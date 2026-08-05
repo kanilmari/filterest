@@ -1,0 +1,18 @@
+/*
+ * about.css
+ *
+ * Layout overrides for the About page card and image containers.
+ * Bridges the about_container section and the card component styles.
+ * Exists to remove fixed card dimensions and allow full-width image display.
+ */
+
+#about_container .card_body {
+    flex-direction: column !important;
+}
+
+#about_container .card_image_content, #about_container .card_image > div {
+    width: unset !important;
+    height: unset !important;
+    max-width: 1800px;
+    max-height: 1800px;
+}

@@ -1,0 +1,60 @@
+/* search_vector_maintenance.css — styles for the text index maintenance admin view */
+
+.text-index-maintenance-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--fw-space-4, 16px);
+    margin-bottom: var(--fw-space-4, 16px);
+}
+
+.text-index-maintenance-toggle-system-users,
+.text-index-maintenance-toggle-system-datasets {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fw-space-2, 8px);
+    padding: var(--fw-space-2, 8px) var(--fw-space-3, 12px);
+    background: var(--fw-color-surface-muted);
+    border: 1px solid var(--border_color);
+    border-radius: var(--fw-radius-md);
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+.text-index-maintenance-dataset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.text-index-maintenance-dataset-entry {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border_color);
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.text-index-maintenance-dataset-entry:hover {
+    background-color: var(--hover_color, rgba(0, 0, 0, 0.04));
+}
+
+.text-index-maintenance-dataset-label {
+    color: var(--text_color);
+}
+
+.text-index-maintenance-no-index-flag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--fw-space-2, 8px);
+    border-radius: 999px;
+    background: rgba(200, 165, 0, 0.2);
+    color: var(--fw-color-text, var(--text_color));
+    font-size: 0.8rem;
+    font-weight: 600;
+}

@@ -1,0 +1,208 @@
+/*
+ * kv_container.css
+ *
+ * Responsive key-value pair grid layout with dark theme variables.
+ * Bridges the kv_container component and its internal color tokens.
+ * Exists to display structured key-value data in a readable grid format.
+ */
+
+:root {
+    --color-bg: #111;
+    --color-fg: #f4f4f4;
+    --color-key: #d0d0d0;
+    --color-grid-line: #333;
+}
+
+/* Yleiset tyylit (valinnainen – voit jättää pois ja käyttää omiasi) */
+/* html,
+body { */
+    /* height: 100%;
+    margin: 0; */
+    /* background: var(--color-bg); */
+    /* color: var(--color-fg); */
+    /* font-family: system-ui, sans-serif; */
+/* } */
+
+/* Kontti avain-arvo-pareille */
+.kv_container_selector,
+/* voit nimetä vapaasti */
+.kv-display {
+    display: grid;
+    /* padding: 0.75rem; */
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.kv-display span {
+    margin-bottom: -1px;
+    margin-right: -1px;
+}
+
+/* Avain ja arvo – yhteiset tyylit */
+.kv-key,
+.kv-value {
+    padding: 0.75rem;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+.kv-empty {
+    color: var(--empty_field_text_color);
+}
+
+/* Inline-tilassa solukohtaiset reunat */
+.kv-display.kv-inline .kv-key {
+    /* border: 1px solid var(--color-grid-line); */
+    border-right: none;
+    font-weight: 600;
+    /* color: var(--color-key); */
+    margin-left: 4px;
+}
+
+.kv-display.kv-inline .kv-value {
+    /* border: 1px solid var(--color-grid-line); */
+    border-left: none;
+    margin-right: 4px;
+}
+
+.kv-pair-inline {
+    margin: 1px;
+    background: var(--bg_color_2);
+    /* border-radius: 7px; */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: 4px;
+}
+
+.kv-display.kv-stacked .kv-key {
+    border-bottom: none;
+    padding-bottom: 10px;
+}
+
+.kv-display.kv-stacked .kv-value {
+    padding-top: 3px;
+    margin-left: 2px;
+}
+
+.kv-link-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.kv-open-in-new-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--text_color_secondary, var(--text_color));
+    line-height: 1;
+    text-decoration: none;
+}
+
+.kv-open-in-new-tab:hover,
+.kv-open-in-new-tab:focus-visible {
+    background: color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 12%, transparent 88%);
+    color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.open-in-new-tab-icon {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+/* Stacked-tilassa parin ympärillä on yksi kehys */
+.kv-pair-stacked {
+    /* border: 1px solid var(--color-grid-line); */
+    margin: 2px;
+    background: var(--bg_color_2);
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+}
+
+.kv-pair-stacked .kv-key {
+    font-weight: 600;
+    /* color: var(--color-key); */
+    /* border-bottom: 1px solid var(--color-grid-line); */
+}
+
+/* ================================================================
+   CONDITIONAL-TILA: Älykäs rivitys (suositeltu)
+   Arvo sijoitetaan avaimen viereen jos mahtuu, muuten omalle rivilleen.
+   Perustuu: docs/design_ideas/2025-11-30--container-text-cutter-query.html
+   ================================================================ */
+
+/* Yksittäinen conditional-rivi (avain + arvo) - float-pohjainen asettelu */
+.kv-pair-conditional {
+    margin: 2px;
+    background: var(--bg_color_2);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* CLEARFIX: float-elementtien korkeus */
+.kv-pair-conditional::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* Avain kelluu vasemmalle, teksti kiertää sen */
+.kv-conditional-key {
+    float: left;
+    font-weight: 600;
+    margin-right: 10px;
+    white-space: normal; /* Sallii avaimen rivittymisen */
+    max-width: 100%;
+    padding: 0;
+}
+
+/* Arvo-elementti: oletuksena kiertää avaimen ympäri */
+.kv-conditional-value {
+    display: block;
+    overflow-wrap: anywhere; /* Pitkät URL:t katkeavat */
+    padding: 0;
+    padding-left: 10px;
+    /* line-height: 1.5; */
+}
+
+/* Kun arvo pudotetaan omalle rivilleen (JS lisää tämän luokan) */
+.kv-conditional-value.kv-dropped {
+    clear: both; /* Pakottaa avaimen alapuolelle */
+    margin-top: 1.5em; /* Pieni väli avaimen ja arvon väliin */
+    margin-left: 0 !important;
+    display: block;
+}
+
+.kv-conditional-value .kv-link-group {
+    margin-left: -10px;
+}
+
+/* Conditional-kontterin yleiset asetukset */
+.kv-display.kv-conditional {
+    display: grid;
+    gap: 0;
+}
+
+/* ================================================================ */
+
+/* Alle 400 px – aina stacked (ei koske conditional-tilaa) */
+@media (max-width: 400px) {
+    #kv-display {
+        grid-template-columns: 1fr !important;
+    }
+}

@@ -1,0 +1,50 @@
+/*
+ * cells.css
+ *
+ * Table cell styling for database-driven table rows.
+ * Bridges the table_view renderer and the theme's color variables.
+ * Exists to set padding, borders, and overflow behavior on individual cells.
+ */
+
+.table_from_db td {
+    /* overflow: hidden; */
+    border-color: var(--table-grid-border-color, var(--table_border_color));
+    padding: 10px;
+}
+
+.table_data_cell.editing .table-editor-input,
+.table_data_cell.editing .table-editor-select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+    background: var(--bg_color);
+    color: var(--text_color);
+    padding: 0.45rem 0.6rem;
+}
+
+.table_data_cell.editing .table-editor-input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+}
+
+.table_from_db td.table_data_cell--inline-fk-editing {
+    overflow: visible;
+    z-index: calc(var(--z-filterbar, 100004) + 2);
+}
+
+.table_from_db td.table_data_cell--inline-fk-editing .inline-fk-dropdown {
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-start: 8px;
+    width: max(calc(100% - 16px), 16rem);
+    max-width: min(32rem, calc(100vw - 2rem));
+    z-index: calc(var(--z-filterbar, 100004) + 3);
+}
+
+.table_from_db td.table_data_cell--inline-fk-editing .dropdown-options-list {
+    max-height: min(18rem, 60vh);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 24%);
+}

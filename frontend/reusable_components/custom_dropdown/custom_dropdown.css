@@ -1,0 +1,48 @@
+/*
+ * custom_dropdown.css
+ *
+ * Styles for the reusable custom dropdown component.
+ * Bridges the custom_dropdown JS module and the theme variable system.
+ * Exists to render positioned dropdown menus with consistent button and list styling.
+ */
+
+.custom-dropdown-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.dropdown-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px;
+}
+
+/* Tärkeää - Lista vaihtoehdoista, kun muokataan solua */
+.dropdown-options-list {
+    position: absolute;
+    z-index: 1000;
+    background: var(--bg_color);
+    border: 1px solid var(--border_color);
+    max-height: 600px;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+.dropdown-option-item {
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.dropdown-option-item:hover,
+.dropdown-option-item.highlighted {
+    background-color: var(--bg_color);
+}
+
+.dropdown-option-item.selected {
+    font-weight: bold;
+}

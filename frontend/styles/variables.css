@@ -1,0 +1,411 @@
+/* variables.css */
+/* 
+ * Visual Documentation:
+ * - instructions_and_documentation/visual_documentation/color_system_and_theming.md
+ *   - Defines the dynamic color system used in Easelect.
+ */
+
+:root {
+    /* =========================================
+       1. Core Configuration (Theming Engine)
+       ========================================= */
+    --brand-hue: 207; /* Canonical Easelect blue hue; keep exact until an owner-approved design change. */
+    --brand-sat: 80%;
+    --brand-light: 50%;
+
+    /* =========================================
+       2. Semantic Base Colors (Dynamic)
+       ========================================= */
+    --color-brand: hsl(var(--brand-hue) var(--brand-sat) var(--brand-light));
+    --color-brand-hover: hsl(var(--brand-hue) var(--brand-sat) calc(var(--brand-light) - 10%));
+    --color-brand-active: hsl(var(--brand-hue) var(--brand-sat) calc(var(--brand-light) - 20%));
+    --color-brand-text: #ffffff; /* Text on top of brand color */
+
+    /* =========================================
+       2b. Secondary Harmonic Hues (Dynamic)
+       ========================================= */
+    --hue-1: calc(var(--brand-hue) - 180);
+    --hue-2: calc(var(--brand-hue) - 120);
+    --hue-3: calc(var(--brand-hue) - 60);
+    --hue-4: var(--brand-hue); /* Main Brand */
+    --hue-5: calc(var(--brand-hue) + 60);
+    --hue-6: calc(var(--brand-hue) + 120);
+    
+    /* 30-degree offsets for finer granularity */
+    --hue-1-30: calc(var(--brand-hue) - 150);
+    --hue-2-30: calc(var(--brand-hue) - 90);
+    --hue-3-30: calc(var(--brand-hue) - 30);
+    --hue-4-30: calc(var(--brand-hue) + 30);
+    --hue-5-30: calc(var(--brand-hue) + 90);
+    --hue-6-30: calc(var(--brand-hue) + 150);
+
+    /* =========================================
+       3. Neutral Tints (Light Mode Defaults)
+       ========================================= */
+    --bg-base: hsl(var(--brand-hue) 8% 99.4%);
+    --bg-surface: hsl(var(--brand-hue) 8% 100%);
+    --bg-surface-hover: hsl(var(--brand-hue) 10% 97.5%);
+    
+    --text-main: hsl(var(--brand-hue) 30% 15%);
+    --text-muted: hsl(var(--brand-hue) 20% 40%);
+    
+    --border-subtle: hsl(var(--brand-hue) 10% 85%);
+    --border-strong: hsl(var(--brand-hue) 10% 70%);
+
+    /* Decorative Elements (Logo Letter Backgrounds) */
+    --logo-letter-bg-sat: 80%;
+    --logo-letter-bg-light: 36%;
+    --logo-letter-bg-size: 56px;
+    --logo-letter-bg-radius: 0;
+    --logo-letter-bg-gap-x: 0px;
+    --logo-letter-bg-gap-y: 0px;
+    --logo-letter-bg-font-size: 20px;
+    --container-scale: 100%;
+    
+    /* Logo Letter Background Colors & Text */
+    --logo-letter-bg-text-color: #ffffff;
+    --logo-letter-bg-neutral-bg: hsl(var(--brand-hue) 20% 20%); /* Dimmed canonical brand hue for dark mode feel */
+    --logo-letter-bg-neutral-text-color: #ffffff; 
+    --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 12% 22%);
+    --logo-letter-bg-monochrome-color: hsl(var(--brand-hue) 10% 28%);
+    --logo-letter-bg-monochrome-text-color: #ffffff;
+
+    /* =========================================
+       4. Legacy Mapping & Functional Variables
+       ========================================= */
+    
+    /* Layout & Dimensions */
+    --navbar_padding: 8px;
+    --navbar_width: 300px;
+    --border_radius: 10px;
+    --border_radius_small: 4px;
+    --border_radius_tiny: 3px;
+    --button_pressed_scale: 0.98;
+    --transition-time: 0.5s;
+    
+    /* Z-Index Hierarchy */
+    --z-modal: 101000;
+    --z-toast: 100500;
+    --z_show_menu_button: 100003;
+    --z-navbar: 100002;
+    --z-filterbar: 100004;
+    --z-overlay: 100000;
+
+    /* Global layout breakpoints:
+       - --navbar-breakpoint: navbar defaults to collapsed below this
+       - --filterbar-breakpoint: compact filterbar switches to overlay below this
+       - --card-stack-breakpoint: card layout stacks vertically below this
+       - --card-viewport-stack-breakpoint: viewport width that forces stacked cards
+       - --filterbar-column-width: default width for the compact right rail */
+    --menu-button-search-offset: 0px;
+    --navbar-breakpoint: 1850px;
+    --filterbar-breakpoint: 1100px;
+    --card-stack-breakpoint: 1060px;
+    --card-viewport-stack-breakpoint: 1550px;
+    --filterbar-column-width: 450px;
+    --filterbar-content-reserved-width: 0px;
+    /* Sidebar slide-in/out animation duration. Also controls the
+       tab-content-area margin-right transition so they stay in sync.
+       Used in: morphing_filterbar_layout.css, create_filter_bar.js */
+    --filterbar-sidebar-transition-duration: 0.7s;
+
+    /* Hero filterbar section max-widths (morphing_filterbar_content.css,
+       morphing_filterbar_search.css). Title needs more room than filters. */
+    --filterbar-hero-title-max-width: 800px;
+    --filterbar-hero-content-max-width: 550px;
+    --filterbar-search-only-max-width: 800px;
+
+    /* Legacy Color Mapping (Connecting old vars to new system) */
+    --bg_color: var(--bg-base);
+    --bg_color_1_5: hsl(var(--brand-hue) 10% 98.5%);
+    --bg_color_2: var(--bg-surface);
+    --bg_color_extreme: #ffffff; /* Keep pure white for specific needs */
+    --bg_color_text: var(--bg_color_extreme);
+    
+    --bg_color_blended: hsl(var(--brand-hue) 10% 10% / 10%);
+    --bg_color_blended_2: color-mix(in srgb, var(--bg-surface) 80%, var(--bg_color_extreme) 20%);
+    --bg_color_card_frame: var(--bg-surface);
+    --bg_color_image: var(--bg-surface-hover);
+
+    --navbar_shadow_color: var(--border-subtle);
+
+    --card_border_color: var(--border-subtle);
+    --card_text_max_width: 650px;
+    --card_body_gap: 10px;
+    --card_image_large_width: 300px;
+    --card_image_small_width: 120px;
+
+    --text_color: var(--text-main);
+    --empty_field_text_color: var(--text-muted);
+    --border_color: var(--border-strong);
+    --table_border_color: var(--border-subtle);
+    --input_bg_color: var(--bg_color_extreme);
+
+    /* Buttons */
+    --button_bg_color: var(--bg-surface);
+    --button_text_color: var(--text-main);
+    --button_hover_bg_color: var(--bg-surface-hover);
+    --button_hover_text_color: var(--text-main);
+
+    --button_active_bg_color: var(--bg_color_extreme);
+    --button_active_text_color: var(--text-main);
+    --button_active_border_color: var(--border-strong);
+
+    /* Dropdowns */
+    --dropdown_button_bg_color: var(--bg-surface);
+    --dropdown_button_text_color: var(--text-main);
+    --dropdown_button_hover_bg_color: var(--bg-surface-hover);
+    --dropdown_content_bg_color: var(--bg_color_extreme);
+
+    /* Info Banner */
+    --info_banner_bg_color: hsl(var(--brand-hue) 80% 90%);
+    --info_banner_border_color: hsl(var(--brand-hue) 60% 40%);
+
+    --add_row_form_box_shadow: 0 2px 60px 30px rgb(0 0 0 / 30%);
+
+    /* Primary Actions (Brand) */
+    --primary_color: var(--color-brand);
+    --primary_color_hover: var(--color-brand-hover);
+    --primary_text_color: var(--color-brand-text);
+
+    /* Status / Feedback */
+    --color-error: hsl(0deg 70% 45%);
+    --color-error-light: hsl(0deg 70% 95%);
+
+    /* Filter Panel */
+    --filter_panel_bg: var(--bg-surface);
+    --filter_panel_border: var(--border-subtle);
+}
+
+/* =========================================
+   Dark Mode Overrides (System Preference)
+   ========================================= */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --bg-base: hsl(var(--brand-hue) 20% 8%);
+        --bg-surface: hsl(var(--brand-hue) 20% 12%);
+        --bg-surface-hover: hsl(var(--brand-hue) 20% 16%);
+        --bg_color_1_5: color-mix(in srgb, var(--bg-base), var(--bg-surface));
+        
+        --text-main: hsl(var(--brand-hue) 0% 99%);
+        --text-muted: hsl(var(--brand-hue) 10% 60%);
+        
+        --border-subtle: hsl(var(--brand-hue) 20% 20%);
+        --border-strong: hsl(var(--brand-hue) 20% 30%);
+        
+        /* Adjust brand lightness for dark mode */
+        --color-brand: hsl(var(--brand-hue) var(--brand-sat) 60%);
+        --color-brand-hover: hsl(var(--brand-hue) var(--brand-sat) 50%);
+        --color-brand-active: hsl(var(--brand-hue) var(--brand-sat) 40%);
+
+        /* Specific Dark Mode Mappings */
+        --bg_color_extreme: hsl(var(--brand-hue) 20% 5%);
+        --input_bg_color: var(--bg-surface);
+        --bg_color_blended: hsl(var(--brand-hue) 10% 90% / 10%);
+        
+        --add_row_form_box_shadow: 0 2px 60px 30px rgb(0 0 0 / 50%);
+
+        /* Dark Mode Logo Letter Background Overrides */
+        --logo-letter-bg-sat: 49%;
+        --logo-letter-bg-light: 28%;
+        --logo-letter-bg-neutral-bg: hsl(var(--brand-hue) 8% 30%);
+        --logo-letter-bg-neutral-text-color: #ffffff;
+        --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 10% 24%);
+    }
+}
+
+/* =========================================
+   Explicit Mode Classes (JS Toggles)
+   ========================================= */
+
+/* Light Mode Force */
+body.light-mode {
+    color-scheme: light;
+    --bg-base: hsl(var(--brand-hue) 8% 99.4%);
+    --bg-surface: hsl(var(--brand-hue) 8% 100%);
+    --bg-surface-hover: hsl(var(--brand-hue) 10% 97.5%);
+    
+    --text-main: hsl(var(--brand-hue) 30% 15%);
+    --text-muted: hsl(var(--brand-hue) 20% 40%);
+    
+    --border-subtle: hsl(var(--brand-hue) 10% 85%);
+    --border-strong: hsl(var(--brand-hue) 10% 70%);
+    
+    --color-brand: hsl(var(--brand-hue) var(--brand-sat) var(--brand-light));
+    
+    --bg_color_extreme: #ffffff;
+    --input_bg_color: #ffffff;
+    --add_row_form_box_shadow: 0 2px 60px 30px rgb(0 0 0 / 30%);
+
+    /* Legacy Redefinitions to ensure update */
+    --bg_color: var(--bg-base);
+    --bg_color_1_5: hsl(var(--brand-hue) 10% 98.5%);
+    --bg_color_2: var(--bg-surface);
+    --bg_color_text: var(--bg_color_extreme);
+    
+    --bg_color_blended: hsl(var(--brand-hue) 10% 10% / 10%);
+    --bg_color_blended_2: color-mix(in srgb, var(--bg-surface) 80%, var(--bg_color_extreme) 20%);
+    --bg_color_card_frame: var(--bg-surface);
+    --bg_color_image: var(--bg-surface-hover);
+    
+    --navbar_shadow_color: var(--border-subtle);
+    --card_border_color: var(--border-subtle);
+    
+    --text_color: var(--text-main);
+    --empty_field_text_color: var(--text-muted);
+    --border_color: var(--border-strong);
+    --table_border_color: var(--border-subtle);
+    
+    --button_bg_color: var(--bg-surface);
+    --button_text_color: var(--text-main);
+    --button_hover_bg_color: var(--bg-surface-hover);
+    --button_hover_text_color: var(--text-main);
+    
+    --button_active_bg_color: var(--bg_color_extreme);
+    --button_active_text_color: var(--text-main);
+    --button_active_border_color: var(--border-strong);
+    
+    --dropdown_button_bg_color: var(--bg-surface);
+    --dropdown_button_text_color: var(--text-main);
+    --dropdown_button_hover_bg_color: var(--bg-surface-hover);
+    --dropdown_content_bg_color: var(--bg_color_extreme);
+    
+    --primary_color: var(--color-brand);
+    --primary_color_hover: var(--color-brand-hover);
+    --primary_text_color: var(--color-brand-text);
+    
+    --filter_panel_bg: var(--bg-surface);
+    --filter_panel_border: var(--border-subtle);
+    
+    /* Framework overrides for Light Mode */
+    --fw-color-surface: var(--bg_color_extreme);
+
+    /* Light Mode Logo Letter Background Overrides */
+    --logo-letter-bg-sat: 80%;
+    --logo-letter-bg-light: 36%;
+    --logo-letter-bg-neutral-bg: hsl(var(--brand-hue) 8% 90%);
+    --logo-letter-bg-neutral-text-color: #1a1a1a;
+    --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 9% 84%);
+    --logo-letter-bg-monochrome-color: hsl(var(--brand-hue) 10% 84%);
+    --logo-letter-bg-monochrome-text-color: #1a1a1a;
+    --fw-color-surface-muted: color-mix(in srgb, var(--bg_color_extreme) 70%, var(--bg_color) 30%);
+    --fw-color-surface-alt: var(--bg_color_2);
+    --fw-color-border: var(--card_border_color);
+    --fw-color-border-strong: color-mix(in srgb, var(--card_border_color) 60%, var(--border_color) 40%);
+    --fw-color-text: var(--text_color);
+    --fw-color-muted: var(--empty_field_text_color);
+    --fw-color-primary: var(--primary_color);
+    --fw-color-primary-soft: color-mix(in srgb, var(--primary_color) 20%, var(--bg_color_extreme) 80%);
+}
+
+/* Dark Mode Force */
+body.dark-mode {
+    color-scheme: dark;
+    --bg-base: hsl(var(--brand-hue) 20% 8%);
+    --bg-surface: hsl(var(--brand-hue) 20% 12%);
+    --bg-surface-hover: hsl(var(--brand-hue) 20% 16%);
+    
+    --text-main: hsl(var(--brand-hue) 10% 99%);
+    --text-muted: hsl(var(--brand-hue) 10% 60%);
+    
+    --border-subtle: hsl(var(--brand-hue) 20% 20%);
+    --border-strong: hsl(var(--brand-hue) 20% 30%);
+    
+    --logo-letter-bg-sat: 49%;
+    --logo-letter-bg-light: 28%;
+
+    --color-brand: hsl(var(--brand-hue) var(--brand-sat) 60%);
+    --color-brand-hover: hsl(var(--brand-hue) var(--brand-sat) 50%);
+    
+    --bg_color_extreme: hsl(var(--brand-hue) 20% 5%);
+    --input_bg_color: var(--bg-surface);
+    --bg_color_blended: hsl(var(--brand-hue) 10% 90% / 10%);
+    
+    --add_row_form_box_shadow: 0 2px 60px 30px rgb(0 0 0 / 50%);
+    
+    /* Filter Panel Specifics for Dark Mode */
+    --filter_panel_bg: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-surface) 100%);
+
+    /* Legacy Redefinitions to ensure update */
+    --bg_color: var(--bg-base);
+    --bg_color_1_5: color-mix(in srgb, var(--bg-base), var(--bg-surface));
+    --bg_color_2: var(--bg-surface);
+    --bg_color_text: var(--bg_color_extreme);
+    
+    --bg_color_blended_2: color-mix(in srgb, var(--bg-surface) 80%, var(--bg_color_extreme) 20%);
+    --bg_color_card_frame: var(--bg-surface);
+    --bg_color_image: var(--bg-surface-hover);
+    
+    --navbar_shadow_color: var(--border-subtle);
+    --card_border_color: var(--border-subtle);
+    
+    --text_color: var(--text-main);
+    --empty_field_text_color: var(--text-muted);
+    --border_color: var(--border-strong);
+    --table_border_color: var(--border-subtle);
+    
+    --button_bg_color: var(--bg-surface);
+    --button_text_color: var(--text-main);
+    --button_hover_bg_color: var(--bg-surface-hover);
+    --button_hover_text_color: var(--text-main);
+    
+    --button_active_bg_color: var(--bg_color_extreme);
+    --button_active_text_color: var(--text-main);
+    --button_active_border_color: var(--border-strong);
+    
+    --dropdown_button_bg_color: var(--bg-surface);
+    --dropdown_button_text_color: var(--text-main);
+    --dropdown_button_hover_bg_color: var(--bg-surface-hover);
+    --dropdown_content_bg_color: var(--bg_color_extreme);
+    
+    --primary_color: var(--color-brand);
+    --primary_color_hover: var(--color-brand-hover);
+    --primary_text_color: var(--color-brand-text);
+    
+    --filter_panel_border: var(--border-subtle);
+
+    /* Framework overrides for Light Mode */
+    --fw-color-surface: var(--bg_color_extreme);
+    --fw-color-surface-muted: color-mix(in srgb, var(--bg_color_extreme) 70%, var(--bg_color) 30%);
+    --fw-color-surface-alt: var(--bg_color_2);
+    --fw-color-border: var(--card_border_color);
+    --fw-color-border-strong: color-mix(in srgb, var(--card_border_color) 60%, var(--border_color) 40%);
+    --fw-color-text: var(--text_color);
+    --fw-color-muted: var(--empty_field_text_color);
+    --fw-color-primary: var(--primary_color);
+    --fw-color-primary-soft: color-mix(in srgb, var(--primary_color) 20%, var(--bg_color_extreme) 80%);
+
+    --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 10% 24%);
+    --logo-letter-bg-monochrome-color: hsl(var(--brand-hue) 10% 24%);
+    --logo-letter-bg-monochrome-text-color: #ffffff;
+}
+
+/* =========================================
+   Scrollbars
+   ========================================= */
+
+/* WebKit (Chrome, Safari) */
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: var(--border_radius_tiny);
+    border: 3px solid var(--bg-base); /* Creates padding effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Firefox */
+* {
+    scrollbar-color: var(--border-strong) var(--bg-base);
+    scrollbar-width: thin;
+}

@@ -1,0 +1,385 @@
+/* cloud_management_view.css
+   Dense operations styling for the management-Easelect cloud view. */
+
+.cloud-management-view {
+    --cloud-border: color-mix(in srgb, var(--border-color, #2d3742) 72%, #ffffff 8%);
+    --cloud-bg: color-mix(in srgb, var(--page-bg, #101418) 88%, #1f2b24 12%);
+    --cloud-panel: color-mix(in srgb, var(--panel-bg, #141a20) 82%, #233026 18%);
+    --cloud-muted: color-mix(in srgb, var(--text-color, #edf2f7) 62%, #6d7886 38%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px;
+    color: var(--text-color, #edf2f7);
+    background: var(--cloud-bg);
+}
+
+.cloud-management-toolbar,
+.cloud-statusbar,
+.cloud-diagnostics-shell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cloud-management-toolbar {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--cloud-border);
+}
+
+.cloud-filter-field {
+    display: grid;
+    gap: 3px;
+    min-width: 150px;
+    font-size: 12px;
+    color: var(--cloud-muted);
+}
+
+.cloud-filter-input,
+.cloud-filter-select {
+    min-height: 34px;
+    padding: 6px 9px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cloud-panel) 78%, #000 22%);
+    color: inherit;
+}
+
+.cloud-icon-button,
+.cloud-row-toggle,
+.cloud-action-button {
+    min-width: 34px;
+    min-height: 34px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cloud-panel) 84%, #2d3d34 16%);
+    color: inherit;
+    cursor: pointer;
+}
+
+.cloud-icon-button:hover,
+.cloud-row-toggle:hover,
+.cloud-action-button:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--accent-color, #72d6b2) 65%, var(--cloud-border) 35%);
+}
+
+.cloud-action-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.cloud-statusbar {
+    padding: 7px 0;
+}
+
+.cloud-status-metric {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: baseline;
+    column-gap: 7px;
+    min-width: 112px;
+    padding: 7px 9px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: var(--cloud-panel);
+}
+
+.cloud-status-metric strong {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.cloud-status-metric span {
+    font-size: 12px;
+    color: var(--cloud-muted);
+}
+
+.cloud-status-metric--warning {
+    border-color: #a98039;
+}
+
+.cloud-status-metric--locked {
+    border-color: #56636d;
+}
+
+.cloud-diagnostics {
+    min-width: 240px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cloud-panel) 78%, #000 22%);
+}
+
+.cloud-diagnostics summary,
+.cloud-row-diagnostics summary,
+.cloud-row-audit summary,
+.cloud-row-scheduler summary {
+    padding: 8px 10px;
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.cloud-diagnostics-list,
+.cloud-audit-list {
+    margin: 0;
+    padding: 0 12px 10px 28px;
+    color: var(--cloud-muted);
+}
+
+.cloud-service-table-shell {
+    overflow: auto;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+}
+
+.cloud-service-table,
+.cloud-node-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.cloud-service-table th,
+.cloud-service-table td,
+.cloud-node-table th,
+.cloud-node-table td {
+    padding: 8px 9px;
+    border-bottom: 1px solid var(--cloud-border);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.cloud-service-table th,
+.cloud-node-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--cloud-panel) 88%, #000 12%);
+    color: var(--cloud-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.cloud-service-table th:first-child,
+.cloud-service-table td:first-child {
+    width: 46px;
+}
+
+.cloud-service-name {
+    font-weight: 750;
+}
+
+.cloud-service-details-row > td {
+    padding: 0;
+    background: color-mix(in srgb, var(--cloud-panel) 74%, #000 26%);
+}
+
+.cloud-node-section,
+.cloud-row-diagnostics,
+.cloud-row-audit,
+.cloud-row-scheduler {
+    margin: 10px;
+}
+
+.cloud-node-table {
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.cloud-action-group {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.cloud-scheduler-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 7px;
+    padding: 0 10px 10px;
+}
+
+.cloud-orchestrator-next {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 7px;
+    margin: 0 10px 10px;
+    padding: 9px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cloud-panel) 82%, #000 18%);
+}
+
+.cloud-orchestrator-heading {
+    grid-column: 1 / -1;
+    color: var(--text-color, #edf2f7);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.cloud-orchestrator-claim-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding: 7px 10px;
+    border-color: #2d9870;
+}
+
+.cloud-orchestrator-execute-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding: 7px 10px;
+    border-color: #a98039;
+}
+
+.cloud-orchestrator-fallback-plan-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding: 7px 10px;
+    border-color: #8f7541;
+}
+
+.cloud-orchestrator-fallback-plan {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 7px;
+    padding: 8px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+}
+
+.cloud-scheduler-metric {
+    display: grid;
+    gap: 3px;
+    min-height: 50px;
+    padding: 7px 9px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cloud-panel) 78%, #000 22%);
+}
+
+.cloud-scheduler-metric strong {
+    font-size: 14px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.cloud-scheduler-metric span,
+.cloud-scheduler-note,
+.cloud-scheduler-calls,
+.cloud-scheduler-rescue-actions {
+    color: var(--cloud-muted);
+    font-size: 12px;
+}
+
+.cloud-scheduler-calls,
+.cloud-scheduler-rescue-actions {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 7px 9px 7px 26px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cloud-panel) 78%, #000 22%);
+}
+
+.cloud-scheduler-calls-heading {
+    list-style: none;
+    margin-left: -17px;
+    color: var(--text-color, #edf2f7);
+    font-weight: 700;
+}
+
+.cloud-scheduler-note {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+.cloud-scheduler-load-button {
+    margin: 0 10px 10px;
+}
+
+.cloud-orchestrator-load-button {
+    margin: 0 10px 10px;
+}
+
+.cloud-badge {
+    display: inline-flex;
+    min-width: 58px;
+    justify-content: center;
+    padding: 3px 8px;
+    border: 1px solid var(--cloud-border);
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.cloud-badge--ok {
+    border-color: #2d9870;
+    color: #9df0cb;
+}
+
+.cloud-badge--warning {
+    border-color: #a98039;
+    color: #ffd588;
+}
+
+.cloud-badge--error {
+    border-color: #a95454;
+    color: #ffb0b0;
+}
+
+.cloud-badge--neutral {
+    color: var(--cloud-muted);
+}
+
+.cloud-view-message {
+    padding: 12px;
+    border: 1px dashed var(--cloud-border);
+    border-radius: 6px;
+    color: var(--cloud-muted);
+}
+
+.cloud-log-dialog {
+    width: min(980px, calc(100vw - 32px));
+    max-height: min(760px, calc(100vh - 32px));
+    border: 1px solid var(--cloud-border);
+    border-radius: 8px;
+    background: var(--cloud-bg);
+    color: inherit;
+}
+
+.cloud-log-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--cloud-border);
+}
+
+.cloud-log-dialog pre {
+    max-height: 620px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-size: 12px;
+}
+
+@media (max-width: 760px) {
+    .cloud-management-view {
+        padding: 6px;
+    }
+
+    .cloud-filter-field,
+    .cloud-status-metric {
+        min-width: min(100%, 172px);
+    }
+
+    .cloud-service-table,
+    .cloud-node-table {
+        min-width: 920px;
+    }
+}

@@ -1,0 +1,4852 @@
+{
+  "generated_by": "server_tools/scripts/generate_route_manifest.go",
+  "scenario_order": [
+    "production",
+    "development",
+    "api_language"
+  ],
+  "routes": [
+    {
+      "path_pattern": "/",
+      "match_type": "prefix",
+      "handler_name": "router.rootHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/admin/",
+      "match_type": "prefix",
+      "handler_name": "router.adminHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/about",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetAboutRowHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/add-row-multipart",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.AddRowMultipartHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/add_foreign_key",
+      "match_type": "exact",
+      "handler_name": "dtt_foreign_keys.AddForeignKeyHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/admin/openai-api-key",
+      "match_type": "exact",
+      "handler_name": "router.saveOpenAIAPIKeyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/admin/version-info",
+      "match_type": "exact",
+      "handler_name": "router.adminVersionInfoHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/app/ai-chat/capabilities",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.FilterbarAICapabilitiesHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/app/ai-chat/codex-query",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.FilterbarAICodexQueryHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/app/ai-chat/conversation",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.FilterbarAIConversationHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/app/ai-chat/query",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.FilterbarAIQueryHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/archive-media-tables",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.ArchiveMediaTableFoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/attachments/disable",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.DisableAttachmentLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/attachments/enable",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.EnableAttachmentLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/attachments/remove",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.RemoveAttachmentLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/attachments/status",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.GetAttachmentLinkingStatusHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/images/disable",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.DisableImageAssetLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/images/enable",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.EnableImageAssetLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/images/remove",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.RemoveImageAssetLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/images/status",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.GetImageAssetLinkingStatusHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/images/update",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.UpdateImageAssetLinkingHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/asset-linking/status",
+      "match_type": "exact",
+      "handler_name": "dtt_asset_linking.GetAssetLinkingStatusHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/auth-modes",
+      "match_type": "exact",
+      "handler_name": "auth.GetAuthModesHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/card-visibility/",
+      "match_type": "prefix",
+      "handler_name": "system_table_tools.GetCardVisibilityHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/card-visibility/update",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.UpdateCardVisibilityHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-archived-media-tables",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.CheckArchivedMediaTableFoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-db-consistency",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.CheckDatabaseConsistencyHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-fingerprint",
+      "match_type": "exact",
+      "handler_name": "auth.CheckFingerprintHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-json-columns",
+      "match_type": "exact",
+      "handler_name": "devtools.CheckJsonInTextColumnsHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-media-rows",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.CheckMediaRowFoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-media-subfolders",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.CheckMediaSubfoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-media-tables",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.CheckMediaTableFoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-table-right",
+      "match_type": "exact",
+      "handler_name": "auth.CheckTableRightHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-table-rights",
+      "match_type": "exact",
+      "handler_name": "auth.CheckTableRightsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/check-table-rights-multi",
+      "match_type": "exact",
+      "handler_name": "auth.CheckTableRightsMultiHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/child-tab-config/",
+      "match_type": "prefix",
+      "handler_name": "system_table_tools.GetChildTabConfigHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/child-tab-config/save",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SaveChildTabConfigHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/column-view-presets/",
+      "match_type": "prefix",
+      "handler_name": "system_table_tools.ListColumnViewPresetsHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/column-view-presets/delete",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.DeleteColumnViewPresetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/column-view-presets/save",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SaveColumnViewPresetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/comment-counts",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.CommentCountHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/comments",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.CommentListHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/comments/create",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.CommentCreateHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/comments/delete",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.CommentDeleteHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/count-lang-embeddings",
+      "match_type": "exact",
+      "handler_name": "ai_features.CountLangEmbeddingsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/create-folder",
+      "match_type": "exact",
+      "handler_name": "dtt_system_table_folders.HandleCreateFolder",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/create-indexes",
+      "match_type": "exact",
+      "handler_name": "dtt_crud_workflows.CreateIndexesHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/create-table",
+      "match_type": "exact",
+      "handler_name": "dtt_crud_workflows.SimpleCreateTableHandler",
+      "conditional_source": "ENABLE_API_LANGUAGE=true",
+      "scenarios": [
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/create_dataset",
+      "match_type": "exact",
+      "handler_name": "dtt_crud_workflows.CreateTableHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/csrf-token",
+      "match_type": "exact",
+      "handler_name": "auth.CSRFTokenHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/data-retention/preview",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.PreviewDataRetentionHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/data-retention/prune",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.PruneDataRetentionHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-alias-management",
+      "match_type": "exact",
+      "handler_name": "router.GetDatasetAliasManagementHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-alias-management/save",
+      "match_type": "exact",
+      "handler_name": "router.SaveDatasetAliasManagementHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-aliases",
+      "match_type": "exact",
+      "handler_name": "router.GetDatasetAliasesHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-columns/",
+      "match_type": "prefix",
+      "handler_name": "dtt_2_column_crud.GetTableColumnsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-header-config/",
+      "match_type": "prefix",
+      "handler_name": "system_table_tools.GetDatasetHeaderConfigHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-header-config/save",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SaveDatasetHeaderConfigHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset-names",
+      "match_type": "exact",
+      "handler_name": "dtt_foreign_keys.GetTableNamesHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dataset_permissions",
+      "match_type": "exact",
+      "handler_name": "backend.PermissionsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/datasets",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetGroupedTables",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/db-roles",
+      "match_type": "exact",
+      "handler_name": "db_admin.ListRolesHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/db-roles/create",
+      "match_type": "exact",
+      "handler_name": "db_admin.CreateRoleHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/db-roles/delete",
+      "match_type": "exact",
+      "handler_name": "db_admin.DeleteRoleHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/db-roles/update",
+      "match_type": "exact",
+      "handler_name": "db_admin.UpdateRoleHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/delete-folder",
+      "match_type": "exact",
+      "handler_name": "dtt_system_table_folders.HandleDeleteFolder",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/delete-rows",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_delete.DeleteRowsHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/delete_foreign_key",
+      "match_type": "exact",
+      "handler_name": "dtt_foreign_keys.DeleteForeignKeyHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/dev-ai-translate-single",
+      "match_type": "exact",
+      "handler_name": "lang.AiTranslateSingleHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/drop-dataset",
+      "match_type": "exact",
+      "handler_name": "dtt_3_table_delete.DropTableHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/embedding-datasets",
+      "match_type": "exact",
+      "handler_name": "ai_features.GetEmbeddingDatasetsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/embedding_stream_handler",
+      "match_type": "exact",
+      "handler_name": "ai_features.EmbeddingStreamHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/empty-rows",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetEmptyRowsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/export-table-csv",
+      "match_type": "exact",
+      "handler_name": "devtools.ExportTableCSVHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/fetch-dynamic-children",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.GetDynamicChildItemsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/filterbar-section-layout",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetFilterbarSectionLayoutHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/filterbar-section-layout/save",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SaveFilterbarSectionLayoutHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/fix-db-consistency",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.FixDatabaseConsistencyHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/fix-media-subfolders",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.FixMediaSubfoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/fix-translations",
+      "match_type": "exact",
+      "handler_name": "lang.FixTableTranslationsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/fk-cache-refresh",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.RefreshFKCacheHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/fk-cache-triggers",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.ListFKCacheTriggersHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/foreign_keys",
+      "match_type": "exact",
+      "handler_name": "dtt_foreign_keys.GetForeignKeys",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/generateTranslations",
+      "match_type": "exact",
+      "handler_name": "lang.GenerateTranslationsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/geocode-address",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.GeocodeAddressHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-1m-relations",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.GetOneToManyRelationsHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-add-row-metadata",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.GetAddRowMetadataHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-columns",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.GetAddRowColumnsHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-filter-options",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.GetFilterOptionsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-intelligent-results",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-lang-key-translations",
+      "match_type": "exact",
+      "handler_name": "lang.GetLangKeyTranslationsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-many-to-many",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.GetManyToManyTablesHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-metadata",
+      "match_type": "exact",
+      "handler_name": "dtt_3_table_read.GetTableViewHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-results",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.GetResultsHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-results-vector",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.GetResultsVector",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-row-count",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.GetRowCountHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/get-view-data",
+      "match_type": "exact",
+      "handler_name": "vanilla_tree.GetViewDataHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/import-table-csv",
+      "match_type": "exact",
+      "handler_name": "devtools.ImportTableCSVHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/log-client-error",
+      "match_type": "exact",
+      "handler_name": "devtools.LogClientError",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/log-retention/preview",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.PreviewLogRetentionHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/log-retention/prune",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.PruneLogRetentionHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/login",
+      "match_type": "exact",
+      "handler_name": "auth.LoginAPIHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/logout",
+      "match_type": "exact",
+      "handler_name": "auth.LogoutHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/modify-columns",
+      "match_type": "exact",
+      "handler_name": "dtt_crud_workflows.ModifyColumnsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/payments/",
+      "match_type": "prefix",
+      "handler_name": "payment_gateway.GetPaymentStatusHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/payments/create",
+      "match_type": "exact",
+      "handler_name": "payment_gateway.CreatePaymentHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/payments/webhook",
+      "match_type": "exact",
+      "handler_name": "payment_gateway.WebhookHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/pipeline-info",
+      "match_type": "exact",
+      "handler_name": "pipeline.IntrospectionHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/product-identity",
+      "match_type": "exact",
+      "handler_name": "product_identity.Handler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/prune-archived-media-tables",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.PruneArchivedMediaTableFoldersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/runs",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenRunsHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/session",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenSessionHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/session/message",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenSessionMessageHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/session/stop",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenSessionStopHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/session/stream",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenSessionStreamHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/sessions",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenSessionsHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/transcript",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenTranscriptHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/queen/transcript/stream",
+      "match_type": "exact",
+      "handler_name": "devtools.QueenTranscriptStreamHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/query-table",
+      "match_type": "exact",
+      "handler_name": "dtt_crud_workflows.SimpleQueryTableHandler",
+      "conditional_source": "ENABLE_API_LANGUAGE=true",
+      "scenarios": [
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/rebuild-search-vectors",
+      "match_type": "exact",
+      "handler_name": "dtt_search_vectors.RebuildSearchVectorHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/referenced-data",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_create.GetReferencedTableData",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/refresh-lang-embeddings",
+      "match_type": "exact",
+      "handler_name": "ai_features.RefreshLangEmbeddingsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/register_ndYOyXV0INOK3F",
+      "match_type": "exact",
+      "handler_name": "auth.RegisterAPIHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/rename-tree-node",
+      "match_type": "exact",
+      "handler_name": "dtt_system_table_folders.HandleRenameTreeNode",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/request-email-change-otp",
+      "match_type": "exact",
+      "handler_name": "auth.RequestEmailChangeOTPHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/request-password-change-otp",
+      "match_type": "exact",
+      "handler_name": "auth.RequestPasswordChangeOTPHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/request-password-reset-otp",
+      "match_type": "exact",
+      "handler_name": "auth.RequestPasswordResetOTPHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/reset-password",
+      "match_type": "exact",
+      "handler_name": "auth.ResetPasswordWithOTPHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/reset-session",
+      "match_type": "exact",
+      "handler_name": "e_sessions.ResetSessionHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/save-usergroup-right",
+      "match_type": "exact",
+      "handler_name": "backend.SaveUserGroupRight",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/scan-lang-sources",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.ScanLangSourcesHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/sessioninfo",
+      "match_type": "exact",
+      "handler_name": "devtools.SessionHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/set-comments",
+      "match_type": "exact",
+      "handler_name": "dtt_crud_workflows.SetCommentsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/set-current-project-folder",
+      "match_type": "exact",
+      "handler_name": "dtt_system_table_folders.HandleSetCurrentProjectFolder",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/sse/subscribe",
+      "match_type": "exact",
+      "handler_name": "event_bus.SSESubscribeHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "access_control_no_tx",
+          "skip_stages": [
+            "admin_check",
+            "transaction"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "access_control_no_tx",
+          "skip_stages": [
+            "admin_check",
+            "transaction"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "access_control_no_tx",
+          "skip_stages": [
+            "admin_check",
+            "transaction"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/system_triggers/create",
+      "match_type": "exact",
+      "handler_name": "dtt_triggers.CreateTriggerHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/system_triggers/list",
+      "match_type": "exact",
+      "handler_name": "dtt_triggers.GetTriggersHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/task-todo-progress",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetTaskTodoProgressHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/text-index-status",
+      "match_type": "exact",
+      "handler_name": "dtt_search_vectors.TextIndexStatusHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/translations",
+      "match_type": "exact",
+      "handler_name": "lang.GetTranslationsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/tree_data",
+      "match_type": "exact",
+      "handler_name": "vanilla_tree.GetTreeDataHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-folder",
+      "match_type": "exact",
+      "handler_name": "dtt_system_table_folders.HandleUpdateFolder",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-lang-key",
+      "match_type": "exact",
+      "handler_name": "lang.UpdateLangKeyHandler",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
+      "scenarios": [
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-oids",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.HandleUpdateOidsAndTableNames",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-profile",
+      "match_type": "exact",
+      "handler_name": "auth.UserProfileUpdateHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-row",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_update.UpdateRowHandlerWrapper",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-tab-order",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.UpdateTabOrderHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/update-table-folder",
+      "match_type": "exact",
+      "handler_name": "dtt_system_table_folders.HandleUpdateTableFolder",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/user-permissions",
+      "match_type": "exact",
+      "handler_name": "auth.UserPermissionsHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/user-profile",
+      "match_type": "exact",
+      "handler_name": "auth.UserProfileFetchHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/apps/",
+      "match_type": "prefix",
+      "handler_name": "router.handleApps",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/datasets/",
+      "match_type": "prefix",
+      "handler_name": "router.datasetsRedirectHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/favicon4S.png",
+      "match_type": "exact",
+      "handler_name": "router.faviconHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/first-run",
+      "match_type": "exact",
+      "handler_name": "auth.FirstRunAdminHandler",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/frontend/",
+      "match_type": "prefix",
+      "handler_name": "router.handleFrontend",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/health",
+      "match_type": "exact",
+      "handler_name": "router.healthHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/login",
+      "match_type": "exact",
+      "handler_name": "auth.LoginHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/register_ndYOyXV0INOK3F",
+      "match_type": "exact",
+      "handler_name": "auth.RegisterHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/robots.txt",
+      "match_type": "exact",
+      "handler_name": "router.robotsHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/sitemap.xml",
+      "match_type": "exact",
+      "handler_name": "router.sitemapHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/storage/",
+      "match_type": "prefix",
+      "handler_name": "router.ServeStorage",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/system/drain",
+      "match_type": "exact",
+      "handler_name": "router.systemDrainHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/system/health",
+      "match_type": "exact",
+      "handler_name": "router.systemHealthHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/system/instance-status",
+      "match_type": "exact",
+      "handler_name": "router.systemInstanceStatusHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/system/ready",
+      "match_type": "exact",
+      "handler_name": "router.systemReadyHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    }
+  ]
+}

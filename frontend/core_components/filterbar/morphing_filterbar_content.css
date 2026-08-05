@@ -1,0 +1,606 @@
+/* morphing_filterbar_content.css */
+/* Content styles for the unified filterbar panel.
+ * Panel morphs between wide (hero bar) and compact (sidebar).
+ * CSS classes control content appearance per mode.
+ */
+
+/* ============================================
+   FIXED TOGGLE BUTTON
+   Always visible in top-right corner
+   ============================================ */
+
+.filterbar-fixed-toggle {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: calc(var(--z-filterbar, 100004) + 1);
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--button_bg_color);
+  border: 1px solid var(--border_color);
+  color: var(--button_text_color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 0.3s ease,
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    visibility 0s linear 180ms;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--fw-shadow-raised);
+  appearance: none;
+}
+
+.filterbar-fixed-toggle--exposed {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  background: rgb(0 255 136 / 0.15);
+  border-color: rgb(0 255 136 / 0.3);
+  transition:
+    opacity 180ms ease,
+    transform 0.3s ease,
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.filterbar-fixed-toggle:hover {
+  background: var(--button_hover_bg_color);
+  border-color: rgb(0 255 136 / 0.3);
+}
+
+.filterbar-fixed-toggle:active {
+  transform: scale(0.95);
+}
+
+.filterbar-fixed-toggle-icon {
+  width: 22px;
+  height: 22px;
+  background-color: currentcolor;
+}
+
+/* ============================================
+   FILTER CONTENT INNER
+   Flex column layout for all content.
+   ============================================ */
+
+.filter-content-inner {
+  width: auto;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin: 12px var(--filterbar-panel-inline-space, 24px) 0;
+  box-sizing: border-box;
+  transition:
+    gap 180ms ease,
+    margin 180ms ease;
+}
+
+.filterbar-inline-hero {
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid var(--filter_panel_border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--filter_panel_bg) 86%, var(--bg_color_extreme) 14%) 0%,
+      color-mix(in srgb, var(--filter_panel_bg) 94%, transparent 6%) 100%
+    );
+}
+
+/* ============================================
+   WIDE STATE (scrolled to top)
+   Full-width bar at top with centered content.
+   ============================================ */
+
+.filterbar-panel--wide .filter-content-inner,
+.filterbar-inline-hero .filter-content-inner {
+  max-width: var(--filterbar-hero-content-max-width, 550px);
+  width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-content-max-width, 550px));
+  margin: 12px auto 0;
+}
+
+.filterbar-panel--wide .morphing-header,
+.filterbar-inline-hero .morphing-header {
+  margin-bottom: 16px;
+  text-align: center;
+  width: 100%;
+  max-width: var(--filterbar-hero-title-max-width, 800px);
+  align-self: center;
+}
+
+.filterbar-hero-dataset-icon {
+  display: block;
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 16px;
+  color: var(--primary_color, var(--text_color));
+  opacity: 0.95;
+}
+
+.filterbar-hero-dataset-icon--users {
+  color: #fff;
+}
+
+.filterbar-panel--wide .morphing-title,
+.filterbar-inline-hero .morphing-title {
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  font-weight: 700;
+  color: var(--text_color);
+  margin-bottom: 8px;
+  letter-spacing: -0.03em;
+}
+
+.filterbar-panel--wide .morphing-subtitle,
+.filterbar-inline-hero .morphing-subtitle {
+  font-size: 16px;
+  color: #8a8a9b;
+  margin-bottom: 0;
+}
+
+.filterbar-panel--wide .filterbar_results_count,
+.filterbar-inline-hero .filterbar_results_count {
+  text-align: center;
+}
+
+.filterbar-inline-hero-sort-row {
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* ============================================
+   COMPACT STATE (sidebar mode)
+   Applied via JS after the left transition ends,
+   so content stays full-size during the slide.
+   ============================================ */
+
+.filterbar-panel--compact .morphing-header {
+  margin-bottom: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.filterbar-panel--compact .morphing-title {
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text_color);
+  margin-bottom: 0;
+  letter-spacing: -0.01em;
+}
+
+.filterbar-panel--compact .morphing-subtitle {
+  display: none;
+}
+
+/* Compact logo: smaller, left-aligned, less padding */
+.filterbar-panel--compact .project-logo-wrapper {
+  justify-content: flex-start;
+  margin-top: 0;
+  padding-bottom: 8px;
+}
+
+.filterbar-panel--compact .logo-letter-backgrounds-container {
+  --logo-letter-bg-size: 28px;
+  --logo-letter-bg-font-size: 10px;
+  --logo-letter-bg-radius: 1px;
+  --logo-letter-bg-gap-x: 0px;
+  justify-content: flex-start;
+  margin: var(--filterbar-panel-top-space, 16px) var(--filterbar-panel-inline-space, 24px) 0;
+  max-height: 64px;
+  overflow: hidden;
+  transition:
+    max-height 180ms ease,
+    margin 180ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+
+.filterbar-panel--compact .logo-letter-background--endcap-label {
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-indent: 1px;
+}
+
+.filterbar-panel--compact .filterbar_results_count {
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.filterbar-panel--compact .morphing-header,
+.filterbar-panel--compact .filterbar_results_count {
+  overflow: hidden;
+  max-height: 72px;
+  transition:
+    max-height 180ms ease,
+    margin 180ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+
+.filterbar-panel--compact.filterbar-panel--body-scrolled .logo-letter-backgrounds-container,
+.filterbar-panel--compact.filterbar-panel--body-scrolled .morphing-header,
+.filterbar-panel--compact.filterbar-panel--body-scrolled .filterbar_results_count {
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+}
+
+.filterbar-panel--compact.filterbar-panel--body-scrolled .filter-content-inner {
+  gap: 0;
+  margin:
+    4px
+    calc(12px + 44px + 12px)
+    0
+    12px;
+}
+
+/* ============================================
+   PANEL BODY: FILTER SECTIONS (favefox-style)
+   Filters live in the panel's lower body in compact mode.
+   ============================================ */
+
+.filterbar-panel-body .favefox-filterbar {
+  overflow: visible;
+}
+
+.filterbar-panel-body .favefox-filterbar .filter-header {
+  background-color: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
+  color: var(--fw-color-text);
+  padding: var(--fw-space-2) var(--fw-space-3);
+  transition: all 0.2s ease;
+}
+
+.filterbar-panel-body .favefox-filterbar .filter-header:hover {
+  background-color: transparent;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open {
+  overflow: visible;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-header--static {
+  background-color: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
+  padding: 0;
+  grid-area: header;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  align-self: start;
+  min-width: 0;
+  min-height: 0;
+  color: var(--fw-color-text);
+}
+
+.filterbar-panel-body .favefox-filterbar.favefox-filterbar--inline-open .filter-section--inline-open .filter-header--static {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-header--static:hover {
+  background-color: transparent;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-header--static h3 {
+  line-height: 1.2;
+}
+
+.filterbar-panel-body .favefox-filterbar .filter-section {
+  border-color: transparent;
+  margin-bottom: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-section--inline-open {
+  overflow: visible;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "header actions"
+    "content content";
+  align-items: start;
+  gap: 20px var(--fw-space-3);
+  padding: 20px var(--filterbar-panel-inline-space, 24px);
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-content--inline-open {
+  padding: 0;
+  grid-area: content;
+  min-width: 0;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-content--inline-open .row-container {
+  padding: 0;
+  min-width: 0;
+}
+
+.filterbar-panel-body .filterbar-text-search-row .dataset-search-panel--filter-stack {
+  width: 100%;
+}
+
+.filterbar-panel-body .filterbar-text-search-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.filterbar-panel-body .filterbar-text-search-controls {
+  padding: 0;
+  background: transparent;
+}
+
+.filterbar-panel-body .filterbar-text-search-row .dataset-search-input,
+.filterbar-panel-body .filterbar-text-search-row .dataset-search-submit-button {
+  height: 34px !important;
+}
+
+.filterbar-panel-body .filterbar-text-search-row .dataset-search-input-row {
+  --dataset-search-placeholder-fade-left: var(--fw-space-3);
+}
+
+.filterbar-panel-body .filterbar-text-search-row .dataset-search-input {
+  font-family: inherit;
+  padding-inline: var(--fw-space-3) !important;
+}
+
+.filterbar-panel-body .filterbar-text-search-row .dataset-search-submit-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-section-header-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  justify-content: flex-end;
+  min-width: 30px;
+}
+
+/* ============================================
+   RESULTS COUNT
+   ============================================ */
+
+.filterbar_results_count {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text_color_subtle, var(--text_color));
+  opacity: 0.85;
+}
+
+.results-count--search-breakdown {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.45rem;
+}
+
+.results-count-prefix {
+  opacity: 0.9;
+}
+
+.results-count-breakdown {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.results-count-breakdown-item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.results-count-breakdown-value {
+  color: var(--text_color);
+  font-weight: 700;
+}
+
+.results-count-breakdown-separator {
+  opacity: 0.55;
+}
+
+/* ============================================
+   PROJECT LOGO
+   ============================================ */
+
+.project-logo-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: var(--filterbar-panel-top-space, 16px) var(--filterbar-panel-inline-space, 24px) 0;
+  width: auto;
+  pointer-events: none;
+  z-index: 0;
+  padding-bottom: 20px;
+  transition: padding 0.5s ease, margin 0.5s ease, opacity 0.3s ease;
+}
+
+.project-logo-wrapper--hidden {
+  display: none;
+  margin-top: 0;
+  padding-bottom: 0;
+}
+
+.project-logo-image {
+  max-width: var(--filterbar-hero-content-max-width, 550px);
+  max-height: 150px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+}
+
+.logo-letter-backgrounds-container {
+  display: grid;
+  grid-template-columns: repeat(8, min-content);
+  justify-content: center;
+  gap: var(--logo-letter-bg-gap-x);
+  width: auto;
+  max-width: 800px;
+  margin: var(--filterbar-panel-top-space, 16px) auto 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 1;
+}
+
+.logo-letter-backgrounds-container--serlog-glow {
+  --serlog-logo-glow-width: calc(var(--logo-letter-bg-size) * 8);
+  --serlog-logo-glow-height: calc(var(--logo-letter-bg-size) * 2);
+}
+
+.logo-letter-background {
+  width: var(--logo-letter-bg-size);
+  height: var(--logo-letter-bg-size);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--logo-letter-bg-radius);
+  transition: all 0.5s ease;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Inter, sans-serif;
+  font-weight: 800;
+  font-size: var(--logo-letter-bg-font-size);
+  user-select: none;
+}
+
+.logo-letter-backgrounds-container--serlog-glow .logo-letter-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at 50% 50%,
+      color-mix(in srgb, var(--primary_color, hsl(var(--brand-hue) 80% 50%)) 32%, transparent) 0%,
+      transparent 58%
+    ),
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      rgb(255 255 255 / 14%) 42%,
+      rgb(255 255 255 / 8%) 56%,
+      transparent 78%
+    );
+  background-size: var(--serlog-logo-glow-width) var(--serlog-logo-glow-height);
+  background-position:
+    calc(var(--logo-cell-column, 0) * -1 * var(--logo-letter-bg-size))
+    calc(var(--logo-cell-row, 0) * -1 * var(--logo-letter-bg-size));
+  mix-blend-mode: screen;
+  opacity: 0.8;
+}
+
+.logo-letter-background--endcap-label {
+  font-size: max(6px, calc(var(--logo-letter-bg-font-size) * 0.58));
+  line-height: 1;
+  letter-spacing: 3px;
+  text-align: center;
+  text-indent: 3px;
+}
+
+.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-dark
+  .logo-letter-background--has-letter,
+.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-light
+  .logo-letter-background--blue-letter {
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.55),
+    0 0 6px rgb(0 0 0 / 0.22);
+}
+
+body.light-mode .logo-letter-backgrounds-container--serlog-glow
+  .logo-letter-background--endcap-label,
+body.light-mode .logo-letter-backgrounds-container--serlog-glow
+  .logo-letter-background--monochrome-letter,
+.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-light
+  .logo-letter-background--endcap-label,
+.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-light
+  .logo-letter-background--monochrome-letter {
+  text-shadow: none;
+}
+
+/* Corner rounding — only the outer corner of each corner cell */
+.logo-corner-tl { border-top-left-radius: var(--logo-corner-radius, 18%); }
+.logo-corner-tr { border-top-right-radius: var(--logo-corner-radius, 18%); }
+.logo-corner-bl { border-bottom-left-radius: var(--logo-corner-radius, 18%); }
+.logo-corner-br { border-bottom-right-radius: var(--logo-corner-radius, 18%); }
+
+/* ============================================
+   FILTER TOP GRID (buttons, sort, etc.)
+   ============================================ */
+
+.dataset-filter-top-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.filterbar-panel--compact .dataset-filter-query-section,
+.filterbar-panel--compact .dataset-filter-tools-section,
+.filterbar-panel--compact .dataset-filter-views-section,
+.filterbar-panel--compact .filterbar-disclosure-section,
+.filterbar-panel--compact .column-preset-row,
+.filterbar-panel-body > .favefox-filterbar-wrapper {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.favefox-filterbar {
+  background: transparent !important;
+}
+
+/* ============================================
+   SCROLL SENTINEL (invisible trigger element)
+   ============================================ */
+
+.filterbar-scroll-sentinel {
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (width <= 768px) {
+  .filterbar-inline-hero {
+    padding: 18px 12px 14px;
+  }
+
+  .dataset-filter-top-grid {
+    gap: 10px;
+  }
+}
+
+@media (width <= 480px) {
+  .filterbar-inline-hero {
+    padding: 14px 8px 12px;
+  }
+
+  .dataset-filter-top-grid {
+    gap: 6px;
+  }
+}

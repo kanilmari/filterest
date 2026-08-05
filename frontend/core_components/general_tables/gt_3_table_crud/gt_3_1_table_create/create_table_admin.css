@@ -1,0 +1,64 @@
+/*
+ * create_table_admin.css
+ *
+ * Form styling for the admin table creation view.
+ * Bridges the table creation form (#table_creation_form) and the admin UI.
+ * Exists to lay out labels, inputs, and submit controls for new table setup.
+ */
+#table_creation_form {
+    margin-top: 20px;
+}
+
+/* Labelit pinoavat sisällön selkeästi */
+#table_creation_form label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+.table-folder-section {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--table_border_color);
+    border-radius: var(--border_radius_small);
+    margin-bottom: 10px;
+}
+
+.table-folder-section-title {
+    font-weight: 600;
+}
+
+.table-folder-inline-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.table-folder-hint {
+    margin: 0;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.92rem;
+}
+
+/* Yksittäinen "row" sarakkeelle:
+   Käytetään display: grid -asettelua taulukkomaisesti */
+.column-field {
+    display: grid;
+    grid-template-columns: 200px 200px 100px auto; /* Voit muokata leveyksiä */
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 10px; /* pientä tilaa riveille */
+    border: 1px solid var(--table_border_color);
+    padding: 7px;
+}
+
+/* Pienet marginaalit kentille */
+.column-field input,
+.column-field select {
+    margin-right: 5px;
+}
+
+/* Poista-painikkeen pientä marginaalia */
+.column-field button {
+    margin-left: 5px;
+}

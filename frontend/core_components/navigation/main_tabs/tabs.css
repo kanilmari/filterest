@@ -1,0 +1,141 @@
+/*
+ * tabs.css
+ *
+ * Styles for the main navigation tab strip (dataset tabs).
+ * Bridges tab button elements (.navtablinks) and the dataset switching logic.
+ * Exists to render the horizontal tab bar with active/hover states.
+ */
+
+.navtablinks {
+    --navtab-content-transition-easing: linear;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    height: 65px;
+    overflow: hidden;
+    transition:
+        background-color var(--navtab-presentation-transition-duration, 150ms) var(--navtab-presentation-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.navtablinks[draggable="true"] {
+    cursor: grab;
+}
+
+.navtablinks[draggable="true"]:active,
+.navtabs--reordering .navtablinks {
+    cursor: grabbing;
+}
+
+.navtablinks--dragging {
+    opacity: 0.45;
+}
+
+.navtabs--reordering .navtablinks:not(.navtablinks--dragging) {
+    transition:
+        transform 90ms ease,
+        background-color var(--navtab-presentation-transition-duration, 150ms) var(--navtab-presentation-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* .navtablinks.active {
+    outline: 2px solid blue;
+} */
+
+.svg-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.svg-container path {
+    transition-property: fill, stroke, stroke-width, opacity;
+    transition-duration: var(--navtab-presentation-transition-duration, 150ms);
+    transition-timing-function: var(--navtab-presentation-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.navtab_icon {
+    position: absolute;
+    left: calc(var(--navtab-rounded-left-offset, 50px) + 14px);
+    top: 50%;
+    width: 26px;
+    height: 26px;
+    transform: translateY(-50%);
+    color: var(--text_color);
+    pointer-events: none;
+    overflow: visible;
+    will-change: left, width, height;
+    transition:
+        left var(--navtab-presentation-transition-duration, 150ms) var(--navtab-content-transition-easing, linear),
+        width var(--navtab-presentation-transition-duration, 150ms) var(--navtab-content-transition-easing, linear),
+        height var(--navtab-presentation-transition-duration, 150ms) var(--navtab-content-transition-easing, linear),
+        color var(--theme-transition-duration, 520ms) var(--theme-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.navtab_icon path {
+    fill: currentcolor;
+}
+
+.tab_button_text {
+    position: absolute;
+    left: calc(var(--navtab-rounded-left-offset, 50px) + 50px);
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: block;
+    font-size: 16px;
+    line-height: 1.2;
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+    min-width: 0;
+    overflow: hidden;
+    will-change: left, right, font-size;
+    transition:
+        left var(--navtab-presentation-transition-duration, 150ms) var(--navtab-content-transition-easing, linear),
+        right var(--navtab-presentation-transition-duration, 150ms) var(--navtab-content-transition-easing, linear),
+        font-size var(--navtab-presentation-transition-duration, 150ms) var(--navtab-content-transition-easing, linear),
+        color var(--theme-transition-duration, 520ms) var(--theme-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.tab_button_text.tab_button_text--multiline {
+    font-size: 15px;
+}
+
+.navtablinks[data-tab-presentation^="button"] {
+    background-color: var(--bg_color_1_5);
+    border-radius: 0;
+    justify-self: left;
+    width: calc(100% - 2px);
+}
+
+#navmenu .navtablinks[data-tab-presentation^="button"] {
+    justify-self: left;
+    width: calc(100% - 2px);
+}
+
+.navtablinks[data-tab-presentation="button-active"] {
+    background-color: var(--bg_color_2);
+}
+
+.navtablinks[data-tab-presentation="tab-active"] {
+    z-index: 2;
+}
+
+.navtablinks[data-tab-presentation^="button"] .navtab_icon {
+    left: 22px;
+    width: 24px;
+    height: 24px;
+}
+
+.navtablinks[data-tab-presentation^="button"] .tab_button_text {
+    left: 62px;
+    right: 20px;
+    font-size: 18px;
+}

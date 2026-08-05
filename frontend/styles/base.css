@@ -1,0 +1,374 @@
+/* base.css */
+/* 
+ * Visual Documentation:
+ * - instructions_and_documentation/visual_documentation/layout_and_navigation_concepts.md
+ *   - Defines the high-level visual architecture (Menu vs Tab Content).
+ * - instructions_and_documentation/visual_documentation/tab_content/data_content/data_content_overview.md
+ *   - Defines the dataset content area layout grid.
+ * - instructions_and_documentation/visual_documentation/tab_content/filter_bar/filter_bar_overview.md
+ *   - Defines the filter bar layout grid.
+ */
+
+* {
+    font-family: Arial, sans-serif;
+    letter-spacing: 0.5px;
+    /* line-height: 1.625; */
+    box-sizing: border-box;
+    margin: 0;
+    color: var(--text_color);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.saturate_on_hover {
+    --saturate-on-hover-amount: 1.22;
+    --saturate-on-hover-transition-duration: 160ms;
+    --saturate-on-hover-transition-easing: ease-out;
+
+    transition: filter var(--saturate-on-hover-transition-duration) var(--saturate-on-hover-transition-easing);
+}
+
+.saturate_on_hover:hover {
+    filter: saturate(var(--saturate-on-hover-amount));
+}
+
+body {
+    background-color: color-mix(in srgb, var(--bg_color) 50%, var(--bg_color_extreme) 50%);
+    overflow: hidden;
+    line-height: 1.5;
+}
+
+.body_wrapper {
+    overflow: hidden;
+    background-color: var(--bg_color_blended_2);
+}
+
+/* Yleiset perustyylit */
+.body_content {
+    height: 100vh;
+    background-color: var(--bg_color);
+    color: var(--text_color);
+    margin: auto;
+    position: relative;
+    grid-column: 2;
+    max-width: 2560px;
+    /* contain: paint turns body_content into a containing block for
+       position: fixed descendants (sidebar, toggle, search bar) AND
+       clips them at the 2560px boundary.  On viewports wider than
+       2560px the sidebar / toggle stay inside the content area and
+       the slide-out animation is hidden beyond the edge. */
+    contain: paint;
+}
+
+#tabs_container {
+    transform: translateX(var(--navbar_width));
+    width: calc(100% - var(--navbar_width));
+    will-change: transform, width;
+}
+
+.body_content.navbar-transitions-ready #tabs_container {
+    transition:
+        transform var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1),
+        width var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#tabs_container.navbar_hidden {
+    width: 100%;
+    transform: translateX(0);
+}
+
+.hidden {
+    display: none !important;
+}
+
+
+input {
+    box-sizing: border-box;
+}
+
+input:focus {
+    outline: 2px solid var(--border_color) !important;
+}
+
+input::placeholder {
+    color: var(--empty_field_text_color);
+    opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+    input {
+        background-color: var(--input_bg_color);
+        color: var(--text_color);
+    }
+}
+
+/* .tab_parts_container {
+    height: 100vh;
+    display: grid;
+    grid-template-columns: auto 450px;
+} */
+/* Grid: vain content-alue, filterbar on fixed overlay margin-right-tilanvarauksella */
+.tab_parts_container {
+    display: grid;
+    grid-template: "content" 1fr / 1fr;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    position: relative;
+}
+
+.tab_parts_container:has(.dataset-filter-panel.hidden) {
+    /* Ei muutosta, grid on jo content-only */
+}
+
+.tab-content-area {
+    background-color: var(--bg_color_2);
+    grid-area: content;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+    position: relative;
+    /* Margin-right animaatio filterbar-tilanvaraukselle */
+    margin-right: 0;
+    transition:
+        margin-right var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tab-content-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 1fr;
+}
+
+.tab-content-body>.scrollable_content {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    overflow: auto;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+}
+
+.transparent {
+    opacity: 0;
+}
+
+textarea {
+    background-color: var(--input_bg_color);
+    color: var(--text_color);
+    font-size: 1rem;
+    width: 100%;
+}
+
+.auto_resize_textarea {
+    background-color: var(--input_bg_color);
+    color: var(--text_color);
+    resize: vertical;
+    box-sizing: border-box;
+    /* line-height: 1.4em; */
+    min-height: 1.4em;
+    width: 100%;
+}
+
+
+
+.no-float+label {
+    position: static;
+    transform: none;
+    font-size: inherit;
+    color: inherit;
+    transition: none;
+}
+
+.no-float:focus+label,
+.no-float:not(:placeholder-shown)+label {
+    position: static !important;
+    transform: none !important;
+    font-size: inherit !important;
+    color: inherit !important;
+}
+
+.filter-elements-container {
+    display: grid;
+    gap: 10px;
+    background-color: var(--bg_color);
+}
+
+.chat-bubble details {
+    padding: 10px;
+    border: 1px solid var(--border_color);
+    max-height: 200px;
+    overflow: auto;
+    border-radius: var(--border_radius_small);
+}
+
+.chat-bubble summary {
+    border-bottom: 1px solid var(--border_color);
+}
+
+summary {
+    cursor: pointer;
+}
+
+.sort_button {
+    margin: 5px;
+}
+
+.sort_button_fade_until_hover {
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 0.3s;
+}
+
+/* 3 ongelmaa: 
+- 0.3 s on liian lyhyt aika: sen pitäisi ilmestyä nopeasti mutta ei kadota nopeasti vaan näkyä pitkään; ei toteutettavissa yksinkertaisella 0.5 tms. animaatiosäännöllä.
+- Lisäksi .filter-field-header:hover .sort_button_fade_until_hover ei toimi: se alkaa toimia vasta kun hoveroinnin kohdistaa itse nappiin. Tosin se ei ole mukavaa: olisi kiva jos otsikkorivin hoverointi toimisi (toisin kuin nyt).
+- Kolmannekseen pointer-events none ei toimi .sort_button_fade_until_hover -säännöissä: vasta auto toimii.
+
+*/
+/* .filter-field-header:hover .sort_button_fade_until_hover { */
+.sort_button_fade_until_hover:hover {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.column_management_forms input[type="text"] {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.content_div {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.dataset-search-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.dataset-search-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dataset-search-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+
+
+.dataset-search-subtitle {
+    color: var(--text_color_subtle);
+    font-size: 1rem;
+}
+
+.dataset-search-subtitle-text {
+    line-height: 1.35;
+}
+
+.dataset-search-title-text {
+    font-weight: 700;
+    font-size: 27px;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.dataset-search-row.dataset-search-hidden {
+    display: none !important;
+}
+
+.dataset-search-title.dataset-search-title-hidden {
+    display: none !important;
+}
+
+
+.row-container {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: 50px auto;
+    padding: 2px;
+}
+
+.combined-filter-sort-container {
+    display: grid;
+    gap: 0.5rem;
+    padding: 8px 0 0;
+}
+
+.results_count {
+    display: block;
+    margin: 20px auto;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--text_color);
+}
+
+/* top info banner
+.info-banner {
+    position: fixed;
+    top: 20px; left: auto; right: auto;
+    z-index: 2000000;
+    text-align: center;
+    background-color: var(--info_banner_bg_color);
+    border-radius: var(--border_radius);
+    padding: 12px;
+    font-size: 0.9rem;
+    color: var(--text_color);
+    border: 2px solid var(--info_banner_border_color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+*/

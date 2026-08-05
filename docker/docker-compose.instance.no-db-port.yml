@@ -1,0 +1,9 @@
+# ==============================================================================
+# docker-compose.instance.no-db-port.yml: Optional override for internal-only DB
+# Used between: docker/docker-compose.instance.yml and instance env files.
+# Exists to remove PostgreSQL host publication while keeping app port publication.
+# ==============================================================================
+
+services:
+  db:
+    ports: !reset []

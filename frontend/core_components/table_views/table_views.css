@@ -1,0 +1,171 @@
+/*
+ * table_views.css
+ *
+ * Shared table display styles for normal and comparison views.
+ * Bridges the table_views module and the CSS variable system.
+ * Exists to provide the base table/row/cell layout used across all view modes.
+ */
+.table {
+    display: table;
+    margin: 20px 0;
+    border-spacing: 50px 0;
+}
+
+.row {
+    display: table-row;
+    box-shadow: none;
+}
+  
+
+.cell {
+    display: table-cell;
+    vertical-align: middle;
+    min-width: 80px;
+    /* width: 250px; */
+    border-right: 1px solid var(--table_border_color);
+    border-bottom: 1px solid var(--table_border_color);
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    padding: 8px 0;
+    /* border-radius: 5px; */
+}
+
+.cell-content {
+    max-height: 80px;
+    max-width: 300px;
+    overflow: auto;
+    /* padding-right: 5px; */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+
+}
+
+.header {
+    font-weight: bold;
+    padding-bottom: 5px;
+    border-right-width: 2px;
+    border-bottom: 2px solid var(--table_border_color);
+    box-shadow: none;
+    /* Jos haluat vaihtaa taustavärin myös otsikoissa:
+       background-color: var(--header_bg_color); */
+}
+
+.sortable {
+    cursor: pointer;
+}
+
+.sortable:hover {
+    background-color: var(--bg_color);
+}
+
+/* DRAG HANDLE -tyylit */
+.drag-handle {
+    display: none;
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    cursor: grab;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* Näytä drag-handle hoverissa otsikkosoluissa */
+.cell.header.sortable:hover .drag-handle {
+    display: inline-block;
+}
+
+/* Suodatuskentät ja näkymävalinnan sijoittelu */
+#controls {
+    margin: 20px 0;
+}
+
+#controls label {
+    margin-right: 10px;
+    font-weight: bold;
+}
+
+#controls input {
+    margin-right: 20px;
+}
+
+#viewSelector {
+    margin-left: 20px;
+    padding: 5px 10px;
+}
+
+/* Tikettinäkymän perusmuotoilu */
+.ticket-container {
+    margin-top: 20px;
+}
+
+.ticket {
+    border: 1px solid var(--border_color);
+    border-radius: 5px;
+    background-color: var(--bg_color);
+    padding: 15px;
+    margin: 15px;
+}
+
+.ticket div {
+    margin: 3px 0;
+}
+
+.ticket .label {
+    font-weight: bold;
+    margin-right: 5px;
+    cursor: pointer;
+}
+
+.ticket .label:hover {
+    text-decoration: underline;
+}
+
+/* Korostus: käytetään mukautettuja värejä */
+.cell.selected {
+    color: var(--primary_text_color, white);
+    background-color: color-mix(in srgb, var(--primary_color, hsl(var(--brand-hue) 80% 50%)) 18%, var(--bg_color_extreme) 82%);
+    /* text-shadow: var(--text_shadow); */
+    transition: all 0.15s ease;
+    outline: 3px solid var(--outline_color, var(--primary_color, hsl(var(--brand-hue) 80% 50%)));
+    outline-offset: -3px;
+}
+
+.cell.selected_for_editing {
+    outline: 2px solid var(--outline_color);
+    outline-offset: -2px;
+}
+
+.cell.editing {
+    min-width: 0;
+}
+
+.cell.editing .table-editor-input,
+.cell.editing .table-editor-select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/* Pieni valikko (context menu -tyyppinen) */
+.selection-menu {
+    position: absolute;
+    display: none;
+    background: var(--menu_bg_color);
+    border: 1px solid var(--menu_border_color);
+    border-radius: 5px;
+    padding: 8px;
+    font-size: 14px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+}
+
+.selection-menu button {
+    margin: 5px 0;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+}

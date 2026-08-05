@@ -1,0 +1,103 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="{{.LangCode}}">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Disable automatic phone number detection for better design control -->
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- Dynamic SEO meta tags (populated by Go template from seo_meta_helpers.go) -->
+    <title>{{.PageTitle}}</title>
+    <meta name="description" content="{{.MetaDescription}}">
+    <link rel="canonical" href="{{.CanonicalURL}}">
+    {{if .RobotsNoIndex}}<meta name="robots" content="noindex, nofollow">{{end}}
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{{.OGType}}">
+    <meta property="og:title" content="{{.OGTitle}}">
+    <meta property="og:description" content="{{.OGDescription}}">
+    <meta property="og:url" content="{{.OGURL}}">
+    <meta property="og:image" content="{{.OGImage}}">
+    <meta property="og:locale" content="{{.OGLocale}}">
+    <meta property="og:site_name" content="{{.SiteName}}">
+    <meta name="project-logo-path" content="{{.ProjectLogoPath}}">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{.OGTitle}}">
+    <meta name="twitter:description" content="{{.OGDescription}}">
+    <meta name="twitter:image" content="{{.OGImage}}">
+
+    <!-- Add to home screen for Safari on iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+    <!-- Add to home screen for Chrome on Android -->
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- 🔑 välitetään nonce metaan, jotta JS löytää sen -->
+    <meta name="csp-nonce" content="{{ .CSPNonce }}">
+    <!-- Ympäristötieto frontille (dev/prod) -->
+    <meta name="app-env" content="{{if .IsDev}}dev{{else}}prod{{end}}">
+    <!-- First Runissa valittu käyttötarkoitus; ei muuta prosessin turvallisuustasoa. -->
+    <meta name="installation-environment" content="{{.InstallationEnvironment}}">
+
+    <link rel="icon" href="/frontend/favicon4S.png">
+    {{/* dev_error_forwarder is now loaded as ES module import in main.js */}}
+    {{if .UseMinifiedAssets}}
+    <link rel="stylesheet" id="imports-css" href="{{.ImportsCSSPath}}">
+    {{else}}
+    <link rel="stylesheet" id="imports-css" href="/frontend/styles/imports.css">
+    {{end}}
+</head>
+
+<body>
+<!--[if IE]>
+<div>Internet Explorer not supported. Download Brave browser and use it.</div>
+<a href="https://brave.com/download/">Brave browser download</a>
+<![endif]-->
+    <div class="body_wrapper">
+        <!-- Sisältö -->
+        <div class="body_content">
+            <!-- <div class="vertical-nav"> -->
+            <button id="showMenuButton">☰</button>
+            <div id="navbar" class="collapsed">
+                <div class="top-button-bar">
+                    <button id="hideMenuButton">☰</button>
+                    <div class="nav-history-buttons">
+                        <button id="navBackBtn" class="nav-history-btn" disabled title="Back">
+                            <span class="nav-history-btn-icon nav-history-btn-icon--back" aria-hidden="true"></span>
+                        </button>
+                        <button id="navForwardBtn" class="nav-history-btn" disabled title="Forward">
+                            <span class="nav-history-btn-icon nav-history-btn-icon--forward" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <button id="themeToggleBtn" class="smallButtons button"></button>
+                    <div class="language-selection menu-language-selection button"></div>
+                </div>
+                <div id="navbarAuthActions" class="navbar-auth-actions" aria-label="Account actions"></div>
+                <div class="navtabs_relative navbar-tab-region">
+                    <div id="navmenu" class="navtabs"></div>
+                </div>
+                <!-- <a href="/register_ndYOyXV0INOK3F" data-lang-key="register_a_companion"></a> -->
+                <!-- <div id="session_debug"></div> -->
+            </div>
+            <!-- </div> -->
+
+            <div id="tabs_container" class="navbar_hidden">
+                <!-- Dynaamisesti generoidut taulukot ja näkymät tulevat tänne -->
+            </div>
+        </div>
+    </div>
+    <script src="/frontend/public/initial_browser_check.js"></script> <!-- IE check, can't be a module, added in "public/" -->
+    {{if .UseMinifiedAssets}}
+    <script type="module" id="main-bundle" src="{{.MainBundlePath}}"></script>
+    {{else}}
+    <script type="module" id="main-bundle" src="/frontend/main.js"></script>
+    {{end}}
+</body>
+
+</html>

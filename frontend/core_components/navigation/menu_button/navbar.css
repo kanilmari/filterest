@@ -1,0 +1,803 @@
+/*
+ * navbar.css
+ *
+ * Fixed sidebar navigation layout, menu button styling, and collapse behavior.
+ * Bridges the navbar DOM (#navbar) and the CSS variable system (--navbar_width).
+ * Exists to position the main navigation panel and control its expand/collapse transitions.
+ *
+ * Visual Documentation:
+ * - docs/instructions_and_documentation/visual_documentation/menu_bar/menu_bar_overview.md
+ *   - Describes the menu bar layout and behavior.
+ */
+#navbar {
+    --navbar-control-radius: 8px;
+    --navtab-presentation-transition-duration: 150ms;
+    --navtab-presentation-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
+    position: fixed;
+    width: var(--navbar_width);
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto auto;
+    align-content: start;
+    gap: 2px;
+    background-color: var(--bg_color);
+    /* Critical tab-edge contract:
+       keep the navbar's visible edge as this inset shadow. Do not replace it
+       with a border, pseudo-element, or child overlay. Right-opening rounded
+       SVG tabs intentionally cross this visual edge so their outline can blend
+       seamlessly with card content; a real border would paint over that shape.
+       The navbar intentionally has only this right structural edge. */
+    box-shadow: inset -2px 0 0 0 var(--border_color);
+    grid-auto-rows: min-content;
+    /* padding: var(--navbar_padding); */
+    padding-top: unset;
+    overflow: hidden auto;
+    direction: rtl;
+    z-index: var(--z-navbar);
+    transform: translateX(0);
+    opacity: 1;
+    will-change: transform;
+}
+
+#navbar * {
+    direction: ltr;
+}
+
+
+
+.vertical-nav {
+    overflow-y: auto;
+    height: 100vh;
+    direction: rtl;
+}
+
+#navbar #navContainer button,
+#navbar #nav_tree button {
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+    font-size: 16px;
+    height: auto;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: none;
+    margin-top: 5px !important;
+}
+
+#navContainer button:hover,
+#nav_tree button:hover {
+    background-color: color-mix(in srgb, var(--button_bg_color) 50%, var(--button_hover_bg_color) 50%);
+    /* outline: 2px solid color-mix(in srgb, var(--button_bg_color) 50%, var(--button_hover_bg_color) 50%); */
+    border: none;
+    color: var(--button_hover_text_color);
+}
+
+#nav_tree button.active,
+#navContainer button.active {
+    background-color: rgb(0 70 255 / 0.2);
+    color: var(--button_active_text_color);
+    outline: 2px solid var(--border_color);
+}
+
+/* ── Admin-puun erotteleva tyyli (indigo, monospace, reunaviiva) ─── */
+
+/* Admin-puun painikkeet: indigo-tausta + monospace-fontti */
+#admin_tools_tree .general_button_admin {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 16px;
+    background-color: rgb(63 50 120 / 0.15);
+    border-left: 3px solid rgb(75 60 140 / 0.4);
+    padding: 4px 8px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+#admin_tools_tree .general_button_admin:hover {
+    background-color: rgb(75 60 160 / 0.3);
+    border-left-color: rgb(100 80 200 / 0.7);
+}
+
+/* Admin-puun aktiivinen: indigo-korostus */
+#admin_tools_tree .general_button_admin.active {
+    background-color: rgb(75 50 180 / 0.25);
+    color: var(--button_active_text_color);
+    outline: 2px solid rgb(100 70 200 / 0.5);
+}
+
+/* Kolmio puun oikeaan reunaan — node-row-tasolla, ei napin sisällä */
+#admin_tools_tree .node-row:has(.general_button_admin.active) {
+    position: relative;
+}
+
+#admin_tools_tree .node-row:has(.general_button_admin.active)::after {
+    content: "▶";
+    position: absolute;
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: rgb(140 120 255);
+    font-family: sans-serif;
+    pointer-events: none;
+}
+
+/* Admin-puun kansio-otsikot: indigo-vivahteet, sama koko kuin leaf-napit */
+#admin_tools_tree .node-row > span {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 16px;
+    color: rgb(180 170 220);
+}
+
+#nav_tree .node[data-current-project="true"] > .node-row > span {
+    color: rgb(236 228 173);
+}
+
+#nav_tree .tree-current-project-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border: 1px solid rgb(214 194 95 / 0.5);
+    border-radius: 999px;
+    background: rgb(214 194 95 / 0.16);
+    color: rgb(236 228 173);
+    font-family: system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+body.light-mode #nav_tree .node[data-current-project="true"] > .node-row > span {
+    color: color-mix(in srgb, var(--text_color) 86%, rgb(146 118 31) 14%);
+}
+
+body.light-mode #nav_tree .tree-current-project-badge {
+    border-color: rgb(146 118 31 / 0.55);
+    background: rgb(146 118 31 / 0.16);
+    color: rgb(92 72 18);
+}
+
+@media (prefers-color-scheme: light) {
+    body:not(.dark-mode) #nav_tree .node[data-current-project="true"] > .node-row > span {
+        color: color-mix(in srgb, var(--text_color) 86%, rgb(146 118 31) 14%);
+    }
+
+    body:not(.dark-mode) #nav_tree .tree-current-project-badge {
+        border-color: rgb(146 118 31 / 0.55);
+        background: rgb(146 118 31 / 0.16);
+        color: rgb(92 72 18);
+    }
+}
+
+/* Admin-puun reunaviiva haaran vasempaan reunaan */
+#admin_tools_tree .children {
+    border-left: 1px solid rgb(100 80 180 / 0.3);
+    margin-left: 8px;
+}
+
+#navContainer button:active,
+#nav_tree button:active {
+    transform: scale(var(--button_pressed_scale));
+}
+
+.collapsible.child-active::after {
+    content: "•";
+    color: rgb(0 70 255);
+    margin-left: 0.5em;
+    font-weight: bold;
+}
+
+/* child-rv: himmeä korostus, jos ryhmässä on vain RV-nappeja */
+.collapsible.child-rv::after {
+    content: "•";
+    color: rgb(20 35 128);
+    /* himmeämpi punainen */
+    margin-left: 0.5em;
+    font-weight: bold;
+}
+
+#navbar button.recently_viewed {
+    /* background-color: rgba(70, 100, 127, 0.2); */
+    /* background-color: rgba(89, 110, 166, 0.2); */
+    background-color: rgb(77 104 179 / 0.2);
+    outline: 2px solid rgb(77 104 179 / 0.2);
+    /* background-color: rgba(124, 89, 166, 0.2); */
+    color: var(--button_active_text_color);
+}
+
+#navbar button:disabled {
+    background-color: var(--table_border_color);
+    color: var(--border_color);
+    cursor: not-allowed;
+}
+
+#navbar > *:not(.top-button-bar, .navtabs_relative) {
+    max-width: calc(var(--navbar_width) - 2*var(--navbar_padding) - 1px);
+    margin: var(--navbar_padding);
+}
+
+/* Style the collapsible buttons */
+.collapsible,
+.toolbar button {
+    cursor: pointer;
+    padding: 10px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 16px;
+    margin: 4px 0;
+}
+
+/* Add an active class to highlight the collapsible button when it is clicked */
+.collapsible.active,
+.collapsible:hover {
+    background-color: rgb(255 255 255 / 0.1);
+}
+
+/* Style the collapsible content */
+.content {
+    display: grid;
+    gap: 5px;
+    padding: 0 10px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    background-color: rgb(0 0 0 / 0.1);
+}
+
+/* Style for navigation buttons inside content */
+.navigation_buttons {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* Voit lisätä oman muuttujan: */
+:root {
+    --recently_visited_bg_color: rgb(255 165 0 / 0.2);
+}
+
+/* Luokka, joka näyttää viimeksi vieraillun n. 2h sisällä */
+.navigation_buttons.recently_visited:not(.active) {
+    background-color: var(--recently_visited_bg_color);
+    /* Halutessasi muita efektejä */
+}
+
+/* #navContainer {
+      width: calc(var(--navbar_width) - 22px);
+  } */
+
+.top-button-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    left: 0;
+    padding: 12px;
+    background-color: var(--bg_color);
+    z-index: calc(var(--z-navbar) + 1);
+    border-bottom: 2px solid var(--border_color);
+    /* Leave the final 2px clear so #navbar's single right edge remains visible. */
+    margin-right: 2px;
+    height: 70px; /* Matches the filterbar title row, including the restored bottom divider. */
+    box-sizing: border-box;
+    align-items: center;
+}
+
+.select-selected {
+    display: inline-grid;
+    grid-auto-flow: column;
+    /* gap: 0.25rem; */
+    white-space: nowrap;
+}
+
+/* All top-bar buttons: consistent 44px height */
+.top-button-bar button,
+.top-button-bar .language-button {
+    height: 44px;
+    box-sizing: border-box;
+    border-radius: var(--navbar-control-radius);
+}
+
+#navbar > .navbar-auth-actions {
+    /* Compensate for #navbar grid gap and the following tab region margin so
+       the visible air around the auth row matches the top button bar. */
+    margin: 20px 12px 12px;
+}
+
+.navbar-auth-actions {
+    grid-row: 2;
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.navbar-auth-actions--solo {
+    justify-content: center;
+}
+
+.navbar-auth-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 max-content;
+    gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--border_color);
+    border-radius: var(--navbar-control-radius);
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    box-shadow: var(--fw-shadow-raised);
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.2;
+}
+
+.navbar-auth-actions--solo .navbar-auth-action {
+    flex: 0 1 auto;
+}
+
+.navbar-auth-action:hover {
+    background-color: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+}
+
+.navbar-auth-action:active {
+    transform: scale(var(--button_pressed_scale));
+}
+
+.navbar-auth-action-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    color: currentcolor;
+}
+
+.navbar-auth-action-icon path {
+    fill: currentcolor;
+}
+
+.navbar-auth-action-text {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================
+   Navigation History Back/Forward Buttons
+   Merged pair with shared 1px border between them
+   ============================================ */
+.nav-history-buttons {
+    display: flex;
+    align-items: center;
+    /* No gap — buttons share a border via negative margin */
+}
+
+.nav-history-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--border_color);
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+    padding: 0;
+    appearance: none;
+}
+
+.nav-history-btn-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    background-color: currentcolor;
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+}
+
+.nav-history-btn-icon--back {
+    mask-image: url("/frontend/icons/navigation/nav-history-back-icon.svg");
+}
+
+.nav-history-btn-icon--forward {
+    mask-image: url("/frontend/icons/navigation/nav-history-forward-icon.svg");
+}
+
+/* Back button: flatten right side */
+#navBackBtn {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* Forward button: flatten left side, overlap border */
+#navForwardBtn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    margin-left: -1px;
+}
+
+.nav-history-btn:hover:not(:disabled) {
+    background-color: var(--button_hover_bg_color);
+    z-index: 1; /* Ensure hover border is on top */
+}
+
+.nav-history-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.navtabs_relative {
+    grid-row: 3;
+    right: 0;
+    position: relative;
+    z-index: 50;
+    width: 100%;
+    max-width: none;
+    margin: 22px 0 0;
+    overflow: visible;
+}
+
+.navtabs {
+    right: 0;
+    position: relative;
+    display: grid;
+    grid-auto-flow: row;
+    justify-items: stretch;
+    width: 100%;
+    margin-top: 0;
+    z-index: 100;
+}
+
+#navContainer {
+    grid-row: 4;
+    position: relative;
+    z-index: 20;
+    padding-top: 10px;
+}
+
+#nav_tree {
+    grid-row: 5;
+    position: relative;
+    z-index: 10;
+}
+
+#navbar > #navContainer,
+#navbar > #nav_tree {
+    max-width: none;
+    margin: 0;
+}
+
+#navContainer,
+.navbar-admin-tools-content {
+    display: grid;
+    gap: 0;
+}
+
+#navbar > #navbarAdminToolsSection {
+    grid-row: 4;
+    max-width: none;
+    margin: 30px 2px 0 0;
+    overflow: visible;
+}
+
+.navbar-disclosure-section {
+    --animated-disclosure-chevron-collapsed-rotation: -90deg;
+    --animated-disclosure-chevron-expanded-rotation: 0deg;
+    background: var(--bg_color_extreme);
+    border-radius: 0;
+    margin-top: 0;
+    overflow: hidden;
+}
+
+.navbar-disclosure-section:first-child {
+    margin-top: 0;
+}
+
+.navbar-disclosure-section > .navbar-section-heading {
+    justify-content: flex-start;
+    min-height: 56px;
+    margin: 0;
+    margin-top: 0 !important;
+    padding: 0 14px 0 22px;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg_color_extreme);
+}
+
+.navbar-disclosure-section > .navbar-section-heading .animated-disclosure-chevron {
+    order: -1;
+}
+
+.navbar-disclosure-section > .navbar-section-heading .animated-disclosure-title-group {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    gap: 14px;
+}
+
+.navbar-disclosure-section > .navbar-section-heading .animated-disclosure-title {
+    line-height: 1.2;
+    text-align: left;
+}
+
+.navbar-disclosure-section > .animated-disclosure-content-shell > .navbar-disclosure-content {
+    box-sizing: border-box;
+    display: grid;
+    gap: 5px;
+    padding: 10px 12px 12px;
+}
+
+.navbar-admin-tools-section > .animated-disclosure-content-shell > .navbar-admin-tools-content {
+    box-sizing: border-box;
+    display: grid;
+    gap: 0;
+    padding: 0;
+}
+
+.navbar-admin-tools-content > .navbar-disclosure-section {
+    border-block: 2px solid var(--border_color);
+    margin-top: -2px;
+}
+
+.navbar-admin-tools-content > .navbar-disclosure-section:first-child {
+    margin-top: 0;
+}
+
+.navbar-disclosure-section .animated-disclosure-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    background-color: currentcolor;
+}
+
+#nav_tree > input[id^="tree_search"] {
+    box-sizing: border-box;
+    width: calc(100% - 24px);
+    min-height: 44px;
+    margin: 12px;
+}
+
+#nav_tree > .tree-container > .node {
+    width: 100%;
+    padding-left: 0;
+}
+
+#nav_tree > .tree-container > .node > .node-row {
+    min-height: 56px;
+    box-sizing: border-box;
+    padding: 0 14px 0 22px;
+    border-block: 2px solid var(--border_color);
+    margin-top: -2px;
+    background: var(--bg_color_extreme);
+}
+
+#nav_tree > .tree-container > .node:first-child > .node-row {
+    margin-top: 0;
+}
+
+#nav_tree > .tree-container > .node > .node-row > .toggle {
+    margin-top: 0;
+    margin-right: 12px;
+}
+
+#nav_tree > .tree-container > .node > .children {
+    padding: 8px 12px 10px 36px;
+}
+
+#navbar.collapsed {
+    transform: translateX(calc(-1 * var(--navbar_width)));
+    pointer-events: none;
+    box-shadow: none;
+}
+
+#navbar.collapsed.navbar-collapse-complete {
+    box-shadow: none;
+}
+
+.body_content.navbar-transitions-ready #navbar {
+    transition:
+        transform var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1),
+        opacity var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#navbar > * {
+    opacity: 1;
+}
+
+.body_content.navbar-transitions-ready #navbar > * {
+    transition:
+        opacity var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#navbar.collapsed > * {
+    opacity: 0;
+}
+
+
+
+#showMenuButton {
+    --navbar-control-radius: 8px;
+    position: fixed;
+    top: 12px;
+    /* body_content has contain: paint → fixed is relative to body_content */
+    left: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* line-height: 0; */
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    border: 1px solid var(--border_color);
+    cursor: pointer;
+    height: 44px;
+    width: 44px;
+    border-radius: var(--navbar-control-radius);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--fw-shadow-raised);
+    margin-right: auto;
+    z-index: calc(var(--z-navbar) + 1);
+    appearance: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    will-change: opacity;
+}
+
+.body_content.navbar-transitions-ready #showMenuButton {
+    transition:
+        height 0.3s,
+        width 0.3s,
+        opacity 180ms ease;
+}
+
+#showMenuButton.menu-toggle-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+}
+
+#showMenuButton:hover {
+    background: var(--button_hover_bg_color);
+    border-color: rgb(0 255 136 / 0.3);
+    transform: translateX(0);
+}
+
+
+#hideMenuButton {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    /* line-height: 0; */
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    border: 1px solid var(--border_color);
+    cursor: pointer;
+    height: 44px;
+    width: 44px;
+    border-radius: var(--navbar-control-radius);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--fw-shadow-raised);
+    margin-right: auto;
+    transition: height 0.3s, width 0.3s, transform 0.3s;
+    appearance: none;
+    position: relative;
+}
+
+#hideMenuButton:hover {
+    background: var(--button_hover_bg_color);
+    border-color: rgb(0 255 136 / 0.3);
+}
+
+.inset {
+    box-shadow: inset 5px 5px 5px 0 rgb(0 0 0 / 30%);
+}
+
+#showMenuButton:not(.inset) {
+    /* box-shadow: 0px 0px 8px 2px rgb(0 0 0 / 50%); */
+    /* Use consistent shadow with other floating buttons */
+    box-shadow: var(--fw-shadow-raised);
+}
+
+#showMenuButton.filterbar-overlap {
+    box-shadow: none !important;
+}
+
+/* ============================================
+   Environment Badge
+   Shows the user-selected non-production label on menu buttons
+   ============================================ */
+.environment-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: linear-gradient(135deg, #b36a36, #b55e21);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.environment-badge--test {
+  right: -3px;
+}
+
+.environment-badge--qa {
+  right: 3px;
+}
+
+/* Removed duplicate hover rule that was overriding the specific one */
+/* #showMenuButton:hover {
+    background-color: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+} */
+
+/* #hideMenuButton:hover {
+    background-color: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+} */
+
+.theme-toggle-icon {
+    flex-shrink: 0;
+    display: block;
+    width: 24px;
+    height: 24px;
+    background-color: currentcolor;
+}
+
+/* Theme toggle button: match menu button width for visual balance */
+#themeToggleBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+}
+
+/* Main SVG tabs use one stable full-navbar layout. The SVG path changes shape
+   inside that fixed row, which avoids width/position snaps during mode changes. */
+#navmenu {
+    direction: rtl;
+    position: relative;
+    inset: auto;
+    display: grid;
+    gap: 0;
+    width: 100%;
+    margin-top: 0;
+    justify-items: stretch;
+}
+
+#navmenu .navtablinks {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+}
+
+#navmenu .navtablinks + .navtablinks {
+    margin-top: -2px;
+}
+
+#navmenu .navtablinks.active {
+    z-index: 1;
+}

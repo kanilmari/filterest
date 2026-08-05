@@ -1,0 +1,478 @@
+/*
+ * mobile_friendliness.css
+ *
+ * Responsive breakpoints for narrow screens and mobile layouts.
+ * Bridges the desktop layout system and mobile viewport constraints.
+ * Exists to collapse navbar, adjust content areas, and optimize touch targets.
+ *
+ * Visual Documentation:
+ * - instructions_and_documentation/visual_documentation/tab_content/data_content/data_content_overview.md
+ *   - Describes narrow layouts and responsive behavior.
+ */
+
+/* Global layout bands:
+   - <= 1850px: navbar defaults to overlay/collapsed behavior
+   - <= 1100px: filterbar changes from right rail to overlay panel
+   - <= 1550px viewport width: cards stay stacked so the fixed 450px filterbar
+     cannot make a hidden-filterbar wide card collapse back to stacked
+   - <= 1060px card container width: cards also stack when fixed side UI leaves too little room
+   Keep these values in sync with frontend/ui_config.js and variables.css. */
+@media screen and (width <= 1850px){ 
+    #navbar {
+        position: fixed !important;
+        left: 0 !important;
+        /* max-width: calc(100% - 50px); */
+        /* Overlay navbar keeps the same right edge as the docked navbar,
+           plus an outer shadow that separates it from the dataset content. */
+        box-shadow:
+            15px 0 15px rgb(0 0 0 / 0.7),
+            inset -2px 0 0 0 var(--border_color) !important;
+    }
+
+    #navbar.collapsed {
+        pointer-events: none !important;
+        box-shadow: none !important;
+    }
+
+    #tabs_container {
+        transform: unset !important;
+        width: unset !important;
+    }
+}
+
+@media screen and (width <= 1100px){
+    /* Sidebar is now position:fixed, so no second grid column needed.
+       The old .dataset-filter-panel rules and grid-template-columns: auto 0
+       have been removed as part of the 3-element filterbar refactoring. */
+}
+
+@media screen and (width <= 1550px) {
+    .card_container {
+        padding: 0;
+    }
+
+    .card {
+        width: 100%;
+        max-width: 650px;
+        padding: unset;
+        border: 0;
+        border-radius: var(--border_radius);
+    }
+
+    .card > * {
+        border-radius: 0;
+    }
+
+    .card_content {
+        flex-direction: column;
+        align-items: center;
+        padding: 15px 0;
+        --card_layout_bound_width: 100%;
+    }
+
+    .card_header {
+        display: block;
+        width: 100%;
+        padding: 0 15px !important;
+        margin: 5px 0 0 !important;
+    }
+
+    .card:has(> .card_checkbox) .card_header {
+        padding-right: 2.75rem !important;
+    }
+
+    .card--modern .card_header {
+        display: grid;
+        grid-template-columns: 2.35rem minmax(0, 1fr);
+        grid-template-areas:
+            "header-icon header-title"
+            ". header-user";
+        align-items: center;
+        gap: 0.35rem 0.85rem;
+    }
+
+    .card--modern .card_header::before,
+    .card--modern .card_header::after {
+        grid-area: header-icon;
+    }
+
+    .card--modern .card_header::after {
+        position: static;
+        place-self: center;
+        transform: none;
+    }
+
+    .card--modern .card_header > .key_value_wrapper {
+        grid-area: header-title;
+    }
+
+    .card--modern .card_header > .card_username {
+        grid-area: header-user;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+        margin-bottom: 0;
+    }
+
+    .key_value_wrapper {
+        height: unset;
+    }
+
+    .kv-inline {
+        grid-template-columns: 1fr !important;
+    }
+
+    .kv-pair-inline {
+        grid-template-columns: 1fr 2fr !important;
+    }
+
+    .card_header>.card_pair,
+    .card_header>.card_username {
+        width: 100%;
+        max-width: 100%;
+        margin-bottom: 5px;
+    }
+
+    .card_body {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .card_image_content,
+    .card_text_content {
+        max-width: 100%;
+        border: unset;
+        padding: unset;
+    }
+
+    .card_image img {
+        border-left: unset;
+        border-right: unset;
+    }
+
+    .card_image {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .card_content_large .card_body .card_image_content {
+        width: 100%;
+    }
+
+    .card_image>.wrapper {
+        width: min(100%, 80vh) !important;
+        height: auto !important;
+        max-width: 1000px !important;
+        max-height: 80vh !important;
+        aspect-ratio: 1 / 1;
+        box-shadow: unset !important;
+        background: unset !important;
+        border-radius: unset !important;
+    }
+
+    .card_image>.wrapper>img {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 80vh !important;
+        object-fit: contain !important;
+        border-radius: unset !important;
+    }
+
+    .card--modern .card_modern_info_panel,
+    .card--modern .card_details_modern_tiles {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .card--modern .card_modern_info_panel {
+        overflow: visible;
+    }
+
+    .card--modern .card_modern_info_panel > :not(:first-child),
+    .card--modern .card_modern_info_panel > .card_keywords_container,
+    .card--modern .card_modern_info_panel > .card_keywords_container + *,
+    .card--modern .card_detail_tile--row-separated,
+    .card--modern .card_detail_tile--column-separated,
+    .card--modern .card_detail_tile:not(:first-child) {
+        border: 0;
+    }
+
+    .card--modern .card_description_container,
+    .card--modern .card_keywords_container {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: 8px 10px;
+    }
+
+    .card--modern .card_details_modern_tiles {
+        grid-auto-flow: row;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+        gap: 0.25rem;
+        padding: 0.15rem 0 0;
+    }
+
+    .card--modern .card_detail_tile {
+        padding: 6px 10px;
+    }
+
+    .card--modern .card_detail_tile_text {
+        grid-template-columns:
+            minmax(0, min(var(--card-detail-tile-label-width, 12ch), 42%))
+            minmax(0, 1fr);
+        align-items: baseline;
+        gap: 0.16rem var(--card-detail-tile-gap, 0.72rem);
+    }
+
+    .card--modern .card_detail_tile_text--value-only .card_detail_tile_value,
+    .card--modern .card_detail_tile_text > .card_detail_tile_value:only-child {
+        grid-column: 1 / -1;
+    }
+
+    .card--modern .card_detail_tile_label {
+        max-width: min(12rem, 38cqw);
+    }
+
+    .card--modern .card_header > .todo_status_chip--card {
+        grid-column: 2;
+        justify-self: start;
+        margin-left: 0;
+    }
+
+    .card_details_container {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@container card-view (max-width: 1060px) {
+    .card_container {
+        padding: 0;
+    }
+}
+
+@container card-list (max-width: 1060px) {
+    .card {
+        width: 100%;
+        max-width: 650px;
+        padding: unset;
+        border: 0;
+        border-radius: var(--border_radius);
+    }
+}
+
+@container card-list (max-width: 1060px) {
+    .card > * {
+        border-radius: 0;
+    }
+
+    /* pinoa kaikki pystysuunnassa */
+    .card_content {
+        flex-direction: column;
+        align-items: center;
+        padding: 15px 0;
+    }
+
+    /* UUSI: otsikko (card_pair) ja käyttäjä (card_username) 100 % leveiksi
+       ja pinoon card_header‑lohkossa                                 */
+    .card_header {
+        display: block;
+        width: 100%;
+        padding: 0 15px !important;
+        margin: 5px 0 0 !important;
+    }
+
+    .card:has(> .card_checkbox) .card_header {
+        padding-right: 2.75rem !important;
+    }
+
+    .card--modern .card_header {
+        display: grid;
+        grid-template-columns: 2.35rem minmax(0, 1fr);
+        grid-template-areas:
+            "header-icon header-title"
+            ". header-user";
+        align-items: center;
+        gap: 0.35rem 0.85rem;
+    }
+
+    .card--modern .card_header::before,
+    .card--modern .card_header::after {
+        grid-area: header-icon;
+    }
+
+    .card--modern .card_header::after {
+        position: static;
+        place-self: center;
+        transform: none;
+    }
+
+    .card--modern .card_header > .key_value_wrapper {
+        grid-area: header-title;
+    }
+
+    .card--modern .card_header > .card_username {
+        grid-area: header-user;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+        margin-bottom: 0;
+    }
+
+    .key_value_wrapper {
+        height: unset;
+    }
+
+    .kv-inline {
+        grid-template-columns: 1fr !important;
+    }
+
+    .kv-pair-inline {
+        grid-template-columns: 1fr 2fr !important;
+    }
+
+    .card_header>.card_pair,
+    .card_header>.card_username {
+        width: 100%;
+        max-width: 100%;
+        margin-bottom: 5px;
+    }
+
+    /* UUSI: kuva 100 % leveäksi ja pinoon ennen tekstiä                */
+    .card_body {
+        display: flex;
+        flex-direction: column;
+        /* kuva ensin, tekstit perässä */
+        width: 100%;
+    }
+
+    .card_image_content,
+    .card_text_content {
+        max-width: 100%;
+        border: unset;
+        padding: unset;
+    }
+
+    .card_image img {
+        border-left: unset;
+        border-right: unset;
+    }
+
+    .card_image {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .card_content_large .card_body .card_image_content {
+        width: 100%;
+    }
+
+    .card_image>.wrapper {
+        width: min(100%, 80vh) !important;
+        height: auto !important;
+        max-width: 1000px !important;
+        max-height: 80vh !important;
+        aspect-ratio: 1 / 1;
+        box-shadow: unset !important;
+        background: unset !important;
+        border-radius: unset !important;
+    }
+
+    .card_image>.wrapper>img {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 80vh !important;
+        object-fit: contain !important;
+        border-radius: unset !important;
+    }
+
+    .card--modern .card_modern_info_panel,
+    .card--modern .card_details_modern_tiles {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .card--modern .card_modern_info_panel {
+        overflow: visible;
+    }
+
+    .card--modern .card_modern_info_panel > :not(:first-child),
+    .card--modern .card_modern_info_panel > .card_keywords_container,
+    .card--modern .card_modern_info_panel > .card_keywords_container + *,
+    .card--modern .card_detail_tile--row-separated,
+    .card--modern .card_detail_tile--column-separated,
+    .card--modern .card_detail_tile:not(:first-child) {
+        border: 0;
+    }
+
+    .card--modern .card_description_container,
+    .card--modern .card_keywords_container {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: 8px 10px;
+    }
+
+    .card--modern .card_details_modern_tiles {
+        grid-auto-flow: row;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+        gap: 0.25rem;
+        padding: 0.15rem 0 0;
+    }
+
+    .card--modern .card_detail_tile {
+        padding: 6px 10px;
+    }
+
+    .card--modern .card_detail_tile_text {
+        grid-template-columns:
+            minmax(0, min(var(--card-detail-tile-label-width, 12ch), 42%))
+            minmax(0, 1fr);
+        align-items: baseline;
+        gap: 0.16rem var(--card-detail-tile-gap, 0.72rem);
+    }
+
+    .card--modern .card_detail_tile_text--value-only .card_detail_tile_value,
+    .card--modern .card_detail_tile_text > .card_detail_tile_value:only-child {
+        grid-column: 1 / -1;
+    }
+
+    .card--modern .card_detail_tile_label {
+        max-width: min(12rem, 38cqw);
+    }
+
+    .card_details_container {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@container card-list (max-width: 560px) {
+    .card {
+        max-width: none;
+        border-radius: 0;
+    }
+
+    .card--modern .card_detail_tile_text {
+        grid-template-columns:
+            minmax(0, min(var(--card-detail-tile-label-width, 12ch), 45%))
+            minmax(0, 1fr);
+        column-gap: 0.55rem;
+    }
+
+    .card--modern .card_detail_tile_label {
+        max-width: 100%;
+    }
+}
+
+@media screen and (width <= 1060px) {
+    #tabs_container {
+        transform: unset;
+        width: unset;
+    }
+}

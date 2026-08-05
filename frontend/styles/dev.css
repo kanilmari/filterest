@@ -1,0 +1,74 @@
+/*
+ * dev.css
+ *
+ * Development-only debug overlays and diagnostic styles.
+ * Bridges dev tooling (session debug panel) and the theme variables.
+ * Exists to provide hover-reveal debug information during development.
+ */
+
+/* #session_debug {
+    white-space: pre-wrap;
+    position: fixed;
+    bottom: 8px;
+    background-color: var(--bg_color_2);
+    opacity: 0.1;
+    padding: 10px;
+    border-radius: var(--border_radius);
+    filter: blur(5px);
+    transition: opacity 0.3s, filter 0.3s;
+}
+
+#session_debug:hover {
+    opacity: 1;
+    filter: unset;
+} */
+
+.dev-toolbox {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.dev-toolbox-note {
+    margin: 0;
+    color: var(--empty_field_text_color);
+    line-height: 1.45;
+}
+
+.dev-toolbox-field {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.dev-toolbox-label {
+    font-weight: 650;
+}
+
+.dev-toolbox-control-row {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.dev-toolbox-number-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+    background: var(--input_bg_color);
+    color: var(--text_color);
+    font: inherit;
+}
+
+.dev-toolbox-value {
+    min-width: 5rem;
+    color: var(--empty_field_text_color);
+    font-variant-numeric: tabular-nums;
+}
+
+.dev-toolbox-reset-button {
+    justify-self: start;
+}

@@ -1,0 +1,67 @@
+/*
+ * child_tab_config.css
+ *
+ * Styles the child-tab configuration admin view.
+ * Bridges draggable child-row markup and shared theme variables.
+ * Exists to keep relation-tab ordering controls readable across themes.
+ */
+
+.ctc-header {
+    display: grid;
+    grid-template-columns: 40px 1fr 80px;
+    gap: 8px;
+    padding: 8px 12px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border_color);
+    color: var(--text_color);
+}
+
+.ctc-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 80px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border_color);
+    align-items: center;
+    transition: background-color 0.15s;
+}
+
+.ctc-row:hover {
+    background-color: var(--hover_color, rgba(0, 0, 0, 0.04));
+}
+
+.ctc-row-hidden {
+    opacity: 0.45;
+}
+
+.ctc-draggable {
+    cursor: grab;
+}
+
+.ctc-draggable:active {
+    cursor: grabbing;
+}
+
+.ctc-dragging {
+    opacity: 0.4;
+}
+
+.ctc-drag-over {
+    border-top: 2px solid var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.ctc-col-order {
+    text-align: center;
+    color: var(--text_secondary_color, #888);
+    font-size: 0.85em;
+}
+
+.ctc-col-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ctc-col-visible {
+    text-align: center;
+}

@@ -1,0 +1,202 @@
+/* vanilla_checkbox_table.css
+ * Shared styles for the reusable editable checkbox table component.
+ * Bridges the table renderer, toolbar controls, and cell input states in one visual layer.
+ * Exists to keep checkbox-table presentation consistent across future admin tools.
+ */
+
+.vct-root {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.vct-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.vct-btn {
+    border: 1px solid var(--border_color);
+    background: var(--button_bg_color);
+    color: var(--button_text_color);
+    border-radius: var(--border_radius_small, 6px);
+    padding: 0.35rem 0.65rem;
+    cursor: pointer;
+}
+
+.vct-btn:hover {
+    background: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+}
+
+.vct-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.vct-status {
+    margin-left: auto;
+    font-size: 0.85rem;
+    color: var(--text_color_secondary, var(--text_color));
+}
+
+.vct-status[data-state="dirty"] {
+    color: var(--warning_color, #c8a500);
+    font-weight: 600;
+}
+
+.vct-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.vct-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--table_border_color, var(--border_color));
+    table-layout: auto;
+}
+
+.vct-header-cell,
+.vct-cell {
+    border: 1px solid var(--table_border_color, var(--border_color));
+    padding: 0.45rem 0.55rem;
+    vertical-align: middle;
+    min-width: 4.5rem;
+}
+
+.vct-cell {
+    position: relative;
+}
+
+.vct-header-cell {
+    background: var(--bg_color_2, var(--bg_color));
+    text-align: left;
+    font-weight: 600;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+}
+
+.vct-checkbox-indicator {
+    display: inline-flex;
+    min-width: 1.25rem;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.vct-checkbox-indicator[data-checked="true"] {
+    color: var(--success_color, #35a854);
+}
+
+.vct-checkbox-indicator[data-checked="false"] {
+    color: var(--danger_color, #d4504c);
+}
+
+.vct-checkbox-indicator[data-state="ambiguous"] {
+    color: var(--warning_color, #c8a500);
+}
+
+.vct-readonly-cell-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 1.25rem;
+}
+
+.vct-readonly-cell-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.vct-cell-checkbox .vct-readonly-cell-content {
+    justify-content: center;
+}
+
+.vct-cell-checkbox {
+    text-align: center;
+}
+
+.vct-cell-checkbox .vct-readonly-cell-shell {
+    justify-content: center;
+}
+
+.vct-cell-checkbox .vct-checkbox-indicator,
+.vct-cell-checkbox .vct-input-checkbox {
+    margin-inline: auto;
+}
+
+.vct-cell-edit-button {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_tiny, 3px);
+    background: var(--bg_color);
+    color: var(--button_text_color);
+}
+
+.vct-cell:hover .vct-cell-edit-button {
+    display: inline-flex;
+}
+
+.vct-cell-edit-button:hover {
+    background: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+}
+
+.vct-cell-edit-button svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.vct-cell-edit-glyph {
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
+.vct-input-checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.vct-input-checkbox-ambiguous {
+    outline: 1px solid var(--warning_color, #c8a500);
+    outline-offset: 1px;
+}
+
+.vct-input-select,
+.vct-input-text {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small, 6px);
+    padding: 0.25rem 0.4rem;
+    background: var(--bg_color);
+    color: var(--text_color);
+}
+
+.vct-cell-text {
+    white-space: normal;
+    word-break: break-word;
+}

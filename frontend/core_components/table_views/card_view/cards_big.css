@@ -1,0 +1,700 @@
+/*
+ * cards_big.css
+ *
+ * Expanded single-card layout for detailed record views.
+ * Bridges the card view component and the theme variable system.
+ * Exists to render a full-width card with border, background, and content grid.
+ */
+
+.big_card_container {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    padding: 1rem;
+    border: 1px solid var(--border_color);
+    background-color: var(--bg_color_extreme);
+    position: relative;
+    margin: 0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.card_view_wrapper.big-card-open .big_card_container {
+    border-radius: 0;
+}
+
+.big_card_content {
+    max-width: inherit !important;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+}
+
+.big_card_content .card_username {
+    margin: 0 0 10px 0;
+}
+
+.big_card_details_container > div {
+    padding-bottom: 20px !important;
+    margin-bottom: 20px !important;
+    width: auto;
+    border-bottom: 2px solid var(--border_color);
+}
+
+.big_card_content * {
+    max-width: inherit !important;
+}
+
+.big_card_image {
+    margin-top: 30px;
+}
+
+.big_card_image .wrapper {
+    width: 100% !important;
+    height: auto !important;
+}
+
+.big_card_image img {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 80vh;
+    object-fit: contain;
+}
+
+.big_card_image .wrapper.service_catalog_logo_frame img,
+.big_card_image .wrapper.card_image_contrast_frame img {
+    max-height: 80vh;
+}
+
+.big_card_image .wrapper.service_catalog_logo_frame[data-service-catalog-logo-render-mode="css"] {
+    width: min(100%, 80vh) !important;
+    max-width: 100%;
+    height: auto !important;
+    aspect-ratio: 1;
+    margin: 0 auto;
+}
+
+.big_card_image .wrapper.service_catalog_logo_frame .service-catalog-css-logo.service-catalog-css-logo--mark-title {
+    gap: clamp(0.35rem, 1.4cqi, 1rem);
+    padding:
+        clamp(2.25rem, 6cqi, 4.5rem)
+        clamp(2.25rem, 6cqi, 4.5rem)
+        clamp(3rem, 7cqi, 5.5rem);
+}
+
+.big_card_image .wrapper.service_catalog_logo_frame .service-catalog-css-logo.service-catalog-css-logo--mark-title .service-catalog-css-logo__mark {
+    width: 80% !important;
+    height: 80% !important;
+}
+
+.big_card_image .wrapper.service_catalog_logo_frame .service-catalog-css-logo.service-catalog-css-logo--mark-title .service-catalog-css-logo__title {
+    --service-logo-title-min-size: 2.2rem;
+    --service-logo-title-max-size: min(8.8rem, 18cqi);
+    --service-logo-title-offset-y: -28px;
+}
+
+.big_card_image .wrapper.service_catalog_logo_frame .service-catalog-css-logo__mark--text {
+    font-size: 5rem;
+}
+
+.big_card_header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--text_color);
+}
+
+.big_card_header_dataset_icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+    opacity: 0.9;
+}
+
+.ticket_status_badge--big {
+    margin-top: -0.35rem;
+    font-size: 0.9rem;
+    padding: 0.35rem 0.85rem;
+}
+
+/* keyword tags inside big card */
+.big_card_keywords_container {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0 10px;
+}
+
+
+
+
+
+.big_card_child_container>div {
+    white-space: normal;
+    /* Mahdollistaa normaalin rivittymisen */
+    word-wrap: break-word;
+    /* Salli sanojen katkeaminen tarvittaessa, vanhempi synonyymi  */
+    overflow-wrap: break-word;
+    /* Modernimpi vastaava ominaisuus       */
+}
+
+/* .two_line_label {
+    margin-left: -5px;
+    margin-bottom: 5px;
+    background: color-mix(in srgb, var(--bg_color_extreme) 90%, #888 10%);
+    padding: 5px 7px;
+    width: fit-content;
+    border-radius: var(--border_radius);
+} */
+
+/* description tekstin näyttö */
+/* rivinvaihdot, välilyönnit JA \t säilyvät */
+.big_description_value {
+    white-space: break-spaces;
+    /* modernit selaimet */
+    tab-size: 4;
+    /* määrittää \t-leveyden */
+}
+
+/* fallback vanhemmille selaimille */
+@supports not (white-space: break-spaces) {
+    .big_description_value {
+        white-space: pre-wrap;
+    }
+}
+/* 1) Yksinkertaisin – flex + kiinteä (tai ch-pohjainen) leveys */
+.big_card_details_container .two_line_field {
+    display: flex;
+    align-items: baseline;
+    /* tekstit osuvat samalle vaakatasolle */
+    margin-block: 0.25rem;
+    /* kevyt väli rivien väliin */
+}
+
+.big_card_details_container .two_line_label {
+    display: inline-grid;
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.72rem;
+    flex: 0 0 14rem;
+    min-width: 0;
+    color: var(--card-modern-label-color, color-mix(in srgb, var(--text_color) 72%, var(--primary_color) 28%));
+    font-weight: 600;
+}
+
+.big_card_details_container .two_line_label:not(.two_line_label--with-icon) {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.big_card_details_container .two_line_label_icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: var(--border_radius);
+    color: var(--card-modern-icon-color, color-mix(in srgb, var(--primary_color) 82%, var(--text_color) 18%));
+    background: var(--card-modern-icon-bg, color-mix(in srgb, var(--primary_color) 5%, transparent));
+}
+
+.big_card_details_container .two_line_label_icon .card_detail_row_icon_svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.big_card_details_container .two_line_label_text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.big_card_content .two_line_label--with-icon {
+    display: inline-grid;
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.72rem;
+    color: var(--card-modern-label-color, color-mix(in srgb, var(--text_color) 72%, var(--primary_color) 28%));
+}
+
+.big_card_content .two_line_label_icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: var(--border_radius);
+    color: var(--card-modern-icon-color, color-mix(in srgb, var(--primary_color) 82%, var(--text_color) 18%));
+    background: var(--card-modern-icon-bg, color-mix(in srgb, var(--primary_color) 5%, transparent));
+}
+
+.big_card_content .two_line_label_icon .card_detail_row_icon_svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.big_card_content .two_line_label_text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.big_card_details_container .two_line_value {
+    flex: 1 1 auto;
+    /* arvo vie loput rivistä */
+    overflow-wrap: anywhere;
+    /* pitkä teksti ei riko layoutia */
+}
+
+.big_card_details_container .two_line_link_group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.big_card_details_container .two_line_new_tab_button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--text_color_secondary, var(--text_color));
+    line-height: 1;
+    text-decoration: none;
+}
+
+.big_card_details_container .two_line_new_tab_button:hover,
+.big_card_details_container .two_line_new_tab_button:focus-visible {
+    background: color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 12%, transparent 88%);
+    color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.big_card_details_container .open-in-new-tab-icon {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.big_card_close {
+    position: static;
+    margin-left: auto;
+    align-self: flex-end;
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.card_view_wrapper.big-card-open .active_row_article > .big_card_close {
+    display: none;
+}
+
+/* ── Action toolbar (edit, checkbox, delete) ── */
+.big_card_action_bar {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 0.75rem;
+    padding: 0.75rem 0 0;
+    border-top: 1px solid var(--border_color);
+    margin-top: 0;
+    background: var(--bg_color_extreme);
+}
+
+.big_card_action_bar .fw-btn {
+    min-height: 36px;
+    padding: 0.45rem 0.9rem;
+}
+
+.big_card_checkbox {
+    width: 1.2rem;
+    height: 1.2rem;
+    cursor: pointer;
+    accent-color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.big_card_delete {
+    margin-left: auto;
+    color: var(--error_color, #d44);
+    border: 1px solid var(--error_color, #d44);
+    background: transparent;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--border_radius, 4px);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.big_card_delete:hover {
+    background: var(--error_color, #d44);
+    color: #fff;
+}
+
+.big_card_description_container {
+    padding: 20px 0;
+}
+
+.multilang-selector {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: fit-content;
+    max-width: 100%;
+    gap: 0.15rem;
+    padding: 0.45rem 0.7rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border_color);
+    border-radius: 8px;
+    background: var(--bg_color_2);
+    color: var(--text_color);
+    font-size: 0.85rem;
+}
+
+.multilang-selector__heading {
+    margin-bottom: 0.15rem;
+    line-height: 1;
+}
+
+.multilang-selector__option {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    padding: 0.1rem 0;
+    color: inherit;
+}
+
+.multilang-selector__option input[type="checkbox"] {
+    flex: 0 0 auto;
+    accent-color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+/* ── Child tabs ────────────────────────────────── */
+.child_tabs_container {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border_color);
+    padding-top: 0.5rem;
+}
+
+.child_tabs_bar {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    border-bottom: 2px solid var(--border_color);
+}
+
+.child_tab_button {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.9rem;
+}
+
+.child_tab_button:hover {
+    background: color-mix(in srgb, var(--bg_color_extreme) 90%, #888 10%);
+}
+
+.child_tab_button.active {
+    border-bottom-color: var(--accent_color, hsl(207deg 70% 53%));
+    color: var(--text_color);
+    font-weight: 600;
+}
+
+.child_tab_panel {
+    display: none;
+    padding: 0.75rem 0;
+}
+
+.child_tab_panel.active {
+    display: block;
+}
+
+.child_tab_open_link {
+    display: inline-block;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.comment_list.child_record_list {
+    margin-top: 0.5rem;
+    gap: 2.5rem;
+}
+
+.child_record_header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    margin-bottom: 0;
+}
+
+.child_record_title_group {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1 1 18rem;
+    min-width: 0;
+}
+
+.child_record_icon {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    color: var(--accent_color, hsl(207deg 70% 53%));
+    background: color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 12%, transparent 88%);
+}
+
+.child_record_icon_svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: currentColor;
+}
+
+.child_record_title {
+    font-size: 1rem;
+    line-height: 1.35;
+    min-width: 0;
+}
+
+.child_record_title_button {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.child_record_title_button:hover,
+.child_record_title_button:focus-visible {
+    color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.child_record_meta {
+    line-height: 1.4;
+    margin-left: auto;
+}
+
+.child_pretty_card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.95rem 1rem;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+    border-left: 3px solid color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 65%, transparent 35%);
+}
+
+.child_record_body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.child_record_actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: -0.15rem;
+}
+
+.child_record_action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid var(--border_color);
+    background: transparent;
+    color: var(--text_color);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+.child_record_action:hover,
+.child_record_action:focus-visible {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+    color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.child_record_action--delete {
+    margin-left: auto;
+    border-color: color-mix(in srgb, var(--error_color, #d44) 55%, var(--border_color) 45%);
+    color: var(--error_color, #d44);
+}
+
+.child_record_action--delete:hover,
+.child_record_action--delete:focus-visible {
+    border-color: var(--error_color, #d44);
+    background: color-mix(in srgb, var(--error_color, #d44) 12%, transparent 88%);
+    color: var(--error_color, #d44);
+}
+
+.child_pretty_card .two_line_field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.child_pretty_card .two_line_field + .two_line_field {
+    padding-top: 0.75rem;
+    border-top: 1px solid color-mix(in srgb, var(--border_color) 88%, transparent 12%);
+}
+
+.child_pretty_card .two_line_label {
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.child_pretty_card .two_line_value {
+    color: var(--text_color);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.child_pretty_value--long {
+    max-height: 14rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+}
+
+@media (max-width: 720px) {
+    .child_record_meta {
+        margin-left: 0;
+        width: 100%;
+    }
+}
+
+.child_tab_limit_notice {
+    padding: 0.5rem;
+    text-align: center;
+    color: var(--text_color_secondary, var(--text_color));
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+/* ── Comments tab ──────────────────────────────── */
+.comment_form {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    align-items: flex-end;
+}
+
+.comment_input {
+    flex: 1;
+    resize: vertical;
+    padding: 0.5rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius, 4px);
+    background: var(--bg_color_extreme);
+    color: var(--text_color);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.comment_submit {
+    padding: 0.5rem 1rem;
+    white-space: nowrap;
+    align-self: flex-end;
+}
+
+.comment_list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.comment_item {
+    padding: 0.75rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius, 4px);
+    background: color-mix(in srgb, var(--bg_color_extreme) 95%, #888 5%);
+}
+
+.comment_header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.85rem;
+}
+
+.comment_author {
+    font-weight: 600;
+}
+
+.comment_date {
+    color: var(--text_color_secondary, var(--text_color));
+}
+
+.comment_delete {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: var(--text_color_secondary, var(--text_color));
+    padding: 0 0.25rem;
+    line-height: 1;
+}
+
+.comment_delete:hover {
+    color: var(--error_color, #d44);
+}
+
+.comment_body {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.comment_empty {
+    text-align: center;
+    color: var(--text_color_secondary, var(--text_color));
+    font-style: italic;
+    padding: 1rem;
+}
+
+/* ── Big card delete button ───────────────────── */
+.big_card_delete_button {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    color: var(--error_color, #d44);
+    border: 1px solid var(--error_color, #d44);
+    background: transparent;
+    padding: 0.4rem 1rem;
+    border-radius: var(--border_radius, 4px);
+    cursor: pointer;
+}
+
+.big_card_delete_button:hover {
+    background: var(--error_color, #d44);
+    color: #fff;
+}

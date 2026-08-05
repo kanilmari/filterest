@@ -1,0 +1,50 @@
+/*
+ * row_creation_form.css
+ *
+ * Styles the multi-page row-creation form inside the shared modal.
+ * Bridges generated field/relation sections with reusable form navigation.
+ * Exists to keep every page readable, responsive, and theme-aware.
+ */
+
+.row-creation-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+}
+
+.row-creation-form__section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.row-creation-form__relation-fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 16px;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+}
+
+.row-creation-form__section .vanilla-dropdown,
+.row-creation-form__section input,
+.row-creation-form__section select,
+.row-creation-form__section textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.row-creation-form > .form-section-navigator__footer {
+    margin-top: 2px;
+}
+
+@media (width <= 520px) {
+    .row-creation-form {
+        padding-inline: 10px;
+    }
+
+    .row-creation-form__relation-fieldset {
+        padding: 12px;
+    }
+}

@@ -1,0 +1,22 @@
+/*
+ * dark_overlay.css
+ *
+ * Full-screen dark overlay with fade transitions.
+ * Bridges the overlay toggle logic and the z-index hierarchy (--z-overlay).
+ * Exists to dim background content when modals or panels are open.
+ */
+.mfo-overlay {
+    position: fixed;
+    inset: var(--content-top-banner-height, 0px) 0 0 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: var(--z-overlay);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+.mfo-overlay--visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease;
+}

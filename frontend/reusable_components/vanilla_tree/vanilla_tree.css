@@ -1,0 +1,79 @@
+/*
+ * vanilla_tree.css
+ *
+ * Tree-view component with expandable nodes, icons, and toggle controls.
+ * Bridges the vanilla_tree JS renderer and the theme variable system.
+ * Exists to display hierarchical data as an interactive tree widget.
+ */
+/* Rivi, jolla node-elementin sisältö näytetään yhdessä rivissä */
+.node-row {
+    display: flex;
+    align-items: center;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* Nuolen ja ikonin koko ja kursori */
+.node-row .toggle svg,
+.node-row .icon svg {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.node-row > .toggle {
+    transform: rotate(0deg);
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    margin-top: 5px;
+    margin-right: 4px;
+    transform-origin: center;
+}
+
+.node-row > .toggle.rotated {
+    transform: rotate(90deg) translateX(-2.5px) translateY(0);
+}
+
+/* Ikoni hieman alas, jos tarvitaan */
+.node-row .icon {
+    transform: translateY(1px);
+    /* margin-right: 5px; */
+}
+
+/* Teksti ja checkbox rivillä */
+.node-row span,
+.node-row input[type="checkbox"] {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.node-row input[type="checkbox"] {
+    margin-right: 7px;
+}
+
+/* Lapsisolmuille sisennys */
+.children {
+    padding-left: 23px;
+    overflow: hidden;
+}
+
+/* Node-konteksti, width: fit-content voi säilyä 
+   mutta varmista että ympäristö tukee sitä. */
+.node {
+    width: fit-content;
+    cursor: pointer;
+    padding-left: 2px;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+
+
+.tree-container button {
+    margin: 2px 0;
+}
+
+.general_button_nav {
+    padding: 5px;
+}

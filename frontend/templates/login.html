@@ -1,0 +1,268 @@
+<!-- login.html -->
+<!DOCTYPE html>
+<html lang="fi">
+
+<head>
+    <meta charset="UTF-8">
+    <base href="/">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title data-lang-key="login">Kirjaudu sisään</title>
+    {{if .UseMinifiedAssets}}
+    <link rel="stylesheet" href="{{.ImportsCSSPath}}">
+    {{else}}
+    <link rel="stylesheet" href="/frontend/styles/variables.css">
+    <link rel="stylesheet" href="/frontend/styles/base.css">
+    <link rel="stylesheet" href="/frontend/styles/form.css">
+    <link rel="stylesheet" href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" href="/frontend/reusable_components/modal/modals.css">
+    <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
+    {{end}}
+    <link rel="icon" href="/frontend/favicon4S.png" type="image/png">
+    <meta name="login-tour-screenshots-enabled" content="{{if .ShowTourScreenshots}}true{{else}}false{{end}}">
+    {{if not .UseMinifiedAssets}}
+    <script src="/frontend/core_components/auth/translation_prefetcher.js"></script>
+    {{end}}
+    {{if .UseMinifiedAssets}}
+    <script type="module" id="login-bundle" src="{{.LoginBundlePath}}"></script>
+    {{else}}
+    <script type="module" id="login-bundle" src="/frontend/core_components/auth/login_page_builder.js"></script>
+    {{end}}
+</head>
+
+<body class="loading login-page{{if .StandalonePage}} standalone-login-page{{end}}" data-login-page-mode="{{if .StandalonePage}}standalone{{else}}fragment{{end}}">
+    <!-- <div class="info-banner" data-lang-key="site_will_be_published_soon">Site will be published soon</div> -->
+    {{if .StandalonePage}}
+    <div class="auth-page-shell" data-testid="login-page-shell">
+        <div class="auth-page-content-card">
+            <div class="auth-page-header-row" data-testid="login-page-header-row">
+                <div class="auth-page-tablist" role="tablist" aria-label="Authentication sections" data-testid="login-page-tablist">
+                    <button
+                        type="button"
+                        class="auth-page-tab is-active"
+                        role="tab"
+                        id="auth-tab-login"
+                        aria-selected="true"
+                        aria-controls="auth-panel-login"
+                        data-auth-tab-target="login"
+                        data-testid="login-page-tab-login"
+                        data-lang-key="login">Login</button>
+                    <button
+                        type="button"
+                        class="auth-page-tab"
+                        role="tab"
+                        id="auth-tab-tour"
+                        aria-selected="false"
+                        aria-controls="auth-panel-tour"
+                        data-auth-tab-target="tour"
+                        data-testid="login-page-tab-tour"
+                        data-lang-key="login_page_tab_tour">Tour</button>
+                </div>
+                <div
+                    class="auth-top-controls"
+                    data-auth-preference-controls
+                    data-auth-controls-context="login"
+                    data-testid="login-page-controls"></div>
+            </div>
+            <section
+                class="auth-page-tab-panel auth-page-login-panel"
+                id="auth-panel-login"
+                role="tabpanel"
+                aria-labelledby="auth-tab-login"
+                data-auth-tab-panel="login"
+                data-testid="login-page-panel-login">
+    {{end}}
+    <div class="auth-login-stack">
+        <div class="auth-hero">
+            <h1 class="site_name">{{.SiteName}}</h1>
+            <div class="auth-intro-box" data-html-lang-key="login_page_intro_site_html+{{.SiteName}}">
+                <p>Welcome to <strong>{{.SiteName}}</strong>. Sign in to continue to this multilingual workspace.</p>
+            </div>
+        </div>
+        <form method="POST" action="/api/login" class="auth-form form_with_border" data-testid="login-form">
+        {{if .ShowCloseButton}}
+            <button type="button" class="auth-form-close-button" aria-label="Close" data-testid="auth-form-close-button">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
+            </button>
+        {{end}}
+        <h2 data-lang-key="login"></h2>
+
+        <label for="username" data-lang-key="username_or_email"></label>
+        <input type="text" id="username" name="username" required autocomplete="username" aria-label="Username" data-testid="login-username">
+
+        <label for="password" data-lang-key="password"></label>
+        <div class="password-wrapper">
+            <input type="password" id="password" name="password" required autocomplete="current-password" aria-label="Password" data-testid="login-password">
+            <button type="button" id="toggle-password" aria-label="Show password" data-testid="login-toggle-password">
+                <svg id="password-icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z"/></svg>
+            </button>
+        </div>
+
+        <input type="hidden" class="hidden_fields" id="fingerprint" name="fingerprint">
+
+        <input type="hidden" class="hidden_fields" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
+
+        <div id="otp-section" data-testid="login-otp-section">
+            <div id="otp-message" class="otp-message" role="status" aria-live="polite" aria-atomic="true" data-testid="login-otp-message"></div>
+            <label for="otp" data-lang-key="otp">OTP</label>
+            <input type="text" id="otp" name="otp" autocomplete="off" data-testid="login-otp">
+            <a href="#" id="resend-otp" data-lang-key="resend_code" data-testid="login-resend-otp">Lähetä koodi uudelleen</a>
+        </div>
+
+        <div class="auth-secondary-actions">
+            <a href="#" id="forgot-password-link" data-lang-key="forgot_password" data-testid="login-forgot-password">Forgot password?</a>
+            <a href="#" id="back-to-login-link" data-lang-key="back_to_login" data-testid="login-back-to-login">Back to login</a>
+        </div>
+
+        <div id="password-reset-section" data-testid="login-password-reset-section">
+            <div id="password-reset-message" class="otp-message" role="status" aria-live="polite" aria-atomic="true" data-testid="login-password-reset-message"></div>
+            <label for="password-reset-otp" data-lang-key="otp">OTP</label>
+            <input type="text" id="password-reset-otp" name="password_reset_otp" autocomplete="off" data-testid="login-password-reset-otp">
+
+            <label for="password-reset-new-password" data-lang-key="new_password">Uusi salasana</label>
+            <div class="password-wrapper password-reset-wrapper">
+                <input type="password" id="password-reset-new-password" name="password_reset_new_password" autocomplete="new-password" aria-label="New password" data-testid="login-password-reset-new-password">
+                <button type="button" id="toggle-password-reset" aria-label="Show password" data-testid="login-toggle-password-reset">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z"/></svg>
+                </button>
+            </div>
+
+            <a href="#" id="resend-password-reset-otp" data-lang-key="resend_code" data-testid="login-resend-password-reset-otp">Resend code</a>
+        </div>
+
+        <label for="authCode" class="hidden_fields" aria-hidden="true" data-lang-key="authenticator_code">Authenticator code</label>
+        <input type="text" id="authCode" name="authCode" class="hidden_fields" autocomplete="off" tabindex="-1" aria-hidden="true">
+
+        <div class="privacy-notice-link">
+            <input type="checkbox" id="privacy-accept" required data-testid="login-privacy-accept">
+            <label for="privacy-accept">
+                <span data-lang-key="privacy_notice_login_you_must_accept"></span>
+                <a href="#" id="privacy-notice-link" data-lang-key="privacy_notice_login"></a><span data-lang-key="."></span>
+            </label>
+        </div>
+
+        <div id="submit">
+            <input type="submit" class="saturate_on_hover" data-lang-key="login" value="Login" data-testid="login-submit">
+        </div>
+
+            <!-- Placeholder for privacy notice modal -->
+            <div id="privacy-notice-placeholder"></div>
+
+        </form>
+    </div>
+    {{if .StandalonePage}}
+            </section>
+            <section
+                class="auth-page-tab-panel auth-page-tour-panel"
+                id="auth-panel-tour"
+                role="tabpanel"
+                aria-labelledby="auth-tab-tour"
+                data-auth-tab-panel="tour"
+                data-testid="login-page-panel-tour"
+                hidden>
+                <div class="auth-tour-content" data-html-lang-key="{{if eq .SiteName "easelect.com"}}login_page_platform_story_easelect_html{{else}}login_page_platform_story_site_html+{{.SiteName}}{{end}}"></div>
+                {{if .ShowTourScreenshots}}
+                <section class="auth-tour-gallery" data-testid="login-tour-gallery" aria-label="Tour gallery">
+                    <div class="auth-tour-gallery-header">
+                        <h3 data-lang-key="login_page_tour_gallery_heading">Interface snapshots</h3>
+                        <p data-lang-key="login_page_tour_gallery_intro">Open a screenshot to inspect how navigation, cards, tables, and filters work together in the same UI.</p>
+                    </div>
+                    <div class="auth-tour-gallery-grid">
+                        <button
+                            type="button"
+                            class="auth-tour-shot auth-tour-shot--wide saturate_on_hover"
+                            data-testid="login-tour-shot-full-shell"
+                            data-aria-label-lang-key="login_page_tour_image_full_shell_title"
+                            aria-haspopup="dialog">
+                            <img
+                                src="/frontend/public/auth-tour/platform-full-shell.jpg"
+                                data-lang-key="login_page_tour_image_full_shell_alt"
+                                alt="Screenshot of the full application workspace."
+                                loading="lazy"
+                                decoding="async">
+                            <span class="auth-tour-shot-copy">
+                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_full_shell_title">Full application workspace</strong>
+                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_full_shell_caption">Cards, navigation, and filtering in one continuous workspace.</span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="auth-tour-shot saturate_on_hover"
+                            data-testid="login-tour-shot-navbar"
+                            data-aria-label-lang-key="login_page_tour_image_navbar_title"
+                            aria-haspopup="dialog">
+                            <img
+                                src="/frontend/public/auth-tour/platform-navbar.jpg"
+                                data-lang-key="login_page_tour_image_navbar_alt"
+                                alt="Screenshot of the navigation bar."
+                                loading="lazy"
+                                decoding="async">
+                            <span class="auth-tour-shot-copy">
+                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_navbar_title">Navigation and tools</strong>
+                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_navbar_caption">Main tabs, theme switching, and language controls stay within easy reach.</span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="auth-tour-shot saturate_on_hover"
+                            data-testid="login-tour-shot-card-view"
+                            data-aria-label-lang-key="login_page_tour_image_card_view_title"
+                            aria-haspopup="dialog">
+                            <img
+                                src="/frontend/public/auth-tour/platform-card-view.jpg"
+                                data-lang-key="login_page_tour_image_card_view_alt"
+                                alt="Screenshot of the card view."
+                                loading="lazy"
+                                decoding="async">
+                            <span class="auth-tour-shot-copy">
+                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_card_view_title">Card view</strong>
+                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_card_view_caption">Cards combine quick scanning, media, and a fast path into deeper record detail.</span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="auth-tour-shot saturate_on_hover"
+                            data-testid="login-tour-shot-table-view"
+                            data-aria-label-lang-key="login_page_tour_image_table_view_title"
+                            aria-haspopup="dialog">
+                            <img
+                                src="/frontend/public/auth-tour/platform-table-view.jpg"
+                                data-lang-key="login_page_tour_image_table_view_alt"
+                                alt="Screenshot of the table view."
+                                loading="lazy"
+                                decoding="async">
+                            <span class="auth-tour-shot-copy">
+                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_table_view_title">Table view</strong>
+                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_table_view_caption">Tables support comparison, quick editing, and dense information management.</span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="auth-tour-shot saturate_on_hover"
+                            data-testid="login-tour-shot-filterbar"
+                            data-aria-label-lang-key="login_page_tour_image_filterbar_title"
+                            aria-haspopup="dialog">
+                            <img
+                                src="/frontend/public/auth-tour/platform-filterbar.jpg"
+                                data-lang-key="login_page_tour_image_filterbar_alt"
+                                alt="Screenshot of the filter bar."
+                                loading="lazy"
+                                decoding="async">
+                            <span class="auth-tour-shot-copy">
+                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_filterbar_title">Filter bar</strong>
+                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_filterbar_caption">Search, column-level filters, sorting, and active constraints work together in one surface.</span>
+                            </span>
+                        </button>
+                    </div>
+                </section>
+                {{end}}
+            </section>
+        </div>
+    </div>
+    {{end}}
+</body>
+
+</html>

@@ -1,0 +1,312 @@
+/*
+ * big_card_image_gallery.css
+ *
+ * Image gallery and upload placeholders inside the big card view.
+ * Bridges the gallery component and the theme variable system.
+ * Exists to keep article-view image actions visually aligned with shared media controls.
+ */
+
+.big_card_image_gallery {
+    --big-card-thumbnail-gap: 8px;
+    --big-card-thumbnail-slot-count: 6;
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0;
+    position: relative;
+}
+
+.big_card_image_gallery.is-uploading {
+    opacity: 0.85;
+}
+
+/* ── Thumbnail row ────────────────────────────── */
+.big_card_thumbnail_row {
+    display: grid;
+    grid-template-columns: repeat(var(--big-card-thumbnail-slot-count), minmax(0, 1fr));
+    align-items: center;
+    gap: var(--big-card-thumbnail-gap);
+    padding: 4px 0;
+    position: relative;
+    width: 100%;
+}
+
+.big_card_thumbnail_strip {
+    display: grid;
+    grid-column: span 5;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: center;
+    gap: var(--big-card-thumbnail-gap);
+    min-width: 0;
+    width: 100%;
+}
+
+.big_card_thumbnail_row:not(:has(> .image_upload_placeholder.small)) .big_card_thumbnail_strip {
+    grid-column: 1 / -1;
+}
+
+.big_card_thumbnail_item {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    width: 100%;
+    aspect-ratio: 1;
+}
+
+.big_card_thumbnail_carousel_button {
+    position: absolute;
+    top: 50%;
+    z-index: 3;
+    transform: translateY(-50%);
+    min-width: 0;
+    width: 36px;
+    height: min(72px, 100%);
+    padding: 0;
+    justify-content: center;
+    font-size: 1.4rem;
+    line-height: 1;
+    background: color-mix(in srgb, var(--bg_color_extreme, #111) 78%, transparent 22%);
+}
+
+.big_card_thumbnail_carousel_button[data-testid="big-card-image-carousel-previous"] {
+    left: 0;
+}
+
+.big_card_thumbnail_row:has(> .image_upload_placeholder.small) .big_card_thumbnail_carousel_button[data-testid="big-card-image-carousel-previous"] {
+    left: calc(
+        ((100% - (var(--big-card-thumbnail-gap) * (var(--big-card-thumbnail-slot-count) - 1))) / var(--big-card-thumbnail-slot-count))
+        + var(--big-card-thumbnail-gap)
+    );
+}
+
+.big_card_thumbnail_carousel_button[data-testid="big-card-image-carousel-next"] {
+    right: 0;
+}
+
+.big_card_thumbnail_row img {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--border_radius, 4px);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s, transform 0.15s ease;
+}
+
+.big_card_thumbnail_delete,
+.big_card_thumbnail_primary {
+    position: absolute;
+    z-index: 2;
+    min-width: 0;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg_color, #111) 84%, black 16%);
+    border: 1px solid color-mix(in srgb, var(--border_color, #666) 78%, transparent 22%);
+    color: var(--text_color_secondary, #bbb);
+    opacity: 0.48;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+}
+
+.big_card_thumbnail_delete {
+    top: 4px;
+    right: 4px;
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.big_card_thumbnail_primary {
+    top: 4px;
+    left: 4px;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
+.big_card_thumbnail_primary.is-primary {
+    opacity: 0.95;
+    color: color-mix(in srgb, #ffdb6e 86%, white 14%);
+    background: color-mix(in srgb, var(--bg_color, #111) 70%, #a36f00 30%);
+}
+
+.big_card_thumbnail_item:hover .big_card_thumbnail_delete,
+.big_card_thumbnail_item:hover .big_card_thumbnail_primary,
+.big_card_thumbnail_delete:hover,
+.big_card_thumbnail_primary:hover {
+    opacity: 1;
+    color: var(--text_color, #fff);
+    transform: scale(1.04);
+}
+
+.big_card_thumbnail_delete:hover {
+    background: color-mix(in srgb, #9e1f1f 50%, var(--bg_color, #111) 50%);
+}
+
+.big_card_thumbnail_primary:hover {
+    background: color-mix(in srgb, var(--primary_color, hsl(207deg 70% 53%)) 34%, var(--bg_color, #111) 66%);
+}
+
+.big_card_thumbnail_primary:disabled {
+    cursor: default;
+}
+
+.big_card_thumbnail_context_menu {
+    position: fixed;
+    z-index: 10020;
+    display: none;
+    min-width: 190px;
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--border_color, #666) 80%, transparent 20%);
+    background: color-mix(in srgb, var(--bg_color_extreme, #111) 92%, black 8%);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+.big_card_thumbnail_context_menu.is-visible {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.big_card_thumbnail_context_action {
+    width: 100%;
+    border: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text_color, #fff);
+    text-align: left;
+    cursor: pointer;
+}
+
+.big_card_thumbnail_context_action:hover {
+    background: color-mix(in srgb, var(--primary_color, hsl(207deg 70% 53%)) 18%, transparent 82%);
+}
+
+.big_card_thumbnail_context_action.danger:hover {
+    background: color-mix(in srgb, #9e1f1f 26%, transparent 74%);
+}
+
+.big_card_thumbnail_row img:hover,
+.big_card_thumbnail_row img.active_thumb {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.big_card_image_editor_shell {
+    display: grid;
+    gap: 8px;
+}
+
+.big_card_image_editor_toggle {
+    justify-self: start;
+}
+
+.big_card_image_editor {
+    border: 1px solid color-mix(in srgb, var(--border_color, #666) 78%, transparent 22%);
+    border-radius: 12px;
+    padding: 12px;
+    background: color-mix(in srgb, var(--bg_color_extreme, #111) 88%, transparent 12%);
+}
+
+.big_card_image_editor.is-saving {
+    opacity: 0.8;
+}
+
+.big_card_image_editor_title {
+    margin: 0 0 10px;
+    font-size: 0.98rem;
+}
+
+.big_card_image_editor_form {
+    display: grid;
+    gap: 10px;
+}
+
+.big_card_image_editor_field {
+    display: grid;
+    gap: 6px;
+}
+
+.big_card_image_editor_label {
+    font-size: 0.85rem;
+    color: var(--text_color_secondary, #bbb);
+}
+
+.big_card_image_editor_input,
+.big_card_image_editor_textarea {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--border_color, #666) 80%, transparent 20%);
+    background: color-mix(in srgb, var(--bg_color, #111) 92%, transparent 8%);
+    color: var(--text_color, #fff);
+    padding: 9px 10px;
+}
+
+.big_card_image_editor_textarea {
+    resize: vertical;
+    min-height: 88px;
+}
+
+.big_card_image_editor_helper {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text_color_secondary, #bbb);
+}
+
+.big_card_image_editor_actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ── Upload placeholder ───────────────────────── */
+.image_upload_placeholder {
+    border: 2px dashed var(--border_color, #ccc);
+    background: color-mix(in srgb, var(--bg_color_extreme, #f5f5f5) 95%, #888 5%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--border_radius, 4px);
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.image_upload_placeholder:hover {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.image_upload_placeholder.large {
+    width: 100%;
+    min-height: 200px;
+}
+
+.image_upload_placeholder.small {
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    min-width: 0;
+}
+
+.image_upload_placeholder.drag_over {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+    background: color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 10%, var(--bg_color_extreme, #f5f5f5) 90%);
+}
+
+.upload_icon {
+    color: var(--text_color_secondary, #999);
+    font-size: 1.5rem;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    pointer-events: none;
+}
+
+.image_upload_placeholder.large .upload_icon {
+    font-size: 2.5rem;
+}

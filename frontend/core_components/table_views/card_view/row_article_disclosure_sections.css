@@ -1,0 +1,143 @@
+/*
+ * row_article_disclosure_sections.css
+ *
+ * Article-view collapsible tool-section styling.
+ * Bridges shared animated disclosure markup and row article tool sections.
+ * Exists to keep article tool boxes out of the already-large cards_big.css file.
+ */
+
+.row_article_disclosure_section {
+    --animated-disclosure-chevron-collapsed-rotation: -90deg;
+    --animated-disclosure-chevron-expanded-rotation: 0deg;
+    --row-article-disclosure-heading-bg: hsl(var(--brand-hue) 70% 92%);
+    --row-article-disclosure-heading-hover-bg: hsl(var(--brand-hue) 66% 89%);
+
+    background: var(--bg_color_extreme);
+    border-block: 2px solid var(--fw-color-border);
+    border-radius: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.row_article_disclosure_section + .row_article_disclosure_section {
+    margin-top: -2px;
+}
+
+.row_article_disclosure_section > .row_article_disclosure_header {
+    justify-content: flex-start;
+    min-height: 56px;
+    margin: 0;
+    padding: 0 14px 0 22px;
+    border: 0;
+    border-radius: 0;
+    background: var(--row-article-disclosure-heading-bg);
+    color: var(--text_color);
+}
+
+.row_article_disclosure_section > .row_article_disclosure_header:hover {
+    background: var(--row-article-disclosure-heading-hover-bg);
+}
+
+.row_article_disclosure_section > .row_article_disclosure_header .animated-disclosure-chevron {
+    order: -1;
+}
+
+.row_article_disclosure_section .animated-disclosure-title-group {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    gap: 14px;
+    min-width: 0;
+}
+
+.row_article_disclosure_section .animated-disclosure-title {
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-align: left;
+}
+
+.row_article_disclosure_section .animated-disclosure-icon {
+    width: 18px;
+    height: 18px;
+    color: currentcolor;
+}
+
+body.dark-mode .row_article_disclosure_section {
+    --row-article-disclosure-heading-bg: hsl(var(--brand-hue) 30% 13%);
+    --row-article-disclosure-heading-hover-bg: hsl(var(--brand-hue) 31% 16%);
+}
+
+.row_article_disclosure_content {
+    padding: 0.75rem 0.25rem 0.95rem;
+}
+
+.row_article_image_gallery_section .row_article_disclosure_content,
+.row_article_attachment_list_section .row_article_disclosure_content,
+.row_article_related_items_section .row_article_disclosure_content {
+    padding-inline: 0;
+}
+
+.row_article_task_progress {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.row_article_task_progress_overview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+}
+
+.row_article_task_progress_percent {
+    color: var(--text_color);
+    font-size: 1.25rem;
+    letter-spacing: 0;
+}
+
+.row_article_task_progress_ratio {
+    color: var(--empty_field_text_color);
+    font-size: 0.95rem;
+}
+
+.row_article_task_progress_lights {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 0.35rem;
+    width: min(100%, 34rem);
+}
+
+.row_article_task_progress_light {
+    display: block;
+    min-width: 0;
+    height: 0.75rem;
+    border: 1px solid hsl(135 42% 38%);
+    border-radius: 0.22rem;
+    background: hsl(135 34% 16%);
+    box-shadow: inset 0 0 0 1px hsl(135 30% 10% / 35%);
+}
+
+.row_article_task_progress_light.is-lit {
+    border-color: hsl(135 48% 28%);
+    background: hsl(135 58% 48%);
+    box-shadow: 0 0 0.55rem hsl(135 58% 48% / 28%);
+}
+
+.row_article_task_progress_statuses {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.row_article_task_progress_status_chip {
+    border: 1px solid color-mix(in srgb, var(--border_color) 72%, transparent);
+    border-radius: var(--border_radius_small);
+    color: var(--empty_field_text_color);
+    font-size: 0.85rem;
+    line-height: 1.2;
+    padding: 0.32rem 0.48rem;
+}
+
+.row_article_task_progress_status_chip.is-complete {
+    border-color: hsl(135 42% 36%);
+    color: var(--text_color);
+}

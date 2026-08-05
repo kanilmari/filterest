@@ -1,0 +1,796 @@
+/*
+ * filterbar.css
+ *
+ * Visual styling for the main filter bar component (inputs, buttons, panels).
+ * Bridges the filterbar JS module and the theme variable system.
+ * Exists to render filter controls with consistent spacing and theme colors.
+ *
+ * Visual Documentation:
+ * - instructions_and_documentation/visual_documentation/tab_content/filter_bar/filter_bar_overview.md
+ *   - Describes the filter bar layout and components.
+ */
+/* .dataset-filter-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    padding: 10px;
+    position: relative;
+} */
+
+.dataset-filter-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: auto;
+    padding: 10px;
+    max-width: var(--filterbar-column-width);
+    /* Oletusleveys, kun näkyvissä */
+    transition: width 0.3s ease;
+    /* Animaatio leveyden muutokselle */
+    z-index: var(--z-filterbar);
+    background: var(--bg_color);
+    position: relative;
+}
+
+.dataset-filter-panel.hidden {
+    width: 0;
+    padding: 0;
+    /* Poistetaan padding piilotettuna */
+    overflow: hidden;
+    display: none;
+    /* Varmistetaan, että sisältö ei vuoda */
+}
+
+.dataset-filter-panel.compressed {
+    height: auto;
+    padding: 0;
+    overflow: hidden;
+    margin: auto;
+}
+
+.dataset-filter-panel.compressed>.dataset-search-input-row {
+    padding: 10px;
+}
+
+.dataset-filter-panel.compressed> :not(.dataset-search-input-row) {
+    display: none !important;
+}
+
+/* Kolme ensimmäistä eivät veny, vaan asettuvat yläreunaan */
+.dataset-filter-panel>div:nth-child(1),
+.dataset-filter-panel>div:nth-child(2),
+.dataset-filter-panel>div:nth-child(3) {
+    flex: 0 0 auto;
+}
+
+/* .dataset-filter-panel>div:nth-child(4) {
+    overflow-y: auto;
+} */
+
+.dataset-filter-panel>.chat-collapsible {
+    /* margin-top: auto; */
+    overflow-y: auto;
+    position: absolute;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    background-color: var(--bg_color_extreme, #1a1a2e);
+    max-height: calc(100vh - 2rem);
+    border-radius: var(--border_radius, 8px);
+    border: 1px solid var(--border_color, #333);
+    box-shadow: 0 4px 20px rgb(0 0 0 / 50%);
+}
+
+.chat_container {
+    max-height: calc(100vh - 150px);
+}
+
+.dataset-filter-tabs-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem;
+}
+
+/* .dataset-filter-tabs-row button { */
+    /* Inherits from fw-btn */
+/* } */
+
+/* .dataset-filter-tabs-row button:hover { */
+    /* Inherits hover from fw-btn */
+/* } */
+
+.tab-button-active {
+    background-color: var(--button_active_bg_color) !important;
+    color: var(--button_active_text_color) !important;
+    border-color: var(--button_active_border_color) !important;
+}
+
+.tabs_content_container {
+    position: relative;
+    overflow: hidden;
+}
+
+.sort_filter_section,
+.chat_section {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-sections {
+    flex: 1 1 auto;
+    overflow-y: auto;
+}
+
+/* Esimerkkirakenne yläosan ”riviin” */
+.dataset-filter-top-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.dataset-filter-primary-actions,
+.dataset-filter-secondary-row {
+    background: var(--bg_color_extreme);
+    /* border: 1px solid var(--fw-color-border); */
+    border-radius: var(--fw-radius-lg);
+    padding: 15px;
+}
+
+/* Empty rows are hidden by JS in filterbar_ui.js after permission checks */
+
+.dataset-filter-primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.dataset-filter-primary-actions.dataset-filter-primary-actions--query {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px 10px;
+    background:
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--bg_color_extreme) 92%, var(--bg_color_2) 8%),
+            var(--bg_color_extreme)
+        );
+}
+
+.dataset-filter-primary-actions--tools {
+    align-items: center;
+}
+
+/* Sort left, Reset search right */
+.dataset-filter-row-spread {
+    justify-content: space-between;
+}
+
+.dataset-filter-secondary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.dataset-filter-primary-actions > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius);
+}
+
+.dataset-filter-primary-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dataset-filter-primary-buttons > * {
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.sort-dropdown-wrapper {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.sort-dropdown-wrapper > div:first-child {
+    white-space: nowrap;
+    color: var(--text_color);
+    opacity: 0.9;
+}
+
+.sort-dropdown-wrapper > div:last-child {
+    min-width: 0;
+}
+
+/* Allow reset-search text to wrap to 2 lines on narrow screens.
+   fw-btn uses inline-flex which prevents wrapping — override here. */
+.reset-search-button {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+    min-width: 0;
+    line-height: 1.3;
+}
+
+.view-selector-buttons,
+.dataset-filter-management-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.column-preset-row {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg_color_extreme);
+    border-radius: var(--fw-radius-lg);
+    padding: 15px;
+}
+
+.column-preset-select-row,
+.column-preset-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.column-preset-select {
+    flex: 1 1 200px;
+    min-width: 200px;
+}
+
+.column-preset-field-picker {
+    flex: 1 1 200px;
+    min-width: 200px;
+}
+
+.column-preset-field-picker .msd-dropdown-input {
+    background-color: var(--input_bg_color);
+    min-height: 44px;
+}
+
+.column-preset-field-picker .msd-clear-btn {
+    min-height: 44px;
+}
+
+.column-preset-more-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.column-preset-more-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 100;
+    min-width: 200px;
+    padding: 0.25rem 0;
+    background: var(--bg_color, #1a1a2e);
+    border: 1px solid var(--border_color, #444);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
+}
+
+.column-preset-more-item {
+    display: block;
+    width: 100%;
+    padding: 0.4rem 0.8rem;
+    text-align: left;
+    white-space: nowrap;
+    border: none;
+    border-radius: 0;
+}
+
+.column-preset-more-item--danger {
+    color: var(--error_color, #e74c3c);
+}
+
+.view-selector-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 0 100%;
+    color: var(--text_color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.filterbar-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 0 100%;
+    width: 100%;
+    color: var(--text_color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.filterbar-disclosure-section {
+    --animated-disclosure-chevron-collapsed-rotation: -90deg;
+    --animated-disclosure-chevron-expanded-rotation: 0deg;
+    --filterbar-disclosure-heading-bg: hsl(var(--brand-hue) 70% 92%);
+    --filterbar-disclosure-heading-hover-bg: hsl(var(--brand-hue) 66% 89%);
+    --filterbar-disclosure-heading-border: hsl(var(--brand-hue) 58% 74%);
+    background: var(--bg_color_extreme);
+    border-block: 2px solid var(--fw-color-border);
+    border-radius: 0;
+    flex: 0 0 auto;
+    margin-top: -2px;
+    overflow: hidden;
+}
+
+.filterbar-disclosure-section > .filterbar-section-heading {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    min-height: 56px;
+    margin: 0;
+    padding: 0 14px 0 22px;
+    border: 0;
+    border-radius: 0;
+    background: var(--filterbar-disclosure-heading-bg);
+    border-bottom: 1px solid var(--filterbar-disclosure-heading-border);
+}
+
+.filterbar-disclosure-section > .filterbar-section-heading:hover {
+    background: var(--filterbar-disclosure-heading-hover-bg);
+}
+
+.filterbar-disclosure-section > .filterbar-section-heading .animated-disclosure-chevron {
+    order: -1;
+}
+
+.filterbar-panel-body > .filterbar-disclosure-section:first-child {
+    margin-top: 0;
+    border-top-width: 0;
+}
+
+.filterbar-disclosure-section > .filterbar-section-heading .animated-disclosure-title-group {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    gap: 14px;
+}
+
+.filterbar-disclosure-section > .filterbar-section-heading .animated-disclosure-title {
+    line-height: 1.2;
+    text-align: left;
+}
+
+.filterbar-disclosure-section > .animated-disclosure-content-shell > .filterbar-disclosure-content {
+    box-sizing: border-box;
+    padding: 14px 15px 15px;
+}
+
+.filterbar-disclosure-section.is-expanded > .animated-disclosure-content-shell {
+    border-top: 1px solid var(--filterbar-disclosure-heading-border);
+}
+
+body.dark-mode .filterbar-disclosure-section {
+    --filterbar-disclosure-heading-bg: hsl(var(--brand-hue) 30% 13%);
+    --filterbar-disclosure-heading-hover-bg: hsl(var(--brand-hue) 31% 16%);
+    --filterbar-disclosure-heading-border: hsl(var(--brand-hue) 42% 29%);
+}
+
+.filterbar-overview-section.filterbar-disclosure-section {
+    overflow: visible;
+}
+
+.filterbar-overview-section > .animated-disclosure-content-shell {
+    overflow: visible;
+}
+
+.filterbar-overview-section .filter-content-inner {
+    margin-top: 12px;
+}
+
+.filterbar-disclosure-content.dataset-filter-primary-actions,
+.filterbar-disclosure-content.dataset-filter-secondary-row {
+    background: transparent;
+    border-radius: 0;
+    padding: 14px 15px 15px;
+}
+
+.column-preset-row.filterbar-disclosure-section {
+    gap: 0;
+    padding: 0;
+}
+
+.column-preset-row .filterbar-disclosure-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.favefox-filterbar-wrapper.filterbar-disclosure-section > .animated-disclosure-content-shell > .favefox-filterbar-disclosure-content {
+    padding: 14px 0 0;
+}
+
+.filterbar-disclosure-section--reorderable > .filterbar-section-heading {
+    cursor: grab;
+}
+
+.filterbar-disclosure-section--reorderable > .filterbar-section-heading:active,
+.filterbar-disclosure-section--dragging > .filterbar-section-heading {
+    cursor: grabbing;
+}
+
+.filterbar-disclosure-section--dragging {
+    opacity: 0.55;
+}
+
+.filterbar-section-heading-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    background-color: currentcolor;
+}
+
+.filterbar-panel--wide > .filterbar-chat-dock {
+    display: none;
+}
+
+.filterbar-chat-dock {
+    --filterbar-chat-dock-animation-duration: 240ms;
+    --filterbar-chat-dock-open-motion-duration: 240ms;
+    --filterbar-chat-dock-close-motion-duration: 240ms;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg_color_extreme);
+    border-top: 2px solid var(--fw-color-border);
+    overflow: hidden;
+    transform: translateY(0);
+    transition:
+        transform var(--filterbar-chat-dock-open-motion-duration) cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+}
+
+.filterbar-chat-dock[data-chat-animation-direction="closing"] {
+    transition-duration: var(--filterbar-chat-dock-close-motion-duration);
+}
+
+.filterbar-panel--chat-maximized > .filterbar-chat-dock,
+.filterbar-panel--chat-layout-animating > .filterbar-chat-dock {
+    position: absolute;
+    right: 0;
+    bottom: var(--filterbar-clock-bar-height, 34px);
+    left: 0;
+    z-index: 40;
+}
+
+.filterbar-panel--chat-maximized > .filterbar-chat-dock {
+    top: 70px;
+}
+
+.filterbar-panel--chat-layout-animating > .filterbar-chat-dock {
+    top: auto;
+    overflow: hidden;
+}
+
+.filterbar-panel--chat-layout-animating > .filterbar-chat-dock .filterbar-chat-dock__content {
+    transition: none;
+}
+
+.filterbar-chat-dock__header {
+    flex: 0 0 auto;
+    min-height: 56px;
+    margin: 0;
+    padding: 0 12px 0 22px;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg_color_extreme);
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease;
+}
+
+.filterbar-chat-dock__header:hover,
+.filterbar-chat-dock__header:focus-visible {
+    background:
+        color-mix(in srgb, var(--bg_color_extreme) 88%, var(--button_hover_bg_color) 12%);
+}
+
+.filterbar-chat-dock__header:focus-visible {
+    outline: 2px solid var(--button_active_border_color);
+    outline-offset: -3px;
+}
+
+.filterbar-chat-dock__title-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.filterbar-chat-dock__title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filterbar-chat-dock__toggle {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 8px;
+}
+
+.filterbar-chat-dock__toggle-icon {
+    width: 18px;
+    height: 18px;
+    background-color: currentcolor;
+    transform: rotate(0deg);
+    transition:
+        transform var(--filterbar-chat-dock-animation-duration) cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 160ms ease;
+}
+
+.filterbar-chat-dock.is-chat-maximized {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.filterbar-chat-dock.is-chat-maximized .filterbar-chat-dock__toggle-icon {
+    mask-image: url("/frontend/icons/general/minimize-panel-icon.svg") !important;
+    -webkit-mask-image: url("/frontend/icons/general/minimize-panel-icon.svg") !important;
+    transform: rotate(0deg);
+}
+
+.filterbar-chat-dock__content {
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    max-height: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-top: 0 solid transparent;
+    opacity: 0;
+    transition:
+        max-height var(--filterbar-chat-dock-animation-duration) cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 160ms ease,
+        border-color 160ms ease;
+}
+
+.filterbar-chat-dock[data-chat-animation-direction="closing"] .filterbar-chat-dock__content {
+    transition-duration:
+        var(--filterbar-chat-dock-close-motion-duration),
+        160ms,
+        160ms;
+}
+
+.filterbar-chat-dock.is-chat-maximized .filterbar-chat-dock__content {
+    flex: 1 1 auto;
+    max-height: calc(100vh - 56px - var(--filterbar-clock-bar-height, 34px));
+    border-top-width: 1px;
+    border-top-color: var(--fw-color-border);
+    opacity: 1;
+}
+
+.filterbar-chat-dock__content-inner,
+.filterbar-chat-dock__content .chat_wrapper,
+.filterbar-chat-dock__content .chat_inner {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.filterbar-chat-dock__content .chat_wrapper {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.filterbar-chat-dock__content .chat_container {
+    min-height: 0;
+    max-height: none;
+}
+
+.column-preset-row > .column-preset-heading {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+}
+
+.view-selector-heading-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    background-color: currentcolor;
+}
+
+.view-selector-buttons > *,
+.dataset-filter-management-buttons > * {
+    min-width: 0;
+    white-space: nowrap;
+}
+
+/* Blur efekti kun chat on avoinna */
+.filter-blur>*:not(.chat-collapsible) {
+    filter: blur(3px);
+    pointer-events: none;
+    user-select: none;
+    transition: filter 0.3s ease;
+}
+
+.filter-blur>.chat-collapsible {
+    z-index: 10;
+    /* Varmistaa että chat on sumennetun sisällön päällä */
+    position: relative;
+}
+
+.dataset-search-input,
+input,
+textarea {
+    border-radius: var(--border_radius);
+    width: 100%;
+    border: 1px solid var(--border_color);
+    padding: 12px;
+    height: unset;
+}
+
+/* Focus style for .dataset-search-input is in text_search/text_search.css */
+
+.hide_filter_bar_button,
+.show_filter_bar_button {
+    /* Inherits from fw-btn, but overrides size and position */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    border: 1px solid var(--border_color);
+}
+
+.hide_filter_bar_button {
+    width: 36px;
+    height: 36px;
+}
+
+.filterbar-hide-button-icon,
+.delete-selected-icon {
+    flex: 0 0 auto;
+    background-color: currentcolor;
+}
+
+.filterbar-hide-button-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.delete-selected-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.show_filter_bar_button {
+    position: absolute;
+    top: 8px;
+    right: 5px;
+    z-index: 111;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+}
+
+/* Piilota näytänappi oletuksena ja näytä se kun dataset-filter-panel on piilossa */
+.tab_parts_container>.show_filter_bar_button {
+    display: none;
+}
+
+.tab_parts_container:has(.dataset-filter-panel.hidden)>.show_filter_bar_button {
+    display: flex;
+}
+
+/* Hide old show_filter_bar_button when the new filterbar-fixed-toggle exists
+   in the same container — prevents duplicate toggle buttons. */
+.tab_parts_container:has(.filterbar-fixed-toggle)>.show_filter_bar_button {
+    display: none !important;
+}
+
+.card-view .column-visibility-toggle {
+    display: none !important;
+}
+
+/* .dataset-filter-panel-title-container > div {
+    font-wi
+} */
+
+/* --- Search component styles have been moved to text_search/text_search.css --- */
+/* That file is the single source of truth for .dataset-search-panel,
+   .dataset-search-row, .dataset-search-fields, .dataset-search-input, etc. */
+
+/* --- Admin dropdown lisänät --- */
+.more-views-dropdown {
+    min-width: 150px;
+}
+
+[data-lang-key="sort_by"] {
+    width: 70px;
+}
+
+[data-lang-key="show_more"], [data-lang-key="show_less"] {
+    padding: 10px;
+}
+
+/* ============================================
+   RESPONSIVE: tighten filterbar spacing on narrow screens
+   so sort + reset stay on the same line.
+   ============================================ */
+
+@media (width <= 768px) {
+    .dataset-filter-primary-actions,
+    .dataset-filter-secondary-row {
+        padding: 10px;
+    }
+
+    .dataset-filter-primary-actions > span {
+        padding: 6px;
+    }
+
+    /* Sort label moves above dropdown on narrow viewports */
+    .sort-dropdown-wrapper {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+}
+
+@media (width <= 480px) {
+    .dataset-filter-primary-actions,
+    .dataset-filter-secondary-row {
+        padding: 6px;
+    }
+
+    .dataset-filter-primary-actions > span {
+        padding: 4px;
+    }
+
+    [data-lang-key="sort_by"] {
+        width: auto;
+    }
+
+    /* Force reset button text to wrap to 2 lines, freeing
+       horizontal space for the sort dropdown */
+    .reset-search-button {
+        max-width: 5.5rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}

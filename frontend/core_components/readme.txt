@@ -1,0 +1,1 @@
+Login, register, and other non-repeatable key components (like the navigation bar) belong to this folder. While there can be many navigation bar options, the site can still use just one at a time, and that's what non-repeatable means.
