@@ -501,7 +501,12 @@ ensure_generated_filterest_initial_admin() {
 
     echo ""
     echo -e "${BLUE}Creating isolated automated-preview admin credentials...${NC}"
-    FILTEREST_DB_PASSWORD="$DB_ADMIN_PASSWORD" go run ./server_tools/initial_admin_bootstrap "${initial_admin_args[@]}"
+    # The isolated preview admin hashes the configured local PIN. Keep the PIN
+    # scoped to this child process just like the database password instead of
+    # exporting either secret into the parent shell.
+    LOGIN_OTP_CODE="$LOGIN_OTP_CODE" \
+        FILTEREST_DB_PASSWORD="$DB_ADMIN_PASSWORD" \
+        go run ./server_tools/initial_admin_bootstrap "${initial_admin_args[@]}"
 }
 
 create_role "$DB_ADMIN_USER" "$DB_ADMIN_PASSWORD" "SUPERUSER"

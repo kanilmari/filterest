@@ -138,6 +138,10 @@ class BootstrapSeedShellTests(unittest.TestCase):
             preview_script,
         )
         self.assertIn(
+            'LOGIN_OTP_CODE="$LOGIN_OTP_CODE"',
+            setup_script,
+        )
+        self.assertIn(
             "unset EASELECT_RUNTIME_ENV_FILE EASELECT_DEV_ENV_FILE",
             preview_script,
         )
