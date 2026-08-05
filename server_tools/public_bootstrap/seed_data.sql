@@ -508,7 +508,7 @@ VALUES
     2,
     2,
     'teppo_tekija',
-    1,
+    NULL,
     json_build_object('en', 'First dataset', 'fi', 'Ensimmäinen tietoaineisto', 'yue', '第一個資料集')::text,
     json_build_object('en', 'Workspace builders', 'fi', 'Työtilan rakentajat', 'yue', '工作區建立者')::text,
     json_build_object(
@@ -523,7 +523,7 @@ VALUES
     3,
     2,
     'teppo_tekija',
-    1,
+    NULL,
     json_build_object(
         'en', 'Browse, filter and manage data',
         'fi', 'Selaa, suodata ja hallitse tietoja',
