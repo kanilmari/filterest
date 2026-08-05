@@ -92,7 +92,7 @@ describe('resolveEaselectPrivatePaths', () => {
       path.join(root, 'filterest-projects'),
     );
 
-    const publicRoot = path.join(root, 'filterest-beta');
+    const publicRoot = path.join(root, 'filterest');
     fs.mkdirSync(publicRoot);
     fs.writeFileSync(path.join(publicRoot, 'VERSION_APP'), 'test\n');
     expect(resolveFilterestHomes(publicRoot, {}).projectsHome).toBe(

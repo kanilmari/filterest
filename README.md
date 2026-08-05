@@ -29,7 +29,7 @@ the data or another administration system.
 When a workflow needs more than the built-in views, Filterest can be extended
 with compiled custom application modules that use its authentication,
 permissions, routing, dataset APIs, translations, and file handling. The
-public beta does not yet provide a drop-in runtime plug-in loader.
+current Filterest release does not yet provide a drop-in runtime plug-in loader.
 
 ```text
 filterest_projects/
@@ -84,15 +84,13 @@ and polygon rendering are not yet part of this documented contract.
 
 ## Current Status
 
-This repository contains the stable Filterest application platform. Stable
-releases remain subject to the compatibility and upgrade policy documented in
-this repository; review release notes and backups before upgrading important
-installations.
+This repository contains the Filterest application platform. Releases remain
+subject to the compatibility and upgrade policy documented in this repository;
+review release notes and backups before upgrading important installations.
 
-`filterest` is the only active publication channel. It starts with a fresh
-initial artifact commit rather than copying non-public maintainer-source,
-retired alpha, or predecessor beta history. The `filterest-beta` repository is
-read-only unless the release owner explicitly reopens it.
+This repository is the canonical public Filterest release source. Its history
+starts with a reviewed Filterest release artifact and excludes non-public
+maintainer-source history.
 
 ## Installation Profiles
 
@@ -195,6 +193,6 @@ private vulnerability-reporting channel.
 ## License
 
 Filterest is licensed under the GNU General Public License version 2
-(`GPL-2.0-only`), the same source-license choice applied to its predecessor
-channels. See `LICENSE` and `docs/publication/PUBLICATION_CHECKLIST.md`. The source license
-does not grant trademark rights in the `FILTEREST` name or logo.
+(`GPL-2.0-only`). See `LICENSE` and
+`docs/publication/PUBLICATION_CHECKLIST.md`. The source license does not grant
+trademark rights in the `FILTEREST` name or logo.

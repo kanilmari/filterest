@@ -4,6 +4,7 @@
 // Exists to keep startup config semantics stable even when network calls fail.
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
+import checkedInConfig from '../config.json';
 
 const endpointRouterMock = vi.fn();
 
@@ -41,6 +42,18 @@ describe('config_fetcher', () => {
 
     await expect(mod.loadConfig()).resolves.toEqual({ default_view: 'normal' });
     expect(mod.getDefaultViewSync()).toBe('normal');
+  });
+
+  test('bypasses an older release config cached for the same site URL', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1723456789);
+    endpointRouterMock.mockResolvedValue({ default_view: 'card' });
+    const mod = await loadModule();
+
+    await mod.loadConfig();
+
+    expect(endpointRouterMock).toHaveBeenCalledWith('fetchConfig', {
+      url_params: '?release_config=1723456789',
+    });
   });
 
   test('falls back to card on failures and allows retrying', async () => {
@@ -94,6 +107,13 @@ describe('config_fetcher', () => {
     expect(mod.getDefaultDatasetSortSync('missing')).toEqual({
       column: null,
       direction: null,
+    });
+  });
+
+  test('keeps public documentation oldest-first in the checked-in config', () => {
+    expect(checkedInConfig.default_dataset_sorts.dokumentaatio).toEqual({
+      column: 'created',
+      direction: 'ASC',
     });
   });
 });

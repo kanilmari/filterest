@@ -1,8 +1,8 @@
 # Publishing Filterest
 
-This stable `filterest` sibling repository is intentionally local-first. The
-generator syncs it from the maintainer release source, preserves this channel's
-own `.git` history, and does not create a GitHub remote or push.
+This Filterest repository is intentionally local-first. The generator syncs it
+from the maintainer release source, preserves its own `.git` history, and does
+not create a GitHub remote or push.
 
 This repository is a generated artifact. Prefer changing the maintainer release
 source or the export generator, then regenerating this checkout. Direct edits in
@@ -18,9 +18,9 @@ cat VERSION_APP
 cat VERSION_DB
 ```
 
-Review `docs/publication/PUBLICATION_CHECKLIST.md` before publishing. Every stable update
-must come from a clean maintainer release-source commit and a reviewed
-sibling-repo commit.
+Review `docs/publication/PUBLICATION_CHECKLIST.md` before publishing. Every
+Filterest update must come from a clean maintainer release-source commit and a
+reviewed sibling-repo commit.
 
 From the maintainer release source, use the release wrapper:
 
@@ -42,7 +42,7 @@ unless they are intentionally converted back into release-source changes.
 
 ## GitHub Publication
 
-The approved stable repository is `kanilmari/filterest`. Standing owner
+The approved Filterest repository is `kanilmari/filterest`. Standing owner
 authorization permits the source-repository publication action after every
 required local and manual-final evidence gate passes:
 
@@ -59,7 +59,7 @@ version tags by hand.
 
 The command re-verifies both clean repositories, source evidence, the approved
 `origin/main` contract, the local cross-compilation toolchain, and the account
-Actions-disable policy before pushing stable Filterest. No generation command adds,
+Actions-disable policy before pushing Filterest. No generation command adds,
 replaces, or pushes a remote.
 
 The maintainer machine needs Go, `gcc`, and the ARM64 cross-compiler. On
@@ -79,16 +79,12 @@ and run `verify`. Use `publish --yes` only after every gate passes; do not ask
 for a second publication confirmation. Keep private apps, config, runtime data, and unclear media outside the
 public history.
 
-## Channel Promotion
+## Release Source Boundary
 
 The non-public maintainer release source is the only durable development
 upstream. Its Git history and DB-native development records do not transfer
 into the generated publication repository.
 
-The alpha channel is retired from the active local workflow, and
-`filterest-beta` is now the read-only predecessor. Stable `filterest` starts in
-its own repository with a fresh initial artifact commit; non-public
-maintainer-source, alpha, and beta history is not copied. Routine generation
-and publication to beta have stopped unless the release owner explicitly
-reopens that channel.
-The active stable checkout is `../filterest`.
+Filterest is published in its own repository with a fresh initial artifact
+commit; non-public maintainer-source history is not copied. The active checkout
+is `../filterest`.
