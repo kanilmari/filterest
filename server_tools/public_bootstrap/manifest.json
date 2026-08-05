@@ -1,7 +1,7 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "8.29.1",
+  "app_version": "8.29.2",
   "db_version": "8.0.59",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
@@ -112,7 +112,7 @@
       "sha256": "cea04eb7ce202978d1ac2972fd6a47e23bcf3d3f7975da55bb6c99c4e3292d98"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "7c9b58e249e9b407681cc67fb97c9e8e73ebcf9b66edcd518e2653ad029ca238"
+      "sha256": "2f00495e0327d8f77b475a47ab37a947ccb44e89f8a14bb4f412ab9ff5beb7e2"
     }
   },
   "source_files": {
@@ -132,7 +132,7 @@
       "sha256": "e7d93194c36e209253016c50c3a78b84a6a6ea17e438b4600981133514d4b47f"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.seed.sql": {
-      "sha256": "aaf570d04873e24d9e822d57243a06dcd871df2499c1a36f029fa51c3e33b88a"
+      "sha256": "515b8d8161bfa0939342ccb9f6fc80fee01769799442cb1142f042a477a8876d"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql": {
       "sha256": "cd988a9903a7f3b2b3e5e6dc4af33d21afacfdfcb604b8a184b9a05216e2b3a9"
