@@ -1,0 +1,22 @@
+{
+    "default_view": "card",
+    "cross_tab_login_sync": true,
+    "default_dataset_sorts": {
+        "palvelukatalogi": {
+            "column": "__images_first",
+            "direction": "DESC"
+        },
+        "riskienhallinta": {
+            "column": "__images_first",
+            "direction": "DESC"
+        },
+        "dokumentaatio": {
+            "column": "id",
+            "direction": "ASC"
+        },
+        "tiketit": {
+            "column": "__images_first",
+            "direction": "DESC"
+        }
+    }
+}

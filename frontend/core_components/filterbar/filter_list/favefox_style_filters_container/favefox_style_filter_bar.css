@@ -1,0 +1,575 @@
+/* favefox_style_filter_bar.css
+   Styling for Favefox-style collapsible filter bar sections.
+   
+   Uses framework tokens from frontend/styles/framework.css for consistency.
+   
+   Visual Documentation:
+   - instructions_and_documentation/visual_documentation/tab_content/filter_bar/favefox_filterbar_sections.md
+*/
+
+/* ============================================
+   WRAPPER & SCROLL AREA
+   ============================================ */
+.favefox-filterbar-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: var(--fw-color-surface);
+    /* border: 1px solid var(--fw-color-border); */
+    border-radius: var(--fw-radius-lg);
+    box-shadow: var(--fw-shadow-raised);
+    margin-bottom: 0;
+}
+
+.favefox-filterbar-scroll {
+    overflow-y: auto;
+    padding: 0;
+}
+
+.filterbar-panel-body .favefox-filterbar-scroll {
+    overflow: visible;
+    max-height: none;
+}
+
+.favefox-filterbar-scroll--inline-open {
+    overflow: visible;
+}
+
+/* ============================================
+   FILTERBAR CONTAINER
+   ============================================ */
+.favefox-filterbar {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    overflow: hidden;
+    /* No CSS transition here — height follows children via ResizeObserver.
+       Show-more/less uses inline transition set by JS. */
+}
+
+.favefox-filterbar--inline-open {
+    overflow: visible;
+}
+
+/* ============================================
+   FILTER SECTIONS (Collapsible accordion items)
+   ============================================ */
+.favefox-filterbar .filter-section {
+    --filter-section-bg: transparent;
+
+    background: var(--filter-section-bg);
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+    color: var(--fw-color-text);
+    min-height: 48px;
+    flex-shrink: 0;
+}
+
+.favefox-filterbar .filter-section:nth-child(even) {
+    --filter-section-bg: hsl(var(--brand-hue) 24% 96% / 0.72);
+}
+
+body.dark-mode .favefox-filterbar .filter-section:nth-child(even) {
+    --filter-section-bg: hsl(var(--brand-hue) 18% 9% / 0.92);
+}
+
+.favefox-filterbar .filter-section:last-child {
+    border-bottom: none;
+}
+
+.favefox-filterbar .filter-section:hover {
+    background: var(--fw-color-surface-muted);
+}
+
+.favefox-filterbar .filter-section:focus-within {
+    background: var(--fw-color-surface-muted);
+}
+
+.favefox-filterbar .filter-section button {
+    height: 30px;
+    min-height: 30px;
+}
+
+.favefox-filterbar--inline-open .filter-section:hover,
+.favefox-filterbar--inline-open .filter-section:focus-within {
+    background: var(--filter-section-bg);
+}
+
+.favefox-filterbar--inline-open .filter-section--inline-open {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "header actions"
+        "content content";
+    align-items: center;
+    gap: 0 var(--fw-space-3);
+    padding: 0;
+}
+
+/* ============================================
+   FILTER HEADER (Clickable toggle area)
+   ============================================ */
+.favefox-filterbar .filter-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--fw-space-2);
+    background-color: transparent;
+    padding: 10px 15px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+    border-bottom: none;
+    color: var(--fw-color-text);
+}
+
+.favefox-filterbar .filter-header-lead {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+}
+
+.favefox-filterbar .filter-header:hover {
+    background-color: transparent;
+}
+
+.favefox-filterbar .filter-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 650;
+    color: var(--fw-color-text);
+}
+
+.favefox-filterbar--inline-open .filter-header--static {
+    grid-area: header;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    align-self: center;
+    cursor: default;
+    padding: 0 var(--fw-space-3);
+    min-width: 0;
+    min-height: 38px;
+    background-color: transparent;
+    border-bottom: none;
+    color: var(--fw-color-text);
+}
+
+.favefox-filterbar--inline-open .filter-header--static:hover {
+    background-color: transparent;
+}
+
+.favefox-filterbar--inline-open .filter-header--static h3 {
+    line-height: 1.2;
+}
+
+/* ============================================
+   HEADER ICONS (Sort button + toggle arrow)
+   ============================================ */
+.favefox-filterbar .filter-section-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--fw-space-2);
+    min-width: 0;
+}
+
+.favefox-filterbar .filter-section-hover-actions,
+.favefox-filterbar .filter-section-persistent-actions,
+.favefox-filterbar .filter-display-mode-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--fw-space-1);
+}
+
+.favefox-filterbar .filter-section-hover-actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.favefox-filterbar .filter-section:hover .filter-section-hover-actions,
+.favefox-filterbar .filter-section:focus-within .filter-section-hover-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.favefox-filterbar .filter-display-mode-button {
+    min-width: 30px;
+    width: 30px;
+    padding: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.favefox-filterbar .filter-display-mode-button.is-active {
+    border-color: var(--fw-color-primary);
+    background-color: var(--fw-color-primary-soft);
+    color: var(--fw-color-primary);
+}
+
+.favefox-filterbar .filter-section-header-actions .sort_button {
+    min-width: 40px;
+    padding-inline: var(--fw-space-2);
+}
+
+.favefox-filterbar .filter-section-header-actions .column-visibility-toggle {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--fw-color-primary);
+}
+
+.favefox-filterbar .toggle-filters-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--fw-color-text);
+    padding: var(--fw-space-1);
+    border-radius: var(--fw-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    transition:
+        color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.favefox-filterbar .toggle-filters-button:hover {
+    color: var(--fw-color-text);
+    background-color: var(--fw-color-surface);
+}
+
+/* ============================================
+   FILTER CONTENT (Expanded area)
+   Height is animated by the reusable collapsible-height controller.
+   ============================================ */
+.favefox-filterbar .filter-content {
+    height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0 15px;
+    background-color: transparent;
+    color: var(--fw-color-text);
+    transition:
+        padding-top var(--transition-time, 0.3s) ease,
+        padding-bottom var(--transition-time, 0.3s) ease;
+}
+
+.favefox-filterbar .filter-content.expanded {
+    overflow-y: auto;
+    padding-top: var(--fw-space-2);
+    padding-bottom: var(--fw-space-3);
+}
+
+.favefox-filterbar .filter-section.section-expanded .filter-header {
+    padding-bottom: 3px;
+}
+
+.favefox-filterbar .filter-section.section-expanded .filter-content.expanded {
+    padding-top: 2px;
+}
+
+.favefox-filterbar .filter-section.section-expanded .filter-content .row-container {
+    padding-top: 0;
+}
+
+.filterbar-panel-body .favefox-filterbar .filter-content.expanded {
+    overflow: visible;
+}
+
+.favefox-filterbar--inline-open .filter-content--inline-open {
+    grid-area: content;
+    height: auto;
+    overflow: visible;
+    padding: var(--fw-space-2) var(--fw-space-3) var(--fw-space-3);
+    transition: none;
+    min-width: 0;
+}
+
+.favefox-filterbar--inline-open .filter-content--inline-open .row-container {
+    padding: 0;
+    min-width: 0;
+}
+
+.favefox-filterbar--inline-open .filter-content--inline-open .column-visibility-toggle {
+    margin-top: 10px;
+}
+
+.favefox-filterbar .filter-section-actions {
+    display: flex;
+    align-items: center;
+}
+
+.favefox-filterbar--inline-open .filter-section-actions--inline-open {
+    grid-area: actions;
+    opacity: 0;
+    pointer-events: none;
+    align-items: center;
+    align-self: center;
+    justify-content: flex-end;
+    min-width: 30px;
+    min-height: 30px;
+    transition: opacity 0.15s ease;
+}
+
+.favefox-filterbar--inline-open .filter-section--inline-open:hover .filter-section-actions--inline-open,
+.favefox-filterbar--inline-open .filter-section--inline-open:focus-within .filter-section-actions--inline-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ============================================
+   FILTER CONTENT INNER ELEMENTS
+   ============================================ */
+
+/* Row containers inside filter content */
+.favefox-filterbar .filter-content .row-container {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--fw-space-3);
+    padding: var(--fw-space-1) 0;
+}
+
+.favefox-filterbar .filter-content .filterbar-text-search-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 0;
+}
+
+.favefox-filterbar .filter-content .row-container .input-group {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--fw-space-2);
+}
+
+.favefox-filterbar .filter-content .row-container .filter-input-group--with-display-modes {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.favefox-filterbar .filter-content .filter-display-pane {
+    min-width: 0;
+}
+
+.favefox-filterbar .filter-content .filter-display-pane--range {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--fw-space-2);
+}
+
+.favefox-filterbar .filter-content .filter-display-pane[hidden] {
+    display: none !important;
+}
+
+.favefox-filterbar .filter-content .row-container .input-group:first-child {
+    grid-column: 1 / -1;
+}
+
+.favefox-filterbar .filter-content .row-container .input-group > * {
+    min-width: 0;
+}
+
+.favefox-filterbar .filter-content .row-container .column-visibility-toggle {
+    margin-top: calc(var(--fw-space-2) + 2px);
+}
+
+/* Inputs and selects inside filter content */
+.favefox-filterbar .filter-content input:not([type="checkbox"]),
+.favefox-filterbar .filter-content select,
+.favefox-filterbar .filter-content textarea {
+    width: 100%;
+    padding: var(--fw-space-2) var(--fw-space-3);
+    border: 1px solid var(--fw-color-border);
+    border-radius: var(--fw-radius-sm);
+    background-color: var(--fw-color-surface);
+    color: var(--fw-color-text);
+    font-size: 0.875rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.favefox-filterbar .filter-content input:not([type="checkbox"]):focus,
+.favefox-filterbar .filter-content select:focus,
+.favefox-filterbar .filter-content textarea:focus {
+    outline: none;
+    border-color: var(--fw-color-primary);
+    box-shadow: 0 0 0 2px var(--fw-color-primary-soft);
+}
+
+/* Checkboxes inside filter content */
+.favefox-filterbar .filter-content input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    accent-color: var(--fw-color-primary);
+    cursor: pointer;
+}
+
+/* Remove bottom margin from inputs inside filter rows so that
+   the visibility-toggle checkbox aligns to the true vertical
+   centre of the input field, not the centre including the margin. */
+.favefox-filterbar .filter-content .row-container .input-group input,
+.favefox-filterbar .filter-content .row-container .input-group select,
+.favefox-filterbar .filter-content .row-container .input-group textarea {
+    margin-bottom: 0;
+}
+
+/* Labels inside filter content */
+.favefox-filterbar .filter-content label {
+    display: flex;
+    align-items: center;
+    gap: var(--fw-space-2);
+    font-size: 0.875rem;
+    color: var(--fw-color-text);
+    cursor: pointer;
+}
+
+/* Placeholder text styling */
+.favefox-filterbar .filter-content div[data-lang-key="coming_soon"] {
+    color: var(--fw-color-muted);
+    font-style: italic;
+    text-align: center;
+    padding: var(--fw-space-3);
+}
+
+/* ============================================
+   SIDEBAR MODE (Compact view with limited height)
+   ============================================ */
+.filterbar-panel-body .favefox-filterbar {
+    position: relative;
+    overflow: hidden;
+}
+
+/* ============================================
+   SHOW MORE/LESS CONTROLS
+   ============================================ */
+.favefox-fade-strip {
+    height: 3rem;
+    margin-top: -3rem;
+    background: linear-gradient(to bottom, transparent, var(--fw-color-surface-muted));
+    cursor: pointer;
+    pointer-events: auto;
+    position: relative; /* Ensure it's positioned correctly */
+    z-index: 5;
+}
+
+/* ============================================
+   FOOTER (Show more/less + Browse)
+   ============================================ */
+.favefox-filterbar-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: transparent;
+    border-top: 1px solid var(--fw-color-border);
+    flex-shrink: 0;
+    z-index: 10;
+    gap: var(--fw-space-4);
+}
+
+.favefox-filterbar-footer .footer-left,
+.favefox-filterbar-footer .footer-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.favefox-filterbar-footer .footer-center {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+}
+
+/* Show more button - subtle style matching filter list */
+.favefox-show-more {
+    background-color: var(--fw-color-surface-muted);
+    color: var(--fw-color-text);
+    border: 1px solid var(--fw-color-border);
+    padding: var(--fw-space-2) var(--fw-space-4);
+    border-radius: var(--fw-radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    width: 100%;
+    min-width: 140px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.favefox-show-more:hover {
+    background-color: var(--fw-color-surface-alt);
+    border-color: var(--fw-color-border-strong);
+}
+
+.favefox-show-more:active {
+    transform: scale(0.98);
+}
+
+/* Show less button - ghost style */
+.favefox-show-less {
+    background-color: transparent;
+    color: var(--fw-color-text);
+    border: 1px solid var(--fw-color-border);
+    padding: var(--fw-space-2) var(--fw-space-4);
+    border-radius: var(--fw-radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    width: 100%;
+    min-width: 140px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.favefox-show-less:hover {
+    background-color: var(--fw-color-surface-muted);
+    border-color: var(--fw-color-border-strong);
+}
+
+/* ============================================
+   OVERFLOW & EXPANDED STATES
+   ============================================ */
+
+/* When wrapper has overflow (more than 5 sections) */
+.favefox-filterbar-wrapper.has-overflow {
+    /* border: 1px solid var(--fw-color-border); */
+}
+
+/* When wrapper is expanded (showing all sections) — no
+   highlight border, just keep the same border as collapsed */
+.favefox-filterbar-wrapper.has-overflow.expanded {
+    border-color: var(--fw-color-border);
+}
+
+/* Improved scroll area when expanded */
+.favefox-filterbar-wrapper.expanded .favefox-filterbar-scroll {
+    max-height: none;
+    padding: 0;
+}
+
+/* Center the filterbar content better */
+.favefox-filterbar-wrapper.has-overflow .favefox-filterbar-scroll {
+    display: flex;
+    flex-direction: column;
+}
+
+.favefox-filterbar-wrapper.has-overflow .favefox-filterbar {
+    width: 100%;
+    margin: 0 auto;
+}

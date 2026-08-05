@@ -1,0 +1,26 @@
+/*
+ * notification_triggers.css
+ *
+ * Form layout for the notification trigger creation admin view.
+ * Bridges the trigger creation form and the admin tools UI.
+ * Exists to arrange trigger form fields in a grid with consistent spacing.
+ */
+
+#trigger_creation_form {
+    display: grid;
+    grid-gap: 30px; /* Väli lomakkeen elementtien välillä */
+}
+
+/* Asetetaan jokainen label gridiksi */
+#trigger_creation_form label {
+    display: grid;
+    grid-template-columns: 1fr; /* Kaksi saraketta: otsikko ja syöte */
+    align-items: center; /* Kohdistetaan pystysuunnassa keskelle */
+    grid-gap: 10px; /* Väli otsikon ja syötteen välillä */
+}
+
+/* Varmistetaan, että syötekentät täyttävät käytettävissä olevan tilan */
+#trigger_creation_form label select,
+#trigger_creation_form label input {
+    width: 100%;
+}

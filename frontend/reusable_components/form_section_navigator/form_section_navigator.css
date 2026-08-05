@@ -1,0 +1,185 @@
+/* Reusable navigation for multi-section forms. */
+
+[data-form-section-navigator] > [data-form-section][hidden] {
+    display: none;
+}
+
+.form-section-navigator {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.form-section-navigator__steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.form-section-navigator__arrow,
+.form-section-navigator__step {
+    appearance: none;
+    border: 1px solid transparent;
+    background: var(--button_bg_color);
+    color: var(--button_text_color);
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease,
+        color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+}
+
+.form-section-navigator__arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 11px;
+    border-radius: 50%;
+    border-color: var(--border_color);
+}
+
+.form-section-navigator__arrow-icon {
+    width: 20px;
+    height: 20px;
+    background-color: currentcolor;
+}
+
+.form-section-navigator__step {
+    min-height: 40px;
+    max-width: 220px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.form-section-navigator__step.is-active {
+    border-color: var(--auth-focus-color, var(--border_color));
+    background: color-mix(
+        in srgb,
+        var(--button_active_bg_color) 60%,
+        var(--button_bg_color) 40%
+    );
+    color: var(--button_active_text_color);
+}
+
+.form-section-navigator__arrow:hover:not(:disabled),
+.form-section-navigator__step:hover {
+    background: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+}
+
+.form-section-navigator__arrow:active:not(:disabled),
+.form-section-navigator__step:active {
+    transform: scale(var(--button_pressed_scale));
+}
+
+.form-section-navigator__arrow:focus-visible,
+.form-section-navigator__step:focus-visible {
+    outline: 2px solid var(--auth-focus-color, var(--border_color));
+    outline-offset: 3px;
+    box-shadow: 0 0 0 3px var(--auth-focus-ring, transparent);
+}
+
+.form-section-navigator__arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.form-section-navigator__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.form-section-navigator__footer-button {
+    appearance: none;
+    min-width: 112px;
+    min-height: 42px;
+    padding: 10px 18px;
+    border: 1px solid var(--border_color);
+    border-radius: 10px;
+    background: var(--button_bg_color);
+    color: var(--button_text_color);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease,
+        color 0.2s ease, transform 0.15s ease;
+}
+
+.form-section-navigator__footer-button--next {
+    margin-left: auto;
+    border-color: var(--auth-focus-color, var(--border_color));
+}
+
+.form-section-navigator__footer-button--previous {
+    margin-right: auto;
+}
+
+.form-section-navigator__footer-button:hover {
+    background: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+}
+
+.form-section-navigator__footer-button:active {
+    transform: scale(var(--button_pressed_scale));
+}
+
+.form-section-navigator__footer-button:focus-visible {
+    outline: 2px solid var(--auth-focus-color, var(--border_color));
+    outline-offset: 3px;
+    box-shadow: 0 0 0 3px var(--auth-focus-ring, transparent);
+}
+
+.form-section-navigator__footer-button[hidden] {
+    display: none;
+}
+
+@media (width <= 520px) {
+    .form-section-navigator {
+        grid-template-columns: 40px minmax(0, 1fr) 40px;
+        gap: 6px;
+    }
+
+    .form-section-navigator__arrow {
+        width: 40px;
+        height: 40px;
+        padding: 10px;
+    }
+
+    .form-section-navigator__steps {
+        gap: 2px;
+    }
+
+    .form-section-navigator__step {
+        max-width: 135px;
+        padding-inline: 7px;
+        font-size: 0.82rem;
+    }
+
+    .form-section-navigator__footer-button {
+        min-width: 104px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .form-section-navigator__arrow,
+    .form-section-navigator__step,
+    .form-section-navigator__footer-button {
+        transition: none;
+    }
+}

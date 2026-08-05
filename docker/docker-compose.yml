@@ -1,0 +1,108 @@
+# ==============================================================================
+# docker-compose.yml: Production-ready Filterest stack
+# Includes: App (Go + Vite build), PostgreSQL with PostGIS + pgvector
+# Note: Reads credentials from .env file automatically
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Filterest Application (Go backend + built frontend)
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        EASELECT_APP_VERSION: ${EASELECT_APP_VERSION:-unknown}
+        EASELECT_DB_VERSION: ${EASELECT_DB_VERSION:-unknown}
+        EASELECT_GIT_COMMIT: ${EASELECT_GIT_COMMIT:-unknown}
+        EASELECT_RUNTIME_UID: ${EASELECT_RUNTIME_UID:-1000}
+        EASELECT_RUNTIME_GID: ${EASELECT_RUNTIME_GID:-1000}
+    container_name: filterest-app
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND_HOST:-127.0.0.1}:${APP_PORT:-8082}:8082"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_SSLMODE=disable
+      - DB_ADMIN_USER=${DB_ADMIN_USER}
+      - DB_ADMIN_PASSWORD=${DB_ADMIN_PASSWORD}
+      - DB_READONLY_USER=${DB_READONLY_USER:-readeronly}
+      - DB_READONLY_PASSWORD=${DB_READONLY_PASSWORD}
+      - DB_CONFIDENTIAL_USER=${DB_CONFIDENTIAL_USER:-limited_user}
+      - DB_CONFIDENTIAL_PASSWORD=${DB_CONFIDENTIAL_PASSWORD}
+      - DB_BASIC_USER=${DB_BASIC_USER:-basic_user}
+      - DB_BASIC_PASSWORD=${DB_BASIC_PASSWORD}
+      - DB_GUEST_USER=${DB_GUEST_USER:-guest_user}
+      - DB_GUEST_PASSWORD=${DB_GUEST_PASSWORD}
+      - SESSION_KEY=${SESSION_KEY}
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_MODEL=${OPENAI_API_MODEL:-}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-}
+      - TUKISUU_PURCHASE_SECRET=${TUKISUU_PURCHASE_SECRET:-}
+      - TUKISUU_BASE_URL=${TUKISUU_BASE_URL:-}
+      - MCP_SERVICE_TOKEN=${MCP_SERVICE_TOKEN:-}
+      - REGFETCH_WORKER_SERVICE_TOKEN=${REGFETCH_WORKER_SERVICE_TOKEN:-}
+      - SANDBOX_MODE=${SANDBOX_MODE:-false}
+      - REVOLUT_MERCHANT_API_SECRET_KEY=${REVOLUT_MERCHANT_API_SECRET_KEY:-}
+      - REVOLUT_MERCHANT_API_PUBLIC_KEY=${REVOLUT_MERCHANT_API_PUBLIC_KEY:-}
+      - REVOLUT_WEBHOOK_SECRET=${REVOLUT_WEBHOOK_SECRET:-}
+      - PAYMENT_CALLBACK_SECRET=${PAYMENT_CALLBACK_SECRET:-}
+      - ENVIRONMENT_TYPE=${ENVIRONMENT_TYPE:-production}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../storage:/app/storage
+      - ../storage_deleted:/app/storage_deleted
+      - ../db_backups:/app/db_backups
+    networks:
+      - filterest-network
+    labels:
+      - "easelect.version_contract=1"
+      - "easelect.app_version=${EASELECT_APP_VERSION:-unknown}"
+      - "easelect.db_version=${EASELECT_DB_VERSION:-unknown}"
+      - "easelect.git_commit=${EASELECT_GIT_COMMIT:-unknown}"
+      - "org.opencontainers.image.version=${EASELECT_APP_VERSION:-unknown}"
+      - "org.opencontainers.image.revision=${EASELECT_GIT_COMMIT:-unknown}"
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database with PostGIS + pgvector extensions
+  # ----------------------------------------------------------------------------
+  db:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.db
+    image: filterest-postgres:pg16-postgis-pgvector
+    container_name: filterest-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_ADMIN_USER}
+      - POSTGRES_PASSWORD=${DB_ADMIN_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../server_tools/db_init:/docker-entrypoint-initdb.d
+    ports:
+      - "${DB_BIND_HOST:-127.0.0.1}:${DB_PORT:-5432}:5432"
+    networks:
+      - filterest-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ADMIN_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "easelect.db_version=${EASELECT_DB_VERSION:-unknown}"
+
+networks:
+  filterest-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

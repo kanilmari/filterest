@@ -1,0 +1,49 @@
+/*
+ * input_group.css
+ *
+ * Responsive grid layout for grouped form inputs.
+ * Bridges form components and the CSS grid system.
+ * Exists to arrange input fields in auto-fitting columns with consistent gaps.
+ */
+.input-group {
+    display: grid;
+    gap: 0.5rem;
+    width: 100%;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.input-group.single-input {
+    grid-template-columns: 1fr;
+}
+.input-group label {
+    grid-column: 1 / -1;       /* spans the row */
+    position: static;
+    transform: none;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.input-group input,
+.input-group textarea,
+.input-group select {
+    padding: 10px;
+    outline: 1px solid var(--border_color);
+    border: 1px solid transparent;
+    border-radius: 5px;
+    font-size: 16px;
+    background-color: var(--bg_color_text);
+    /* height: 32px; */
+    margin-bottom: 15px;
+}
+
+.filter-field-header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.filter-field-header > button {
+    height: 24px;
+    width: 48px;
+}

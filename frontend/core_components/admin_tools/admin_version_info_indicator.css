@@ -1,0 +1,100 @@
+/* admin_version_info_indicator.css
+ * Positions the admin-only Material info icon and its click-disclosed details panel.
+ * Bridges the filterbar clock footer with a semantic key/value information table.
+ * Exists so translated runtime details align without shifting the footer clock.
+ */
+
+.filterbar-clock-bar__version-info-shell {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+}
+
+.filterbar-clock-bar__version-info {
+  display: block;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  color: var(--text_color);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 120ms ease;
+  appearance: none;
+}
+
+.filterbar-clock-bar__version-info-icon,
+.filterbar-clock-bar__version-info-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.filterbar-clock-bar__version-info-icon {
+  pointer-events: none;
+}
+
+.filterbar-clock-bar__version-info-icon svg {
+  fill: currentcolor;
+}
+
+.filterbar-clock-bar__version-info-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  min-width: 250px;
+  max-width: min(360px, calc(100vw - 24px));
+  box-sizing: border-box;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border_color);
+  border-radius: var(--border_radius_small);
+  color: var(--text_color);
+  background: var(--bg_color_extreme);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 22%);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.filterbar-clock-bar__version-info-key {
+  padding: 0 19px 0 0;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.filterbar-clock-bar__version-info-title {
+  padding: 0 0 8px;
+  color: var(--text_color);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.filterbar-clock-bar__version-info-value {
+  min-width: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.filterbar-clock-bar__version-info-shell[hidden],
+.filterbar-clock-bar__version-info-panel[hidden] {
+  display: none;
+}
+
+.filterbar-clock-bar__version-info:hover,
+.filterbar-clock-bar__version-info:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--fw-color-primary, currentcolor);
+  outline-offset: 2px;
+}

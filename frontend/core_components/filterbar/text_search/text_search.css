@@ -1,0 +1,289 @@
+/* morphing_filterbar_search.css */
+/* Search panel and input styling for all three filterbar containers */
+
+/* ============================================
+   SEARCH PANEL BASE STYLES
+   Structural + visual defaults for the search component.
+   These are the single source of truth — filterbar.css
+   no longer defines search-component rules.
+   ============================================ */
+
+.dataset-search-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin-bottom: 0;
+  --dataset-search-focus-border-color: var(--primary_color);
+  --dataset-search-focus-ring: 0 0 0 4px color-mix(in srgb, var(--primary_color), transparent 80%);
+  --dataset-search-active-button-bg: color-mix(in srgb, var(--dataset-search-focus-border-color) 18%, var(--input_bg_color) 82%);
+  --dataset-search-active-button-color: var(--primary_color);
+}
+
+.dataset-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin: 0;
+}
+
+.dataset-search-fields {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dataset-search-input-row,
+.dataset-search-location-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.dataset-search-input-row {
+  position: relative;
+  border-radius: var(--fw-radius-lg);
+  transition: box-shadow 0.3s ease;
+}
+
+.dataset-search-input {
+  flex: 1;
+  height: 44px;
+  box-sizing: border-box;
+  background: var(--input_bg_color) !important;
+  border: 1px solid var(--border_color) !important;
+  color: var(--text_color) !important;
+  border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
+  padding: 0 20px !important;
+  font-family: 'JetBrains Mono', monospace;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* Search submit button flush against input */
+.dataset-search-submit-button {
+  border-radius: 0 var(--fw-radius-lg) var(--fw-radius-lg) 0 !important;
+  border-left: none !important;
+  height: 44px;
+  box-sizing: border-box;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dataset-search-submit-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  background-color: currentcolor;
+  mask: url("/frontend/icons/general/dataset-search-icon.svg") center / contain no-repeat;
+}
+
+.dataset-search-placeholder-fade {
+  position: absolute;
+  z-index: 2;
+  left: var(--dataset-search-placeholder-fade-left, 20px);
+  top: 50%;
+  max-width: calc(100% - 82px);
+  overflow: hidden;
+  color: var(--empty_field_text_color);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: inherit;
+  line-height: 1;
+  opacity: 1;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  animation: dataset-search-placeholder-fade-out 0.3s ease forwards;
+}
+
+@keyframes dataset-search-placeholder-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.dataset-search-input-row:focus-within {
+  box-shadow: var(--dataset-search-focus-ring);
+}
+
+.dataset-search-input-row:focus-within .dataset-search-input {
+  background: var(--bg_color_extreme) !important;
+  border-color: var(--dataset-search-focus-border-color) !important;
+}
+
+.dataset-search-input-row:focus-within .dataset-search-submit-button {
+  background: var(--dataset-search-active-button-bg) !important;
+  border-color: var(--dataset-search-focus-border-color) !important;
+  color: var(--dataset-search-active-button-color) !important;
+}
+
+.dataset-search-input:focus {
+  outline: none;
+  box-shadow: none !important;
+}
+
+.dataset-search-location-row {
+  gap: 6px;
+  padding: 10px 0 0;
+}
+
+.dataset-search-location-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
+  transform: translateY(-1px);
+}
+
+.dataset-search-location-row label {
+  line-height: 1.2;
+}
+
+/* ============================================
+   HERO SEARCH PANEL
+   Inherits base styles. Search appears below title in both modes.
+   ============================================ */
+
+/* ============================================
+   SIDEBAR SEARCH PANEL
+   Compact, left-aligned
+   ============================================ */
+
+.filterbar-panel--compact .dataset-search-panel {
+  margin-bottom: 0;
+}
+
+.filterbar-panel--compact .dataset-search-input-row {
+  --dataset-search-placeholder-fade-left: 16px;
+}
+
+.filterbar-panel--compact .dataset-search-input {
+  padding: 0 16px !important;
+  border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
+}
+
+.filterbar-panel--compact .dataset-search-submit-button {
+  border-radius: 0 var(--fw-radius-lg) var(--fw-radius-lg) 0 !important;
+}
+
+.filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-input,
+.filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-submit-button {
+  height: 44px;
+}
+
+.filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-input {
+  padding-inline: 16px !important;
+}
+
+/* ============================================
+   SEARCH-ONLY BAR INPUT
+   Flat, centered, minimal
+   ============================================ */
+
+.filterbar-search-only .dataset-search-panel {
+  width: 100%;
+  max-width: var(--filterbar-search-only-max-width, 800px);
+  margin: 0 auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  --dataset-search-focus-border-color: rgb(0 255 136 / 30%);
+  --dataset-search-focus-ring: 0 4px 16px rgb(0 255 136 / 15%);
+  --dataset-search-active-button-bg: color-mix(in srgb, var(--dataset-search-focus-border-color) 30%, var(--input_bg_color) 70%);
+  --dataset-search-active-button-color: var(--text_color);
+}
+
+.filterbar-search-only .dataset-search-input-row {
+  --dataset-search-placeholder-fade-left: 16px;
+}
+
+.filterbar-search-only .dataset-search-input {
+  background: var(--input_bg_color) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border_color) !important;
+  padding: 0 16px !important;
+  height: 44px !important;
+  border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
+  font-size: 0.9rem;
+  box-shadow: var(--fw-shadow-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dataset-search-placeholder-fade {
+    animation-duration: 0ms;
+  }
+}
+
+.filterbar-search-only .dataset-search-submit-button {
+  border-radius: 0 var(--fw-radius-lg) var(--fw-radius-lg) 0 !important;
+  height: 44px;
+}
+
+.filterbar-search-only .dataset-search-input:focus {
+  background: var(--bg_color_extreme) !important;
+}
+
+/* ============================================
+   SEARCH STAGE NOTICES
+   Divs between first (text) and second (AI) result tables.
+   ============================================ */
+
+.search-stage-notice {
+  padding: 20px 24px;
+  margin: 24px 16px 16px;
+  font-size: 0.9rem;
+  color: var(--text_color_subtle, #8a8a9b);
+  font-style: normal;
+  font-weight: 500;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+
+/* "No text results" — subtle empty-state message */
+.search-stage-notice[data-lang-key="text_search_no_results"] {
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.7;
+  padding: 28px 20px 16px;
+}
+
+/* "See also" — horizontal divider with centered label */
+.search-stage-notice[data-lang-key="see_also"] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 28px 20px 12px;
+  opacity: 0.55;
+}
+
+.search-stage-notice[data-lang-key="see_also"]::before,
+.search-stage-notice[data-lang-key="see_also"]::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border_color, #444),
+    transparent
+  );
+}
+
+/* Second search table (AI results) — no visible header row */
+.search-ai-results-table thead {
+  display: none;
+}

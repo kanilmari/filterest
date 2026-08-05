@@ -1,0 +1,68 @@
+{
+  "_comment": "Defines the visual render order of filterbar building blocks. The orchestrator (create_filter_bar.js) appends ordinary controls to .filter-content-inner in this order, then moves compact controls into .filterbar-panel-body. Chat is now a pinned .filterbar-chat-dock outside the scroll body above the clock bar. Folders marked 'hero_only' are rendered outside contentInner, visible only in the hero container. 'filterbar_engine' contains non-visual utilities and is excluded from the render order.",
+  "content_inner_order": [
+    {
+      "id": "header",
+      "label": "Title and slogan",
+      "description": "h1.morphing-title + p.morphing-subtitle — built inline in create_filter_bar.js",
+      "folder": null
+    },
+    {
+      "id": "results_count",
+      "label": "Results count",
+      "description": "Shows '46 results' etc. — built inline in create_filter_bar.js",
+      "folder": null
+    },
+    {
+      "id": "text_search",
+      "label": "Text search panel",
+      "description": "Search input, submit button, location row",
+      "folder": "text_search"
+    },
+    {
+      "id": "top_row_buttons",
+      "label": "Top row buttons",
+      "description": "Sort dropdown, reset search, add row button",
+      "folder": "top_row_buttons"
+    },
+    {
+      "id": "admin_buttons",
+      "label": "Admin buttons",
+      "description": "View selector, delete selected, column management, embed — rendered inside top_row_buttons via appendAdminFeatures(). Moved to core_components/admin_tools/",
+      "folder": null
+    },
+    {
+      "id": "filter_list",
+      "label": "Filter sections",
+      "description": "Favefox-style always-open field filters, active filter tags, column visibility, legacy filters",
+      "folder": "filter_list"
+    },
+    {
+      "id": "chat_ui",
+      "label": "Chat UI",
+      "description": "Pinned chat dock above the filterbar clock; the whole dock header toggles the animated maximized chat state — appendChatUIIfAllowed() in core_components/admin_tools/admin_button_builder.js",
+      "folder": null
+    }
+  ],
+  "hero_only_order": [
+    {
+      "id": "logo_background",
+      "label": "Logo letter grid",
+      "description": "Decorative 8-column letter grid — appended to heroContentWrapper, not contentInner",
+      "folder": "logo_background"
+    },
+    {
+      "id": "scroll_indicator",
+      "label": "Scroll indicator footer",
+      "description": "Footer with pulse-animated scroll button — built inline in create_filter_bar.js",
+      "folder": null
+    }
+  ],
+  "non_visual": [
+    {
+      "folder": "filterbar_engine",
+      "label": "Non-visual utilities",
+      "description": "fetchTableMeta service, visibility/overlay logic, localStorage helpers"
+    }
+  ]
+}

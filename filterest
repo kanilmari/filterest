@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+# filterest
+# Provides one public command surface for setup, administration, maintenance, and QA.
+# Bridges the repository root with canonical implementations under server_tools and testing.
+# Exists so generated Filterest releases do not need a drawer full of root wrappers.
+
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_ROOT"
+
+usage() {
+    cat <<'USAGE'
+Usage: ./filterest <command> [arguments]
+
+Everyday commands:
+  setup [options]               Install for browser administration or development
+  start [arguments]             Start with the installed profile (prebuilt or development)
+  status [arguments]            Show application and database compatibility
+  data [arguments]              Maintain datasets through the application API
+  language [arguments]          Maintain translations through the application API
+  maintenance logs [arguments]  Preview or prune application logs through the API
+  maintenance data [arguments]  Preview or prune configured data through the API
+
+Developer commands:
+  database [arguments]          Run a read-only database inspection
+  mcp [arguments]               Start the developer MCP server
+  refresh [arguments]           Refresh selected deployment targets
+  test [arguments]              Run Playwright without opening an HTML report
+  search <pattern> [path]       Search repository text without a pager
+  audit browser [arguments]     Run the browser quality audit
+  audit visual [arguments]      Capture/analyze Visual Guardian screenshots
+  audit human [arguments]       Prepare or run browser acceptance evidence
+  timestamp                     Print the shared project timestamp
+  fix-go-imports [arguments]    Run the Go import maintenance helper
+
+The established ./ctl command remains available as a compatibility entrypoint.
+USAGE
+}
+
+resolve_environment() {
+    # shellcheck source=server_tools/ctl/lib/resolve_env.sh
+    source "$PROJECT_ROOT/server_tools/ctl/lib/resolve_env.sh"
+}
+
+installed_profile() {
+    local candidate_file=""
+    local profile=""
+
+    resolve_environment
+    for candidate_file in "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE"; do
+        [[ -f "$candidate_file" ]] || continue
+        profile="$(grep -E '^FILTEREST_INSTALL_PROFILE=' "$candidate_file" 2>/dev/null | tail -1 | cut -d'=' -f2- || true)"
+        if [[ -n "$profile" ]]; then
+            printf '%s' "$profile"
+            return
+        fi
+    done
+}
+
+# Reads one non-empty value from the installed public runtime configuration.
+# Between the root launcher and protected env files it avoids sourcing secrets
+# while still letting startup make narrow profile and safety decisions.
+installed_environment_value() {
+    local key="$1"
+    local candidate_file=""
+    local value=""
+
+    resolve_environment
+    for candidate_file in "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE"; do
+        [[ -f "$candidate_file" ]] || continue
+        value="$(grep -E "^${key}=" "$candidate_file" 2>/dev/null | tail -1 | cut -d'=' -f2- || true)"
+        if [[ -n "$value" ]]; then
+            printf '%s' "$value"
+            return
+        fi
+    done
+}
+
+# Enables reviewed pending migrations for a local generated Filterest start.
+# Existing public installations can otherwise keep an older reduced schema
+# forever because their protected env files intentionally preserve blank
+# optional toggles across release refreshes. Explicit operator values and
+# remote database hosts remain untouched.
+enable_local_public_schema_repairs() {
+    local configured_value=""
+    local database_host=""
+
+    [[ -f "$PROJECT_ROOT/VERSION_APP" && ! -f "$PROJECT_ROOT/VERSION_EASELECT" ]] || return
+    configured_value="$(installed_environment_value ENABLE_SQL_MIGRATIONS)"
+    if [[ -n "$configured_value" ]]; then
+        export ENABLE_SQL_MIGRATIONS="$configured_value"
+        return
+    fi
+
+    database_host="$(installed_environment_value DB_HOST)"
+    case "${database_host,,}" in
+        localhost|127.0.0.1|::1)
+            export ENABLE_SQL_MIGRATIONS=true
+            export EASELECT_MIGRATION_FILE_ALLOWLIST="20260307_create_system_comments.sql,20260805000001_restore_filterest_public_version_head.sql"
+            printf 'Applying pending local Filterest schema repairs before startup.\n'
+            ;;
+    esac
+}
+
+# Reads the profile recorded only after database bootstrap and dependencies finish.
+# Between the public start command and the resumable installer it is the durable setup gate.
+# Why: environment files can already exist after an interrupted setup, so their presence alone
+# must not allow Filterest to skip the remaining installation steps.
+completed_setup_profile() {
+    local completion_marker="$PROJECT_ROOT/runtime/filterest-setup-complete"
+    sed -n 's/^profile=//p' "$completion_marker" 2>/dev/null | head -1 || true
+}
+
+# Reports whether a generated Filterest checkout still needs its guided setup.
+# Between generated-release identity, protected settings, and the completion marker it detects
+# both fresh downloads and interrupted installations without consulting an uninitialized DB.
+filterest_setup_is_required() {
+    local configured_profile=""
+    local completed_profile=""
+
+    [[ -f "$PROJECT_ROOT/VERSION_APP" && ! -f "$PROJECT_ROOT/VERSION_EASELECT" ]] || return 1
+    configured_profile="$(installed_profile)"
+    completed_profile="$(completed_setup_profile)"
+    [[ -n "$configured_profile" && "$configured_profile" == "$completed_profile" ]] && return 1
+    return 0
+}
+
+# Runs setup automatically when an actual start is requested from an unfinished checkout.
+# Between the start command and profile-aware installer it preserves a partial setup's profile
+# and lets the installer resume safely before starting the application itself.
+run_setup_before_first_start() {
+    local profile=""
+    profile="$(installed_profile)"
+    [[ -n "$profile" ]] || profile="$(completed_setup_profile)"
+
+    printf 'Welcome to Filterest!\n'
+    printf "Let's complete the guided setup, then start the application.\n\n"
+    if [[ -n "$profile" ]]; then
+        exec "$PROJECT_ROOT/server_tools/install_filterest.sh" --profile "$profile"
+    fi
+    exec "$PROJECT_ROOT/server_tools/install_filterest.sh"
+}
+
+# Checks the development profile's configured application port before ctl can
+# build the server or perform database-backed startup work.
+preflight_development_start_port() {
+    local port=""
+    resolve_environment
+    # shellcheck source=server_tools/lib/filterest_port_preflight.sh
+    source "$PROJECT_ROOT/server_tools/lib/filterest_port_preflight.sh"
+    port="$(filterest_configured_port 8100 "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
+    filterest_preflight_port "$port"
+}
+
+# Distinguishes application startup from compatibility actions such as --stop or --help.
+# Between the public command arguments and automatic setup it prevents a maintenance action
+# from unexpectedly installing packages or creating local runtime state.
+start_action_was_requested() {
+    [[ "$#" -eq 0 || "${1:-}" == "start" ]]
+}
+
+command_name="${1:-help}"
+[[ "$#" -eq 0 ]] || shift
+
+case "$command_name" in
+    setup)
+        exec "$PROJECT_ROOT/server_tools/install_filterest.sh" "$@"
+        ;;
+    start|ctl)
+        if start_action_was_requested "$@" && filterest_setup_is_required; then
+            run_setup_before_first_start
+        fi
+        if start_action_was_requested "$@"; then
+            enable_local_public_schema_repairs
+        fi
+        if [[ "$(installed_profile)" == "admin" ]]; then
+            exec "$PROJECT_ROOT/server_tools/run_filterest_admin.sh" "$@"
+        fi
+        if start_action_was_requested "$@"; then
+            preflight_development_start_port
+        fi
+        exec "$PROJECT_ROOT/ctl" "$@"
+        ;;
+    status)
+        resolve_environment
+        exec python3 "$PROJECT_ROOT/server_tools/agent_tools/dev_status.py" "$@"
+        ;;
+    data)
+        resolve_environment
+        exec python3 "$PROJECT_ROOT/server_tools/agent_tools/api_crud.py" "$@"
+        ;;
+    language)
+        resolve_environment
+        exec python3 "$PROJECT_ROOT/server_tools/agent_tools/api_lang.py" "$@"
+        ;;
+    database)
+        resolve_environment
+        exec python3 "$PROJECT_ROOT/server_tools/agent_tools/db.py" "$@"
+        ;;
+    maintenance)
+        maintenance_name="${1:-}"
+        [[ "$#" -eq 0 ]] || shift
+        resolve_environment
+        case "$maintenance_name" in
+            logs)
+                exec python3 "$PROJECT_ROOT/server_tools/agent_tools/db_log_retention.py" "$@"
+                ;;
+            data)
+                exec python3 "$PROJECT_ROOT/server_tools/agent_tools/db_data_retention.py" "$@"
+                ;;
+            *)
+                printf 'error: maintenance requires logs or data\n' >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    mcp)
+        resolve_environment
+        exec python3 "$PROJECT_ROOT/server_tools/agent_tools/easelect_mcp_server.py" "$@"
+        ;;
+    refresh)
+        resolve_environment
+        exec "$PROJECT_ROOT/server_tools/refresh_targets.sh" "$@"
+        ;;
+    test)
+        exec "$PROJECT_ROOT/server_tools/scripts/safe_test.sh" "$@"
+        ;;
+    search)
+        exec "$PROJECT_ROOT/server_tools/scripts/safe_grep.sh" "$@"
+        ;;
+    audit)
+        audit_name="${1:-}"
+        [[ "$#" -eq 0 ]] || shift
+        case "$audit_name" in
+            browser)
+                resolve_environment
+                exec node "$PROJECT_ROOT/server_tools/scripts/browser_audit.mjs" "$@"
+                ;;
+            visual)
+                exec "$PROJECT_ROOT/server_tools/scripts/guardian.sh" "$@"
+                ;;
+            human)
+                qa_name="${1:-}"
+                resolve_environment
+                case "$qa_name" in
+                    ai-test)
+                        exec node "$PROJECT_ROOT/server_tools/scripts/ai_acceptance_test.mjs" "$@"
+                        ;;
+                    computer-use-test)
+                        exec node "$PROJECT_ROOT/server_tools/scripts/computer_use_acceptance_test.mjs" "$@"
+                        ;;
+                    *)
+                        exec node "$PROJECT_ROOT/server_tools/scripts/human_qa.mjs" "$@"
+                        ;;
+                esac
+                ;;
+            *)
+                printf 'error: audit requires browser, visual, or human\n' >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    timestamp)
+        exec python3 "$PROJECT_ROOT/server_tools/scripts/timestamp.py" "$@"
+        ;;
+    fix-go-imports)
+        exec node "$PROJECT_ROOT/server_tools/scripts/fix_go_imports.js" "$@"
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        printf 'error: unknown Filterest command: %s\n\n' "$command_name" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

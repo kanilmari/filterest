@@ -1,0 +1,132 @@
+/*
+ * vanilla_dropdown.css
+ *
+ * Lightweight dropdown with inline input and suggestion list.
+ * Bridges the vanilla_dropdown JS component and the CSS layout system.
+ * Exists to provide a minimal, dependency-free searchable dropdown widget.
+ */
+
+/*
+  Koko dropdownin pääkontainer.
+  Voit säätää leveyttä, display-tilaa, jne. tarpeen mukaan.
+*/
+.vdw-dropdown {
+  display: inline-block;
+  position: relative;
+}
+
+/* 
+    Tämä rivi sisältää input-kentän ja x-napin vierekkäin.
+    - 1fr = input venyy 
+    - auto = nappi pysyy pienenä 
+  */
+.vdw-dropdown-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  /* väli inputin ja napin välillä */
+  align-items: center;
+}
+
+/* Syötekenttä (näkyvä tekstikenttä) */
+.vdw-dropdown-input {
+  background-color: var(--bg_color);
+  border: 1px solid var(--border_color);
+  color: var(--text_color);
+  padding: 0.7rem;
+  cursor: pointer;
+  /* osoitin muuttuu, kun vie hiiren päälle */
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--border_radius_small);
+  padding-right: 2rem;
+}
+
+/* Inputin ja nuolen kääre */
+.vdw-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Dropdownin nuoli */
+.vdw-dropdown-chevron {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text_color);
+  background-color: currentcolor;
+}
+
+/* X-nappi (tyhjennys) */
+.vdw-clear-btn {
+  background-color: var(--button_bg_color);
+  color: var(--button_text_color);
+  border: 1px solid var(--border_color);
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  box-sizing: border-box;
+}
+
+/* Aukeava lista (koko “valikko”). */
+.vdw-dropdown-list {
+  border: 1px solid var(--border_color);
+  background-color: var(--bg_color);
+  color: var(--text_color);
+  max-height: 400px;
+  overflow-y: auto;
+  position: fixed;
+  z-index: calc(var(--z-filterbar, 100001) + 10);
+  transition: opacity 0.2s ease-out;
+  /* fade-animaatiota varten */
+  opacity: 1;
+  /* oletustilassa näkyvä */
+  box-shadow: 5px 5px 15px rgb(0 0 0 / 0.4);
+  border-radius: var(--border_radius_small);
+}
+
+/* Fade-out-luokka: siirtymä liukuu pois */
+/* 
+    (Mahdollinen) hakukentän kääre. 
+  */
+.vdw-dropdown-search {
+  padding: 0.25rem;
+}
+
+/* Hakukentän input */
+.vdw-dropdown-search-input {
+  width: 100%;
+  border: 1px solid var(--border_color);
+  background-color: var(--bg_color);
+  color: var(--text_color);
+  padding: 0.25rem;
+  box-sizing: border-box;
+}
+
+/* Perusoption tyyli */
+.vdw-option {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Hover-korostus (kun hiiri on päällä) */
+.vdw-option:hover {
+  background-color: var(--button_bg_color);
+  color: var(--button_text_color);
+}
+
+/* Jo valittu option */
+.vdw-option.vdw-selected {
+  background-color: var(--button_hover_bg_color);
+  color: var(--button_hover_text_color);
+  border: 1px solid var(--border_color);
+}
+
+/* “Ei tuloksia” -viestille yksinkertainen tyyli */
+.vdw-no-results {
+  padding: 0.25rem 0.5rem;
+  font-style: italic;
+}

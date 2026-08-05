@@ -1,0 +1,82 @@
+/* imports.css
+	Central list of CSS imports bundled by Vite.
+	Visual docs: instructions_and_documentation/visual_documentation/visual_documentation_readme.md
+	Dev guide:   instructions_and_documentation/DEV_GUIDE.md
+*/
+
+/* --- Foundation (order matters) --- */
+@import url("./variables.css");
+@import url("./framework.css");
+@import url("./base.css");
+
+/* --- Auth --- */
+@import url("../core_components/auth/auth.css");
+
+/* --- Navigation --- */
+@import url("../core_components/navigation/menu_button/navbar.css");
+@import url("../core_components/navigation/main_tabs/tabs.css");
+@import url("../core_components/lang/lang_panel.css");
+@import url("../core_components/lang/dev_lang_key_editor.css");
+
+/* --- Table views --- */
+@import url("../core_components/table_views/table_view/tables.css");
+@import url("../core_components/table_views/table_view/cells.css");
+@import url("../core_components/table_views/card_view/cards_big.css");
+@import url("../core_components/table_views/card_view/row_article_disclosure_sections.css");
+@import url("../core_components/table_views/card_view/big_card_related_records.css");
+@import url("../core_components/table_views/card_view/big_card_image_gallery.css");
+@import url("../core_components/table_views/card_view/big_card_attachment_list.css");
+@import url("../core_components/table_views/card_view/cards.css");
+@import url("../core_components/table_views/experimental_free_layout_card/experimental_free_layout_card.css");
+@import url("../core_components/table_views/product_card_view/product_card_view.css");
+@import url("../core_components/table_views/calendar_view/calendar_view.css");
+@import url("../core_components/table_views/map_view/map_view.css");
+@import url("../core_components/table_views/price_chart_view/price_chart_view.css");
+@import url("../core_components/table_views/cloud_management_view/cloud_management_view.css");
+@import url("../core_components/table_views/table_views.css");
+@import url("../core_components/table_views/settings_view/settings_view.css");
+
+/* --- Filter bar (see visual docs tab_content/filter_bar/) --- */
+@import url("../core_components/filterbar/filterbar.css");
+@import url("../core_components/filterbar/filterbar_calendar.css");
+@import url("../core_components/filterbar/morphing_filterbar.css");
+@import url("../core_components/filterbar/filter_list/favefox_style_filters_container/favefox_style_filter_bar.css");
+@import url("../core_components/filterbar/filter_list/active_filter_tags.css");
+
+/* --- Chat --- */
+@import url("../reusable_components/ai_features/table_chat/chat.css");
+
+/* --- Reusable UI building blocks --- */
+@import url("../reusable_components/vanilla_tree/vanilla_tree.css");
+@import url("../reusable_components/windows/windows.css");
+@import url("../reusable_components/vanilla_dropdown/vanilla_dropdown.css");
+@import url("../reusable_components/multiselect_dropdown/multiselect_dropdown.css");
+@import url("../reusable_components/custom_dropdown/custom_dropdown.css");
+@import url("../reusable_components/modal/modals.css");
+@import url("../reusable_components/form_section_navigator/form_section_navigator.css");
+@import url("../reusable_components/animated_disclosure/animated_disclosure.css");
+@import url("../reusable_components/collapsible_section/collapsible_section.css");
+@import url("../reusable_components/key_value_container/kv_container.css");
+@import url("../reusable_components/dark_overlay/dark_overlay.css");
+@import url("../reusable_components/notifications/toast_notification.css");
+@import url("../reusable_components/vanilla_checkbox_table/vanilla_checkbox_table.css");
+
+/* --- App-level styles --- */
+@import url("./dropdowns.css");
+@import url("./form.css");
+@import url("../core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_creation_form.css");
+@import url("./input_group.css");
+@import url("./dev.css");
+@import url("./mobile_friendliness.css");
+@import url("./about.css");
+@import url("./theme_transition.css");
+
+/* --- Admin tools --- */
+@import url("../core_components/admin_tools/notification_triggers.css");
+@import url("../core_components/admin_tools/manage_permissions.css");
+@import url("../core_components/admin_tools/empty_rows.css");
+@import url("../core_components/admin_tools/child_tab_config.css");
+@import url("../core_components/admin_tools/dataset_alias_management.css");
+@import url("../core_components/admin_tools/dataset_header_config.css");
+@import url("../core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/create_table_admin.css");
+@import url("../custom_views/search_vector_maintenance.css");

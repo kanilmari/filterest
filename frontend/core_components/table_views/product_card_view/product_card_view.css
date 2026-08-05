@@ -1,0 +1,175 @@
+/*
+ * product_card_view.css
+ *
+ * Styles dense product/listing cards for the product-card table view.
+ * Bridges the product_card_view DOM structure with the Easelect theme variables.
+ * Exists to make inferred product cards responsive, scannable, and theme-aware.
+ */
+
+.product-card-view {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+    color: var(--text_color);
+}
+
+.product-card-view-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+    width: 100%;
+}
+
+.product-card-view-card {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-rows: 144px minmax(0, 1fr);
+    min-height: 270px;
+    overflow: hidden;
+    border: 1px solid var(--card_border_color);
+    border-radius: 8px;
+    background: var(--bg_color_card_frame);
+    color: var(--text_color);
+    cursor: pointer;
+    transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        transform 160ms ease,
+        background-color 160ms ease;
+}
+
+.product-card-view-card:hover,
+.product-card-view-card:focus-visible {
+    border-color: var(--border_color);
+    background: color-mix(in srgb, var(--bg_color_card_frame) 86%, var(--bg_color_extreme) 14%);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 14%);
+    outline: none;
+}
+
+.product-card-view-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    border-bottom: 1px solid var(--card_border_color);
+    background: var(--bg_color_image);
+}
+
+.product-card-view-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.product-card-view-image-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: var(--empty_field_text_color);
+    font-size: 2rem;
+    font-weight: 700;
+    background:
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--bg_color_2) 84%, var(--bg_color_extreme) 16%),
+            var(--bg_color_card_frame)
+        );
+}
+
+.product-card-view-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 10px;
+    padding: 12px;
+}
+
+.product-card-view-title {
+    display: -webkit-box;
+    min-height: 2.6em;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text_color);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.product-card-view-details {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+}
+
+.product-card-view-detail {
+    display: grid;
+    grid-template-columns: minmax(64px, 0.45fr) minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    min-width: 0;
+}
+
+.product-card-view-detail-label,
+.product-card-view-detail-value {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.product-card-view-detail-label {
+    color: var(--empty_field_text_color);
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.product-card-view-detail-value {
+    color: var(--text_color);
+    font-size: 0.88rem;
+    font-weight: 500;
+    text-align: right;
+}
+
+.product-card-view-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 180px;
+    border: 1px dashed var(--card_border_color);
+    border-radius: 8px;
+    color: var(--empty_field_text_color);
+    background: color-mix(in srgb, var(--bg_color_card_frame) 78%, transparent);
+}
+
+@media (width <= 720px) {
+    .product-card-view {
+        padding: 10px;
+    }
+
+    .product-card-view-grid {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 10px;
+    }
+
+    .product-card-view-card {
+        grid-template-rows: 124px minmax(0, 1fr);
+        min-height: 246px;
+    }
+
+    .product-card-view-detail {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+    .product-card-view-detail-value {
+        text-align: left;
+    }
+}

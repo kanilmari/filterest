@@ -1,0 +1,128 @@
+# ==============================================================================
+# Dockerfile.mcp: Go backend + frontend for easelect instance
+# Used for api.filterest.fi (RegFetch backend + admin UI)
+# ==============================================================================
+
+# --- Stage 1: Build frontend bundles ---
+FROM node:24-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci --only=production=false
+
+COPY frontend/ ./frontend/
+COPY server_tools/lib/easelect_private_paths.mjs ./server_tools/lib/easelect_private_paths.mjs
+RUN npm run build
+
+# --- Stage 2: Build Go binary ---
+FROM golang:1.26.5-alpine3.24 AS builder
+
+RUN apk add --no-cache \
+    git=2.54.0-r0 \
+    ca-certificates=20260611-r0 \
+    gcc=15.2.0-r5 \
+    musl-dev=1.2.6-r2 \
+    libwebp-dev=1.6.0-r0
+
+WORKDIR /app
+
+ARG BUILD_ENV=prod
+
+# Copy go mod files (layer caching)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy Go source. Use a wildcard so private root-level registration files
+# are included when present, while exported builds with only main.go still work.
+COPY *.go ./
+COPY backend/ ./backend/
+
+# Build with an explicit runtime mode so local derivative Docker instances can
+# stay in true dev mode while VPS sidecars still ship as locked prod binaries.
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.buildEnv=${BUILD_ENV}" -o easelect .
+
+# --- Stage 3: Minimal runtime ---
+FROM alpine:3.24
+
+WORKDIR /app
+
+ARG BUILD_ENV=prod
+ARG EASELECT_APP_VERSION=unknown
+ARG EASELECT_DB_VERSION=unknown
+ARG EASELECT_GIT_COMMIT=unknown
+ARG EASELECT_RUNTIME_UID=1000
+ARG EASELECT_RUNTIME_GID=1000
+
+# The protected admin version panel reports this reviewed execution-mode enum.
+ENV EASELECT_RUNTIME_MODE=docker
+
+RUN apk add --no-cache \
+    ca-certificates=20260611-r0 \
+    tzdata=2026c-r0 \
+    libwebp=1.6.0-r0 \
+    openssl=3.5.7-r0
+
+LABEL easelect.version_contract="1" \
+      easelect.app_version="${EASELECT_APP_VERSION}" \
+      easelect.db_version="${EASELECT_DB_VERSION}" \
+      easelect.git_commit="${EASELECT_GIT_COMMIT}" \
+      org.opencontainers.image.version="${EASELECT_APP_VERSION}" \
+      org.opencontainers.image.revision="${EASELECT_GIT_COMMIT}"
+
+# Create non-root user
+RUN case "${EASELECT_RUNTIME_UID}:${EASELECT_RUNTIME_GID}" in \
+        *[!0-9:]*|:*|*:) printf 'runtime UID/GID must be numeric\n' >&2; exit 1 ;; \
+    esac && \
+    [ "${EASELECT_RUNTIME_UID}" -ge 1000 ] && \
+    [ "${EASELECT_RUNTIME_GID}" -ge 1000 ] && \
+    addgroup -g "${EASELECT_RUNTIME_GID}" -S easelect && \
+    adduser -u "${EASELECT_RUNTIME_UID}" -S easelect -G easelect
+
+# Copy binary
+COPY --from=builder /app/easelect .
+
+# Copy frontend for admin UI (login, templates, etc.)
+COPY frontend/ ./frontend/
+
+# Copy built frontend bundles last so runtime never reverts to stale tracked dist files.
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
+# Copy migrations for auto-running on startup
+COPY server_tools/migrations/ ./server_tools/migrations/
+
+# Copy the app/DB compatibility manifest for startup mirror sync.
+RUN mkdir -p ./server_tools/versioning
+COPY server_tools/versioning/app_db_compatibility.jsonl ./server_tools/versioning/app_db_compatibility.jsonl
+COPY VERSION_* ./
+RUN app_file=""; app_version="${EASELECT_APP_VERSION}"; \
+    if [ -f VERSION_EASELECT ]; then app_file="VERSION_EASELECT"; app_version="$(cat VERSION_EASELECT)"; \
+    elif [ -f VERSION_APP ]; then app_file="VERSION_APP"; app_version="$(cat VERSION_APP)"; fi; \
+    db_version="${EASELECT_DB_VERSION}"; \
+    if [ -f VERSION_DB ]; then db_version="$(cat VERSION_DB)"; fi; \
+    { \
+      printf 'VERSION_CONTRACT=1\n'; \
+      printf 'APP_VERSION=%s\n' "$app_version"; \
+      printf 'APP_VERSION_FILE=%s\n' "$app_file"; \
+      printf 'DB_VERSION=%s\n' "$db_version"; \
+      printf 'GIT_COMMIT=%s\n' "${EASELECT_GIT_COMMIT}"; \
+    } > easelect-runtime.env
+
+# Create runtime directories
+RUN if [ "${BUILD_ENV}" = "dev" ]; then \
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout /app/dev-cert.key \
+            -out /app/dev-cert.crt \
+            -subj "/CN=localhost"; \
+    fi && \
+    mkdir -p storage storage_deleted db_backups && \
+    chown -R easelect:easelect /app
+
+USER easelect
+
+EXPOSE 8082
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1
+
+CMD ["./easelect"]

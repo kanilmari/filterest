@@ -1,0 +1,109 @@
+/*
+ * filterbar_calendar.css
+ *
+ * Styles the popup calendar anchored above the filterbar clock bar date element.
+ * Bridges clock-bar date controls and the filterbar overlay surface.
+ * Exists to keep date-picking layout stable with an ISO-week plus weekday grid.
+ */
+
+.filterbar-calendar {
+  position: fixed;
+  z-index: 9999;
+
+  background: var(--filter_panel_bg, #fff);
+  border: 1px solid var(--filter_panel_border, #ccc);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 10px 12px 12px;
+  width: max-content;
+  min-width: 260px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Header ──────────────────────────────────────── */
+.filterbar-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.filterbar-calendar__title {
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.filterbar-calendar__nav {
+  background: none;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.filterbar-calendar__nav:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+/* ── Grid — 8 columns (wk + Mon–Sun) ────────────── */
+.filterbar-calendar__grid {
+  display: grid;
+  grid-template-columns: auto repeat(7, 1fr);
+  column-gap: 4px;
+  row-gap: 5px;
+}
+
+.filterbar-calendar__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  min-width: 28px;
+  border-radius: 4px;
+}
+
+/* Week number column */
+.filterbar-calendar__cell--wk-header,
+.filterbar-calendar__cell--wk {
+  color: color-mix(in srgb, currentColor 45%, transparent);
+  padding: 0 4px;
+  margin-right: 5px;
+  justify-content: flex-end;
+}
+
+/* Day-of-week header row */
+.filterbar-calendar__cell--day-header {
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+/* Active (current) week row */
+.filterbar-calendar__cell--current-week {
+  background: color-mix(in srgb, var(--accent, hsl(207deg 90% 60%)) 12%, transparent);
+}
+
+.filterbar-calendar__cell--wk.filterbar-calendar__cell--current-week {
+  color: var(--accent, hsl(207deg 90% 60%));
+  font-weight: 700;
+  opacity: 1;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent, hsl(207deg 90% 60%)) 60%, transparent);
+}
+
+/* Days from the previous or next month */
+.filterbar-calendar__cell--neighbour {
+  opacity: 0.3;
+}
+
+/* Today highlight */
+.filterbar-calendar__cell--today {
+  background: var(--accent, hsl(207deg 90% 60%));
+  color: #fff;
+  font-weight: 700;
+}

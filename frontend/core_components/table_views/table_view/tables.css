@@ -1,0 +1,245 @@
+/* table_views.css */
+/* 
+ * Visual Documentation:
+ * - instructions_and_documentation/visual_documentation/tab_content/data_content/data_content_overview.md
+ *   - Relates to data content (Table View).
+ */
+
+/* Taulukon tyylit */
+.table_from_db {
+    border-collapse: separate;
+    border-spacing: 0;
+    --table-grid-border-color: var(--table_border_color);
+    --table-body-grid-border-width: 1px;
+    --table-header-grid-border-width: 2px;
+    --table-cell-min-inline-size: 100px;
+    --table-cell-max-inline-size: 300px;
+    --table-cell-compact-inline-size: 180px;
+    --table-cell-line-height: 1.45;
+    --table-cell-max-lines: 15;
+}
+
+.table_from_db th,
+.table_from_db td {
+    border: 0;
+    border-right: var(--table-body-grid-border-width) solid var(--table-grid-border-color);
+    border-bottom: var(--table-body-grid-border-width) solid var(--table-grid-border-color);
+    padding: 8px;
+    text-align: left;
+    max-width: var(--table-cell-max-inline-size);
+}
+
+.table_from_db th:first-child,
+.table_from_db td:first-child {
+    border-left: var(--table-body-grid-border-width) solid var(--table-grid-border-color);
+}
+
+.table_from_db td {
+    min-width: 50px;
+}
+
+.table_from_db th {
+    background-color: var(--bg_color);
+    border-right-width: var(--table-header-grid-border-width);
+    border-bottom-width: var(--table-header-grid-border-width);
+}
+
+.table_from_db thead tr:first-child th:first-child {
+    border-left-width: var(--table-header-grid-border-width);
+}
+
+.table_from_db th.table_data_header_cell,
+.table_from_db td.table_data_cell {
+    min-width: var(--table-cell-min-inline-size);
+    max-width: var(--table-cell-max-inline-size);
+    vertical-align: top;
+}
+
+.table_from_db td.table_data_cell--compact {
+    min-width: max(var(--table-cell-min-inline-size), 12ch);
+}
+
+.table_from_db th.table_data_header_cell {
+    white-space: nowrap;
+}
+
+/* Taulun perustyyli */
+table.table_from_db {
+    table-layout: auto;
+    width: max-content;
+    /* Subtle fade-in when table is rebuilt (e.g. after sort/filter) */
+    animation: table-appear 0.2s ease-out;
+}
+
+@keyframes table-appear {
+    from { opacity: 0.4; }
+    to   { opacity: 1; }
+}
+
+/* Perustyyli taulukon soluille */
+.table_from_db th,
+.table_from_db td {
+    position: relative;
+    overflow: hidden;
+}
+
+.table_from_db .table_cell_content {
+    display: block;
+    max-width: var(--table-cell-max-inline-size);
+    max-height: calc(var(--table-cell-line-height) * 1em * var(--table-cell-max-lines));
+    overflow: auto;
+    line-height: var(--table-cell-line-height);
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+.table_from_db .table_cell_content--compact {
+    max-width: var(--table-cell-compact-inline-size);
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.table_from_db td.table_row_numbering--height-resizable {
+    padding-bottom: 18px;
+}
+
+.table_from_db .table_row_height_handle {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    height: 12px;
+    border-radius: 999px;
+    cursor: ns-resize;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    background:
+        linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 2px,
+            color-mix(in srgb, var(--border_color, #888) 72%, transparent) 2px,
+            color-mix(in srgb, var(--border_color, #888) 72%, transparent) 4px,
+            transparent 4px,
+            transparent 6px,
+            color-mix(in srgb, var(--border_color, #888) 72%, transparent) 6px,
+            color-mix(in srgb, var(--border_color, #888) 72%, transparent) 8px,
+            transparent 8px
+        );
+}
+
+.table_from_db tr:hover .table_row_height_handle,
+.table_from_db td.table_row_numbering--manually-resized .table_row_height_handle,
+.table_from_db .table_row_height_handle:focus-visible {
+    opacity: 0.85;
+}
+
+/* Ensimmäisen header-rivin solut jäävät tahmeiksi ruudun yläosaan */
+.table_from_db thead tr:first-child th {
+    position: sticky;
+    top: 0;
+    background: var(--bg_color);
+    border-top: var(--table-header-grid-border-width) solid var(--table-grid-border-color);
+    z-index: 3;
+}
+
+/* Toisen header-rivin (esim. suodattimet) solut */
+.table_from_db thead tr:nth-child(2) th {
+    display: none;
+}
+
+/* Sarakkeiden koon muuttamiseen tarkoitettu kahva */
+.table_from_db .resize-handle {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    bottom: 0;
+    width: 7px;
+    cursor: col-resize;
+    background-color: var(--border_color, #ddd);
+}
+
+/* Vierasavainten taulukko */
+#foreign_keys_container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#foreign_keys_container th,
+#foreign_keys_container td {
+    border: 1px solid var(--border_color);
+    padding: 8px;
+    text-align: left;
+}
+
+.selected {
+    background-color: rgb(255 0 0 / 20%);
+}
+
+input[type="checkbox"], input[type="radio"] {
+    width: 14px;
+    height: 14px;
+}
+
+/* Style the table for better appearance */
+#foreign_keys_table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#foreign_keys_table th, #foreign_keys_table td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+}
+
+/* Center the content in select-cell */
+.select-cell {
+    text-align: center;
+    vertical-align: middle;
+    width: 50px;
+}
+
+/* Optional: Center the radio button itself */
+.select-cell input[type="radio"] {
+    margin: 0 auto;
+    display: block;
+}
+
+/* Style the delete button */
+#foreign_keys_table + button {
+    margin-top: 10px;
+}
+
+.float_right {
+    float: right;
+}
+
+.selected_for_editing {
+    outline: 2px solid skyblue;
+}
+
+.editing {
+    background-color: rgb(128 128 0 / 0.5);
+    padding: 0;
+    overflow: auto !important;
+    width: 300px;
+}
+
+.editing input {
+    border: none;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    background: none;
+}
+
+.table_row_numbering {
+    color: color-mix(in srgb, var(--bg_color) 50%, var(--text_color) 50%);
+    text-align: left !important;
+}

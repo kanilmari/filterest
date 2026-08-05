@@ -1,0 +1,52 @@
+<!-- register.html -->
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <base href="/">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <title data-lang-key="register">Register</title>
+
+    <!-- Käytetään samaa CSS-tiedostoa kuin login-sivulla -->
+    <link rel="stylesheet" href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
+</head>
+<body>
+    <form method="POST" action="{{.FormAction}}" class="auth-form" data-testid="register-form">
+        <h2 data-lang-key="register"></h2>
+
+        <label for="username" data-lang-key="username"></label>
+        <input type="text" id="username" name="username" required data-testid="register-username">
+        {{if .UsernameErr}}
+        <p class="error" data-lang-key="{{.UsernameErr}}"></p>
+        {{end}}
+
+        <label for="password" data-lang-key="password"></label>
+        <input type="password" id="password" name="password" required data-testid="register-password">
+
+        <label for="email" data-lang-key="email"></label>
+        <input type="email" id="email" name="email" required data-testid="register-email">
+        {{if .EmailErr}}
+        <p class="error" data-lang-key="{{.EmailErr}}"></p>
+        {{end}}
+
+        <label for="full_name" data-lang-key="full_name"></label>
+        <input type="text" id="full_name" name="full_name" required data-testid="register-full-name">
+
+        <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
+
+        <div id="submit">
+            <input type="submit" class="saturate_on_hover" value="Rekisteröidy" data-lang-key="register" data-testid="register-submit">
+        </div>
+        {{if .GeneralErr}}
+        <p class="error" data-lang-key="{{.GeneralErr}}"></p>
+        {{end}}
+    </form>
+    <script type="module" src="/frontend/core_components/auth/register_page_builder.js"></script>
+</body>
+</html>

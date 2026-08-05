@@ -1,0 +1,25 @@
+/* empty_rows.css */
+/* Styles for the empty rows table view. */
+
+.empty-rows-table {
+    border-collapse: collapse;
+    border: 1px solid var(--table_border_color);
+    margin-bottom: 20px;
+}
+
+.empty-rows-table th,
+.empty-rows-table td {
+    border: 1px solid var(--table_border_color);
+    padding: 4px 8px;
+}
+
+.empty-rows-table + button {
+    margin-bottom: 20px;
+}
+
+.er-mode-buttons-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+

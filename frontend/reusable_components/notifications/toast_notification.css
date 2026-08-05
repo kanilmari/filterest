@@ -1,0 +1,141 @@
+/*
+ * toast_notification.css
+ *
+ * Visual styling for the unified toast notification system.
+ * Operates between toast_notification.js and the browser's rendering engine.
+ * Exists to apply the project's design system (CSS variables, theme tokens)
+ * to toast notifications, ensuring visual consistency in both light and dark modes.
+ *
+ * Key Principles:
+ * 1. All colors via CSS variables — theme-aware, never hardcoded.
+ * 2. Z-index from the project hierarchy (--z-toast in variables.css).
+ * 3. Border-radius from framework tokens (--fw-radius-md).
+ * 4. Supports 4 severity levels: success, info, warning, error.
+ */
+
+/* =========================================
+   Toast Container — fixed stack, bottom-right
+   ========================================= */
+#toast-notification-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 10px;
+    z-index: var(--z-toast);
+    pointer-events: none;
+    max-width: 420px;
+}
+
+/* =========================================
+   Toast Item — base styling for all levels
+   ========================================= */
+.toast-notification-item {
+    /* Local variables — overridden per level */
+    --toast-bg: var(--fw-color-surface);
+    --toast-border: var(--fw-color-border);
+    --toast-text: var(--fw-color-text);
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem 2rem 0.75rem 1.25rem;
+    background: var(--toast-bg);
+    border: 1px solid var(--toast-border);
+    color: var(--toast-text);
+    border-radius: var(--fw-radius-md);
+    box-shadow: var(--fw-shadow-raised);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: auto;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+.toast-notification-text {
+    flex: 1;
+    word-break: break-word;
+}
+
+/* =========================================
+   Close Button — × in top-right corner
+   ========================================= */
+.toast-notification-close {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    background: none;
+    border: none;
+    color: var(--toast-text);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 0 0.25rem;
+    transition: opacity 150ms ease;
+}
+
+.toast-notification-close:hover {
+    opacity: 1;
+}
+
+/* =========================================
+   Severity Levels
+   ========================================= */
+
+/* --- Success: green tones --- */
+.toast-notification-item[data-toast-level="success"] {
+    --toast-bg: color-mix(in srgb, #22c55e 15%, var(--bg_color_extreme) 85%);
+    --toast-border: color-mix(in srgb, #22c55e 40%, var(--fw-color-border) 60%);
+    --toast-text: color-mix(in srgb, #15803d 70%, var(--fw-color-text) 30%);
+}
+
+/* --- Info: blue tones (hue 207 per project standard) --- */
+.toast-notification-item[data-toast-level="info"] {
+    --toast-bg: color-mix(in srgb, hsl(207, 90%, 60%) 12%, var(--bg_color_extreme) 88%);
+    --toast-border: color-mix(in srgb, hsl(207, 90%, 60%) 35%, var(--fw-color-border) 65%);
+    --toast-text: color-mix(in srgb, hsl(207, 76%, 48%) 60%, var(--fw-color-text) 40%);
+}
+
+/* --- Warning: amber tones --- */
+.toast-notification-item[data-toast-level="warning"] {
+    --toast-bg: color-mix(in srgb, #f59e0b 15%, var(--bg_color_extreme) 85%);
+    --toast-border: color-mix(in srgb, #f59e0b 40%, var(--fw-color-border) 60%);
+    --toast-text: color-mix(in srgb, #92400e 70%, var(--fw-color-text) 30%);
+}
+
+/* --- Error: red tones --- */
+.toast-notification-item[data-toast-level="error"] {
+    --toast-bg: color-mix(in srgb, #ef4444 15%, var(--bg_color_extreme) 85%);
+    --toast-border: color-mix(in srgb, #ef4444 40%, var(--fw-color-border) 60%);
+    --toast-text: color-mix(in srgb, #991b1b 70%, var(--fw-color-text) 30%);
+}
+
+/* =========================================
+   Dark Mode — stronger tint, lighter text
+   ========================================= */
+[data-theme="dark"] .toast-notification-item[data-toast-level="success"] {
+    --toast-bg: color-mix(in srgb, #22c55e 18%, var(--bg_color_extreme) 82%);
+    --toast-text: color-mix(in srgb, #86efac 80%, var(--fw-color-text) 20%);
+}
+
+[data-theme="dark"] .toast-notification-item[data-toast-level="info"] {
+    --toast-bg: color-mix(in srgb, hsl(207, 90%, 60%) 16%, var(--bg_color_extreme) 84%);
+    --toast-text: color-mix(in srgb, hsl(207, 90%, 80%) 80%, var(--fw-color-text) 20%);
+}
+
+[data-theme="dark"] .toast-notification-item[data-toast-level="warning"] {
+    --toast-bg: color-mix(in srgb, #f59e0b 18%, var(--bg_color_extreme) 82%);
+    --toast-text: color-mix(in srgb, #fcd34d 80%, var(--fw-color-text) 20%);
+}
+
+[data-theme="dark"] .toast-notification-item[data-toast-level="error"] {
+    --toast-bg: color-mix(in srgb, #ef4444 18%, var(--bg_color_extreme) 82%);
+    --toast-text: color-mix(in srgb, #fca5a5 80%, var(--fw-color-text) 20%);
+}

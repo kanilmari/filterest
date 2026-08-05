@@ -1,0 +1,13 @@
+FROM pgvector/pgvector:pg16
+
+USER root
+
+# Keep pgvector from the base image and add PostGIS packages so derivative
+# instances can materialize PostGIS-backed tables during sync.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-16-postgis-3=3.6.4+dfsg-2.pgdg12+1 \
+        postgresql-16-postgis-3-scripts=3.6.4+dfsg-2.pgdg12+1 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER postgres

@@ -1,0 +1,109 @@
+# ==============================================================================
+# docker-compose.mcp.yml: MCP API stack for api.filterest.fi
+# Runs Go backend + PostgreSQL. Behind Cloudflare proxy (HTTPS at edge).
+#
+# REQUIRED: Create a .env file next to this file with all variables.
+# See ../instances/mcp.env.example for the template.
+# ==============================================================================
+
+services:
+  mcp-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mcp
+      args:
+        EASELECT_APP_VERSION: ${EASELECT_APP_VERSION:-unknown}
+        EASELECT_DB_VERSION: ${EASELECT_DB_VERSION:-unknown}
+        EASELECT_GIT_COMMIT: ${EASELECT_GIT_COMMIT:-unknown}
+        EASELECT_RUNTIME_UID: ${EASELECT_RUNTIME_UID:-1000}
+        EASELECT_RUNTIME_GID: ${EASELECT_RUNTIME_GID:-1000}
+    container_name: mcp-api
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8082}:8082"
+    environment:
+      - DB_HOST=mcp-db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_SSLMODE=disable
+      # All DB roles point to the same user (single-user MCP setup)
+      - DB_ADMIN_USER=${DB_ADMIN_USER}
+      - DB_ADMIN_PASSWORD=${DB_PASSWORD}
+      - DB_READONLY_USER=${DB_ADMIN_USER}
+      - DB_READONLY_PASSWORD=${DB_PASSWORD}
+      - DB_CONFIDENTIAL_USER=${DB_ADMIN_USER}
+      - DB_CONFIDENTIAL_PASSWORD=${DB_PASSWORD}
+      - DB_BASIC_USER=${DB_ADMIN_USER}
+      - DB_BASIC_PASSWORD=${DB_PASSWORD}
+      - DB_GUEST_USER=${DB_ADMIN_USER}
+      - DB_GUEST_PASSWORD=${DB_PASSWORD}
+      - ENVIRONMENT_TYPE=production
+      # API keys
+      - MML_API_KEY=${MML_API_KEY}
+      - PRH_API_BASE_URL=${PRH_API_BASE_URL}
+      - MCP_SERVICE_TOKEN=${MCP_SERVICE_TOKEN}
+      - REGFETCH_WORKER_SERVICE_TOKEN=${REGFETCH_WORKER_SERVICE_TOKEN}
+      # Payments
+      - TUKISUU_PURCHASE_SECRET=${TUKISUU_PURCHASE_SECRET:-}
+      - TUKISUU_BASE_URL=${TUKISUU_BASE_URL:-}
+      - SANDBOX_MODE=${SANDBOX_MODE:-true}
+      - REVOLUT_MERCHANT_API_SECRET_KEY=${REVOLUT_MERCHANT_API_SECRET_KEY:-}
+      - REVOLUT_MERCHANT_API_PUBLIC_KEY=${REVOLUT_MERCHANT_API_PUBLIC_KEY:-}
+      - REVOLUT_WEBHOOK_SECRET=${REVOLUT_WEBHOOK_SECRET:-}
+      - PAYMENT_CALLBACK_SECRET=${PAYMENT_CALLBACK_SECRET:-}
+      # SQL migrations: disabled by default
+      - ENABLE_SQL_MIGRATIONS=${ENABLE_SQL_MIGRATIONS:-false}
+      # AI translation features (optional — app works without these)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_MODEL=${OPENAI_API_MODEL:-}
+      - AI_TRANSLATOR_SYSTEM_MESSAGE=${AI_TRANSLATOR_SYSTEM_MESSAGE:-}
+      # Session management
+      - SESSION_KEY=${SESSION_KEY}
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-}
+    volumes:
+      - ../storage:/app/storage
+      - ../storage_deleted:/app/storage_deleted
+    depends_on:
+      mcp-db:
+        condition: service_healthy
+    networks:
+      - mcp-network
+    labels:
+      - "easelect.version_contract=1"
+      - "easelect.app_version=${EASELECT_APP_VERSION:-unknown}"
+      - "easelect.db_version=${EASELECT_DB_VERSION:-unknown}"
+      - "easelect.git_commit=${EASELECT_GIT_COMMIT:-unknown}"
+      - "org.opencontainers.image.version=${EASELECT_APP_VERSION:-unknown}"
+      - "org.opencontainers.image.revision=${EASELECT_GIT_COMMIT:-unknown}"
+
+  mcp-db:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.db
+    image: easelect-postgres:pg16-postgis-pgvector
+    container_name: mcp-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_ADMIN_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - mcp_pgdata:/var/lib/postgresql/data
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ADMIN_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "easelect.db_version=${EASELECT_DB_VERSION:-unknown}"
+
+volumes:
+  mcp_pgdata:
+
+networks:
+  mcp-network:
+    driver: bridge

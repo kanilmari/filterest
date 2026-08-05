@@ -1,0 +1,67 @@
+/* dataset_header_config.css
+ * Specific layout polish for the dataset header admin editor.
+ * Builds on framework.css utilities for the form structure and banner preview.
+ */
+
+.dataset-header-config-view {
+    max-width: 1280px;
+}
+
+.dataset-header-config-form {
+    width: 100%;
+}
+
+.dataset-header-config-dataset-dropdown {
+    min-width: min(100%, 420px);
+}
+
+.dataset-header-config-text-card h4 {
+    margin: 0;
+}
+
+.dataset-header-config-translation-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--fw-space-3);
+}
+
+.dataset-header-config-readonly-key {
+    font-family: var(--fw-font-mono, monospace);
+    background: color-mix(in srgb, var(--fw-color-surface) 78%, transparent);
+}
+
+.dataset-header-config-banner-preview {
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--fw-space-2);
+}
+
+.dataset-header-config-banner-image {
+    width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    border-radius: var(--fw-radius-md);
+    background: var(--fw-color-surface);
+    border: 1px solid var(--fw-color-border);
+}
+
+.dataset-header-config-checkbox input {
+    margin: 0;
+}
+
+.dataset-header-config-actions {
+    justify-content: flex-start;
+}
+
+@media (width <= 900px) {
+    .dataset-header-config-translation-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dataset-header-config-banner-preview {
+        min-height: 140px;
+    }
+}

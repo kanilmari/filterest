@@ -1,0 +1,2 @@
+# Dependencies needed to collect and run testing/python with the project venv.
+pytest>=8,<10

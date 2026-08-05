@@ -1,0 +1,4 @@
+<!-- chevron.svg: downward arrow icon for vanilla dropdown -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 6">
+  <path fill="currentColor" d="M0 0l5 6 5-6z"/>
+</svg>

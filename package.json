@@ -1,0 +1,45 @@
+{
+    "devDependencies": {
+        "@axe-core/playwright": "^4.11.3",
+        "@eslint/js": "^10.0.1",
+        "@playwright/test": "^1.49.1",
+        "@types/node": "^24.9.1",
+        "eslint": "^10.8.0",
+        "eslint-plugin-import-x": "^4.17.1",
+        "globals": "^15.15.0",
+        "jsdom": "^29.0.1",
+        "lighthouse": "^13.4.1",
+        "playwright": "^1.49.1",
+        "stylelint": "^16.14.1",
+        "stylelint-config-standard": "^37.0.0",
+        "vite": "^6.4.3",
+        "vitest": "^4.1.0"
+    },
+    "dependencies": {
+        "fastest-levenshtein": "^1.0.16",
+        "glob": "^13.0.6"
+    },
+    "overrides": {
+        "fast-uri": "3.1.4",
+        "js-yaml": "4.3.0",
+        "postcss": "8.5.23"
+    },
+    "scripts": {
+        "dev": "vite frontend",
+        "build": "vite build frontend",
+        "preview": "vite preview --outDir frontend/dist",
+        "lint:css": "stylelint \"frontend/styles/**/*.css\"",
+        "qa": "./server_tools/scripts/qa.sh",
+        "restart": "./ctl",
+        "guardian": "./filterest audit visual --capture-only",
+        "guardian:full": "./filterest audit visual",
+        "guardian:analyze": "./filterest audit visual --analyze-only",
+        "audit:browser": "./filterest audit browser --capture-only",
+        "audit:browser:full": "./filterest audit browser",
+        "test": "node server_tools/scripts/vitest_process_runner.mjs run",
+        "test:watch": "node server_tools/scripts/vitest_process_runner.mjs",
+        "test:e2e": "PLAYWRIGHT_HTML_OPEN=${PLAYWRIGHT_HTML_OPEN:-never} playwright test"
+    },
+    "name": "filterest",
+    "license": "GPL-2.0-only"
+}

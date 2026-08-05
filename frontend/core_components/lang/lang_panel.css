@@ -1,0 +1,236 @@
+/* lang_panel.css
+ * Styles for the navbar language picker button and floating selection panel.
+ * Bridges lang_panel_printer.js and the DOM structure it injects into navigation.
+ * Exists to keep language switching UI readable and reusable across layouts.
+ */
+
+.language-selection .custom-select {
+	position: relative;
+	cursor: pointer;
+
+}
+
+.select-selected {
+	display: flex;
+	align-items: center;
+	border: 1px solid var(--border_color);
+    cursor: pointer;
+}
+
+/* .select-selected svg,
+.select-items svg {
+	transform: translateY(1px);
+} */
+
+.text-and-arrow {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	width: 100%;
+
+}
+
+.select-items {
+	display: block;
+
+	position: absolute;
+	width: 270px;
+	background-color: var(--bg_color);
+	/* top: 100%; */
+	/* left: 50%; */
+	/* transform: translateX(-50%); */
+	border: 1px solid #ccc;
+	border-radius: var(--border_radius);
+	box-shadow: 0 -8px 16px 0 rgba(0, 0, 0, 0.5);
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity var(--transition-time) ease, visibility 0.3s ease;
+	z-index: 1500;
+}
+
+.inner-select-area {
+	background-color: var(--bg-color-content);
+}
+
+.select-arrow-active+.select-items {
+	opacity: 1;
+	visibility: visible;
+
+}
+
+.select-items .section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+
+}
+
+.select-items .select-option {
+	margin-left: 10px;
+}
+
+.select-items .select-option input {
+	margin-right: 10px;
+}
+
+.section {
+
+	margin: 5px;
+	border-radius: var(--border_radius_small);
+	padding: 5px;
+}
+
+/*
+//p?
+.long-spaces {
+	margin-right: 5px;
+
+} */
+
+#service-language-link {
+	color: var(--link-color);
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+/*
+//p?
+.flex-container {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+} */
+
+.sort-select {
+	height: 36px;
+	padding: 5px;
+	border: 1px solid #ccc;
+	border-radius: var(--border_radius);
+	cursor: pointer;
+}
+
+.language-selection .custom-select .select-items {
+	left: auto;
+	transform: none;
+}
+
+.language-selection .custom-select .inner-select-area div.language-option {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-bottom: 5px;
+	margin-right: 10px;
+}
+
+.language-option input {
+	margin-left: 5px;
+}
+
+.menu-language-selection {
+    /* position: fixed; */
+    /* top: 5px; */
+    /* left: 45px; */
+    z-index: 2000;
+}
+
+.language-selection {
+    position: relative;
+    --language-panel-bg: color-mix(in srgb, var(--button_bg_color) 84%, var(--bg_color_extreme) 16%);
+    --language-panel-border: color-mix(in srgb, var(--border_color) 80%, transparent);
+    --language-panel-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
+}
+
+.language-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding-left: 0;
+    padding-right: 0;
+    width: 71px;
+}
+
+.language-button-icon {
+    flex-shrink: 0;
+    display: block;
+    width: 24px;
+    height: 24px;
+    background-color: currentColor;
+}
+
+.language-code-label {
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.floating-language-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 1000001;
+    min-width: 220px;
+    padding: 10px;
+    border: 1px solid var(--language-panel-border);
+    border-radius: calc(var(--border_radius) + 2px);
+    background: var(--language-panel-bg);
+    box-shadow: var(--language-panel-shadow);
+    backdrop-filter: blur(12px);
+}
+
+.floating-language-panel .panel-content {
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.floating-language-panel .panel-content > * {
+    margin: 0;
+}
+
+.floating-language-panel .panel-content > label {
+    display: block;
+    padding: 2px 4px 6px;
+    color: var(--text_color_blended);
+}
+
+.floating-language-panel .panel-content > label b {
+    display: block;
+}
+
+.floating-language-panel .language-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 0;
+    margin-bottom: 0;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: calc(var(--border_radius_small) + 4px);
+    background: color-mix(in srgb, var(--bg_color_2) 70%, transparent);
+    transition:
+        background-color var(--transition-time) ease,
+        border-color var(--transition-time) ease,
+        transform var(--transition-time) ease;
+}
+
+.floating-language-panel .language-option:hover {
+    background: color-mix(in srgb, var(--button_hover_bg_color) 86%, transparent);
+    border-color: color-mix(in srgb, var(--button_active_border_color) 42%, transparent);
+}
+
+.floating-language-panel .language-option:has(input:checked) {
+    background: color-mix(in srgb, var(--button_active_bg_color) 20%, var(--bg_color_2) 80%);
+    border-color: color-mix(in srgb, var(--button_active_border_color) 72%, transparent);
+}
+
+.floating-language-panel .language-option input {
+    margin: 0;
+    accent-color: hsl(207, 70%, 53%);
+}
+
+.floating-language-panel .language-option label {
+    margin-left: 0;
+    flex: 1;
+    cursor: pointer;
+}

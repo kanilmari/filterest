@@ -1,0 +1,133 @@
+/* theme_transition.css
+ * Smooth theme transitions for the main app surfaces.
+ * Bridges body theme classes (light/dark/system) and the shared CSS variable system.
+ * Exists to keep theme-change animation centralized instead of scattering transition tweaks across components.
+ */
+
+:root {
+    --theme-transition-duration: 520ms;
+    --theme-transition-duration-slow: 760ms;
+    --theme-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.theme-transitions-ready,
+body.theme-transitions-ready::before,
+body.theme-transitions-ready .body_wrapper,
+body.theme-transitions-ready .body_content,
+body.theme-transitions-ready #navbar,
+body.theme-transitions-ready .tab-content-area,
+body.theme-transitions-ready .content_div,
+body.theme-transitions-ready .filter-elements-container,
+body.theme-transitions-ready .dataset-filter-panel,
+body.theme-transitions-ready .auth-page-content-card,
+body.theme-transitions-ready .auth-form,
+body.theme-transitions-ready .auth-page-tablist,
+body.theme-transitions-ready .auth-intro-box,
+body.theme-transitions-ready .auth-tour-content,
+body.theme-transitions-ready .auth-tour-gallery,
+body.theme-transitions-ready .auth-tour-shot,
+body.theme-transitions-ready .auth-tour-modal-image,
+body.theme-transitions-ready .floating-language-panel,
+body.theme-transitions-ready .fw-card,
+body.theme-transitions-ready .fw-panel,
+body.theme-transitions-ready .card,
+body.theme-transitions-ready .big_card_outer_container,
+body.theme-transitions-ready .form_with_border,
+body.theme-transitions-ready .modal,
+body.theme-transitions-ready .modal-content,
+body.theme-transitions-ready .button,
+body.theme-transitions-ready .fw-btn,
+body.theme-transitions-ready button,
+body.theme-transitions-ready input,
+body.theme-transitions-ready textarea,
+body.theme-transitions-ready select,
+body.theme-transitions-ready details,
+body.theme-transitions-ready summary,
+body.theme-transitions-ready table,
+body.theme-transitions-ready th,
+body.theme-transitions-ready td {
+    transition-property: background-color, color, border-color, box-shadow, fill, stroke, outline-color, text-decoration-color;
+    transition-duration: var(--theme-transition-duration);
+    transition-timing-function: var(--theme-transition-easing);
+}
+
+body.theme-transitions-ready {
+    transition-property: background-color, color;
+}
+
+body.theme-transitions-ready .saturate_on_hover {
+    transition:
+        filter var(--saturate-on-hover-transition-duration, 160ms) var(--saturate-on-hover-transition-easing, ease-out),
+        background-color var(--theme-transition-duration) var(--theme-transition-easing),
+        color var(--theme-transition-duration) var(--theme-transition-easing),
+        border-color var(--theme-transition-duration) var(--theme-transition-easing),
+        box-shadow var(--theme-transition-duration) var(--theme-transition-easing),
+        fill var(--theme-transition-duration) var(--theme-transition-easing),
+        stroke var(--theme-transition-duration) var(--theme-transition-easing),
+        outline-color var(--theme-transition-duration) var(--theme-transition-easing),
+        text-decoration-color var(--theme-transition-duration) var(--theme-transition-easing);
+}
+
+body.theme-transitions-ready .tab-content-area {
+    transition:
+        background-color var(--theme-transition-duration) var(--theme-transition-easing),
+        color var(--theme-transition-duration) var(--theme-transition-easing),
+        border-color var(--theme-transition-duration) var(--theme-transition-easing),
+        box-shadow var(--theme-transition-duration) var(--theme-transition-easing),
+        fill var(--theme-transition-duration) var(--theme-transition-easing),
+        stroke var(--theme-transition-duration) var(--theme-transition-easing),
+        outline-color var(--theme-transition-duration) var(--theme-transition-easing),
+        text-decoration-color var(--theme-transition-duration) var(--theme-transition-easing),
+        margin-right var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.login-page.theme-transitions-ready {
+    transition-duration: var(--theme-transition-duration-slow);
+}
+
+body.login-page.theme-transitions-ready::before {
+    transition-property: opacity, filter;
+    transition-duration: var(--theme-transition-duration-slow);
+    transition-timing-function: var(--theme-transition-easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.theme-transitions-ready,
+    body.theme-transitions-ready::before,
+    body.theme-transitions-ready .body_wrapper,
+    body.theme-transitions-ready .body_content,
+    body.theme-transitions-ready #navbar,
+    body.theme-transitions-ready .tab-content-area,
+    body.theme-transitions-ready .content_div,
+    body.theme-transitions-ready .filter-elements-container,
+    body.theme-transitions-ready .dataset-filter-panel,
+    body.theme-transitions-ready .auth-page-content-card,
+    body.theme-transitions-ready .auth-form,
+    body.theme-transitions-ready .auth-page-tablist,
+    body.theme-transitions-ready .auth-intro-box,
+    body.theme-transitions-ready .auth-tour-content,
+    body.theme-transitions-ready .auth-tour-gallery,
+    body.theme-transitions-ready .auth-tour-shot,
+    body.theme-transitions-ready .auth-tour-modal-image,
+    body.theme-transitions-ready .floating-language-panel,
+    body.theme-transitions-ready .fw-card,
+    body.theme-transitions-ready .fw-panel,
+    body.theme-transitions-ready .card,
+    body.theme-transitions-ready .big_card_outer_container,
+    body.theme-transitions-ready .form_with_border,
+    body.theme-transitions-ready .modal,
+    body.theme-transitions-ready .modal-content,
+    body.theme-transitions-ready .button,
+    body.theme-transitions-ready .fw-btn,
+    body.theme-transitions-ready button,
+    body.theme-transitions-ready input,
+    body.theme-transitions-ready textarea,
+    body.theme-transitions-ready select,
+    body.theme-transitions-ready details,
+    body.theme-transitions-ready summary,
+    body.theme-transitions-ready table,
+    body.theme-transitions-ready th,
+    body.theme-transitions-ready td {
+        transition-duration: 0ms !important;
+    }
+}

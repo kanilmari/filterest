@@ -1,0 +1,124 @@
+/*
+ * big_card_related_records.css
+ *
+ * Related-record list layout for row article child tabs.
+ * Bridges child tab DOM rows and the shared card/comment visual system.
+ * Exists to keep article child lists column-aligned without growing cards_big.css.
+ */
+
+.child_record_list_item {
+    padding: 0.55rem 0.75rem;
+    box-shadow: none;
+    border-left: 2px solid color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 70%, transparent 30%);
+}
+
+.child_record_list_header,
+.child_record_summary_row {
+    --child-record-list-columns:
+        3.5rem
+        minmax(10rem, 1fr)
+        10rem
+        10rem
+        5.5rem;
+
+    display: grid;
+    grid-template-columns: var(--child-record-list-columns);
+    align-items: center;
+    column-gap: 0.9rem;
+    row-gap: 0.35rem;
+    min-width: 0;
+}
+
+.child_record_list_header {
+    padding: 0 0.75rem;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.child_record_list_header_cell {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.child_record_summary_cell {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.child_record_summary_cell--title {
+    align-items: center;
+}
+
+.child_record_summary_label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.child_record_summary_value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text_color);
+    line-height: 1.35;
+}
+
+.child_record_summary_cell--title .child_record_summary_value {
+    font-weight: 650;
+}
+
+.child_record_summary_row .child_record_actions {
+    justify-self: end;
+    margin-top: 0;
+    gap: 0.4rem;
+}
+
+@media (max-width: 720px) {
+    .child_record_list_header {
+        display: none;
+    }
+
+    .child_record_summary_row {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .child_record_summary_cell {
+        white-space: normal;
+    }
+
+    .child_record_summary_label {
+        position: static;
+        width: auto;
+        height: auto;
+        padding: 0;
+        margin: 0;
+        overflow: visible;
+        clip: auto;
+        flex: 0 0 auto;
+        color: var(--text_color_secondary, var(--text_color));
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    .child_record_summary_row .child_record_actions {
+        justify-self: start;
+    }
+}

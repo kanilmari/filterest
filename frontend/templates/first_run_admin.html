@@ -1,0 +1,168 @@
+<!-- first_run_admin.html: one-time form for creating the first login-ready administrator. -->
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <base href="/">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="format-detection" content="telephone=no">
+    <title data-lang-key="first_run_admin_title">Create the first administrator</title>
+    <link rel="stylesheet" href="/frontend/styles/variables.css">
+    <link rel="stylesheet" href="/frontend/styles/base.css">
+    <link rel="stylesheet" href="/frontend/styles/form.css">
+    <link rel="stylesheet" href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" href="/frontend/reusable_components/form_section_navigator/form_section_navigator.css">
+    <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
+    <link rel="icon" href="/frontend/favicon4S.png" type="image/png">
+    <script type="module" src="/frontend/core_components/auth/first_run_admin_page.js"></script>
+</head>
+<body class="loading login-page standalone-login-page first-run-admin-page">
+    <main class="auth-page-shell first-run-admin-shell" data-testid="first-run-admin-shell">
+        <section class="auth-page-content-card">
+            <div class="auth-preferences-row">
+                <div
+                    class="auth-top-controls"
+                    data-auth-preference-controls
+                    data-auth-controls-context="first-run"
+                    data-testid="first-run-admin-controls"></div>
+            </div>
+            <form
+                method="POST"
+                action="/first-run"
+                id="first-run-admin-form"
+                class="auth-form first-run-admin-form form_with_border"
+                data-form-section-navigator
+                data-initial-section="{{.InitialSection}}"
+                data-testid="first-run-admin-form">
+                <section
+                    id="first-run-section-settings"
+                    class="first-run-form-section"
+                    data-form-section
+                    data-section-key="settings"
+                    data-section-label="Environment"
+                    data-section-label-lang-key="first_run_section_settings">
+                    <div class="auth-hero first-run-section-hero">
+                        <p class="first-run-welcome" data-lang-key="first_run_welcome">Welcome to Filterest!</p>
+                        <h1 data-lang-key="first_run_settings_title">Set up your workspace</h1>
+                        <div class="auth-intro-box">
+                            <p data-lang-key="first_run_settings_description">Choose how this installation is used and how the first administrator verifies sign-ins.</p>
+                        </div>
+                    </div>
+
+                    <fieldset class="first-run-choice-group">
+                        <legend data-lang-key="first_run_environment_legend">Environment</legend>
+                        <div class="first-run-choice-grid">
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="installation_environment" value="dev" {{if eq .Environment "dev"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="environment_development">Development</span>
+                                <span class="first-run-choice-description" data-lang-key="environment_development_description">For building and changing the application.</span>
+                                <span class="first-run-environment-label" aria-hidden="true">DEV</span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="installation_environment" value="test" {{if eq .Environment "test"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="environment_testing">Testing</span>
+                                <span class="first-run-choice-description" data-lang-key="environment_testing_description">For testing in a development-like environment.</span>
+                                <span class="first-run-environment-label" aria-hidden="true">TEST</span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="installation_environment" value="qa" {{if eq .Environment "qa"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="environment_qa">QA</span>
+                                <span class="first-run-choice-description" data-lang-key="environment_qa_description">For quality assurance and release verification.</span>
+                                <span class="first-run-environment-label" aria-hidden="true">QA</span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="installation_environment" value="prod" {{if eq .Environment "prod"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="environment_production">Production</span>
+                                <span class="first-run-choice-description" data-lang-key="environment_production_description">For real users and live data.</span>
+                            </label>
+                        </div>
+                        {{if .EnvironmentErr}}<p class="error" data-lang-key="{{.EnvironmentErr}}">{{.EnvironmentErr}}</p>{{end}}
+                    </fieldset>
+
+                    <fieldset class="first-run-choice-group">
+                        <legend data-lang-key="first_run_verification_legend">Sign-in verification</legend>
+                        <div class="first-run-choice-grid">
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="verification_method" value="none" {{if eq .VerificationMethod "none"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="verification_none">No additional verification</span>
+                                <span class="first-run-choice-description" data-lang-key="verification_none_description">Sign in with username and password only.</span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="verification_method" value="fixed_pin" {{if eq .VerificationMethod "fixed_pin"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="verification_fixed_pin">Fixed PIN</span>
+                                <span class="first-run-choice-description" data-lang-key="verification_fixed_pin_description">Use the same private 4–8 digit PIN at every sign-in.</span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="verification_method" value="totp" {{if eq .VerificationMethod "totp"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="verification_authenticator">Authenticator app</span>
+                                <span class="first-run-choice-description" data-lang-key="verification_authenticator_description">Works with standard TOTP apps, including Google Authenticator.</span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="verification_method" value="email" {{if eq .VerificationMethod "email"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="verification_email">Email</span>
+                                <span class="first-run-choice-description" data-lang-key="verification_email_description">Sends a one-time code through Postmark. Requires a free external Postmark account.</span>
+                            </label>
+                        </div>
+                        {{if .VerificationErr}}<p class="error" data-lang-key="{{.VerificationErr}}">{{.VerificationErr}}</p>{{end}}
+                    </fieldset>
+
+                    <div class="first-run-method-fields" data-verification-fields="fixed_pin" hidden>
+                        <label for="fixed_pin" data-lang-key="fixed_pin">Fixed PIN</label>
+                        <input type="password" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="first-run-fixed-pin">
+                        <label for="confirm_fixed_pin" data-lang-key="confirm_fixed_pin">Confirm fixed PIN</label>
+                        <input type="password" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="first-run-fixed-pin-confirmation">
+                    </div>
+
+                    <div class="first-run-method-fields" data-verification-fields="totp" hidden>
+                        <p class="first-run-setup-key-label" data-lang-key="authenticator_setup_key">Add this setup key to your authenticator app:</p>
+                        <code class="first-run-setup-key" data-testid="first-run-totp-secret">{{.TOTPSecret}}</code>
+                        <label for="totp_code" data-lang-key="authenticator_confirmation_code">Enter the current 6-digit code to confirm setup</label>
+                        <input type="text" inputmode="numeric" id="totp_code" name="totp_code" minlength="6" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" data-testid="first-run-totp-code">
+                    </div>
+                    {{if .FactorErr}}<p class="error" data-lang-key="{{.FactorErr}}">{{.FactorErr}}</p>{{end}}
+                </section>
+
+                <section
+                    id="first-run-section-credentials"
+                    class="first-run-form-section"
+                    data-form-section
+                    data-section-key="credentials"
+                    data-section-label="Credentials"
+                    data-section-label-lang-key="first_run_section_credentials">
+                    <div class="auth-hero first-run-section-hero">
+                        <h1 data-lang-key="first_run_admin_title">Create the first administrator</h1>
+                        <div class="auth-intro-box">
+                            <p data-lang-key="first_run_admin_description">Choose the site name and administrator credentials for this installation. Email is also used for account recovery and messages.</p>
+                        </div>
+                    </div>
+
+                    <label for="site_name" data-lang-key="first_run_site_name">Site name</label>
+                    <input type="text" id="site_name" name="site_name" value="{{.FirstRunSiteName}}" maxlength="100" required autocomplete="organization" data-testid="first-run-site-name">
+                    {{if .SiteNameErr}}<p class="error" data-lang-key="{{.SiteNameErr}}">{{.SiteNameErr}}</p>{{end}}
+
+                    <label for="username" data-lang-key="username">Username</label>
+                    <input type="text" id="username" name="username" value="{{.Username}}" minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]*" required autocomplete="username" data-testid="first-run-admin-username">
+                    {{if .UsernameErr}}<p class="error" data-lang-key="{{.UsernameErr}}">{{.UsernameErr}}</p>{{end}}
+
+                    <label for="email" data-lang-key="email">Email</label>
+                    <input type="email" id="email" name="email" value="{{.Email}}" maxlength="254" required autocomplete="email" data-testid="first-run-admin-email">
+                    {{if .EmailErr}}<p class="error" data-lang-key="{{.EmailErr}}">{{.EmailErr}}</p>{{end}}
+
+                    <label for="password" data-lang-key="password">Password</label>
+                    <input type="password" id="password" name="password" minlength="12" maxlength="128" required autocomplete="new-password" data-testid="first-run-admin-password">
+
+                    <label for="confirm_password" data-lang-key="confirm_password">Confirm password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" minlength="12" maxlength="128" required autocomplete="new-password" data-testid="first-run-admin-password-confirmation">
+                    {{if .PasswordErr}}<p class="error" data-lang-key="{{.PasswordErr}}">{{.PasswordErr}}</p>{{end}}
+
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div id="submit">
+                        <input type="submit" value="Create administrator" data-lang-key="first_run_admin_submit" data-testid="first-run-admin-submit">
+                    </div>
+                    {{if .GeneralErr}}<p class="error" data-lang-key="{{.GeneralErr}}">{{.GeneralErr}}</p>{{end}}
+                </section>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

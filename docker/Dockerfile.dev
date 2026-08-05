@@ -1,0 +1,64 @@
+# ==============================================================================
+# Dockerfile.dev: Development image with hot reload support
+# Includes both Go and Node.js runtimes for live development
+# ==============================================================================
+
+FROM golang:1.26.5-alpine3.24
+
+ARG EASELECT_RUNTIME_UID=1000
+ARG EASELECT_RUNTIME_GID=1000
+
+# The protected admin version panel reports this reviewed execution-mode enum.
+ENV EASELECT_RUNTIME_MODE=docker
+
+# Install Node.js and other development dependencies. Keep the fast-moving
+# Node/npm packages on their reviewed major release lines: Alpine retires old
+# patch packages from its index, which made fresh Linux/WSL builds fail even
+# though the supported Node 24 toolchain itself had not changed.
+# libwebp-dev and build-base are needed for chai2010/webp (CGO)
+RUN apk add --no-cache \
+    nodejs~24 \
+    npm~11 \
+    git=2.54.0-r0 \
+    bash=5.3.9-r1 \
+    ca-certificates=20260611-r0 \
+    build-base=0.5-r4 \
+    libwebp-dev=1.6.0-r0
+
+RUN case "${EASELECT_RUNTIME_UID}:${EASELECT_RUNTIME_GID}" in \
+        *[!0-9:]*|:*|*:) printf 'runtime UID/GID must be numeric\n' >&2; exit 1 ;; \
+    esac && \
+    [ "${EASELECT_RUNTIME_UID}" -ge 1000 ] && \
+    [ "${EASELECT_RUNTIME_GID}" -ge 1000 ] && \
+    addgroup -g "${EASELECT_RUNTIME_GID}" -S easelect && \
+    adduser -u "${EASELECT_RUNTIME_UID}" -S easelect -G easelect
+
+WORKDIR /app
+
+# Copy package files for npm install
+COPY package.json package-lock.json* ./
+
+# Install Node.js dependencies. Assign the cached dependency tree once in this
+# layer so ordinary source edits do not repeat a recursive chown over it.
+RUN npm ci && chown -R easelect:easelect /app/node_modules
+
+# Copy go mod files for dependency caching
+COPY go.mod go.sum ./
+
+# Download Go dependencies
+RUN go mod download
+
+# Copy source (will be overwritten by volume mount in development) directly
+# with the runtime identity instead of duplicating it in a later chown layer.
+COPY --chown=easelect:easelect . .
+
+RUN mkdir -p storage storage_deleted db_backups && \
+    chown easelect:easelect storage storage_deleted db_backups
+
+USER easelect
+
+# Expose ports
+EXPOSE 8082 5173
+
+# Default command (overridden in docker-compose.dev.yml)
+CMD ["sh", "-c", "npm run dev & go run main.go"]

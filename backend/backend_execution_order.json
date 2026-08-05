@@ -1,0 +1,72 @@
+{
+  "_comment": "Documents the execution order of backend pipeline stages. Each HTTP request flows through these stages in the listed order (top to bottom). The pipeline wraps from last to first: the first stage is the outermost wrapper (executed first on request, last on response).",
+  "pipeline_stages": [
+    {
+      "name": "rate_limiting",
+      "always_enforced": true,
+      "description": "Rejects requests exceeding per-function rate limits",
+      "folder": "pipeline/rate_limiting"
+    },
+    {
+      "name": "logging",
+      "always_enforced": true,
+      "description": "Logs basic HTTP request info when debug mode is enabled",
+      "folder": "pipeline/logging"
+    },
+    {
+      "name": "error_handling",
+      "always_enforced": true,
+      "description": "Recovers from panics, logs stack traces, returns 500",
+      "folder": "pipeline/error_handling"
+    },
+    {
+      "name": "auth",
+      "always_enforced": false,
+      "description": "Validates user session — rejects unauthenticated requests",
+      "folder": "pipeline/auth"
+    },
+    {
+      "name": "fingerprint",
+      "always_enforced": false,
+      "description": "Validates browser fingerprint matches session",
+      "folder": "pipeline/fingerprint"
+    },
+    {
+      "name": "device_id",
+      "always_enforced": false,
+      "description": "Validates device ID header matches session",
+      "folder": "pipeline/device_id"
+    },
+    {
+      "name": "access_control",
+      "always_enforced": false,
+      "description": "Checks user's table/function-level permissions",
+      "folder": "pipeline/access_control"
+    },
+    {
+      "name": "admin_check",
+      "always_enforced": false,
+      "description": "Verifies user has admin privileges",
+      "folder": "pipeline/admin_check"
+    }
+  ],
+  "non_stage_pipeline_folders": [
+    {
+      "name": "router",
+      "description": "Route definitions — maps URL patterns to handlers with pipeline profiles",
+      "folder": "pipeline/router"
+    },
+    {
+      "name": "shared",
+      "description": "Cross-cutting middleware not in the main pipeline (CSP, CSRF, security headers, maintenance mode, panic recovery, transaction wrapper, firewall, app-specific chains)",
+      "folder": "pipeline/shared"
+    }
+  ],
+  "engine_files": [
+    "pipeline/pipeline.go — Stage type definition and BuildPipeline function",
+    "pipeline/pipeline_order.go — PipelineOrder array (single source of truth for stage sequence)",
+    "pipeline/build_pipeline.go — Pipeline construction from route profiles",
+    "pipeline/route_profiles.go — Per-route stage enable/disable profiles",
+    "pipeline/introspection_handler.go — Debug endpoint listing active stages"
+  ]
+}

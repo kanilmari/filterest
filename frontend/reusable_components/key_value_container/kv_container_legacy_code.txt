@@ -1,0 +1,46 @@
+    // TODO: ÄLÄ POISTA TÄTÄ: Tee tästä alla olevasta (1 2 / 3 4) tyylistä parametrilla aktivoitava vaihtoehto yllä olevan (1 3 / 2 4) sijaan.
+    // /* ---------- PÄÄ-RENDERÖINTI ---------- */
+    // function renderNow() {
+    //     count_this_function('renderNow');
+
+    //     const ww = window.innerWidth;
+    //     const mode = ww < responsiveBreakpoint ? 'stacked' : layoutMode;
+
+    //     containerElement.classList.toggle('kv-inline',  mode === 'inline');
+    //     containerElement.classList.toggle('kv-stacked', mode === 'stacked');
+
+    //     const cols = Math.min(
+    //         maxColumns,
+    //         Math.max(1, Math.floor(ww / minPairWidth))
+    //     );
+
+    //     containerElement.innerHTML = '';
+
+    //     if (mode === 'inline') {
+    //         /* ----- Sarake-major (column-major) ----- */
+    //         containerElement.style.gridTemplateColumns =
+    //             `repeat(${cols}, 150px 1fr)`;
+
+    //         const total = keyValuePairDataArray.length;
+    //         const rows = Math.ceil(total / cols);
+
+    //         for (let col = 0; col < cols; col++) {
+    //             for (let row = 0; row < rows; row++) {
+    //                 const idx = col * rows + row;
+    //                 if (idx >= total) continue;
+    //                 const pair = keyValuePairDataArray[idx];
+    //                 const [k, v] = createInlineElements(pair);
+    //                 containerElement.appendChild(k);
+    //                 containerElement.appendChild(v);
+    //             }
+    //         }
+    //     } else {
+    //         /* ----- Stacked, sarake-major ----- */
+    //         containerElement.style.gridTemplateColumns =
+    //             `repeat(${cols}, 1fr)`;
+
+    //         keyValuePairDataArray.forEach(pair =>
+    //             containerElement.appendChild(createStackedElement(pair))
+    //         );
+    //     }
+    // }

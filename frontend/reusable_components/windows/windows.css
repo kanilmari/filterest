@@ -1,0 +1,58 @@
+/*
+ * windows.css
+ *
+ * Draggable floating window component with header and content grid.
+ * Bridges the draggable-window JS logic and the theme background/border variables.
+ * Exists to render repositionable overlay panels for inspector-style views.
+ */
+.draggable-window {
+  position: absolute;
+  top: 150px;
+  /* Voit valita toisen oletussijainnin */
+  left: 150px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  /* header + sisältö */
+  background-color: var(--bg_color);
+  color: var(--text_color);
+  border: 1px solid var(--border_color);
+  border-radius: var(--border_radius_small);
+  box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  resize: both;
+  /* Jos haluat ikkunan koon muuttuvan */
+  min-width: 300px;
+  width: calc(100% - 80px);
+  min-height: 1400px;
+}
+
+.draggable-window-header {
+  background-color: var(--button_bg_color);
+  color: var(--button_text_color);
+  padding: 8px;
+  cursor: move;
+  /* Indikaatio, että tästä voi raahata */
+  font-weight: bold;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  /* Estää tekstin valitsemisen otsikkopalkista vetäessä */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.draggable-window-content {
+  padding: 8px;
+  overflow: auto;
+  /* Sisältö voi scrollailla */
+}
+
+.draggable-window-close-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-weight: normal;
+  margin-left: auto;
+}

@@ -1,0 +1,53 @@
+{
+    "_description": "Machine-readable documentation of navigation component structure. See nav_engine/navigation.js for the orchestrator.",
+
+    "menu_button": {
+        "_description": "Sidebar panel visibility toggle and responsive show/hide logic",
+        "files": [
+            "navbar_visibility_handler.js — initNavbar(), show/hide sidebar, responsive breakpoint logic",
+            "navbar.css — all sidebar panel and button styling (485 lines)"
+        ]
+    },
+
+    "top_bar": {
+        "_description": "Top-bar browser-history navigation buttons",
+        "files": [
+            "nav_history_buttons.js — back/forward navigation buttons with URL stack tracking"
+        ]
+    },
+
+    "admin_and_user_tools": {
+        "_description": "Registry of custom views (admin tools + user tools) loaded into navigation",
+        "files": [
+            "custom_views.js — custom_views[] array mapping view names to load functions"
+        ]
+    },
+
+    "database_tree": {
+        "_description": "Sidebar navigation menu: collapsible groups, tree view for admin tools",
+        "files": [
+            "nav_builder.js — create_navigation_buttons(), update_active_heading(), admin tree builder"
+        ]
+    },
+
+    "main_tabs": {
+        "_description": "Horizontal SVG tab bar at the top of the sidebar",
+        "files": [
+            "tabs.js                     — initTabs(), openNavTab(), SVG tab rendering, auth filtering",
+            "tabs.css                     — tab bar styling",
+            "tab_icon_library.js          — Material Symbols SVG path registry (getTabIconPath)",
+            "tab_reorder_drag_and_drop.js — drag-and-drop tab reordering with API persistence"
+        ]
+    },
+
+    "nav_engine": {
+        "_description": "Core navigation engine: orchestration, routing, URL params, history",
+        "files": [
+            "navigation.js        — orchestrator: imports all subfolders, exports public API",
+            "navigate.js          — handle_all_navigation(), navigation pipeline integration",
+            "query_params.js      — URL/localStorage param management (most imported file externally)",
+            "history_navigation.js — popstate handler for browser back/forward",
+            "recently_viewed.js   — tracks and highlights recently used nav tabs"
+        ]
+    }
+}

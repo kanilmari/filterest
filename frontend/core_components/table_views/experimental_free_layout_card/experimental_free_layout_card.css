@@ -1,0 +1,202 @@
+/* experimental_free_layout_card.css */
+/*
+ * Visual Documentation:
+ * - Experimental admin-only free-layout card style rendered inside the existing card view shell.
+ * - Relates to data content (Card View) while staying isolated for easy future removal.
+ */
+
+.experimental-free-layout-card__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0 0 1rem 0;
+    padding: 0.9rem 1rem;
+    border: 1px dashed var(--border_color);
+    border-radius: var(--border_radius_small);
+    background: color-mix(in srgb, var(--bg_color_text) 84%, var(--extreme_bg) 16%);
+}
+
+.experimental-free-layout-card__toolbar-copy {
+    flex: 1 1 18rem;
+    color: var(--text_color_secondary);
+    font-size: 0.94rem;
+}
+
+.experimental-free-layout-card__content {
+    padding: 1rem;
+}
+
+.experimental-free-layout-card__canvas {
+    --experimental-free-layout-row-size: 22px;
+    display: grid;
+    grid-template-columns: repeat(24, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--experimental-free-layout-row-count, 16), var(--experimental-free-layout-row-size));
+    gap: 0.7rem;
+    width: 100%;
+    min-height: calc(var(--experimental-free-layout-row-count, 16) * var(--experimental-free-layout-row-size));
+}
+
+.experimental-free-layout-card__block {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 0;
+    min-height: 0;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--border_color) 84%, transparent);
+    border-radius: var(--border_radius_small);
+    background: color-mix(in srgb, var(--bg_color_card_frame) 88%, var(--bg_color_text) 12%);
+    overflow: hidden;
+}
+
+.experimental-free-layout-card__block--media {
+    padding: 0.55rem;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg_color_image) 82%, var(--bg_color_card_frame) 18%);
+}
+
+.experimental-free-layout-card__block--header {
+    justify-content: center;
+}
+
+.experimental-free-layout-card__block--header .experimental-free-layout-card__value {
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.experimental-free-layout-card__block--username .experimental-free-layout-card__value {
+    font-weight: 600;
+}
+
+.experimental-free-layout-card__block--action {
+    justify-content: flex-end;
+    align-items: flex-end;
+    padding: 0.15rem 0 0.1rem;
+    background: transparent;
+    border-color: transparent;
+    overflow: visible;
+}
+
+.experimental-free-layout-card__label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text_color_secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.experimental-free-layout-card__value {
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow: auto;
+    line-height: 1.4;
+}
+
+.experimental-free-layout-card__value--empty {
+    color: var(--text_color_secondary);
+    font-style: italic;
+}
+
+.experimental-free-layout-card__media,
+.experimental-free-layout-card__media > * {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.experimental-free-layout-card__media img,
+.experimental-free-layout-card__media svg,
+.experimental-free-layout-card__media canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(var(--border_radius_small) - 2px);
+}
+
+.experimental-free-layout-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.experimental-free-layout-card__chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.28rem 0.62rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--button_bg_color) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--button_bg_color) 26%, transparent);
+    font-size: 0.86rem;
+}
+
+.experimental-free-layout-card__action-button {
+    min-width: 10rem;
+    max-width: 100%;
+    margin: 0;
+}
+
+.experimental-free-layout-card--designing .experimental-free-layout-card__block {
+    cursor: grab;
+    outline: 1px dashed color-mix(in srgb, var(--button_bg_color) 54%, transparent);
+}
+
+.experimental-free-layout-card--designing .experimental-free-layout-card__block--dragging {
+    cursor: grabbing;
+    z-index: 3;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.experimental-free-layout-card--designing .experimental-free-layout-card__action-button,
+.experimental-free-layout-card--designing .experimental-free-layout-card__value a {
+    pointer-events: none;
+}
+
+.experimental-free-layout-card__resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 1.9rem;
+    height: 1.9rem;
+    box-sizing: border-box;
+    padding: 0.35rem;
+    border-right: 2px solid var(--button_bg_color);
+    border-bottom: 2px solid var(--button_bg_color);
+    opacity: 0.75;
+    cursor: nwse-resize;
+    background: linear-gradient(
+        135deg,
+        transparent 0 50%,
+        color-mix(in srgb, var(--button_bg_color) 10%, transparent) 50% 100%
+    );
+    border-bottom-right-radius: var(--border_radius_small);
+    touch-action: none;
+}
+
+.experimental-free-layout-card__block--empty {
+    background: color-mix(in srgb, var(--bg_color_card_frame) 70%, transparent);
+}
+
+@media (max-width: 1100px) {
+    .experimental-free-layout-card__canvas {
+        --experimental-free-layout-row-size: 18px;
+    }
+}
+
+@media (max-width: 760px) {
+    .experimental-free-layout-card__toolbar {
+        align-items: stretch;
+    }
+
+    .experimental-free-layout-card__toolbar .fw-btn {
+        width: 100%;
+    }
+
+    .experimental-free-layout-card__canvas {
+        --experimental-free-layout-row-size: 16px;
+        gap: 0.45rem;
+    }
+}

@@ -1,0 +1,227 @@
+# ==============================================================================
+# docker-compose.instance.yml: Parameterized template for multi-instance deployment
+# Usage: INSTANCE=serlog.com docker compose -f docker/docker-compose.instance.yml up -d
+# Note: Requires instances/<INSTANCE>/.env file with credentials
+# ==============================================================================
+#
+# Environment variables (set before running or in instances/<INSTANCE>/.env):
+#   INSTANCE     - Unique instance name (e.g., "serlog.com", "filterest.fi")
+#   APP_PORT      - Host port for the app (default: 8090 for multi-instance use)
+#   DB_PORT       - Reserved host port for PostgreSQL when DB publication is enabled
+#   APP_BIND_HOST - Host interface for the app port (default: 127.0.0.1)
+#   DB_BIND_HOST  - Host interface for the DB port (default: 127.0.0.1)
+#   ENVIRONMENT_TYPE - Exact literal "dev" or "prod". Use "prod" for
+#                      production sidecars even when they stay on loopback
+#                      behind a host reverse proxy during migration.
+#   DOMAIN       - Domain for Traefik routing (optional, e.g., "filterest.fi")
+#   SESSION_COOKIE_NAME - Optional shared cookie name for replica pools
+#
+# To enable email webhooks via ngrok:
+#   1. Set NGROK_AUTHTOKEN in your instance .env file
+#   2. Run with --profile webhooks:
+#      INSTANCE=example.com docker compose -f docker/docker-compose.instance.yml --profile webhooks up -d
+#   3. Check ngrok URL at http://localhost:4040 (or NGROK_PORT)
+#   4. Configure the ngrok URL in Postmark webhook settings
+#
+# Example:
+#   INSTANCE=easelect.com APP_PORT=8093 DB_PORT=5493 docker compose -f docker/docker-compose.instance.yml up -d
+#   INSTANCE=easelect.com APP_PORT=8093 DB_PORT=0 docker compose \
+#     -f docker/docker-compose.instance.yml \
+#     -f docker/docker-compose.instance.no-db-port.yml \
+#     up -d
+#
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Easelect Application (Go backend + built frontend)
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mcp
+      args:
+        BUILD_ENV: ${BUILD_ENV:-prod}
+        EASELECT_APP_VERSION: ${EASELECT_APP_VERSION:-unknown}
+        EASELECT_DB_VERSION: ${EASELECT_DB_VERSION:-unknown}
+        EASELECT_GIT_COMMIT: ${EASELECT_GIT_COMMIT:-unknown}
+        EASELECT_RUNTIME_UID: ${EASELECT_RUNTIME_UID:-1000}
+        EASELECT_RUNTIME_GID: ${EASELECT_RUNTIME_GID:-1000}
+    container_name: easelect-${INSTANCE:-default}-app
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND_HOST:-127.0.0.1}:${APP_PORT:-8090}:8082"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DB_HOST=easelect-${INSTANCE:-default}-db
+      - DB_PORT=5432
+      - DB_ADMIN_USER=${DB_ADMIN_USER}
+      - DB_ADMIN_PASSWORD=${DB_ADMIN_PASSWORD}
+      - DB_NAME=${DB_NAME:-filterest}
+      - DB_SSLMODE=disable
+      - DB_READONLY_USER=${DB_READONLY_USER:-readeronly}
+      - DB_READONLY_PASSWORD=${DB_READONLY_PASSWORD}
+      - DB_CONFIDENTIAL_USER=${DB_CONFIDENTIAL_USER:-limited_user}
+      - DB_CONFIDENTIAL_PASSWORD=${DB_CONFIDENTIAL_PASSWORD}
+      - DB_BASIC_USER=${DB_BASIC_USER:-basic_user}
+      - DB_BASIC_PASSWORD=${DB_BASIC_PASSWORD}
+      - DB_GUEST_USER=${DB_GUEST_USER:-guest_user}
+      - DB_GUEST_PASSWORD=${DB_GUEST_PASSWORD}
+      - SESSION_KEY=${SESSION_KEY}
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-}
+      - TUKISUU_PURCHASE_SECRET=${TUKISUU_PURCHASE_SECRET:-}
+      - TUKISUU_BASE_URL=${TUKISUU_BASE_URL:-}
+      - MCP_SERVICE_TOKEN=${MCP_SERVICE_TOKEN:-}
+      - REGFETCH_WORKER_SERVICE_TOKEN=${REGFETCH_WORKER_SERVICE_TOKEN:-}
+      - SANDBOX_MODE=${SANDBOX_MODE:-false}
+      - REVOLUT_MERCHANT_API_SECRET_KEY=${REVOLUT_MERCHANT_API_SECRET_KEY:-}
+      - REVOLUT_MERCHANT_API_PUBLIC_KEY=${REVOLUT_MERCHANT_API_PUBLIC_KEY:-}
+      - REVOLUT_WEBHOOK_SECRET=${REVOLUT_WEBHOOK_SECRET:-}
+      - PAYMENT_CALLBACK_SECRET=${PAYMENT_CALLBACK_SECRET:-}
+      - SITE_NAME=${SITE_NAME:-Filterest}
+      - ENVIRONMENT_TYPE=${ENVIRONMENT_TYPE:-prod}
+      - INSTANCE_NAME=${INSTANCE:-default}
+      # SQL migrations: enable to auto-create schema on fresh DB
+      - ENABLE_SQL_MIGRATIONS=${ENABLE_SQL_MIGRATIONS:-false}
+      # External port for logging (Docker port mapping info)
+      - APP_PORT=${APP_PORT:-8090}
+      # OpenAI API key for AI features
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Optional fixed PIN for reserved development test users only.
+      - LOGIN_OTP_CODE=${LOGIN_OTP_CODE:-}
+      - LOGIN_PAGE_TOUR_SCREENSHOTS_ENABLED=${LOGIN_PAGE_TOUR_SCREENSHOTS_ENABLED:-}
+      # Management-Easelect cloud view / instance-control-agent integration
+      - CLOUD_MANAGEMENT_UI_ENABLED=${CLOUD_MANAGEMENT_UI_ENABLED:-0}
+      - CLOUD_ACTION_VISIBILITY_MODE=${CLOUD_ACTION_VISIBILITY_MODE:-disabled}
+      - CLOUD_MANAGEMENT_ENABLE_AGENTS=${CLOUD_MANAGEMENT_ENABLE_AGENTS:-0}
+      - CLOUD_MANAGEMENT_AGENTS=${CLOUD_MANAGEMENT_AGENTS:-${INSTANCE_PANEL_AGENTS:-}}
+      - CLOUD_MANAGEMENT_AGENT_URL=${CLOUD_MANAGEMENT_AGENT_URL:-${INSTANCE_PANEL_AGENT_URL:-}}
+      - CLOUD_MANAGEMENT_AGENT_ID=${CLOUD_MANAGEMENT_AGENT_ID:-${INSTANCE_PANEL_AGENT_ID:-}}
+      - CLOUD_MANAGEMENT_AGENT_NAME=${CLOUD_MANAGEMENT_AGENT_NAME:-${INSTANCE_PANEL_AGENT_NAME:-}}
+      - CLOUD_MANAGEMENT_AGENT_TOKEN_ENV=${CLOUD_MANAGEMENT_AGENT_TOKEN_ENV:-${INSTANCE_PANEL_AGENT_TOKEN_ENV:-INSTANCE_PANEL_AGENT_TOKEN}}
+      - CLOUD_MANAGEMENT_AGENT_TOKEN=${CLOUD_MANAGEMENT_AGENT_TOKEN:-${INSTANCE_PANEL_AGENT_TOKEN:-}}
+      # Postmark email configuration (canonical names with legacy env fallback)
+      - POSTMARK_API_KEY=${POSTMARK_API_KEY:-${POSTMARK_SERVER_TOKEN:-}}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-${POSTMARK_FROM_ADDRESS:-}}
+      - POSTMARK_INBOUND_ADDRESS=${POSTMARK_INBOUND_ADDRESS}
+      # TLS is handled by Traefik — no cert mounts needed
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../instances/${INSTANCE:-default}/storage:/app/storage
+      - ../instances/${INSTANCE:-default}/storage_deleted:/app/storage_deleted
+      - ../instances/${INSTANCE:-default}/backups:/app/db_backups
+    networks:
+      - instance-network
+      - traefik-network  # Connect to Traefik for reverse proxy routing
+    labels:
+      # Traefik labels for automatic routing (when Traefik is configured)
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.easelect-${INSTANCE:-default}.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.easelect-${INSTANCE:-default}.entrypoints=websecure"
+      - "traefik.http.routers.easelect-${INSTANCE:-default}.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.easelect-${INSTANCE:-default}.middlewares=security-headers@file,compress@file"
+      - "traefik.http.services.easelect-${INSTANCE:-default}.loadbalancer.server.port=8082"
+      # Instance identification
+      - "easelect.instance=${INSTANCE:-default}"
+      - "easelect.domain=${DOMAIN:-localhost}"
+      - "easelect.version_contract=1"
+      - "easelect.app_version=${EASELECT_APP_VERSION:-unknown}"
+      - "easelect.db_version=${EASELECT_DB_VERSION:-unknown}"
+      - "easelect.git_commit=${EASELECT_GIT_COMMIT:-unknown}"
+      - "org.opencontainers.image.version=${EASELECT_APP_VERSION:-unknown}"
+      - "org.opencontainers.image.revision=${EASELECT_GIT_COMMIT:-unknown}"
+
+  # ----------------------------------------------------------------------------
+  # Ngrok Tunnel for Email Webhooks (optional - requires NGROK_AUTHTOKEN)
+  # Exposes the webhook port (8083) to the internet for Postmark inbound emails
+  # Note: Only starts if NGROK_AUTHTOKEN is set in .env file
+  # ----------------------------------------------------------------------------
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: easelect-${INSTANCE:-default}-ngrok
+    restart: "no"  # Don't restart on failure (allows graceful skip if no authtoken)
+    profiles:
+      - webhooks  # Explicit: docker compose --profile webhooks up
+      - ${NGROK_PROFILE:-_disabled}  # Auto-enable via NGROK_PROFILE=webhooks in .env
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "easelect-${INSTANCE:-default}-app:8083"
+      - "--log=stdout"
+    ports:
+      - "${NGROK_PORT:-4040}:4040"  # Ngrok web interface for checking tunnel URL
+    networks:
+      - instance-network
+    depends_on:
+      - app
+    labels:
+      - "easelect.instance=${INSTANCE:-default}"
+      - "easelect.service=ngrok"
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database with PostGIS + pgvector extensions
+  # ----------------------------------------------------------------------------
+  db:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.db
+    image: easelect-postgres:pg16-postgis-pgvector
+    container_name: easelect-${INSTANCE:-default}-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_ADMIN_USER}
+      - POSTGRES_PASSWORD=${DB_ADMIN_PASSWORD}
+      - POSTGRES_DB=${DB_NAME:-filterest}
+      # Pass role passwords for init script
+      - DB_READONLY_PASSWORD=${DB_READONLY_PASSWORD:-readonly}
+      - DB_CONFIDENTIAL_PASSWORD=${DB_CONFIDENTIAL_PASSWORD:-confidential}
+      - DB_BASIC_PASSWORD=${DB_BASIC_PASSWORD:-basic}
+      - DB_GUEST_PASSWORD=${DB_GUEST_PASSWORD:-guest}
+    volumes:
+      - instance-postgres:/var/lib/postgresql/data
+      - ../server_tools/db_init:/docker-entrypoint-initdb.d
+    # Default direct-port mode publishes the DB on loopback for operator/debug use.
+    # Layer docker/docker-compose.instance.no-db-port.yml after this file to keep
+    # PostgreSQL Docker-internal only while still leaving the app on APP_PORT.
+    ports:
+      - "${DB_BIND_HOST:-127.0.0.1}:${DB_PORT:-5490}:5432"
+    networks:
+      - instance-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_ADMIN_USER} -d ${DB_NAME:-filterest}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "easelect.instance=${INSTANCE:-default}"
+      - "easelect.db_version=${EASELECT_DB_VERSION:-unknown}"
+
+# ==============================================================================
+# Networks
+# - instance-network: Isolated network for app <-> db communication
+# - traefik-network: External network for Traefik routing (production only)
+# ==============================================================================
+networks:
+  instance-network:
+    name: easelect-${INSTANCE:-default}-network
+    driver: bridge
+  
+  # External Traefik network (created by docker/docker-compose.traefik.yml)
+  # This allows Traefik to route traffic to instances
+  traefik-network:
+    name: traefik-network
+    external: true
+
+# ==============================================================================
+# Volumes - Named volumes with instance prefix for easy identification
+# ==============================================================================
+volumes:
+  instance-postgres:
+    name: easelect-${INSTANCE:-default}-postgres

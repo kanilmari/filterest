@@ -1,0 +1,110 @@
+# ==============================================================================
+# .dockerignore: Exclude files from Docker build context
+# Reduces build time and image size significantly
+# ==============================================================================
+
+# Git
+.git
+.github
+.gitignore
+.gitattributes
+filterest.paths.local
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Node modules (will be installed fresh in container)
+node_modules
+
+# Test artifacts
+testing/e2e/.auth/
+testing/test-results/
+testing/test-results-visual/
+testing/my-test-results/
+testing/playwright-report/
+/playwright-report/
+/test-results/
+/coverage/
+/coverage.out
+
+# Build outputs
+# NOTE: frontend/dist is NOT excluded because docker/Dockerfile.mcp
+# copies pre-built assets directly (no Node.js build stage).
+# If using the main Dockerfile (which has a Vite build stage),
+# this exclusion would be appropriate but is harmless to include.
+# frontend/dist
+
+# Development files
+dev_env.txt
+dev_env_test_creds.txt
+easelect
+easelect_dev
+easelect_prod
+easelect_server
+*.log
+*.tmp
+tmp/
+temp/
+
+# Documentation that's not needed at runtime (except README)
+CHANGELOG.md
+LICENSE.md
+AGENTS.md
+
+# Patches and temporary files
+*.patch
+apply_repo_update.patch
+cookies.txt
+
+# Local storage and backups (mounted as volumes instead)
+storage/
+storage_deleted/
+data/db_backups/
+data/instance_trash/
+data/project_trash/
+data/others/
+data/shared_dev_storage/
+db_backups/
+
+# Agent tasks (development only)
+agent_tasks/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+
+# Environment files
+.env
+**/.env
+**/.env.*
+**/*.env
+**/.dev.vars
+**/.dev.vars.*
+**/secrets.json
+**/*service-account*.json
+**/*service_account*.json
+**/*gserviceaccount*.json
+**/*credentials*.json
+**/*credential*.json
+**/google-application-credentials*.json
+**/*private-key*.json
+**/*private_key*.json
+apps/**/my-test-project-*.json
+# Private compiled apps are supplied through the filtered projects_home build
+# context. Do not copy local bridge symlinks into the primary build context.
+apps/regfetch
+apps/tukisuu
+*.crt
+*.pem
+*.key

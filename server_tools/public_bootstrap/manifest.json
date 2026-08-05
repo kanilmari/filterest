@@ -1,0 +1,150 @@
+{
+  "artifact": "filterest-public-bootstrap",
+  "format_version": 2,
+  "app_version": "8.29.0",
+  "db_version": "8.0.59",
+  "schema_source": "testing/essential/generated/schema.sql",
+  "seed_source": "testing/essential/generated/seed.sql",
+  "purpose": "local independent Filterest bootstrap without private source runtime dependency",
+  "allowed_schema_tables": [
+    "public.ai_chat_conversations",
+    "public.dokumentaatio",
+    "public.dokumentaatio_assets",
+    "public.dokumentaatio_tiketit_relation",
+    "public.palvelukatalogi",
+    "public.palvelukatalogi_assets",
+    "public.palvelukatalogi_dokumentaatio_relation",
+    "public.palvelukatalogi_riskienhallinta_relation",
+    "public.palvelukatalogi_tiketit_relation",
+    "public.riskienhallinta",
+    "public.riskienhallinta_assets",
+    "public.riskienhallinta_dokumentaatio_relation",
+    "public.riskienhallinta_tiketit_relation",
+    "public.system_about",
+    "public.system_audit_log",
+    "public.system_child_tab_config",
+    "public.system_column_control",
+    "public.system_column_details",
+    "public.system_column_view_presets",
+    "public.system_comments",
+    "public.system_config",
+    "public.system_db_tables",
+    "public.system_db_version",
+    "public.system_foreign_key_relations_1_m",
+    "public.system_foreign_key_relations_m_m",
+    "public.system_functions",
+    "public.system_group_table_func_rights",
+    "public.system_lang_key_sources",
+    "public.system_lang_keys",
+    "public.system_lang_keys_archive",
+    "public.system_table_folders",
+    "public.system_table_row_view_counts",
+    "public.system_table_views",
+    "public.system_transaction_log",
+    "public.system_user_column_settings",
+    "public.system_user_group_memberships",
+    "public.system_user_groups",
+    "public.system_users",
+    "public.tiketit",
+    "public.tiketit_assets",
+    "restricted.otp_send_events",
+    "restricted.users_restricted",
+    "restricted.verification_codes"
+  ],
+  "allowed_seed_tables": [
+    "public.dokumentaatio",
+    "public.dokumentaatio_tiketit_relation",
+    "public.palvelukatalogi",
+    "public.palvelukatalogi_assets",
+    "public.palvelukatalogi_dokumentaatio_relation",
+    "public.palvelukatalogi_riskienhallinta_relation",
+    "public.palvelukatalogi_tiketit_relation",
+    "public.riskienhallinta",
+    "public.riskienhallinta_assets",
+    "public.riskienhallinta_dokumentaatio_relation",
+    "public.riskienhallinta_tiketit_relation",
+    "public.system_about",
+    "public.system_column_details",
+    "public.system_config",
+    "public.system_db_tables",
+    "public.system_db_version",
+    "public.system_foreign_key_relations_1_m",
+    "public.system_functions",
+    "public.system_group_table_func_rights",
+    "public.system_lang_keys",
+    "public.system_table_folders",
+    "public.system_user_group_memberships",
+    "public.system_user_groups",
+    "public.system_users",
+    "public.tiketit",
+    "public.tiketit_assets"
+  ],
+  "seed_row_counts": {
+    "public.dokumentaatio": 3,
+    "public.dokumentaatio_tiketit_relation": 1,
+    "public.palvelukatalogi": 1,
+    "public.palvelukatalogi_assets": 1,
+    "public.palvelukatalogi_dokumentaatio_relation": 1,
+    "public.palvelukatalogi_riskienhallinta_relation": 1,
+    "public.palvelukatalogi_tiketit_relation": 1,
+    "public.riskienhallinta": 1,
+    "public.riskienhallinta_assets": 1,
+    "public.riskienhallinta_dokumentaatio_relation": 1,
+    "public.riskienhallinta_tiketit_relation": 1,
+    "public.system_about": 1,
+    "public.system_column_details": 45,
+    "public.system_config": 9,
+    "public.system_db_tables": 41,
+    "public.system_db_version": 1,
+    "public.system_foreign_key_relations_1_m": 4,
+    "public.system_functions": 15,
+    "public.system_group_table_func_rights": 20,
+    "public.system_lang_keys": 489,
+    "public.system_table_folders": 14,
+    "public.system_user_group_memberships": 2,
+    "public.system_user_groups": 3,
+    "public.system_users": 2,
+    "public.tiketit": 1,
+    "public.tiketit_assets": 1
+  },
+  "generated_files": {
+    "server_tools/public_bootstrap/schema.sql": {
+      "sha256": "cea04eb7ce202978d1ac2972fd6a47e23bcf3d3f7975da55bb6c99c4e3292d98"
+    },
+    "server_tools/public_bootstrap/seed_data.sql": {
+      "sha256": "7c9b58e249e9b407681cc67fb97c9e8e73ebcf9b66edcd518e2653ad029ca238"
+    }
+  },
+  "source_files": {
+    "testing/essential/generated/schema.sql": {
+      "sha256": "cf968fc3d6cb0e6a39185552424688b4782ee3daf17691309d60c8d71ca0da15"
+    },
+    "testing/essential/generated/seed.sql": {
+      "sha256": "f91192e8fb91e56a7d069dad0dc4c333dc213cfb9607af5adde9dffe209dc51a"
+    },
+    "server_tools/public_slice_export/public_bootstrap/runtime.schema.sql": {
+      "sha256": "5966af3a41c8d855cb2020ca4f0338ece1171dfc0b73967ceae2a2fc7e923d9b"
+    },
+    "server_tools/public_slice_export/public_bootstrap/runtime.seed.sql": {
+      "sha256": "76117887c4c8b95026fb604cdc7b88ab68dc492d32557c0dca1006eb0f27d904"
+    },
+    "server_tools/public_slice_export/public_bootstrap/app_tables.schema.sql": {
+      "sha256": "e7d93194c36e209253016c50c3a78b84a6a6ea17e438b4600981133514d4b47f"
+    },
+    "server_tools/public_slice_export/public_bootstrap/app_tables.seed.sql": {
+      "sha256": "aaf570d04873e24d9e822d57243a06dcd871df2499c1a36f029fa51c3e33b88a"
+    },
+    "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql": {
+      "sha256": "cd988a9903a7f3b2b3e5e6dc4af33d21afacfdfcb604b8a184b9a05216e2b3a9"
+    },
+    "server_tools/public_slice_export/public_bootstrap/fixtures/docs/first-dataset.png": {
+      "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"
+    },
+    "server_tools/public_slice_export/public_bootstrap/fixtures/docs/ready-to-release.png": {
+      "sha256": "6b09ffdc1c42ba04b4467ce20a2df1476f1c17895e5922c56458f4a6ac7d252f"
+    },
+    "server_tools/public_slice_export/public_bootstrap/fixtures/docs/start-here.png": {
+      "sha256": "eb426eed32b17fee2bdf54ba1d240f4048e58e8871106f5ba7ceba843474d02d"
+    }
+  }
+}
