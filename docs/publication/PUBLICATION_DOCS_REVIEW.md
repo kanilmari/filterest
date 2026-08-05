@@ -1,7 +1,7 @@
 # Filterest Public Docs Wording Audit
 
 - Target: `launch-facing and governing public docs`
-- Files scanned: `8`
+- Files scanned: `9`
 - Missing expected files: `0`
 - Findings: `0`
 
@@ -14,6 +14,7 @@ PASS
 - `README.md`
 - `CONTRIBUTING.md`
 - `docs/publication/PUBLISHING.md`
+- `docs/publication/PUBLICATION_EVIDENCE.md`
 - `NOTICE`
 - `docs/publication/PUBLICATION_CHECKLIST.md`
 - `SECURITY.md`
@@ -26,4 +27,4 @@ PASS
 
 ## Findings
 
-- No source product-name, private-upstream, private-monorepo, internal-operations, maintainer-upstream, generated-review-artifact, overwrite-warning, or private-maintainer public wording detected.
+- No source product-name, pre-release maturity, private-upstream, private-monorepo, internal-operations, maintainer-upstream, generated-review-artifact, overwrite-warning, or private-maintainer public wording detected.

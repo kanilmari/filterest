@@ -11,7 +11,7 @@
             "direction": "DESC"
         },
         "dokumentaatio": {
-            "column": "id",
+            "column": "created",
             "direction": "ASC"
         },
         "tiketit": {

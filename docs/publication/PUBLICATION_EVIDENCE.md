@@ -3,10 +3,10 @@
 This file is generated from the Filterest public-slice candidate flow.
 It is evidence for review, not approval to publish.
 
-- Generated at: `2026-08-05T12:03:39Z`
-- Release source commit used by the generator: `1f79783b8a631fdb6bac2c87aa8db7e25710e386`
+- Generated at: `2026-08-05T12:35:06Z`
+- Release source commit used by the generator: `e2561d371133f056359da56441f7812c98a6f5ad`
 - Generated Filterest commit: this repository commit; run `git log -1 --oneline`
-- Filterest app version: `8.29.3`
+- Filterest app version: `8.29.4`
 - Database version: `8.0.59`
 
 ## Automated Evidence Included In This Commit
@@ -30,7 +30,7 @@ It is evidence for review, not approval to publish.
 
 The following gates are intentionally not resolved by this generated evidence:
 
-- production-readiness approval beyond this public beta release;
+- production-readiness approval beyond the current Filterest release;
 - human/project approval of third-party notices and public bootstrap strategy;
 - owner approval of the browser/runtime proof target and final local proof chain;
 - semantic public docs/screenshot wording review beyond the deterministic media audit;

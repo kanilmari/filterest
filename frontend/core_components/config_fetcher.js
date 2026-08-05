@@ -25,7 +25,12 @@ function readBooleanConfig(config, keys, fallback = false) {
 
 export function loadConfig() {
     if (!configPromise) {
-        configPromise = endpoint_router('fetchConfig')
+        // A release may change config.json while keeping the same site URL. A
+        // page-load-specific query prevents the browser from reusing an older
+        // release's defaults, while this module still fetches only once per page.
+        configPromise = endpoint_router('fetchConfig', {
+            url_params: `?release_config=${Date.now()}`,
+        })
             .then(json => {
                 if (typeof json === 'string') {
                     try {
