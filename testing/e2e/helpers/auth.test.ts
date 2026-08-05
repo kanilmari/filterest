@@ -51,16 +51,21 @@ describe('loadOtpCode', () => {
     }
   });
 
-  it('reads the external Easelect development environment without root compatibility files', () => {
+  it('reads a configured external key home without root compatibility files', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'easelect-e2e-key-root-'));
     const keyRoot = path.join(tempDir, 'filterest_keys');
-    const developmentRoot = path.join(keyRoot, 'easelect_development');
-    const devEnvFile = path.join(developmentRoot, 'development_environment.env');
-    fs.mkdirSync(developmentRoot, { recursive: true });
-    fs.writeFileSync(devEnvFile, 'LOGIN_OTP_CODE=345678\n', 'utf8');
+    for (const profileName of ['easelect_development', 'filterest_runtime']) {
+      const developmentRoot = path.join(keyRoot, profileName);
+      fs.mkdirSync(developmentRoot, { recursive: true });
+      fs.writeFileSync(
+        path.join(developmentRoot, 'development_environment.env'),
+        'LOGIN_OTP_CODE=345678\n',
+        'utf8',
+      );
+    }
     try {
       expect(loadOtpCode({
-        environment: { EASELECT_KEY_ROOT: keyRoot },
+        environment: { FILTEREST_KEYS_HOME: keyRoot },
       })).toBe('345678');
     } finally {
       fs.rmSync(tempDir, { force: true, recursive: true });
