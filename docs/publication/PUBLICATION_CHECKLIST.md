@@ -8,17 +8,16 @@ evidence must be repeated before remote publication.
 ## Current Verdict
 
 `filterest` is approved as the active stable generation and repository target.
-Owner-policy rows are decided, but the stable-only evidence rows below remain
-`blocked-evidence`. The local stable release-readiness gate therefore remains
-blocked until those rows are replaced by evidence for the exact stable commit.
+Owner-policy rows are decided, and the stable-only evidence rows below now
+record exact-candidate proof. Standing owner authorization permits publication
+after the deterministic final preflight and GitHub Actions policy audit pass.
 Generated deterministic evidence is summarized in
 [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md), and current runtime and
 Computer Use artifacts are attached to non-public maintainer ticket #834.
 
-Earlier beta runtime and Computer Use artifacts are historical. They must not
-be described as fresh stable evidence. Create fresh structured runtime,
-browser, and Computer Use artifacts for the exact stable commit before changing
-the blocked rows below to `done`.
+Earlier beta runtime and Computer Use artifacts remain historical and are not
+used as fresh stable evidence. The completed rows below refer only to the
+current stable checkout, its own runtime, and its clean-clone verification.
 
 This checklist governs the active stable `filterest` channel only. Alpha is
 retired from the active workflow, and `filterest-beta` is now a read-only
@@ -56,13 +55,13 @@ and generated artifact commit.
 | P0 | Public bootstrap content review | done | Release agent + Human/project owner | [`server_tools/public_bootstrap/REVIEW.md`](../../server_tools/public_bootstrap/REVIEW.md) passes for 43 schema tables, 26 seed tables, and 661 counted fixture rows; the reviewed public scope includes the complete First Run environment, verification, identity, credential, and four-dataset image-upload flow. |
 | P0 | Private source boundary | done | Release agent | The clean candidate and tracked-tree audit pass; [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md) records the exact current release-source commit. |
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
-| P0 | Fresh-clone public build/test | blocked-evidence | Release agent | Run the complete fresh-clone build and test against the exact stable commit; predecessor proof does not satisfy this row. |
-| P0 | Browser review uses Filterest runtime | blocked-evidence | Release agent + Computer Use | Run the structured verifier and browser proof against the stable checkout's own runtime and database on port 8100. |
-| P0 | Current browser release-readiness acceptance | blocked-evidence | Human release owner | Review and accept the exact stable runtime after fresh automated evidence exists. |
+| P0 | Fresh-clone public build/test | done | Release agent | Exact stable proof: a clean clone of this reviewed stable tree passed dependency installation, 2,097 JavaScript tests, all Go tests, and the production frontend build on 2026-08-05. |
+| P0 | Browser review uses Filterest runtime | done | Release agent + Computer Use | Exact stable proof: the structured verifier passed against the stable checkout's own database and runtime on port 8100; a separate browser proof traversed all six Add Row pages and verified Next/Add visibility. |
+| P0 | Current browser release-readiness acceptance | done | Human release owner | Exact stable proof: fresh stable runtime and browser evidence passed under the release owner's standing instruction to publish the new `filterest` repository after successful verification. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 8-file public docs wording audit passes with no draft/private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
-| P1 | Public CI and local-preview posture | blocked-evidence | Release agent | Prove the stable checkout's local preview and repeat the account-wide GitHub Actions disable audit before publication. |
+| P1 | Public CI and local-preview posture | done | Release agent | Exact stable proof: the target-owned local preview passed on port 8100 and the account-wide audit confirmed GitHub Actions disabled everywhere except the separately approved `kanilmari/try_it_html` repository. |
 | P2 | Local release evidence review | manual-final | Human release owner | Review this checklist, ticket evidence, generated commit, and approved remote state before authorizing a push. |
 | P2 | GitHub repository target | done | Human release owner | Owner selected the fresh stable `kanilmari/filterest` repository on `main`. `filterest-beta` is its read-only predecessor. Only the approved `origin` and `main` upstream are allowed. |
 | P2 | Remote push | gated-authorized | Release agent under standing owner authorization | Push a reviewed clean commit only to stable `filterest` after every required local gate and the manual-final evidence review pass. Do not request a second publication confirmation. The approved publish command also pushes the matching `v<VERSION_APP>` tag, which builds checksum-verified Linux admin binaries. |
@@ -74,6 +73,7 @@ Add one dated line per publication-candidate attempt:
 | Date | Release source commit | Generated Filterest commit | Evidence summary |
 | --- | --- | --- | --- |
 | 2026-07-25 | Historical beta evidence | Historical beta commit | Predecessor evidence only; it cannot satisfy the stable blocked-evidence rows. No stable remote push was performed. |
+| 2026-08-05 | `1f79783b` | Current reviewed stable commit | Exact clean-clone build/test, target-owned runtime, structured browser, Add Row paging, starter-data, and GitHub Actions policy evidence passed. |
 
 ## Local Generation Command
 
