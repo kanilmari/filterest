@@ -98,6 +98,8 @@ vi.mock('./relation_detail_helpers.js', () => ({
 import { buildBigCardContent } from './big_card_content_builder.js';
 import { buildRowArticleContent } from './row_article_content_builder.js';
 import { CARD_IMAGE_RENDER_SLOTS } from './card_image_render_options.js';
+import { resolveCardFieldDisplayValue } from './card_field_formatter_helpers.js';
+import { splitKeywords } from './row_article_content_builder_helpers.js';
 
 describe('big_card_content_builder', () => {
     beforeEach(() => {
@@ -130,6 +132,36 @@ describe('big_card_content_builder', () => {
 
     test('keeps the legacy big-card export mapped to the row article builder', () => {
         expect(buildBigCardContent).toBe(buildRowArticleContent);
+    });
+
+    test('marks multilingual keyword tags read-only for the article editor', async () => {
+        vi.mocked(resolveCardFieldDisplayValue)
+            .mockImplementationOnce(() => ({
+                rawValue: JSON.stringify({ fi: 'risteilyt, matkat', en: 'cruises, travel' }),
+                displayValue: 'risteilyt, matkat',
+                isMultilingual: true,
+            }))
+            .mockImplementationOnce(() => ({
+                rawValue: JSON.stringify({ fi: 'risteilyt, matkat', en: 'cruises, travel' }),
+                displayValue: 'risteilyt, matkat',
+                isMultilingual: true,
+            }));
+        vi.mocked(splitKeywords).mockReturnValueOnce(['risteilyt', 'matkat']);
+
+        const built = await buildRowArticleContent(
+            { keywords: JSON.stringify({ fi: 'risteilyt, matkat', en: 'cruises, travel' }) },
+            'travel_deals',
+            { keywords: { card_element: 'keywords', is_multilingual: true } },
+            ['keywords'],
+            'seed-1',
+            'R',
+            false
+        );
+
+        const keywordFields = built.rowArticleContentElement.querySelectorAll(
+            '[data-article-edit-readonly="true"]'
+        );
+        expect(keywordFields).toHaveLength(2);
     });
 
     test('returns row_article aliases alongside the legacy content-builder keys', async () => {

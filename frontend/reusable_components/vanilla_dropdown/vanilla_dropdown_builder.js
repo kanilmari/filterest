@@ -79,6 +79,7 @@ function resolveDropdownOptionLabel(option, translate) {
  * @param {function} [config.onChange] - Kutsutaan, kun valinta muuttuu (parametrina valittu arvo)
  * @param {function} [config.translate] - Optional translation function (key) => string
  * @param {function} [config.renderOptionTrailingAction] - Optional opt-in action renderer for each option
+ * @param {number|null} [config.menuMaxWidth=null] - Optional viewport-bounded menu width in pixels
  */
 export function createVanillaDropdown({
 	containerElement,
@@ -90,6 +91,7 @@ export function createVanillaDropdown({
 	onChange,
 	translate = () => undefined,
 	renderOptionTrailingAction = null,
+    menuMaxWidth = null,
   }) {
 	if (!containerElement) {
 	  throw new Error("containerElement puuttuu tai on virheellinen.");
@@ -220,8 +222,14 @@ export function createVanillaDropdown({
 	  const viewportMargin = 8;
 	  const dropdownGap = 4;
 	  const preferredDropdownHeight = 400;
-	  const maxWidth = Math.max(160, viewportWidth - (viewportMargin * 2));
-	  const width = Math.min(anchorRect.width || maxWidth, maxWidth);
+	  const viewportBoundedWidth = Math.max(0, viewportWidth - (viewportMargin * 2));
+	  const hasConfiguredMenuWidth = menuMaxWidth !== null
+		&& Number.isFinite(Number(menuMaxWidth))
+		&& Number(menuMaxWidth) > 0;
+	  const requestedMenuWidth = hasConfiguredMenuWidth
+		? Number(menuMaxWidth)
+		: anchorRect.width;
+	  const width = Math.min(requestedMenuWidth || viewportBoundedWidth, viewportBoundedWidth);
 	  const left = Math.min(
 		Math.max(anchorRect.left, viewportMargin),
 		Math.max(viewportMargin, viewportWidth - width - viewportMargin)

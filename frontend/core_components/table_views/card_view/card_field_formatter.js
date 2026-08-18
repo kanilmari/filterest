@@ -368,6 +368,16 @@ export function enableEditing(container, table_name) {
         const isEditable = columnInfoMap[columnName].editable_in_ui;
         const dataType = columnInfoMap[columnName].data_type;
 
+        // Some article-view renderers intentionally expose a readable field without
+        // offering a lossless editor for its stored structure. In particular,
+        // multilingual keywords are split into individual tags for display, while
+        // the database value is one language-keyed object. Editing a tag as an
+        // ordinary text field would overwrite that object and lose translations.
+        if (fieldElem.dataset.articleEditReadonly === 'true') {
+            if (IS_DEV_MODE) console.log(`[${table_name}] sarake: ${columnName}, article editor keeps the structured value read-only.`);
+            return;
+        }
+
         // Jos sisällä on <details>, ohitetaan
         if (fieldElem.querySelector('details')) {
             if (IS_DEV_MODE) console.log(`[${table_name}] sarake: ${columnName}, sis. <details>, jätetään ennalleen.`);

@@ -132,12 +132,14 @@ describe("admin version info indicator", () => {
         indicator.click();
         expect(indicator.getAttribute("aria-expanded")).toBe("true");
         expect(panel.hidden).toBe(false);
+        expect(indicator.hasAttribute("title")).toBe(false);
         panel.click();
         expect(panel.hidden).toBe(false);
 
         indicator.click();
         expect(indicator.getAttribute("aria-expanded")).toBe("false");
         expect(panel.hidden).toBe(true);
+        expect(indicator.title).toContain("Filterest v. 8.27.99");
 
         const outsideButton = document.createElement("button");
         outsideButton.addEventListener("click", (event) => event.stopPropagation());
@@ -202,8 +204,9 @@ describe("admin version info indicator", () => {
         expect(panel.querySelector('[data-version-info-key="required-database"]')?.textContent)
             .toBe("Required database");
         expect(panel.querySelector('[data-version-info-key="runtime"]')?.textContent).toBe("Runtime");
-        expect(indicator.title).toContain("Database v. 8.0.55 (compatible)");
-        expect(indicator.title).toContain("Runtime Native");
+        expect(indicator.hasAttribute("title")).toBe(false);
+        expect(indicator.dataset.closedTooltip).toContain("Database v. 8.0.55 (compatible)");
+        expect(indicator.dataset.closedTooltip).toContain("Runtime Native");
 
         document.documentElement.setAttribute("lang", "zh-CN");
         await vi.waitFor(() => {
@@ -211,6 +214,9 @@ describe("admin version info indicator", () => {
         });
         expect(panel.querySelector('[data-version-info-key="site"]')?.textContent).toBe("网站");
         expect(panel.querySelector('[data-version-info-key="runtime"]')?.textContent).toBe("运行方式");
+
+        indicator.click();
+        expect(indicator.title).toContain("运行方式 本机");
 
         shell.destroy();
     });

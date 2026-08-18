@@ -483,6 +483,14 @@ export async function buildRowArticleContent(
                         k.columnClass
                     );
 
+                    if (k.isMultilingual) {
+                        // The article view renders one element per localized keyword token.
+                        // Editing those elements separately would flatten the stored language
+                        // object and discard sibling translations, so keep this surface read-only
+                        // until it has one grouped multilingual keywords editor.
+                        contentElement.dataset.articleEditReadonly = "true";
+                    }
+
                     tagDiv.appendChild(contentElement);
                     kc.appendChild(tagDiv);
                 });

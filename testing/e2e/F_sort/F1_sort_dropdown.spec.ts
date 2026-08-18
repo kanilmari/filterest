@@ -62,6 +62,15 @@ test.describe('FX — Sort Dropdown', () => {
     await expect(newestOption).toBeVisible({ timeout: 3000 });
     await newestOption.hover();
 
+    const menu = page.locator('.vdw-dropdown-list:visible').first();
+    const menuBox = await menu.boundingBox();
+    const viewport = page.viewportSize();
+    expect(menuBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(menuBox!.width).toBeLessThanOrEqual(300);
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(viewport!.width);
+
     const setDefaultButton = newestOption.locator('.sort-default-action');
     await expect(setDefaultButton).toBeVisible();
     await expect(setDefaultButton).toHaveText(/Set default|Aseta oletukseksi/);
