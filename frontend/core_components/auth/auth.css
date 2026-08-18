@@ -767,7 +767,8 @@ body.light-mode .first-run-choice-card:has(input:checked) {
 
 .privacy-notice-link a {
     color: var(--auth-link-color, hsl(var(--brand-hue) 50% 50%));
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
     transition: color 0.2s ease;
 }
 
@@ -942,7 +943,9 @@ body.dark-mode {
 }
 
 .auth-secondary-actions a {
-    color: var(--primary_color);
+    color: var(--auth-link-color, hsl(var(--brand-hue) 50% 40%));
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
 }
 
 .hidden_fields {
