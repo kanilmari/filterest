@@ -8,12 +8,13 @@ remote publication.
 ## Current Verdict
 
 `filterest` is approved as the active generation and repository target.
-Owner-policy rows are decided, and the technical exact-release evidence rows
-are complete for generated Filterest commit
+Owner-policy rows are decided, and the exact-release evidence rows are
+complete for generated Filterest commit
 `cd589bc98accf0b00dfefe49e2989fc2fe23d03c` from release-source commit
-`70610c116bb2d3f83d673251e51eb66d01d7b750`. Exact owner acceptance of
-version 8.32.2 remains `blocked-evidence`, so publication remains blocked until
-that one row is explicitly accepted.
+`70610c116bb2d3f83d673251e51eb66d01d7b750`. The release owner explicitly
+directed the agent to update Fintravel production with version 8.32.2 on
+2026-08-18, so the local release-readiness gate can proceed to its final
+deterministic preflight.
 Generated deterministic evidence is summarized in
 [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md), and current runtime and
 Computer Use artifacts are attached to non-public maintainer ticket #834.
@@ -59,7 +60,7 @@ and generated artifact commit.
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
 | P0 | Fresh-clone public build/test | done | Release agent | Exact stable proof: clean clone of `cd589bc98accf0b00dfefe49e2989fc2fe23d03c` completed `npm ci` with 0 vulnerabilities and `npm run qa` with all checks passing on 2026-08-18. |
 | P0 | Browser review uses Filterest runtime | done | Release agent + browser audit | Exact stable proof: `fintravel-production-app:8.32.2-cd589bc` ran from its embedded published identity against an isolated restore of Fintravel's pre-update database; `/health` and `/login` returned 200, DB 9.0.0 had the original content counts and matching credential digest, and the final browser audit reported accessibility 100/100, best practices 100/100, and no P1 findings. |
-| P0 | Current browser release-readiness acceptance | blocked-evidence | Human release owner | Exact technical evidence is ready for version 8.32.2. The release owner must explicitly accept this exact patch version after the clean-clone, database-upgrade rehearsal, and browser evidence. |
+| P0 | Current browser release-readiness acceptance | done | Human release owner | Exact stable proof: after the clean-clone, database-upgrade rehearsal, and final published-image browser evidence were available, the release owner explicitly directed the agent on 2026-08-18 to update Fintravel production with Filterest 8.32.2. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 9-file public docs wording audit passes with no pre-release or private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
@@ -75,7 +76,7 @@ Add one dated line per publication-candidate attempt:
 | Date | Release source commit | Generated Filterest commit | Evidence summary |
 | --- | --- | --- | --- |
 | 2026-07-25 | Earlier Filterest evidence | Earlier Filterest commit | Historical evidence only; it cannot satisfy the current exact-commit evidence rows. No current remote push was performed. |
-| 2026-08-18 | `70610c116bb2d3f83d673251e51eb66d01d7b750` | `cd589bc98accf0b00dfefe49e2989fc2fe23d03c` | Exact technical proof: fresh-clone QA PASS, isolated Fintravel 8.0.59 → 9.0.0 database rehearsal with unchanged content and credential digest PASS, final published-image browser audit accessibility/best-practices 100/100 with no P1 findings, and account-wide GitHub Actions policy PASS. Exact 8.32.2 owner acceptance remains pending. |
+| 2026-08-18 | `70610c116bb2d3f83d673251e51eb66d01d7b750` | `cd589bc98accf0b00dfefe49e2989fc2fe23d03c` | Exact stable proof: fresh-clone QA PASS, isolated Fintravel 8.0.59 → 9.0.0 database rehearsal with unchanged content and credential digest PASS, final published-image browser audit accessibility/best-practices 100/100 with no P1 findings, account-wide GitHub Actions policy PASS, and explicit owner direction to deploy 8.32.2 to Fintravel production. |
 
 ## Local Generation Command
 
