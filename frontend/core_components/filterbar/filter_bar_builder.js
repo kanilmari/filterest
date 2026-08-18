@@ -51,14 +51,15 @@ import {
 } from "../state_stores/site_identity_reader.js";
 import { buildCalendarPopup } from "./filterbar_calendar.js";
 import {
+    addEnvironmentBadgeIfNeeded,
     NAVBAR_VISIBILITY_CHANGED_EVENT,
+    syncNavbarMenuButtonAccessibility,
+    toggleNavbarVisibility,
     updateShowMenuButtonPosition,
 } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { getTabIconPath } from "../navigation/main_tabs/tab_icon_library.js";
 import {
-    dockButtonIntoSharedTopBar,
     isSharedTopBarHostActive,
-    restoreButtonFromSharedTopBar,
     shouldShowSharedTopBar,
 } from "./shared_topbar_builder.js";
 import { buildFilterbarDisclosureSection } from "./filterbar_section_heading_builder.js";
@@ -473,14 +474,34 @@ function buildSharedTopBarArticleCloseButton(onClose) {
     closeButton.type = "button";
     closeButton.classList.add("dataset-shared-topbar__article-close");
     closeButton.dataset.testid = "shared-topbar-article-close";
-    closeButton.title = "Sulje artikkelinäkymä";
-    closeButton.setAttribute("aria-label", "Sulje artikkelinäkymä");
+    closeButton.title = "Palaa korttinäkymään";
+    closeButton.setAttribute("aria-label", "Palaa korttinäkymään");
     closeButton.setAttribute("aria-hidden", "true");
     closeButton.tabIndex = -1;
     closeButton.hidden = true;
     closeButton.textContent = "×";
     closeButton.addEventListener("click", onClose);
     return closeButton;
+}
+
+function buildSharedTopBarMenuButton() {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.classList.add("dataset-shared-topbar__menu-button");
+    button.dataset.testid = "shared-topbar-menu-button";
+    button.dataset.navbarMenuButton = "true";
+    button.title = "Menu";
+    button.setAttribute("aria-label", "Menu");
+    button.setAttribute("aria-controls", "navbar");
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-hidden", "true");
+    button.tabIndex = -1;
+    button.textContent = "☰";
+    button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleNavbarVisibility();
+    });
+    return button;
 }
 
 /**
@@ -720,8 +741,8 @@ export function createFilterBarContent(container, {
     buildFilterbarDisclosureSection({
         iconPath: "/frontend/icons/general/filter-list-icon.svg",
         iconClassName: "filterbar-section-heading-icon--filters",
-        langKey: "filters",
-        fallbackText: "Suodattimet",
+        langKey: "filterbar_filter_results",
+        fallbackText: "Filter results",
         contentElement: secondaryFilterContent,
         sectionElement: secondaryFilterBar,
         sectionClassNames: ["filterbar-filters-section"],
@@ -951,7 +972,6 @@ export function create_filter_bar(
     tablePartsContainer.appendChild(fixedToggleButton);
 
     const showMenuButton = document.getElementById("showMenuButton");
-    const hideMenuButton = document.getElementById("hideMenuButton");
     const sharedTopBarOwner = { tableName };
     const sharedTopBar = document.createElement("div");
     sharedTopBar.classList.add("dataset-shared-topbar", "filterbar-search-only");
@@ -970,7 +990,11 @@ export function create_filter_bar(
     );
     const sharedTopBarMenuSlot = document.createElement("div");
     sharedTopBarMenuSlot.classList.add("dataset-shared-topbar__menu-slot");
-    sharedTopBarMenuSlot.hidden = true;
+    sharedTopBarMenuSlot.setAttribute("aria-hidden", "true");
+    sharedTopBarMenuSlot.inert = true;
+    const sharedTopBarMenuButton = buildSharedTopBarMenuButton();
+    sharedTopBarMenuSlot.appendChild(sharedTopBarMenuButton);
+    addEnvironmentBadgeIfNeeded(sharedTopBarMenuSlot);
     sharedTopBarStart.append(
         sharedTopBarMenuSlot,
         buildSharedTopBarDatasetTitle(tableName, headerTitleOverride)
@@ -986,9 +1010,17 @@ export function create_filter_bar(
     );
     const sharedTopBarArticleClose = buildSharedTopBarArticleCloseButton(() => {
         const articleCloseButton = tablePartsContainer.querySelector(
-            ".active_row_article .big_card_close"
+            ".active_row_article .big_card_close, .active_big_card .big_card_close"
         );
-        articleCloseButton?.click();
+        if (articleCloseButton instanceof HTMLElement) {
+            articleCloseButton.click();
+            return;
+        }
+
+        const cardViewButton = tablePartsContainer.querySelector(
+            '.view-selector-buttons [data-testid="view-btn-card"]'
+        );
+        cardViewButton?.click();
     });
     sharedTopBarEnd.appendChild(sharedTopBarArticleClose);
 
@@ -1030,6 +1062,7 @@ export function create_filter_bar(
     let sharedTopBarHideTimer = null;
     let sharedTopBarShowFrame = 0;
     let compactBodyHideTimer = null;
+    let inlineHeroVisible = false;
     function isCompact() {
         return panel.classList.contains("filterbar-panel--compact");
     }
@@ -1119,6 +1152,31 @@ export function create_filter_bar(
         sharedTopBarArticleClose.tabIndex = shouldShowClose ? 0 : -1;
     }
 
+    function measureInlineHeroVisibility() {
+        if (
+            !inlineHeroHost ||
+            !activeScrollable ||
+            bigCardOpen ||
+            !inlineHeroHost.isConnected
+        ) {
+            return false;
+        }
+
+        const heroRect = inlineHeroHost.getBoundingClientRect();
+        const scrollableRect = activeScrollable.getBoundingClientRect();
+        return heroRect.height > 0 && heroRect.bottom > scrollableRect.top;
+    }
+
+    function syncInlineHeroVisibility() {
+        const nextInlineHeroVisible = measureInlineHeroVisibility();
+        if (nextInlineHeroVisible === inlineHeroVisible) {
+            return;
+        }
+
+        inlineHeroVisible = nextInlineHeroVisible;
+        syncSharedTopBar();
+    }
+
     function setSharedTopBarVisibility(shouldShowBar) {
         tablePartsContainer.dataset.sharedTopbarVisible = shouldShowBar
             ? "true"
@@ -1155,6 +1213,8 @@ export function create_filter_bar(
     function syncSharedTopBar() {
         const navbarVisible = isNavbarVisible();
         const filterbarVisible = !isHidden();
+        const activeView =
+            localStorage.getItem(`${tableName}_view`) || currentView || "card";
         const shouldShowBar =
             isSharedTopBarHostActive(sharedTopBar) &&
             shouldShowSharedTopBar({
@@ -1162,26 +1222,43 @@ export function create_filter_bar(
                 filterbarVisible,
                 bigCardOpen,
                 allowBigCardSearchBar: show_search_only_bar_in_big_card_view,
+                inlineHeroVisible,
             });
 
         setSharedTopBarVisibility(shouldShowBar);
-        setSharedTopBarArticleCloseVisibility(shouldShowBar && bigCardOpen);
-
-        restoreButtonFromSharedTopBar(fixedToggleButton, sharedTopBarOwner);
-        restoreButtonFromSharedTopBar(hideMenuButton, sharedTopBarOwner);
-        restoreButtonFromSharedTopBar(showMenuButton, sharedTopBarOwner);
+        setSharedTopBarArticleCloseVisibility(
+            shouldShowBar && (bigCardOpen || activeView !== "card")
+        );
 
         const shouldShowMenuButton =
-            shouldShowBar && !navbarVisible && Boolean(showMenuButton);
-        sharedTopBarMenuSlot.hidden = !shouldShowMenuButton;
-        if (shouldShowMenuButton) {
-            dockButtonIntoSharedTopBar(
-                showMenuButton,
-                sharedTopBarMenuSlot,
-                sharedTopBarOwner
-            );
+            shouldShowBar && !navbarVisible;
+        sharedTopBarMenuSlot.classList.toggle(
+            "dataset-shared-topbar__menu-slot--visible",
+            shouldShowMenuButton
+        );
+        sharedTopBarMenuSlot.setAttribute(
+            "aria-hidden",
+            shouldShowMenuButton ? "false" : "true"
+        );
+        sharedTopBarMenuSlot.inert = !shouldShowMenuButton;
+        sharedTopBarMenuButton.setAttribute(
+            "aria-hidden",
+            shouldShowMenuButton ? "false" : "true"
+        );
+        sharedTopBarMenuButton.setAttribute(
+            "aria-expanded",
+            navbarVisible ? "true" : "false"
+        );
+        sharedTopBarMenuButton.tabIndex = shouldShowMenuButton ? 0 : -1;
+        if (showMenuButton && shouldShowMenuButton) {
+            showMenuButton.__sharedTopbarMenuOwner = sharedTopBarOwner;
+            showMenuButton.classList.add("shared-topbar-menu-source-hidden");
+        } else if (showMenuButton?.__sharedTopbarMenuOwner === sharedTopBarOwner) {
+            showMenuButton.__sharedTopbarMenuOwner = null;
+            showMenuButton.classList.remove("shared-topbar-menu-source-hidden");
         }
 
+        syncNavbarMenuButtonAccessibility();
         updateShowMenuButtonPosition();
     }
 
@@ -1565,6 +1642,7 @@ export function create_filter_bar(
 
         if (!scrollableChanged) {
             if (panelMode === FILTERBAR_PANEL_MODES.INLINE_HERO) {
+                inlineHeroVisible = measureInlineHeroVisibility();
                 setCompactMode();
                 syncSharedTopBar();
             }
@@ -1578,7 +1656,14 @@ export function create_filter_bar(
         activeScrollable = nextScrollable;
 
         if (panelMode === FILTERBAR_PANEL_MODES.INLINE_HERO) {
+            inlineHeroVisible = measureInlineHeroVisibility();
             setCompactMode();
+            const onInlineHeroScroll = () => syncInlineHeroVisibility();
+            activeScrollable.addEventListener("scroll", onInlineHeroScroll, {
+                passive: true,
+            });
+            cleanupScrollListener = () =>
+                activeScrollable.removeEventListener("scroll", onInlineHeroScroll);
             syncSharedTopBar();
             return;
         }
@@ -1681,6 +1766,7 @@ export function create_filter_bar(
             if (!isHidden()) {
                 syncModeToScroll();
             }
+            syncInlineHeroVisibility();
         }, 150);
     }, { signal });
 
@@ -1695,6 +1781,7 @@ export function create_filter_bar(
         } else {
             showPanel();
         }
+        syncInlineHeroVisibility();
     }, { signal });
 
     // Close panel on outside click (mobile)
@@ -1750,9 +1837,11 @@ export function create_filter_bar(
         sectionOrdering.destroy?.();
         overviewSection?.destroy?.();
         sharedTopBarSearch.destroy?.();
-        restoreButtonFromSharedTopBar(showMenuButton, sharedTopBarOwner);
-        restoreButtonFromSharedTopBar(hideMenuButton, sharedTopBarOwner);
-        restoreButtonFromSharedTopBar(fixedToggleButton, sharedTopBarOwner);
+        if (showMenuButton?.__sharedTopbarMenuOwner === sharedTopBarOwner) {
+            showMenuButton.__sharedTopbarMenuOwner = null;
+            showMenuButton.classList.remove("shared-topbar-menu-source-hidden");
+            syncNavbarMenuButtonAccessibility();
+        }
         clockBar.destroy?.();
         inlineHeroHost?.destroy?.();
         scrollSentinel.remove();

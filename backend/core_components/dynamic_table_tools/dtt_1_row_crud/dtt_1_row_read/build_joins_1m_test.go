@@ -34,11 +34,13 @@ func (c *buildJoinsQueryCounter) get(name string) int {
 }
 
 type buildJoinsMockDriver struct {
-	counter *buildJoinsQueryCounter
+	counter        *buildJoinsQueryCounter
+	foreignKeyMode bool
 }
 
 type buildJoinsMockConn struct {
-	counter *buildJoinsQueryCounter
+	counter        *buildJoinsQueryCounter
+	foreignKeyMode bool
 }
 
 type buildJoinsMockStmt struct{}
@@ -52,7 +54,10 @@ type buildJoinsMockRows struct {
 }
 
 func (d *buildJoinsMockDriver) Open(_ string) (driver.Conn, error) {
-	return &buildJoinsMockConn{counter: d.counter}, nil
+	return &buildJoinsMockConn{
+		counter:        d.counter,
+		foreignKeyMode: d.foreignKeyMode,
+	}, nil
 }
 
 func (c *buildJoinsMockConn) Prepare(_ string) (driver.Stmt, error) {
@@ -139,13 +144,52 @@ func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, _ []d
 		}, nil
 	case strings.Contains(query, "information_schema.table_constraints AS tc"):
 		c.counter.add("foreign_keys")
+		if c.foreignKeyMode {
+			return &buildJoinsMockRows{
+				cols: []string{"referencing_column", "referenced_table", "referenced_column"},
+				rows: [][]driver.Value{{"table_uid", "system_db_tables", "table_uid"}},
+			}, nil
+		}
 		return &buildJoinsMockRows{
 			cols: []string{"referencing_column", "referenced_table", "referenced_column"},
 			rows: [][]driver.Value{},
 		}, nil
+	case strings.Contains(query, "SELECT fk_display_column FROM system_db_tables") && c.foreignKeyMode:
+		return &buildJoinsMockRows{
+			cols: []string{"fk_display_column"},
+			rows: [][]driver.Value{{"table_name"}},
+		}, nil
+	case strings.Contains(query, "SELECT EXISTS (") && c.foreignKeyMode:
+		return &buildJoinsMockRows{
+			cols: []string{"exists"},
+			rows: [][]driver.Value{{true}},
+		}, nil
 	default:
 		return nil, fmt.Errorf("unexpected query: %s", query)
 	}
+}
+
+func openBuildJoinsForeignKeyMockDB(t *testing.T, counter *buildJoinsQueryCounter) *sql.DB {
+	t.Helper()
+
+	driverName := fmt.Sprintf(
+		"build_joins_fk_%d_%d",
+		time.Now().UnixNano(),
+		atomic.AddInt64(&buildJoinsDriverCounter, 1),
+	)
+	sql.Register(driverName, &buildJoinsMockDriver{
+		counter:        counter,
+		foreignKeyMode: true,
+	})
+
+	db, err := sql.Open(driverName, "")
+	if err != nil {
+		t.Fatalf("sql.Open foreign-key mock: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+	return db
 }
 
 var buildJoinsDriverCounter int64
@@ -216,5 +260,50 @@ func TestBuildJoinsWith1MRelationsCachesMetadataAcrossCalls(t *testing.T) {
 	}
 	if got := counter.get("foreign_keys"); got != 1 {
 		t.Fatalf("foreign_keys query count = %d, want 1", got)
+	}
+}
+
+func TestBuildJoinsWith1MRelationsAddsTableNameAliasForColumnMetadataTableUID(t *testing.T) {
+	resetJoinMetadataCacheForTests()
+
+	counter := &buildJoinsQueryCounter{counts: map[string]int{}}
+	db := openBuildJoinsForeignKeyMockDB(t, counter)
+
+	origDB := backend.Db
+	backend.Db = db
+	t.Cleanup(func() {
+		backend.Db = origDB
+		resetJoinMetadataCacheForTests()
+	})
+
+	columnsMap := map[int]dtt_models.ColumnInfo{
+		1: {ColumnName: "table_uid"},
+	}
+
+	selectColumns, joinClauses, columnExpressions, err := buildJoinsWith1MRelations(
+		db,
+		"system_column_details",
+		columnsMap,
+		[]int{1},
+	)
+	if err != nil {
+		t.Fatalf("buildJoinsWith1MRelations returned error: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`"system_column_details"."table_uid" AS "table_uid"`,
+		`"table_uid_alias1"."table_name" AS "table_name (ln)"`,
+	} {
+		if !strings.Contains(selectColumns, fragment) {
+			t.Fatalf("select columns %q do not contain %q", selectColumns, fragment)
+		}
+	}
+
+	wantJoin := `LEFT JOIN "system_db_tables" AS "table_uid_alias1" ON "system_column_details"."table_uid" = "table_uid_alias1"."table_uid"`
+	if !strings.Contains(joinClauses, wantJoin) {
+		t.Fatalf("join clauses %q do not contain %q", joinClauses, wantJoin)
+	}
+	if got := columnExpressions["table_name (ln)"]; got != `"table_uid_alias1"."table_name"` {
+		t.Fatalf("table_name alias expression = %q, want joined display column", got)
 	}
 }

@@ -17,6 +17,7 @@ const getParamsMock = vi.fn(() => ({}));
 const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
 const getCachedSearchResultForRenderMock = vi.fn();
+const closeRowArticleMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -48,6 +49,9 @@ async function loadModule() {
     vi.doMock("../filterbar/text_search/dataset_search_executor.js", () => ({
         getCachedSearchResultForRender: getCachedSearchResultForRenderMock,
     }));
+    vi.doMock("./card_view/row_article_ui_handler.js", () => ({
+        closeRowArticle: closeRowArticleMock,
+    }));
 
     return import("./view_selector_printer.js");
 }
@@ -68,6 +72,78 @@ describe("view_selector_printer", () => {
         setParamsMock.mockReset();
         updateURLMock.mockReset();
         getCachedSearchResultForRenderMock.mockReturnValue(null);
+        closeRowArticleMock.mockReset();
+    });
+
+    test.each([
+        ["table", "Taulu"],
+        ["transposed", "Vertailu"],
+    ])("closes an open article before switching to %s view", async (viewKey, label) => {
+        const { createGenericViewSelector } = await loadModule();
+        const selector = createGenericViewSelector("demo_table", "card", [
+            { label, viewKey },
+        ]);
+        document.body.insertAdjacentHTML(
+            "beforeend",
+            `
+            <div id="demo_table_card_view_container">
+                <div class="card_view_wrapper big-card-open">
+                    <div class="card_container">
+                        <article class="active_row_article"></article>
+                    </div>
+                </div>
+            </div>
+            `
+        );
+        document.body.appendChild(selector);
+
+        selector.querySelector(`[data-testid="view-btn-${viewKey}"]`).click();
+
+        expect(closeRowArticleMock).toHaveBeenCalledWith(
+            document.querySelector(".card_view_wrapper"),
+            document.querySelector(".card_container"),
+            document.querySelector(".active_row_article"),
+            null,
+            "demo_table",
+            true
+        );
+        expect(localStorage.getItem("demo_table_view")).toBe(viewKey);
+        expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
+    });
+
+    test("clears stale article state when returning to cards without mounted article DOM", async () => {
+        localStorage.setItem(
+            "demo_table_sorting_and_filtering_specs",
+            JSON.stringify({
+                sort: { column: null, direction: null },
+                filters: {},
+                offset: 0,
+                cardView: { collapsed: true, expandedId: 7 },
+            })
+        );
+        const articleToggleSpy = vi.fn();
+        document.addEventListener("big-card-toggle", articleToggleSpy, { once: true });
+        const { createGenericViewSelector } = await loadModule();
+        const selector = createGenericViewSelector("demo_table", "table", [
+            { label: "Kortit", viewKey: "card" },
+        ]);
+        document.body.appendChild(selector);
+
+        selector.querySelector('[data-testid="view-btn-card"]').click();
+
+        const storedState = JSON.parse(
+            localStorage.getItem("demo_table_sorting_and_filtering_specs")
+        );
+        expect(storedState.cardView).toEqual(expect.objectContaining({
+            collapsed: false,
+            expandedId: null,
+            pendingAutoOpenFirstSearchResult: false,
+            pendingAutoOpenFirstRenderedResult: false,
+            returnView: null,
+        }));
+        expect(articleToggleSpy).toHaveBeenCalledWith(expect.objectContaining({
+            detail: { tableName: "demo_table", isOpen: false },
+        }));
     });
 
     test("moves the active highlight immediately on direct view button click", async () => {

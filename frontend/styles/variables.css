@@ -106,7 +106,7 @@
     --filterbar-content-reserved-width: 0px;
     /* Sidebar slide-in/out animation duration. Also controls the
        tab-content-area margin-right transition so they stay in sync.
-       Used in: morphing_filterbar_layout.css, create_filter_bar.js */
+       Used in: filterbar_layout.css, filter_bar_builder.js */
     --filterbar-sidebar-transition-duration: 0.7s;
 
     /* Hero filterbar section max-widths (morphing_filterbar_content.css,

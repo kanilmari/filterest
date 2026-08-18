@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 // shared_topbar_builder.test.js
-// Verifies shared topbar visibility rules and DOM-safe button docking for dataset topbars.
-// Bridges hidden tab containers, reused menu/filter buttons, and restoration of original button homes.
-// Exists to prevent duplicated controls and stale docking regressions in the shared topbar flow.
+// Verifies shared topbar visibility rules for persistent dataset topbars.
+// Bridges hidden tab containers, navbar/filter visibility, and active topbar hosts.
+// Exists to prevent inactive dataset bars from participating in shared layout state.
 
 import { describe, expect, test } from "vitest";
 import {
-    dockButtonIntoSharedTopBar,
     isSharedTopBarHostActive,
-    restoreButtonFromSharedTopBar,
     shouldShowSharedTopBar,
 } from "./shared_topbar_builder.js";
 
@@ -48,39 +46,27 @@ describe("shouldShowSharedTopBar", () => {
             })
         ).toBe(true);
     });
+
+    test("suppresses the repeated flat topbar while the inline hero is visible", () => {
+        expect(
+            shouldShowSharedTopBar({
+                navbarVisible: true,
+                filterbarVisible: false,
+                inlineHeroVisible: true,
+            })
+        ).toBe(false);
+
+        expect(
+            shouldShowSharedTopBar({
+                navbarVisible: true,
+                filterbarVisible: false,
+                inlineHeroVisible: false,
+            })
+        ).toBe(true);
+    });
 });
 
-describe("shared topbar button docking", () => {
-    test("moves an existing button into the topbar host and restores it without cloning", () => {
-        document.body.innerHTML = `
-            <div class="body_content">
-                <button id="showMenuButton">menu</button>
-                <div class="content_div">
-                    <div class="dataset-shared-topbar__slot"></div>
-                </div>
-            </div>
-        `;
-
-        const owner = { name: "demo" };
-        const button = document.getElementById("showMenuButton");
-        const originalParent = button.parentElement;
-        const slot = document.querySelector(".dataset-shared-topbar__slot");
-
-        expect(document.querySelectorAll("#showMenuButton")).toHaveLength(1);
-
-        dockButtonIntoSharedTopBar(button, slot, owner);
-
-        expect(document.querySelectorAll("#showMenuButton")).toHaveLength(1);
-        expect(slot.firstElementChild).toBe(button);
-        expect(button.classList.contains("shared-topbar-docked-button")).toBe(true);
-
-        restoreButtonFromSharedTopBar(button, owner);
-
-        expect(document.querySelectorAll("#showMenuButton")).toHaveLength(1);
-        expect(button.parentElement).toBe(originalParent);
-        expect(button.classList.contains("shared-topbar-docked-button")).toBe(false);
-    });
-
+describe("shared topbar host activity", () => {
     test("treats hidden content containers as inactive topbar hosts", () => {
         document.body.innerHTML = `
             <div class="content_div hidden">

@@ -88,37 +88,86 @@ describe('resolveEaselectPrivatePaths', () => {
     fs.mkdirSync(path.join(privateRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(privateRoot, 'VERSION_EASELECT'), 'test\n');
 
-    expect(resolveFilterestHomes(privateRoot, {}).projectsHome).toBe(
-      path.join(root, 'filterest-projects'),
+    const privateHomes = resolveFilterestHomes(privateRoot, {});
+    expect(privateHomes.projectsHome).toBe(path.join(root, 'filterest-projects'));
+    expect(privateHomes.projectsAppsHome).toBe(path.join(root, 'filterest-projects', 'apps'));
+    expect(privateHomes.runtimeDataHome).toBe(path.join(root, 'filterest-runtime-data'));
+    expect(privateHomes.maintainerToolsHome).toBe(
+      path.join(root, 'filterest-maintainer-tools'),
     );
+    expect(privateHomes.operationsHome).toBe(path.join(root, 'filterest-operations'));
 
     const publicRoot = path.join(root, 'filterest');
     fs.mkdirSync(publicRoot);
     fs.writeFileSync(path.join(publicRoot, 'VERSION_APP'), 'test\n');
-    expect(resolveFilterestHomes(publicRoot, {}).projectsHome).toBe(
-      path.join(publicRoot, 'filterest_projects'),
+    const publicHomes = resolveFilterestHomes(publicRoot, {});
+    expect(publicHomes.projectsHome).toBe(path.join(publicRoot, 'filterest_projects'));
+    expect(publicHomes.runtimeDataHome).toBe(path.join(publicRoot, 'filterest_runtime_data'));
+    expect(publicHomes.maintainerToolsHome).toBe(
+      path.join(publicRoot, 'filterest_maintainer_tools'),
     );
+    expect(publicHomes.operationsHome).toBe(
+      path.join(publicRoot, 'filterest_operations'),
+    );
+  });
+
+  test('does not reinterpret calculated shell exports as explicit overrides', () => {
+    const projectRoot = path.join(temporaryRoot(), 'filterest');
+    fs.mkdirSync(projectRoot);
+    fs.writeFileSync(path.join(projectRoot, 'VERSION_APP'), 'test\n');
+
+    const homes = resolveFilterestHomes(projectRoot, {
+      FILTEREST_PROJECTS_HOME: path.join(projectRoot, 'filterest_projects'),
+      FILTEREST_KEYS_HOME: path.join(projectRoot, 'filterest_keys'),
+      FILTEREST_RUNTIME_DATA_HOME: path.join(projectRoot, 'filterest_runtime_data'),
+      FILTEREST_MAINTAINER_TOOLS_HOME: path.join(
+        projectRoot,
+        'filterest_maintainer_tools',
+      ),
+      FILTEREST_OPERATIONS_HOME: path.join(projectRoot, 'filterest_operations'),
+      FILTEREST_PROJECTS_HOME_CONFIGURED: '0',
+      FILTEREST_KEYS_HOME_CONFIGURED: '0',
+      FILTEREST_RUNTIME_DATA_HOME_CONFIGURED: '0',
+      FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED: '0',
+      FILTEREST_OPERATIONS_HOME_CONFIGURED: '0',
+    });
+
+    expect(homes.projectsHomeConfigured).toBe(false);
+    expect(homes.keysHomeConfigured).toBe(false);
+    expect(homes.runtimeDataHomeConfigured).toBe(false);
+    expect(homes.maintainerToolsHomeConfigured).toBe(false);
+    expect(homes.operationsHomeConfigured).toBe(false);
   });
 
   test('accepts dynamic relative and absolute homes', () => {
     const root = temporaryRoot();
     const projectRoot = path.join(root, 'filterest');
     const keysHome = path.join(root, 'operator data', 'keys');
+    const runtimeDataHome = path.join(root, 'operator data', 'runtime');
+    const maintainerToolsHome = path.join(root, 'operator data', 'maintainer');
+    const operationsHome = path.join(root, 'operator data', 'operations');
     fs.mkdirSync(projectRoot);
     fs.writeFileSync(path.join(projectRoot, 'VERSION_APP'), 'test\n');
     const locator = path.join(projectRoot, 'filterest.paths.local');
     fs.writeFileSync(
       locator,
-      `schema_version=1\nprojects_home=../customer projects\nkeys_home=${keysHome}\n`,
+      `schema_version=1\nprojects_home=../customer projects\nkeys_home=${keysHome}\nruntime_data_home=${runtimeDataHome}\nmaintainer_tools_home=${maintainerToolsHome}\noperations_home=${operationsHome}\n`,
     );
     fs.chmodSync(locator, 0o600);
 
     expect(resolveFilterestHomes(projectRoot, {})).toEqual({
       projectRoot,
       projectsHome: path.join(root, 'customer projects'),
+      projectsAppsHome: path.join(root, 'customer projects', 'apps'),
       keysHome,
+      runtimeDataHome,
+      maintainerToolsHome,
+      operationsHome,
       projectsHomeConfigured: true,
       keysHomeConfigured: true,
+      runtimeDataHomeConfigured: true,
+      maintainerToolsHomeConfigured: true,
+      operationsHomeConfigured: true,
     });
     expect(resolveEaselectPrivatePaths(projectRoot, {})).toEqual({
       runtimeEnvFile: path.join(keysHome, 'filterest_runtime', 'runtime_environment.env'),
@@ -154,6 +203,34 @@ describe('resolveEaselectPrivatePaths', () => {
     expect(() => resolveFilterestHomes(projectRoot, {
       FILTEREST_PROJECTS_HOME: '../shared/projects',
       FILTEREST_KEYS_HOME: '../shared',
+    })).toThrow(/equal or nested/);
+    expect(() => resolveFilterestHomes(projectRoot, {
+      FILTEREST_PROJECTS_HOME: '../projects',
+      FILTEREST_KEYS_HOME: '../keys',
+      FILTEREST_RUNTIME_DATA_HOME: '.',
+    })).toThrow(/checkout root/);
+    expect(() => resolveFilterestHomes(projectRoot, {
+      FILTEREST_PROJECTS_HOME: '../projects',
+      FILTEREST_KEYS_HOME: '../keys',
+      FILTEREST_RUNTIME_DATA_HOME: '.git/runtime',
+    })).toThrow(/inside \.git/);
+    expect(() => resolveFilterestHomes(projectRoot, {
+      FILTEREST_PROJECTS_HOME: '../projects',
+      FILTEREST_KEYS_HOME: '../keys',
+      FILTEREST_RUNTIME_DATA_HOME: '../projects/runtime',
+    })).toThrow(/equal or nested/);
+    expect(() => resolveFilterestHomes(projectRoot, {
+      FILTEREST_PROJECTS_HOME: '../projects',
+      FILTEREST_KEYS_HOME: '../keys',
+      FILTEREST_RUNTIME_DATA_HOME: '../runtime',
+      FILTEREST_MAINTAINER_TOOLS_HOME: '../projects/maintainer',
+    })).toThrow(/equal or nested/);
+    expect(() => resolveFilterestHomes(projectRoot, {
+      FILTEREST_PROJECTS_HOME: '../projects',
+      FILTEREST_KEYS_HOME: '../keys',
+      FILTEREST_RUNTIME_DATA_HOME: '../runtime',
+      FILTEREST_MAINTAINER_TOOLS_HOME: '../maintainer',
+      FILTEREST_OPERATIONS_HOME: '../maintainer/operations',
     })).toThrow(/equal or nested/);
     expect(() => resolveFilterestHomes(projectRoot, {
       FILTEREST_PROJECTS_HOME: 'projects[prod]',

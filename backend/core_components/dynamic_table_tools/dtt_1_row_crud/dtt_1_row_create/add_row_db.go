@@ -113,6 +113,16 @@ func insertDataAccordingToPayload(
 			continue
 		}
 
+		// Missing geometry is missing data, never a real-world location. Nullable
+		// columns persist NULL; required geometry is rejected before the INSERT.
+		if strings.Contains(colType, "geometry") {
+			val, err = normalizeGeometryInsertValue(val, colNullableMap[colName])
+			if err != nil {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "geometry value is required for "+colName)
+				return 0, nil, err
+			}
+		}
+
 		// --- Date/timestamp: "" → NULL -----------------------------
 		if isDateLikeType(colType) {
 			if s, ok := val.(string); ok && strings.TrimSpace(s) == "" {
@@ -169,6 +179,20 @@ func insertDataAccordingToPayload(
 		}
 	}
 	applyCurrentActorOwnership(filteredRow, columnsInfo, currentUserID, currentUsername)
+	for _, column := range columnsInfo {
+		if requiredGeometryValueMissing(
+			column.ColumnName,
+			column.DataType,
+			column.IsNullable,
+			column.ColumnDefault,
+			column.GenerationExpression,
+			filteredRow,
+		) {
+			err := fmt.Errorf("geometry value is required for %s", column.ColumnName)
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return 0, nil, err
+		}
+	}
 
 	//------------------------------------------------------------------
 	// 3) PÄÄRIVI
@@ -295,7 +319,14 @@ func insertDataAccordingToPayload(
 	//------------------------------------------------------------------
 	// 6) TRIGGERIT
 	//------------------------------------------------------------------
-	if err := dtt_triggers.ExecuteTriggers(tx, tableName, map[string]interface{}{"id": mainRowID}); err != nil {
+	triggerSourceRow, err := fetchInsertedTriggerSourceRow(r.Context(), tx, tableName, mainRowID)
+	if err != nil {
+		wrappedErr := fmt.Errorf("fetch inserted trigger source row for %s: %w", tableName, err)
+		fmt.Printf("\033[31m[add_row_db.go] [fetchInsertedTriggerSourceRow] error: %s\033[0m\n", wrappedErr.Error())
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error preparing triggers")
+		return 0, nil, wrappedErr
+	}
+	if err := dtt_triggers.ExecuteTriggers(tx, tableName, triggerSourceRow); err != nil {
 		return 0, nil, respondToTriggerExecutionError(w, tableName, err)
 	}
 
@@ -312,6 +343,91 @@ func respondToTriggerExecutionError(w http.ResponseWriter, tableName string, tri
 	return wrappedErr
 }
 
+// fetchInsertedTriggerSourceRow reads the committed shape inside the current
+// transaction so create triggers also receive database defaults and generated
+// values, not only fields present in the request payload.
+func fetchInsertedTriggerSourceRow(ctx context.Context, tx *sql.Tx, tableName string, mainRowID int64) (map[string]interface{}, error) {
+	query := fmt.Sprintf(
+		"SELECT * FROM %s WHERE id = $1",
+		pq.QuoteIdentifier(tableName),
+	)
+	rows, err := tx.QueryContext(ctx, query, mainRowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columnNames, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return nil, sql.ErrNoRows
+	}
+
+	columnValues := make([]interface{}, len(columnNames))
+	scanTargets := make([]interface{}, len(columnNames))
+	for index := range columnValues {
+		scanTargets[index] = &columnValues[index]
+	}
+	if err := rows.Scan(scanTargets...); err != nil {
+		return nil, err
+	}
+	return mapInsertedRowValues(columnNames, columnValues)
+}
+
+func mapInsertedRowValues(columnNames []string, columnValues []interface{}) (map[string]interface{}, error) {
+	if len(columnNames) != len(columnValues) {
+		return nil, errors.New("inserted row column/value count mismatch")
+	}
+	triggerSourceRow := make(map[string]interface{}, len(columnNames))
+	for index, columnName := range columnNames {
+		triggerSourceRow[columnName] = columnValues[index]
+	}
+	return triggerSourceRow, nil
+}
+
+// normalizeGeometryInsertValue preserves missing spatial data as NULL and
+// rejects it when the database contract requires an actual geometry.
+func normalizeGeometryInsertValue(value interface{}, nullable bool) (interface{}, error) {
+	missing := value == nil
+	if textValue, ok := value.(string); ok {
+		missing = strings.TrimSpace(textValue) == ""
+	}
+	if !missing {
+		return value, nil
+	}
+	if !nullable {
+		return nil, errors.New("geometry value is required")
+	}
+	return nil, nil
+}
+
+func requiredGeometryValueMissing(
+	columnName string,
+	dataType string,
+	isNullable string,
+	columnDefault string,
+	generationExpression string,
+	rowData map[string]interface{},
+) bool {
+	if !strings.Contains(strings.ToLower(dataType), "geometry") ||
+		strings.EqualFold(strings.TrimSpace(isNullable), "YES") ||
+		strings.TrimSpace(columnDefault) != "" ||
+		strings.TrimSpace(generationExpression) != "" {
+		return false
+	}
+	value, exists := rowData[columnName]
+	if !exists {
+		return true
+	}
+	_, err := normalizeGeometryInsertValue(value, false)
+	return err != nil
+}
+
 // insertMainRow lisää päärivin tauluun ja palauttaa luodun rivin id-arvon
 // Between: insertDataAccordingToPayload -> Database
 // Why: Executes the SQL INSERT for the main row.
@@ -326,11 +442,12 @@ func insertMainRow(ctx context.Context, tx *sql.Tx, tableName string, rowData ma
 		colType := strings.ToLower(columnTypeMap[col])
 
 		// Special handling for geometry columns — PostGIS requires valid WKT.
-		// Default to Helsinki city center (EPSG:4326) when no value provided,
-		// so the row is insertable and the point is visible on a map.
+		// Empty nullable geometry stays NULL so missing data cannot become a
+		// plausible but false map location.
 		if strings.Contains(colType, "geometry") {
-			if val == nil || val == "" {
-				val = "POINT(24.9384 60.1699)" // Helsinki, Finland — default for empty geometry
+			if normalizedValue, normalizeErr := normalizeGeometryInsertValue(val, true); normalizeErr == nil && normalizedValue == nil {
+				placeholders = append(placeholders, "NULL")
+				continue
 			}
 			placeholders = append(placeholders, fmt.Sprintf("ST_GeomFromText($%d, 4326)", i))
 			values = append(values, val)

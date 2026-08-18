@@ -19,7 +19,7 @@
 }
 
 .dataset-alias-management-preview-label {
-    color: var(--fw-color-muted, var(--text-muted, hsl(210, 10%, 45%)));
+    color: var(--fw-color-muted, var(--text-muted, hsl(210deg 10% 45%)));
     font-size: 0.9rem;
     font-weight: 600;
 }
@@ -27,21 +27,21 @@
 .dataset-alias-management-preview-value {
     background: color-mix(
         in srgb,
-        var(--fw-color-surface-alt, var(--bg_color_2, hsl(210, 15%, 94%))) 72%,
+        var(--fw-color-surface-alt, var(--bg_color_2, hsl(210deg 15% 94%))) 72%,
         var(--fw-color-surface, var(--bg_color_extreme, white)) 28%
     );
-    border: 1px solid var(--fw-color-border, var(--border_color, hsl(210, 10%, 70%)));
+    border: 1px solid var(--fw-color-border, var(--border_color, hsl(210deg 10% 70%)));
     border-radius: 0.55rem;
     color: var(--fw-color-text, var(--text_color, inherit));
     display: inline-block;
     font-family: var(--fw-font-mono, "IBM Plex Mono", "Fira Code", monospace);
     line-height: 1.45;
     padding: 0.55rem 0.7rem;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .dataset-alias-management-note {
-    border-left: 3px solid hsl(207, 70%, 53%);
+    border-left: 3px solid hsl(207deg 70% 53%);
     margin: 0;
     padding-left: 0.85rem;
 }
@@ -59,7 +59,7 @@
     align-self: start;
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
     .dataset-alias-management-preview-value {
         font-size: 0.88rem;
     }

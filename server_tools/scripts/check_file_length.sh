@@ -46,7 +46,6 @@ KNOWN_LEGACY=(
     "frontend/core_components/lang/translation_handler.js"
     "frontend/core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_relation_builder.js"
     "frontend/core_components/navigation/main_tabs/main_tab_printer.js"
-    "frontend/core_components/navigation/menu_button/navbar.css"
     "frontend/core_components/table_views/card_view/big_card_attachment_list.js"
     "frontend/core_components/table_views/card_view/big_card_image_gallery.js"
     "frontend/core_components/table_views/card_view/card_view_printer.js"

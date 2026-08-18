@@ -156,7 +156,7 @@
   line-height: 1.45;
 }
 
-@media (max-width: 720px) {
+@media (width <= 720px) {
   .price-chart-view {
     padding: 12px;
   }

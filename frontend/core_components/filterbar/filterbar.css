@@ -565,7 +565,6 @@ body.dark-mode .filterbar-disclosure-section {
 
 .filterbar-chat-dock.is-chat-maximized .filterbar-chat-dock__toggle-icon {
     mask-image: url("/frontend/icons/general/minimize-panel-icon.svg") !important;
-    -webkit-mask-image: url("/frontend/icons/general/minimize-panel-icon.svg") !important;
     transform: rotate(0deg);
 }
 

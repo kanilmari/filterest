@@ -5,7 +5,14 @@
         "_description": "Sidebar panel visibility toggle and responsive show/hide logic",
         "files": [
             "navbar_visibility_handler.js — initNavbar(), show/hide sidebar, responsive breakpoint logic",
-            "navbar.css — all sidebar panel and button styling (485 lines)"
+            "menu_button.css — persistent opener/closer controls and environment badges"
+        ]
+    },
+
+    "navbar": {
+        "_description": "Fixed sidebar shell, internal rows, navigation tree, and collapse presentation",
+        "files": [
+            "../navbar/navbar_layout.css — sidebar shell and internal layout styling"
         ]
     },
 

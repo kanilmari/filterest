@@ -9,7 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { openActiveFilterbarIfCollapsed } from '../helpers/filterbar';
-import { navigateToDataset } from '../helpers/navigation';
+import { navigateToDefaultDataset } from '../helpers/navigation';
 
 test.describe('E9 — Admin version info', () => {
   let credentials: TestCredentials;
@@ -28,16 +28,14 @@ test.describe('E9 — Admin version info', () => {
       'This placement proof drives its own viewport and only needs one project.',
     );
 
-    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.setViewportSize({ width: 1280, height: 768 });
     const identityResponse = await page.request.get('/api/product-identity');
     expect(identityResponse.status()).toBe(200);
     const identity = await identityResponse.json();
     const expectedProductName = String(identity.name || '');
-    expect(expectedProductName).toMatch(/^(Easelect|Filterest)$/);
-    await navigateToDataset(
-      page,
-      expectedProductName === 'Filterest' ? 'riskienhallinta' : 'app_service_catalog',
-    );
+    const expectedPublicDistribution = Boolean(identity.public_distribution);
+    expect(expectedProductName).toBe('Filterest');
+    await navigateToDefaultDataset(page);
     await openActiveFilterbarIfCollapsed(page);
 
     const indicator = page
@@ -56,8 +54,46 @@ test.describe('E9 — Admin version info', () => {
       db_compatible: true,
     });
     expect(versionInfo.app_version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(versionInfo.release_channel).toMatch(/^(development|stable|unknown)$/);
+    expect(versionInfo.artifact_purpose).toMatch(/^(developer_backup|public_release|unknown)$/);
+    expect(versionInfo.artifact_type).toMatch(/^(runtime|backup|unknown)$/);
+    expect(versionInfo.release_maturity).toMatch(/^(snapshot|candidate|published|unknown)$/);
+    expect(versionInfo.identity_verification)
+      .toMatch(/^(local_contract_validated|legacy_unverified|unverified)$/);
+    expect(versionInfo.public_distribution).toBe(expectedPublicDistribution);
+    expect(versionInfo.update_status).toMatch(/^(available|current|ahead_of_stable|unavailable)$/);
+    expect(versionInfo.update_available).toBe(versionInfo.update_status === 'available');
+    if (versionInfo.update_status !== 'unavailable') {
+      expect(versionInfo.latest_stable_version).toMatch(/^\d+\.\d+\.\d+$/);
+    }
     expect(versionInfo.db_version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(versionInfo.runtime_mode).toMatch(/^(docker|native)$/);
+    const releaseChannelLabels: Record<string, string> = {
+      development: 'Development',
+      stable: 'Stable',
+      unknown: 'Unknown',
+    };
+    const artifactPurposeLabels: Record<string, string> = {
+      developer_backup: 'Developer backup',
+      public_release: 'Intended for public release',
+      unknown: 'Unknown',
+    };
+    const artifactTypeLabels: Record<string, string> = {
+      runtime: 'Runtime',
+      backup: 'Backup',
+      unknown: 'Unknown',
+    };
+    const releaseMaturityLabels: Record<string, string> = {
+      snapshot: 'Development snapshot',
+      candidate: 'Release candidate',
+      published: 'Published',
+      unknown: 'Unknown',
+    };
+    const identityVerificationLabels: Record<string, string> = {
+      local_contract_validated: 'Local release contract validated',
+      legacy_unverified: 'Legacy marker, unverified',
+      unverified: 'Unverified',
+    };
     const expectedRuntimeMode = String(process.env.EASELECT_EXPECTED_RUNTIME_MODE || '').trim();
     if (expectedRuntimeMode) {
       expect(versionInfo.runtime_mode).toBe(expectedRuntimeMode);
@@ -71,7 +107,7 @@ test.describe('E9 — Admin version info', () => {
     await expect(indicator).toHaveAttribute(
       'title',
       new RegExp(
-        `${escapedProductName} ${versionInfo.app_version}.*Database ${versionInfo.db_version}`,
+        `${escapedProductName} v\\. ${versionInfo.app_version}.*Database v\\. ${versionInfo.db_version}`,
         's',
       ),
     );
@@ -85,16 +121,41 @@ test.describe('E9 — Admin version info', () => {
     await indicator.click();
     await expect(indicator).toHaveAttribute('aria-expanded', 'true');
     await expect(panel).toBeVisible();
-    await expect(panel.locator('caption')).toHaveText('Version information');
+    await expect(panel.locator('thead th')).toHaveText('Site information');
     const expectedSiteName = await page.locator('meta[property="og:site_name"]').getAttribute('content');
+    const expectedSiteDisplayName = String(expectedSiteName || expectedProductName)
+      .trim()
+      .replace(/^\p{Ll}/u, (character) => character.toLocaleUpperCase());
     await expect(panel.locator('[data-version-info-key="site"]'))
       .toHaveText('Site');
     await expect(panel.locator('[data-version-info-value="site"]'))
-      .toHaveText(String(expectedSiteName || expectedProductName).trim());
+      .toHaveText(expectedSiteDisplayName);
     await expect(panel.locator('[data-version-info-key="application"]'))
       .toHaveText(expectedProductName);
     await expect(panel.locator('[data-version-info-value="application"]'))
-      .toHaveText(versionInfo.app_version);
+      .toHaveText(`v. ${versionInfo.app_version}`);
+    await expect(panel.locator('[data-version-info-key="release-channel"]'))
+      .toHaveText('Release channel');
+    await expect(panel.locator('[data-version-info-value="release-channel"]'))
+      .toHaveText(releaseChannelLabels[String(versionInfo.release_channel)] || 'Unknown');
+    await expect(panel.locator('[data-version-info-key="artifact-purpose"]'))
+      .toHaveText('Release purpose');
+    await expect(panel.locator('[data-version-info-value="artifact-purpose"]'))
+      .toHaveText(artifactPurposeLabels[String(versionInfo.artifact_purpose)] || 'Unknown');
+    await expect(panel.locator('[data-version-info-key="artifact-type"]'))
+      .toHaveText('Package type');
+    await expect(panel.locator('[data-version-info-value="artifact-type"]'))
+      .toHaveText(artifactTypeLabels[String(versionInfo.artifact_type)] || 'Unknown');
+    await expect(panel.locator('[data-version-info-key="release-maturity"]'))
+      .toHaveText('Release stage');
+    await expect(panel.locator('[data-version-info-value="release-maturity"]'))
+      .toHaveText(releaseMaturityLabels[String(versionInfo.release_maturity)] || 'Unknown');
+    await expect(panel.locator('[data-version-info-key="identity-verification"]'))
+      .toHaveText('Identity verification');
+    await expect(panel.locator('[data-version-info-value="identity-verification"]'))
+      .toHaveText(identityVerificationLabels[String(versionInfo.identity_verification)] || 'Unverified');
+    await expect(panel.locator('[data-version-info-key="latest-stable"]'))
+      .toHaveText('Latest stable version');
     await expect(panel.locator('[data-version-info-key="database"]'))
       .toHaveText('Database');
     await expect(panel.locator('[data-version-info-value="database"]'))

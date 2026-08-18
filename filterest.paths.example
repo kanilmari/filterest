@@ -1,7 +1,12 @@
 # Dynamic Filterest path locator. Copy to filterest.paths.local for local use.
 # Relative values resolve from the checkout root; absolute values are accepted.
-# Process overrides: FILTEREST_PROJECTS_HOME and FILTEREST_KEYS_HOME.
-# The homes must be distinct and non-nested; root/.git targets are rejected.
+# Process overrides: FILTEREST_PROJECTS_HOME, FILTEREST_KEYS_HOME,
+# FILTEREST_RUNTIME_DATA_HOME, FILTEREST_MAINTAINER_TOOLS_HOME, and
+# FILTEREST_OPERATIONS_HOME.
+# All homes must be distinct and non-nested; checkout-root/.git targets are rejected.
 schema_version=1
 projects_home=filterest_projects
 keys_home=filterest_keys
+runtime_data_home=filterest_runtime_data
+maintainer_tools_home=filterest_maintainer_tools
+operations_home=filterest_operations

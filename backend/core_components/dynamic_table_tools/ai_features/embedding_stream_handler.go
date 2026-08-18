@@ -8,17 +8,17 @@ import (
 	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
-	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"easelect/backend/core_components/httpresponse"
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	pgvector "github.com/pgvector/pgvector-go"
 )
 
@@ -88,20 +88,30 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Haetaan tekstisarakkeet util-funktion avulla
-	textCols, err := dbutils.GetQueryableColumns(sanitizedTableName, db, true)
+	// Resolve only fields explicitly approved for the configured external provider.
+	_, sourceColumns, err := ResolveExternalEmbeddingSourceColumns(db, sanitizedTableName)
 	if err != nil {
-		log.Printf("\033[31merror: fetching text columns: %v\033[0m", err)
-		sendSSE("error", escape_for_sse(fmt.Sprintf("error fetching text columns: %v", err)))
+		log.Printf("\033[31merror: fetching approved embedding fields: %v\033[0m", err)
+		sendSSE("error", escape_for_sse("embedding field policy unavailable"))
+		return
+	}
+	if len(sourceColumns) == 0 {
+		sendSSE("error", escape_for_sse("no fields are approved for the external embedding provider"))
 		return
 	}
 	textColumnsSet := make(map[string]bool)
-	for _, colName := range textCols {
-		textColumnsSet[colName] = true
+	selectColumns := []string{pq.QuoteIdentifier("id")}
+	for _, column := range sourceColumns {
+		textColumnsSet[column.ColumnName] = true
+		selectColumns = append(selectColumns, pq.QuoteIdentifier(column.ColumnName))
 	}
 
-	// Haetaan kaikki sarakkeet (koska tarvitaan myös id).
-	selectQuery := fmt.Sprintf(`SELECT * FROM %s`, sanitizedTableName)
+	// Read the row id and approved fields only; disallowed text never enters this path.
+	selectQuery := fmt.Sprintf(
+		`SELECT %s FROM %s`,
+		strings.Join(selectColumns, ", "),
+		pq.QuoteIdentifier(sanitizedTableName),
+	)
 	rows, err := db.Query(selectQuery)
 	if err != nil {
 		log.Printf("\033[31merror: selecting rows: %v\033[0m", err)
@@ -166,10 +176,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rowText := buildRowText(columns, values, textColumnsSet)
-		log.Printf("[DEBUG] row id=%v: rowText length=%d", rowIDVal, len(rowText))
-		if len(rowText) < 500 {
-			log.Printf("[DEBUG] rowText content = %q", rowText)
-		}
+		logEmbeddingRowMetadata(rowIDVal, rowText)
 
 		if strings.TrimSpace(rowText) == "" {
 			sendSSE("progress", escape_for_sse(fmt.Sprintf("row id=%d empty text, skipped", rowID)))
@@ -198,6 +205,12 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendSSE("done", escape_for_sse(fmt.Sprintf("embedding finished. total=%d, embedded=%d", totalRows, embeddedCount)))
+}
+
+// logEmbeddingRowMetadata keeps diagnostics useful without writing customer
+// or personal content sent to the embedding provider into application logs.
+func logEmbeddingRowMetadata(rowID interface{}, rowText string) {
+	log.Printf("[DEBUG] embedding row id=%v: text length=%d", rowID, len(rowText))
 }
 
 // buildRowText luo yksinkertaisen tekstin vain niistä sarakkeista, jotka löytyvät textColumnsSet:stä.

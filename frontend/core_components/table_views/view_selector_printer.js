@@ -16,6 +16,7 @@ import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
 import { getParams, setParams, updateURL } from "../navigation/nav_engine/query_params.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
+import { closeRowArticle } from "./card_view/row_article_ui_handler.js";
 import {
     ARTICLE_VIEW_KEY,
     DATASET_VIEW_SELECTOR_TEXT,
@@ -148,6 +149,50 @@ function prepareArticleViewTarget(tableName, selectedViewKey, previousViewKey) {
     })();
 }
 
+function clearRowArticleState(tableName) {
+    const currentState = getUnifiedTableState(tableName);
+    setUnifiedTableState(tableName, {
+        cardView: {
+            ...(currentState.cardView || {}),
+            collapsed: false,
+            expandedId: null,
+            pendingAutoOpenFirstSearchResult: false,
+            pendingAutoOpenFirstRenderedResult: false,
+            returnView: null,
+        },
+    });
+    const detail = { tableName, isOpen: false };
+    document.dispatchEvent(new CustomEvent("big-card-toggle", { detail }));
+    document.dispatchEvent(new CustomEvent("row-article-toggle", { detail }));
+}
+
+/**
+ * Closes a mounted or stale row-article state before another presentation opens.
+ * Operates between selector clicks, the card article DOM, and shared-topbar state.
+ * Exists so switching to table/tree/etc. cannot leave a visible but inert article X.
+ */
+export function closeRowArticleBeforeViewSwitch(tableName) {
+    const wrapper = document.querySelector(
+        `#${tableName}_card_view_container .card_view_wrapper.big-card-open`
+    );
+    const rowArticle = wrapper?.querySelector(".active_row_article, .active_big_card");
+    const cardContainer = wrapper?.querySelector(".card_container");
+
+    if (wrapper && rowArticle && cardContainer) {
+        closeRowArticle(
+            wrapper,
+            cardContainer,
+            rowArticle,
+            wrapper.querySelector(".active_card"),
+            tableName,
+            true
+        );
+        return;
+    }
+
+    clearRowArticleState(tableName);
+}
+
 /**
  * Yhdistetty nappifunktio, joka käyttää samaa logiikkaa riippumatta siitä,
  * onko kyse "normal"/"ticket"/"transposed" vai "table"/"card"/"tree".
@@ -188,6 +233,9 @@ function createGenericViewButton(label, viewKey, tableName, currentView, langKey
         let nextViewKey = resolveDatasetViewSelectionTarget(viewKey);
         if (!isDatasetViewSelectorAlias(viewKey) && viewKey !== defaultView && route && !hasRoutePermission(route)) {
             nextViewKey = defaultView;
+        }
+        if (viewKey !== ARTICLE_VIEW_KEY) {
+            closeRowArticleBeforeViewSwitch(tableName);
         }
         localStorage.setItem(`${datasetName}_view`, nextViewKey);
         syncActiveViewButtons(tableName, nextViewKey);

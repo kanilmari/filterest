@@ -10,6 +10,9 @@ import (
 
 func setRequiredConfigEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("INSTANCE_NAME", "config-test")
 	required := []string{
 		"SESSION_KEY", "DB_HOST", "DB_PORT", "DB_NAME",
 		"DB_ADMIN_USER", "DB_ADMIN_PASSWORD",
@@ -20,6 +23,38 @@ func setRequiredConfigEnv(t *testing.T) {
 	}
 	for _, key := range required {
 		t.Setenv(key, "test-value")
+	}
+}
+
+func TestValidateConfigRejectsSharedCookieWithoutReplicaPoolMode(t *testing.T) {
+	setRequiredConfigEnv(t)
+	t.Setenv("SESSION_COOKIE_NAME", "shared_session")
+
+	err := ValidateConfig()
+	if err == nil || !strings.Contains(err.Error(), "replica-pool") {
+		t.Fatalf("ValidateConfig() error = %v, want explicit replica-pool requirement", err)
+	}
+}
+
+func TestValidateConfigRequiresSharedCookieInReplicaPoolMode(t *testing.T) {
+	setRequiredConfigEnv(t)
+	t.Setenv("SESSION_COOKIE_MODE", "replica-pool")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+
+	err := ValidateConfig()
+	if err == nil || !strings.Contains(err.Error(), "SESSION_COOKIE_NAME is required") {
+		t.Fatalf("ValidateConfig() error = %v, want missing shared cookie error", err)
+	}
+}
+
+func TestValidateConfigAcceptsExplicitReplicaPoolContract(t *testing.T) {
+	setRequiredConfigEnv(t)
+	t.Setenv("SESSION_COOKIE_MODE", "replica-pool")
+	t.Setenv("SESSION_COOKIE_NAME", "shared_session")
+	t.Setenv("SESSION_SECRET_KEY", "shared-encryption-secret")
+
+	if err := ValidateConfig(); err != nil {
+		t.Fatalf("ValidateConfig() returned error for explicit replica pool: %v", err)
 	}
 }
 

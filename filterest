@@ -15,6 +15,7 @@ Usage: ./filterest <command> [arguments]
 
 Everyday commands:
   setup [options]               Install for browser administration or development
+  update [options]              Back up and install a published stable release
   start [arguments]             Start with the installed profile (prebuilt or development)
   status [arguments]            Show application and database compatibility
   data [arguments]              Maintain datasets through the application API
@@ -166,6 +167,9 @@ command_name="${1:-help}"
 case "$command_name" in
     setup)
         exec "$PROJECT_ROOT/server_tools/install_filterest.sh" "$@"
+        ;;
+    update)
+        exec "$PROJECT_ROOT/server_tools/update_filterest.sh" "$@"
         ;;
     start|ctl)
         if start_action_was_requested "$@" && filterest_setup_is_required; then

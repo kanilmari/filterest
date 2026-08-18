@@ -12,7 +12,7 @@ import { waitForAppReady } from '../helpers/navigation';
 import { cleanupDatasetViaRequest } from '../helpers/temp-dataset';
 import { confirmTestArtifact, registerTestArtifact } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
-import { openActiveFilterbarIfCollapsed } from '../helpers/filterbar';
+import { openActiveFilterbarSection } from '../helpers/filterbar';
 
 test.describe('Table Creation Permissions', () => {
   // Forces 1920×1080 so the admin create-table flow renders consistently across projects.
@@ -42,7 +42,7 @@ test.describe('Table Creation Permissions', () => {
     await waitForAppReady(page);
   });
 
-  test('Creator gets permissions automatically', async ({ page }) => {
+  test('creator gets permissions, images and label-free card fields by default', async ({ page }) => {
     // Accept any dialogs that may appear during table creation
     page.on('dialog', async dialog => {
       await dialog.accept();
@@ -57,8 +57,12 @@ test.describe('Table Creation Permissions', () => {
     const existingFolderSelect = page.locator('[data-testid="create-table-folder-select"]');
     const newFolderNameInput = page.locator('[data-testid="create-table-new-folder-name"]');
     const newFolderParentSelect = page.locator('[data-testid="create-table-new-folder-parent"]');
+    const enableImagesCheckbox = page.locator('[data-testid="create-table-enable-images"]');
+    const grantUsersReadCheckbox = page.locator('#grant_users_read');
     await expect(tableNameInput).toBeVisible({ timeout: 10000 });
     await expect(existingFolderSelect).toBeVisible({ timeout: 10000 });
+    await expect(enableImagesCheckbox).toBeChecked();
+    await expect(grantUsersReadCheckbox).not.toBeChecked();
 
     const selectedFolderId = await existingFolderSelect.evaluate((select) => {
       if (!(select instanceof HTMLSelectElement)) {
@@ -78,22 +82,59 @@ test.describe('Table Creation Permissions', () => {
 
     // 3. Submit and wait for the create-dataset API response.
     registerTestArtifact('dataset', testTableName);
-    const [response] = await Promise.all([
+    const [response, imageSetupResponse] = await Promise.all([
       page.waitForResponse(resp =>
         resp.url().includes('/api/create_dataset')
+      ),
+      page.waitForResponse(resp =>
+        resp.url().includes('/api/asset-linking/images/enable')
+          && resp.request().method() === 'POST'
       ),
       page.locator('[data-testid="create-table-submit"]').click(),
     ]);
 
     // Confirm API returned success
     expect(response.ok()).toBe(true);
+    expect(imageSetupResponse.status()).toBe(201);
     const tableUID = await readDatasetTableUIDFromPage(page, testTableName);
     expect(tableUID, 'Created dataset must expose a stable table_uid identity.').not.toBeNull();
     confirmTestArtifact('dataset', testTableName, tableUID!);
     testTableConfirmed = true;
+
+    const imageStatusResponse = await page.request.get(
+      `/api/asset-linking/images/status?table=${encodeURIComponent(testTableName)}`,
+    );
+    expect(imageStatusResponse.ok()).toBe(true);
+    const imageStatus = await imageStatusResponse.json();
+    expect(imageStatus.asset_linkings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        parent_table: testTableName,
+        enabled: true,
+        relation_kind: 'shared_asset',
+      }),
+    ]));
+
+    const newTableResponse = await page.request.get(
+      `/api/get-results?dataset=${encodeURIComponent(testTableName)}`,
+    );
+    expect(newTableResponse.ok()).toBe(true);
+    const newTablePayload = await newTableResponse.json();
+    const fieldMetadata = Object.values(newTablePayload?.types ?? {}).filter(
+      (metadata): metadata is Record<string, unknown> => (
+        metadata !== null
+        && typeof metadata === 'object'
+        && Object.prototype.hasOwnProperty.call(metadata, 'show_key_on_card')
+      ),
+    );
+    expect(fieldMetadata.length, 'A new table must expose its field presentation metadata.').toBeGreaterThan(0);
+    expect(
+      fieldMetadata.every((metadata) => metadata.show_key_on_card === false),
+      'New table fields must hide their labels on cards by default.',
+    ).toBe(true);
     await page.waitForTimeout(1000);
 
-    // 4. Navigate to the new table via full page load
+    // 4. Navigate to the new table via full page load. This must work for the
+    // administrator even though ordinary Users read access remained disabled.
     //    (createDataset doesn't refresh sidebar tree, so page.goto is needed)
     await page.goto('/' + testTableName, { waitUntil: 'domcontentloaded' });
     await waitForAppReady(page);
@@ -103,12 +144,14 @@ test.describe('Table Creation Permissions', () => {
       timeout: 15000,
     });
 
-    await expect(page.locator('[data-testid="btn-add-row"]')).toBeVisible({ timeout: 10000 });
+    // The panel and its Add & manage content group both persist their own
+    // collapsed state. Open the exact group before checking its permission-
+    // gated actions so this proof follows the same path as an admin user.
+    const toolsSection = await openActiveFilterbarSection(page, 'tools');
+    await expect(toolsSection.locator('[data-testid="btn-add-row"]')).toBeVisible({ timeout: 10000 });
 
     // 6. Verify manage_table button is accessible
-    await openActiveFilterbarIfCollapsed(page);
-    const activeTableParts = page.locator('.tab_parts_container:visible').first();
-    const manageBtn = activeTableParts.locator('[data-testid="btn-edit-table"]:visible').first();
+    const manageBtn = toolsSection.locator('[data-testid="btn-edit-table"]:visible').first();
     await expect(manageBtn).toBeVisible({ timeout: 5000 });
     await expect(manageBtn).toBeEnabled();
   });

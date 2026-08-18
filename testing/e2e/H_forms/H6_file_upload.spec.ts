@@ -1,7 +1,8 @@
 /**
  * H6_file_upload.spec.ts
  *
- * Verifies file input interaction in add-row form.
+ * Verifies file input interaction in add-row form and deletion of a parent row
+ * that owns shared image and attachment records.
  */
 
 import { test, expect } from '@playwright/test';
@@ -222,6 +223,28 @@ test.describe('H6 — File Upload', () => {
       expect(assetRows.some((row) => row.asset_kind === 'image' && typeof row.filename === 'string')).toBe(true);
       expect(assetRows.some((row) => row.asset_kind === 'document' && row.original_name === 'test-file.txt')).toBe(true);
       expect(assetRows.some((row) => row.asset_kind === 'pdf' && row.original_name === 'offer.pdf')).toBe(true);
+
+      const createdRowId = createdRow?.id as number | string;
+      const deleteResponse = await postJsonWithCsrf(
+        page,
+        `/api/delete-rows?dataset=${encodeURIComponent(datasetName)}`,
+        { ids: [createdRowId] },
+      );
+      expect(
+        deleteResponse.ok,
+        `Failed to delete shared-asset parent row from "${datasetName}": ${deleteResponse.body}`,
+      ).toBe(true);
+
+      await expect.poll(async () => {
+        const currentRows = await fetchDatasetRows(page, datasetName);
+        return currentRows.some((row) => String(row.id) === String(createdRowId));
+      }, { timeout: 15000 }).toBe(false);
+
+      const childrenAfterDelete = await fetchDynamicChildren(page, datasetName, createdRowId);
+      expect(
+        childrenAfterDelete.every((child) => !Array.isArray(child.rows) || child.rows.length === 0),
+        'Deleting a parent row must cascade its managed image and attachment rows.',
+      ).toBe(true);
     } finally {
       if (!page.isClosed()) {
         await page.keyboard.press('Escape').catch(() => {});

@@ -1,6 +1,6 @@
 # Core Workflows
 
-This document consolidates information regarding Easelect's core workflows, including adding rows, refreshing embeddings, and API features.
+This document consolidates information regarding Filterest's core workflows, including adding rows, refreshing embeddings, and API features.
 
 ## 1. Adding a Row
 
@@ -22,19 +22,20 @@ This section outlines how a new row is inserted through the generic table interf
 The Refresh Embeddings view updates multi-language embedding tables so that the search field (`dataset-search-input`) can find results in all selected languages.
 
 ### Usage
-1.  **Dataset Listing**: Fetched from `/api/embedding-datasets`. Lists datasets where `system_db_tables.multi_lang_embeddings` is `true`.
-2.  **Language Selection**: Checkboxes for languages (e.g., `en`, `fi`).
-3.  **Pending Counter**: `refresh_embeddings_pending_counter` shows the total number of unprocessed rows via `/api/count-lang-embeddings`.
-4.  **Start Refresh**: The `refresh_embeddings_start_button` sends requests to `/api/refresh-lang-embeddings` for each selected dataset/language combination.
+1.  **Table and field policy**: The admin view lists current-project public-schema tables that have stable `text` or `varchar` field metadata. The administrator can save the allowed fields and table switch before vector storage exists; that state queues and sends no row content until a technical embedding target is available. Restricted-schema tables are excluded.
+2.  **Technical capability**: The same response reports whether a general vector column or multilingual vector table is already available. Manual language-refresh checkboxes appear only for the multilingual capability.
+3.  **Language Selection**: Checkboxes select languages such as `en` and `fi` for technically ready multilingual tables.
+4.  **Pending Counter**: `refresh_embeddings_pending_counter` shows the total number of unprocessed rows via `/api/count-lang-embeddings`.
+5.  **Start Refresh**: The `refresh_embeddings_start_button` sends requests to `/api/refresh-lang-embeddings` for each selected, technically ready dataset/language combination.
 
 ### Server-Side Functions
--   **GetEmbeddingDatasetsHandler** (`/api/embedding-datasets`): Returns datasets with multi-lang embeddings enabled.
+-   **GetEmbeddingDatasetsHandler** (`/api/embedding-datasets`): Preserves the capability-only legacy list by default. With `include_policy_candidates=true`, it returns technically eligible tables in the current project together with their general/multilingual target readiness.
 -   **CountLangEmbeddingsHandler** (`/api/count-lang-embeddings`): Counts rows needing updates.
--   **RefreshLangEmbeddingsHandler** (`/api/refresh-lang-embeddings`): Iterates rows, generates vectors via OpenAI, writes to `<dataset>_lang_embeddings`, and returns stats.
+-   **RefreshLangEmbeddingsHandler** (`/api/refresh-lang-embeddings`): Iterates rows, generates vectors through the configured embedding provider, writes to `<dataset>_lang_embeddings`, and returns stats.
 
 ## 3. API and Features Overview
 
-This section covers specific features and API endpoints of Easelect.
+This section covers specific features and API endpoints of Filterest.
 
 ### Transaction Handling
 Most HTTP requests flow through the pipeline's `transaction` stage

@@ -9,7 +9,10 @@ import {
     setLanguage,
 } from "../state_stores/lang_preference_reader.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
-import { getUiLanguageOptions } from "./ui_language_catalog.js";
+import {
+    getUiLanguageOptions,
+    loadPublicUiLanguageCatalog,
+} from "./ui_language_catalog.js";
 
 const MENU_LANGUAGE_ICON_PATH = "/frontend/icons/navigation/language-globe-icon.svg";
 const initializedSelectors = new WeakSet();
@@ -197,4 +200,7 @@ export async function updateMenuLanguageDisplay(nextLanguage = null, targetSelec
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => initializeLanguageSelectors(document));
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadPublicUiLanguageCatalog();
+    initializeLanguageSelectors(document);
+});

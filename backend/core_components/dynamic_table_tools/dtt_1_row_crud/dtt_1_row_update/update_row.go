@@ -6,7 +6,6 @@
 package dtt_1_row_update
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -30,7 +29,6 @@ import (
 	e_sessions "easelect/backend/core_components/sessions"
 
 	"github.com/lib/pq"
-	pgvector "github.com/pgvector/pgvector-go"
 )
 
 // UpdateRowHandlerWrapper vain lukee ?dataset= -parametrin ja kutsuu varsinaista käsittelijää
@@ -271,6 +269,17 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error updating search vector")
 		return
 	}
+	if _, err := ai_features.EnqueueRelevantEmbeddingRefresh(
+		tx,
+		tableName,
+		int64(tableUID),
+		updateRequest.ID,
+		changedFields,
+	); err != nil {
+		log.Printf("\033[31merror: schedule embedding refresh for %s id %d: %v\033[0m", tableName, updateRequest.ID, err)
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error scheduling embedding refresh")
+		return
+	}
 
 	cacheSyncPlan, err := dtt_asset_linking.CollectSharedAssetParentCacheSyncPlan(tx, tableName, []int64{updateRequest.ID})
 	if err != nil {
@@ -319,12 +328,6 @@ func getSessionUserRoleOrGuest(request *http.Request) string {
 // getTableUID hakee system_db_tables-taulusta table_uid:in
 type queryer interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
-}
-
-type queryExecer interface {
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
-	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
 func getTableUID(tableName string, q queryer) (int, error) {
@@ -504,100 +507,4 @@ func convertValue(value interface{}, dataType string) (interface{}, error) {
 		// Jos ei osuta mihinkään, palautetaan sellaisenaan
 		return value, nil
 	}
-}
-
-// tableHasLangEmbeddings checks multi_lang_embeddings flag for the table.
-func tableHasLangEmbeddings(tableName string, q queryer) bool {
-	var flag bool
-	err := q.QueryRow(`SELECT multi_lang_embeddings FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&flag)
-	if err != nil {
-		return false
-	}
-	return flag
-}
-
-// generateLangEmbeddingsForRow creates embeddings for the row and stores them in <table>_lang_embeddings.
-func generateLangEmbeddingsForRow(q queryExecer, tableName string, rowID int64, langs []string) error {
-	var hostUpdated time.Time
-	err := q.QueryRow(fmt.Sprintf(`SELECT updated FROM %s WHERE id=$1`, pq.QuoteIdentifier(tableName)), rowID).Scan(&hostUpdated)
-	if err != nil {
-		return err
-	}
-
-	embTable := pq.QuoteIdentifier(tableName + "_lang_embeddings")
-	rows, err := q.Query(fmt.Sprintf(`SELECT language_code, updated FROM %s WHERE host_row_id=$1`, embTable), rowID)
-	if err == nil {
-		existing := make(map[string]time.Time)
-		for rows.Next() {
-			var code string
-			var upd time.Time
-			if err := rows.Scan(&code, &upd); err == nil {
-				existing[code] = upd
-			}
-		}
-		_ = rows.Err() // non-critical: best-effort prefetch of existing embeddings
-		var need []string
-		for _, l := range langs {
-			if u, ok := existing[l]; !ok || u.Before(hostUpdated) {
-				need = append(need, l)
-			}
-		}
-		langs = need
-	}
-
-	if len(langs) == 0 {
-		return nil
-	}
-	textCols, err := dbutils.GetQueryableColumns(tableName, q, true)
-	if err != nil {
-		return err
-	}
-	if len(textCols) == 0 {
-		return nil
-	}
-
-	selectCols := strings.Join(textCols, ", ")
-	row := q.QueryRow(fmt.Sprintf(`SELECT %s FROM %s WHERE id=$1`, selectCols, pq.QuoteIdentifier(tableName)), rowID)
-	data := make([]interface{}, len(textCols))
-	ptrs := make([]interface{}, len(textCols))
-	for i := range data {
-		ptrs[i] = &data[i]
-	}
-	if err := row.Scan(ptrs...); err != nil {
-		return err
-	}
-
-	var parts []string
-	for i := range textCols {
-		if data[i] != nil {
-			s := strings.TrimSpace(fmt.Sprintf("%v", data[i]))
-			if s != "" {
-				parts = append(parts, s)
-			}
-		}
-	}
-	joined := strings.Join(parts, " / ")
-	if strings.TrimSpace(joined) == "" {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	embedding, err := ai_features.GenerateEmbedding(ctx, joined)
-	if err != nil || len(embedding) == 0 {
-		return err
-	}
-	vec := pgvector.NewVector(embedding)
-
-	for _, lang := range langs {
-		del := fmt.Sprintf(`DELETE FROM %s WHERE host_row_id=$1 AND language_code=$2`, embTable)
-		if _, delErr := q.Exec(del, rowID, lang); delErr != nil {
-			log.Printf("[upsertRowEmbedding] warning: failed to delete old embedding for row %v lang %s: %v", rowID, lang, delErr)
-		}
-		ins := fmt.Sprintf(`INSERT INTO %s (host_row_id, language_code, embedding, updated) VALUES ($1,$2,$3,NOW())`, embTable)
-		if _, insErr := q.Exec(ins, rowID, lang, vec); insErr != nil {
-			log.Printf("[upsertRowEmbedding] warning: failed to insert embedding for row %v lang %s: %v", rowID, lang, insErr)
-		}
-	}
-	return nil
 }

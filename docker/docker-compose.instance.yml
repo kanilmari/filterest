@@ -14,7 +14,9 @@
 #                      production sidecars even when they stay on loopback
 #                      behind a host reverse proxy during migration.
 #   DOMAIN       - Domain for Traefik routing (optional, e.g., "filterest.fi")
-#   SESSION_COOKIE_NAME - Optional shared cookie name for replica pools
+#   SESSION_COOKIE_MODE - "isolated" by default; use "replica-pool" only for
+#                         true load-balanced replicas serving the same database
+#   SESSION_COOKIE_NAME - Required shared cookie name only in replica-pool mode
 #
 # To enable email webhooks via ngrok:
 #   1. Set NGROK_AUTHTOKEN in your instance .env file
@@ -70,6 +72,7 @@ services:
       - DB_GUEST_PASSWORD=${DB_GUEST_PASSWORD}
       - SESSION_KEY=${SESSION_KEY}
       - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+      - SESSION_COOKIE_MODE=${SESSION_COOKIE_MODE:-isolated}
       - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-}
       - TUKISUU_PURCHASE_SECRET=${TUKISUU_PURCHASE_SECRET:-}
       - TUKISUU_BASE_URL=${TUKISUU_BASE_URL:-}

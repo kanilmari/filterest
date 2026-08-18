@@ -10,7 +10,8 @@ import {
 } from "../general_tables/gt_toolbar/toolbar_button_creator.js";
 import {
     createGenericViewSelector,
-    applyViewStyling
+    applyViewStyling,
+    closeRowArticleBeforeViewSwitch,
 } from "../table_views/view_selector_printer.js";
 import { refreshTableUnified } from "../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { createVanillaDropdown } from "../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
@@ -23,6 +24,7 @@ import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
 import { get_endpoint_url } from "../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import { applyTranslationVariable } from "../lang/translation_handler_helpers.js";
+import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 import {
     EXPERIMENTAL_FREE_LAYOUT_CARD_STYLE_VARIANT,
     getCardStyleVariant,
@@ -34,8 +36,11 @@ import {
     DATASET_VIEW_SELECTOR_GROUP_DIRECT,
     DATASET_VIEW_SELECTOR_GROUP_MORE,
     DATASET_VIEW_SELECTOR_TEXT,
+    getDatasetViewLabelForLanguage,
     getDatasetViewSelectorOptions,
+    getDatasetViewSelectorTextForLanguage,
 } from "../table_views/dataset_view_registry.js";
+import { createFieldViewEditorButton } from "./field_view_editor.js";
 
 /**
  * SSE-yhteyden avaava funktio, joka asuu nyt admin-tiedostossa,
@@ -104,10 +109,14 @@ function createEmbedButton(table_name) {
 /**
  * Luodaan näkymänvalintanapit vain adminille.
  */
-function createAdminViewButtons(table_name, current_view) {
+function createAdminViewButtons(table_name, current_view, columns = [], dataTypes = {}) {
+    const activeLanguage = getLanguageWithBrowserFallback();
     const directButtons = getDatasetViewSelectorOptions(
         DATASET_VIEW_SELECTOR_GROUP_DIRECT
-    );
+    ).map((option) => ({
+        ...option,
+        label: getDatasetViewLabelForLanguage(option.viewKey, activeLanguage),
+    }));
 
     const container = createGenericViewSelector(
         table_name,
@@ -121,23 +130,47 @@ function createAdminViewButtons(table_name, current_view) {
     dropdownWrapper.classList.add("more-views-dropdown");
     dropdownWrapper.dataset.testid = "view-dropdown-more";
 
+    const moreViewOptions = getDatasetViewSelectorOptions(
+        DATASET_VIEW_SELECTOR_GROUP_MORE,
+        {
+            datasetName: table_name,
+            columns,
+            dataTypes,
+        }
+    ).map((option) => ({
+        value: option.viewKey,
+        label: getTranslationForKey(option.langKey, {
+            fallback: getDatasetViewLabelForLanguage(
+                option.viewKey,
+                activeLanguage
+            ),
+        }),
+        langKey: option.langKey,
+    }));
+
     createVanillaDropdown({
         containerElement: dropdownWrapper,
-        options: getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_MORE)
-            .map((option) => ({
-                value: option.viewKey,
-                label: option.translateDropdownLabel
-                    ? getTranslationForKey(option.langKey, { fallback: option.label })
-                    : option.label,
-            })),
+        options: moreViewOptions,
         placeholder: getTranslationForKey(DATASET_VIEW_SELECTOR_TEXT.moreViews.langKey, {
-            fallback: DATASET_VIEW_SELECTOR_TEXT.moreViews.placeholderFallback,
+            fallback: getDatasetViewSelectorTextForLanguage(
+                DATASET_VIEW_SELECTOR_TEXT.moreViews,
+                activeLanguage
+            ),
         }),
         showClearButton: false,
         useSearch: false,
+        translate: (langKey) => {
+            const matchingOption = moreViewOptions.find(
+                (option) => option.langKey === langKey
+            );
+            return getTranslationForKey(langKey, {
+                fallback: matchingOption?.label || "",
+            });
+        },
         onChange: (value) => {
             if (!value) return;
             const datasetName = table_name;
+            closeRowArticleBeforeViewSwitch(datasetName);
             localStorage.setItem(`${datasetName}_view`, value);
             applyViewStyling(table_name);
             refreshTableUnified(table_name);
@@ -201,16 +234,22 @@ export async function appendAdminFeatures(
     table_name,
     managementButtonsContainer,
     viewSelectorContainer,
-    current_view
+    current_view,
+    { columns = [], dataTypes = {} } = {}
 ) {
     const [
         canDeleteRows,
         canModifyColumns,
+        canEditFieldView,
         canEmbedRows,
         canChangeViewStyle,
     ] = await Promise.all([
         hasDatasetPermission("/api/delete-rows", table_name),
         hasDatasetPermission("/api/modify-columns", table_name),
+        // Field-view editing is an admin capability whose permission row is
+        // intentionally tableless. Passing the active dataset here would ask
+        // the strict checker for a table-specific grant that does not exist.
+        hasDatasetPermission("/api/card-visibility/update", ""),
         hasDatasetPermission("/api/embedding_stream_handler", table_name),
         hasDatasetPermission("/ui/table-view-style-buttons", table_name),
     ]);
@@ -227,6 +266,12 @@ export async function appendAdminFeatures(
         managementButtonsContainer.appendChild(columnBtn);
     }
 
+    if (canEditFieldView) {
+        managementButtonsContainer.appendChild(
+            createFieldViewEditorButton(table_name)
+        );
+    }
+
     // 3) "Embeditä data" -nappi
     if (canEmbedRows) {
         const embedBtn = createEmbedButton(table_name);
@@ -239,7 +284,12 @@ export async function appendAdminFeatures(
 
     // 4) Näkymänvalintanapit erilliseen konttiin
     if (canChangeViewStyle) {
-        const viewSelector = createAdminViewButtons(table_name, current_view);
+        const viewSelector = createAdminViewButtons(
+            table_name,
+            current_view,
+            columns,
+            dataTypes
+        );
         viewSelectorContainer.appendChild(viewSelector);
     }
 

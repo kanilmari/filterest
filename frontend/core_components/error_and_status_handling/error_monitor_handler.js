@@ -30,15 +30,10 @@ import { getNiceStatusMessage, isAbortLikeNetworkError, shortenUrl } from "./err
     // Session Reset (recovery tool)
     // ==========================================
     // Exposed as window.__resetSession() for dev console recovery.
-    // Clears client-side cookies and calls the server reset endpoint.
+    // Calls the server-owned, instance-scoped reset endpoint. JavaScript must
+    // not delete host-wide cookies because sibling instances may share a host.
 
     window.__resetSession = function() {
-        const cookiesToRemove = [
-            "device_id", "fingerprint", "nonce_name", "session", "nonce_value"
-        ];
-        cookiesToRemove.forEach(name => {
-            document.cookie = name + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        });
         endpoint_router('resetSession', { method: 'POST' })
             .then(() => location.reload())
             .catch(err => {

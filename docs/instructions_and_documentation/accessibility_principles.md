@@ -1,12 +1,12 @@
 <!--
 accessibility_principles.md
-Defines the durable accessibility baseline for Easelect UI work.
+Defines the durable accessibility baseline for Filterest UI work.
 Explains the minimum expectations contributors should follow when building or changing frontend features.
 Keeps recurring accessibility rules in stable documentation instead of repeating them in tickets.
 -->
 # Accessibility Principles
 
-This document defines the practical accessibility baseline for Easelect.
+This document defines the practical accessibility baseline for Filterest.
 Use it when building or reviewing frontend work that creates, edits, or removes UI behavior.
 
 ## 1. Scope

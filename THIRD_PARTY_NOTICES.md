@@ -6,8 +6,8 @@ not legal advice and still needs human/project approval before publication.
 
 ## Candidate
 
-- Filterest app version: `8.29.4`
-- Database version: `8.0.59`
+- Filterest app version: `8.32.0`
+- Database version: `9.0.0`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
 - Go modules listed: `96`
@@ -334,10 +334,10 @@ not legal advice and still needs human/project approval before publication.
 | axe-core | 4.11.4 | MPL-2.0 | node_modules/axe-core (package-lock.json) |
 | axe-core | 4.12.1 | MPL-2.0 | node_modules/lighthouse/node_modules/axe-core (package-lock.json) |
 | balanced-match | 2.0.0 | MIT | node_modules/stylelint/node_modules/balanced-match (package-lock.json) |
-| balanced-match | 4.0.4 | MIT | node_modules/glob/node_modules/balanced-match (package-lock.json) |
+| balanced-match | 4.0.4 | MIT | node_modules/balanced-match (package-lock.json) |
 | base64-js | 1.5.1 | MIT | node_modules/base64-js (package-lock.json) |
 | bidi-js | 1.0.3 | MIT | node_modules/bidi-js (package-lock.json) |
-| brace-expansion | 5.0.8 | MIT | node_modules/glob/node_modules/brace-expansion (package-lock.json) |
+| brace-expansion | 5.0.9 | MIT | node_modules/brace-expansion (package-lock.json) |
 | braces | 3.0.3 | MIT | node_modules/braces (package-lock.json) |
 | buffer | 6.0.3 | MIT | node_modules/buffer (package-lock.json) |
 | cacheable | 1.8.8 | MIT | node_modules/cacheable (package-lock.json) |
@@ -396,7 +396,7 @@ not legal advice and still needs human/project approval before publication.
 | fast-glob | 3.3.3 | MIT | node_modules/fast-glob (package-lock.json) |
 | fast-json-stable-stringify | 2.1.0 | MIT | node_modules/fast-json-stable-stringify (package-lock.json) |
 | fast-levenshtein | 2.0.6 | MIT | node_modules/fast-levenshtein (package.json license) |
-| fast-uri | 3.1.4 | BSD-3-Clause | node_modules/fast-uri (package-lock.json) |
+| fast-uri | 3.1.5 | BSD-3-Clause | node_modules/fast-uri (package-lock.json) |
 | fastest-levenshtein | 1.0.16 | MIT | node_modules/fastest-levenshtein (package-lock.json) |
 | fastq | 1.19.0 | ISC | node_modules/fastq (package-lock.json) |
 | fdir | 6.4.4 | MIT | node_modules/vite/node_modules/fdir (package-lock.json) |
@@ -449,7 +449,7 @@ not legal advice and still needs human/project approval before publication.
 | jpeg-js | 0.4.4 | BSD-3-Clause | node_modules/jpeg-js (package-lock.json) |
 | js-library-detector | 6.7.0 | MIT | node_modules/js-library-detector (package-lock.json) |
 | js-tokens | 4.0.0 | MIT | node_modules/js-tokens (package-lock.json) |
-| js-yaml | 4.3.0 | MIT | node_modules/js-yaml (package-lock.json) |
+| js-yaml | 4.3.1 | MIT | node_modules/js-yaml (package-lock.json) |
 | jsdom | 29.0.1 | MIT | node_modules/jsdom (package-lock.json) |
 | json-buffer | 3.0.1 | MIT | node_modules/json-buffer (package.json license) |
 | json-parse-even-better-errors | 2.3.1 | MIT | node_modules/json-parse-even-better-errors (package-lock.json) |
@@ -485,7 +485,7 @@ not legal advice and still needs human/project approval before publication.
 | modern-tar | 0.7.7 | MIT | node_modules/modern-tar (package-lock.json) |
 | module-details-from-path | 1.0.4 | MIT | node_modules/module-details-from-path (package-lock.json) |
 | ms | 2.1.3 | MIT | node_modules/ms (package.json license) |
-| nanoid | 3.3.16 | MIT | node_modules/nanoid (package-lock.json) |
+| nanoid | 3.3.18 | MIT | node_modules/nanoid (package-lock.json) |
 | napi-postinstall | 0.3.4 | MIT | node_modules/napi-postinstall (package-lock.json) |
 | natural-compare | 1.4.0 | MIT | node_modules/natural-compare (package.json license) |
 | normalize-path | 3.0.0 | MIT | node_modules/normalize-path (package-lock.json) |
@@ -570,7 +570,7 @@ not legal advice and still needs human/project approval before publication.
 | type-check | 0.4.0 | MIT | node_modules/type-check (package.json license) |
 | type-fest | 4.41.0 | (MIT OR CC0-1.0) | node_modules/type-fest (package-lock.json) |
 | typed-query-selector | 2.12.2 | MIT | node_modules/typed-query-selector (package-lock.json) |
-| undici | 7.28.0 | MIT | node_modules/undici (package-lock.json) |
+| undici | 7.29.0 | MIT | node_modules/undici (package-lock.json) |
 | undici-types | 7.16.0 | MIT | node_modules/undici-types (package-lock.json) |
 | unrs-resolver | 1.12.2 | MIT | node_modules/unrs-resolver (package-lock.json) |
 | uri-js | 4.4.1 | BSD-2-Clause | node_modules/uri-js (package-lock.json) |

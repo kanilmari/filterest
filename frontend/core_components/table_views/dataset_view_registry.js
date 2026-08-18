@@ -4,6 +4,8 @@
 // Exists to remove duplicated view keys, labels, container IDs, and UI permission routes.
 // Keep this file renderer-free so selectors can read metadata without loading view modules.
 
+import { datasetSupportsTreeView } from "./dataset_tree_availability_checker.js";
+
 export const DATASET_VIEW_SELECTOR_GROUP_DIRECT = "direct";
 export const DATASET_VIEW_SELECTOR_GROUP_MORE = "more";
 export const CARD_VIEW_KEY = "card";
@@ -17,6 +19,7 @@ export const DATASET_VIEW_SELECTOR_TEXT = Object.freeze({
             fi: "N\u00e4kym\u00e4t ja esitystavat",
             en: "Views and presentations",
             ch: "\u89c6\u56fe\u4e0e\u5c55\u793a\u65b9\u5f0f",
+            yue: "\u8996\u5716\u8207\u5c55\u793a\u65b9\u5f0f",
         }),
     }),
     moreViews: Object.freeze({
@@ -27,6 +30,7 @@ export const DATASET_VIEW_SELECTOR_TEXT = Object.freeze({
             fi: "Lis\u00e4\u00e4",
             en: "More",
             ch: "\u66f4\u591a",
+            yue: "\u66f4\u591a",
         }),
     }),
 });
@@ -42,6 +46,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Kortit",
             en: "Cards",
             ch: "\u5361\u7247",
+            yue: "\u5361\u7247",
         },
         permissionRoute: "/ui/view/card",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_DIRECT,
@@ -55,6 +60,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Artikkeli",
             en: "Article",
             ch: "\u6587\u7ae0",
+            yue: "\u6587\u7ae0",
         },
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_DIRECT,
     },
@@ -68,6 +74,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Taulu",
             en: "Table",
             ch: "\u8868\u683c",
+            yue: "\u8868\u683c",
         },
         permissionRoute: "/ui/view/table",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_DIRECT,
@@ -83,6 +90,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Lista",
             en: "List",
             ch: "\u5217\u8868",
+            yue: "\u5217\u8868",
         },
         permissionRoute: "/ui/view/list",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_DIRECT,
@@ -98,6 +106,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Vertailu",
             en: "Compare",
             ch: "\u5bf9\u6bd4",
+            yue: "\u6bd4\u8f03",
         },
         permissionRoute: "/ui/view/transposed",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_DIRECT,
@@ -114,6 +123,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Puun\u00e4kym\u00e4",
             en: "Tree",
             ch: "\u6811\u89c6\u56fe",
+            yue: "\u6a39\u72c0\u5716",
         },
         permissionRoute: "/ui/view/tree",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
@@ -129,6 +139,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Tiketti",
             en: "Ticket",
             ch: "\u5de5\u5355",
+            yue: "\u5de5\u55ae",
         },
         permissionRoute: "/ui/view/ticket",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
@@ -143,6 +154,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Tuotekortti",
             en: "Product card",
             ch: "\u4ea7\u54c1\u5361\u7247",
+            yue: "\u7522\u54c1\u5361\u7247",
         },
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
     },
@@ -156,6 +168,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Kalenteri",
             en: "Calendar",
             ch: "\u65e5\u5386",
+            yue: "\u65e5\u66c6",
         },
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
     },
@@ -169,6 +182,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Kartta",
             en: "Map",
             ch: "\u5730\u56fe",
+            yue: "\u5730\u5716",
         },
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
     },
@@ -182,6 +196,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Hintagraafi",
             en: "Price chart",
             ch: "\u4ef7\u683c\u56fe\u8868",
+            yue: "\u50f9\u683c\u5716\u8868",
         },
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
         translateDropdownLabel: true,
@@ -196,6 +211,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Asetusn\u00e4kym\u00e4",
             en: "Settings",
             ch: "\u8bbe\u7f6e\u89c6\u56fe",
+            yue: "\u8a2d\u5b9a",
         },
         permissionRoute: "/ui/view/settings",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
@@ -210,6 +226,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
             fi: "Pilvihallinta",
             en: "Cloud management",
             ch: "\u4e91\u7ba1\u7406",
+            yue: "\u96f2\u7aef\u7ba1\u7406",
         },
         permissionRoute: "/ui/view/cloud_management",
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
@@ -318,9 +335,18 @@ export function getDatasetViewPermissionRoute(viewKey) {
  * Operates between registry metadata and admin/filterbar selector builders.
  * Exists to keep selector ordering and labels in one canonical place.
  */
-export function getDatasetViewSelectorOptions(selectorGroup) {
+export function getDatasetViewSelectorOptions(selectorGroup, availabilityContext = null) {
     return DATASET_VIEW_DEFINITIONS
         .filter((definition) => definition.selectorGroup === selectorGroup)
+        .filter((definition) => (
+            definition.viewKey !== "tree"
+            || !availabilityContext
+            || datasetSupportsTreeView(
+                availabilityContext.datasetName,
+                availabilityContext.columns,
+                availabilityContext.dataTypes
+            )
+        ))
         .map((definition) => ({
             viewKey: definition.viewKey,
             label: definition.labelFallback,
@@ -345,6 +371,83 @@ export function getDatasetViewLangKey(viewKey) {
  */
 export function getDatasetViewLabelFallback(viewKey) {
     return getDatasetViewDefinition(viewKey)?.labelFallback || String(viewKey || "");
+}
+
+/**
+ * Returns the registered local label for the active UI language.
+ * Operates between the view registry and controls created before DB translations arrive.
+ * Exists so every view name remains multilingual even when an installation lacks a key row.
+ */
+export function getDatasetViewLabelForLanguage(viewKey, language = "en") {
+    const definition = getDatasetViewDefinition(viewKey);
+    const translations = definition?.translations || {};
+    const normalizedLanguage = String(language || "")
+        .trim()
+        .toLowerCase()
+        .replaceAll("_", "-");
+
+    if (normalizedLanguage.startsWith("fi")) {
+        return translations.fi || definition?.labelFallback || "";
+    }
+    if (
+        normalizedLanguage.startsWith("yue")
+        || normalizedLanguage.startsWith("zh-hk")
+    ) {
+        return translations.yue
+            || translations.ch
+            || translations.en
+            || definition?.labelFallback
+            || "";
+    }
+    if (
+        normalizedLanguage.startsWith("ch")
+        || normalizedLanguage.startsWith("zh")
+    ) {
+        return translations.ch
+            || translations.en
+            || definition?.labelFallback
+            || "";
+    }
+    return translations.en
+        || definition?.labelFallback
+        || String(viewKey || "");
+}
+
+/**
+ * Returns selector heading/dropdown copy for the active UI language.
+ * Operates between canonical selector text and controls rendered before translation fetches.
+ * Exists to keep the More-views trigger aligned with translated view names.
+ */
+export function getDatasetViewSelectorTextForLanguage(selectorText, language = "en") {
+    const translations = selectorText?.translations || {};
+    const normalizedLanguage = String(language || "")
+        .trim()
+        .toLowerCase()
+        .replaceAll("_", "-");
+
+    if (normalizedLanguage.startsWith("fi")) {
+        return translations.fi || selectorText?.labelFallback || "";
+    }
+    if (
+        normalizedLanguage.startsWith("yue")
+        || normalizedLanguage.startsWith("zh-hk")
+    ) {
+        return translations.yue
+            || translations.ch
+            || translations.en
+            || selectorText?.labelFallback
+            || "";
+    }
+    if (
+        normalizedLanguage.startsWith("ch")
+        || normalizedLanguage.startsWith("zh")
+    ) {
+        return translations.ch
+            || translations.en
+            || selectorText?.labelFallback
+            || "";
+    }
+    return translations.en || selectorText?.labelFallback || "";
 }
 
 /**

@@ -20,21 +20,34 @@
     overflow: hidden;
 }
 
+/* Article chrome owns the full width. Text and media receive their spacing at
+   the content level so section rules and the action-bar divider can stay flush. */
+.big_card_container.row_article_container {
+    padding: 0;
+}
+
 .card_view_wrapper.big-card-open .big_card_container {
     border-radius: 0;
+    border-top: 0;
 }
 
 .big_card_content {
     max-width: inherit !important;
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden auto;
     overscroll-behavior: contain;
 }
 
 .big_card_content .card_username {
-    margin: 0 0 10px 0;
+    margin: 0 0 10px;
+    padding-inline: 1rem;
+}
+
+.row_article_content > .big_card_generic_field,
+.row_article_content > .big_card_creation_spec {
+    box-sizing: border-box;
+    padding-inline: 1rem;
 }
 
 .big_card_details_container > div {
@@ -50,6 +63,7 @@
 
 .big_card_image {
     margin-top: 30px;
+    padding-inline: 1rem;
 }
 
 .big_card_image .wrapper {
@@ -107,6 +121,8 @@
     font-size: 2rem;
     font-weight: bold;
     color: var(--text_color);
+    padding-block-start: 19px;
+    padding-inline: 1rem;
 }
 
 .big_card_header_dataset_icon {
@@ -118,6 +134,7 @@
 
 .ticket_status_badge--big {
     margin-top: -0.35rem;
+    margin-inline: 1rem;
     font-size: 0.9rem;
     padding: 0.35rem 0.85rem;
 }
@@ -126,7 +143,7 @@
 .big_card_keywords_container {
     display: flex;
     flex-wrap: wrap;
-    padding: 0 10px;
+    padding-inline: 1rem;
 }
 
 
@@ -281,7 +298,7 @@
     width: 1rem;
     height: 1rem;
     fill: none;
-    stroke: currentColor;
+    stroke: currentcolor;
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 2;
@@ -289,7 +306,7 @@
 
 .big_card_close {
     position: static;
-    margin-left: auto;
+    margin: 1rem 1rem 0 auto;
     align-self: flex-end;
     flex: 0 0 auto;
     background: transparent;
@@ -308,7 +325,7 @@
     align-items: center;
     flex: 0 0 auto;
     gap: 0.75rem;
-    padding: 0.75rem 0 0;
+    padding: 0.75rem 1rem 1rem;
     border-top: 1px solid var(--border_color);
     margin-top: 0;
     background: var(--bg_color_extreme);
@@ -343,7 +360,7 @@
 }
 
 .big_card_description_container {
-    padding: 20px 0;
+    padding: 20px 1rem;
 }
 
 .multilang-selector {
@@ -381,57 +398,6 @@
     accent-color: var(--accent_color, hsl(207deg 70% 53%));
 }
 
-/* ── Child tabs ────────────────────────────────── */
-.child_tabs_container {
-    margin-top: 1rem;
-    border-top: 1px solid var(--border_color);
-    padding-top: 0.5rem;
-}
-
-.child_tabs_bar {
-    display: flex;
-    gap: 0;
-    overflow-x: auto;
-    border-bottom: 2px solid var(--border_color);
-}
-
-.child_tab_button {
-    padding: 0.5rem 1rem;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    cursor: pointer;
-    white-space: nowrap;
-    color: var(--text_color_secondary, var(--text_color));
-    font-size: 0.9rem;
-}
-
-.child_tab_button:hover {
-    background: color-mix(in srgb, var(--bg_color_extreme) 90%, #888 10%);
-}
-
-.child_tab_button.active {
-    border-bottom-color: var(--accent_color, hsl(207deg 70% 53%));
-    color: var(--text_color);
-    font-weight: 600;
-}
-
-.child_tab_panel {
-    display: none;
-    padding: 0.75rem 0;
-}
-
-.child_tab_panel.active {
-    display: block;
-}
-
-.child_tab_open_link {
-    display: inline-block;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-}
-
 .comment_list.child_record_list {
     margin-top: 0.5rem;
     gap: 2.5rem;
@@ -467,7 +433,7 @@
 .child_record_icon_svg {
     width: 1.1rem;
     height: 1.1rem;
-    fill: currentColor;
+    fill: currentcolor;
 }
 
 .child_record_title {
@@ -501,7 +467,7 @@
     flex-direction: column;
     gap: 0.75rem;
     padding: 0.95rem 1rem;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 0.12);
     border-left: 3px solid color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 65%, transparent 35%);
 }
 
@@ -584,7 +550,7 @@
     padding-right: 0.25rem;
 }
 
-@media (max-width: 720px) {
+@media (width <= 720px) {
     .child_record_meta {
         margin-left: 0;
         width: 100%;
@@ -671,7 +637,7 @@
 
 .comment_body {
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .comment_empty {

@@ -9,8 +9,6 @@
 .node-row {
     display: flex;
     align-items: center;
-    -webkit-user-select: none;
-    -moz-user-select: none;
     user-select: none;
 }
 
@@ -63,8 +61,6 @@
     width: fit-content;
     cursor: pointer;
     padding-left: 2px;
-    -webkit-user-select: none;
-    -moz-user-select: none;
     user-select: none;
 }
 

@@ -29,6 +29,7 @@ const CARD_ELEMENT_OPTIONS = [
     'header',
     'header+lang_key',
     'image',
+    'details_link',
     'description1',
     'description1+lang_key',
     'description2',

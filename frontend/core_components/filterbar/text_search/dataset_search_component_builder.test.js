@@ -86,6 +86,7 @@ vi.mock("./dataset_search_executor.js", () => ({
 describe("createDatasetSearchComponent", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
+        localStorage.clear();
         vi.clearAllMocks();
         getParamsMock.mockReturnValue({});
         datasetSearchStateMock.initialize.mockImplementation((_tableName, value) => value);
@@ -94,6 +95,31 @@ describe("createDatasetSearchComponent", () => {
         datasetSearchRegistryMock.clear();
         stateSubscriber = null;
         window.history.replaceState({}, "", "/");
+    });
+
+    test("restores an uncommitted per-table search draft after a page reload", async () => {
+        localStorage.setItem("int_search_draft_app_users", "title");
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+
+        const component = createDatasetSearchComponent("app_users");
+
+        expect(component.input.value).toBe("title");
+        expect(datasetSearchStateMock.initialize).toHaveBeenCalledWith(
+            "app_users",
+            "title"
+        );
+        component.destroy();
+    });
+
+    test("prefers the committed URL search over an older local draft", async () => {
+        localStorage.setItem("int_search_draft_app_users", "older draft");
+        getParamsMock.mockReturnValue({ search: "current title" });
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+
+        const component = createDatasetSearchComponent("app_users");
+
+        expect(component.input.value).toBe("current title");
+        component.destroy();
     });
 
     test("adds accessible labels to the search input and icon-only submit button", async () => {

@@ -69,7 +69,14 @@ describe('create_tree_view', () => {
             [
                 { id: 1, parent_id: null, type: 'folder', name: 'Root' },
                 { id: 2, parent_id: 1, type: 'item', name: 'Leaf' },
-            ]
+            ],
+            {
+                parent_id: {
+                    data_type: 'integer',
+                    foreign_table: 'demo_dataset',
+                    foreign_column: 'id',
+                },
+            }
         );
 
         expect(endpointRouterMock).not.toHaveBeenCalled();
@@ -115,6 +122,11 @@ describe('create_tree_view', () => {
             {
                 type: { is_multilingual: true },
                 name: { is_multilingual: true },
+                parent_id: {
+                    data_type: 'integer',
+                    foreign_table: 'demo_dataset',
+                    foreign_column: 'id',
+                },
             }
         );
 
@@ -133,9 +145,16 @@ describe('create_tree_view', () => {
         const { create_tree_view } = await import('./tree_view_printer.js');
         await create_tree_view(
             'demo_dataset',
-            ['id', 'name'],
-            [{ id: 1, name: rawJson }],
-            { name: { is_multilingual: false } }
+            ['id', 'parent_id', 'name'],
+            [{ id: 1, parent_id: null, name: rawJson }],
+            {
+                name: { is_multilingual: false },
+                parent_id: {
+                    data_type: 'integer',
+                    foreign_table: 'demo_dataset',
+                    foreign_column: 'id',
+                },
+            }
         );
 
         expect(renderTreeMock.mock.calls.at(-1)[0][0].name).toBe(rawJson);
@@ -153,9 +172,16 @@ describe('create_tree_view', () => {
         } = await import('./tree_view_printer.js');
         await create_tree_view(
             'demo_dataset',
-            ['id', 'name'],
-            [row],
-            { name: { is_multilingual: true } }
+            ['id', 'parent_id', 'name'],
+            [{ ...row, parent_id: null }],
+            {
+                name: { is_multilingual: true },
+                parent_id: {
+                    data_type: 'integer',
+                    foreign_table: 'demo_dataset',
+                    foreign_column: 'id',
+                },
+            }
         );
         expect(renderTreeMock.mock.calls.at(-1)[0][0].name).toBe('English name');
 
@@ -166,5 +192,20 @@ describe('create_tree_view', () => {
         expect(renderTreeMock.mock.calls.at(-1)[0][0].name).toBe('Suomenkielinen nimi');
         expect(endpointRouterMock).not.toHaveBeenCalled();
         expect(row.name).toBe(nameValue);
+    });
+
+    test('fails closed when a parent-looking column has no self-FK metadata', async () => {
+        document.body.innerHTML = '<div id="demo_dataset_tree_view_container"></div>';
+
+        const { create_tree_view } = await import('./tree_view_printer.js');
+        const treeHost = await create_tree_view(
+            'demo_dataset',
+            ['id', 'parent_id', 'name'],
+            [{ id: 1, parent_id: null, name: 'Root' }],
+            { parent_id: { data_type: 'integer' } }
+        );
+
+        expect(renderTreeMock).not.toHaveBeenCalled();
+        expect(treeHost.textContent).toContain('sisäistä yläsolmusuhdetta');
     });
 });

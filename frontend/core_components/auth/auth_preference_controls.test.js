@@ -9,10 +9,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const {
     initializeThemeToggle,
     initializeLanguageSelector,
+    loadPublicUiLanguageCatalog,
     authLanguages,
 } = vi.hoisted(() => ({
     initializeThemeToggle: vi.fn(),
     initializeLanguageSelector: vi.fn(),
+    loadPublicUiLanguageCatalog: vi.fn(async () => {}),
     authLanguages: [{ value: "en" }, { value: "fi" }, { value: "ch" }, { value: "yue" }],
 }));
 
@@ -20,6 +22,7 @@ vi.mock("../theme.js", () => ({ initializeThemeToggle }));
 vi.mock("../lang/lang_panel_printer.js", () => ({ initializeLanguageSelector }));
 vi.mock("../lang/ui_language_catalog.js", () => ({
     getUiLanguageOptions: vi.fn(() => authLanguages),
+    loadPublicUiLanguageCatalog,
 }));
 
 import { initializeAuthPreferenceControls } from "./auth_preference_controls.js";
@@ -30,12 +33,12 @@ describe("auth_preference_controls", () => {
         vi.clearAllMocks();
     });
 
-    test("builds shared controls from a context-only placeholder", () => {
+    test("builds shared controls from a context-only placeholder", async () => {
         document.body.innerHTML = `
             <div data-auth-preference-controls data-auth-controls-context="first-run"></div>
         `;
 
-        initializeAuthPreferenceControls(document);
+        await initializeAuthPreferenceControls(document);
 
         const themeButton = document.querySelector('[data-testid="first-run-theme-toggle"]');
         const languageSelector = document.querySelector('[data-testid="first-run-language-selection"]');
@@ -47,14 +50,14 @@ describe("auth_preference_controls", () => {
         });
     });
 
-    test("supports multiple form contexts without duplicate controls", () => {
+    test("supports multiple form contexts without duplicate controls", async () => {
         document.body.innerHTML = `
             <div data-auth-preference-controls data-auth-controls-context="login"></div>
             <div data-auth-preference-controls data-auth-controls-context="password-reset"></div>
         `;
 
-        initializeAuthPreferenceControls(document);
-        initializeAuthPreferenceControls(document);
+        await initializeAuthPreferenceControls(document);
+        await initializeAuthPreferenceControls(document);
 
         expect(document.querySelectorAll("[data-theme-toggle]")).toHaveLength(2);
         expect(document.querySelector('[data-testid="login-theme-toggle"]')).not.toBeNull();

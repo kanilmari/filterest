@@ -1,7 +1,6 @@
 // @vitest-environment node
 // filterbar_layout_css.test.js
-// Verifies CSS contracts for the shared dataset topbar layout.
-// Bridges filterbar DOM classes and stylesheet-only sizing guarantees.
+// Verifies stylesheet-only contracts owned by the main filterbar layout.
 // Exists to catch visual regressions that do not require jsdom behavior.
 
 import { describe, expect, test } from 'vitest';
@@ -26,26 +25,7 @@ function extractRule(css, selector) {
     return css.slice(bodyStart, bodyEnd);
 }
 
-describe('shared topbar layout CSS', () => {
-    test('caps the search-only field at 600px inside the shared topbar', () => {
-        const css = readSiblingCss('filterbar_layout.css');
-        const topbarRule = extractRule(css, '.dataset-shared-topbar');
-        const searchRule = extractRule(css, '.dataset-shared-topbar__center > .dataset-search-panel');
-
-        expect(topbarRule).toContain('--filterbar-search-only-max-width: 600px');
-        expect(searchRule).toContain('max-width: var(--filterbar-search-only-max-width, 600px)');
-    });
-
-    test('moves the article close button left of the exposed filterbar toggle', () => {
-        const css = readSiblingCss('filterbar_layout.css');
-        const closeOffsetRule = extractRule(
-            css,
-            '.tab_parts_container:has(.filterbar-fixed-toggle--exposed) .dataset-shared-topbar__article-close:not([hidden])'
-        );
-
-        expect(closeOffsetRule).toContain('margin-right: 52px');
-    });
-
+describe('filterbar layout CSS', () => {
     test('uses the shared SVG info control with a click disclosure panel', () => {
         const css = readSiblingCss('../admin_tools/admin_version_info_indicator.css');
         const shellRule = extractRule(css, '.filterbar-clock-bar__version-info-shell');

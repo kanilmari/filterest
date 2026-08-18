@@ -14,8 +14,14 @@ const createChatUiMock = vi.hoisted(() => vi.fn((_tableName, parentElement) => {
 const getTranslationForKeyMock = vi.hoisted(() => vi.fn(() => ""));
 const createGenericViewSelectorMock = vi.hoisted(() => vi.fn(() => document.createElement("div")));
 const applyViewStylingMock = vi.hoisted(() => vi.fn());
+const closeRowArticleBeforeViewSwitchMock = vi.hoisted(() => vi.fn());
 const createVanillaDropdownMock = vi.hoisted(() => vi.fn(() => document.createElement("div")));
 const hasDatasetPermissionMock = vi.hoisted(() => vi.fn(() => Promise.resolve(false)));
+const createFieldViewEditorButtonMock = vi.hoisted(() => vi.fn(() => {
+    const button = document.createElement("button");
+    button.dataset.testid = "btn-edit-fields-view";
+    return button;
+}));
 
 vi.mock("../general_tables/gt_toolbar/toolbar_button_creator.js", () => ({
     createDeleteSelectedButton: vi.fn(() => document.createElement("button")),
@@ -25,6 +31,7 @@ vi.mock("../general_tables/gt_toolbar/toolbar_button_creator.js", () => ({
 vi.mock("../table_views/view_selector_printer.js", () => ({
     createGenericViewSelector: createGenericViewSelectorMock,
     applyViewStyling: applyViewStylingMock,
+    closeRowArticleBeforeViewSwitch: closeRowArticleBeforeViewSwitchMock,
 }));
 
 vi.mock("../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
@@ -55,6 +62,10 @@ vi.mock("../lang/translation_handler.js", () => ({
     getTranslationForKey: getTranslationForKeyMock,
 }));
 
+vi.mock("./field_view_editor.js", () => ({
+    createFieldViewEditorButton: createFieldViewEditorButtonMock,
+}));
+
 vi.mock("../table_views/experimental_free_layout_card/experimental_free_layout_card_store.js", () => ({
     EXPERIMENTAL_FREE_LAYOUT_CARD_STYLE_VARIANT: "experimental_free_layout",
     STANDARD_CARD_STYLE_VARIANT: "standard",
@@ -69,11 +80,39 @@ describe("appendChatUIIfAllowed", () => {
         createChatUiMock.mockClear();
         createGenericViewSelectorMock.mockClear();
         applyViewStylingMock.mockClear();
+        closeRowArticleBeforeViewSwitchMock.mockClear();
         createVanillaDropdownMock.mockClear();
         hasDatasetPermissionMock.mockReset();
         hasDatasetPermissionMock.mockResolvedValue(false);
+        createFieldViewEditorButtonMock.mockClear();
         getTranslationForKeyMock.mockReset();
         getTranslationForKeyMock.mockReturnValue("");
+    });
+
+    test("adds the global field-view editor to dataset Tools when allowed", async () => {
+        hasDatasetPermissionMock.mockImplementation((route, dataset) => (
+            Promise.resolve(
+                route === "/api/card-visibility/update" && dataset === ""
+            )
+        ));
+        const { appendAdminFeatures } = await import("./admin_button_builder.js");
+        const managementContainer = document.createElement("div");
+        const viewSelectorContainer = document.createElement("div");
+
+        await appendAdminFeatures(
+            "demo_table",
+            managementContainer,
+            viewSelectorContainer,
+            "card"
+        );
+
+        expect(createFieldViewEditorButtonMock).toHaveBeenCalledWith("demo_table");
+        expect(hasDatasetPermissionMock).toHaveBeenCalledWith(
+            "/api/card-visibility/update",
+            ""
+        );
+        expect(managementContainer.querySelector('[data-testid="btn-edit-fields-view"]'))
+            .not.toBeNull();
     });
 
     test("builds admin view controls from the dataset view registry", async () => {
@@ -89,36 +128,82 @@ describe("appendChatUIIfAllowed", () => {
             "demo_table",
             managementContainer,
             viewSelectorContainer,
-            "card"
+            "card",
+            {
+                columns: ["id", "parent_id", "name"],
+                dataTypes: {
+                    id: { data_type: "integer" },
+                    parent_id: { data_type: "integer" },
+                },
+            }
         );
 
         expect(createGenericViewSelectorMock).toHaveBeenCalledWith(
             "demo_table",
             "card",
             [
-                expect.objectContaining({ viewKey: "card", label: "Kortti", langKey: "view_card" }),
-                expect.objectContaining({ viewKey: "article", label: "Artikkeli", langKey: "view_article" }),
-                expect.objectContaining({ viewKey: "table", label: "Taulu", langKey: "view_table" }),
-                expect.objectContaining({ viewKey: "normal", label: "Lista", langKey: "view_normal" }),
-                expect.objectContaining({ viewKey: "transposed", label: "Vertailu", langKey: "view_transposed" }),
+                expect.objectContaining({ viewKey: "card", label: "Cards", langKey: "view_card" }),
+                expect.objectContaining({ viewKey: "article", label: "Article", langKey: "view_article" }),
+                expect.objectContaining({ viewKey: "table", label: "Table", langKey: "view_table" }),
+                expect.objectContaining({ viewKey: "normal", label: "List", langKey: "view_normal" }),
+                expect.objectContaining({ viewKey: "transposed", label: "Compare", langKey: "view_transposed" }),
             ],
             [],
             { includeHeading: false }
         );
         expect(createVanillaDropdownMock).toHaveBeenCalledWith(expect.objectContaining({
             options: [
-                { value: "tree", label: "Puunäkymä" },
-                { value: "ticket", label: "Tiketti" },
-                { value: "product_card", label: "Tuotekortti" },
-                { value: "calendar", label: "Kalenteri" },
-                { value: "map", label: "Kartta" },
-                { value: "price_chart", label: "Hintagraafi" },
-                { value: "settings", label: "Asetusnäkymä" },
-                { value: "cloud_management", label: "Pilvihallinta" },
+                { value: "ticket", label: "Ticket", langKey: "view_ticket" },
+                { value: "product_card", label: "Product card", langKey: "view_product_card" },
+                { value: "calendar", label: "Calendar", langKey: "view_calendar" },
+                { value: "map", label: "Map", langKey: "view_map" },
+                { value: "price_chart", label: "Price chart", langKey: "view_price_chart" },
+                { value: "settings", label: "Settings", langKey: "view_settings" },
+                { value: "cloud_management", label: "Cloud management", langKey: "view_cloud_management" },
             ],
-            placeholder: "Lisää näkymiä",
+            placeholder: "More",
+            translate: expect.any(Function),
         }));
+        createVanillaDropdownMock.mock.calls[0][0].onChange("calendar");
+        expect(closeRowArticleBeforeViewSwitchMock).toHaveBeenCalledWith("demo_table");
         expect(viewSelectorContainer.children).toHaveLength(1);
+    });
+
+    test("includes translated tree option for a verified self-parent dataset", async () => {
+        getTranslationForKeyMock.mockImplementation((key, options = {}) => (
+            key === "view_tree" ? "Tree" : options.fallback || ""
+        ));
+        hasDatasetPermissionMock.mockImplementation((route) => (
+            Promise.resolve(route === "/ui/table-view-style-buttons")
+        ));
+        const { appendAdminFeatures } = await import("./admin_button_builder.js");
+        const managementContainer = document.createElement("div");
+        const viewSelectorContainer = document.createElement("div");
+
+        await appendAdminFeatures(
+            "demo_table",
+            managementContainer,
+            viewSelectorContainer,
+            "card",
+            {
+                columns: ["id", "parent_id", "name"],
+                dataTypes: {
+                    parent_id: {
+                        data_type: "integer",
+                        foreign_table: "demo_table",
+                        foreign_column: "id",
+                    },
+                },
+            }
+        );
+
+        const dropdownOptions = createVanillaDropdownMock.mock.calls[0][0].options;
+        expect(dropdownOptions).toContainEqual({
+            value: "tree",
+            label: "Tree",
+            langKey: "view_tree",
+        });
+        expect(dropdownOptions.every((option) => Boolean(option.langKey))).toBe(true);
     });
 
     test("renders chat as a pinned filterbar dock with a clickable animated header", async () => {

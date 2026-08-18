@@ -140,26 +140,15 @@ vi.mock('./filterbar_calendar.js', () => ({
 }));
 
 vi.mock('../navigation/menu_button/navbar_visibility_handler.js', () => ({
+    addEnvironmentBadgeIfNeeded: vi.fn(),
     NAVBAR_VISIBILITY_CHANGED_EVENT: 'navbar-visibility-changed',
+    syncNavbarMenuButtonAccessibility: vi.fn(),
+    toggleNavbarVisibility: vi.fn(),
     updateShowMenuButtonPosition: vi.fn(),
 }));
 
 vi.mock('./shared_topbar_builder.js', () => ({
-    dockButtonIntoSharedTopBar: vi.fn((button, host, owner) => {
-        if (!button || !host || !owner) return false;
-        button.__sharedTopbarOwner = owner;
-        button.classList.add('shared-topbar-docked-button');
-        host.replaceChildren(button);
-        return true;
-    }),
     isSharedTopBarHostActive: vi.fn(() => true),
-    restoreButtonFromSharedTopBar: vi.fn((button, owner) => {
-        if (!button || button.__sharedTopbarOwner !== owner) return false;
-        button.__sharedTopbarOwner = null;
-        button.classList.remove('shared-topbar-docked-button');
-        document.body.prepend(button);
-        return true;
-    }),
     shouldShowSharedTopBar: vi.fn(() => false),
 }));
 

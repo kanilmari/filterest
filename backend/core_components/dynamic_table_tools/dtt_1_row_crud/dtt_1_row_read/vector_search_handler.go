@@ -1,7 +1,7 @@
 // vector_search_handler.go
 // HTTP handler for semantic vector search over database rows.
 // Bridges the embedding API, the vector column, and the search result response.
-// Exists to generate query embeddings and rank rows by cosine distance.
+// Exists to generate query embeddings and rank rows by pgvector L2 distance.
 
 package dtt_1_row_read
 
@@ -173,8 +173,6 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	vector_query := request.URL.Query().Get("vector_query")
 	langCode := request.URL.Query().Get("lang")
 	if vector_query != "" {
-		log.Printf("[DEBUG] semantic search param: %s", vector_query)
-
 		useLang := false
 		if langCode != "" {
 			if ok, err := tableHasLangEmbeddings(readQuerier, table_name); err == nil && ok {
@@ -282,16 +280,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	// Lisätään laajennettu lokitus tulosten määrästä ja esimerkistä
-	if len(query_results) == 0 {
-		log.Printf("vector search returned no rows for table %s, query: %s, args: %v", table_name, query, query_args)
-	} else {
-		log.Printf("vector search returned %d rows for table %s", len(query_results), table_name)
-		// Valinnainen: tulosta ensimmäinen tulos tarkistusta varten
-		// if len(query_results) > 0 {
-		// 	log.Printf("Ensimmäinen tulos: %v", query_results[0])
-		// }
-	}
+	logVectorSearchResultMetadata(table_name, len(query_results))
 
 	// 10. Palautetaan tulokset JSON-muodossa
 	response_data := map[string]interface{}{
@@ -307,6 +296,12 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding response")
 		return
 	}
+}
+
+// logVectorSearchResultMetadata records operational search results without
+// exposing user search text, filter values, or generated embedding vectors.
+func logVectorSearchResultMetadata(tableName string, resultCount int) {
+	log.Printf("vector search returned %d rows for table %s", resultCount, tableName)
 }
 
 // generateVectorParam generates an embedding vector via the configured provider.

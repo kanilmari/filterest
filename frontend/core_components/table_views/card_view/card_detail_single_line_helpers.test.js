@@ -139,6 +139,21 @@ describe("card_detail_single_line_helpers", () => {
         expect(value?.title).toBe("2026-06-15 21:36:10");
     });
 
+    test("renderSingleLineCardDetails links safe URLs and leaves unsafe schemes as text", () => {
+        const container = document.createElement("div");
+
+        renderSingleLineCardDetails(container, [
+            { column: "website", label: "Website", rawValue: "https://example.test", isLink: true },
+            { column: "script", label: "Script", rawValue: "javascript:alert(1)", isLink: true },
+        ]);
+
+        const links = container.querySelectorAll(".card_detail_row_value_link");
+        expect(links).toHaveLength(1);
+        expect(links[0].getAttribute("href")).toBe("https://example.test");
+        expect(links[0].getAttribute("rel")).toBe("noopener noreferrer");
+        expect(container.textContent).toContain("javascript:alert(1)");
+    });
+
     test("renderSingleLineCardDetails uses the generic icon when icon SVG is rejected", () => {
         const container = document.createElement("div");
 

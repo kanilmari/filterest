@@ -8,7 +8,7 @@
     position: fixed;
     inset: 0;
     z-index: 100000;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgb(0 0 0 / 0.45);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -20,7 +20,7 @@
     border: 1px solid #585b70;
     border-radius: 8px;
     width: min(480px, 90vw);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 32px rgb(0 0 0 / 0.5);
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
 }

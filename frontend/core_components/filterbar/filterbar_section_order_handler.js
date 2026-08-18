@@ -65,8 +65,8 @@ export function normalizeFilterbarSectionCollapsed(input = {}) {
     const normalized = {};
 
     for (const key of DEFAULT_FILTERBAR_SECTION_ORDER) {
-        if (values[key] === true) {
-            normalized[key] = true;
+        if (values[key] === true || values[key] === false) {
+            normalized[key] = values[key];
         }
     }
 
@@ -137,14 +137,20 @@ export async function applySectionCollapsedState(container, collapsedState) {
     const normalizedCollapsed = normalizeFilterbarSectionCollapsed(collapsedState);
     const operations = getSectionElements(container).map((section) => {
         const key = section.dataset.filterbarSectionKey;
+        if (!Object.hasOwn(normalizedCollapsed, key)) {
+            // Legacy layouts stored only collapsed sections. Missing keys must
+            // retain their component defaults instead of reopening everything.
+            return Promise.resolve();
+        }
         const shouldCollapse = normalizedCollapsed[key] === true;
         const isCollapsed = section.classList.contains("is-collapsed");
 
         if (shouldCollapse && !isCollapsed && typeof section.collapse === "function") {
             return section.collapse({ animate: false });
         }
-        // Remote layout can make a section stricter, but it must not reopen the
-        // closed-by-default right sidebar during initial page construction.
+        if (!shouldCollapse && isCollapsed && typeof section.expand === "function") {
+            return section.expand({ animate: false });
+        }
         return Promise.resolve();
     });
 

@@ -41,7 +41,7 @@ Each run writes:
 
 The CLI prints the markdown report path on stdout.
 
-## Local Easelect Auth
+## Local Filterest Auth
 
 For `https://localhost:8082`, the tool reuses
 `testing/e2e/.auth/user.json` when it exists. That is the same Playwright

@@ -43,6 +43,8 @@ func (e *forbiddenError) Error() string { return e.msg }
 
 const deleteRLSPilotTableName = "app_service_catalog"
 
+const referencedRowsDeleteConflictMessage = "One or more selected rows cannot be deleted because other records still reference them."
+
 type revokePrivilegeScope string
 
 const (
@@ -189,12 +191,7 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 
 	if err := deleteGenericRows(tx, table_name, request_data.IDs, deletedBy, actor.UserRole, actor.UserID); err != nil {
 		log.Printf("error: %v", err)
-		var fe *forbiddenError
-		if errors.As(err, &fe) {
-			httpresponse.RespondWithError(w, http.StatusForbidden, fe.msg)
-			return
-		}
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		respondWithDeleteRowsError(w, err)
 		return
 	}
 
@@ -234,6 +231,24 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 	}
 
 	respondOK(w, "Rivit poistettu onnistuneesti")
+}
+
+// respondWithDeleteRowsError maps expected business conflicts without exposing
+// PostgreSQL constraint names, table names, or row details to the client.
+func respondWithDeleteRowsError(w http.ResponseWriter, err error) {
+	var fe *forbiddenError
+	if errors.As(err, &fe) {
+		httpresponse.RespondWithError(w, http.StatusForbidden, fe.msg)
+		return
+	}
+
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+		httpresponse.RespondWithError(w, http.StatusConflict, referencedRowsDeleteConflictMessage)
+		return
+	}
+
+	httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 }
 
 func intIDsToInt64(ids []int) []int64 {

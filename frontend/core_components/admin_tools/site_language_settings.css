@@ -1,0 +1,84 @@
+/* site_language_settings.css
+ * Styles the administrator's canonical site-language registry editor.
+ * Bridges theme variables with the responsive language table and status badges.
+ * Exists so five locale contracts remain readable in both light and dark themes.
+ */
+
+.site-language-settings-view {
+    display: grid;
+    gap: 1rem;
+    width: min(100%, 1180px);
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.site-language-settings-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius);
+    background: var(--bg_color_extreme);
+}
+
+.site-language-settings-table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    color: var(--text_color);
+}
+
+.site-language-settings-table th,
+.site-language-settings-table td {
+    padding: 0.8rem;
+    border-bottom: 1px solid var(--table_border_color);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.site-language-settings-table thead th {
+    background: var(--bg_color_2);
+    color: var(--text_color);
+    font-size: 0.85rem;
+}
+
+.site-language-settings-table tbody tr:last-child > * {
+    border-bottom: 0;
+}
+
+.site-language-settings-code {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--empty_field_text_color);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.site-language-settings-table select {
+    min-width: 175px;
+    padding: 0.45rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+    background: var(--input_bg_color);
+    color: var(--text_color);
+}
+
+.site-language-settings-badge {
+    display: inline-flex;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--card_border_color);
+    border-radius: 999px;
+    background: var(--bg_color_2);
+    color: var(--text_color);
+    font-size: 0.78rem;
+    text-transform: capitalize;
+}
+
+.site-language-settings-status {
+    min-height: 1.4rem;
+    color: var(--empty_field_text_color);
+}
+
+@media (width <= 720px) {
+    .site-language-settings-view {
+        padding: 0.5rem;
+    }
+}

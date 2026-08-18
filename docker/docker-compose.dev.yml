@@ -36,8 +36,10 @@ services:
       - TLS_KEY_FILE=/run/easelect-private/localhost_private_key.key
       - VITE_DEV_PORT=5173
       - VITE_HMR_PORT=${VITE_PORT:-5173}
+      - INSTANCE_NAME=${INSTANCE_NAME:-easelect-dev}
       - SESSION_KEY=${SESSION_KEY}
       - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+      - SESSION_COOKIE_MODE=${SESSION_COOKIE_MODE:-isolated}
       - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_MODEL=${OPENAI_API_MODEL:-}

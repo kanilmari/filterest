@@ -6,7 +6,6 @@
 package e_sessions
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"os"
@@ -50,24 +49,25 @@ func sanitizeSessionCookieName(raw string) string {
 	return reCookieNameSafe.ReplaceAllString(strings.TrimSpace(raw), "_")
 }
 
-// resolveSessionName picks the cookie name for this runtime. Explicit
-// SESSION_COOKIE_NAME enables shared cookies across load-balanced replicas,
-// while INSTANCE_NAME remains the default isolation mechanism for separate
-// localhost/per-customer instances.
+// resolveSessionName returns the validated session name from the shared
+// authentication-cookie identity contract.
 func resolveSessionName() string {
-	if explicit := sanitizeSessionCookieName(os.Getenv("SESSION_COOKIE_NAME")); explicit != "" {
-		return explicit
+	config, err := resolveAuthCookieConfig()
+	if err != nil {
+		return ""
 	}
-
-	if instanceName := sanitizeSessionCookieName(os.Getenv("INSTANCE_NAME")); instanceName != "" {
-		return "session_" + instanceName
-	}
-
-	return "session"
+	return config.names.Session
 }
 
 // InitSessionStore alustaa sessiostoren ja asettaa sen asetukset
 func InitSessionStore() {
+	config, err := resolveAuthCookieConfig()
+	if err != nil {
+		panic(fmt.Errorf("invalid authentication-cookie configuration: %w", err))
+	}
+	currentAuthCookieConfig = config
+	SessionName = config.names.Session
+
 	// Luo store vain, jos se puuttuu
 	if Store == nil {
 		secretKey := os.Getenv("SESSION_KEY")
@@ -77,20 +77,18 @@ func InitSessionStore() {
 			panic(err)
 		}
 
-		// Optional AES encryption key — must be 16, 24, or 32 bytes.
-		// Derive deterministically from SESSION_SECRET_KEY via SHA-256 so any
-		// length input produces a valid 32-byte key.
+		// Scope signing and optional encryption keys to this isolated instance or
+		// explicitly declared replica pool before constructing CookieStore.
+		scopedSigningKey := deriveScopedCookieKey(secretKey, "session-signing", config)
 		encKey := os.Getenv("SESSION_SECRET_KEY")
 		if encKey == "" {
 			fmt.Printf("\033[33mwarning: SESSION_SECRET_KEY is not set — session data will be stored unencrypted\033[0m\n")
-			Store = sessions.NewCookieStore([]byte(secretKey))
+			Store = sessions.NewCookieStore(scopedSigningKey)
 		} else {
-			derived := sha256.Sum256([]byte(encKey))
-			Store = sessions.NewCookieStore([]byte(secretKey), derived[:])
+			derived := deriveScopedCookieKey(encKey, "session-encryption", config)
+			Store = sessions.NewCookieStore(scopedSigningKey, derived)
 		}
 	}
-
-	SessionName = resolveSessionName()
 
 	// Asetukset:
 	Store.Options = &sessions.Options{

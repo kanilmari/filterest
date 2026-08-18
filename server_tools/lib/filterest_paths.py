@@ -1,4 +1,4 @@
-"""Resolve dynamic Filterest project and key homes without reading secrets.
+"""Resolve dynamic Filterest project, key, runtime, maintainer, and operations homes safely.
 
 Bridges operator path configuration with Python tooling, shell wrappers,
 public-repository sync, Docker context protection, and deployment filters.
@@ -21,7 +21,16 @@ from typing import Mapping
 
 CONFIG_FILE_NAME = "filterest.paths"
 LOCAL_CONFIG_FILE_NAME = "filterest.paths.local"
-SUPPORTED_KEYS = frozenset({"schema_version", "projects_home", "keys_home"})
+SUPPORTED_KEYS = frozenset(
+    {
+        "schema_version",
+        "projects_home",
+        "keys_home",
+        "runtime_data_home",
+        "maintainer_tools_home",
+        "operations_home",
+    }
+)
 GIT_EXCLUDE_BEGIN = "# filterest-paths:begin"
 GIT_EXCLUDE_END = "# filterest-paths:end"
 
@@ -31,10 +40,37 @@ class FilterestHomes:
     project_root: Path
     projects_home: Path
     keys_home: Path
+    runtime_data_home: Path
+    maintainer_tools_home: Path
+    operations_home: Path
     projects_home_entry: Path
     keys_home_entry: Path
+    runtime_data_home_entry: Path
+    maintainer_tools_home_entry: Path
+    operations_home_entry: Path
     projects_home_configured: bool
     keys_home_configured: bool
+    runtime_data_home_configured: bool
+    maintainer_tools_home_configured: bool
+    operations_home_configured: bool
+
+    @property
+    def projects_apps_home(self) -> Path:
+        """Return the preferred external application collection without creating it."""
+
+        return self.projects_home / "apps"
+
+
+@dataclass(frozen=True)
+class ProjectSourceResolution:
+    """Describe preferred and legacy project source paths without mutating either."""
+
+    slug: str
+    target_path: Path
+    legacy_alias_path: Path
+    selected_path: Path | None
+    state: str
+    requires_move: bool
 
 
 def is_private_easelect_source_checkout(project_root: Path) -> bool:
@@ -136,22 +172,62 @@ def resolve_filterest_homes(
     defaults = {
         "projects_home": str(root.parent / "filterest-projects") if private_source else "filterest_projects",
         "keys_home": str(root.parent / "filterest_keys") if private_source else "filterest_keys",
+        "runtime_data_home": (
+            str(root.parent / "filterest-runtime-data")
+            if private_source
+            else "filterest_runtime_data"
+        ),
+        "maintainer_tools_home": (
+            str(root.parent / "filterest-maintainer-tools")
+            if private_source
+            else "filterest_maintainer_tools"
+        ),
+        "operations_home": (
+            str(root.parent / "filterest-operations")
+            if private_source
+            else "filterest_operations"
+        ),
     }
     values = dict(defaults)
     configured_keys: set[str] = set()
     for config_path in (root / CONFIG_FILE_NAME, root / LOCAL_CONFIG_FILE_NAME):
         file_values = _read_paths_file(config_path)
-        for key in ("projects_home", "keys_home"):
+        for key in (
+            "projects_home",
+            "keys_home",
+            "runtime_data_home",
+            "maintainer_tools_home",
+            "operations_home",
+        ):
             if key in file_values:
                 values[key] = file_values[key]
                 configured_keys.add(key)
 
     environment_overrides = {
-        "projects_home": str(resolved_environment.get("FILTEREST_PROJECTS_HOME", "")).strip(),
-        "keys_home": str(resolved_environment.get("FILTEREST_KEYS_HOME", "")).strip(),
+        "projects_home": (
+            "FILTEREST_PROJECTS_HOME",
+            "FILTEREST_PROJECTS_HOME_CONFIGURED",
+        ),
+        "keys_home": ("FILTEREST_KEYS_HOME", "FILTEREST_KEYS_HOME_CONFIGURED"),
+        "runtime_data_home": (
+            "FILTEREST_RUNTIME_DATA_HOME",
+            "FILTEREST_RUNTIME_DATA_HOME_CONFIGURED",
+        ),
+        "maintainer_tools_home": (
+            "FILTEREST_MAINTAINER_TOOLS_HOME",
+            "FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED",
+        ),
+        "operations_home": (
+            "FILTEREST_OPERATIONS_HOME",
+            "FILTEREST_OPERATIONS_HOME_CONFIGURED",
+        ),
     }
-    for key, value in environment_overrides.items():
-        if value:
+    for key, (value_name, configured_name) in environment_overrides.items():
+        value = str(resolved_environment.get(value_name, "")).strip()
+        calculated_default = (
+            str(resolved_environment.get(configured_name, "")).strip() == "0"
+        )
+        if value and not calculated_default:
             values[key] = value
             configured_keys.add(key)
 
@@ -179,25 +255,122 @@ def resolve_filterest_homes(
 
     projects_home_entry = _declared_home(root, values["projects_home"])
     keys_home_entry = _declared_home(root, values["keys_home"])
+    runtime_data_home_entry = _declared_home(root, values["runtime_data_home"])
+    maintainer_tools_home_entry = _declared_home(
+        root, values["maintainer_tools_home"]
+    )
+    operations_home_entry = _declared_home(root, values["operations_home"])
     projects_home = _resolved_home(root, values["projects_home"], "projects_home")
     keys_home = _resolved_home(root, values["keys_home"], "keys_home")
-    if _paths_overlap(projects_home, keys_home):
-        raise ValueError("projects_home and keys_home must not be equal or nested")
+    runtime_data_home = _resolved_home(
+        root, values["runtime_data_home"], "runtime_data_home"
+    )
+    maintainer_tools_home = _resolved_home(
+        root, values["maintainer_tools_home"], "maintainer_tools_home"
+    )
+    operations_home = _resolved_home(
+        root, values["operations_home"], "operations_home"
+    )
+    resolved_homes = {
+        "projects_home": projects_home,
+        "keys_home": keys_home,
+        "runtime_data_home": runtime_data_home,
+        "maintainer_tools_home": maintainer_tools_home,
+        "operations_home": operations_home,
+    }
+    names = tuple(resolved_homes)
+    for index, first_name in enumerate(names):
+        for second_name in names[index + 1 :]:
+            if _paths_overlap(resolved_homes[first_name], resolved_homes[second_name]):
+                raise ValueError(
+                    f"{first_name} and {second_name} must not be equal or nested"
+                )
 
     return FilterestHomes(
         project_root=root,
         projects_home=projects_home,
         keys_home=keys_home,
+        runtime_data_home=runtime_data_home,
+        maintainer_tools_home=maintainer_tools_home,
+        operations_home=operations_home,
         projects_home_entry=projects_home_entry,
         keys_home_entry=keys_home_entry,
+        runtime_data_home_entry=runtime_data_home_entry,
+        maintainer_tools_home_entry=maintainer_tools_home_entry,
+        operations_home_entry=operations_home_entry,
         projects_home_configured="projects_home" in configured_keys,
         keys_home_configured="keys_home" in configured_keys,
+        runtime_data_home_configured="runtime_data_home" in configured_keys,
+        maintainer_tools_home_configured="maintainer_tools_home" in configured_keys,
+        operations_home_configured="operations_home" in configured_keys,
+    )
+
+
+def _source_path_kind(path: Path) -> str:
+    """Classify a project path without accepting symlinks as source ownership."""
+
+    if path.is_symlink():
+        return "symlink"
+    if path.is_dir():
+        return "directory"
+    if path.exists():
+        return "other"
+    return "missing"
+
+
+def resolve_project_source_path(
+    homes: FilterestHomes,
+    slug: str,
+) -> ProjectSourceResolution:
+    """Prefer projects_home/apps/<slug> with a read-only legacy-root fallback."""
+
+    normalized_slug = slug.strip()
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", normalized_slug):
+        raise ValueError(f"invalid project slug: {slug!r}")
+
+    target_path = homes.projects_apps_home / normalized_slug
+    legacy_alias_path = homes.projects_home / normalized_slug
+    target_kind = _source_path_kind(target_path)
+    legacy_kind = _source_path_kind(legacy_alias_path)
+
+    if target_kind == "directory" and legacy_kind == "directory":
+        selected_path = target_path
+        state = "target_and_legacy_conflict"
+    elif target_kind == "directory":
+        selected_path = target_path
+        state = "target"
+    elif target_kind != "missing":
+        selected_path = None
+        state = f"unsafe_target_{target_kind}"
+    elif legacy_kind == "directory":
+        selected_path = legacy_alias_path
+        state = "legacy_alias"
+    elif legacy_kind != "missing":
+        selected_path = None
+        state = f"unsafe_legacy_{legacy_kind}"
+    else:
+        selected_path = None
+        state = "missing"
+
+    return ProjectSourceResolution(
+        slug=normalized_slug,
+        target_path=target_path,
+        legacy_alias_path=legacy_alias_path,
+        selected_path=selected_path,
+        state=state,
+        requires_move=state == "legacy_alias",
     )
 
 
 def relative_protected_homes(homes: FilterestHomes) -> list[str]:
     protected: list[str] = []
-    for home in (homes.projects_home_entry, homes.keys_home_entry):
+    for home in (
+        homes.projects_home_entry,
+        homes.keys_home_entry,
+        homes.runtime_data_home_entry,
+        homes.maintainer_tools_home_entry,
+        homes.operations_home_entry,
+    ):
         try:
             relative = home.relative_to(homes.project_root)
         except ValueError:
@@ -237,7 +410,9 @@ def audit_path_boundaries(homes: FilterestHomes) -> None:
         rendered = ", ".join(tracked[:5])
         suffix = "" if len(tracked) <= 5 else f" (+{len(tracked) - 5} more)"
         raise ValueError(
-            f"configured project/key home contains tracked files: {rendered}{suffix}"
+            "configured project home, key home, runtime-data home, "
+            "maintainer-tools home, or operations home contains "
+            f"tracked files: {rendered}{suffix}"
         )
 
 
@@ -334,17 +509,52 @@ def main(argv: list[str]) -> int:
             print(f"FILTEREST_PROJECTS_HOME={shlex.quote(str(homes.projects_home))}")
             print(f"FILTEREST_KEYS_HOME={shlex.quote(str(homes.keys_home))}")
             print(
+                "FILTEREST_RUNTIME_DATA_HOME="
+                f"{shlex.quote(str(homes.runtime_data_home))}"
+            )
+            print(
+                "FILTEREST_MAINTAINER_TOOLS_HOME="
+                f"{shlex.quote(str(homes.maintainer_tools_home))}"
+            )
+            print(
+                "FILTEREST_OPERATIONS_HOME="
+                f"{shlex.quote(str(homes.operations_home))}"
+            )
+            print(
+                "FILTEREST_PROJECTS_APPS_HOME="
+                f"{shlex.quote(str(homes.projects_apps_home))}"
+            )
+            print(
                 "FILTEREST_PROJECTS_HOME_CONFIGURED="
                 f"{int(homes.projects_home_configured)}"
             )
             print(
                 f"FILTEREST_KEYS_HOME_CONFIGURED={int(homes.keys_home_configured)}"
             )
+            print(
+                "FILTEREST_RUNTIME_DATA_HOME_CONFIGURED="
+                f"{int(homes.runtime_data_home_configured)}"
+            )
+            print(
+                "FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED="
+                f"{int(homes.maintainer_tools_home_configured)}"
+            )
+            print(
+                "FILTEREST_OPERATIONS_HOME_CONFIGURED="
+                f"{int(homes.operations_home_configured)}"
+            )
         else:
             print(homes.projects_home)
             print(homes.keys_home)
             print(int(homes.projects_home_configured))
             print(int(homes.keys_home_configured))
+            print(homes.runtime_data_home)
+            print(int(homes.runtime_data_home_configured))
+            print(homes.projects_apps_home)
+            print(homes.maintainer_tools_home)
+            print(int(homes.maintainer_tools_home_configured))
+            print(homes.operations_home)
+            print(int(homes.operations_home_configured))
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

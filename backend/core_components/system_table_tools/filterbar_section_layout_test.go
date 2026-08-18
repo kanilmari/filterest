@@ -1,3 +1,6 @@
+// filterbar_section_layout_test.go
+// Verifies that the shared filterbar layout preserves explicit open and closed states.
+// Exists so page reloads can restore disclosures without changing legacy defaults.
 package system_table_tools
 
 import (
@@ -59,26 +62,24 @@ func TestNormalizeFilterbarSectionOrderUpgradesLegacyDefault(t *testing.T) {
 	}
 }
 
-func TestNormalizeFilterbarSectionCollapsedKeepsOnlyKnownCollapsedSections(t *testing.T) {
-	got := normalizeFilterbarSectionCollapsed(map[string]bool{
+func TestNormalizeFilterbarSectionCollapsedPreservesExplicitBooleans(t *testing.T) {
+	input := map[string]bool{
 		"filters": true,
 		"tools":   false,
 		"unknown": true,
-		"chat":    true,
-	})
+	}
 	want := map[string]bool{
 		"filters": true,
-		"chat":    true,
+		"tools":   false,
 	}
 
-	if !reflect.DeepEqual(got, want) {
+	if got := normalizeFilterbarSectionCollapsed(input); !reflect.DeepEqual(got, want) {
 		t.Fatalf("normalizeFilterbarSectionCollapsed() = %#v, want %#v", got, want)
 	}
 }
 
-func TestNormalizeFilterbarSectionCollapsedFallsBackToOpenSections(t *testing.T) {
-	got := normalizeFilterbarSectionCollapsed(nil)
-	if len(got) != 0 {
+func TestNormalizeFilterbarSectionCollapsedKeepsMissingLegacyEntriesMissing(t *testing.T) {
+	if got := normalizeFilterbarSectionCollapsed(nil); len(got) != 0 {
 		t.Fatalf("normalizeFilterbarSectionCollapsed(nil) = %#v, want empty map", got)
 	}
 }

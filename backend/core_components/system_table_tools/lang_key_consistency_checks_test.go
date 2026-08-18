@@ -33,6 +33,42 @@ func TestIsSyntheticTestLangKey(t *testing.T) {
 	}
 }
 
+func TestLangKeyPatternsRecognizeLowerCamelConfigKeys(t *testing.T) {
+	testCases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "lower camel config property",
+			content: `{ key: "week", label: "Week", langKey: "calendar_week" }`,
+			want:    "calendar_week",
+		},
+		{
+			name:    "named lang key constant",
+			content: `const NO_EVENTS_LANG_KEY = "calendar_no_events";`,
+			want:    "calendar_no_events",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			found := false
+			for _, pattern := range langKeyPatterns {
+				matches := pattern.FindAllStringSubmatch(tc.content, -1)
+				for _, match := range matches {
+					if len(match) > 1 && match[1] == tc.want {
+						found = true
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("source scanning should find %q", tc.want)
+			}
+		})
+	}
+}
+
 func TestBuildLangKeyConsistencyDescription_SyntheticKey(t *testing.T) {
 	row := langKeyRow{
 		id:          91,

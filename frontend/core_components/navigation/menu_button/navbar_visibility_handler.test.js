@@ -28,6 +28,10 @@ describe("navbar_visibility_handler", () => {
                     <div id="navbar">
                         <div class="top-button-bar">
                             <button id="hideMenuButton">☰</button>
+                            <div class="nav-history-buttons">
+                                <button id="navBackBtn" disabled>Back</button>
+                                <button id="navForwardBtn" disabled>Forward</button>
+                            </div>
                         </div>
                     </div>
                     <div id="tabs_container"></div>
@@ -42,7 +46,7 @@ describe("navbar_visibility_handler", () => {
         });
     });
 
-    test("dispatches navbar visibility change events when toggled", async () => {
+    test("dispatches navbar visibility change events from each persistent navbar button", async () => {
         localStorage.setItem("navVisibleWide", "true");
         const { initNavbar, NAVBAR_VISIBILITY_CHANGED_EVENT } = await loadModule();
         const events = [];
@@ -51,38 +55,69 @@ describe("navbar_visibility_handler", () => {
         });
 
         initNavbar();
-        document.getElementById("showMenuButton").click();
+        document.getElementById("hideMenuButton").click();
         document.getElementById("showMenuButton").click();
 
         expect(events.slice(-2)).toEqual([false, true]);
-        expect(document.getElementById("hideMenuButton").getAttribute("aria-hidden")).toBe("true");
-        expect(document.getElementById("hideMenuButton").tabIndex).toBe(-1);
+        expect(document.getElementById("hideMenuButton").getAttribute("aria-hidden")).toBe("false");
+        expect(document.getElementById("hideMenuButton").tabIndex).toBe(0);
     });
 
-    test("keeps the menu button available and lets it close and reopen an open navbar", async () => {
+    test("keeps only the menu button for the current navbar context reachable", async () => {
         localStorage.setItem("navVisibleWide", "true");
         const { initNavbar } = await loadModule();
         const navbar = document.getElementById("navbar");
         const showButton = document.getElementById("showMenuButton");
+        const hideButton = document.getElementById("hideMenuButton");
 
         initNavbar();
 
-        expect(showButton.classList.contains("menu-toggle-visible")).toBe(true);
-        expect(showButton.getAttribute("aria-hidden")).toBe("false");
+        expect(showButton.classList.contains("menu-toggle-visible")).toBe(false);
+        expect(showButton.getAttribute("aria-hidden")).toBe("true");
         expect(showButton.getAttribute("aria-expanded")).toBe("true");
-        expect(showButton.tabIndex).toBe(0);
+        expect(showButton.tabIndex).toBe(-1);
+        expect(hideButton.getAttribute("aria-hidden")).toBe("false");
+        expect(hideButton.tabIndex).toBe(0);
 
-        showButton.click();
+        hideButton.click();
 
         expect(navbar.classList.contains("collapsed")).toBe(true);
         expect(showButton.getAttribute("aria-expanded")).toBe("false");
         expect(showButton.tabIndex).toBe(0);
+        expect(hideButton.getAttribute("aria-hidden")).toBe("true");
+        expect(hideButton.tabIndex).toBe(-1);
 
         showButton.click();
 
         expect(navbar.classList.contains("collapsed")).toBe(false);
         expect(showButton.getAttribute("aria-expanded")).toBe("true");
+        expect(showButton.tabIndex).toBe(-1);
+        expect(hideButton.getAttribute("aria-hidden")).toBe("false");
+        expect(hideButton.tabIndex).toBe(0);
+    });
+
+    test("suppresses the floating fallback while a persistent topbar button owns the context", async () => {
+        localStorage.setItem("navVisibleWide", "false");
+        const {
+            initNavbar,
+            syncNavbarMenuButtonAccessibility,
+        } = await loadModule();
+        const showButton = document.getElementById("showMenuButton");
+
+        initNavbar();
+        expect(showButton.getAttribute("aria-hidden")).toBe("false");
         expect(showButton.tabIndex).toBe(0);
+        expect(document.documentElement.style.getPropertyValue("--menu-button-search-offset"))
+            .toBe("68px");
+
+        showButton.classList.add("shared-topbar-menu-source-hidden");
+        syncNavbarMenuButtonAccessibility();
+
+        expect(showButton.getAttribute("aria-hidden")).toBe("true");
+        expect(showButton.tabIndex).toBe(-1);
+        expect(showButton.classList.contains("menu-toggle-visible")).toBe(false);
+        expect(document.documentElement.style.getPropertyValue("--menu-button-search-offset"))
+            .toBe("0px");
     });
 
     test("leaves the floating menu button's fixed inset to CSS", async () => {
@@ -137,6 +172,43 @@ describe("navbar_visibility_handler", () => {
         expect(navbar.classList.contains("navbar-collapse-complete")).toBe(true);
     });
 
+    test("keeps the opening cursor lock transient without enabling disabled controls", async () => {
+        localStorage.setItem("navVisibleWide", "true");
+        const { initNavbar } = await loadModule();
+        const navbar = document.getElementById("navbar");
+        const showButton = document.getElementById("showMenuButton");
+        const hideButton = document.getElementById("hideMenuButton");
+        const backButton = document.getElementById("navBackBtn");
+        const forwardButton = document.getElementById("navForwardBtn");
+
+        initNavbar();
+        hideButton.click();
+        expect(navbar.classList.contains("navbar-opening")).toBe(false);
+
+        showButton.click();
+        expect(navbar.classList.contains("navbar-opening")).toBe(true);
+        expect(backButton.disabled).toBe(true);
+        expect(forwardButton.disabled).toBe(true);
+
+        const unrelatedTransition = new Event("transitionend", { bubbles: true });
+        Object.defineProperty(unrelatedTransition, "propertyName", { value: "opacity" });
+        navbar.dispatchEvent(unrelatedTransition);
+        expect(navbar.classList.contains("navbar-opening")).toBe(true);
+
+        const transformTransition = new Event("transitionend", { bubbles: true });
+        Object.defineProperty(transformTransition, "propertyName", { value: "transform" });
+        navbar.dispatchEvent(transformTransition);
+        expect(navbar.classList.contains("navbar-opening")).toBe(false);
+        expect(backButton.disabled).toBe(true);
+        expect(forwardButton.disabled).toBe(true);
+
+        hideButton.click();
+        showButton.click();
+        expect(navbar.classList.contains("navbar-opening")).toBe(true);
+        hideButton.click();
+        expect(navbar.classList.contains("navbar-opening")).toBe(false);
+    });
+
     test.each([
         ["dev", "DEV", "environment-badge--dev"],
         ["test", "TEST", "environment-badge--test"],
@@ -146,8 +218,12 @@ describe("navbar_visibility_handler", () => {
         const { addEnvironmentBadgeIfNeeded } = await loadModule();
         addEnvironmentBadgeIfNeeded();
         addEnvironmentBadgeIfNeeded();
+        const topbarButtonHost = document.createElement("div");
+        topbarButtonHost.innerHTML = '<button data-navbar-menu-button="true">☰</button>';
+        document.body.appendChild(topbarButtonHost);
+        addEnvironmentBadgeIfNeeded(topbarButtonHost);
         const badges = document.querySelectorAll(".environment-badge");
-        expect(badges).toHaveLength(2);
+        expect(badges).toHaveLength(3);
         expect(badges[0].textContent).toBe(label);
         expect(badges[0].classList.contains(modifier)).toBe(true);
     });

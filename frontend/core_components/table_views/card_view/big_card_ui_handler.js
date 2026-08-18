@@ -16,6 +16,7 @@ import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js
 import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation_handler_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
+import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
 let highlightedCard = null;
 const OPEN_IN_NEW_TAB_LANG_KEY = "open_in_new_tab";
@@ -177,13 +178,19 @@ export function createLinkTwoLine(
     if (hasLangKey) {
         valueDiv.dataset.langKey = linkValue;
     } else {
-        const linkEl = document.createElement("a");
         const resolved = resolveLocalizedValue(linkValue, isMultilingual);
         const trimmed = resolved.trim();
-        linkEl.href = trimmed;
-        linkEl.target = "_blank";
-        linkEl.textContent = trimmed;
-        valueDiv.appendChild(linkEl);
+        const safeHref = resolveSafeExternalHttpUrl(trimmed);
+        if (safeHref) {
+            const linkEl = document.createElement("a");
+            linkEl.href = safeHref;
+            linkEl.target = "_blank";
+            linkEl.rel = "noopener noreferrer";
+            linkEl.textContent = trimmed;
+            valueDiv.appendChild(linkEl);
+        } else {
+            valueDiv.textContent = trimmed;
+        }
     }
 
     container.appendChild(valueDiv);
@@ -205,6 +212,7 @@ export function createNavigableTwoLineElement({
     href = "",
     openInNewTabHref = "",
     openPrimaryInNewTab = false,
+    externalHttpOnly = false,
     storedRawValue = value,
     labelMeta = {},
 }) {
@@ -231,8 +239,14 @@ export function createNavigableTwoLineElement({
     }
 
     const resolvedValue = String(value ?? "");
-    const resolvedHref = String(href || "").trim();
-    const resolvedNewTabHref = String(openInNewTabHref || resolvedHref).trim();
+    const requestedHref = String(href || "").trim();
+    const requestedNewTabHref = String(openInNewTabHref || requestedHref).trim();
+    const resolvedHref = externalHttpOnly
+        ? resolveSafeExternalHttpUrl(requestedHref)
+        : requestedHref;
+    const resolvedNewTabHref = externalHttpOnly
+        ? resolveSafeExternalHttpUrl(requestedNewTabHref)
+        : requestedNewTabHref;
 
     if (resolvedHref) {
         const linkGroup = document.createElement("span");

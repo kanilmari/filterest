@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
+    buildLegacyVisibilityKey,
     buildVisibilityKey,
     parseStoredVisibility,
     resolveInitialVisibility,
@@ -9,20 +10,21 @@ import {
 // buildVisibilityKey
 // ---------------------------------------------------------------------------
 describe('buildVisibilityKey', () => {
-    test('returns wide key when isWideScreen is true', () => {
-        expect(buildVisibilityKey('orders', true)).toBe('orders_filterbar_visible_wide');
+    test('returns one canonical key across viewport widths', () => {
+        expect(buildVisibilityKey('orders')).toBe('orders_filterbar_visible');
     });
 
-    test('returns narrow key when isWideScreen is false', () => {
-        expect(buildVisibilityKey('orders', false)).toBe('orders_filterbar_visible_narrow');
+    test('retains the old breakpoint key builder for preference migration', () => {
+        expect(buildLegacyVisibilityKey('orders', true)).toBe('orders_filterbar_visible_wide');
+        expect(buildLegacyVisibilityKey('orders', false)).toBe('orders_filterbar_visible_narrow');
     });
 
     test('handles empty table name', () => {
-        expect(buildVisibilityKey('', true)).toBe('_filterbar_visible_wide');
+        expect(buildVisibilityKey('')).toBe('_filterbar_visible');
     });
 
     test('handles table name with special characters', () => {
-        expect(buildVisibilityKey('my_table-2', false)).toBe('my_table-2_filterbar_visible_narrow');
+        expect(buildVisibilityKey('my_table-2')).toBe('my_table-2_filterbar_visible');
     });
 });
 

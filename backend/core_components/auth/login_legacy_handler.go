@@ -193,7 +193,7 @@ func handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- device_id-cookie ---
-	deviceCookie, err := r.Cookie("device_id")
+	deviceCookie, err := r.Cookie(e_sessions.DeviceIDCookieName())
 	var deviceID string
 	if err != nil || deviceCookie.Value == "" {
 		deviceID = uuid.NewString()
@@ -220,30 +220,9 @@ func handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	session.Values["fingerprint_hash"] = hmacFP
 	log.Println("fingerprint received and HMAC computed ✅")
 
-	// Kaikki evästeet asetetaan aina Secure-lipulla
-	cookieLifetime := 7 * 24 * time.Hour
-
 	// --- Evästeiden asetus ---
-	// fingerprint cookie is now HttpOnly — JS no longer needs to read it.
-	// The cookie stores the HMAC value so clients cannot forge valid fingerprints.
-	http.SetCookie(w, &http.Cookie{
-		Name:     "fingerprint",
-		Value:    hmacFP,
-		Path:     "/",
-		HttpOnly: true, // 🔒  ei JS-pääsyä
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode, // 🔒  CSRF-suoja
-		Expires:  time.Now().Add(cookieLifetime),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "device_id",
-		Value:    deviceID,
-		Path:     "/",
-		HttpOnly: true, // 🔒  ei JS-pääsyä
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(cookieLifetime),
-	})
+	e_sessions.SetFingerprintCookie(w, hmacFP)
+	e_sessions.SetDeviceIDCookie(w, deviceID)
 	log.Println("cookies set for fingerprint and device_id 🍪")
 
 	// --- Session tallennus ---

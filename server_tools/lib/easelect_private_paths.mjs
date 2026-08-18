@@ -1,5 +1,5 @@
 // easelect_private_paths.mjs
-// Resolves Easelect/Filterest env and TLS files from a dynamic protected key home.
+// Resolves project, key, runtime, maintainer, and operations homes plus Filterest env/TLS files.
 // Bridges Node/Playwright tooling with the same contract used by shell and Go startup.
 // Exists so source tooling works without secret-bearing files or symlinks in repo root.
 
@@ -13,7 +13,14 @@ export function isPrivateEaselectSourceCheckout(projectRoot) {
   );
 }
 
-const SUPPORTED_PATH_KEYS = new Set(['schema_version', 'projects_home', 'keys_home']);
+const SUPPORTED_PATH_KEYS = new Set([
+  'schema_version',
+  'projects_home',
+  'keys_home',
+  'runtime_data_home',
+  'maintainer_tools_home',
+  'operations_home',
+]);
 
 function readPathsFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -119,11 +126,26 @@ export function resolveFilterestHomes(projectRoot, environment = process.env) {
     keys_home: privateSource
       ? path.resolve(normalizedProjectRoot, '..', 'filterest_keys')
       : 'filterest_keys',
+    runtime_data_home: privateSource
+      ? path.resolve(normalizedProjectRoot, '..', 'filterest-runtime-data')
+      : 'filterest_runtime_data',
+    maintainer_tools_home: privateSource
+      ? path.resolve(normalizedProjectRoot, '..', 'filterest-maintainer-tools')
+      : 'filterest_maintainer_tools',
+    operations_home: privateSource
+      ? path.resolve(normalizedProjectRoot, '..', 'filterest-operations')
+      : 'filterest_operations',
   };
   const configured = new Set();
   for (const configName of ['filterest.paths', 'filterest.paths.local']) {
     const fileValues = readPathsFile(path.join(normalizedProjectRoot, configName));
-    for (const key of ['projects_home', 'keys_home']) {
+    for (const key of [
+      'projects_home',
+      'keys_home',
+      'runtime_data_home',
+      'maintainer_tools_home',
+      'operations_home',
+    ]) {
       if (Object.hasOwn(fileValues, key)) {
         values[key] = fileValues[key];
         configured.add(key);
@@ -132,13 +154,45 @@ export function resolveFilterestHomes(projectRoot, environment = process.env) {
   }
   const projectsOverride = String(environment.FILTEREST_PROJECTS_HOME || '').trim();
   const keysOverride = String(environment.FILTEREST_KEYS_HOME || '').trim();
-  if (projectsOverride) {
+  const runtimeDataOverride = String(environment.FILTEREST_RUNTIME_DATA_HOME || '').trim();
+  const maintainerToolsOverride = String(
+    environment.FILTEREST_MAINTAINER_TOOLS_HOME || '',
+  ).trim();
+  const operationsOverride = String(environment.FILTEREST_OPERATIONS_HOME || '').trim();
+  if (
+    projectsOverride
+    && String(environment.FILTEREST_PROJECTS_HOME_CONFIGURED || '').trim() !== '0'
+  ) {
     values.projects_home = projectsOverride;
     configured.add('projects_home');
   }
-  if (keysOverride) {
+  if (
+    keysOverride
+    && String(environment.FILTEREST_KEYS_HOME_CONFIGURED || '').trim() !== '0'
+  ) {
     values.keys_home = keysOverride;
     configured.add('keys_home');
+  }
+  if (
+    runtimeDataOverride
+    && String(environment.FILTEREST_RUNTIME_DATA_HOME_CONFIGURED || '').trim() !== '0'
+  ) {
+    values.runtime_data_home = runtimeDataOverride;
+    configured.add('runtime_data_home');
+  }
+  if (
+    maintainerToolsOverride
+    && String(environment.FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED || '').trim() !== '0'
+  ) {
+    values.maintainer_tools_home = maintainerToolsOverride;
+    configured.add('maintainer_tools_home');
+  }
+  if (
+    operationsOverride
+    && String(environment.FILTEREST_OPERATIONS_HOME_CONFIGURED || '').trim() !== '0'
+  ) {
+    values.operations_home = operationsOverride;
+    configured.add('operations_home');
   }
 
   const legacyKeyRoot = String(environment.EASELECT_KEY_ROOT || '').trim();
@@ -170,18 +224,51 @@ export function resolveFilterestHomes(projectRoot, environment = process.env) {
     'projects_home',
   );
   const keysHome = resolveHome(normalizedProjectRoot, values.keys_home, 'keys_home');
-  if (
-    pathContainsPath(projectsHome, keysHome)
-    || pathContainsPath(keysHome, projectsHome)
-  ) {
-    throw new Error('projects_home and keys_home must not be equal or nested');
+  const runtimeDataHome = resolveHome(
+    normalizedProjectRoot,
+    values.runtime_data_home,
+    'runtime_data_home',
+  );
+  const maintainerToolsHome = resolveHome(
+    normalizedProjectRoot,
+    values.maintainer_tools_home,
+    'maintainer_tools_home',
+  );
+  const operationsHome = resolveHome(
+    normalizedProjectRoot,
+    values.operations_home,
+    'operations_home',
+  );
+  const homes = [
+    ['projects_home', projectsHome],
+    ['keys_home', keysHome],
+    ['runtime_data_home', runtimeDataHome],
+    ['maintainer_tools_home', maintainerToolsHome],
+    ['operations_home', operationsHome],
+  ];
+  for (let first = 0; first < homes.length; first += 1) {
+    for (let second = first + 1; second < homes.length; second += 1) {
+      if (
+        pathContainsPath(homes[first][1], homes[second][1])
+        || pathContainsPath(homes[second][1], homes[first][1])
+      ) {
+        throw new Error(`${homes[first][0]} and ${homes[second][0]} must not be equal or nested`);
+      }
+    }
   }
   return {
     projectRoot: normalizedProjectRoot,
     projectsHome,
+    projectsAppsHome: path.join(projectsHome, 'apps'),
     keysHome,
+    runtimeDataHome,
+    maintainerToolsHome,
+    operationsHome,
     projectsHomeConfigured: configured.has('projects_home'),
     keysHomeConfigured: configured.has('keys_home'),
+    runtimeDataHomeConfigured: configured.has('runtime_data_home'),
+    maintainerToolsHomeConfigured: configured.has('maintainer_tools_home'),
+    operationsHomeConfigured: configured.has('operations_home'),
   };
 }
 

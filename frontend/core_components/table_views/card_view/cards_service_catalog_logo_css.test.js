@@ -231,8 +231,8 @@ describe('card detail icon CSS', () => {
         const cardsCss = readSiblingCss('cards.css');
         const iconRule = extractRule(cardsCss, '.card_detail_row_icon_svg');
 
-        expect(iconRule).toContain('color: currentColor');
-        expect(iconRule).not.toContain('fill: currentColor');
+        expect(iconRule).toContain('color: currentcolor');
+        expect(iconRule).not.toContain('fill: currentcolor');
     });
 });
 

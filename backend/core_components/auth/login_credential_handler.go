@@ -293,7 +293,7 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 	}
 
 	// Device ID
-	deviceCookie, err := r.Cookie("device_id")
+	deviceCookie, err := r.Cookie(e_sessions.DeviceIDCookieName())
 	var deviceID string
 	if err != nil || deviceCookie.Value == "" {
 		deviceID = uuid.NewString()
@@ -315,17 +315,8 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 	session.Values["fingerprint_hash"] = hmacFP
 
 	// Cookies
-	cookieLifetime := 7 * 24 * time.Hour
-	http.SetCookie(w, &http.Cookie{
-		Name: "fingerprint", Value: hmacFP, Path: "/",
-		HttpOnly: true, Secure: e_sessions.ShouldUseSecureCookies(), SameSite: http.SameSiteLaxMode,
-		Expires: time.Now().Add(cookieLifetime),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name: "device_id", Value: deviceID, Path: "/",
-		HttpOnly: true, Secure: e_sessions.ShouldUseSecureCookies(), SameSite: http.SameSiteLaxMode,
-		Expires: time.Now().Add(cookieLifetime),
-	})
+	e_sessions.SetFingerprintCookie(w, hmacFP)
+	e_sessions.SetDeviceIDCookie(w, deviceID)
 
 	// Save session
 	if err = saveSession(w, r, session); err != nil {

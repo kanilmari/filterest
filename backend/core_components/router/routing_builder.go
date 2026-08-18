@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth"
@@ -393,7 +392,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		changed := false
 
 		// Varmista device_id
-		cDev, cDevErr := r.Cookie("device_id")
+		cDev, cDevErr := r.Cookie(e_sessions.DeviceIDCookieName())
 		var deviceID string
 		if cDevErr != nil || cDev.Value == "" {
 			deviceID = uuid.NewString()
@@ -406,17 +405,11 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			changed = true
 		}
 		if changed {
-			http.SetCookie(w, &http.Cookie{
-				Name:     "device_id",
-				Value:    deviceID,
-				Path:     "/",
-				HttpOnly: false,
-				Expires:  time.Now().Add(7 * 24 * time.Hour),
-			})
+			e_sessions.SetDeviceIDCookie(w, deviceID)
 		}
 
 		// Varmista fingerprint
-		cF, cFErr := r.Cookie("fingerprint")
+		cF, cFErr := r.Cookie(e_sessions.FingerprintCookieName())
 		var fingerprint string
 		if cFErr != nil || cF.Value == "" {
 			fingerprint = uuid.NewString()
@@ -429,13 +422,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			changed = true
 		}
 		if changed {
-			http.SetCookie(w, &http.Cookie{
-				Name:     "fingerprint",
-				Value:    fingerprint,
-				Path:     "/",
-				HttpOnly: false,
-				Expires:  time.Now().Add(7 * 24 * time.Hour),
-			})
+			e_sessions.SetFingerprintCookie(w, fingerprint)
 			if errSave := session.Save(r, w); errSave != nil {
 				log.Printf("\033[31merror: session save failed: %s\033[0m\n", errSave.Error())
 			}

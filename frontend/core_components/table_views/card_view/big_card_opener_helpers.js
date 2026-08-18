@@ -54,17 +54,28 @@ export function extractRowId(rowItem) {
 
 /**
  * Sort columns so that columns with a card_element role come before those without.
- * Preserves relative order among columns that both have (or both lack) a role.
+ * Within each role group, applies the dataset-wide co_number field order and
+ * preserves the source order as a fallback when metadata is missing.
  *
  * @param {string[]} columns - Column names
  * @param {object} dataTypes - Map of column name → { card_element?: string, ... }
  * @returns {string[]} New sorted array (does not mutate input)
  */
 export function sortColumnsByRole(columns, dataTypes) {
+    const sourceOrder = new Map(columns.map((column, index) => [column, index]));
     return [...columns].sort((a, b) => {
         const roleA = dataTypes[a]?.card_element || "";
         const roleB = dataTypes[b]?.card_element || "";
-        return roleA && !roleB ? -1 : !roleA && roleB ? 1 : 0;
+        if (roleA && !roleB) return -1;
+        if (!roleA && roleB) return 1;
+
+        const orderA = Number(dataTypes[a]?.co_number);
+        const orderB = Number(dataTypes[b]?.co_number);
+        const hasOrderA = Number.isFinite(orderA) && orderA > 0;
+        const hasOrderB = Number.isFinite(orderB) && orderB > 0;
+        if (hasOrderA && hasOrderB && orderA !== orderB) return orderA - orderB;
+        if (hasOrderA !== hasOrderB) return hasOrderA ? -1 : 1;
+        return sourceOrder.get(a) - sourceOrder.get(b);
     });
 }
 

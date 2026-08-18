@@ -38,6 +38,7 @@ import {
     RENDERABLE_DATASET_VIEW_DEFINITIONS,
     resolveDatasetViewSelectionTarget,
 } from "./dataset_view_registry.js";
+import { datasetSupportsTreeView } from "./dataset_tree_availability_checker.js";
 
 function isFilterbarVisible(tableName) {
     // Check unified panel
@@ -272,6 +273,12 @@ function resolveRenderableView(datasetName, currentView, columns, data, dataType
     if (
         renderableView === "map"
         && !dataset_supports_map_view(columns, data, dataTypes, hasGeo)
+    ) {
+        return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView);
+    }
+    if (
+        renderableView === "tree"
+        && !datasetSupportsTreeView(datasetName, columns, dataTypes)
     ) {
         return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView);
     }

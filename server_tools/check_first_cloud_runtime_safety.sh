@@ -57,7 +57,8 @@ Mode meanings:
                 migrations, sessions, or worker ownership.
   replica-pool  Multiple replicas for the same application behind one load
                 balancer. Replicas must share DB identity, SESSION_KEY,
-                SESSION_SECRET_KEY, and an explicit SESSION_COOKIE_NAME.
+                SESSION_SECRET_KEY, SESSION_COOKIE_MODE=replica-pool, and an
+                explicit SESSION_COOKIE_NAME.
 
 Environment defaults:
   FIRST_CLOUD_RUNTIME_MODE, FIRST_CLOUD_RUNTIME_TIMEOUT_SECONDS,
@@ -213,6 +214,17 @@ db_identity() {
     printf '%s|%s|%s' "$db_host" "$db_port" "$db_name"
 }
 
+stable_instance_identity() {
+    local env_file="$1"
+    local identity
+
+    identity="$(env_value "$env_file" INSTANCE_NAME)"
+    if [[ -z "$identity" ]]; then
+        identity="$(db_identity "$env_file")"
+    fi
+    printf '%s' "$identity"
+}
+
 worker_role() {
     local env_file="$1"
     local role
@@ -235,6 +247,7 @@ check_env_file_basics() {
     local label
     local session_key
     local session_secret
+    local cookie_mode
     local cookie_name
     local migrations_enabled
     local role
@@ -247,12 +260,16 @@ check_env_file_basics() {
     label="$(instance_label "$env_file")"
     session_key="$(env_value "$env_file" SESSION_KEY)"
     session_secret="$(env_value "$env_file" SESSION_SECRET_KEY)"
+    cookie_mode="$(env_value "$env_file" SESSION_COOKIE_MODE)"
+    if [[ -z "$cookie_mode" ]]; then
+        cookie_mode="isolated"
+    fi
     cookie_name="$(env_value "$env_file" SESSION_COOKIE_NAME)"
     migrations_enabled="$(normalize_bool "$(env_value "$env_file" ENABLE_SQL_MIGRATIONS)")"
     role="$(worker_role "$env_file")"
 
     info "checking env file ${env_file} (${label})"
-    info "session_key=$(redacted_presence "$session_key") session_secret=$(redacted_presence "$session_secret") session_cookie_name=$(redacted_presence "$cookie_name")"
+    info "session_key=$(redacted_presence "$session_key") session_secret=$(redacted_presence "$session_secret") session_cookie_mode=${cookie_mode} session_cookie_name=$(redacted_presence "$cookie_name")"
 
     if is_placeholder_secret "$session_key"; then
         fail_check "${label}: SESSION_KEY is missing or still placeholder-like"
@@ -264,6 +281,31 @@ check_env_file_basics() {
         fail_check "${label}: SESSION_SECRET_KEY is missing or still placeholder-like"
     else
         pass_check "${label}: SESSION_SECRET_KEY is present without printing its value"
+    fi
+
+    case "$cookie_mode" in
+        isolated)
+            if [[ -n "$cookie_name" ]]; then
+                fail_check "${label}: isolated cookie mode must not set SESSION_COOKIE_NAME"
+            else
+                pass_check "${label}: isolated cookie namespace is derived from the stable instance identity"
+            fi
+            ;;
+        replica-pool)
+            if [[ -z "$cookie_name" ]]; then
+                fail_check "${label}: replica-pool cookie mode requires SESSION_COOKIE_NAME"
+            else
+                pass_check "${label}: replica-pool cookie name is explicit"
+            fi
+            ;;
+        *)
+            fail_check "${label}: SESSION_COOKIE_MODE must be isolated or replica-pool"
+            ;;
+    esac
+    if [[ "$cookie_mode" != "$MODE" ]]; then
+        fail_check "${label}: SESSION_COOKIE_MODE=${cookie_mode} does not match requested --mode ${MODE}"
+    else
+        pass_check "${label}: cookie mode matches the requested runtime contract"
     fi
 
     if [[ "$migrations_enabled" == "true" ]]; then
@@ -291,6 +333,8 @@ check_pairwise_contracts() {
     local right_db
     local left_cookie
     local right_cookie
+    local left_instance_identity
+    local right_instance_identity
     local left_migrations
     local right_migrations
     local left_role
@@ -306,6 +350,7 @@ check_pairwise_contracts() {
         left_label="$(instance_label "$left")"
         left_db="$(db_identity "$left")"
         left_cookie="$(env_value "$left" SESSION_COOKIE_NAME)"
+        left_instance_identity="$(stable_instance_identity "$left")"
         left_migrations="$(normalize_bool "$(env_value "$left" ENABLE_SQL_MIGRATIONS)")"
         left_role="$(worker_role "$left")"
 
@@ -315,6 +360,7 @@ check_pairwise_contracts() {
             right_label="$(instance_label "$right")"
             right_db="$(db_identity "$right")"
             right_cookie="$(env_value "$right" SESSION_COOKIE_NAME)"
+            right_instance_identity="$(stable_instance_identity "$right")"
             right_migrations="$(normalize_bool "$(env_value "$right" ENABLE_SQL_MIGRATIONS)")"
             right_role="$(worker_role "$right")"
 
@@ -331,7 +377,10 @@ check_pairwise_contracts() {
                     warn_check "${left_label}/${right_label}: same DB identity seen in isolated mode; use --mode replica-pool if these are same-app replicas"
                 fi
                 if [[ -n "$left_cookie" && "$left_cookie" == "$right_cookie" && "$left_db" != "$right_db" ]]; then
-                    warn_check "${left_label}/${right_label}: same explicit SESSION_COOKIE_NAME across different DB identities"
+                    fail_check "${left_label}/${right_label}: same explicit SESSION_COOKIE_NAME across different DB identities"
+                fi
+                if [[ "$left_instance_identity" == "$right_instance_identity" && "$left_db" != "$right_db" ]]; then
+                    fail_check "${left_label}/${right_label}: same stable INSTANCE_NAME is assigned to different DB identities"
                 fi
             fi
         done
@@ -365,6 +414,9 @@ check_replica_pool_contract() {
     for env_file in "${ENV_FILES[@]}"; do
         [[ -r "$env_file" ]] || continue
         label="$(instance_label "$env_file")"
+        if [[ "$(env_value "$env_file" SESSION_COOKIE_MODE)" != "replica-pool" ]]; then
+            fail_check "${label}: replica pool requires SESSION_COOKIE_MODE=replica-pool"
+        fi
         if [[ "$(db_identity "$env_file")" != "$first_db" ]]; then
             fail_check "${label}: replica pool DB identity differs from the first env file"
         fi

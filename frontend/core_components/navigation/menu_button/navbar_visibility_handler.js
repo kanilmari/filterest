@@ -8,8 +8,10 @@ import { setupScrollPassthrough } from "../../../reusable_components/scroll_pass
 export const NAVBAR_VISIBILITY_CHANGED_EVENT = "navbar-visibility-changed";
 const NAVBAR_SHOW_BUTTON_REVEAL_DELAY_MS = 0;
 const NAVBAR_COLLAPSE_COMPLETE_CLASS = 'navbar-collapse-complete';
+const NAVBAR_OPENING_CLASS = 'navbar-opening';
 let showButtonRevealTimer = 0;
 let navbarCollapseCompletionCleanup = null;
+let navbarOpeningCleanup = null;
 
 // Päivittää piilotetun navigaatiopalkin palauttavan napin paikan niin,
 // että se pysyy saman app-kuoren vasemmassa yläkulmassa kuin itse navbar.
@@ -19,19 +21,15 @@ export function updateShowMenuButtonPosition() {
   if (!showButton || !bodyContent) return;
 
   const rootStyle = document.documentElement.style;
-  if (showButton.classList.contains('shared-topbar-docked-button')) {
-    showButton.style.width = '';
-    showButton.style.height = '';
-    showButton.style.left = '';
-    rootStyle.setProperty('--menu-button-search-offset', '0px');
-    return;
-  }
-
   // Reset inline styles to let CSS handle the size (44px)
   showButton.style.width = '';
   showButton.style.height = '';
+  showButton.style.left = '';
 
-  if (!navVisible) {
+  if (
+    !navVisible &&
+    !showButton.classList.contains('shared-topbar-menu-source-hidden')
+  ) {
     rootStyle.setProperty('--menu-button-search-offset', '68px');
   } else {
     rootStyle.setProperty('--menu-button-search-offset', '0px');
@@ -116,6 +114,53 @@ function finishNavbarCollapseAfterTransition(navbar, { immediate = false } = {})
   };
 }
 
+function clearNavbarOpening(navbar) {
+  if (navbarOpeningCleanup) {
+    navbarOpeningCleanup();
+    navbarOpeningCleanup = null;
+  }
+  navbar?.classList.remove(NAVBAR_OPENING_CLASS);
+}
+
+/**
+ * Keeps the top-row cursor visually stable only while the navbar slides in.
+ * This class is cosmetic: it never changes disabled state or pointer events.
+ */
+function markNavbarOpeningUntilTransitionEnds(navbar, { immediate = false } = {}) {
+  clearNavbarOpening(navbar);
+  if (immediate) {
+    return;
+  }
+
+  const transitionDurationMs = getNavbarTransformTransitionDurationMs(navbar);
+  if (transitionDurationMs <= 0) {
+    return;
+  }
+
+  navbar.classList.add(NAVBAR_OPENING_CLASS);
+
+  const finishOpening = () => {
+    clearNavbarOpening(navbar);
+  };
+  const handleTransitionStop = (event) => {
+    if (event.target === navbar && event.propertyName === 'transform') {
+      finishOpening();
+    }
+  };
+  const fallbackTimer = window.setTimeout(
+    finishOpening,
+    transitionDurationMs + 50
+  );
+
+  navbar.addEventListener('transitionend', handleTransitionStop);
+  navbar.addEventListener('transitioncancel', handleTransitionStop);
+  navbarOpeningCleanup = () => {
+    window.clearTimeout(fallbackTimer);
+    navbar.removeEventListener('transitionend', handleTransitionStop);
+    navbar.removeEventListener('transitioncancel', handleTransitionStop);
+  };
+}
+
 function setShowButtonVisibility(showButton, shouldShow, { immediate = false } = {}) {
   clearShowButtonRevealTimer();
   showButton.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
@@ -149,14 +194,16 @@ function animateInitialNavbarEntrance(
   hideButton,
   bodyContent
 ) {
-  hideButton.setAttribute('aria-hidden', 'true');
-  hideButton.tabIndex = -1;
-  setShowButtonVisibility(showButton, true, { immediate: true });
+  hideButton.setAttribute('aria-hidden', 'false');
+  hideButton.setAttribute('aria-expanded', 'true');
+  hideButton.tabIndex = 0;
+  setShowButtonVisibility(showButton, false, { immediate: true });
   showButton.setAttribute('aria-expanded', 'true');
   bodyContent?.classList.add('navbar-transitions-ready');
 
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      markNavbarOpeningUntilTransitionEnds(navbar);
       navbar.classList.remove('collapsed');
       tabsContainer.classList.remove('navbar_hidden');
       if (bodyContent) {
@@ -176,22 +223,32 @@ function applyNavbarVisibility(
   isVisible,
   { immediate = false } = {}
 ) {
-  // The canonical menu button now toggles both directions. Keep the legacy
-  // in-navbar control out of the visual and accessibility trees so there is
-  // only one real target in every layout.
-  hideButton.setAttribute('aria-hidden', 'true');
-  hideButton.tabIndex = -1;
+  const wasCollapsed = navbar.classList.contains('collapsed');
+  hideButton.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+  hideButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+  hideButton.tabIndex = isVisible ? 0 : -1;
   showButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
-  setShowButtonVisibility(showButton, true, { immediate });
 
   if (isVisible) {
     clearNavbarCollapseCompletion(navbar);
+    if (wasCollapsed) {
+      markNavbarOpeningUntilTransitionEnds(navbar, { immediate });
+    } else {
+      clearNavbarOpening(navbar);
+    }
     navbar.classList.remove('collapsed');
+    setShowButtonVisibility(showButton, false, { immediate: true });
     tabsContainer.classList.remove('navbar_hidden');
   } else {
+    clearNavbarOpening(navbar);
     navbar.classList.add('collapsed');
     finishNavbarCollapseAfterTransition(navbar, { immediate });
     tabsContainer.classList.add('navbar_hidden');
+    setShowButtonVisibility(
+      showButton,
+      !showButton.classList.contains('shared-topbar-menu-source-hidden'),
+      { immediate }
+    );
   }
 
   updateShowMenuButtonPosition();
@@ -204,6 +261,61 @@ function applyNavbarVisibility(
 
 // Kynnysarvo pikseleinä
 let navVisible = true; // Nykyisen leveyden näkyvyystila
+
+function storeNavbarVisibility(isVisible) {
+  const currentIsWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
+  localStorage.setItem(
+    currentIsWide ? 'navVisibleWide' : 'navVisibleNarrow',
+    String(isVisible)
+  );
+}
+
+/**
+ * Toggles the shared navbar state from any surface-specific menu button.
+ * Between persistent navbar/floating/topbar controls and the one navigation panel.
+ * Exists so controls never forward clicks through another DOM button.
+ */
+export function toggleNavbarVisibility() {
+  const navbar = document.getElementById('navbar');
+  const showButton = document.getElementById('showMenuButton');
+  const hideButton = document.getElementById('hideMenuButton');
+  const tabsContainer = document.getElementById('tabs_container');
+  const bodyContent = document.querySelector('.body_content');
+
+  if (!navbar || !showButton || !hideButton || !tabsContainer) {
+    return false;
+  }
+
+  navVisible = !navVisible;
+  storeNavbarVisibility(navVisible);
+  applyNavbarVisibility(
+    navbar,
+    tabsContainer,
+    showButton,
+    hideButton,
+    bodyContent,
+    navVisible
+  );
+  return navVisible;
+}
+
+/**
+ * Reconciles the fixed fallback after a context topbar takes or releases menu ownership.
+ * Between filterbar-owned menu buttons and the navbar's persistent fixed controls.
+ * Exists to keep exactly one collapsed-state menu target interactive and reachable.
+ */
+export function syncNavbarMenuButtonAccessibility() {
+  const showButton = document.getElementById('showMenuButton');
+  if (!showButton) {
+    return;
+  }
+
+  const shouldShowFloatingButton =
+    !navVisible &&
+    !showButton.classList.contains('shared-topbar-menu-source-hidden');
+  setShowButtonVisibility(showButton, shouldShowFloatingButton, { immediate: true });
+  updateShowMenuButtonPosition();
+}
 
 export function initNavbar() {
   const navbar = document.getElementById('navbar');
@@ -251,27 +363,14 @@ export function initNavbar() {
   }
 
   // Menu-painikkeiden klikkaukset
-  showButton.addEventListener('click', () => {
-    const currentIsWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
-    navVisible = !navVisible;
-    if (currentIsWide) {
-      localStorage.setItem('navVisibleWide', navVisible);
-    } else {
-      localStorage.setItem('navVisibleNarrow', navVisible);
-    }
-    applyNavbarVisibility(navbar, tabsContainer, showButton, hideButton, bodyContent, navVisible);
+  showButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleNavbarVisibility();
   });
 
-  hideButton.addEventListener('click', () => {
-    if (!navVisible) return;
-    const currentIsWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
-    navVisible = false;
-    if (currentIsWide) {
-      localStorage.setItem('navVisibleWide', navVisible);
-    } else {
-      localStorage.setItem('navVisibleNarrow', navVisible);
-    }
-    applyNavbarVisibility(navbar, tabsContainer, showButton, hideButton, bodyContent, navVisible);
+  hideButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleNavbarVisibility();
   });
 
   // Piilota navigaatio, jos klikataan sen ulkopuolelle kapeassa näkymässä
@@ -280,6 +379,7 @@ export function initNavbar() {
     if (!currentIsWide && navVisible) {
       if (
         !navbar.contains(event.target) &&
+        !event.target.closest?.('[data-navbar-menu-button="true"]') &&
         !showButton.contains(event.target)
       ) {
         navVisible = false;
@@ -334,7 +434,7 @@ function checkWindowWidth() {
  * Adds the user-facing DEV/TEST/QA badge selected during First Run.
  * Uses a display-only meta tag; app-env remains the runtime capability boundary.
  */
-export function addEnvironmentBadgeIfNeeded() {
+export function addEnvironmentBadgeIfNeeded(root = document) {
   const environment = document.querySelector('meta[name="installation-environment"]')?.content;
   const labels = { dev: 'DEV', test: 'TEST', qa: 'QA' };
   const label = labels[environment] || '';
@@ -342,10 +442,10 @@ export function addEnvironmentBadgeIfNeeded() {
     return;
   }
 
-  const showButton = document.getElementById('showMenuButton');
-  const hideButton = document.getElementById('hideMenuButton');
-
-  [showButton, hideButton].forEach(button => {
+  const buttons = root.querySelectorAll(
+    '#showMenuButton, #hideMenuButton, [data-navbar-menu-button="true"]'
+  );
+  buttons.forEach(button => {
     if (button && !button.querySelector('.environment-badge')) {
       const badge = document.createElement('span');
       badge.className = `environment-badge environment-badge--${environment}`;

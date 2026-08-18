@@ -183,8 +183,8 @@ func normalizeFilterbarSectionOrder(input []string) []string {
 func normalizeFilterbarSectionCollapsed(input map[string]bool) map[string]bool {
 	normalized := map[string]bool{}
 	for _, key := range defaultFilterbarSectionOrder {
-		if input[key] {
-			normalized[key] = true
+		if value, exists := input[key]; exists {
+			normalized[key] = value
 		}
 	}
 	return normalized

@@ -209,6 +209,83 @@ func TestDeleteRemovedTablesSuccessAndExecError(t *testing.T) {
 	})
 }
 
+func TestFindManagedAssetChildTablesRequiresCanonicalFileUploadRelation(t *testing.T) {
+	db, state := openDeleteTableDB(
+		t,
+		[]queuedDeleteQuery{{
+			cols: []string{"table_name", "table_uid", "schema_name"},
+			rows: [][]driver.Value{{"articles_assets", int64(84), "public"}},
+		}},
+		nil,
+	)
+
+	children, err := findManagedAssetChildTables(db, 42, "articles")
+	if err != nil {
+		t.Fatalf("findManagedAssetChildTables returned error: %v", err)
+	}
+	if len(children) != 1 || children[0].tableName != "articles_assets" || children[0].tableUID != 84 {
+		t.Fatalf("children = %#v, want canonical articles_assets child", children)
+	}
+	if len(state.queryCalls) != 1 {
+		t.Fatalf("query call count = %d, want 1", len(state.queryCalls))
+	}
+	query := state.queryCalls[0]
+	for _, required := range []string{
+		"src.table_name = $2",
+		"src.schema_name = 'public'",
+		"target_insert_specs->'file_upload' IS NOT NULL",
+	} {
+		if !strings.Contains(query, required) {
+			t.Fatalf("managed-child query missing %q:\n%s", required, query)
+		}
+	}
+}
+
+func TestDropManagedAssetChildTableDropsSchemaAndMetadataTogether(t *testing.T) {
+	db, state := openDeleteTableDB(
+		t,
+		[]queuedDeleteQuery{
+			{
+				cols: []string{"table_name"},
+				rows: [][]driver.Value{{"articles_assets"}},
+			},
+			{
+				cols: []string{"lang_key_id"},
+				rows: nil,
+			},
+		},
+		[]queuedDeleteExec{
+			{rowsAffected: 1}, // DROP TABLE
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+			{rowsAffected: 1},
+		},
+	)
+
+	err := dropManagedAssetChildTable(db, managedAssetChildTable{
+		tableName:  "articles_assets",
+		tableUID:   84,
+		schemaName: "public",
+	})
+	if err != nil {
+		t.Fatalf("dropManagedAssetChildTable returned error: %v", err)
+	}
+	if len(state.execCalls) != 9 {
+		t.Fatalf("exec call count = %d, want 9", len(state.execCalls))
+	}
+	if !strings.Contains(state.execCalls[0], "DROP TABLE articles_assets CASCADE") {
+		t.Fatalf("first exec must drop canonical child table:\n%s", state.execCalls[0])
+	}
+	if !strings.Contains(state.execCalls[8], "DELETE FROM system_db_tables") {
+		t.Fatalf("final exec must delete child catalog metadata:\n%s", state.execCalls[8])
+	}
+}
+
 func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 	db, state := openDeleteTableDB(
 		t,

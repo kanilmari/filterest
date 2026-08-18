@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dynamic_table_tools/ai_features"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	"easelect/backend/core_components/system_table_tools"
 )
@@ -58,6 +59,7 @@ func runDeferredStartupMaintenance(projectRoot string) {
 	EnsureFilterestBusinessID(backend.Db)
 
 	EnsureLangEmbeddingTables()
+	ai_features.StartEmbeddingRefreshWorker(backend.Db)
 	// Populoi lähdetiedot: skannaa koodipohja (JS/HTML/Go), skeema (sarakkeet/taulut)
 	// ja tietokantapohjaiset avaimet (views, groups) system_lang_key_sources-tauluun.
 	// Tämä pitää ajaa ENNEN MarkOrphanLangKeys():ta, koska orphan-tunnistus

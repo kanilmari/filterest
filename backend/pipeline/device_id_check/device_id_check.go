@@ -42,7 +42,7 @@ func WithDeviceIDCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Haetaan device_id-eväste
-		cookie_device_id, err := r.Cookie("device_id")
+		cookie_device_id, err := r.Cookie(e_sessions.DeviceIDCookieName())
 		if err != nil || cookie_device_id.Value == "" {
 			log.Printf("[WithDeviceIDCheck] no device_id cookie -> login")
 			http.Redirect(w, r, "/login", http.StatusSeeOther)

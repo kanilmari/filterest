@@ -1,5 +1,5 @@
 // filterest_paths.go
-// Resolves operator-provided project and key homes from one portable locator.
+// Resolves operator-provided project, key, runtime, maintainer, and operations homes from one locator.
 // Bridges Go startup with Python, Node, and shell tooling path semantics.
 // Exists so safety follows normalized paths instead of fixed directory names.
 package backend
@@ -19,10 +19,16 @@ const (
 )
 
 type filterestHomes struct {
-	ProjectsHome           string
-	KeysHome               string
-	ProjectsHomeConfigured bool
-	KeysHomeConfigured     bool
+	ProjectsHome              string
+	KeysHome                  string
+	RuntimeDataHome           string
+	MaintainerToolsHome       string
+	OperationsHome            string
+	ProjectsHomeConfigured    bool
+	KeysHomeConfigured        bool
+	RuntimeDataHomeConfigured bool
+	MaintainerToolsConfigured bool
+	OperationsHomeConfigured  bool
 }
 
 func readFilterestPathsFile(path string) (map[string]string, error) {
@@ -49,9 +55,12 @@ func readFilterestPathsFile(path string) (map[string]string, error) {
 	}
 
 	supported := map[string]bool{
-		"schema_version": true,
-		"projects_home":  true,
-		"keys_home":      true,
+		"schema_version":        true,
+		"projects_home":         true,
+		"keys_home":             true,
+		"runtime_data_home":     true,
+		"maintainer_tools_home": true,
+		"operations_home":       true,
 	}
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
@@ -167,13 +176,22 @@ func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHom
 	}
 	defaultProjectsHome := filepath.Join(normalizedRoot, "filterest_projects")
 	defaultKeysHome := filepath.Join(normalizedRoot, "filterest_keys")
+	defaultRuntimeDataHome := filepath.Join(normalizedRoot, "filterest_runtime_data")
+	defaultMaintainerToolsHome := filepath.Join(normalizedRoot, "filterest_maintainer_tools")
+	defaultOperationsHome := filepath.Join(normalizedRoot, "filterest_operations")
 	if privateSource {
 		defaultProjectsHome = filepath.Join(normalizedRoot, "..", "filterest-projects")
 		defaultKeysHome = filepath.Join(normalizedRoot, "..", "filterest_keys")
+		defaultRuntimeDataHome = filepath.Join(normalizedRoot, "..", "filterest-runtime-data")
+		defaultMaintainerToolsHome = filepath.Join(normalizedRoot, "..", "filterest-maintainer-tools")
+		defaultOperationsHome = filepath.Join(normalizedRoot, "..", "filterest-operations")
 	}
 	values := map[string]string{
-		"projects_home": defaultProjectsHome,
-		"keys_home":     defaultKeysHome,
+		"projects_home":         defaultProjectsHome,
+		"keys_home":             defaultKeysHome,
+		"runtime_data_home":     defaultRuntimeDataHome,
+		"maintainer_tools_home": defaultMaintainerToolsHome,
+		"operations_home":       defaultOperationsHome,
 	}
 	configured := map[string]bool{}
 	for _, configName := range []string{filterestPathsFile, filterestLocalPathsFile} {
@@ -181,7 +199,13 @@ func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHom
 		if err != nil {
 			return filterestHomes{}, err
 		}
-		for _, key := range []string{"projects_home", "keys_home"} {
+		for _, key := range []string{
+			"projects_home",
+			"keys_home",
+			"runtime_data_home",
+			"maintainer_tools_home",
+			"operations_home",
+		} {
 			if value, ok := fileValues[key]; ok {
 				values[key] = value
 				configured[key] = true
@@ -195,6 +219,18 @@ func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHom
 	if value := strings.TrimSpace(os.Getenv("FILTEREST_KEYS_HOME")); value != "" && strings.TrimSpace(os.Getenv("FILTEREST_KEYS_HOME_CONFIGURED")) != "0" {
 		values["keys_home"] = value
 		configured["keys_home"] = true
+	}
+	if value := strings.TrimSpace(os.Getenv("FILTEREST_RUNTIME_DATA_HOME")); value != "" && strings.TrimSpace(os.Getenv("FILTEREST_RUNTIME_DATA_HOME_CONFIGURED")) != "0" {
+		values["runtime_data_home"] = value
+		configured["runtime_data_home"] = true
+	}
+	if value := strings.TrimSpace(os.Getenv("FILTEREST_MAINTAINER_TOOLS_HOME")); value != "" && strings.TrimSpace(os.Getenv("FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED")) != "0" {
+		values["maintainer_tools_home"] = value
+		configured["maintainer_tools_home"] = true
+	}
+	if value := strings.TrimSpace(os.Getenv("FILTEREST_OPERATIONS_HOME")); value != "" && strings.TrimSpace(os.Getenv("FILTEREST_OPERATIONS_HOME_CONFIGURED")) != "0" {
+		values["operations_home"] = value
+		configured["operations_home"] = true
 	}
 
 	legacyKeyRoot := strings.TrimSpace(os.Getenv("EASELECT_KEY_ROOT"))
@@ -234,13 +270,49 @@ func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHom
 	if err != nil {
 		return filterestHomes{}, err
 	}
-	if filterestHomesOverlap(projectsHome, keysHome) {
-		return filterestHomes{}, fmt.Errorf("projects_home and keys_home must not be equal or nested")
+	runtimeDataHome, err := resolveFilterestHome(normalizedRoot, values["runtime_data_home"], "runtime_data_home")
+	if err != nil {
+		return filterestHomes{}, err
+	}
+	maintainerToolsHome, err := resolveFilterestHome(normalizedRoot, values["maintainer_tools_home"], "maintainer_tools_home")
+	if err != nil {
+		return filterestHomes{}, err
+	}
+	operationsHome, err := resolveFilterestHome(normalizedRoot, values["operations_home"], "operations_home")
+	if err != nil {
+		return filterestHomes{}, err
+	}
+	homes := []struct {
+		name string
+		path string
+	}{
+		{name: "projects_home", path: projectsHome},
+		{name: "keys_home", path: keysHome},
+		{name: "runtime_data_home", path: runtimeDataHome},
+		{name: "maintainer_tools_home", path: maintainerToolsHome},
+		{name: "operations_home", path: operationsHome},
+	}
+	for first := 0; first < len(homes); first++ {
+		for second := first + 1; second < len(homes); second++ {
+			if filterestHomesOverlap(homes[first].path, homes[second].path) {
+				return filterestHomes{}, fmt.Errorf(
+					"%s and %s must not be equal or nested",
+					homes[first].name,
+					homes[second].name,
+				)
+			}
+		}
 	}
 	return filterestHomes{
-		ProjectsHome:           projectsHome,
-		KeysHome:               keysHome,
-		ProjectsHomeConfigured: configured["projects_home"],
-		KeysHomeConfigured:     configured["keys_home"],
+		ProjectsHome:              projectsHome,
+		KeysHome:                  keysHome,
+		RuntimeDataHome:           runtimeDataHome,
+		MaintainerToolsHome:       maintainerToolsHome,
+		OperationsHome:            operationsHome,
+		ProjectsHomeConfigured:    configured["projects_home"],
+		KeysHomeConfigured:        configured["keys_home"],
+		RuntimeDataHomeConfigured: configured["runtime_data_home"],
+		MaintainerToolsConfigured: configured["maintainer_tools_home"],
+		OperationsHomeConfigured:  configured["operations_home"],
 	}, nil
 }

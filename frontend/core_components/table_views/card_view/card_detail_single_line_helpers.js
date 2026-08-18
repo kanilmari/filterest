@@ -4,6 +4,7 @@
 // Exists so the SVG/fallback logic stays testable without importing the whole card renderer.
 
 import { getCardDetailIconSvgMarkup } from "./card_detail_icon_builder.js";
+import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
 const SAFE_CARD_DETAIL_SVG_TAGS = new Set([
     "svg",
@@ -236,9 +237,12 @@ function createSingleLineCardDetailValue(detailEntry) {
 
     valueContainer.title = detailEntry?.titleValue || displayValue;
 
-    const href = String(
-        detailEntry?.href || (detailEntry?.isLink === true ? detailEntry?.rawValue : "") || ""
-    ).trim();
+    const explicitHref = String(detailEntry?.href || "").trim();
+    const href = explicitHref || (
+        detailEntry?.isLink === true
+            ? resolveSafeExternalHttpUrl(detailEntry?.rawValue)
+            : ""
+    );
 
     if (!href) {
         valueContainer.textContent = displayValue;

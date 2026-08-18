@@ -54,6 +54,24 @@ access; the database folder hierarchy remains authoritative.
 - Optional semantic search and AI integrations through separately configured
   provider credentials.
 
+### Semantic-search privacy boundary
+
+Semantic search is optional and ordinary dataset views work without AI
+credentials. Outbound row content is fail-closed: no field is sent to the
+configured Google or OpenAI embedding service until an administrator explicitly
+allows that current text field in the embedding management view. Missing or
+stale metadata never falls back to all queryable text fields.
+
+New rows and edits to allowed fields create content-free, durable refresh jobs
+in the installation's own database. A leased background worker calls the
+external provider after the business transaction commits, retries temporary
+failures, and rejects stale results before storing vectors. Queue rows contain
+identifiers and retry state, not source text or provider responses.
+
+Administrators must still review the provider's processing terms and their own
+data-protection obligations before allowing personal or otherwise sensitive
+fields. Cost preview and provider-specific policy guidance remain future work.
+
 ## Geospatial Data With PostGIS
 
 Filterest uses PostGIS for location-aware datasets. The built-in **Map view**

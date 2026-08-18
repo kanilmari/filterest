@@ -16,9 +16,12 @@ import { handleLoginShellEntry } from "./core_components/auth/login_shell_entry.
 import { handleRegisterShellEntry } from "./core_components/auth/register_shell_entry.js";
 import { startAuthBroadcastSync } from "./core_components/auth/auth_broadcast_sync.js";
 import { initDevToolbox } from "./core_components/dev_tools/dev_toolbox.js";
+import {
+    getUiLanguageOptions,
+    loadPublicUiLanguageCatalog,
+} from "./core_components/lang/ui_language_catalog.js";
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
-const SUPPORTED_UI_LANGUAGES = ['en', 'fi', 'yue'];
 
 import "./core_components/table_views/table_view/table_column_resizer.js";
 import "./core_components/theme.js";
@@ -34,6 +37,7 @@ if (document.querySelector('meta[name="app-env"]')?.content === 'dev') {
 // import "./core_components/dev_tools/print_session_details.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
+    await loadPublicUiLanguageCatalog();
     await loadConfig();
     initDevToolbox();
     // Initialize the navbar before heavy dataset rendering so the content area
@@ -68,7 +72,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     await handleLoginShellEntry();
     await handleRegisterShellEntry();
 
-    const chosen_language = getPreferredAvailableLanguage(SUPPORTED_UI_LANGUAGES);
+    const publicLanguages = getUiLanguageOptions("application");
+    const supportedLanguageCodes = publicLanguages.map((language) => language.value);
+    const defaultLanguage = publicLanguages.find((language) => language.isDefault)?.value || 'en';
+    const chosen_language = getPreferredAvailableLanguage(supportedLanguageCodes, defaultLanguage);
     if (IS_DEV_MODE) console.log("Translating page, chosen_language:", chosen_language);
     await translatePage(chosen_language);
 

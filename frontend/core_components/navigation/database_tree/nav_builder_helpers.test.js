@@ -127,13 +127,15 @@ describe('appendMissingAdminViews', () => {
 // getAdminToolsStructure
 // ---------------------------------------------------------------------------
 describe('getAdminToolsStructure', () => {
-    test('returns top-level admin roots for permissions, queen chat, table tools, and maintenance', () => {
+    test('returns top-level admin roots for permissions, queen chat, site settings, table tools, and maintenance', () => {
         const structure = getAdminToolsStructure();
-        expect(structure).toHaveLength(4);
+        expect(structure).toHaveLength(5);
         expect(structure[0].id).toBe('permissions');
         expect(structure[1].id).toBe('queen_chat');
-        expect(structure[2].id).toBe('table_tools');
-        expect(structure[3].id).toBe('maintenance');
+        expect(structure[2].id).toBe('site_settings');
+        expect(structure[2].children[0].id).toBe('site_languages');
+        expect(structure[3].id).toBe('table_tools');
+        expect(structure[4].id).toBe('maintenance');
     });
 
     test('table_tools contains table-oriented config views while maintenance holds general upkeep views', () => {

@@ -62,11 +62,12 @@ describe("buildTopRow", () => {
         expect(disclosureBuilderMock).toHaveBeenCalledTimes(3);
         expect(disclosureBuilderMock.mock.calls.map(([options]) => [
             options.langKey,
+            options.fallbackText,
             options.startOpen,
         ])).toEqual([
-            ["search_and_basic_controls", false],
-            ["tools", false],
-            ["views_and_presentations", false],
+            ["search_and_basic_controls", "Haku ja perustoiminnot", false],
+            ["filterbar_add_manage_content", "Add & manage content", false],
+            ["filterbar_view_content_as", "View content as…", false],
         ]);
     });
 });

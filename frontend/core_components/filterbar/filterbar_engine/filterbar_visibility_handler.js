@@ -7,27 +7,38 @@ import OverlayFilter from "../../../reusable_components/dark_overlay/dark_overla
 import { FILTERBAR_OVERLAY_BREAKPOINT_PX } from "../../../ui_config.js";
 import { updateShowMenuButtonPosition } from "../../navigation/menu_button/navbar_visibility_handler.js";
 import { getAllSpecs } from "../../state_stores/table_specs_reader.js";
-import { buildVisibilityKey, parseStoredVisibility, resolveInitialVisibility } from "./filterbar_visibility_handler_helpers.js";
+import {
+    buildLegacyVisibilityKey,
+    buildVisibilityKey,
+    parseStoredVisibility,
+    resolveInitialVisibility,
+} from "./filterbar_visibility_handler_helpers.js";
 
 // Kynnysarvo, jonka alapuolella compact filterbar siirtyy overlay-käyttäytymiseen.
 // Arvo pidetään tarkoituksella hieman 1280px-laptop-aluetta kapeampana, jotta
 // oikea rail pysyy vielä selkeänä ja vakaana tavallisissa "narrow desktop" -leveyksissä.
 export const FILTERBAR_BREAKPOINT_PX = FILTERBAR_OVERLAY_BREAKPOINT_PX;
 
-// UUSI FUNKTIO: Palauttaa oikean avaimen localStorageen näytön leveyden perusteella
 export function getVisibilityKey(tableName) {
-    const isWide = window.innerWidth > FILTERBAR_BREAKPOINT_PX;
-    return buildVisibilityKey(tableName, isWide);
+    return buildVisibilityKey(tableName);
 }
 
-// UUSI FUNKTIO: Hakee tallennetun näkyvyystilan localStoragesta
 export function getStoredVisibility(tableName) {
     const key = getVisibilityKey(tableName);
-    const stored = localStorage.getItem(key);
+    let stored = localStorage.getItem(key);
+    if (stored === null) {
+        const legacyKey = buildLegacyVisibilityKey(
+            tableName,
+            window.innerWidth >= FILTERBAR_BREAKPOINT_PX
+        );
+        stored = localStorage.getItem(legacyKey);
+        if (stored !== null) {
+            localStorage.setItem(key, stored);
+        }
+    }
     return parseStoredVisibility(stored);
 }
 
-// UUSI FUNKTIO: Tallentaa näkyvyystilan localStorageen
 export function setStoredVisibility(tableName, isVisible) {
     const key = getVisibilityKey(tableName);
     localStorage.setItem(key, isVisible.toString());

@@ -19,41 +19,150 @@ import (
 	"github.com/lib/pq"
 )
 
-// hyväksytyt kielisarakkeet: 2-3 kirjainta + vapaaehtoisesti 0-2 numeroa
-var langColRegexp = regexp.MustCompile(`^[a-z]{2,3}[0-9]{0,2}$`)
+var canonicalLanguageTagRegexp = regexp.MustCompile(`^[a-z]{2,3}(-[A-Z]{2})?$`)
+var primaryLanguageCodeRegexp = regexp.MustCompile(`^[a-z]{2,3}$`)
+var regionCodeRegexp = regexp.MustCompile(`^[a-z]{2}$`)
 
-// GetTranslationsHandler returns the chosen language map and optional dev-only orphan-key metadata.
-func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
-	chosenLang := r.URL.Query().Get("lang")
-	if !langColRegexp.MatchString(chosenLang) {
-		chosenLang = "en" // fallback turvalliseen oletukseen
+var legacyLanguageColumns = map[string]string{
+	"en":  "en",
+	"fi":  "fi",
+	"ch":  "ch",
+	"yue": "yue",
+}
+
+const canonicalTranslationsQuery = `
+	WITH RECURSIVE locale_chain AS (
+		SELECT language_code,
+		       fallback_language_code,
+		       0 AS fallback_depth,
+		       ARRAY[language_code]::TEXT[] AS visited
+		FROM system_languages
+		WHERE language_code = $1
+
+		UNION ALL
+
+		SELECT fallback.language_code,
+		       fallback.fallback_language_code,
+		       chain.fallback_depth + 1,
+		       chain.visited || fallback.language_code
+		FROM locale_chain AS chain
+		JOIN system_languages AS fallback
+		  ON fallback.language_code = chain.fallback_language_code
+		WHERE chain.fallback_depth < 8
+		  AND NOT fallback.language_code = ANY(chain.visited)
+	), ranked_translations AS (
+		SELECT keys.lang_key,
+		       translations.translation,
+		       ROW_NUMBER() OVER (
+		           PARTITION BY keys.lang_key
+		           ORDER BY chain.fallback_depth
+		       ) AS fallback_rank
+		FROM locale_chain AS chain
+		JOIN system_lang_key_translations AS translations
+		  ON translations.language_code = chain.language_code
+		JOIN system_lang_keys AS keys
+		  ON keys.id = translations.lang_key_id
+	)
+	SELECT lang_key, translation
+	FROM ranked_translations
+	WHERE fallback_rank = 1
+`
+
+func normalizeRequestedLanguageCode(value string) string {
+	raw := strings.TrimSpace(strings.ReplaceAll(value, "_", "-"))
+	if raw == "" {
+		return "en"
 	}
 
-	// QuoteIdentifier estää merkkijono-temput sarake-tunnisteessa
-	colName := pq.QuoteIdentifier(chosenLang)
-	queryStr := fmt.Sprintf(`SELECT lang_key, %s FROM system_lang_keys`, colName)
-
-	rows, err := backend.Db.Query(queryStr)
-	if err != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal server error")
-		return
+	lower := strings.ToLower(raw)
+	switch {
+	case lower == "yue" || strings.HasPrefix(lower, "yue-"):
+		return "yue"
+	case lower == "ch":
+		return "ch"
+	case lower == "zh-hk" || lower == "zh-mo" || strings.HasPrefix(lower, "zh-hant-hk") || strings.HasPrefix(lower, "zh-hant-mo"):
+		return "zh-HK"
+	case lower == "zh-tw" || lower == "zh-hant" || strings.HasPrefix(lower, "zh-hant-tw"):
+		return "zh-TW"
+	case lower == "zh" || lower == "zh-cn" || lower == "zh-sg" || strings.HasPrefix(lower, "zh-hans"):
+		return "zh-CN"
 	}
+
+	parts := strings.Split(lower, "-")
+	if len(parts) == 1 && primaryLanguageCodeRegexp.MatchString(parts[0]) {
+		return parts[0]
+	}
+	if len(parts) == 2 && primaryLanguageCodeRegexp.MatchString(parts[0]) && regionCodeRegexp.MatchString(parts[1]) {
+		return parts[0] + "-" + strings.ToUpper(parts[1])
+	}
+	return "en"
+}
+
+func translationMapFromRows(rows *sql.Rows) (map[string]string, error) {
 	defer rows.Close()
 
 	translationMap := make(map[string]string)
 	for rows.Next() {
 		var key string
-		var val sql.NullString
-		if err := rows.Scan(&key, &val); err != nil {
-			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal server error")
-			return
+		var value sql.NullString
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
 		}
-		translationMap[key] = val.String
+		translationMap[key] = value.String
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: rows iteration error in GetTranslationsHandler: %v\033[0m", err)
+		return nil, err
+	}
+	return translationMap, nil
+}
+
+func readLegacyTranslationMap(languageCode string) (map[string]string, error) {
+	columnName, exists := legacyLanguageColumns[languageCode]
+	if !exists {
+		return map[string]string{}, nil
+	}
+	query := fmt.Sprintf(
+		`SELECT lang_key, %s FROM system_lang_keys`,
+		pq.QuoteIdentifier(columnName),
+	)
+	rows, err := backend.Db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	return translationMapFromRows(rows)
+}
+
+func readCanonicalTranslationMap(languageCode string) (map[string]string, error) {
+	if !canonicalLanguageTagRegexp.MatchString(languageCode) {
+		return map[string]string{}, nil
+	}
+	rows, err := backend.Db.Query(canonicalTranslationsQuery, languageCode)
+	if err != nil {
+		return nil, err
+	}
+	return translationMapFromRows(rows)
+}
+
+// GetTranslationsHandler returns the chosen language map and optional dev-only orphan-key metadata.
+func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
+	chosenLang := normalizeRequestedLanguageCode(r.URL.Query().Get("lang"))
+
+	var translationMap map[string]string
+	var err error
+	if _, isLegacyColumn := legacyLanguageColumns[chosenLang]; isLegacyColumn {
+		translationMap, err = readLegacyTranslationMap(chosenLang)
+	} else {
+		translationMap, err = readCanonicalTranslationMap(chosenLang)
+		if err != nil {
+			log.Printf("[GetTranslationsHandler] canonical locale %q unavailable, falling back to English: %v", chosenLang, err)
+			translationMap, err = readLegacyTranslationMap("en")
+		}
+	}
+	if err == nil && len(translationMap) == 0 && chosenLang != "en" {
+		translationMap, err = readLegacyTranslationMap("en")
+	}
+	if err != nil {
+		log.Printf("\033[31merror: translations query failed: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}

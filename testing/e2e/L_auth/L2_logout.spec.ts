@@ -21,12 +21,76 @@ test.describe('L2 — Logout', () => {
     await ensureNavbarVisible(page);
     await expect(page.locator('[data-testid="navbar-auth-logout"], [data-testid="tab-logout"]').first()).toBeVisible();
 
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      localStorage.setItem('chosen_language', 'fi');
+      localStorage.setItem('navVisibleWide', 'false');
+      localStorage.setItem('navVisibleNarrow', 'true');
+      localStorage.setItem('secret_table_hide_columns', '{"restricted_field":true}');
+      localStorage.setItem(
+        'secret_table_sorting_and_filtering_specs',
+        '{"filters":{"secret":"x"}}',
+      );
+    });
+
+    const currentAuthCookieNames = (await page.context().cookies())
+      .map((cookie) => cookie.name)
+      .filter((name) => /^(session|device_id|fingerprint)_.+_[0-9a-f]{10}$/.test(name));
+    const siblingCookieNames = [
+      'session_sibling_deadbeef00',
+      'device_id_sibling_deadbeef00',
+      'fingerprint_sibling_deadbeef00',
+    ];
+    await page.context().addCookies(
+      siblingCookieNames.map((name) => ({
+        name,
+        value: 'sibling-instance-value',
+        url: new URL(page.url()).origin,
+        secure: true,
+        sameSite: 'Lax' as const,
+      })),
+    );
+
+    const logoutResponsePromise = page.waitForResponse(
+      (response) => response.url().endsWith('/api/logout'),
+    );
     await logout(page);
+
+    const logoutResponse = await logoutResponsePromise;
+    const setCookieHeader = (await logoutResponse.allHeaders())['set-cookie'] || '';
+    for (const currentName of currentAuthCookieNames) {
+      expect(setCookieHeader).toContain(`${currentName}=`);
+    }
+    for (const siblingName of siblingCookieNames) {
+      expect(setCookieHeader).not.toContain(`${siblingName}=`);
+    }
+
+    // The redirected guest shell may create fresh current-instance cookies.
+    // Sibling-instance cookies must remain untouched throughout the flow.
+    const namesAfterLogout = (await page.context().cookies()).map((cookie) => cookie.name);
+    expect(namesAfterLogout).toEqual(expect.arrayContaining(siblingCookieNames));
 
     const sessionInfo = await readSessionInfo(page);
     expect(typeof sessionInfo.user_id === 'number' ? sessionInfo.user_id : 0).toBeLessThanOrEqual(1);
     await expect(page.locator('[data-testid="navbar-auth-logout"], [data-testid="tab-logout"]')).toHaveCount(0);
     expect(page.url()).not.toContain('/api/logout');
+
+    const logoutStorage = await page.evaluate(() => ({
+      theme: localStorage.getItem('theme'),
+      language: localStorage.getItem('chosen_language'),
+      navVisibleWide: localStorage.getItem('navVisibleWide'),
+      navVisibleNarrow: localStorage.getItem('navVisibleNarrow'),
+      tableVisibility: localStorage.getItem('secret_table_hide_columns'),
+      tableFiltering: localStorage.getItem('secret_table_sorting_and_filtering_specs'),
+    }));
+    expect(logoutStorage).toEqual({
+      theme: 'light',
+      language: 'fi',
+      navVisibleWide: 'false',
+      navVisibleNarrow: 'true',
+      tableVisibility: null,
+      tableFiltering: null,
+    });
 
     const navbar = page.locator('#navbar');
     if (await navbar.count()) {

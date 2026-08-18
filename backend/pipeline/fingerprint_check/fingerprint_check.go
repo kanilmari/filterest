@@ -37,7 +37,7 @@ func WithFingerprintCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
 
 		// The fingerprint cookie is HttpOnly and contains the HMAC-signed value.
 		// X-Fingerprint header is no longer accepted — removing that attack surface.
-		cookieFingerprint, cookieErr := r.Cookie("fingerprint")
+		cookieFingerprint, cookieErr := r.Cookie(e_sessions.FingerprintCookieName())
 		if cookieErr != nil || cookieFingerprint.Value == "" {
 			if sessFingerprint == "" {
 				log.Printf("[WithFingerprintCheck] no fingerprint value in session or cookie")

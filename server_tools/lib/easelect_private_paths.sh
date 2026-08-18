@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # easelect_private_paths.sh
-# Resolves Easelect/Filterest env and TLS files from a dynamic protected key home.
+# Resolves Filterest homes plus env and TLS files from protected external paths.
 # Bridges repo-local tooling with the shared path locator while keeping legacy runtimes local.
 # Exists so Easelect does not need secret-bearing compatibility files or symlinks in repo root.
 
@@ -24,6 +24,15 @@ _easelect_resolve_filterest_homes() {
     if [[ "${FILTEREST_KEYS_HOME_CONFIGURED:-}" == "0" ]]; then
         unset FILTEREST_KEYS_HOME
     fi
+    if [[ "${FILTEREST_RUNTIME_DATA_HOME_CONFIGURED:-}" == "0" ]]; then
+        unset FILTEREST_RUNTIME_DATA_HOME
+    fi
+    if [[ "${FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED:-}" == "0" ]]; then
+        unset FILTEREST_MAINTAINER_TOOLS_HOME
+    fi
+    if [[ "${FILTEREST_OPERATIONS_HOME_CONFIGURED:-}" == "0" ]]; then
+        unset FILTEREST_OPERATIONS_HOME
+    fi
 
     if [[ ! -f "$resolver" ]]; then
         resolver_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -42,6 +51,13 @@ _easelect_resolve_filterest_homes() {
     FILTEREST_KEYS_HOME="$(printf '%s\n' "$output" | sed -n '2p')"
     FILTEREST_PROJECTS_HOME_CONFIGURED="$(printf '%s\n' "$output" | sed -n '3p')"
     FILTEREST_KEYS_HOME_CONFIGURED="$(printf '%s\n' "$output" | sed -n '4p')"
+    FILTEREST_RUNTIME_DATA_HOME="$(printf '%s\n' "$output" | sed -n '5p')"
+    FILTEREST_RUNTIME_DATA_HOME_CONFIGURED="$(printf '%s\n' "$output" | sed -n '6p')"
+    FILTEREST_PROJECTS_APPS_HOME="$(printf '%s\n' "$output" | sed -n '7p')"
+    FILTEREST_MAINTAINER_TOOLS_HOME="$(printf '%s\n' "$output" | sed -n '8p')"
+    FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED="$(printf '%s\n' "$output" | sed -n '9p')"
+    FILTEREST_OPERATIONS_HOME="$(printf '%s\n' "$output" | sed -n '10p')"
+    FILTEREST_OPERATIONS_HOME_CONFIGURED="$(printf '%s\n' "$output" | sed -n '11p')"
 }
 
 # Audits tracked-file boundaries and keeps dynamic child homes ignored locally.
@@ -103,6 +119,13 @@ easelect_resolve_private_paths() {
     export EASELECT_TLS_KEY_FILE
     export FILTEREST_PROJECTS_HOME
     export FILTEREST_KEYS_HOME
+    export FILTEREST_RUNTIME_DATA_HOME
+    export FILTEREST_MAINTAINER_TOOLS_HOME
+    export FILTEREST_OPERATIONS_HOME
+    export FILTEREST_PROJECTS_APPS_HOME
     export FILTEREST_PROJECTS_HOME_CONFIGURED
     export FILTEREST_KEYS_HOME_CONFIGURED
+    export FILTEREST_RUNTIME_DATA_HOME_CONFIGURED
+    export FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED
+    export FILTEREST_OPERATIONS_HOME_CONFIGURED
 }

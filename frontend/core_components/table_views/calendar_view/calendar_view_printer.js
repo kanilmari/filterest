@@ -38,6 +38,7 @@ const MAX_MONTH_TEXT_ROWS = 6;
 const MAX_MONTH_PREVIEW_EVENTS = 5;
 const NO_EVENTS_LABEL = "No events";
 const NO_EVENTS_LANG_KEY = "calendar_no_events";
+const NO_DATE_COLUMN_LANG_KEY = "calendar_no_date_column";
 
 /**
  * Creates the standalone calendar view element for a dataset.
@@ -57,7 +58,7 @@ export function create_calendar_view(table_name, columns, data, data_types = {})
     if (!calendarColumns.dateColumn) {
         root.appendChild(createNoticeElement(
             "No calendar date column found",
-            "calendar_no_date_column"
+            NO_DATE_COLUMN_LANG_KEY
         ));
         return root;
     }

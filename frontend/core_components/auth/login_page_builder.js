@@ -33,21 +33,6 @@ import { isCrossTabLoginSyncEnabled } from "../config_fetcher.js";
 import { initializeStandaloneLoginShell } from "./login_page_shell_builder.js";
 import "./auth_preference_controls.js";
 
-const cookiesToRemove = [
-    "device_id",
-    "fingerprint",
-    "nonce_name",
-    // "session",
-    "nonce_value",
-];
-cookiesToRemove.forEach((cookieName) => {
-    // HttpOnly-cookieta (kuten session) ei voi poistaa JS:llä,
-    // mutta yritetään joka tapauksessa, jos se ei sattuisi olemaan HttpOnly.
-    document.cookie =
-        cookieName + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-});
-
-
 // 2-step AJAX login: Phase 1 (credentials) → Phase 2 (OTP verification)
 document.addEventListener("DOMContentLoaded", async () => {
     await ensurePasswordVisibilityIconsLoaded();

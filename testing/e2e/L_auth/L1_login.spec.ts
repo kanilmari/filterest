@@ -22,6 +22,14 @@ test.describe('L1 — Login', () => {
     // 1. Open the guest-shell login modal.
     await openLoginEntry(page);
 
+    const privacyLabel = page.locator('.privacy-notice-link label');
+    await expect(privacyLabel.locator('a')).toHaveCount(1);
+    await expect(privacyLabel.locator('a')).toHaveText('privacy notice');
+    await expect(privacyLabel.locator('[data-lang-key="privacy_notice_login_acceptance_prefix"]'))
+      .toContainText('To sign in');
+    await expect(privacyLabel.locator('[data-lang-key="privacy_notice_login_acceptance_suffix"]'))
+      .toHaveText('.');
+
     // 2. Read credentials from dev_env_test_creds.txt
     const creds = fs.readFileSync('dev_env_test_creds.txt', 'utf8');
     const username =
@@ -56,5 +64,46 @@ test.describe('L1 — Login', () => {
     // 6. Verify we end up inside the authenticated app shell.
     await waitForAuthenticatedApp(page, username);
     expect(page.url()).not.toContain('/login');
+
+    const cookies = await page.context().cookies();
+    const cookieNames = cookies.map((cookie) => cookie.name);
+    expect(cookieNames).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^session_.+_[0-9a-f]{10}$/),
+      expect.stringMatching(/^device_id_.+_[0-9a-f]{10}$/),
+      expect.stringMatching(/^fingerprint_.+_[0-9a-f]{10}$/),
+    ]));
+    for (const legacyName of ['session', 'device_id', 'fingerprint']) {
+      expect(cookieNames).not.toContain(legacyName);
+    }
+
+    const currentAuthCookieNames = cookieNames.filter((name) =>
+      /^(session|device_id|fingerprint)_.+_[0-9a-f]{10}$/.test(name),
+    );
+    const siblingCookieNames = [
+      'session_sibling_deadbeef00',
+      'device_id_sibling_deadbeef00',
+      'fingerprint_sibling_deadbeef00',
+    ];
+    await page.context().addCookies(
+      siblingCookieNames.map((name) => ({
+        name,
+        value: 'sibling-instance-value',
+        url: new URL(page.url()).origin,
+        secure: true,
+        sameSite: 'Lax' as const,
+      })),
+    );
+
+    const resetStatus = await page.evaluate(async () => {
+      const response = await fetch('/api/reset-session', { method: 'POST' });
+      return response.status;
+    });
+    expect(resetStatus).toBe(200);
+
+    const namesAfterReset = (await page.context().cookies()).map((cookie) => cookie.name);
+    for (const currentName of currentAuthCookieNames) {
+      expect(namesAfterReset).not.toContain(currentName);
+    }
+    expect(namesAfterReset).toEqual(expect.arrayContaining(siblingCookieNames));
   });
 });

@@ -328,6 +328,10 @@ func TestEnsureCachedImageColumnRefreshesColumnMetadata(t *testing.T) {
 			match:        "INSERT INTO system_column_details",
 			rowsAffected: 1,
 		},
+		{
+			match:        "SET card_element = 'image'",
+			rowsAffected: 1,
+		},
 	})
 
 	if err := EnsureCachedImageColumn(db, "articles"); err != nil {
@@ -338,18 +342,57 @@ func TestEnsureCachedImageColumnRefreshesColumnMetadata(t *testing.T) {
 	defer state.mu.Unlock()
 
 	var sawCachedImageMetadata bool
+	var sawCachedImageCardRole bool
 	for _, call := range state.calls {
-		if !strings.Contains(call.query, "INSERT INTO system_column_details") {
-			continue
+		if strings.Contains(call.query, "SET card_element = 'image'") {
+			args := namedArgsToValues(call.args)
+			if len(args) == 1 && args[0] == "articles" {
+				sawCachedImageCardRole = true
+			}
 		}
-		args := namedArgsToValues(call.args)
-		if len(args) >= 2 && args[0] == int64(22) && args[1] == "cached_image" {
-			sawCachedImageMetadata = true
-			break
+		if strings.Contains(call.query, "INSERT INTO system_column_details") {
+			args := namedArgsToValues(call.args)
+			if len(args) >= 2 && args[0] == int64(22) && args[1] == "cached_image" {
+				sawCachedImageMetadata = true
+			}
 		}
 	}
 	if !sawCachedImageMetadata {
 		t.Fatalf("system_column_details insert for cached_image was not executed; calls = %#v", state.calls)
+	}
+	if !sawCachedImageCardRole {
+		t.Fatalf("cached_image card_element=image update was not executed; calls = %#v", state.calls)
+	}
+}
+
+func TestEnsureCachedImageColumnRepairsExistingColumnCardRole(t *testing.T) {
+	db, state := openImageLinkingMockDB(t, []imageAssetLinkingQueryResponse{
+		{
+			match: "FROM information_schema.columns",
+			cols:  []string{"count"},
+			rows:  [][]driver.Value{{int64(1)}},
+		},
+	}, []imageAssetLinkingExecResponse{
+		{
+			match:        "SET card_element = 'image'",
+			rowsAffected: 1,
+		},
+	})
+
+	if err := EnsureCachedImageColumn(db, "articles"); err != nil {
+		t.Fatalf("EnsureCachedImageColumn returned error: %v", err)
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if len(state.calls) != 1 {
+		t.Fatalf("exec calls = %#v, want only the targeted metadata repair", state.calls)
+	}
+	if !strings.Contains(state.calls[0].query, "SET card_element = 'image'") {
+		t.Fatalf("query = %q, want cached_image card role repair", state.calls[0].query)
+	}
+	if got := namedArgsToValues(state.calls[0].args); len(got) != 1 || got[0] != "articles" {
+		t.Fatalf("args = %#v, want [articles]", got)
 	}
 }
 

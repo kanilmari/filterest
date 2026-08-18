@@ -10,19 +10,15 @@ import {
     bindDatasetLanguageRenderer,
     resolveDatasetDisplayValue,
 } from '../dataset_value_localizer.js';
+import {
+    isDatabaseCatalogTreeDataset,
+    resolveDatasetTreeStructure,
+} from '../dataset_tree_availability_checker.js';
 
-const DATABASE_CATALOG_TREE_DATASETS = new Set([
-    'system_table_folders',
-    'system_db_tables',
-]);
 const DATABASE_CATALOG_TREE_CACHE_KEY = 'full_tree_data';
 const DATABASE_CATALOG_TREE_CACHE_TS_KEY = 'full_tree_data_cached_at';
 const DATABASE_CATALOG_TREE_CACHE_TTL_MS = 5 * 60 * 1000;
 const DATASET_TREE_LANGUAGE_RENDERERS = new WeakMap();
-
-function shouldRenderDatabaseCatalogTree(tableName) {
-    return DATABASE_CATALOG_TREE_DATASETS.has(tableName);
-}
 
 function readCachedDatabaseCatalogTreeData() {
     const rawTreeData = localStorage.getItem(DATABASE_CATALOG_TREE_CACHE_KEY);
@@ -145,25 +141,19 @@ export async function create_tree_view(table_name, columns, data, data_types = {
     const tree_view_div = document.getElementById(`${table_name}_tree_view_container`);
     if (!tree_view_div) return null;
 
-    if (shouldRenderDatabaseCatalogTree(table_name)) {
+    if (isDatabaseCatalogTreeDataset(table_name)) {
         return await renderDatabaseCatalogTree(table_name, tree_view_div);
     }
 
     const treeRenderHost = createTreeRenderHost(tree_view_div, table_name, 'dataset_row');
 
-    let id_column = null;
-    let parent_column = null;
-    for (const col of columns) {
-        const lower = col.toLowerCase();
-        if (!id_column && lower === 'id') {
-            id_column = col;
-        }
-        if (!parent_column && lower.startsWith('parent_')) {
-            parent_column = col;
-        }
-    }
-    if (!id_column) {
-        treeRenderHost.innerHTML = '<div>Ei "id"-saraketta – ei puuta.</div>';
+    const treeStructure = resolveDatasetTreeStructure(
+        table_name,
+        columns,
+        data_types
+    );
+    if (!treeStructure) {
+        treeRenderHost.innerHTML = '<div>Aineistossa ei ole puunäkymää tukevaa sisäistä yläsolmusuhdetta.</div>';
         return treeRenderHost;
     }
 
@@ -189,8 +179,8 @@ export async function create_tree_view(table_name, columns, data, data_types = {
     // Rakennetaan "flat"-data. Raaka rividata säilyy muuttumattomana;
     // vain puussa näkyvä tyyppi ja nimi rajataan aktiiviseen kieleen.
     const columnSelection = {
-        idColumn: id_column,
-        parentColumn: parent_column,
+        idColumn: treeStructure.idColumn,
+        parentColumn: treeStructure.parentColumn,
         nameColumn: name_column,
         typeColumn: type_column,
     };

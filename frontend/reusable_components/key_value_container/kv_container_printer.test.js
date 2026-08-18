@@ -98,6 +98,29 @@ describe("renderKeyValuePairs", () => {
         expect(kvContainer.querySelector(".kv-key")?.textContent).toBe("Parent name");
     });
 
+    test("makes only semantic HTTP(S) link fields clickable", () => {
+        const kvContainer = document.createElement("div");
+        document.body.appendChild(kvContainer);
+
+        renderKeyValuePairs(
+            kvContainer,
+            [
+                { key: "website", value: "https://example.test", isLink: true },
+                { key: "unsafe", value: "javascript:alert(1)", isLink: true },
+                { key: "plain", value: "https://plain-text.test" },
+            ],
+            { layoutMode: "stacked" }
+        );
+
+        const links = kvContainer.querySelectorAll("a");
+        expect(links).toHaveLength(1);
+        expect(links[0].getAttribute("href")).toBe("https://example.test");
+        expect(links[0].getAttribute("target")).toBe("_blank");
+        expect(links[0].getAttribute("rel")).toBe("noopener noreferrer");
+        expect(kvContainer.textContent).toContain("javascript:alert(1)");
+        expect(kvContainer.textContent).toContain("https://plain-text.test");
+    });
+
     test("uses titleValue as the hover text for rendered values", () => {
         const kvContainer = document.createElement("div");
         document.body.appendChild(kvContainer);

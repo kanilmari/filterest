@@ -53,14 +53,12 @@
     transition: opacity 300ms ease;
     pointer-events: auto;
     cursor: pointer;
-    -webkit-user-select: none;
-    -moz-user-select: none;
     user-select: none;
 }
 
 .toast-notification-text {
     flex: 1;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 /* =========================================
@@ -98,9 +96,9 @@
 
 /* --- Info: blue tones (hue 207 per project standard) --- */
 .toast-notification-item[data-toast-level="info"] {
-    --toast-bg: color-mix(in srgb, hsl(207, 90%, 60%) 12%, var(--bg_color_extreme) 88%);
-    --toast-border: color-mix(in srgb, hsl(207, 90%, 60%) 35%, var(--fw-color-border) 65%);
-    --toast-text: color-mix(in srgb, hsl(207, 76%, 48%) 60%, var(--fw-color-text) 40%);
+    --toast-bg: color-mix(in srgb, hsl(207deg 90% 60%) 12%, var(--bg_color_extreme) 88%);
+    --toast-border: color-mix(in srgb, hsl(207deg 90% 60%) 35%, var(--fw-color-border) 65%);
+    --toast-text: color-mix(in srgb, hsl(207deg 76% 48%) 60%, var(--fw-color-text) 40%);
 }
 
 /* --- Warning: amber tones --- */
@@ -126,8 +124,8 @@
 }
 
 [data-theme="dark"] .toast-notification-item[data-toast-level="info"] {
-    --toast-bg: color-mix(in srgb, hsl(207, 90%, 60%) 16%, var(--bg_color_extreme) 84%);
-    --toast-text: color-mix(in srgb, hsl(207, 90%, 80%) 80%, var(--fw-color-text) 20%);
+    --toast-bg: color-mix(in srgb, hsl(207deg 90% 60%) 16%, var(--bg_color_extreme) 84%);
+    --toast-text: color-mix(in srgb, hsl(207deg 90% 80%) 80%, var(--fw-color-text) 20%);
 }
 
 [data-theme="dark"] .toast-notification-item[data-toast-level="warning"] {

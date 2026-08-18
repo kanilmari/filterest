@@ -161,6 +161,8 @@ export const SUPPORTING_ROUTE_GROUPS = Object.freeze({
     ]),
     translationAndLanguageTools: Object.freeze([
         'translations',
+        'publicUiLanguages',
+        'adminUiLanguages',
         'getLangKeyTranslations',
         'updateLangKey',
         'devAiTranslateSingle',
@@ -239,6 +241,7 @@ export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
         'aiChatConversation',
         'geocodeAddress',
         'embeddingDatasets',
+        'embeddingSourcePolicy',
         'openaiEmbedStream',
         'refreshLangEmbeddings',
         'countLangEmbeddings',

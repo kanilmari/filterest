@@ -46,6 +46,16 @@ describe("admin version info indicator", () => {
         fetchAdminVersionInfoMock.mockResolvedValue({
             product_name: "Filterest",
             app_version: "8.27.99",
+            release_channel: "stable",
+            artifact_purpose: "public_release",
+            artifact_type: "runtime",
+            release_maturity: "published",
+            identity_verification: "local_contract_validated",
+            public_distribution: true,
+            latest_stable_version: "8.28.0",
+            update_status: "available",
+            update_available: true,
+            latest_release_url: "https://github.com/kanilmari/filterest/releases/tag/v8.28.0",
             db_version: "8.0.55",
             required_db_version: "8.0.55",
             db_compatible: true,
@@ -64,18 +74,26 @@ describe("admin version info indicator", () => {
         expect(indicator.tagName).toBe("BUTTON");
         expect(indicator.querySelector("svg")).toBeTruthy();
         expect(indicator.title).toContain("Filterest v. 8.27.99");
+        expect(indicator.title).toContain("Julkaisukanava Vakaa");
+        expect(indicator.title).toContain("Julkaisun tarkoitus Julkiseksi tarkoitettu");
+        expect(indicator.title).toContain("Paketin tyyppi Käyttöversio");
+        expect(indicator.title).toContain("Julkaisuvaihe Julkaistu");
+        expect(indicator.title).toContain("Tunnisteen varmistus Paikallinen julkaisusopimus varmennettu");
+        expect(indicator.title).toContain("Uusin vakaa versio v. 8.28.0 (päivitys saatavilla)");
         expect(indicator.title).toContain("Tietokanta v. 8.0.55 (yhteensopiva)");
         expect(indicator.title).toContain("Vaadittu tietokanta v. 8.0.55");
         expect(indicator.title).toContain("Ajotapa Docker");
         expect(indicator.title).not.toContain(":");
         expect(indicator.getAttribute("aria-expanded")).toBe("false");
+        expect(indicator.classList.contains("filterbar-clock-bar__version-info--update-available"))
+            .toBe(true);
         expect(indicator.getAttribute("aria-controls")).toBe(panel.id);
         expect(panel.tagName).toBe("TABLE");
         expect(panel.getAttribute("aria-label")).toBe("Sivustotiedot");
         expect(panel.querySelector("caption")).toBeNull();
         expect(panel.querySelector("thead th")?.textContent).toBe("Sivustotiedot");
         expect(panel.querySelector("thead th")?.colSpan).toBe(2);
-        expect(panel.querySelectorAll("tbody > tr")).toHaveLength(5);
+        expect(panel.querySelectorAll("tbody > tr")).toHaveLength(11);
         expect(panel.querySelector('[data-version-info-key="site"]')?.textContent)
             .toBe("Sivusto");
         expect(panel.querySelector('[data-version-info-value="site"]')?.textContent)
@@ -88,6 +106,23 @@ describe("admin version info indicator", () => {
             .toBe("Filterest");
         expect(panel.querySelector('[data-version-info-value="application"]')?.textContent)
             .toBe("v. 8.27.99");
+        expect(panel.querySelector('[data-version-info-value="release-channel"]')?.textContent)
+            .toBe("Vakaa");
+        expect(panel.querySelector('[data-version-info-value="artifact-purpose"]')?.textContent)
+            .toBe("Julkiseksi tarkoitettu");
+        expect(panel.querySelector('[data-version-info-value="artifact-type"]')?.textContent)
+            .toBe("Käyttöversio");
+        expect(panel.querySelector('[data-version-info-value="release-maturity"]')?.textContent)
+            .toBe("Julkaistu");
+        expect(panel.querySelector('[data-version-info-value="identity-verification"]')?.textContent)
+            .toBe("Paikallinen julkaisusopimus varmennettu");
+        expect(panel.querySelector('[data-version-info-value="latest-stable"]')?.textContent)
+            .toBe("v. 8.28.0 (päivitys saatavilla)");
+        const releaseLink = panel.querySelector('[data-version-info-value="latest-stable"] a');
+        expect(releaseLink?.getAttribute("href"))
+            .toBe("https://github.com/kanilmari/filterest/releases/tag/v8.28.0");
+        expect(releaseLink?.getAttribute("target")).toBe("_blank");
+        expect(releaseLink?.getAttribute("rel")).toBe("noopener noreferrer");
         expect(panel.querySelector('[data-version-info-key="runtime"]')?.textContent)
             .toBe("Ajotapa");
         expect(panel.querySelector('[data-version-info-value="runtime"]')?.textContent)
@@ -120,6 +155,14 @@ describe("admin version info indicator", () => {
         fetchAdminVersionInfoMock.mockResolvedValue({
             product_name: "Filterest",
             app_version: "8.27.99",
+            release_channel: "development",
+            artifact_purpose: "developer_backup",
+            artifact_type: "backup",
+            release_maturity: "snapshot",
+            identity_verification: "legacy_unverified",
+            latest_stable_version: "8.27.98",
+            update_status: "ahead_of_stable",
+            update_available: false,
             db_version: "8.0.55",
             required_db_version: "8.0.55",
             db_compatible: true,
@@ -144,6 +187,18 @@ describe("admin version info indicator", () => {
         expect(panel.getAttribute("aria-label")).toBe("Site information");
         expect(panel.querySelector('[data-version-info-key="site"]')?.textContent).toBe("Site");
         expect(panel.querySelector('[data-version-info-key="database"]')?.textContent).toBe("Database");
+        expect(panel.querySelector('[data-version-info-value="release-channel"]')?.textContent)
+            .toBe("Development");
+        expect(panel.querySelector('[data-version-info-value="artifact-purpose"]')?.textContent)
+            .toBe("Developer backup");
+        expect(panel.querySelector('[data-version-info-value="artifact-type"]')?.textContent)
+            .toBe("Backup");
+        expect(panel.querySelector('[data-version-info-value="release-maturity"]')?.textContent)
+            .toBe("Development snapshot");
+        expect(panel.querySelector('[data-version-info-value="identity-verification"]')?.textContent)
+            .toBe("Legacy marker, unverified");
+        expect(panel.querySelector('[data-version-info-value="latest-stable"]')?.textContent)
+            .toBe("v. 8.27.98 (local version is newer)");
         expect(panel.querySelector('[data-version-info-key="required-database"]')?.textContent)
             .toBe("Required database");
         expect(panel.querySelector('[data-version-info-key="runtime"]')?.textContent).toBe("Runtime");
@@ -175,11 +230,52 @@ describe("admin version info indicator", () => {
     });
 
     test.each([
+        [
+            "fi",
+            { release_channel: "development", artifact_purpose: "developer_backup" },
+            "Julkaisukanava Kehitys",
+            "Julkaisun tarkoitus Kehittäjän varmuuskopio",
+        ],
+        [
+            "en",
+            { release_channel: "stable", artifact_purpose: "public_release" },
+            "Release channel Stable",
+            "Release purpose Intended for public release",
+        ],
+        [
+            "zh-CN",
+            { release_channel: "development", artifact_purpose: "developer_backup" },
+            "发布渠道 开发版",
+            "发布用途 开发者备份",
+        ],
+        [
+            "zh-TW",
+            { release_channel: "stable", artifact_purpose: "public_release" },
+            "發布管道 穩定版本",
+            "發布用途 預定公開發布",
+        ],
+        [
+            "zh-HK",
+            { release_channel: "stable", artifact_purpose: "public_release" },
+            "發佈渠道 穩定版本",
+            "發佈用途 擬作公開發佈",
+        ],
+    ])("localizes release identity for %s", async (language, versionInfo, channel, purpose) => {
+        const { formatAdminVersionInfoLabel } = await import("./admin_version_info_indicator.js");
+
+        const label = formatAdminVersionInfoLabel(versionInfo, language);
+
+        expect(label).toContain(channel);
+        expect(label).toContain(purpose);
+    });
+
+    test.each([
         ["fi", "Sivustotiedot"],
         ["en", "Site information"],
         ["ch", "站点信息"],
         ["zh", "站点信息"],
         ["zh-CN", "站点信息"],
+        ["zh-TW", "網站資訊"],
         ["yue", "網站資訊"],
         ["zh-HK", "網站資訊"],
         ["unsupported", "Site information"],

@@ -164,7 +164,7 @@
     border-radius: 10px;
     border: 1px solid color-mix(in srgb, var(--border_color, #666) 80%, transparent 20%);
     background: color-mix(in srgb, var(--bg_color_extreme, #111) 92%, black 8%);
-    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 12px 26px rgb(0 0 0 / 0.28);
 }
 
 .big_card_thumbnail_context_menu.is-visible {
@@ -301,8 +301,6 @@
 .upload_icon {
     color: var(--text_color_secondary, #999);
     font-size: 1.5rem;
-    -webkit-user-select: none;
-    -moz-user-select: none;
     user-select: none;
     pointer-events: none;
 }

@@ -1,0 +1,295 @@
+/*
+ * shared_topbar.css
+ *
+ * Defines the dataset-level top bar shared by card, article, table, and other
+ * dataset views. It owns the dataset title, search placement, article close
+ * control, and the animated menu-button reveal area.
+ *
+ * Visual contract:
+ * - docs/instructions_and_documentation/visual_documentation/Top_Row_Layout_Protocol.md
+ */
+
+/* ============================================
+   SHARED DATASET TOP BAR
+   ============================================ */
+
+.dataset-shared-topbar {
+  --dataset-shared-topbar-padding-block: 12px;
+  --dataset-shared-topbar-padding-inline: 12px;
+  --dataset-shared-topbar-transition-duration: 260ms;
+  --filterbar-search-only-max-width: 600px;
+  display: grid;
+  grid-template-rows: 0fr;
+  flex: 0 0 auto;
+  padding: 0 var(--dataset-shared-topbar-padding-inline);
+  background: color-mix(in srgb, var(--filter_panel_bg) 94%, transparent);
+  backdrop-filter: blur(16px);
+  /* Match the navbar top control row. The transparent resting color reserves
+     the same 2px geometry while collapsed; the visible state supplies the
+     shared structural border color without shifting surrounding content. */
+  border-bottom: 2px solid transparent;
+  box-shadow: none;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition:
+    grid-template-rows var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    padding-top var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    padding-bottom var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 180ms ease,
+    transform var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--dataset-shared-topbar-transition-duration) ease,
+    box-shadow var(--dataset-shared-topbar-transition-duration) ease,
+    visibility 0s linear var(--dataset-shared-topbar-transition-duration);
+  will-change: grid-template-rows, padding-top, padding-bottom, opacity, transform;
+}
+
+.dataset-shared-topbar[hidden] {
+  display: none;
+}
+
+.dataset-shared-topbar--visible {
+  grid-template-rows: 1fr;
+  padding-top: var(--dataset-shared-topbar-padding-block);
+  padding-bottom: var(--dataset-shared-topbar-padding-block);
+  border-bottom-color: var(--border_color);
+  box-shadow: var(--fw-shadow-soft);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition:
+    grid-template-rows var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    padding-top var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    padding-bottom var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 180ms ease,
+    transform var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--dataset-shared-topbar-transition-duration) ease,
+    box-shadow var(--dataset-shared-topbar-transition-duration) ease,
+    visibility 0s linear 0s;
+}
+
+.dataset-shared-topbar__inner {
+  display: grid;
+  grid-template-columns:
+    minmax(12rem, 1fr)
+    minmax(16rem, var(--filterbar-search-only-max-width, 600px))
+    auto;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The collapsed 0fr transition needs clipping, but the visible bar already
+   provides 12px of outer padding for the menu button's label overhang. */
+.dataset-shared-topbar--visible .dataset-shared-topbar__inner {
+  overflow: visible;
+}
+
+.dataset-shared-topbar__slot {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.dataset-shared-topbar__slot--start {
+  justify-content: flex-start;
+}
+
+.dataset-shared-topbar__slot--end {
+  justify-content: flex-end;
+}
+
+/* ============================================
+   MENU CONTROL REVEAL
+   ============================================ */
+
+.dataset-shared-topbar__menu-slot {
+  display: flex;
+  flex: 0 0 0;
+  align-items: center;
+  justify-content: flex-start;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  /* The slot itself is the reveal mask. Its animated physical width keeps the
+     complete 44px button (and its DEV/TEST badge) out of the title area until
+     that space has actually opened. Negative block insets preserve the badge's
+     vertical overhang without allowing horizontal paint outside the slot. */
+  overflow: visible;
+  clip-path: inset(-8px 0 -8px 0);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    flex-basis 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 260ms;
+  will-change: flex-basis, width, max-width, opacity;
+}
+
+.dataset-shared-topbar__menu-slot--visible {
+  /* 44px control + 8px reserved for the environment badge and title gap. */
+  flex-basis: 52px;
+  width: 52px;
+  max-width: 52px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    flex-basis 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 0s;
+}
+
+.dataset-shared-topbar__menu-button {
+  --navbar-control-radius: 8px;
+  position: relative;
+  display: flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border_color);
+  border-radius: var(--navbar-control-radius);
+  color: var(--button_text_color);
+  background-color: var(--button_bg_color);
+  box-shadow: var(--fw-shadow-raised);
+  cursor: pointer;
+  appearance: none;
+}
+
+.dataset-shared-topbar__menu-button:hover,
+.dataset-shared-topbar__menu-button:focus-visible {
+  border-color: rgb(0 255 136 / 0.3);
+  background: var(--button_hover_bg_color);
+}
+
+/* ============================================
+   TITLE, SEARCH, AND ARTICLE CLOSE
+   ============================================ */
+
+.dataset-shared-topbar__dataset-title {
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-inline-start: 10px;
+  color: var(--text_color);
+  font-size: 2.15rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dataset-shared-topbar__center {
+  min-width: 0;
+  width: 100%;
+  justify-self: end;
+}
+
+.dataset-shared-topbar__center > .dataset-search-panel {
+  width: 100%;
+  max-width: var(--filterbar-search-only-max-width, 600px);
+  margin: 0;
+}
+
+.dataset-shared-topbar__article-close {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  color: var(--text_color);
+  background: transparent;
+  cursor: pointer;
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.dataset-shared-topbar__article-close:hover,
+.dataset-shared-topbar__article-close:focus-visible {
+  background: color-mix(in srgb, var(--primary_color) 14%, transparent);
+}
+
+.dataset-shared-topbar__article-close[hidden] {
+  display: none !important;
+}
+
+.tab_parts_container:has(.filterbar-fixed-toggle--exposed) .dataset-shared-topbar__article-close:not([hidden]) {
+  margin-right: 52px;
+}
+
+.tab_parts_container[data-shared-topbar-visible="true"] .filterbar-panel > .filter-content-inner > .dataset-search-panel {
+  display: none !important;
+}
+
+/* ============================================
+   RESPONSIVE AND REDUCED MOTION
+   ============================================ */
+
+@media (width <= 1099px) {
+  .dataset-shared-topbar {
+    --dataset-shared-topbar-padding-inline: 12px;
+  }
+}
+
+@media (width <= 700px) {
+  .dataset-shared-topbar__inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 8px;
+  }
+
+  .dataset-shared-topbar__center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+
+  .dataset-shared-topbar__dataset-title {
+    font-size: 1.7rem;
+  }
+}
+
+@media (width <= 480px) {
+  .dataset-shared-topbar {
+    --dataset-shared-topbar-padding-inline: 10px;
+  }
+
+  .dataset-shared-topbar__inner {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dataset-shared-topbar,
+  .dataset-shared-topbar--visible {
+    transition-duration: 1ms;
+  }
+
+  .dataset-shared-topbar__menu-slot,
+  .dataset-shared-topbar__menu-slot--visible {
+    transition-duration: 0ms;
+  }
+}

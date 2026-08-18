@@ -85,6 +85,9 @@ function getLocalTranslationFallback(baseKey, chosen_language) {
         .trim()
         .toLowerCase();
     if (language.startsWith("fi")) return fallback.fi;
+    if (language.startsWith("yue") || language.startsWith("zh-hk")) {
+        return fallback.yue || fallback.ch || fallback.en;
+    }
     if (language.startsWith("ch") || language.startsWith("zh")) return fallback.ch;
     return fallback.en;
 }

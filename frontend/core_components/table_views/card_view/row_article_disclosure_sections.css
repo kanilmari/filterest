@@ -67,12 +67,14 @@ body.dark-mode .row_article_disclosure_section {
 }
 
 .row_article_disclosure_content {
-    padding: 0.75rem 0.25rem 0.95rem;
+    padding: 0.75rem 1rem 0.95rem;
 }
 
-.row_article_image_gallery_section .row_article_disclosure_content,
-.row_article_attachment_list_section .row_article_disclosure_content,
 .row_article_related_items_section .row_article_disclosure_content {
+    padding-block-start: 0;
+}
+
+.row_article_attachment_list_section .row_article_disclosure_content {
     padding-inline: 0;
 }
 
@@ -110,16 +112,16 @@ body.dark-mode .row_article_disclosure_section {
     display: block;
     min-width: 0;
     height: 0.75rem;
-    border: 1px solid hsl(135 42% 38%);
+    border: 1px solid hsl(135deg 42% 38%);
     border-radius: 0.22rem;
-    background: hsl(135 34% 16%);
-    box-shadow: inset 0 0 0 1px hsl(135 30% 10% / 35%);
+    background: hsl(135deg 34% 16%);
+    box-shadow: inset 0 0 0 1px hsl(135deg 30% 10% / 35%);
 }
 
 .row_article_task_progress_light.is-lit {
-    border-color: hsl(135 48% 28%);
-    background: hsl(135 58% 48%);
-    box-shadow: 0 0 0.55rem hsl(135 58% 48% / 28%);
+    border-color: hsl(135deg 48% 28%);
+    background: hsl(135deg 58% 48%);
+    box-shadow: 0 0 0.55rem hsl(135deg 58% 48% / 28%);
 }
 
 .row_article_task_progress_statuses {
@@ -138,6 +140,6 @@ body.dark-mode .row_article_disclosure_section {
 }
 
 .row_article_task_progress_status_chip.is-complete {
-    border-color: hsl(135 42% 36%);
+    border-color: hsl(135deg 42% 36%);
     color: var(--text_color);
 }

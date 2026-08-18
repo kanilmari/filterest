@@ -15,6 +15,18 @@
     margin-bottom: 10px;
 }
 
+.table-capabilities-section {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--table_border_color);
+    border-radius: var(--border_radius_small);
+}
+
+.table-capabilities-section label {
+    margin-bottom: 0 !important;
+}
+
 .table-folder-section {
     display: grid;
     gap: 10px;
