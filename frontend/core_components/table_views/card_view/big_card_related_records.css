@@ -19,8 +19,7 @@
     gap: 0;
     box-sizing: border-box;
     width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto hidden;
     padding-top: 10px;
     border-bottom: 2px solid var(--border_color);
 }
