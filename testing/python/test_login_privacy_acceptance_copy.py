@@ -42,6 +42,20 @@ def test_login_links_only_the_privacy_notice_name():
     assert '<span data-lang-key="privacy_notice_login_acceptance_suffix">' in privacy_block
 
 
+def test_standalone_login_has_main_landmark_and_visible_link_affordances():
+    template = LOGIN_TEMPLATE.read_text(encoding="utf-8")
+    auth_css = (
+        REPO_ROOT / "frontend" / "core_components" / "auth" / "auth.css"
+    ).read_text(encoding="utf-8")
+
+    assert '<main class="auth-page-shell" data-testid="login-page-shell">' in template
+    assert "</main>\n    {{end}}" in template
+    assert ".privacy-notice-link a {" in auth_css
+    assert ".auth-secondary-actions a {" in auth_css
+    assert auth_css.count("text-decoration: underline;") >= 3
+    assert "color: var(--auth-link-color" in auth_css
+
+
 def test_canonical_and_public_seed_ship_all_link_scope_keys():
     migration = LINK_SCOPE_MIGRATION.read_text(encoding="utf-8")
     public_seed = PUBLIC_LANG_SEED.read_text(encoding="utf-8")

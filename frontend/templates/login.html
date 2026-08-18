@@ -36,7 +36,7 @@
 <body class="loading login-page{{if .StandalonePage}} standalone-login-page{{end}}" data-login-page-mode="{{if .StandalonePage}}standalone{{else}}fragment{{end}}">
     <!-- <div class="info-banner" data-lang-key="site_will_be_published_soon">Site will be published soon</div> -->
     {{if .StandalonePage}}
-    <div class="auth-page-shell" data-testid="login-page-shell">
+    <main class="auth-page-shell" data-testid="login-page-shell">
         <div class="auth-page-content-card">
             <div class="auth-page-header-row" data-testid="login-page-header-row">
                 <div class="auth-page-tablist" role="tablist" aria-label="Authentication sections" data-testid="login-page-tablist">
@@ -260,7 +260,7 @@
                 {{end}}
             </section>
         </div>
-    </div>
+    </main>
     {{end}}
 </body>
 
