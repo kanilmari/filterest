@@ -61,6 +61,35 @@ describe("row_article_disclosure_sections.css", () => {
         );
         expect(headerRule).not.toContain("border-bottom");
         expect(titleGroupRule).toContain("gap: 14px");
-        expect(contentRule).toContain("padding: 0.75rem 0.25rem 0.95rem");
+        expect(contentRule).toContain("padding: 0.75rem 1rem 0.95rem");
+    });
+
+    test("indents image and related-row content while keeping attachment content full-width", () => {
+        const fullBleedToolsRule = css.match(
+            new RegExp(
+                "\\.row_article_attachment_list_section \\.row_article_disclosure_content"
+                + "\\s*\\{(?<body>[^}]+)\\}",
+                "s"
+            )
+        )?.groups?.body || "";
+        const imageSpecificRule = ruleBody(
+            "\\.row_article_image_gallery_section \\.row_article_disclosure_content"
+        );
+        const relatedSpecificRule = ruleBody(
+            "\\.row_article_related_items_section \\.row_article_disclosure_content"
+        );
+
+        expect(fullBleedToolsRule).toContain("padding-inline: 0");
+        expect(imageSpecificRule).toBe("");
+        expect(relatedSpecificRule).toContain("padding-block-start: 0");
+        expect(relatedSpecificRule).not.toContain("padding-inline: 0");
+    });
+
+    test("lets related-row tabs start directly below their full-width disclosure header", () => {
+        const relatedContentRule = ruleBody(
+            "\\.row_article_related_items_section \\.row_article_disclosure_content"
+        );
+
+        expect(relatedContentRule).toContain("padding-block-start: 0");
     });
 });

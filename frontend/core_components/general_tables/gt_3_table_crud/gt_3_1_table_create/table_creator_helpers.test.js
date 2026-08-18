@@ -19,6 +19,7 @@ describe('buildTableCreationRequestData', () => {
             grantUsersRead: true,
             grantGuestsRead: false,
             preventDeletion: true,
+            enableImages: true,
             folderId: '12',
             createFolderName: '',
             createFolderParentId: '',
@@ -26,6 +27,7 @@ describe('buildTableCreationRequestData', () => {
 
         expect(result.ok).toBe(true);
         expect(result.tableName).toBe('sample_table');
+        expect(result.enableImages).toBe(true);
         expect(result.columns).toEqual({
             id: 'SERIAL',
             title: 'VARCHAR(40)',
@@ -68,6 +70,29 @@ describe('buildTableCreationRequestData', () => {
             folder_id: 12,
             create_folder: null,
         });
+    });
+
+    test('keeps image setup outside the create-dataset API payload', () => {
+        const result = buildTableCreationRequestData({
+            tableName: 'image_table',
+            columnNames: ['id'],
+            dataTypes: ['SERIAL'],
+            lengths: [''],
+            referencingColumns: [],
+            referencedTables: [],
+            referencedColumns: [],
+            grantUsersRead: false,
+            grantGuestsRead: false,
+            preventDeletion: false,
+            enableImages: true,
+            folderId: '',
+            createFolderName: '',
+            createFolderParentId: '',
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.enableImages).toBe(true);
+        expect(result.requestData).not.toHaveProperty('enable_images');
     });
 
     test('returns a table-name validation failure before building any payload', () => {

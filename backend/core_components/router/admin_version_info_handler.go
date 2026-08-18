@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/httpresponse"
+	releaseupdates "easelect/backend/core_components/release_updates"
 )
 
 const (
@@ -18,13 +19,27 @@ const (
 )
 
 type adminVersionInfoResponse struct {
-	ProductName       string `json:"product_name"`
-	AppVersion        string `json:"app_version"`
-	DBVersion         string `json:"db_version"`
-	RequiredDBVersion string `json:"required_db_version"`
-	DBCompatible      bool   `json:"db_compatible"`
-	RuntimeMode       string `json:"runtime_mode"`
+	ProductName          string                      `json:"product_name"`
+	AppVersion           string                      `json:"app_version"`
+	ReleaseChannel       string                      `json:"release_channel"`
+	ArtifactPurpose      string                      `json:"artifact_purpose"`
+	ArtifactType         string                      `json:"artifact_type"`
+	ReleaseMaturity      string                      `json:"release_maturity"`
+	IdentityVerification string                      `json:"identity_verification"`
+	BuildID              string                      `json:"build_id,omitempty"`
+	PublicDistribution   bool                        `json:"public_distribution"`
+	LatestStableVersion  string                      `json:"latest_stable_version,omitempty"`
+	UpdateStatus         releaseupdates.UpdateStatus `json:"update_status"`
+	UpdateAvailable      bool                        `json:"update_available"`
+	LatestReleaseURL     string                      `json:"latest_release_url,omitempty"`
+	UpdateCheckedAt      string                      `json:"update_checked_at,omitempty"`
+	DBVersion            string                      `json:"db_version"`
+	RequiredDBVersion    string                      `json:"required_db_version"`
+	DBCompatible         bool                        `json:"db_compatible"`
+	RuntimeMode          string                      `json:"runtime_mode"`
 }
+
+var adminLatestStableReleaseCheck = releaseupdates.CheckLatestStable
 
 // currentAdminRuntimeMode returns a stable, non-secret execution-mode value.
 // Docker images opt in through EASELECT_RUNTIME_MODE; ordinary host processes
@@ -43,12 +58,25 @@ func adminVersionInfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	readiness := systemReadinessProbe()
+	updateStatus := adminLatestStableReleaseCheck(r.Context(), readiness.AppVersion)
 	httpresponse.RespondWithJSON(w, http.StatusOK, adminVersionInfoResponse{
-		ProductName:       readiness.ProductName,
-		AppVersion:        readiness.AppVersion,
-		DBVersion:         readiness.DBVersion,
-		RequiredDBVersion: readiness.RequiredDBVersion,
-		DBCompatible:      readiness.DBCompatible,
-		RuntimeMode:       currentAdminRuntimeMode(),
+		ProductName:          readiness.ProductName,
+		AppVersion:           readiness.AppVersion,
+		ReleaseChannel:       readiness.ReleaseChannel,
+		ArtifactPurpose:      readiness.ArtifactPurpose,
+		ArtifactType:         readiness.ArtifactType,
+		ReleaseMaturity:      readiness.ReleaseMaturity,
+		IdentityVerification: readiness.IdentityVerification,
+		BuildID:              readiness.BuildID,
+		PublicDistribution:   readiness.PublicDistribution,
+		LatestStableVersion:  updateStatus.LatestStableVersion,
+		UpdateStatus:         updateStatus.UpdateStatus,
+		UpdateAvailable:      updateStatus.UpdateAvailable,
+		LatestReleaseURL:     updateStatus.ReleaseURL,
+		UpdateCheckedAt:      updateStatus.CheckedAt,
+		DBVersion:            readiness.DBVersion,
+		RequiredDBVersion:    readiness.RequiredDBVersion,
+		DBCompatible:         readiness.DBCompatible,
+		RuntimeMode:          currentAdminRuntimeMode(),
 	})
 }

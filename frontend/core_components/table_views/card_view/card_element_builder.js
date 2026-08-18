@@ -17,6 +17,7 @@ import { setElementSvgContent } from "../../../icons/icon_loader.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { buildGoogleMapsEmbedUrl, resolveImagePaths } from "./card_element_builder_helpers.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
+import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
 /* ----------------------------------------------------------- */
 /** Palauttaa Google Maps -Embed-iframe-src-osoitteen. */
@@ -355,23 +356,16 @@ function createDetailsTable(detailsList, row_item, table_name) {
         /* ——— Arvon käsittely ——— */
         if (detailObj.isLink) {
             const linkValue = detailObj.rawValue.trim();
-            if (linkValue.startsWith("<a ")) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(linkValue, "text/html");
-                const anchor = doc.querySelector("a");
-                const newLink = document.createElement("a");
-                newLink.href = anchor ? anchor.href : linkValue;
-                newLink.target = "_blank";
-                newLink.textContent = anchor
-                    ? anchor.textContent || anchor.href
-                    : linkValue;
-                value_cell.appendChild(newLink);
-            } else {
+            const safeHref = resolveSafeExternalHttpUrl(linkValue);
+            if (safeHref) {
                 const link = document.createElement("a");
-                link.href = linkValue;
+                link.href = safeHref;
                 link.target = "_blank";
+                link.rel = "noopener noreferrer";
                 link.textContent = linkValue;
                 value_cell.appendChild(link);
+            } else {
+                value_cell.textContent = linkValue;
             }
         } else if (!detailObj.hasLangKey && detailObj.rawValue.length > 80) {
             value_cell.textContent = detailObj.rawValue.slice(0, 80) + "... ";

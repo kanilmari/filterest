@@ -222,16 +222,21 @@ describe('generate_table', () => {
 
     test('passes multilingual column metadata to the tree view', async () => {
         localStorage.setItem('demo_dataset_view', 'tree');
-        const rows = [{ id: 1, name: '{"en":"English","fi":"Suomi"}' }];
+        const rows = [{ id: 1, parent_id: null, name: '{"en":"English","fi":"Suomi"}' }];
         const dataTypes = {
             id: { data_type: 'integer' },
+            parent_id: {
+                data_type: 'integer',
+                foreign_table: 'demo_dataset',
+                foreign_column: 'id',
+            },
             name: { data_type: 'text', is_multilingual: true },
         };
 
         const { generate_table } = await import('./dataset_view_printer.js');
         await generate_table(
             'demo_dataset',
-            ['id', 'name'],
+            ['id', 'parent_id', 'name'],
             rows,
             dataTypes,
             1,
@@ -241,10 +246,34 @@ describe('generate_table', () => {
 
         expect(createTreeViewMock).toHaveBeenCalledWith(
             'demo_dataset',
-            ['id', 'name'],
+            ['id', 'parent_id', 'name'],
             rows,
             dataTypes
         );
+    });
+
+    test('falls back from tree view when the dataset has no verified hierarchy', async () => {
+        localStorage.setItem('demo_dataset_view', 'tree');
+
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const activeContainer = await generate_table(
+            'demo_dataset',
+            ['id', 'parent_id', 'title'],
+            [{ id: 1, parent_id: null, title: 'Flat row' }],
+            {
+                id: { data_type: 'integer' },
+                parent_id: { data_type: 'integer' },
+                title: { data_type: 'text' },
+            },
+            1,
+            false,
+            null
+        );
+
+        expect(createTreeViewMock).not.toHaveBeenCalled();
+        expect(createCardViewMock).toHaveBeenCalled();
+        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
+        expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
 
     test('renders price chart view when selected', async () => {

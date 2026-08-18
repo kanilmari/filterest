@@ -8,11 +8,11 @@ import (
 	"context"
 	"crypto/md5"
 	"database/sql"
+	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"easelect/backend/core_components/httpresponse"
 	"strings"
 	"time"
 
@@ -33,6 +33,65 @@ type refreshRequest struct {
 	Languages []string `json:"languages"`
 }
 
+type embeddingDatasetSummary struct {
+	Dataset               string `json:"dataset"`
+	GeneralEmbedding      bool   `json:"general_embedding"`
+	MultilingualEmbedding bool   `json:"multilingual_embedding"`
+}
+
+const embeddingDatasetCatalogQuery = `
+		WITH RECURSIVE current_project_folders AS (
+			SELECT id
+			FROM system_table_folders
+			WHERE is_current_project = true
+			UNION ALL
+			SELECT child.id
+			FROM system_table_folders child
+			INNER JOIN current_project_folders parent ON child.parent_id = parent.id
+		)
+		SELECT
+			sdt.table_name,
+			EXISTS (
+				SELECT 1
+				FROM information_schema.columns isc
+				WHERE isc.table_schema = 'public'
+				  AND isc.table_name = sdt.table_name
+				  AND isc.column_name = 'embedding_vector'
+			),
+			COALESCE(sdt.multi_lang_embeddings, false)
+		FROM system_db_tables sdt
+		WHERE COALESCE(NULLIF(sdt.schema_name, ''), 'public') = 'public'
+		  AND (
+			(
+				$1
+				AND sdt.folder_id IN (SELECT id FROM current_project_folders)
+				AND EXISTS (
+					SELECT 1
+					FROM system_column_details scd
+					JOIN information_schema.columns isc
+					  ON isc.table_schema = 'public'
+					 AND isc.table_name = sdt.table_name
+					 AND isc.column_name = scd.column_name
+					WHERE scd.table_uid = sdt.table_uid
+					  AND isc.data_type IN ('text', 'character varying')
+				)
+			)
+			OR (
+				NOT $1
+				AND (
+					COALESCE(sdt.multi_lang_embeddings, false)
+					OR EXISTS (
+						SELECT 1
+						FROM information_schema.columns isc
+						WHERE isc.table_schema = 'public'
+						  AND isc.table_name = sdt.table_name
+						  AND isc.column_name = 'embedding_vector'
+					)
+				)
+			)
+		  )
+		ORDER BY sdt.table_name`
+
 func GetEmbeddingDatasetsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
@@ -48,20 +107,34 @@ func GetEmbeddingDatasetsHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
 		return
 	}
-	rows, err := tx.Query(`SELECT table_name FROM system_db_tables WHERE multi_lang_embeddings`)
+	includePolicyCandidates := r.URL.Query().Get("include_policy_candidates") == "true"
+	rows, err := tx.Query(embeddingDatasetCatalogQuery, includePolicyCandidates)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "query error")
 		return
 	}
 	defer rows.Close()
-	var tables []string
+	includeCapabilities := r.URL.Query().Get("include_capabilities") == "true"
+	tables := make([]string, 0)
+	summaries := make([]embeddingDatasetSummary, 0)
 	for rows.Next() {
 		var name string
-		if err := rows.Scan(&name); err == nil {
+		var generalEmbedding bool
+		var multilingualEmbedding bool
+		if err := rows.Scan(&name, &generalEmbedding, &multilingualEmbedding); err == nil {
 			tables = append(tables, name)
+			summaries = append(summaries, embeddingDatasetSummary{
+				Dataset:               name,
+				GeneralEmbedding:      generalEmbedding,
+				MultilingualEmbedding: multilingualEmbedding,
+			})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if includeCapabilities {
+		json.NewEncoder(w).Encode(summaries)
+		return
+	}
 	json.NewEncoder(w).Encode(tables)
 }
 
@@ -192,48 +265,12 @@ func generateLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64,
 		return err
 	}
 	rows.Close()
-	textCols, err := dbutils.GetQueryableColumns(tableName, tx, true)
-	if err != nil || len(textCols) == 0 {
+	source, err := LoadAuthorizedEmbeddingSource(tx, tableName, rowID, false)
+	if err != nil {
 		return err
-	}
-	quotedCols := make([]string, len(textCols))
-	for i, col := range textCols {
-		quotedCols[i] = pq.QuoteIdentifier(col)
-	}
-	selectCols := strings.Join(quotedCols, ", ")
-	row := tx.QueryRow(fmt.Sprintf(`SELECT %s FROM %s WHERE id=$1`, selectCols, pq.QuoteIdentifier(tableName)), rowID)
-	vals := make([]interface{}, len(textCols))
-	ptrs := make([]interface{}, len(textCols))
-	for i := range vals {
-		ptrs[i] = &vals[i]
-	}
-	if err := row.Scan(ptrs...); err != nil {
-		return err
-	}
-	parts := map[string][]string{}
-	for i := range textCols {
-		if vals[i] == nil {
-			continue
-		}
-		s := strings.TrimSpace(fmt.Sprintf("%v", vals[i]))
-		if s == "" {
-			continue
-		}
-		var obj map[string]string
-		if json.Unmarshal([]byte(s), &obj) == nil {
-			for k, v := range obj {
-				t := strings.TrimSpace(v)
-				if t != "" {
-					parts[k] = append(parts[k], t)
-				}
-			}
-		} else {
-			lang := detectLanguage(s)
-			parts[lang] = append(parts[lang], s)
-		}
 	}
 	for _, lang := range langs {
-		joined := strings.Join(parts[lang], " / ")
+		joined := strings.TrimSpace(source.ByLanguage[lang])
 		if strings.TrimSpace(joined) == "" {
 			continue
 		}
@@ -282,48 +319,12 @@ func needLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64, lan
 		return false, err
 	}
 	rows.Close()
-	textCols, err := dbutils.GetQueryableColumns(tableName, tx, true)
-	if err != nil || len(textCols) == 0 {
+	source, err := LoadAuthorizedEmbeddingSource(tx, tableName, rowID, false)
+	if err != nil {
 		return false, err
-	}
-	quotedCols2 := make([]string, len(textCols))
-	for i, col := range textCols {
-		quotedCols2[i] = pq.QuoteIdentifier(col)
-	}
-	selectCols := strings.Join(quotedCols2, ", ")
-	row := tx.QueryRow(fmt.Sprintf(`SELECT %s FROM %s WHERE id=$1`, selectCols, pq.QuoteIdentifier(tableName)), rowID)
-	vals := make([]interface{}, len(textCols))
-	ptrs := make([]interface{}, len(textCols))
-	for i := range vals {
-		ptrs[i] = &vals[i]
-	}
-	if err := row.Scan(ptrs...); err != nil {
-		return false, err
-	}
-	parts := map[string][]string{}
-	for i := range textCols {
-		if vals[i] == nil {
-			continue
-		}
-		s := strings.TrimSpace(fmt.Sprintf("%v", vals[i]))
-		if s == "" {
-			continue
-		}
-		var obj map[string]string
-		if json.Unmarshal([]byte(s), &obj) == nil {
-			for k, v := range obj {
-				t := strings.TrimSpace(v)
-				if t != "" {
-					parts[k] = append(parts[k], t)
-				}
-			}
-		} else {
-			lang := detectLanguage(s)
-			parts[lang] = append(parts[lang], s)
-		}
 	}
 	for _, lang := range langs {
-		joined := strings.Join(parts[lang], " / ")
+		joined := strings.TrimSpace(source.ByLanguage[lang])
 		if strings.TrimSpace(joined) == "" {
 			continue
 		}

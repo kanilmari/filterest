@@ -27,7 +27,7 @@
 }
 
 .ctc-row:hover {
-    background-color: var(--hover_color, rgba(0, 0, 0, 0.04));
+    background-color: var(--hover_color, rgb(0 0 0 / 0.04));
 }
 
 .ctc-row-hidden {

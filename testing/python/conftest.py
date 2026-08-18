@@ -106,7 +106,7 @@ def pytest_terminal_summary(
     )
     selected_category = getattr(config, "_easelect_python_selected_category", None)
 
-    terminalreporter.section("Easelect Python test categories")
+    terminalreporter.section("Filterest Python test categories")
     for category in CATEGORY_MARKERS:
         suffix = " (selected)" if category == selected_category else ""
         terminalreporter.write_line(f"{category}: {counts[category]} collected{suffix}")

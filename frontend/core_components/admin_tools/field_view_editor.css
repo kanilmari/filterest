@@ -1,0 +1,115 @@
+/*
+ * field_view_editor.css
+ * Styles the compact global field-order and visibility editor.
+ * Bridges the shared modal shell with draggable rows and accessible move controls.
+ * Exists so the field editor stays readable without affecting article-view CSS.
+ */
+
+.field-view-editor {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+    color: var(--text_color);
+}
+
+.field-view-editor__description,
+.field-view-editor__status {
+    margin: 0;
+    color: var(--muted_text_color, var(--text_color));
+}
+
+.field-view-editor__header,
+.field-view-editor__row {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(10rem, 1fr) auto minmax(14rem, 0.8fr);
+    gap: 0.65rem;
+    align-items: center;
+}
+
+.field-view-editor__header {
+    padding: 0 0.75rem 0.35rem;
+    color: var(--muted_text_color, var(--text_color));
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.field-view-editor__header > :first-child {
+    grid-column: 2;
+}
+
+.field-view-editor__header > :last-child {
+    grid-column: 4;
+}
+
+.field-view-editor__list {
+    display: grid;
+    gap: 0.4rem;
+    max-height: min(60vh, 38rem);
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.field-view-editor__row {
+    padding: 0.6rem 0.75rem;
+    background: var(--table_row_bg_color, var(--bg_color));
+    border: 1px solid var(--table_border_color, var(--border_color));
+    border-radius: 0.45rem;
+}
+
+.field-view-editor__row.is-dragging {
+    opacity: 0.5;
+}
+
+.field-view-editor__drag-handle {
+    color: var(--muted_text_color, var(--text_color));
+    cursor: grab;
+    font-size: 1.1rem;
+    user-select: none;
+}
+
+.field-view-editor__field-name {
+    overflow-wrap: anywhere;
+    font-weight: 600;
+}
+
+.field-view-editor__move-controls {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.field-view-editor__move {
+    min-width: 2rem;
+    padding: 0.25rem 0.45rem;
+}
+
+.field-view-editor__visibility {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.45rem;
+    align-items: center;
+}
+
+.field-view-editor__lock-reason {
+    grid-column: 2;
+    color: var(--muted_text_color, var(--text_color));
+}
+
+.field-view-editor__status--error {
+    color: var(--danger_color, #c33);
+}
+
+@media (width < 700px) {
+    .field-view-editor__header {
+        display: none;
+    }
+
+    .field-view-editor__row {
+        grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+    }
+
+    .field-view-editor__visibility {
+        grid-column: 2 / -1;
+    }
+}

@@ -33,27 +33,8 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2) Poistetaan device_id-eväste
-	http.SetCookie(w, &http.Cookie{
-		Name:     "device_id",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	// 3) Poistetaan fingerprint-eväste
-	http.SetCookie(w, &http.Cookie{
-		Name:     "fingerprint",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-	})
+	// 2) Poistetaan vain tämän instanssin auth-evästeet.
+	e_sessions.ExpireCurrentAuthCookies(w)
 
 	// 4) Tarkistetaan loginToBrowse
 	loginToBrowse, confErr := middlewares.CheckLoginToBrowse()

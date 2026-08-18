@@ -9,6 +9,16 @@ import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { destroy_chat } from "../ai_features/table_chat/table_chat_printer.js";
 import { publishAuthLogout } from "./auth_broadcast.js";
 
+// These settings describe the browser/device, not the authenticated user or
+// the datasets they were allowed to inspect. Everything else remains subject
+// to the full logout reset below.
+const LOGOUT_SAFE_LOCAL_STORAGE_KEYS = Object.freeze([
+    "theme",
+    "chosen_language",
+    "navVisibleWide",
+    "navVisibleNarrow",
+]);
+
 export function resolvePostLogoutPath(responseUrl, currentOrigin = window.location.origin) {
     if (!responseUrl) {
         return "/";
@@ -62,9 +72,21 @@ function teardownRenderedShell() {
 }
 
 export async function clearClientAuthArtifacts() {
+    const logoutSafePreferences = new Map();
+    for (const storageKey of LOGOUT_SAFE_LOCAL_STORAGE_KEYS) {
+        const storedValue = localStorage.getItem(storageKey);
+        if (storedValue !== null) {
+            logoutSafePreferences.set(storageKey, storedValue);
+        }
+    }
+
     clearPermissionCache();
     localStorage.clear();
     sessionStorage.clear();
+
+    for (const [storageKey, storedValue] of logoutSafePreferences) {
+        localStorage.setItem(storageKey, storedValue);
+    }
 
     // Mark the shell as guest immediately so startup helpers like dataset alias
     // hydration do not attempt authenticated-only refreshes before setAuthModes()
@@ -76,13 +98,8 @@ export async function clearClientAuthArtifacts() {
         await Promise.all(cacheKeys.map((key) => caches.delete(key)));
     }
 
-    document.cookie.split(";").forEach((cookieEntry) => {
-        const cookieName = cookieEntry.split("=")[0]?.trim();
-        if (!cookieName) {
-            return;
-        }
-        document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-    });
+    // The server owns authentication-cookie expiry. Browser-side wildcard
+    // deletion would also clear sibling Easelect instances on the same host.
 }
 
 export async function applyLoggedOutShellReset({ postLogoutPath = "/" } = {}) {

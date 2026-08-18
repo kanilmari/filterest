@@ -20,15 +20,15 @@
         "glob": "^13.0.6"
     },
     "overrides": {
-        "fast-uri": "3.1.4",
-        "js-yaml": "4.3.0",
+        "fast-uri": "3.1.5",
+        "js-yaml": "4.3.1",
         "postcss": "8.5.23"
     },
     "scripts": {
         "dev": "vite frontend",
         "build": "vite build frontend",
         "preview": "vite preview --outDir frontend/dist",
-        "lint:css": "stylelint \"frontend/styles/**/*.css\"",
+        "lint:css": "stylelint \"frontend/**/*.css\" --ignore-pattern \"frontend/dist/**\"",
         "qa": "./server_tools/scripts/qa.sh",
         "restart": "./ctl",
         "guardian": "./filterest audit visual --capture-only",

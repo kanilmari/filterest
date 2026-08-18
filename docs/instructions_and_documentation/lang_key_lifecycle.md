@@ -2,7 +2,7 @@
 
 > How lang keys are created, tracked, translated, renamed, deleted, scanned, and marked as orphans.
 
-This document captures the full lifecycle of Easelect's multilingual key system. It is intended as a reference for developers and AI agents working with the `system_lang_keys` / `system_lang_key_sources` tables.
+This document captures the full lifecycle of Filterest's multilingual key system. It is intended as a reference for developers and AI agents working with the `system_lang_keys` / `system_lang_key_sources` tables.
 
 ---
 
@@ -228,6 +228,46 @@ Returns all language translations for a single key: `{fi: "...", en: "...", ch: 
 ### DEV_MODE Orphan Overlay
 
 In development mode, `GetTranslationsHandler` also returns a list of orphan key names via `fetchOrphanLangKeyNames()`. This allows the frontend to visually flag keys that are no longer referenced by any source — a development-time tool that doesn't run in production.
+
+### Locating an exact UI string safely
+
+Use the read-only application API first when the translation key is already
+known:
+
+```bash
+./api_lang get grant_users_read
+```
+
+This reads through the same application boundary that serves the interface. A
+`401` response means that the configured local development credentials must be
+fixed; it is not a reason to write directly to the database.
+
+When only the visible text or a screenshot is known, discover candidate keys
+with a read-only query against the canonical translation table:
+
+```bash
+./db --local "SELECT lang_key, fi, en FROM system_lang_keys WHERE fi ILIKE '%Anna käyttäjille lukuoikeus%' OR en ILIKE '%Grant users read%' ORDER BY lang_key;"
+```
+
+Then locate the actual interface consumer in source code, excluding generated
+bundles and historical evidence:
+
+```bash
+rg -n --glob '!frontend/dist/**' --glob '!docs/**/artifacts/**' \
+  'grant_users_read' frontend backend server_tools/migrations
+```
+
+For this example the canonical key is `grant_users_read`. The table-creation
+checkbox grants read access to the ordinary `users` group; it does not control
+the independent administrator permission that lets the first administrator or
+another creating administrator open and manage the dataset.
+
+The per-use context field `usage_explanation` belongs to
+`system_lang_key_sources`, not `system_lang_keys`. The normal inspection role
+may intentionally lack access to the source-tracking table. Do not elevate
+database access just to locate a UI string: use the application API and source
+search instead. Direct `INSERT`, `UPDATE`, or `DELETE` statements are never part
+of this discovery workflow.
 
 ---
 

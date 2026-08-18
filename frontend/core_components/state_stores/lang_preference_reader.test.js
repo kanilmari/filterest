@@ -56,15 +56,22 @@ describe('lang_preference_reader', () => {
     expect(getPreferredAvailableLanguage(['en', 'fi'])).toBe('fi');
   });
 
-  test('preserves Cantonese codes and maps Hong Kong Traditional Chinese to yue', () => {
+  test('keeps the three regional Chinese locale codes distinct', () => {
     Object.defineProperty(window.navigator, 'languages', { value: ['zh-HK', 'en-US'], configurable: true });
     Object.defineProperty(window.navigator, 'language', { value: 'zh-HK', configurable: true });
 
-    expect(getBrowserLanguageCandidates()).toEqual(['yue', 'en']);
-    expect(getPreferredAvailableLanguage(['en', 'fi', 'yue'])).toBe('yue');
+    expect(getBrowserLanguageCandidates()).toEqual(['zh-HK', 'en']);
+    expect(getPreferredAvailableLanguage(['en', 'fi', 'zh-HK'])).toBe('zh-HK');
 
-    setLanguage('yue');
-    expect(getPreferredAvailableLanguage(['en', 'fi', 'yue'])).toBe('yue');
+    setLanguage('zh_TW');
+    expect(getLanguage()).toBe('zh-TW');
+    expect(getPreferredAvailableLanguage(['en', 'zh-TW', 'zh-HK'])).toBe('zh-TW');
+  });
+
+  test('preserves the explicit legacy Cantonese code without treating it as zh-HK', () => {
+    setLanguage('yue-Hant-HK');
+    expect(getLanguage()).toBe('yue');
+    expect(getPreferredAvailableLanguage(['en', 'yue'])).toBe('yue');
   });
 
   test('falls back to supported fallback language when nothing matches', () => {

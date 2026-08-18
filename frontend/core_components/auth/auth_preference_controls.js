@@ -5,7 +5,10 @@
 
 import { initializeThemeToggle } from "../theme.js";
 import { initializeLanguageSelector } from "../lang/lang_panel_printer.js";
-import { getUiLanguageOptions } from "../lang/ui_language_catalog.js";
+import {
+    getUiLanguageOptions,
+    loadPublicUiLanguageCatalog,
+} from "../lang/ui_language_catalog.js";
 
 const AUTH_CONTROLS_SELECTOR = "[data-auth-preference-controls]";
 const initializedControlGroups = new WeakSet();
@@ -41,7 +44,8 @@ function buildLanguageSelector(contextName) {
  *
  * @param {Document|HTMLElement} root
  */
-export function initializeAuthPreferenceControls(root = document) {
+export async function initializeAuthPreferenceControls(root = document) {
+    await loadPublicUiLanguageCatalog();
     root.querySelectorAll(AUTH_CONTROLS_SELECTOR).forEach((controlGroup) => {
         if (!(controlGroup instanceof HTMLElement) || initializedControlGroups.has(controlGroup)) {
             return;
@@ -60,4 +64,4 @@ export function initializeAuthPreferenceControls(root = document) {
     });
 }
 
-initializeAuthPreferenceControls(document);
+void initializeAuthPreferenceControls(document);

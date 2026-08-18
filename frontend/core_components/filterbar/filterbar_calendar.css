@@ -13,11 +13,10 @@
   background: var(--filter_panel_bg, #fff);
   border: 1px solid var(--filter_panel_border, #ccc);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
   padding: 10px 12px 12px;
   width: max-content;
   min-width: 260px;
-  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -49,15 +48,14 @@
 
 .filterbar-calendar__nav:hover {
   opacity: 1;
-  background: color-mix(in srgb, currentColor 10%, transparent);
+  background: color-mix(in srgb, currentcolor 10%, transparent);
 }
 
 /* ── Grid — 8 columns (wk + Mon–Sun) ────────────── */
 .filterbar-calendar__grid {
   display: grid;
   grid-template-columns: auto repeat(7, 1fr);
-  column-gap: 4px;
-  row-gap: 5px;
+  gap: 5px 4px;
 }
 
 .filterbar-calendar__cell {
@@ -72,7 +70,7 @@
 /* Week number column */
 .filterbar-calendar__cell--wk-header,
 .filterbar-calendar__cell--wk {
-  color: color-mix(in srgb, currentColor 45%, transparent);
+  color: color-mix(in srgb, currentcolor 45%, transparent);
   padding: 0 4px;
   margin-right: 5px;
   justify-content: flex-end;

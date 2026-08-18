@@ -62,10 +62,40 @@ vi.mock('../../state_stores/lang_preference_reader.js', () => ({
 }));
 
 import {
+    addDetailsSection,
     addHeaderElement,
     addUsernameElement,
     updateCardImageSources,
 } from './card_element_builder.js';
+
+describe('card_element_builder link details', () => {
+    test('links safe HTTP(S) values and renders unsafe schemes as text', () => {
+        const container = document.createElement('div');
+
+        addDetailsSection([
+            {
+                suffix_number: 1,
+                column: 'website',
+                columnClass: 'website-column',
+                rawValue: 'https://example.test',
+                isLink: true,
+            },
+            {
+                suffix_number: 2,
+                column: 'script',
+                columnClass: 'script-column',
+                rawValue: 'javascript:alert(1)',
+                isLink: true,
+            },
+        ], {}, 'orders', container);
+
+        const safeLink = container.querySelector('tr.website-column td a');
+        expect(safeLink?.getAttribute('href')).toBe('https://example.test');
+        expect(safeLink?.getAttribute('rel')).toBe('noopener noreferrer');
+        expect(container.querySelector('tr.script-column td a')).toBeNull();
+        expect(container.querySelector('tr.script-column td')?.textContent).toBe('javascript:alert(1)');
+    });
+});
 
 describe('card_element_builder addHeaderElement', () => {
     beforeEach(() => {

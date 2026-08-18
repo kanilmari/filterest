@@ -3,6 +3,8 @@
 // Bridges key-value data and layout options and the DOM presentation used across views.
 // Exists to centralise reusable key-value rendering behavior for cards, details, and modal content.
 
+import { resolveSafeExternalHttpUrl } from "../safe_external_http_url.js";
+
 function isEmptyValue(value) {
     return value === "" || value === null || value === undefined;
 }
@@ -217,9 +219,18 @@ export function renderKeyValuePairs(
     function fillValueElement(dest, pairObj) {
 
         const empty = isEmptyValue(pairObj?.value);
-        const href = String(pairObj?.href || (pairObj?.isLink === true ? pairObj?.value : "") || "").trim();
+        const isExternalLinkField = pairObj?.isLink === true && !pairObj?.href;
+        const requestedHref = String(
+            pairObj?.href || (isExternalLinkField ? pairObj?.value : "") || ""
+        ).trim();
+        const href = isExternalLinkField
+            ? resolveSafeExternalHttpUrl(requestedHref)
+            : requestedHref;
         const linkText = String(pairObj?.value ?? "");
-        const openInNewTabHref = String(pairObj?.openInNewTabHref || "").trim();
+        const requestedOpenInNewTabHref = String(pairObj?.openInNewTabHref || "").trim();
+        const openInNewTabHref = isExternalLinkField
+            ? resolveSafeExternalHttpUrl(requestedOpenInNewTabHref)
+            : requestedOpenInNewTabHref;
         const titleText = String(pairObj?.titleValue || "").trim();
         if (titleText) {
             dest.title = titleText;
@@ -232,7 +243,7 @@ export function renderKeyValuePairs(
             const a = document.createElement("a");
             a.href = href;
             a.textContent = linkText;
-            if (pairObj?.isLink === true && !pairObj?.href) {
+            if (isExternalLinkField) {
                 a.target = "_blank";
                 a.rel = "noopener noreferrer";
             }

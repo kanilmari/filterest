@@ -20,6 +20,7 @@ const (
 func resetSessionTestGlobals() {
 	Store = nil
 	SessionName = "session"
+	currentAuthCookieConfig = legacyAuthCookieConfig()
 }
 
 func initSessionTestStore(t *testing.T) {
@@ -27,6 +28,12 @@ func initSessionTestStore(t *testing.T) {
 	resetSessionTestGlobals()
 	t.Setenv("SESSION_KEY", testSessionKey)
 	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("INSTANCE_NAME", "test-instance")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "easelect_test")
 	InitSessionStore()
 	t.Cleanup(resetSessionTestGlobals)
 }
@@ -105,6 +112,9 @@ func TestInitSessionStoreSetsOptionsAndInstanceScopedSessionName(t *testing.T) {
 	t.Setenv("SESSION_KEY", testSessionKey)
 	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
 	t.Setenv("INSTANCE_NAME", "demo name/with?chars")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "demo")
 	defer resetSessionTestGlobals()
 
 	InitSessionStore()
@@ -112,8 +122,11 @@ func TestInitSessionStoreSetsOptionsAndInstanceScopedSessionName(t *testing.T) {
 	if Store == nil {
 		t.Fatal("InitSessionStore() left Store nil")
 	}
-	if SessionName != "session_demo_name_with_chars" {
-		t.Fatalf("SessionName = %q, want sanitized instance-specific name", SessionName)
+	if !strings.HasPrefix(SessionName, "session_instance_demo_name_with_chars_") {
+		t.Fatalf("SessionName = %q, want stable hashed instance-specific name", SessionName)
+	}
+	if got := CurrentAuthCookieNames(); got.DeviceID != "device_id_"+strings.TrimPrefix(SessionName, "session_") || got.Fingerprint != "fingerprint_"+strings.TrimPrefix(SessionName, "session_") {
+		t.Fatalf("CurrentAuthCookieNames() = %#v, want one shared instance namespace", got)
 	}
 	if Store.Options == nil {
 		t.Fatal("InitSessionStore() left Store.Options nil")
@@ -134,13 +147,135 @@ func TestInitSessionStorePrefersExplicitSessionCookieName(t *testing.T) {
 	t.Setenv("SESSION_KEY", testSessionKey)
 	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
 	t.Setenv("INSTANCE_NAME", "replica-a")
-	t.Setenv("SESSION_COOKIE_NAME", "lb pool session")
+	t.Setenv("SESSION_COOKIE_NAME", "lb_pool_session")
+	t.Setenv("SESSION_COOKIE_MODE", "replica-pool")
+	t.Setenv("DB_HOST", "db.internal")
+	t.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_NAME", "shared_app")
 	defer resetSessionTestGlobals()
 
 	InitSessionStore()
 
 	if SessionName != "lb_pool_session" {
 		t.Fatalf("SessionName = %q, want explicit shared cookie name", SessionName)
+	}
+}
+
+func TestResolveAuthCookieConfigSeparatesIsolatedInstances(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "shared_name")
+	t.Setenv("INSTANCE_NAME", "instance-a")
+
+	first, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("first resolveAuthCookieConfig() returned error: %v", err)
+	}
+	t.Setenv("INSTANCE_NAME", "instance-b")
+	second, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("second resolveAuthCookieConfig() returned error: %v", err)
+	}
+
+	if first.names.Session == second.names.Session || first.names.DeviceID == second.names.DeviceID || first.names.Fingerprint == second.names.Fingerprint {
+		t.Fatalf("isolated cookie names overlap: first=%#v second=%#v", first.names, second.names)
+	}
+	if string(deriveScopedCookieKey(testSessionKey, "session-signing", first)) == string(deriveScopedCookieKey(testSessionKey, "session-signing", second)) {
+		t.Fatal("isolated instances derived the same effective signing key")
+	}
+}
+
+func TestResolveAuthCookieConfigBindsIsolatedKeysToDatabaseIdentity(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "app_a")
+	t.Setenv("INSTANCE_NAME", "accidentally-reused-instance-id")
+
+	first, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("first resolveAuthCookieConfig() returned error: %v", err)
+	}
+	t.Setenv("DB_NAME", "app_b")
+	second, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("second resolveAuthCookieConfig() returned error: %v", err)
+	}
+
+	if first.names != second.names {
+		t.Fatalf("stable instance ID produced different cookie names: first=%#v second=%#v", first.names, second.names)
+	}
+	if string(deriveScopedCookieKey(testSessionKey, "session-signing", first)) == string(deriveScopedCookieKey(testSessionKey, "session-signing", second)) {
+		t.Fatal("different databases derived the same effective signing key from a reused instance ID")
+	}
+}
+
+func TestResolveAuthCookieConfigScopesReplicaKeysToDatabaseIdentity(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_MODE", "replica-pool")
+	t.Setenv("SESSION_COOKIE_NAME", "shared_pool_session")
+	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
+	t.Setenv("INSTANCE_NAME", "node-a")
+	t.Setenv("DB_HOST", "db.internal")
+	t.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_NAME", "app_a")
+
+	first, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("first resolveAuthCookieConfig() returned error: %v", err)
+	}
+	t.Setenv("INSTANCE_NAME", "node-b")
+	secondReplica, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("replica resolveAuthCookieConfig() returned error: %v", err)
+	}
+	if first.names != secondReplica.names {
+		t.Fatalf("same replica pool names differ: first=%#v second=%#v", first.names, secondReplica.names)
+	}
+	if string(deriveScopedCookieKey(testSessionKey, "session-signing", first)) != string(deriveScopedCookieKey(testSessionKey, "session-signing", secondReplica)) {
+		t.Fatal("same replica pool derived different effective signing keys")
+	}
+
+	t.Setenv("DB_NAME", "app_b")
+	differentDatabase, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("different DB resolveAuthCookieConfig() returned error: %v", err)
+	}
+	if string(deriveScopedCookieKey(testSessionKey, "session-signing", first)) == string(deriveScopedCookieKey(testSessionKey, "session-signing", differentDatabase)) {
+		t.Fatal("different databases derived the same effective signing key")
+	}
+}
+
+func TestResolveAuthCookieConfigRejectsUnsafeSharingDeclarations(t *testing.T) {
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "easelect")
+	t.Setenv("INSTANCE_NAME", "instance-a")
+
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "shared_session")
+	if _, err := resolveAuthCookieConfig(); err == nil || !strings.Contains(err.Error(), "replica-pool") {
+		t.Fatalf("isolated explicit cookie error = %v, want replica-pool requirement", err)
+	}
+
+	t.Setenv("SESSION_COOKIE_MODE", "replica-pool")
+	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	if _, err := resolveAuthCookieConfig(); err == nil || !strings.Contains(err.Error(), "SESSION_COOKIE_NAME is required") {
+		t.Fatalf("replica pool missing cookie error = %v, want SESSION_COOKIE_NAME requirement", err)
+	}
+
+	t.Setenv("SESSION_COOKIE_NAME", "invalid shared name")
+	if _, err := resolveAuthCookieConfig(); err == nil || !strings.Contains(err.Error(), "must contain only") {
+		t.Fatalf("invalid replica cookie name error = %v, want strict cookie-name validation", err)
+	}
+
+	t.Setenv("SESSION_COOKIE_NAME", "shared_session")
+	t.Setenv("SESSION_SECRET_KEY", "")
+	if _, err := resolveAuthCookieConfig(); err == nil || !strings.Contains(err.Error(), "SESSION_SECRET_KEY is required") {
+		t.Fatalf("replica pool missing encryption key error = %v, want SESSION_SECRET_KEY requirement", err)
 	}
 }
 
@@ -163,8 +298,20 @@ func TestGetOrCreateSessionReturnsExistingSessionValues(t *testing.T) {
 
 func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
 	resetSessionTestGlobals()
+	t.Setenv("SESSION_KEY", testSessionKey)
+	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("INSTANCE_NAME", "corrupt-cookie-test")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "corrupt_cookie_test")
+	config, err := resolveAuthCookieConfig()
+	if err != nil {
+		t.Fatalf("resolveAuthCookieConfig returned error: %v", err)
+	}
 	oldStore := sessions.NewCookieStore([]byte("oldoldoldoldoldoldoldoldoldold12"))
-	SessionName = "session"
+	SessionName = config.names.Session
 
 	oldReq := httptest.NewRequest(http.MethodGet, "https://example.com/protected", nil)
 	oldRec := httptest.NewRecorder()
@@ -177,8 +324,6 @@ func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
 		t.Fatalf("oldSession.Save returned error: %v", err)
 	}
 
-	t.Setenv("SESSION_KEY", testSessionKey)
-	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
 	InitSessionStore()
 	t.Cleanup(resetSessionTestGlobals)
 
@@ -195,7 +340,7 @@ func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
 	if got := session.Values["user_id"]; got != nil {
 		t.Fatalf("session.Values[user_id] = %v, want cleared value after securecookie error", got)
 	}
-	if !hasSetCookieContaining(rec.Header().Values("Set-Cookie"), "session=; Path=/; Max-Age=0") {
+	if !hasSetCookieContaining(rec.Header().Values("Set-Cookie"), SessionName+"=; Path=/; Max-Age=0") {
 		t.Fatalf("Set-Cookie headers %v do not contain a clearing cookie", rec.Header().Values("Set-Cookie"))
 	}
 }
@@ -250,15 +395,15 @@ func TestResetSessionHandlerRejectsInvalidRequests(t *testing.T) {
 
 func TestResetSessionHandlerClearsAuthCookiesOnValidPost(t *testing.T) {
 	initSessionTestStore(t)
-	SessionName = "session_demo"
+	cookieNames := CurrentAuthCookieNames()
 
 	req := httptest.NewRequest(http.MethodPost, "https://example.com/api/reset-session", nil)
 	req.Host = "example.com"
 	req.Header.Set("Origin", "https://example.com")
-	req.AddCookie(&http.Cookie{Name: "session_demo", Value: "abc"})
+	req.AddCookie(&http.Cookie{Name: cookieNames.Session, Value: "abc"})
 	req.AddCookie(&http.Cookie{Name: "session_other", Value: "def"})
-	req.AddCookie(&http.Cookie{Name: "device_id", Value: "dev"})
-	req.AddCookie(&http.Cookie{Name: "fingerprint", Value: "fp"})
+	req.AddCookie(&http.Cookie{Name: cookieNames.DeviceID, Value: "dev"})
+	req.AddCookie(&http.Cookie{Name: cookieNames.Fingerprint, Value: "fp"})
 	rec := httptest.NewRecorder()
 
 	ResetSessionHandler(rec, req)
@@ -269,15 +414,16 @@ func TestResetSessionHandlerClearsAuthCookiesOnValidPost(t *testing.T) {
 
 	setCookies := rec.Header().Values("Set-Cookie")
 	for _, expected := range []string{
-		"session_demo=;",
-		"session=;",
-		"session_other=;",
-		"device_id=;",
-		"fingerprint=;",
+		cookieNames.Session + "=;",
+		cookieNames.DeviceID + "=;",
+		cookieNames.Fingerprint + "=;",
 	} {
 		if !hasSetCookieContaining(setCookies, expected) {
 			t.Fatalf("Set-Cookie headers %v do not contain %q", setCookies, expected)
 		}
+	}
+	if hasSetCookieContaining(setCookies, "session_other=;") {
+		t.Fatalf("Set-Cookie headers %v unexpectedly clear a sibling instance cookie", setCookies)
 	}
 	if !strings.Contains(rec.Body.String(), `"success": true`) {
 		t.Fatalf("response body = %q, want success json", rec.Body.String())

@@ -1,7 +1,7 @@
 <!--
 API_CRUD_Examples.md
-What: Practical command recipes for Easelect's API-backed CRUD CLI.
-Between: Shell users, agent workflows, and the Easelect HTTP dataset APIs.
+What: Practical command recipes for Filterest's API-backed CRUD CLI.
+Between: Shell users, agent workflows, and the Filterest HTTP dataset APIs.
 Why: Keeps row/table maintenance examples close to the canonical no-direct-SQL workflow.
 -->
 

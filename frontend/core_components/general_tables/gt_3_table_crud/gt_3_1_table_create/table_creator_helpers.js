@@ -109,6 +109,7 @@ function normalizeOptionalPositiveInteger(value) {
  * @param {boolean} formSnapshot.grantUsersRead - Users read permission toggle
  * @param {boolean} formSnapshot.grantGuestsRead - Guests read permission toggle
  * @param {boolean} formSnapshot.preventDeletion - Prevent deletion toggle
+ * @param {boolean} formSnapshot.enableImages - Enable image uploads after table creation
  * @param {string|number|null} formSnapshot.folderId - Selected existing target folder id
  * @param {string} formSnapshot.createFolderName - Optional inline new folder name
  * @param {string|number|null} formSnapshot.createFolderParentId - Optional parent id for inline folder creation
@@ -125,6 +126,7 @@ export function buildTableCreationRequestData({
     grantUsersRead,
     grantGuestsRead,
     preventDeletion,
+    enableImages,
     folderId,
     createFolderName,
     createFolderParentId,
@@ -179,6 +181,7 @@ export function buildTableCreationRequestData({
     return {
         ok: true,
         tableName: normalizedTableName,
+        enableImages: Boolean(enableImages),
         columns: columnsResult.columns,
         foreignKeys,
         folderId: normalizedFolderId,

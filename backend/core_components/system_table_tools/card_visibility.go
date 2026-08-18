@@ -24,6 +24,9 @@ const defaultCardStyleVariant = "standard"
 type CardVisibilityColumn struct {
 	ColumnUID                int    `json:"column_uid"`
 	ColumnName               string `json:"column_name"`
+	CoNumber                 int    `json:"co_number"`
+	HideEverywhereLocked     bool   `json:"hide_everywhere_locked"`
+	HideEverywhereLockReason string `json:"hide_everywhere_lock_reason"`
 	CardElement              string `json:"card_element"`
 	CardDetailLabelMode      string `json:"card_detail_label_mode"`
 	CardDetailIconSVG        string `json:"card_detail_icon_svg"`
@@ -45,6 +48,143 @@ type CardVisibilityResponse struct {
 	CardDetailsLayout string                 `json:"card_details_layout"`
 	CardStyleVariant  string                 `json:"card_style_variant"`
 	Columns           []CardVisibilityColumn `json:"columns"`
+}
+
+type fieldViewColumnGuard struct {
+	ColumnUID  int
+	ColumnName string
+	LockReason string
+}
+
+const fieldViewColumnGuardQuery = `
+	SELECT
+		scd.column_uid,
+		scd.column_name,
+		CASE
+			WHEN primary_keys.column_name IS NOT NULL THEN 'primary_key'
+			WHEN sdt.row_policy_owner_column = scd.column_name THEN 'row_owner'
+			WHEN columns.is_nullable = 'NO'
+			 AND columns.column_default IS NULL
+			 AND columns.is_identity = 'NO'
+			 AND COALESCE(columns.generation_expression, '') = ''
+			 AND COALESCE(scd.insertable, true) = true
+			THEN 'required_input'
+			ELSE ''
+		END AS lock_reason
+	FROM system_column_details scd
+	JOIN system_db_tables sdt ON sdt.table_uid = scd.table_uid
+	LEFT JOIN information_schema.columns columns
+	  ON columns.table_schema = COALESCE(NULLIF(sdt.schema_name, ''), 'public')
+	 AND columns.table_name = sdt.table_name
+	 AND columns.column_name = scd.column_name
+	LEFT JOIN (
+		SELECT key_columns.table_schema, key_columns.table_name, key_columns.column_name
+		FROM information_schema.table_constraints constraints
+		JOIN information_schema.key_column_usage key_columns
+		  ON key_columns.constraint_schema = constraints.constraint_schema
+		 AND key_columns.constraint_name = constraints.constraint_name
+		WHERE constraints.constraint_type = 'PRIMARY KEY'
+	) primary_keys
+	  ON primary_keys.table_schema = columns.table_schema
+	 AND primary_keys.table_name = columns.table_name
+	 AND primary_keys.column_name = columns.column_name
+	WHERE sdt.table_name = $1
+	ORDER BY scd.co_number, scd.column_uid
+`
+
+const updateFieldViewColumnOrderQuery = `
+	UPDATE system_column_details AS details
+	SET co_number = $1,
+	    updated = now()
+	WHERE details.column_uid = $2
+	  AND details.table_uid = (
+	      SELECT table_uid
+	      FROM system_db_tables
+	      WHERE table_name = $3
+	      LIMIT 1
+	  )
+`
+
+const updateUserFieldViewOrderQuery = `
+	UPDATE system_user_column_settings AS settings
+	SET sort_order = $1,
+	    updated = now()
+	WHERE settings.table_uid = (
+	      SELECT table_uid
+	      FROM system_db_tables
+	      WHERE table_name = $2
+	      LIMIT 1
+	  )
+	  AND settings.column_name = $3
+`
+
+func loadFieldViewColumnGuards(queryer dbutils.Querier, tableName string) ([]fieldViewColumnGuard, error) {
+	rows, err := queryer.Query(fieldViewColumnGuardQuery, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("load field-view column guards for %q: %w", tableName, err)
+	}
+	defer rows.Close()
+
+	guards := make([]fieldViewColumnGuard, 0)
+	for rows.Next() {
+		var guard fieldViewColumnGuard
+		if err := rows.Scan(&guard.ColumnUID, &guard.ColumnName, &guard.LockReason); err != nil {
+			return nil, fmt.Errorf("scan field-view column guard for %q: %w", tableName, err)
+		}
+		guards = append(guards, guard)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate field-view column guards for %q: %w", tableName, err)
+	}
+	return guards, nil
+}
+
+func normalizeFieldViewColumns(
+	guards []fieldViewColumnGuard,
+	requested []CardVisibilityColumn,
+) ([]CardVisibilityColumn, error) {
+	if len(requested) != len(guards) {
+		return nil, fmt.Errorf("field list must contain all %d dataset fields", len(guards))
+	}
+
+	guardByUID := make(map[int]fieldViewColumnGuard, len(guards))
+	for _, guard := range guards {
+		guardByUID[guard.ColumnUID] = guard
+	}
+
+	normalized := make([]CardVisibilityColumn, 0, len(requested))
+	seen := make(map[int]bool, len(requested))
+	visibleFieldCount := 0
+	for index, column := range requested {
+		guard, exists := guardByUID[column.ColumnUID]
+		if !exists {
+			return nil, fmt.Errorf("column_uid %d does not belong to the selected dataset", column.ColumnUID)
+		}
+		if seen[column.ColumnUID] {
+			return nil, fmt.Errorf("column_uid %d appears more than once", column.ColumnUID)
+		}
+		seen[column.ColumnUID] = true
+		if column.HideEverywhere && guard.LockReason != "" {
+			return nil, fmt.Errorf(
+				"field %q cannot be hidden everywhere: %s",
+				guard.ColumnName,
+				guard.LockReason,
+			)
+		}
+
+		column.ColumnName = guard.ColumnName
+		column.CoNumber = index + 1
+		column.HideEverywhereLocked = guard.LockReason != ""
+		column.HideEverywhereLockReason = guard.LockReason
+		normalized = append(normalized, column)
+		if !column.HideEverywhere {
+			visibleFieldCount++
+		}
+	}
+	if visibleFieldCount == 0 {
+		return nil, fmt.Errorf("at least one dataset field must remain visible")
+	}
+	return normalized, nil
 }
 
 func publicTableColumnExists(db *sql.DB, tableName, columnName string) (bool, error) {
@@ -99,6 +239,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 
 	query := fmt.Sprintf(`
 		SELECT scd.column_uid, scd.column_name,
+		       COALESCE(scd.co_number, 0)                  AS co_number,
 		       COALESCE(scd.card_element, 'details')       AS card_element,
 		       COALESCE(scd.card_detail_label_mode, 'label') AS card_detail_label_mode,
 		       COALESCE(scd.card_detail_icon_svg, '')     AS card_detail_icon_svg,
@@ -115,7 +256,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		FROM system_column_details scd
 		JOIN system_db_tables sdt ON sdt.table_uid = scd.table_uid
 		WHERE sdt.table_name = $1
-		ORDER BY scd.co_number
+		ORDER BY scd.co_number, scd.column_uid
 	`, cardDetailIconKeyExpr, cardDetailCapitalizationExpr)
 
 	cardDetailsLayout := defaultCardDetailsLayout
@@ -158,7 +299,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c CardVisibilityColumn
 		if err := rows.Scan(
-			&c.ColumnUID, &c.ColumnName, &c.CardElement,
+			&c.ColumnUID, &c.ColumnName, &c.CoNumber, &c.CardElement,
 			&c.CardDetailLabelMode, &c.CardDetailIconSVG, &c.CardDetailIconKey,
 			&c.CardDetailCapitalization,
 			&c.ShowKeyOnCard, &c.ShowValueOnCard, &c.HideEverywhere,
@@ -170,6 +311,27 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		columns = append(columns, c)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("\033[31merror: [GetCardVisibilityHandler] row iteration failed: %v\033[0m", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading column rows")
+		return
+	}
+
+	guards, err := loadFieldViewColumnGuards(backend.Db, tableName)
+	if err != nil {
+		log.Printf("\033[31merror: [GetCardVisibilityHandler] field guard query failed: %v\033[0m", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking field visibility constraints")
+		return
+	}
+	guardByUID := make(map[int]fieldViewColumnGuard, len(guards))
+	for _, guard := range guards {
+		guardByUID[guard.ColumnUID] = guard
+	}
+	for index := range columns {
+		guard := guardByUID[columns[index].ColumnUID]
+		columns[index].HideEverywhereLocked = guard.LockReason != ""
+		columns[index].HideEverywhereLockReason = guard.LockReason
 	}
 
 	if columns == nil {
@@ -217,6 +379,19 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction start failed")
 		return
 	}
+
+	guards, err := loadFieldViewColumnGuards(tx, req.TableName)
+	if err != nil {
+		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] field guard query failed: %v\033[0m", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking field visibility constraints")
+		return
+	}
+	normalizedColumns, err := normalizeFieldViewColumns(guards, req.Columns)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	req.Columns = normalizedColumns
 
 	hasCardDetailIconKey, err := publicTableColumnExists(backend.Db, "system_column_details", "card_detail_icon_key")
 	if err != nil {
@@ -267,6 +442,33 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] update for column_uid %d: %v\033[0m", col.ColumnUID, err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating column settings")
+			return
+		}
+		result, err := tx.Exec(
+			updateFieldViewColumnOrderQuery,
+			col.CoNumber,
+			col.ColumnUID,
+			req.TableName,
+		)
+		if err != nil {
+			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] order update for column_uid %d: %v\033[0m", col.ColumnUID, err)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating field order")
+			return
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil || rowsAffected != 1 {
+			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] order update count for column_uid %d: rows=%d err=%v\033[0m", col.ColumnUID, rowsAffected, err)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "field order update did not match one field")
+			return
+		}
+		if _, err := tx.Exec(
+			updateUserFieldViewOrderQuery,
+			col.CoNumber,
+			req.TableName,
+			col.ColumnName,
+		); err != nil {
+			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] user order update for field %q: %v\033[0m", col.ColumnName, err)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error applying global field order")
 			return
 		}
 	}

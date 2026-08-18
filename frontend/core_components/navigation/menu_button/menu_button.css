@@ -1,0 +1,135 @@
+/*
+ * menu_button.css
+ *
+ * Defines the persistent navbar opener/closer controls and their shared
+ * environment badge. Dataset-topbar-specific layout remains owned by
+ * filterbar/shared_topbar.css.
+ */
+
+/* ============================================
+   FIXED NAVBAR OPENER
+   ============================================ */
+
+#showMenuButton {
+    --navbar-control-radius: 8px;
+    position: fixed;
+    top: 12px;
+    /* body_content has contain: paint, so fixed is relative to body_content. */
+    left: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    border: 1px solid var(--border_color);
+    cursor: pointer;
+    height: 44px;
+    width: 44px;
+    border-radius: var(--navbar-control-radius);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--fw-shadow-raised);
+    margin-right: auto;
+    z-index: calc(var(--z-navbar) + 1);
+    appearance: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: none;
+    will-change: opacity;
+}
+
+.body_content.navbar-transitions-ready #showMenuButton {
+    transition:
+        height 0.3s,
+        width 0.3s,
+        opacity 180ms ease;
+}
+
+#showMenuButton.menu-toggle-visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+}
+
+#showMenuButton:hover {
+    background: var(--button_hover_bg_color);
+    border-color: rgb(0 255 136 / 0.3);
+    transform: translateX(0);
+}
+
+/* ============================================
+   NAVBAR-OWNED CLOSER
+   ============================================ */
+
+#hideMenuButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--button_bg_color);
+    color: var(--button_text_color);
+    border: 1px solid var(--border_color);
+    cursor: pointer;
+    height: 44px;
+    width: 44px;
+    border-radius: var(--navbar-control-radius);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--fw-shadow-raised);
+    margin-right: auto;
+    transition: height 0.3s, width 0.3s, transform 0.3s;
+    appearance: none;
+    position: relative;
+}
+
+#hideMenuButton:hover {
+    background: var(--button_hover_bg_color);
+    border-color: rgb(0 255 136 / 0.3);
+}
+
+.inset {
+    box-shadow: inset 5px 5px 5px 0 rgb(0 0 0 / 30%);
+}
+
+#showMenuButton:not(.inset) {
+    box-shadow: var(--fw-shadow-raised);
+}
+
+#showMenuButton.filterbar-overlap {
+    box-shadow: none !important;
+}
+
+/* A visible dataset topbar owns its own menu control. The floating fallback
+   remains in its original DOM home but leaves both visual and input trees. */
+#showMenuButton.shared-topbar-menu-source-hidden {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* ============================================
+   ENVIRONMENT BADGE
+   ============================================ */
+
+.environment-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: linear-gradient(135deg, #b36a36, #b55e21);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.environment-badge--test {
+    right: -3px;
+}
+
+.environment-badge--qa {
+    right: 3px;
+}

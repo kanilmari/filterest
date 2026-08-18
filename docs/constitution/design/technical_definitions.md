@@ -22,7 +22,8 @@ Fontti, koko, riviväli ja kirjainväli määritellään `body`-säännössä.
 **Lähteet:**
 - [frontend/styles/variables.css](../../../frontend/styles/variables.css) – CSS-muuttujat
 - [frontend/styles/framework.css](../../../frontend/styles/framework.css) – Yhteiset layout-utilityt ja UI-primitivit
-- [frontend/core_components/filterbar/filterbar_layout.css](../../../frontend/core_components/filterbar/filterbar_layout.css) – Filtteripalkin hero/sidebar/search-only-layout
+- [frontend/core_components/filterbar/filterbar_layout.css](../../../frontend/core_components/filterbar/filterbar_layout.css) – Filtteripalkin hero/sidebar-layout
+- [frontend/core_components/filterbar/shared_topbar.css](../../../frontend/core_components/filterbar/shared_topbar.css) – Datasetin yhteinen haku- ja toimintoyläpalkki
 
 Perusyksikkö, navbar-leveys, container-maksimileveys ja border-radius löytyvät näistä tiedostoista.
 
@@ -117,6 +118,6 @@ ei tässä tiedostossa vahvistettu yleinen Design Constitution -raja.
 |------|---------------|
 | CSS-muuttujat | [frontend/styles/variables.css](../../../frontend/styles/variables.css) |
 | Typografia | [frontend/styles/base.css](../../../frontend/styles/base.css) |
-| Layout | [frontend/styles/framework.css](../../../frontend/styles/framework.css), [frontend/core_components/filterbar/filterbar_layout.css](../../../frontend/core_components/filterbar/filterbar_layout.css) |
+| Layout | [frontend/styles/framework.css](../../../frontend/styles/framework.css), [frontend/core_components/filterbar/filterbar_layout.css](../../../frontend/core_components/filterbar/filterbar_layout.css), [frontend/core_components/filterbar/shared_topbar.css](../../../frontend/core_components/filterbar/shared_topbar.css) |
 | Responsiivisuus | [frontend/styles/mobile_friendliness.css](../../../frontend/styles/mobile_friendliness.css) |
 | JS-vakiot | [frontend/ui_config.js](../../../frontend/ui_config.js) |

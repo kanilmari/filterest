@@ -134,7 +134,7 @@ ensure_local_tls_files() {
         -out "$EASELECT_TLS_CERT_FILE" \
         -days 365 \
         -subj "/CN=localhost" \
-        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+        -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" >/dev/null 2>&1
     chmod 600 "$EASELECT_TLS_KEY_FILE"
     chmod 644 "$EASELECT_TLS_CERT_FILE"
 }

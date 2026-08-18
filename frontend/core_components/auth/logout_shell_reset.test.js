@@ -50,7 +50,16 @@ describe("performSpaLogoutReset", () => {
         `;
         history.replaceState({}, "", "/app_service_catalog?foo=1");
         localStorage.setItem("button_state", "logout");
+        localStorage.setItem("theme", "dark");
+        localStorage.setItem("chosen_language", "fi");
+        localStorage.setItem("navVisibleWide", "false");
+        localStorage.setItem("navVisibleNarrow", "true");
+        localStorage.setItem("app_service_catalog_hide_columns", JSON.stringify({ id: true }));
+        localStorage.setItem("app_service_catalog_sorting_and_filtering_specs", JSON.stringify({
+            filters: { internal_notes: "restricted search" },
+        }));
         sessionStorage.setItem("selected_dataset", "app_service_catalog");
+        document.cookie = "sibling_instance_cookie=preserve-me;path=/";
         const container = document.getElementById("demo_container");
         container.__cleanupListeners = vi.fn();
         globalThis.caches = {
@@ -79,9 +88,16 @@ describe("performSpaLogoutReset", () => {
         expect(document.querySelector("#tabs_container > .content_div")).toBeNull();
         expect(document.getElementById("navmenu")?.children).toHaveLength(0);
         expect(localStorage.getItem("button_state")).toBe("login");
+        expect(localStorage.getItem("theme")).toBe("dark");
+        expect(localStorage.getItem("chosen_language")).toBe("fi");
+        expect(localStorage.getItem("navVisibleWide")).toBe("false");
+        expect(localStorage.getItem("navVisibleNarrow")).toBe("true");
+        expect(localStorage.getItem("app_service_catalog_hide_columns")).toBeNull();
+        expect(localStorage.getItem("app_service_catalog_sorting_and_filtering_specs")).toBeNull();
         expect(sessionStorage.length).toBe(0);
         expect(globalThis.caches.keys).toHaveBeenCalledTimes(1);
         expect(globalThis.caches.delete).toHaveBeenCalledTimes(2);
+        expect(document.cookie).toContain("sibling_instance_cookie=preserve-me");
         expect(window.location.pathname).toBe("/login");
         expect(window.location.search).toBe("");
         expect(publishAuthLogoutMock).toHaveBeenCalledWith({

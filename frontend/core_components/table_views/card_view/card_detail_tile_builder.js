@@ -7,6 +7,7 @@ import {
     appendConfiguredCardDetailIcon,
     normalizeClientCardDetailLabelMode,
 } from "./card_detail_single_line_helpers.js";
+import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
 const MODERN_CARD_DETAIL_DESKTOP_COLUMNS = 2;
 const MODERN_CARD_DETAIL_LABEL_MIN_CH = 4;
@@ -35,9 +36,12 @@ function createModernCardDetailTileValue(detailEntry) {
     }
 
     valueElement.title = detailEntry?.titleValue || displayValue;
-    const href = String(
-        detailEntry?.href || (detailEntry?.isLink === true ? detailEntry?.rawValue : "") || ""
-    ).trim();
+    const explicitHref = String(detailEntry?.href || "").trim();
+    const href = explicitHref || (
+        detailEntry?.isLink === true
+            ? resolveSafeExternalHttpUrl(detailEntry?.rawValue)
+            : ""
+    );
 
     if (!href) {
         valueElement.textContent = displayValue;

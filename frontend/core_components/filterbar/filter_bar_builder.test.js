@@ -124,6 +124,72 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(titleRowLabel?.dataset.langKey).toBe('riskienhallinta');
     });
 
+    test('fades the repeated shared topbar in only after the inline hero scrolls away', async () => {
+        const sharedTopbarRules = await import('./shared_topbar_builder.js');
+        sharedTopbarRules.shouldShowSharedTopBar.mockImplementation(
+            ({ inlineHeroVisible }) => !inlineHeroVisible,
+        );
+        const activeScrollable = document.getElementById('demo_card_view_container');
+        const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+            if (this === activeScrollable) {
+                return {
+                    top: 0,
+                    right: 800,
+                    bottom: 600,
+                    left: 0,
+                    width: 800,
+                    height: 600,
+                    x: 0,
+                    y: 0,
+                    toJSON: () => ({}),
+                };
+            }
+            if (this.classList.contains('filterbar-inline-hero')) {
+                const top = -(activeScrollable?.scrollTop || 0);
+                return {
+                    top,
+                    right: 800,
+                    bottom: top + 300,
+                    left: 0,
+                    width: 800,
+                    height: 300,
+                    x: 0,
+                    y: top,
+                    toJSON: () => ({}),
+                };
+            }
+            return originalGetBoundingClientRect.call(this);
+        });
+
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
+        const sharedTopbar = document.querySelector('.dataset-shared-topbar');
+
+        expect(sharedTopbar?.hidden).toBe(true);
+        expect(sharedTopbarRules.shouldShowSharedTopBar).toHaveBeenLastCalledWith(
+            expect.objectContaining({ inlineHeroVisible: true }),
+        );
+
+        activeScrollable.scrollTop = 320;
+        activeScrollable.dispatchEvent(new Event('scroll'));
+        await flushObserverFrame();
+
+        expect(sharedTopbar?.hidden).toBe(false);
+        expect(sharedTopbar?.classList.contains('dataset-shared-topbar--visible')).toBe(true);
+        expect(sharedTopbarRules.shouldShowSharedTopBar).toHaveBeenLastCalledWith(
+            expect.objectContaining({ inlineHeroVisible: false }),
+        );
+
+        activeScrollable.scrollTop = 0;
+        activeScrollable.dispatchEvent(new Event('scroll'));
+
+        expect(sharedTopbar?.classList.contains('dataset-shared-topbar--visible')).toBe(false);
+        expect(sharedTopbarRules.shouldShowSharedTopBar).toHaveBeenLastCalledWith(
+            expect.objectContaining({ inlineHeroVisible: true }),
+        );
+    });
+
     test('shows dataset title and row article close control in the shared topbar', async () => {
         const sharedTopbarRules = await import('./shared_topbar_builder.js');
         sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(true);
@@ -162,16 +228,41 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(closeSpy).toHaveBeenCalledTimes(1);
     });
 
-    test('docks the one working navbar button before the dataset title whenever the shared topbar is shown', async () => {
+    test.each(['table', 'transposed'])(
+        'returns from %s view to cards with the shared close control',
+        async (currentView) => {
+            const sharedTopbarRules = await import('./shared_topbar_builder.js');
+            sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(true);
+            const cardClickSpy = vi.fn();
+
+            const { create_filter_bar } = await import('./filter_bar_builder.js');
+            create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, currentView);
+
+            const viewSelector = document.createElement('div');
+            viewSelector.classList.add('view-selector-buttons');
+            const cardButton = document.createElement('button');
+            cardButton.dataset.testid = 'view-btn-card';
+            cardButton.addEventListener('click', cardClickSpy);
+            viewSelector.appendChild(cardButton);
+            document.getElementById('demo_tab_parts_container')?.appendChild(viewSelector);
+
+            const sharedClose = document.querySelector('.dataset-shared-topbar__article-close');
+            expect(sharedClose?.hidden).toBe(false);
+            expect(sharedClose?.getAttribute('aria-label')).toBe('Palaa korttinäkymään');
+
+            sharedClose?.click();
+
+            expect(cardClickSpy).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    test('keeps a dedicated working menu button before the dataset title whenever the shared topbar is shown', async () => {
         const sharedTopbarRules = await import('./shared_topbar_builder.js');
+        const navbarVisibility = await import('../navigation/menu_button/navbar_visibility_handler.js');
         sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(true);
         document.getElementById('navbar')?.classList.add('collapsed');
-        const showButtonClickSpy = vi.fn();
-        const documentClickSpy = vi.fn();
         const showMenuButtonBeforeMount = document.getElementById('showMenuButton');
         const originalMenuButtonParent = showMenuButtonBeforeMount?.parentElement;
-        showMenuButtonBeforeMount?.addEventListener('click', showButtonClickSpy);
-        document.addEventListener('click', documentClickSpy, { once: true });
 
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
@@ -183,25 +274,37 @@ describe('create_filter_bar inline hero mounting', () => {
         const sharedMenuButton = menuSlot?.firstElementChild;
 
         expect(menuSlot?.hidden).toBe(false);
+        expect(menuSlot?.classList.contains('dataset-shared-topbar__menu-slot--visible'))
+            .toBe(true);
+        expect(menuSlot?.getAttribute('aria-hidden')).toBe('false');
+        expect(menuSlot?.inert).toBe(false);
         expect(menuSlot?.firstElementChild).toBe(sharedMenuButton);
-        expect(sharedMenuButton).toBe(showMenuButton);
-        expect(showMenuButton?.classList.contains('shared-topbar-docked-button')).toBe(true);
+        expect(sharedMenuButton).not.toBe(showMenuButton);
+        expect(sharedMenuButton?.dataset.testid).toBe('shared-topbar-menu-button');
+        expect(sharedMenuButton?.getAttribute('aria-hidden')).toBe('false');
+        expect(sharedMenuButton?.tabIndex).toBe(0);
+        expect(showMenuButton?.classList.contains('shared-topbar-menu-source-hidden')).toBe(true);
+        expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);
         expect(document.querySelectorAll('#showMenuButton')).toHaveLength(1);
         expect(startSlot?.firstElementChild).toBe(menuSlot);
         expect(menuSlot?.nextElementSibling).toBe(title);
 
         sharedMenuButton?.click();
 
-        expect(showButtonClickSpy).toHaveBeenCalledTimes(1);
-        expect(documentClickSpy).toHaveBeenCalledTimes(1);
-        expect(documentClickSpy.mock.calls[0]?.[0]?.target).toBe(showMenuButton);
+        expect(navbarVisibility.toggleNavbarVisibility).toHaveBeenCalledTimes(1);
 
         document.getElementById('navbar')?.classList.remove('collapsed');
         sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(false);
         window.dispatchEvent(new CustomEvent('navbar-visibility-changed'));
 
-        expect(menuSlot?.hidden).toBe(true);
-        expect(showMenuButton?.classList.contains('shared-topbar-docked-button')).toBe(false);
+        expect(menuSlot?.hidden).toBe(false);
+        expect(menuSlot?.classList.contains('dataset-shared-topbar__menu-slot--visible'))
+            .toBe(false);
+        expect(menuSlot?.getAttribute('aria-hidden')).toBe('true');
+        expect(menuSlot?.inert).toBe(true);
+        expect(sharedMenuButton?.getAttribute('aria-hidden')).toBe('true');
+        expect(sharedMenuButton?.tabIndex).toBe(-1);
+        expect(showMenuButton?.classList.contains('shared-topbar-menu-source-hidden')).toBe(false);
         expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);
     });
 
@@ -216,8 +319,11 @@ describe('create_filter_bar inline hero mounting', () => {
         create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
 
         const menuSlot = document.querySelector('.dataset-shared-topbar__menu-slot');
-        expect(menuSlot?.hidden).toBe(true);
+        expect(menuSlot?.hidden).toBe(false);
+        expect(menuSlot?.classList.contains('dataset-shared-topbar__menu-slot--visible'))
+            .toBe(false);
         expect(menuSlot?.contains(showMenuButton)).toBe(false);
+        expect(menuSlot?.querySelector('[data-testid="shared-topbar-menu-button"]')).toBeTruthy();
         expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);
         expect(document.querySelectorAll('#showMenuButton')).toHaveLength(1);
     });
@@ -255,8 +361,8 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(heading.getAttribute('aria-expanded')).toBe('false');
         expect(contentShell?.hidden).toBe(true);
         expect(heading.getAttribute('aria-controls')).toBe(contentShell?.id);
-        expect(heading.textContent).toBe('Suodattimet');
-        expect(heading.querySelector('[data-lang-key="filters"]')).toBeTruthy();
+        expect(heading.textContent).toBe('Filter results');
+        expect(heading.querySelector('[data-lang-key="filterbar_filter_results"]')).toBeTruthy();
         expect(favefoxBuilder.build_favefox_style_filter_bar_from_columns).toHaveBeenCalledWith(
             'demo',
             ['id'],

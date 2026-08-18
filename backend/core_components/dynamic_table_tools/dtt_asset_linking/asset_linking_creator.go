@@ -58,6 +58,7 @@ func EnsureSharedAssetRelation(
 				ReferencingColumn: fkColumnName,
 				ReferencedTable:   parentTable,
 				ReferencedColumn:  "id",
+				CascadeDelete:     true,
 			},
 		}
 
@@ -118,14 +119,42 @@ func EnsureCachedImageColumn(tx dbutils.Querier, parentTable string) error {
 	).Scan(&cachedColumnExists); err != nil {
 		return err
 	}
-	if cachedColumnExists > 0 {
-		return nil
+	if cachedColumnExists == 0 {
+		if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN cached_image TEXT", parentTable)); err != nil {
+			return err
+		}
+		if err := refreshAssetLinkingCatalogMetadata(tx); err != nil {
+			return err
+		}
 	}
 
-	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN cached_image TEXT", parentTable)); err != nil {
-		return err
+	return setCachedImageCardElement(tx, parentTable)
+}
+
+// setCachedImageCardElement keeps the image cache out of ordinary text/card
+// fields and makes it the canonical image role for both new and existing tables.
+func setCachedImageCardElement(tx dbutils.Querier, parentTable string) error {
+	result, err := tx.Exec(
+		`UPDATE system_column_details AS columns
+		 SET card_element = 'image', updated = NOW()
+		 FROM system_db_tables AS tables
+		 WHERE columns.table_uid = tables.table_uid
+		   AND tables.schema_name = 'public'
+		   AND tables.table_name = $1
+		   AND columns.column_name = 'cached_image'`,
+		parentTable,
+	)
+	if err != nil {
+		return fmt.Errorf("set cached image card role: %w", err)
 	}
-	return refreshAssetLinkingCatalogMetadata(tx)
+	updatedRows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("verify cached image card role: %w", err)
+	}
+	if updatedRows != 1 {
+		return fmt.Errorf("cached image metadata row count for %s was %d, want 1", parentTable, updatedRows)
+	}
+	return nil
 }
 
 // EncodeTargetInsertSpecs is a small helper for tests and handlers needing the raw JSON payload.

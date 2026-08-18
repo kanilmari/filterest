@@ -218,11 +218,41 @@ func TestCreateTableInDatabaseBuildsCreateTableAndUpdatedTriggerQueries(t *testi
 			t.Fatalf("create query missing %q: %s", want, createQuery)
 		}
 	}
+	if strings.Contains(createQuery, "ON DELETE CASCADE") {
+		t.Fatalf("ordinary foreign key unexpectedly cascades deletes: %s", createQuery)
+	}
 	if !strings.Contains(state.execCalls[1], "CREATE OR REPLACE FUNCTION set_users_updated_timestamp()") {
 		t.Fatalf("trigger function query = %q, want users updated function", state.execCalls[1])
 	}
 	if !strings.Contains(state.execCalls[2], "CREATE TRIGGER update_users_timestamp") {
 		t.Fatalf("trigger statement query = %q, want users timestamp trigger", state.execCalls[2])
+	}
+}
+
+func TestCreateTableInDatabaseAddsCascadeOnlyWhenExplicitlyRequested(t *testing.T) {
+	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}})
+
+	err := CreateTableInDatabase(db, "article_assets", map[string]string{
+		"id":         "serial",
+		"article_id": "integer",
+	}, []ForeignKeyDefinition{
+		{
+			ReferencingColumn: "article_id",
+			ReferencedTable:   "articles",
+			ReferencedColumn:  "id",
+			CascadeDelete:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTableInDatabase returned error: %v", err)
+	}
+	if len(state.execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(state.execCalls))
+	}
+
+	want := "CONSTRAINT fk_article_assets_article_id FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE"
+	if !strings.Contains(state.execCalls[0], want) {
+		t.Fatalf("create query %q does not contain %q", state.execCalls[0], want)
 	}
 }
 

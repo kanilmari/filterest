@@ -7,8 +7,11 @@ package dtt_1_row_create
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"strconv"
 
+	"easelect/backend/core_components/dynamic_table_tools/ai_features"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
 
@@ -57,8 +60,8 @@ func AddRowMultipartHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 //  2. luo lapsirivit (RETURNING id -> childRowID) ja kerää talteen ChildInsertResult-listaan
 //  3. tallentaa tiedostot polkuun: storage/<tableUID>/<mainRowID>/, nimeksi <tableUID>_<mainRowID>_<childRowID>.ext
 //  4. päivittää lapsirivin "filename" (ja mahdolliset cacheTargets) samalle nimelle
-//  5. Jos taulusta löytyy embedding_vector-sarake, generoi upouuden rivin teksteistä embeddingin
-//     ja tallentaa sen embedding_vector-sarakkeeseen (synkronisesti).
+//  5. Jos taulu käyttää embeddingeja ja sillä on erikseen hyväksyttyjä lähdekenttiä,
+//     jonottaa uuden rivin päivityksen samaan transaktioon. Ulkoinen kutsu tehdään vasta commitin jälkeen.
 //
 // Between: HTTP Request -> Database & Filesystem
 // Why: Main handler for adding a new row with potential child rows and file uploads.
@@ -107,17 +110,23 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 		return
 	}
 
-	// 3) Tarkista, onko taulussa embedding_vector-sarake -> jos kyllä, generoi embedding
-	if hasEmbeddingVectorColumn(tableName, tx) {
-		if errEmb := generateOpenAIEmbeddingForSingleRow(tx, tableName, mainRowID); errEmb != nil {
-			fmt.Printf("\033[31m[add_row_handler.go] [AddRowMultipartHandler -> generateOpenAIEmbeddingForSingleRow] error: %s\033[0m\n", errEmb.Error())
-			// ei estä riviä toimimasta, jatketaan
-		}
+	// 3) Persist the content-free refresh request in the same transaction. This
+	// keeps provider latency and failures outside the row-creation transaction.
+	numericTableUID, parseErr := strconv.ParseInt(tableUID, 10, 64)
+	if parseErr != nil {
+		log.Printf("embedding refresh scheduling failed: invalid table identifier")
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Error scheduling embedding refresh")
+		return
 	}
-	if tableHasLangEmbeddings(tableName, tx) {
-		if errEmb := generateLangEmbeddingsForRow(tx, tableName, mainRowID, []string{"en", "fi"}); errEmb != nil {
-			fmt.Printf("\033[31m[add_row_handler.go] [AddRowMultipartHandler -> generateLangEmbeddingsForRow] error: %s\033[0m\n", errEmb.Error())
-		}
+	if _, queueErr := ai_features.EnqueueCreatedEmbeddingRefresh(
+		tx,
+		tableName,
+		numericTableUID,
+		mainRowID,
+	); queueErr != nil {
+		log.Printf("embedding refresh scheduling failed table_uid=%s row_id=%d", tableUID, mainRowID)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Error scheduling embedding refresh")
+		return
 	}
 
 	eventToPublish := event_bus.Event{

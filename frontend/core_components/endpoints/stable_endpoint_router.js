@@ -127,15 +127,24 @@ export async function fetchUserPermissions() {
 }
 
 /**
- * fetchAdminVersionInfo returns the protected running product/database versions.
+ * fetchAdminVersionInfo returns protected runtime, release-channel, and update details.
  *
  * @param {object} [options]
  * @returns {Promise<{
  *   product_name: string,
  *   app_version: string,
+ *   release_channel: string,
+ *   artifact_purpose: string,
+ *   public_distribution: boolean,
+ *   latest_stable_version?: string,
+ *   update_status: string,
+ *   update_available: boolean,
+ *   latest_release_url?: string,
+ *   update_checked_at?: string,
  *   db_version: string,
  *   required_db_version: string,
- *   db_compatible: boolean
+ *   db_compatible: boolean,
+ *   runtime_mode: string
  * }>}
  */
 export async function fetchAdminVersionInfo(options = {}) {

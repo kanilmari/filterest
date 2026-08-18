@@ -217,6 +217,13 @@ describe('card_visibility_view', () => {
         await flushAsyncWork();
 
         const selectInputs = Array.from(container.querySelectorAll('tbody tr select'));
+        const cardElementSelect = /** @type {HTMLSelectElement | undefined} */ (selectInputs[0]);
+        expect(cardElementSelect).toBeDefined();
+        expect(Array.from(cardElementSelect.options).map((option) => option.value)).toContain('details_link');
+        cardElementSelect.value = 'details_link';
+        cardElementSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        await flushAsyncWork();
+
         const labelModeSelect = /** @type {HTMLSelectElement | undefined} */ (selectInputs[1]);
         expect(labelModeSelect).toBeDefined();
         labelModeSelect.value = 'both';
@@ -238,6 +245,7 @@ describe('card_visibility_view', () => {
         await flushAsyncWork();
 
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"show_key_on_card":false');
+        expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_element":"details_link"');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_detail_capitalization":true');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_detail_label_mode":"both"');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_detail_icon_key":"calendar"');
@@ -252,6 +260,7 @@ describe('card_visibility_view', () => {
             card_style_variant: 'standard',
             columns: [expect.objectContaining({
                 column_uid: 9,
+                card_element: 'details_link',
                 card_detail_label_mode: 'both',
                 card_detail_icon_key: 'calendar',
                 card_detail_icon_svg: '<svg viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg>',

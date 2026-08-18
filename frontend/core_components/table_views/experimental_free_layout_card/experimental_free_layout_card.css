@@ -10,7 +10,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
-    margin: 0 0 1rem 0;
+    margin: 0 0 1rem;
     padding: 0.9rem 1rem;
     border: 1px dashed var(--border_color);
     border-radius: var(--border_radius_small);
@@ -147,7 +147,7 @@
 .experimental-free-layout-card--designing .experimental-free-layout-card__block--dragging {
     cursor: grabbing;
     z-index: 3;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 10px 28px rgb(0 0 0 / 0.18);
 }
 
 .experimental-free-layout-card--designing .experimental-free-layout-card__action-button,
@@ -180,13 +180,13 @@
     background: color-mix(in srgb, var(--bg_color_card_frame) 70%, transparent);
 }
 
-@media (max-width: 1100px) {
+@media (width <= 1100px) {
     .experimental-free-layout-card__canvas {
         --experimental-free-layout-row-size: 18px;
     }
 }
 
-@media (max-width: 760px) {
+@media (width <= 760px) {
     .experimental-free-layout-card__toolbar {
         align-items: stretch;
     }

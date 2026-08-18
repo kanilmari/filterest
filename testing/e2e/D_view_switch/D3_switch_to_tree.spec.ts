@@ -41,6 +41,13 @@ test.describe('D3 — Switch to Tree View', () => {
         parent_id: 'INTEGER',
         description: 'TEXT',
       },
+      foreignKeys: [
+        {
+          referencing_column: 'parent_id',
+          referenced_dataset: datasetName,
+          referenced_column: 'id',
+        },
+      ],
       seedRows: [
         {
           name: 'Root node',

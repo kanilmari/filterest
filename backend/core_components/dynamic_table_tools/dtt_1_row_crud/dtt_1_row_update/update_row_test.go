@@ -495,36 +495,6 @@ func TestGetColumnDataTypeError(t *testing.T) {
 	}
 }
 
-func TestTableHasLangEmbeddingsTrue(t *testing.T) {
-	tx := openUpdRowTx(t, []queuedQuery{
-		{cols: []string{"multi_lang_embeddings"}, rows: [][]driver.Value{{true}}},
-	})
-
-	if !tableHasLangEmbeddings("users", tx) {
-		t.Fatal("expected true")
-	}
-}
-
-func TestTableHasLangEmbeddingsFalse(t *testing.T) {
-	tx := openUpdRowTx(t, []queuedQuery{
-		{cols: []string{"multi_lang_embeddings"}, rows: [][]driver.Value{{false}}},
-	})
-
-	if tableHasLangEmbeddings("users", tx) {
-		t.Fatal("expected false")
-	}
-}
-
-func TestTableHasLangEmbeddingsErrorReturnsFalse(t *testing.T) {
-	tx := openUpdRowTx(t, []queuedQuery{
-		{err: errors.New("boom")},
-	})
-
-	if tableHasLangEmbeddings("missing", tx) {
-		t.Fatal("expected false on error")
-	}
-}
-
 // ── handler guard tests (httptest) ─────────────────────────────────────
 
 // ensureTestSessionStore initializes a minimal session store for handler tests.

@@ -33,12 +33,11 @@ async function prepareHiddenNarrowDrawers(page: Page, width: number): Promise<vo
 }
 
 async function openNavbarThenFilterbar(page: Page): Promise<void> {
-  await expect(page.locator('#showMenuButton')).toBeVisible({ timeout: 5000 });
-  await page.locator('#showMenuButton').evaluate((button) => {
-    if (button instanceof HTMLElement) {
-      button.click();
-    }
-  });
+  const visibleMenuButton = page
+    .locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible')
+    .first();
+  await expect(visibleMenuButton).toBeVisible({ timeout: 5000 });
+  await visibleMenuButton.click();
   await expect(page.locator('#navbar:not(.collapsed)')).toBeVisible({ timeout: 5000 });
   await clickFirstVisibleByTestId(page, 'filterbar-toggle');
 }
@@ -108,20 +107,15 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     );
 
     await prepareHiddenNarrowDrawers(page, 375);
-    await expect(page.locator('#showMenuButton')).toBeVisible({ timeout: 5000 });
-    await page.locator('#showMenuButton').evaluate((button) => {
-      if (button instanceof HTMLElement) {
-        button.click();
-      }
-    });
+    const visibleMenuButton = page
+      .locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible')
+      .first();
+    await expect(visibleMenuButton).toBeVisible({ timeout: 5000 });
+    await visibleMenuButton.click();
     await expect(page.locator('#navbar:not(.collapsed)')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(850);
 
-    await page.locator('#hideMenuButton').evaluate((button) => {
-      if (button instanceof HTMLElement) {
-        button.click();
-      }
-    });
+    await page.locator('#hideMenuButton').click();
     await page.waitForTimeout(100);
 
     const transitionState = await page.locator('#navbar').evaluate((navbar) => {
@@ -136,5 +130,49 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     expect(transitionState.opacity).toBe(1);
     expect(transitionState.right).toBeGreaterThan(0);
     expect(transitionState.right).toBeLessThan(transitionState.width);
+  });
+
+  test('keeps the complete top-row cursor stable only while the navbar opens', async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.metadata?.screenWidth !== 'desktop',
+      'This proof drives its own viewport and only needs one project.',
+    );
+
+    await prepareHiddenNarrowDrawers(page, 375);
+    const visibleMenuButton = page
+      .locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible')
+      .first();
+    await expect(visibleMenuButton).toBeVisible({ timeout: 5000 });
+    await visibleMenuButton.click();
+
+    const navbar = page.locator('#navbar');
+    await expect(navbar).toHaveClass(/navbar-opening/);
+    const openingCursorState = await navbar.evaluate((element) => {
+      const topBar = element.querySelector<HTMLElement>('.top-button-bar');
+      const historyGap = element.querySelector<HTMLElement>('.nav-history-buttons');
+      const disabledHistoryButtons = Array.from(
+        element.querySelectorAll<HTMLButtonElement>('.nav-history-btn:disabled'),
+      );
+      return {
+        topBar: topBar ? getComputedStyle(topBar).cursor : '',
+        historyGap: historyGap ? getComputedStyle(historyGap).cursor : '',
+        disabledButtons: disabledHistoryButtons.map((button) => ({
+          cursor: getComputedStyle(button).cursor,
+          disabled: button.disabled,
+        })),
+      };
+    });
+
+    expect(openingCursorState.topBar).toBe('pointer');
+    expect(openingCursorState.historyGap).toBe('pointer');
+    expect(openingCursorState.disabledButtons.length).toBeGreaterThan(0);
+    expect(openingCursorState.disabledButtons.every(({ cursor }) => cursor === 'pointer')).toBe(true);
+    expect(openingCursorState.disabledButtons.every(({ disabled }) => disabled)).toBe(true);
+
+    await expect(navbar).not.toHaveClass(/navbar-opening/, { timeout: 1000 });
+    const settledDisabledCursors = await navbar
+      .locator('.nav-history-btn:disabled')
+      .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).cursor));
+    expect(settledDisabledCursors.every((cursor) => cursor === 'default')).toBe(true);
   });
 });

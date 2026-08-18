@@ -133,19 +133,29 @@ describe('sortColumnsByRole', () => {
         expect(sortColumnsByRole(cols, types)).toEqual(['age', 'name', 'email']);
     });
 
-    test('preserves order when all have roles', () => {
+    test('uses global field order when all have roles', () => {
         const cols = ['a', 'b'];
         const types = {
-            a: { card_element: 'header' },
-            b: { card_element: 'details' },
+            a: { card_element: 'header', co_number: 20 },
+            b: { card_element: 'details', co_number: 10 },
         };
-        expect(sortColumnsByRole(cols, types)).toEqual(['a', 'b']);
+        expect(sortColumnsByRole(cols, types)).toEqual(['b', 'a']);
     });
 
-    test('preserves order when none have roles', () => {
+    test('uses global field order when none have roles', () => {
+        const cols = ['x', 'y', 'z'];
+        const types = {
+            x: { co_number: 3 },
+            y: { co_number: 1 },
+            z: { co_number: 2 },
+        };
+        expect(sortColumnsByRole(cols, types)).toEqual(['y', 'z', 'x']);
+    });
+
+    test('preserves source order when global order metadata is missing', () => {
         const cols = ['x', 'y', 'z'];
         const types = { x: {}, y: {}, z: {} };
-        expect(sortColumnsByRole(cols, types)).toEqual(['x', 'y', 'z']);
+        expect(sortColumnsByRole(cols, types)).toEqual(cols);
     });
 
     test('does not mutate input array', () => {

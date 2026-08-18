@@ -132,8 +132,8 @@ export function buildTopRow(
     const actionRow = buildFilterbarDisclosureSection({
         iconPath: "/frontend/icons/general/table-tools-icon.svg",
         iconClassName: "filterbar-section-heading-icon--tools",
-        langKey: "tools",
-        fallbackText: "Työkalut",
+        langKey: "filterbar_add_manage_content",
+        fallbackText: "Add & manage content",
         contentElement: actionContent,
         sectionClassNames: ["dataset-filter-tools-section"],
         startOpen: false,
@@ -158,8 +158,8 @@ export function buildTopRow(
     const viewRow = buildFilterbarDisclosureSection({
         iconPath: "/frontend/icons/general/view-palette-icon.svg",
         iconClassName: "view-selector-heading-icon",
-        langKey: "views_and_presentations",
-        fallbackText: "Näkymät ja esitystavat",
+        langKey: "filterbar_view_content_as",
+        fallbackText: "View content as…",
         contentElement: viewContent,
         sectionClassNames: ["dataset-filter-views-section"],
         startOpen: false,
@@ -176,7 +176,8 @@ export function buildTopRow(
             tableName,
             adminButtonsContainer,
             viewSelectorContainer,
-            currentView
+            currentView,
+            { columns, dataTypes }
         ),
     ]).then(() => {
         // Hide actionRow if no visible interactive elements remain

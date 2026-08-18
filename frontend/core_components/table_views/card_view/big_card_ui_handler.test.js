@@ -21,6 +21,7 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 
 import {
     createRowArticleKeyValueElement,
+    createRowArticleLinkTwoLine,
     createRowArticleNavigableElement,
 } from "./big_card_ui_handler.js";
 
@@ -125,5 +126,45 @@ describe("big_card_ui_handler label icons", () => {
         expect(openInNewTab?.dataset.titleLangKey).toBe("open_in_new_tab");
         expect(openInNewTab?.dataset.ariaLabelLangKey).toBe("open_in_new_tab");
         expect(openInNewTab?.querySelector(".open-in-new-tab-icon")).not.toBeNull();
+    });
+
+    test("semantic article links accept HTTP(S) without guessing plain or unsafe values", () => {
+        const safe = createRowArticleLinkTwoLine(
+            "Website",
+            "https://example.test",
+            "website",
+            false,
+        );
+        const unsafe = createRowArticleLinkTwoLine(
+            "Script",
+            "javascript:alert(1)",
+            "script",
+            false,
+        );
+
+        expect(safe.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
+        expect(safe.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(unsafe.querySelector("a")).toBeNull();
+        expect(unsafe.textContent).toContain("javascript:alert(1)");
+    });
+
+    test("raw article link metadata rejects unsafe schemes while explicit internal routes remain valid", () => {
+        const unsafe = createRowArticleNavigableElement({
+            label: "Website",
+            value: "javascript:alert(1)",
+            href: "javascript:alert(1)",
+            externalHttpOnly: true,
+        });
+        const internal = createRowArticleNavigableElement({
+            label: "Documentation",
+            value: "Read documentation",
+            href: "/documentation/1-read-documentation",
+        });
+
+        expect(unsafe.querySelector("a")).toBeNull();
+        expect(unsafe.textContent).toContain("javascript:alert(1)");
+        expect(internal.querySelector("a")?.getAttribute("href")).toBe(
+            "/documentation/1-read-documentation"
+        );
     });
 });

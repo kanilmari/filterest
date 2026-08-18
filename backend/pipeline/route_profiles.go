@@ -110,6 +110,7 @@ var RouteProfiles = map[string]RouteProfile{
 
 	// Public data endpoints
 	"lang.GetTranslationsHandler":           PublicProfile,
+	"lang.GetPublicUILanguagesHandler":      PublicProfile,
 	"system_table_tools.GetAboutRowHandler": PublicProfile, // login page fetches privacy policy
 
 	// Dev tools — registered conditionally in init() below
@@ -217,11 +218,12 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.GetDatasetAliasesHandler":          DefaultProfile,
 
 	// AI / embedding features
-	"ai_features.GetEmbeddingDatasetsHandler":  AdminProfile,
-	"ai_features.EmbeddingStreamHandler":       AdminProfile,
-	"event_bus.SSESubscribeHandler":            AccessControlNoTxProfile,
-	"ai_features.RefreshLangEmbeddingsHandler": AdminProfile,
-	"ai_features.CountLangEmbeddingsHandler":   AdminProfile,
+	"ai_features.GetEmbeddingDatasetsHandler":          AdminProfile,
+	"ai_features.ExternalEmbeddingSourcePolicyHandler": AdminProfile,
+	"ai_features.EmbeddingStreamHandler":               AdminProfile,
+	"event_bus.SSESubscribeHandler":                    AccessControlNoTxProfile,
+	"ai_features.RefreshLangEmbeddingsHandler":         AdminProfile,
+	"ai_features.CountLangEmbeddingsHandler":           AdminProfile,
 
 	// System table tools
 	"system_table_tools.GetGroupedTables":    DefaultProfile,
@@ -277,6 +279,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"lang.GenerateTranslationsHandler":   DefaultProfile,
 	"lang.FixTableTranslationsHandler":   DefaultProfile,
 	"lang.GetLangKeyTranslationsHandler": DefaultProfile,
+	"lang.AdminUILanguagesHandler":       AdminProfile,
 
 	// Search vectors
 	"dtt_search_vectors.TextIndexStatusHandler":     AdminProfile,

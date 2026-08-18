@@ -3,13 +3,22 @@
 // Zero DOM access — all functions are pure input→output.
 
 /**
- * Build the localStorage key for filterbar visibility based on table name and screen width category.
+ * Build the canonical localStorage key for filterbar visibility.
+ * Browser storage is origin-scoped, so separate Easelect ports remain isolated
+ * without splitting one user's preference by viewport width.
  *
  * @param {string} tableName
  * @param {boolean} isWideScreen - true when viewport exceeds the breakpoint
  * @returns {string}
  */
-export function buildVisibilityKey(tableName, isWideScreen) {
+export function buildVisibilityKey(tableName) {
+    return `${tableName}_filterbar_visible`;
+}
+
+/**
+ * Build the pre-8.31 breakpoint-specific key for one-time preference migration.
+ */
+export function buildLegacyVisibilityKey(tableName, isWideScreen) {
     return `${tableName}_filterbar_visible_${isWideScreen ? "wide" : "narrow"}`;
 }
 

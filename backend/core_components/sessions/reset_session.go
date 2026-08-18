@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 )
 
 func ResetSessionHandler(w http.ResponseWriter, r *http.Request) {
@@ -58,42 +57,9 @@ originValidated:
 
 	log.Println("[ResetSessionHandler] Clearing session and all auth cookies")
 
-	// Helper to clear a cookie with specific path
-	clearCookie := func(name, path string) {
-		http.SetCookie(w, &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     path,
-			Expires:  time.Unix(0, 0),
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   ShouldUseSecureCookies(),
-			SameSite: http.SameSiteLaxMode,
-		})
-	}
-
-	// Clear the current instance's session cookie
-	clearCookie(SessionName, "/")
-
-	// Clear generic "session" cookie on both common paths
-	clearCookie("session", "/")
-	clearCookie("session", "/api")
-
-	// Clear any session cookies found in the request (handles instance-specific names)
-	for _, cookie := range r.Cookies() {
-		// Match session cookies: "session", "session_*"
-		if cookie.Name == "session" || len(cookie.Name) > 8 && cookie.Name[:8] == "session_" {
-			log.Printf("[ResetSessionHandler] Clearing cookie: %s", cookie.Name)
-			clearCookie(cookie.Name, "/")
-			clearCookie(cookie.Name, "/api")
-		}
-	}
-
-	// Tyhjennä device_id-eväste
-	clearCookie("device_id", "/")
-
-	// Tyhjennä fingerprint-eväste
-	clearCookie("fingerprint", "/")
+	// Clear only the current instance or replica pool. Sibling cookies on the
+	// same hostname belong to other runtimes and must remain untouched.
+	ExpireCurrentAuthCookies(w)
 
 	// JSON-vastaus
 	w.Header().Set("Content-Type", "application/json")

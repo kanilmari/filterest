@@ -7,8 +7,8 @@
  */
 .mfo-overlay {
     position: fixed;
-    inset: var(--content-top-banner-height, 0px) 0 0 0;
-    background-color: rgba(0, 0, 0, 0.6);
+    inset: var(--content-top-banner-height, 0) 0 0 0;
+    background-color: rgb(0 0 0 / 0.6);
     z-index: var(--z-overlay);
     pointer-events: none;
     opacity: 0;

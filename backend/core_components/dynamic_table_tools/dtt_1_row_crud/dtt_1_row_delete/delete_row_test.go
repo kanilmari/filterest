@@ -21,6 +21,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // ── driver double ──────────────────────────────────────────────────────
@@ -236,6 +238,29 @@ func TestHandlerEmptyIDsAndRows(t *testing.T) {
 	DeleteRowsHandler(rec, req, "users")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestRespondWithDeleteRowsErrorReturnsSafeConflictForReferencedRows(t *testing.T) {
+	databaseErr := &pq.Error{
+		Code:       "23503",
+		Constraint: "private_child_parent_id_fkey",
+		Detail:     "Sensitive row details",
+	}
+	rec := httptest.NewRecorder()
+
+	respondWithDeleteRowsError(rec, fmt.Errorf("delete failed: %w", databaseErr))
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), referencedRowsDeleteConflictMessage) {
+		t.Fatalf("body = %q, want safe conflict message", rec.Body.String())
+	}
+	for _, leaked := range []string{"23503", databaseErr.Constraint, databaseErr.Detail} {
+		if strings.Contains(rec.Body.String(), leaked) {
+			t.Fatalf("body = %q, leaked database detail %q", rec.Body.String(), leaked)
+		}
 	}
 }
 
@@ -646,6 +671,25 @@ func TestDeleteGenericRowsPropagatesExecError(t *testing.T) {
 		if strings.Contains(call, "deletion_log") {
 			t.Fatalf("deletion log call after failed DELETE: %q", call)
 		}
+	}
+}
+
+func TestDeleteGenericRowsPreservesForeignKeyViolationAfterRollback(t *testing.T) {
+	databaseErr := &pq.Error{Code: "23503", Constraint: "child_parent_id_fkey"}
+	_, tx, state := openDelRowTx(t, nil, []queuedExec{
+		{},                 // SAVEPOINT
+		{err: databaseErr}, // DELETE fails due to a referencing row
+		{},                 // ROLLBACK TO SAVEPOINT
+		{},                 // RELEASE SAVEPOINT
+	})
+
+	err := deleteGenericRows(tx, "users", []int{1}, "system", "admin", 2)
+	var gotDatabaseErr *pq.Error
+	if !errors.As(err, &gotDatabaseErr) || gotDatabaseErr.Code != "23503" {
+		t.Fatalf("err = %v, want preserved PostgreSQL 23503 error", err)
+	}
+	if len(state.execCalls) != 4 || state.execCalls[2] != "ROLLBACK TO SAVEPOINT generic_row_delete" || state.execCalls[3] != "RELEASE SAVEPOINT generic_row_delete" {
+		t.Fatalf("exec calls = %#v, want failed DELETE rolled back and savepoint released", state.execCalls)
 	}
 }
 

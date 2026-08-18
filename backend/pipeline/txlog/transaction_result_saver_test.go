@@ -162,7 +162,12 @@ func initTxlogSessionStore(t *testing.T) {
 	e_sessions.SessionName = "session"
 	t.Setenv("SESSION_KEY", txlogTestSessionKey)
 	t.Setenv("SESSION_SECRET_KEY", txlogTestSessionSecretKey)
-	t.Setenv("INSTANCE_NAME", "")
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("INSTANCE_NAME", "txlog-test")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "txlog_test")
 	e_sessions.InitSessionStore()
 	t.Cleanup(func() {
 		e_sessions.Store = nil

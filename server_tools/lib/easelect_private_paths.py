@@ -41,6 +41,12 @@ def resolve_easelect_private_paths(
     for value_key, configured_key in (
         ("FILTEREST_PROJECTS_HOME", "FILTEREST_PROJECTS_HOME_CONFIGURED"),
         ("FILTEREST_KEYS_HOME", "FILTEREST_KEYS_HOME_CONFIGURED"),
+        ("FILTEREST_RUNTIME_DATA_HOME", "FILTEREST_RUNTIME_DATA_HOME_CONFIGURED"),
+        (
+            "FILTEREST_MAINTAINER_TOOLS_HOME",
+            "FILTEREST_MAINTAINER_TOOLS_HOME_CONFIGURED",
+        ),
+        ("FILTEREST_OPERATIONS_HOME", "FILTEREST_OPERATIONS_HOME_CONFIGURED"),
     ):
         if resolved_environment.get(configured_key) == "0":
             resolved_environment.pop(value_key, None)

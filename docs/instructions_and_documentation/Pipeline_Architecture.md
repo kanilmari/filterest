@@ -1,6 +1,6 @@
 # Pipeline Architecture
 
-This document describes the Pipeline Mediator pattern used in Easelect's backend HTTP request processing. It explains how requests flow through middleware stages, how route profiles control which stages apply, and how to add new stages or configure routes.
+This document describes the Pipeline Mediator pattern used in Filterest's backend HTTP request processing. It explains how requests flow through middleware stages, how route profiles control which stages apply, and how to add new stages or configure routes.
 
 **Source code:** `backend/pipeline/`  
 **Related middleware:** `backend/core_components/middlewares/`  
@@ -10,7 +10,7 @@ This document describes the Pipeline Mediator pattern used in Easelect's backend
 
 ## 1. Overview
 
-Every HTTP request in Easelect flows through a **pipeline** — an ordered sequence of middleware stages. Each stage performs one concern (rate limiting, logging, authentication, etc.) and wraps the next stage in the chain.
+Every HTTP request in Filterest flows through a **pipeline** — an ordered sequence of middleware stages. Each stage performs one concern (rate limiting, logging, authentication, etc.) and wraps the next stage in the chain.
 
 The pipeline is **declarative**: the stage order is defined in a single file (`pipeline_order.go`), and per-route configuration is defined in another single file (`route_profiles.go`). There are no scattered `switch` statements or map literals.
 

@@ -192,6 +192,20 @@ describe('column_view_preset_builder', () => {
             .toContain('/frontend/icons/general/visible-fields-icon.svg');
     });
 
+    test('uses the filterbar-specific visible-fields heading', async () => {
+        getTranslationForKeyMock.mockImplementation((key) => (
+            key === 'filterbar_select_visible_fields' ? 'Select visible fields' : key
+        ));
+        const { buildColumnViewPresetSelector } = await loadModule();
+
+        const row = buildColumnViewPresetSelector('orders');
+        const heading = row.querySelector(
+            '[data-lang-key="filterbar_select_visible_fields"]'
+        );
+
+        expect(heading?.textContent).toBe('Select visible fields');
+    });
+
     test('keeps field-set controls visible after the lazy preset load', async () => {
         listColumnViewPresetsMock.mockResolvedValue([]);
         const { buildColumnViewPresetSelector } = await loadModule();

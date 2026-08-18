@@ -91,6 +91,7 @@ def build_parser():
     upsert_parser.add_argument("--fi")
     upsert_parser.add_argument("--en")
     upsert_parser.add_argument("--ch")
+    upsert_parser.add_argument("--yue")
     upsert_parser.add_argument("--usage-explanation")
     upsert_parser.add_argument("--dry-run", action="store_true")
     upsert_parser.add_argument("--json", action="store_true")

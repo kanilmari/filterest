@@ -36,7 +36,8 @@ var langKeyPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`data-lang-key["\s]*[=:]\s*["']([a-zA-Z0-9_-]+)["']`),
 	regexp.MustCompile(`dataset\.langKey\s*=\s*["']([a-zA-Z0-9_-]+)["']`),
 	regexp.MustCompile(`getTranslationForKey\(\s*["']([a-zA-Z0-9_-]+)["']`),
-	regexp.MustCompile(`(?:Title)?LangKey:\s*["']([a-zA-Z0-9_-]+)["']`),
+	regexp.MustCompile(`(?:langKey|LangKey|TitleLangKey):\s*["']([a-zA-Z0-9_-]+)["']`),
+	regexp.MustCompile(`(?:const|let|var)\s+[A-Z0-9_]*LANG_KEY\s*=\s*["']([a-zA-Z0-9_-]+)["']`),
 	regexp.MustCompile(`data-html-lang-key["\s]*[=:]\s*["']([a-zA-Z0-9_-]+)["']`),
 	regexp.MustCompile(`dataset\.langKeyFallback\s*=\s*["']([a-zA-Z0-9_-]+)["']`),
 }

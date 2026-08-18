@@ -13,7 +13,9 @@
 @import url("../core_components/auth/auth.css");
 
 /* --- Navigation --- */
-@import url("../core_components/navigation/menu_button/navbar.css");
+@import url("../core_components/navigation/navbar/navbar_layout.css");
+@import url("../core_components/navigation/navbar/navbar_theme_contrast.css");
+@import url("../core_components/navigation/menu_button/menu_button.css");
 @import url("../core_components/navigation/main_tabs/tabs.css");
 @import url("../core_components/lang/lang_panel.css");
 @import url("../core_components/lang/dev_lang_key_editor.css");
@@ -39,7 +41,11 @@
 /* --- Filter bar (see visual docs tab_content/filter_bar/) --- */
 @import url("../core_components/filterbar/filterbar.css");
 @import url("../core_components/filterbar/filterbar_calendar.css");
-@import url("../core_components/filterbar/morphing_filterbar.css");
+@import url("../core_components/filterbar/filterbar_layout.css");
+@import url("../core_components/filterbar/shared_topbar.css");
+@import url("../core_components/admin_tools/admin_version_info_indicator.css");
+@import url("../core_components/filterbar/text_search/text_search.css");
+@import url("../core_components/filterbar/morphing_filterbar_content.css");
 @import url("../core_components/filterbar/filter_list/favefox_style_filters_container/favefox_style_filter_bar.css");
 @import url("../core_components/filterbar/filter_list/active_filter_tags.css");
 
@@ -78,5 +84,7 @@
 @import url("../core_components/admin_tools/child_tab_config.css");
 @import url("../core_components/admin_tools/dataset_alias_management.css");
 @import url("../core_components/admin_tools/dataset_header_config.css");
+@import url("../core_components/admin_tools/site_language_settings.css");
+@import url("../core_components/admin_tools/field_view_editor.css");
 @import url("../core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/create_table_admin.css");
 @import url("../custom_views/search_vector_maintenance.css");

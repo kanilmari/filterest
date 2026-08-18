@@ -346,7 +346,7 @@ validate_filterest_core_environment_file() {
         PORT EASELECT_PORT APP_PORT TLS_CERT_FILE TLS_KEY_FILE
         DB_HOST DB_PORT DB_SSLMODE DB_ADMIN_USER DB_USER DB_NAME
         DB_READONLY_USER DB_CONFIDENTIAL_USER DB_BASIC_USER DB_GUEST_USER
-        INSTANCE_NAME SESSION_COOKIE_NAME
+        INSTANCE_NAME SESSION_COOKIE_MODE
     )
     local secret_keys=(
         DB_ADMIN_PASSWORD DB_PASSWORD DB_READONLY_PASSWORD DB_CONFIDENTIAL_PASSWORD
@@ -381,6 +381,8 @@ validate_filterest_core_environment_file() {
     [[ "$(env_value "$file" BASE_URL)" == "$expected_base_url" ]] || invalid_keys+=("BASE_URL")
     [[ "$(env_value "$file" PORT)" == "$(env_value "$file" EASELECT_PORT)" ]] || invalid_keys+=("EASELECT_PORT")
     [[ "$(env_value "$file" PORT)" == "$(env_value "$file" APP_PORT)" ]] || invalid_keys+=("APP_PORT")
+    [[ "$(env_value "$file" SESSION_COOKIE_MODE)" == "isolated" ]] || invalid_keys+=("SESSION_COOKIE_MODE")
+    [[ -z "$(env_value "$file" SESSION_COOKIE_NAME)" ]] || invalid_keys+=("SESSION_COOKIE_NAME")
 
     for key in SESSION_SECRET_KEY SESSION_KEY; do
         value="$(env_value "$file" "$key")"
@@ -454,6 +456,8 @@ configure_environment_files() {
         set_env_value "$file" ENVIRONMENT_TYPE "$environment_type"
         set_env_value "$file" FILTEREST_LOCAL_TLS "$local_tls"
         set_env_value "$file" BASE_URL "$base_url"
+        set_env_value "$file" SESSION_COOKIE_MODE "isolated"
+        set_env_value "$file" SESSION_COOKIE_NAME ""
     done
 
     for key in "${secret_keys[@]}"; do

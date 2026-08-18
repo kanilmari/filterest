@@ -52,6 +52,34 @@ export async function openActiveFilterbarIfCollapsed(page: Page): Promise<boolea
 }
 
 /**
+ * Opens one named section inside the active dataset filterbar when needed.
+ * Bridges the persisted section layout with E2E actions that need controls
+ * inside a disclosure group, without toggling an already-open section closed.
+ */
+export async function openActiveFilterbarSection(
+  page: Page,
+  sectionKey: string,
+): Promise<Locator> {
+  await openActiveFilterbarIfCollapsed(page);
+
+  const section = getActiveTableParts(page)
+    .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
+    .first();
+  await expect(section).toBeVisible({ timeout: 5000 });
+
+  const header = section.locator(':scope > .animated-disclosure-header').first();
+  await expect(header).toBeVisible({ timeout: 5000 });
+  if ((await header.getAttribute('aria-expanded')) !== 'true') {
+    await header.click({ timeout: 5000 });
+  }
+  await expect(header).toHaveAttribute('aria-expanded', 'true', { timeout: 5000 });
+  await expect(
+    section.locator(':scope > .animated-disclosure-content-shell').first(),
+  ).toBeVisible({ timeout: 5000 });
+  return section;
+}
+
+/**
  * Closes the active dataset filterbar through its visible in-panel control.
  * Bridges temporary helper-opened panels and the responsive state expected by surface interactions.
  * Exists so shared navigation can restore a previously collapsed mobile panel without changing desktop state.

@@ -1,6 +1,6 @@
 # E2E Testing Guide
 
-Playwright E2E tests for Easelect. Tests live in `testing/e2e/`.
+Playwright E2E tests for Filterest. Tests live in `testing/e2e/`.
 
 ## Quick Reference
 

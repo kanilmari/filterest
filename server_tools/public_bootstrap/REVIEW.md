@@ -1,8 +1,8 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `43`
-- Seed tables: `26`
+- Schema tables: `47`
+- Seed tables: `28`
 - Example emails: `0`
 - Manifest format: `2`
 - Manifest source files: `10`
@@ -35,15 +35,19 @@ PASS
 - `public.system_column_view_presets`
 - `public.system_comments`
 - `public.system_config`
+- `public.system_db_table_aliases`
 - `public.system_db_tables`
 - `public.system_db_version`
+- `public.system_embedding_refresh_jobs`
 - `public.system_foreign_key_relations_1_m`
 - `public.system_foreign_key_relations_m_m`
 - `public.system_functions`
 - `public.system_group_table_func_rights`
 - `public.system_lang_key_sources`
+- `public.system_lang_key_translations`
 - `public.system_lang_keys`
 - `public.system_lang_keys_archive`
+- `public.system_languages`
 - `public.system_table_folders`
 - `public.system_table_row_view_counts`
 - `public.system_table_views`
@@ -79,7 +83,9 @@ PASS
 - `public.system_foreign_key_relations_1_m`
 - `public.system_functions`
 - `public.system_group_table_func_rights`
+- `public.system_lang_key_translations`
 - `public.system_lang_keys`
+- `public.system_languages`
 - `public.system_table_folders`
 - `public.system_user_group_memberships`
 - `public.system_user_groups`
@@ -101,14 +107,16 @@ PASS
 - `public.riskienhallinta_dokumentaatio_relation`: 1
 - `public.riskienhallinta_tiketit_relation`: 1
 - `public.system_about`: 1
-- `public.system_column_details`: 45
+- `public.system_column_details`: 47
 - `public.system_config`: 9
-- `public.system_db_tables`: 41
+- `public.system_db_tables`: 44
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
-- `public.system_functions`: 15
-- `public.system_group_table_func_rights`: 20
-- `public.system_lang_keys`: 489
+- `public.system_functions`: 22
+- `public.system_group_table_func_rights`: 24
+- `public.system_lang_key_translations`: 10
+- `public.system_lang_keys`: 390
+- `public.system_languages`: 5
 - `public.system_table_folders`: 14
 - `public.system_user_group_memberships`: 2
 - `public.system_user_groups`: 3

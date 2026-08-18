@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
@@ -144,7 +143,7 @@ func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *
 	if sessDeviceID, ok := session.Values["device_id"].(string); ok && sessDeviceID != "" {
 		deviceID = sessDeviceID
 	}
-	if cookieDevice, err := r.Cookie("device_id"); err == nil && cookieDevice.Value != "" {
+	if cookieDevice, err := r.Cookie(e_sessions.DeviceIDCookieName()); err == nil && cookieDevice.Value != "" {
 		deviceID = cookieDevice.Value
 	}
 	if deviceID == "" {
@@ -154,21 +153,13 @@ func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *
 		session.Values["device_id"] = deviceID
 		changed = true
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "device_id",
-		Value:    deviceID,
-		Path:     "/",
-		HttpOnly: false,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-	})
+	e_sessions.SetDeviceIDCookie(w, deviceID)
 
 	fingerprint := ""
 	if sessFP, ok := session.Values["fingerprint_hash"].(string); ok && sessFP != "" {
 		fingerprint = sessFP
 	}
-	if cookieFP, err := r.Cookie("fingerprint"); err == nil && cookieFP.Value != "" {
+	if cookieFP, err := r.Cookie(e_sessions.FingerprintCookieName()); err == nil && cookieFP.Value != "" {
 		fingerprint = cookieFP.Value
 	}
 	if fingerprint == "" {
@@ -178,15 +169,7 @@ func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *
 		session.Values["fingerprint_hash"] = fingerprint
 		changed = true
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "fingerprint",
-		Value:    fingerprint,
-		Path:     "/",
-		HttpOnly: false,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-	})
+	e_sessions.SetFingerprintCookie(w, fingerprint)
 
 	if changed {
 		if err := session.Save(r, w); err != nil {

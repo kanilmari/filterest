@@ -37,8 +37,8 @@ export function buildColumnViewPresetSelector(tableName, columns = []) {
     const row = buildFilterbarDisclosureSection({
         iconPath: "/frontend/icons/general/visible-fields-icon.svg",
         iconClassName: ["column-preset-heading-icon", "view-selector-heading-icon"],
-        langKey: "field_sets",
-        fallbackText: t("field_sets", "Näytettävät kentät"),
+        langKey: "filterbar_select_visible_fields",
+        fallbackText: t("filterbar_select_visible_fields", "Select visible fields"),
         contentElement: content,
         sectionElement: document.createElement("div"),
         sectionClassNames: ["column-preset-row"],

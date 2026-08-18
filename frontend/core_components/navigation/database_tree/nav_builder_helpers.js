@@ -94,6 +94,11 @@ export function getAdminToolsStructure() {
         { id: 'permissions', name: 'permissions' },
         { id: 'queen_chat', name: 'queen_chat' },
         {
+            id: 'site_settings', name: 'site_settings', children: [
+                { id: 'site_languages', name: 'site_languages' },
+            ],
+        },
+        {
             id: 'table_tools', name: 'table_tools', children: [
                 { id: 'create_table', name: 'create_table' },
                 { id: 'foreign_keys', name: 'foreign_keys' },

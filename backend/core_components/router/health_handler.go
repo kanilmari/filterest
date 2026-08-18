@@ -48,20 +48,27 @@ type systemHealthResponse struct {
 }
 
 type systemReadyResponse struct {
-	Ready             bool     `json:"ready"`
-	Status            string   `json:"status"`
-	Reasons           []string `json:"reasons"`
-	InstanceID        string   `json:"instance_id"`
-	ProductName       string   `json:"product_name"`
-	AppVersion        string   `json:"app_version"`
-	AppVersionFile    string   `json:"app_version_file"`
-	RequiredDBVersion string   `json:"required_db_version"`
-	DBVersion         string   `json:"db_version"`
-	DBCompatible      bool     `json:"db_compatible"`
-	AcceptingNewWork  bool     `json:"accepting_new_work"`
-	ActiveRequests    int      `json:"active_requests"`
-	ActiveLongJobs    int      `json:"active_long_jobs"`
-	DrainSupported    bool     `json:"drain_supported"`
+	Ready                bool     `json:"ready"`
+	Status               string   `json:"status"`
+	Reasons              []string `json:"reasons"`
+	InstanceID           string   `json:"instance_id"`
+	ProductName          string   `json:"product_name"`
+	AppVersion           string   `json:"app_version"`
+	AppVersionFile       string   `json:"app_version_file"`
+	ReleaseChannel       string   `json:"release_channel"`
+	ArtifactPurpose      string   `json:"artifact_purpose"`
+	ArtifactType         string   `json:"artifact_type"`
+	ReleaseMaturity      string   `json:"release_maturity"`
+	IdentityVerification string   `json:"identity_verification"`
+	BuildID              string   `json:"build_id,omitempty"`
+	PublicDistribution   bool     `json:"public_distribution"`
+	RequiredDBVersion    string   `json:"required_db_version"`
+	DBVersion            string   `json:"db_version"`
+	DBCompatible         bool     `json:"db_compatible"`
+	AcceptingNewWork     bool     `json:"accepting_new_work"`
+	ActiveRequests       int      `json:"active_requests"`
+	ActiveLongJobs       int      `json:"active_long_jobs"`
+	DrainSupported       bool     `json:"drain_supported"`
 }
 
 type systemInstanceStatusResponse struct {
@@ -73,6 +80,13 @@ type systemInstanceStatusResponse struct {
 	ProductName           string                              `json:"product_name"`
 	AppVersion            string                              `json:"app_version"`
 	AppVersionFile        string                              `json:"app_version_file"`
+	ReleaseChannel        string                              `json:"release_channel"`
+	ArtifactPurpose       string                              `json:"artifact_purpose"`
+	ArtifactType          string                              `json:"artifact_type"`
+	ReleaseMaturity       string                              `json:"release_maturity"`
+	IdentityVerification  string                              `json:"identity_verification"`
+	BuildID               string                              `json:"build_id,omitempty"`
+	PublicDistribution    bool                                `json:"public_distribution"`
 	RequiredDBVersion     string                              `json:"required_db_version"`
 	DBVersion             string                              `json:"db_version"`
 	DBCompatible          bool                                `json:"db_compatible"`
@@ -204,6 +218,13 @@ func systemInstanceStatusHandler(w http.ResponseWriter, r *http.Request) {
 		ProductName:           readiness.ProductName,
 		AppVersion:            readiness.AppVersion,
 		AppVersionFile:        readiness.AppVersionFile,
+		ReleaseChannel:        readiness.ReleaseChannel,
+		ArtifactPurpose:       readiness.ArtifactPurpose,
+		ArtifactType:          readiness.ArtifactType,
+		ReleaseMaturity:       readiness.ReleaseMaturity,
+		IdentityVerification:  readiness.IdentityVerification,
+		BuildID:               readiness.BuildID,
+		PublicDistribution:    readiness.PublicDistribution,
 		RequiredDBVersion:     readiness.RequiredDBVersion,
 		DBVersion:             readiness.DBVersion,
 		DBCompatible:          readiness.DBCompatible,
@@ -278,6 +299,13 @@ func buildSystemReadinessResponse() systemReadyResponse {
 	response.ProductName = identity.Name
 	response.AppVersion = identity.Version
 	response.AppVersionFile = identity.AppVersionFile
+	response.ReleaseChannel = string(identity.ReleaseChannel)
+	response.ArtifactPurpose = string(identity.ArtifactPurpose)
+	response.ArtifactType = string(identity.ArtifactType)
+	response.ReleaseMaturity = string(identity.Maturity)
+	response.IdentityVerification = string(identity.Verification)
+	response.BuildID = identity.BuildID
+	response.PublicDistribution = identity.PublicDistribution
 	if strings.TrimSpace(response.AppVersion) == "" {
 		response.addNotReadyReason("app_version_unavailable")
 	}

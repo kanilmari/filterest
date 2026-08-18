@@ -1,7 +1,8 @@
 /**
  * A7_fk_dropdown_edit.spec.ts
  *
- * Tests FK dropdown opens when clicking a FK cell in inline edit mode.
+ * Tests that a foreign-key field gets its default human-readable `(ln)`
+ * companion column and that the source FK remains editable through a dropdown.
  */
 
 import { test, expect } from '@playwright/test';
@@ -24,7 +25,7 @@ test.describe('A7 — FK Dropdown Edit', () => {
     await login(page, credentials);
   });
 
-  test('clicking FK cell opens reference dropdown', async ({ page }) => {
+  test('shows the referenced name by default and opens the source FK dropdown', async ({ page }) => {
     const referencedDatasetName = buildTempDatasetName('e2e_fk_reference');
     const datasetName = buildTempDatasetName('e2e_fk_inline');
 
@@ -64,6 +65,15 @@ test.describe('A7 — FK Dropdown Edit', () => {
 
     try {
       await openTempDataset(page, datasetName, 'table');
+
+      const displayAlias = 'category_name (ln)';
+      await expect(
+        page.locator(`[data-testid="column-header-${displayAlias}"]`).first(),
+        'A new foreign key must expose its referenced display value by default.',
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.locator(`[data-testid="table-cell-${displayAlias}"]`).first(),
+      ).toContainText('Reference A');
 
       const rowCells = page.locator(
         `#${datasetName}_table_view_container tbody tr:first-child [data-testid^="table-cell-"]`,

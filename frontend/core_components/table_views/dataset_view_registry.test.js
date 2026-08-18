@@ -11,10 +11,12 @@ import {
     DATASET_VIEW_SELECTOR_TEXT,
     getDatasetViewContainerId,
     getDatasetViewLabelFallback,
+    getDatasetViewLabelForLanguage,
     getDatasetViewLangKey,
     getDatasetViewLocalTranslationFallbacks,
     getDatasetViewScrollDirection,
     getDatasetViewSelectorOptions,
+    getDatasetViewSelectorTextForLanguage,
     isDatasetViewSelectorAlias,
     resolveDatasetViewSelectionTarget,
     usesFullWidthDatasetContent,
@@ -54,6 +56,36 @@ describe("dataset_view_registry", () => {
             ]);
     });
 
+    test("offers tree only when the dataset has a supported hierarchy", () => {
+        const flatOptions = getDatasetViewSelectorOptions(
+            DATASET_VIEW_SELECTOR_GROUP_MORE,
+            {
+                datasetName: "services",
+                columns: ["id", "parent_id", "name"],
+                dataTypes: {
+                    parent_id: { data_type: "integer" },
+                },
+            }
+        );
+        expect(flatOptions.map((option) => option.viewKey)).not.toContain("tree");
+
+        const treeOptions = getDatasetViewSelectorOptions(
+            DATASET_VIEW_SELECTOR_GROUP_MORE,
+            {
+                datasetName: "services",
+                columns: ["id", "parent_id", "name"],
+                dataTypes: {
+                    parent_id: {
+                        data_type: "integer",
+                        foreign_table: "services",
+                        foreign_column: "id",
+                    },
+                },
+            }
+        );
+        expect(treeOptions.map((option) => option.viewKey)).toContain("tree");
+    });
+
     test("exports the existing permission route map from view metadata", () => {
         expect(DATASET_VIEW_PERMISSION_ROUTES).toEqual({
             card: "/ui/view/card",
@@ -79,6 +111,15 @@ describe("dataset_view_registry", () => {
         expect(fallbacks.view_article.en).toBe("Article");
         expect(fallbacks.view_price_chart.fi).toBe("Hintagraafi");
         expect(fallbacks.view_cloud_management.en).toBe("Cloud management");
+        expect(fallbacks.view_cloud_management.yue).toBe("\u96f2\u7aef\u7ba1\u7406");
         expect(fallbacks.views_and_presentations.en).toBe("Views and presentations");
+        expect(getDatasetViewLabelForLanguage("tree", "yue"))
+            .toBe("\u6a39\u72c0\u5716");
+        expect(getDatasetViewLabelForLanguage("calendar", "zh-HK"))
+            .toBe("\u65e5\u66c6");
+        expect(getDatasetViewSelectorTextForLanguage(
+            DATASET_VIEW_SELECTOR_TEXT.moreViews,
+            "fi"
+        )).toBe("Lis\u00e4\u00e4");
     });
 });

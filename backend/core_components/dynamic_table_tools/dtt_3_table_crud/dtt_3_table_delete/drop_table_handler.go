@@ -84,6 +84,21 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[DropTableHandler] warning: could not look up table_uid/schema for %s: %v — metadata cleanup may be incomplete", sanitizedTableName, scanErr)
 	}
 
+	var managedAssetChildren []managedAssetChildTable
+	if tableUID.Valid {
+		managedAssetChildren, err = findManagedAssetChildTables(tx, tableUID.Int64, sanitizedTableName)
+		if err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	for _, child := range managedAssetChildren {
+		if err := dropManagedAssetChildTable(tx, child); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
 	// Poistetaan taulu PostgreSQL:stä
 	dropStmt := fmt.Sprintf("DROP TABLE %s CASCADE", sanitizedTableName)
 	_, err = tx.Exec(dropStmt)

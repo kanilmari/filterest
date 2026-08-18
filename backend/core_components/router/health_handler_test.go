@@ -85,7 +85,12 @@ func TestSystemReadyHandlerReturnsOKWhenProbeReady(t *testing.T) {
 			Status:            "ready",
 			Reasons:           []string{},
 			InstanceID:        "easelect-a",
+			ProductName:       "Filterest",
 			AppVersion:        "8.0.126",
+			ReleaseChannel:    "development",
+			ArtifactPurpose:   "unknown",
+			ArtifactType:      "runtime",
+			ReleaseMaturity:   "snapshot",
 			RequiredDBVersion: "8.0.38",
 			DBVersion:         "8.0.38",
 			DBCompatible:      true,
@@ -120,6 +125,10 @@ func TestSystemReadyHandlerReturnsOKWhenProbeReady(t *testing.T) {
 	}
 	if response.ActiveRequests != 3 {
 		t.Fatalf("systemReadyHandler active_requests = %d, want 3", response.ActiveRequests)
+	}
+	if response.ReleaseChannel != "development" || response.ArtifactType != "runtime" ||
+		response.ReleaseMaturity != "snapshot" || response.PublicDistribution {
+		t.Fatalf("systemReadyHandler release identity = %#v, want Filterest development runtime snapshot", response)
 	}
 }
 
@@ -181,9 +190,13 @@ func TestSystemInstanceStatusHandlerReturnsManagerSnapshot(t *testing.T) {
 			Status:            "ready",
 			Reasons:           []string{},
 			InstanceID:        "easelect-a",
-			ProductName:       "Easelect",
+			ProductName:       "Filterest",
 			AppVersion:        "8.0.128",
 			AppVersionFile:    "VERSION_EASELECT",
+			ReleaseChannel:    "development",
+			ArtifactPurpose:   "unknown",
+			ArtifactType:      "runtime",
+			ReleaseMaturity:   "snapshot",
 			RequiredDBVersion: "8.0.38",
 			DBVersion:         "8.0.38",
 			DBCompatible:      true,
@@ -212,6 +225,10 @@ func TestSystemInstanceStatusHandlerReturnsManagerSnapshot(t *testing.T) {
 	}
 	if response.InstanceID != "easelect-a" {
 		t.Fatalf("systemInstanceStatusHandler instance_id = %q, want easelect-a", response.InstanceID)
+	}
+	if response.ReleaseChannel != "development" || response.ArtifactType != "runtime" ||
+		response.ReleaseMaturity != "snapshot" || response.PublicDistribution {
+		t.Fatalf("systemInstanceStatusHandler release identity = %#v, want Filterest development runtime snapshot", response)
 	}
 	if response.ActiveRequests != 7 {
 		t.Fatalf("systemInstanceStatusHandler active_requests = %d, want 7", response.ActiveRequests)
@@ -277,7 +294,7 @@ func TestSystemManagerEndpointsAllowPrivateForwardedClient(t *testing.T) {
 			Status:            "ready",
 			Reasons:           []string{},
 			InstanceID:        "easelect-a",
-			ProductName:       "Easelect",
+			ProductName:       "Filterest",
 			AppVersion:        "8.0.208",
 			RequiredDBVersion: "8.0.38",
 			DBVersion:         "8.0.38",

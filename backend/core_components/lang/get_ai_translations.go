@@ -44,6 +44,18 @@ type AiTranslationItem struct {
 	Fi      string `json:"fi,omitempty"`
 }
 
+type datasetTranslationIdentity struct {
+	TableName   string
+	DisplayName string
+}
+
+type dynamicDatasetTranslationContext struct {
+	LangKey          string
+	DatasetName      string
+	FieldName        string
+	UsageExplanation string
+}
+
 func isSyntheticE2ETranslationKey(key string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(key))
 	return strings.HasPrefix(normalized, "e2e_") || strings.HasPrefix(normalized, "e2e-")
@@ -145,14 +157,38 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Haetaan usage_explanation-kontekstit source-recordeista puuttuville avaimille
+	// Haetaan usage_explanation-kontekstit source-recordeista puuttuville avaimille.
+	// Uuden taulun otsikkoavaimilla lähderiviä ei vielä voi olla, joten niille
+	// rakennetaan täsmällinen konteksti nykyisestä taulumetadatasta ennen AI-kutsua.
 	descriptions := fetchUsageExplanations(requestData.MissingKeys)
+	dynamicContexts := fetchDynamicDatasetTranslationContexts(requestData.MissingKeys)
+	for _, dynamicContext := range dynamicContexts {
+		if strings.TrimSpace(descriptions[dynamicContext.LangKey]) == "" {
+			descriptions[dynamicContext.LangKey] = dynamicContext.UsageExplanation
+		}
+	}
+	contextualKeys, skippedWithoutContext := filterTranslationKeysWithUsageExplanation(
+		requestData.MissingKeys,
+		descriptions,
+	)
+	if len(skippedWithoutContext) > 0 {
+		log.Printf(
+			"[GenerateTranslations] skipping %d key(s) without usage explanation: %v",
+			len(skippedWithoutContext),
+			skippedWithoutContext,
+		)
+	}
+	if len(contextualKeys) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]AiTranslationItem{})
+		return
+	}
 
 	// Haetaan käännökset AI:sta (molemmille kielille)
 	items, err := getAllTranslationsFromAI(
 		r.Context(),
 		systemMessage,
-		requestData.MissingKeys,
+		contextualKeys,
 		descriptions,
 	)
 	if err != nil {
@@ -170,13 +206,139 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Tallennetaan lähdetiedot system_lang_key_sources -tauluun
-	saveLangKeySources(requestData.MissingKeys, requestData.Sources)
+	saveLangKeySources(contextualKeys, requestData.Sources)
+	saveDynamicDatasetTranslationContexts(dynamicContexts)
 
 	w.Header().Set("Content-Type", "application/json")
 	// Palautetaan taulukko samassa muodossa, esim.
 	// [ { "lang_key": "...", "en": "...", "fi": "..."}, ... ]
 	if err := json.NewEncoder(w).Encode(items); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("\033[31merror: %s\033[0m", err.Error()))
+	}
+}
+
+func filterTranslationKeysWithUsageExplanation(keys []string, descriptions map[string]string) ([]string, []string) {
+	contextual := make([]string, 0, len(keys))
+	skipped := make([]string, 0)
+	for _, key := range keys {
+		if strings.TrimSpace(descriptions[key]) == "" {
+			skipped = append(skipped, key)
+			continue
+		}
+		contextual = append(contextual, key)
+	}
+	return contextual, skipped
+}
+
+func fetchDynamicDatasetTranslationContexts(keys []string) []dynamicDatasetTranslationContext {
+	rows, err := backend.Db.Query(`
+		SELECT table_name, COALESCE(NULLIF(display_name, ''), table_name)
+		FROM system_db_tables
+		WHERE COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
+		ORDER BY table_name`)
+	if err != nil {
+		log.Printf("[fetchDynamicDatasetTranslationContexts] error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	datasets := make([]datasetTranslationIdentity, 0)
+	for rows.Next() {
+		var dataset datasetTranslationIdentity
+		if err := rows.Scan(&dataset.TableName, &dataset.DisplayName); err != nil {
+			log.Printf("[fetchDynamicDatasetTranslationContexts] scan error: %v", err)
+			continue
+		}
+		datasets = append(datasets, dataset)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("[fetchDynamicDatasetTranslationContexts] rows error: %v", err)
+	}
+	return buildDynamicDatasetTranslationContexts(keys, datasets)
+}
+
+func buildDynamicDatasetTranslationContexts(
+	keys []string,
+	datasets []datasetTranslationIdentity,
+) []dynamicDatasetTranslationContext {
+	requested := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		requested[strings.TrimSpace(key)] = true
+	}
+
+	contexts := make([]dynamicDatasetTranslationContext, 0)
+	for _, dataset := range datasets {
+		datasetName := strings.TrimSpace(dataset.TableName)
+		if datasetName == "" {
+			continue
+		}
+		displayName := strings.TrimSpace(dataset.DisplayName)
+		if displayName == "" {
+			displayName = datasetName
+		}
+		candidates := []dynamicDatasetTranslationContext{
+			{
+				LangKey:     datasetName + "_front_page",
+				DatasetName: datasetName,
+				FieldName:   "title",
+				UsageExplanation: fmt.Sprintf(
+					"Visible page heading for the dataset %q. Use the human-facing dataset name itself; do not include technical identifiers or the words 'front page'.",
+					displayName,
+				),
+			},
+			{
+				LangKey:     "search_slogan_" + datasetName,
+				DatasetName: datasetName,
+				FieldName:   "slogan",
+				UsageExplanation: fmt.Sprintf(
+					"Short, natural subtitle below the page heading for the dataset %q. Describe what the visitor can browse or find; do not expose the translation key or call it a search slogan.",
+					displayName,
+				),
+			},
+			{
+				LangKey:     "search_for_" + datasetName,
+				DatasetName: datasetName,
+				FieldName:   "search_placeholder",
+				UsageExplanation: fmt.Sprintf(
+					"Concise placeholder inside the text-search field for the dataset %q. Use an action phrase such as 'Search travel information'; do not expose the technical table name.",
+					displayName,
+				),
+			},
+		}
+		for _, candidate := range candidates {
+			if requested[candidate.LangKey] {
+				contexts = append(contexts, candidate)
+			}
+		}
+	}
+	return contexts
+}
+
+func saveDynamicDatasetTranslationContexts(contexts []dynamicDatasetTranslationContext) {
+	for _, dynamicContext := range contexts {
+		if _, err := backend.Db.Exec(`
+			INSERT INTO system_lang_key_sources (
+				lang_key_id, source_type, source_high, source_low,
+				last_seen, usage_explanation
+			)
+			SELECT id, 'dataset_header', $2, $3, CURRENT_DATE, $4
+			FROM system_lang_keys
+			WHERE lang_key = $1
+			ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
+			SET source_low = EXCLUDED.source_low,
+			    last_seen = CURRENT_DATE,
+			    usage_explanation = EXCLUDED.usage_explanation`,
+			dynamicContext.LangKey,
+			dynamicContext.DatasetName,
+			dynamicContext.FieldName,
+			dynamicContext.UsageExplanation,
+		); err != nil {
+			log.Printf(
+				"[saveDynamicDatasetTranslationContexts] key=%s error: %v",
+				dynamicContext.LangKey,
+				err,
+			)
+		}
 	}
 }
 

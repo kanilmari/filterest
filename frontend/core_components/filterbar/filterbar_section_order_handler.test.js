@@ -75,7 +75,7 @@ describe("normalizeFilterbarSectionOrder", () => {
 });
 
 describe("normalizeFilterbarSectionCollapsed", () => {
-    test("keeps true known keys and drops unknown or open entries", () => {
+    test("keeps explicit open and collapsed states for known sections", () => {
         expect(normalizeFilterbarSectionCollapsed({
             filters: true,
             tools: false,
@@ -83,6 +83,7 @@ describe("normalizeFilterbarSectionCollapsed", () => {
             chat: true,
         })).toEqual({
             filters: true,
+            tools: false,
             chat: true,
         });
     });
@@ -91,12 +92,15 @@ describe("normalizeFilterbarSectionCollapsed", () => {
         expect(normalizeFilterbarSectionCollapsed()).toEqual({});
     });
 
-    test("remote layout never reopens initially closed sidebar sections", async () => {
+    test("remote layout restores both open and collapsed sidebar sections", async () => {
         const container = document.createElement("div");
         const filters = document.createElement("section");
         filters.dataset.filterbarSectionKey = "filters";
         filters.classList.add("is-collapsed");
-        filters.expand = vi.fn();
+        filters.expand = vi.fn(() => {
+            filters.classList.remove("is-collapsed");
+            return Promise.resolve();
+        });
         filters.collapse = vi.fn();
 
         const tools = document.createElement("section");
@@ -113,9 +117,25 @@ describe("normalizeFilterbarSectionCollapsed", () => {
             tools: true,
         });
 
-        expect(filters.expand).not.toHaveBeenCalled();
-        expect(filters.classList.contains("is-collapsed")).toBe(true);
+        expect(filters.expand).toHaveBeenCalledWith({ animate: false });
+        expect(filters.classList.contains("is-collapsed")).toBe(false);
         expect(tools.collapse).toHaveBeenCalledWith({ animate: false });
         expect(tools.classList.contains("is-collapsed")).toBe(true);
+    });
+
+    test("legacy layouts with missing open entries keep component defaults", async () => {
+        const container = document.createElement("div");
+        const filters = document.createElement("section");
+        filters.dataset.filterbarSectionKey = "filters";
+        filters.classList.add("is-collapsed");
+        filters.expand = vi.fn();
+        filters.collapse = vi.fn();
+        container.appendChild(filters);
+
+        await applySectionCollapsedState(container, {});
+
+        expect(filters.expand).not.toHaveBeenCalled();
+        expect(filters.collapse).not.toHaveBeenCalled();
+        expect(filters.classList.contains("is-collapsed")).toBe(true);
     });
 });

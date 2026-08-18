@@ -228,214 +228,6 @@
   will-change: margin-right;
 }
 
-.dataset-shared-topbar {
-  --dataset-shared-topbar-padding-block: 12px;
-  --dataset-shared-topbar-padding-inline: 12px;
-  --dataset-shared-topbar-transition-duration: 260ms;
-  --filterbar-search-only-max-width: 600px;
-  display: grid;
-  grid-template-rows: 0fr;
-  flex: 0 0 auto;
-  padding: 0 var(--dataset-shared-topbar-padding-inline);
-  background: color-mix(in srgb, var(--filter_panel_bg) 94%, transparent);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid transparent;
-  box-shadow: none;
-  position: relative;
-  z-index: 2;
-  overflow: hidden;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-8px);
-  transition:
-    grid-template-rows var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    padding-top var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    padding-bottom var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 180ms ease,
-    transform var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    border-color var(--dataset-shared-topbar-transition-duration) ease,
-    box-shadow var(--dataset-shared-topbar-transition-duration) ease,
-    visibility 0s linear var(--dataset-shared-topbar-transition-duration);
-  will-change: grid-template-rows, padding-top, padding-bottom, opacity, transform;
-}
-
-.dataset-shared-topbar[hidden] {
-  display: none;
-}
-
-.dataset-shared-topbar--visible {
-  grid-template-rows: 1fr;
-  padding-top: var(--dataset-shared-topbar-padding-block);
-  padding-bottom: var(--dataset-shared-topbar-padding-block);
-  border-bottom-color: var(--filter_panel_border);
-  box-shadow: var(--fw-shadow-soft);
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateY(0);
-  transition:
-    grid-template-rows var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    padding-top var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    padding-bottom var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 180ms ease,
-    transform var(--dataset-shared-topbar-transition-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    border-color var(--dataset-shared-topbar-transition-duration) ease,
-    box-shadow var(--dataset-shared-topbar-transition-duration) ease,
-    visibility 0s linear 0s;
-}
-
-.dataset-shared-topbar__inner {
-  display: grid;
-  grid-template-columns:
-    minmax(12rem, 1fr)
-    minmax(16rem, var(--filterbar-search-only-max-width, 600px))
-    auto;
-  align-items: center;
-  gap: 18px;
-  width: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* The collapsed 0fr transition needs clipping, but the visible bar already
-   provides 12px of outer padding for the menu button's label overhang. */
-.dataset-shared-topbar--visible .dataset-shared-topbar__inner {
-  overflow: visible;
-}
-
-.dataset-shared-topbar__slot {
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-}
-
-.dataset-shared-topbar__slot--start {
-  justify-content: flex-start;
-}
-
-.dataset-shared-topbar__slot--end {
-  justify-content: flex-end;
-}
-
-.dataset-shared-topbar__menu-slot {
-  display: flex;
-  flex: 0 0 44px;
-  align-items: center;
-  justify-content: center;
-  /* 8px here + the title's 10px inset leaves 12px after the DEV badge's 6px overhang. */
-  margin-inline-end: 8px;
-}
-
-.dataset-shared-topbar__menu-slot[hidden] {
-  display: none;
-}
-
-.dataset-shared-topbar__menu-button {
-  --navbar-control-radius: 8px;
-  position: relative;
-  display: flex;
-  flex: 0 0 44px;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 44px;
-  height: 44px;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--border_color);
-  border-radius: var(--navbar-control-radius);
-  color: var(--button_text_color);
-  background-color: var(--button_bg_color);
-  box-shadow: var(--fw-shadow-raised);
-  cursor: pointer;
-  appearance: none;
-}
-
-.dataset-shared-topbar__menu-button:hover,
-.dataset-shared-topbar__menu-button:focus-visible {
-  border-color: rgb(0 255 136 / 0.3);
-  background: var(--button_hover_bg_color);
-}
-
-.dataset-shared-topbar__menu-button:active {
-  transform: scale(0.95);
-}
-
-.dataset-shared-topbar__dataset-title {
-  min-width: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-  padding-inline-start: 10px;
-  color: var(--text_color);
-  font-size: 2.15rem;
-  font-weight: 700;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dataset-shared-topbar__center {
-  min-width: 0;
-  width: 100%;
-  justify-self: end;
-}
-
-.dataset-shared-topbar__center > .dataset-search-panel {
-  width: 100%;
-  max-width: var(--filterbar-search-only-max-width, 600px);
-  margin: 0;
-}
-
-.dataset-shared-topbar__article-close {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  color: var(--text_color);
-  background: transparent;
-  cursor: pointer;
-  font-size: 2.6rem;
-  line-height: 1;
-}
-
-.dataset-shared-topbar__article-close:hover,
-.dataset-shared-topbar__article-close:focus-visible {
-  background: color-mix(in srgb, var(--primary_color) 14%, transparent);
-}
-
-.dataset-shared-topbar__article-close[hidden] {
-  display: none !important;
-}
-
-.tab_parts_container:has(.filterbar-fixed-toggle--exposed) .dataset-shared-topbar__article-close:not([hidden]) {
-  margin-right: 52px;
-}
-
-.shared-topbar-docked-button {
-  position: static !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  transform: none !important;
-  margin: 0 !important;
-  flex: 0 0 44px;
-}
-
-.shared-topbar-docked-button:active {
-  transform: scale(0.95) !important;
-}
-
-.tab_parts_container[data-shared-topbar-visible="true"] .filterbar-panel > .filter-content-inner > .dataset-search-panel {
-  display: none !important;
-}
-
 /* ============================================
    BIG-CARD-OPEN: FILTERBAR BEHAVIOR
    Hero hidden, filterbar hidden by default but
@@ -452,6 +244,8 @@
    offset would only leave an empty strip above the panels. */
 .tab_parts_container:has(.card_view_wrapper.big-card-open) .scrollable_content {
   padding-top: 0;
+  transition: none;
+  will-change: auto;
 }
 
 /* When filterbar IS hidden in big card mode, content takes full width */
@@ -465,10 +259,6 @@
 
 /* Narrow screens: sidebar becomes wider overlay */
 @media (width <= 1099px) {
-  .dataset-shared-topbar {
-    --dataset-shared-topbar-padding-inline: 12px;
-  }
-
   .filterbar-panel:not(.filterbar-panel--wide) {
     width: min(92vw, 520px);
     max-width: min(92vw, 520px);
@@ -484,34 +274,8 @@
   }
 }
 
-@media (width <= 700px) {
-  .dataset-shared-topbar__inner {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    gap: 8px;
-  }
-
-  .dataset-shared-topbar__center {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: stretch;
-  }
-
-  .dataset-shared-topbar__dataset-title {
-    font-size: 1.7rem;
-  }
-}
-
 /* Very small screens: full-width overlay */
 @media (width <= 480px) {
-  .dataset-shared-topbar {
-    --dataset-shared-topbar-padding-inline: 10px;
-  }
-
-  .dataset-shared-topbar__inner {
-    gap: 8px;
-  }
-
   .filterbar-panel:not(.filterbar-panel--wide) {
     left: 0;
     right: 0;
@@ -531,13 +295,6 @@
 
   .filterbar-panel-body {
     padding-bottom: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dataset-shared-topbar,
-  .dataset-shared-topbar--visible {
-    transition-duration: 1ms;
   }
 }
 

@@ -1,0 +1,49 @@
+/* navbar_theme_contrast.css
+ * Defines theme-aware navbar structure and administration-tree contrast.
+ * Bridges shared theme variables with the navbar layout's semantic tokens.
+ * Exists so light mode stays legible without growing the legacy layout file.
+ */
+
+#navbar {
+    --navbar-structural-border: var(--border_color);
+    --admin-tree-accent: color-mix(in srgb, var(--text_color) 78%, var(--primary_color) 22%);
+    --admin-tree-surface: color-mix(in srgb, var(--bg_color_extreme) 91%, var(--primary_color) 9%);
+    --admin-tree-surface-hover: color-mix(in srgb, var(--bg_color_extreme) 82%, var(--primary_color) 18%);
+    --admin-tree-border: color-mix(in srgb, var(--navbar-structural-border) 68%, var(--primary_color) 32%);
+    --database-tree-leaf-surface: color-mix(in srgb, var(--bg_color_extreme) 86%, var(--text_color) 14%);
+    --database-tree-leaf-surface-hover: color-mix(in srgb, var(--bg_color_extreme) 76%, var(--text_color) 24%);
+    --database-tree-leaf-border: color-mix(in srgb, var(--navbar-structural-border) 60%, var(--text_color) 40%);
+}
+
+/* Database leaves, including the datasets under Other tables, use
+   .general_button_nav rather than the separate admin-tools leaf class. */
+#navbar #nav_tree .general_button_nav {
+    background-color: var(--database-tree-leaf-surface);
+    border: 1px solid var(--database-tree-leaf-border);
+    border-left-width: 3px;
+    border-radius: var(--border_radius_small, 4px);
+    color: var(--text_color);
+}
+
+#navbar #nav_tree .general_button_nav:hover {
+    background-color: var(--database-tree-leaf-surface-hover);
+    border-color: var(--admin-tree-accent);
+    color: var(--text_color);
+}
+
+#navbar #nav_tree .general_button_nav.active {
+    background-color: var(--database-tree-leaf-surface-hover);
+    border-color: var(--admin-tree-accent);
+    color: var(--text_color);
+    outline-color: var(--admin-tree-accent);
+}
+
+body.light-mode #navbar {
+    --navbar-structural-border: color-mix(in srgb, var(--border_color) 62%, var(--text_color) 38%);
+}
+
+@media (prefers-color-scheme: light) {
+    body:not(.dark-mode) #navbar {
+        --navbar-structural-border: color-mix(in srgb, var(--border_color) 62%, var(--text_color) 38%);
+    }
+}

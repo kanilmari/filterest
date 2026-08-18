@@ -10,6 +10,7 @@ const {
     createImageElementMock,
     createSeededAvatarMock,
     createRowArticleKeyValueElementMock,
+    createRowArticleNavigableElementMock,
     createTicketStatusBadgeMock,
     isTicketStatusFieldMock,
     resolveRowArticleRelationDetailEntriesMock,
@@ -17,6 +18,7 @@ const {
     createImageElementMock: vi.fn(),
     createSeededAvatarMock: vi.fn(),
     createRowArticleKeyValueElementMock: vi.fn(),
+    createRowArticleNavigableElementMock: vi.fn(),
     createTicketStatusBadgeMock: vi.fn(),
     isTicketStatusFieldMock: vi.fn(),
     resolveRowArticleRelationDetailEntriesMock: vi.fn((entries) => entries),
@@ -76,7 +78,7 @@ vi.mock('./row_article_ui_handler.js', () => ({
     createTwoLineKeyValueElement: vi.fn(() => document.createElement('div')),
     createRowArticleKeyValueElement: createRowArticleKeyValueElementMock,
     createNavigableTwoLineElement: vi.fn(() => document.createElement('div')),
-    createRowArticleNavigableElement: vi.fn(() => document.createElement('div')),
+    createRowArticleNavigableElement: createRowArticleNavigableElementMock,
     resolveLocalizedValue: vi.fn((value) => String(value ?? '')),
     resolveRowArticleLocalizedValue: vi.fn((value) => String(value ?? '')),
 }));
@@ -104,6 +106,7 @@ describe('big_card_content_builder', () => {
         createImageElementMock.mockReset();
         createSeededAvatarMock.mockReset();
         createRowArticleKeyValueElementMock.mockReset();
+        createRowArticleNavigableElementMock.mockReset();
         createTicketStatusBadgeMock.mockReset();
         createTicketStatusBadgeMock.mockImplementation(() => document.createElement('div'));
         isTicketStatusFieldMock.mockReset();
@@ -122,6 +125,7 @@ describe('big_card_content_builder', () => {
 
         createSeededAvatarMock.mockResolvedValue(document.createElement('div'));
         createRowArticleKeyValueElementMock.mockImplementation(() => document.createElement('div'));
+        createRowArticleNavigableElementMock.mockImplementation(() => document.createElement('div'));
     });
 
     test('keeps the legacy big-card export mapped to the row article builder', () => {
@@ -418,5 +422,26 @@ describe('big_card_content_builder', () => {
             'hide'
         );
         expect(createRowArticleKeyValueElementMock).not.toHaveBeenCalled();
+    });
+
+    test('marks raw details-link fields for external HTTP(S)-only navigation', async () => {
+        await buildRowArticleContent(
+            { id: 5, website: 'https://example.test' },
+            'orders',
+            { website: { card_element: 'details_link' } },
+            ['website'],
+            'seed-1',
+            '',
+            false
+        );
+
+        expect(createRowArticleNavigableElementMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                value: 'https://example.test',
+                href: 'https://example.test',
+                externalHttpOnly: true,
+                openPrimaryInNewTab: true,
+            })
+        );
     });
 });

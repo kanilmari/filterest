@@ -7,28 +7,24 @@ package auth
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/hex"
 	"os"
 )
 
-var fingerprintHMACKey []byte
-
-func initFingerprintHMACKey() {
+func currentFingerprintHMACKey() []byte {
 	key := os.Getenv("SESSION_KEY")
 	if key == "" {
 		key = "default-dev-key"
 	}
-	h := sha256.Sum256([]byte(key + ":fingerprint"))
-	fingerprintHMACKey = h[:]
+	return e_sessions.DeriveCurrentAuthKey(key, "fingerprint-hmac")
 }
 
 // HMACFingerprint returns the HMAC-SHA256 of the raw fingerprint value using
-// a key derived from SESSION_KEY. The result is a hex-encoded string.
+// an instance- or replica-pool-scoped key derived from SESSION_KEY. The result
+// is a hex-encoded string.
 func HMACFingerprint(rawFingerprint string) string {
-	if len(fingerprintHMACKey) == 0 {
-		initFingerprintHMACKey()
-	}
-	mac := hmac.New(sha256.New, fingerprintHMACKey)
+	mac := hmac.New(sha256.New, currentFingerprintHMACKey())
 	mac.Write([]byte(rawFingerprint))
 	return hex.EncodeToString(mac.Sum(nil))
 }

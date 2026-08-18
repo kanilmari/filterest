@@ -28,6 +28,10 @@ type ForeignKeyDefinition struct {
 	ReferencingColumn string `json:"referencingColumn"`
 	ReferencedTable   string `json:"referencedTable"`
 	ReferencedColumn  string `json:"referencedColumn"`
+	// CascadeDelete is opt-in because ordinary user-defined relationships keep
+	// their existing restrict behavior. Owned child rows such as shared assets
+	// set it explicitly so deleting the parent cannot strand internal media rows.
+	CascadeDelete bool `json:"cascadeDelete,omitempty"`
 }
 
 func CreateTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition) error {
@@ -63,6 +67,7 @@ func CreateTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 			ReferencingColumn: sRefCol,
 			ReferencedTable:   sRefTable,
 			ReferencedColumn:  sRefColumn,
+			CascadeDelete:     fk.CascadeDelete,
 		}
 	}
 
@@ -121,6 +126,9 @@ func CreateTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 			fk.ReferencedTable,
 			fk.ReferencedColumn,
 		))
+		if fk.CascadeDelete {
+			query_builder.WriteString(" ON DELETE CASCADE")
+		}
 	}
 
 	query_builder.WriteString(");")

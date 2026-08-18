@@ -29,8 +29,8 @@ test.describe('Visual Guardian Capture', () => {
       await takeGuardianScreenshot(page, testInfo, 'desktop_navbar_open');
 
       // 2. Desktop Navbar Closed
-      const menuButton = page.locator('#showMenuButton');
-      if (await menuButton.isVisible()) {
+      const menuButton = page.locator('#hideMenuButton[aria-hidden="false"]');
+      if (await menuButton.count()) {
           await menuButton.click();
           await waitForVisualGuardianIdle(page);
           await takeGuardianScreenshot(page, testInfo, 'desktop_navbar_closed');
@@ -50,8 +50,10 @@ test.describe('Visual Guardian Capture', () => {
       await takeGuardianScreenshot(page, testInfo, 'laptop_navbar_closed');
 
       // 2. Laptop Navbar Open (Overlay)
-      const showButton = page.locator('#showMenuButton');
-      if (await showButton.isVisible()) {
+      const showButton = page
+        .locator('[data-navbar-menu-button="true"][aria-hidden="false"], #showMenuButton[aria-hidden="false"]')
+        .first();
+      if (await showButton.count()) {
           await showButton.click();
           await waitForVisualGuardianIdle(page);
           await takeGuardianScreenshot(page, testInfo, 'laptop_navbar_open');
@@ -82,8 +84,10 @@ test.describe('Visual Guardian Capture', () => {
       await takeGuardianScreenshot(page, testInfo, 'mobile_view');
       
       // 2. Mobile Menu Open
-      const showButton = page.locator('#showMenuButton');
-      if (await showButton.isVisible()) {
+      const showButton = page
+        .locator('[data-navbar-menu-button="true"][aria-hidden="false"], #showMenuButton[aria-hidden="false"]')
+        .first();
+      if (await showButton.count()) {
           await showButton.click();
           await waitForVisualGuardianIdle(page);
           await takeGuardianScreenshot(page, testInfo, 'mobile_menu_open');

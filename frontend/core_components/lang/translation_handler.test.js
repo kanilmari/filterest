@@ -51,6 +51,7 @@ describe('translatePage', () => {
                 chat_for_table: 'Keskustelu – $table_name',
                 system_users: 'Käyttäjät',
             }),
+            yue: Promise.resolve({}),
         };
     });
 
@@ -121,6 +122,10 @@ describe('translatePage', () => {
         await translatePage('en');
         expect(viewButton.textContent).toBe('Article');
         expect(heading.textContent).toBe('Views and presentations');
+
+        await translatePage('yue');
+        expect(viewButton.textContent).toBe('\u6587\u7ae0');
+        expect(heading.textContent).toBe('\u8996\u5716\u8207\u5c55\u793a\u65b9\u5f0f');
     });
 
     test('uses explicit lang variable attributes for placeholder translations', async () => {

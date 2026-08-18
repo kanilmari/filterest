@@ -204,6 +204,28 @@ export async function generate_table_creation_view(container) {
     form.appendChild(permissionsContainer);
     // ----------------
 
+    const capabilitiesContainer = document.createElement('div');
+    capabilitiesContainer.className = 'table-capabilities-section';
+
+    const enableImagesLabel = document.createElement('label');
+    enableImagesLabel.style.display = 'flex';
+    enableImagesLabel.style.alignItems = 'center';
+    enableImagesLabel.style.gap = '5px';
+    const enableImagesCheckbox = document.createElement('input');
+    enableImagesCheckbox.type = 'checkbox';
+    enableImagesCheckbox.id = 'enable_images';
+    enableImagesCheckbox.name = 'enable_images';
+    enableImagesCheckbox.checked = true;
+    enableImagesCheckbox.defaultChecked = true;
+    enableImagesCheckbox.dataset.testid = 'create-table-enable-images';
+    const enableImagesText = document.createElement('span');
+    enableImagesText.dataset.langKey = 'create_table_enable_images';
+    enableImagesText.textContent = getTranslationForKey('create_table_enable_images')
+        || 'Enable image uploads for this table';
+    enableImagesLabel.append(enableImagesCheckbox, enableImagesText);
+    capabilitiesContainer.appendChild(enableImagesLabel);
+    form.appendChild(capabilitiesContainer);
+
     // Lähetä-painike
     const submitButton = document.createElement('button');
     submitButton.type = 'submit';
@@ -542,6 +564,7 @@ async function submitTableCreationForm(form) {
         grantUsersRead: form.querySelector('#grant_users_read').checked,
         grantGuestsRead: form.querySelector('#grant_guests_read').checked,
         preventDeletion: form.querySelector('#prevent_deletion').checked,
+        enableImages: form.querySelector('#enable_images').checked,
         folderId: formData.get('table_folder_id'),
         createFolderName: formData.get('create_table_new_folder_name'),
         createFolderParentId: formData.get('create_table_new_folder_parent_id'),
@@ -557,6 +580,23 @@ async function submitTableCreationForm(form) {
             method: 'POST',
             body_data: result.requestData,
         });
+
+        if (result.enableImages) {
+            try {
+                await endpoint_router('enableImageAssetLinking', {
+                    method: 'POST',
+                    body_data: {
+                        parent_table: result.tableName,
+                    },
+                });
+            } catch (imageSetupError) {
+                console.warn('Table created, but image capability setup failed:', imageSetupError);
+                showWarningToast(
+                    getTranslationForKey('table_created_image_setup_failed')
+                    || 'The table was created, but image uploads could not be enabled. You can retry from Asset linking.'
+                );
+            }
+        }
 
         showSuccessToast(getTranslationForKey('table_created_successfully') || 'Taulu luotu onnistuneesti!');
         form.reset();

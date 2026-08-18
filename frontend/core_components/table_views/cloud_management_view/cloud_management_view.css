@@ -368,7 +368,7 @@
     font-size: 12px;
 }
 
-@media (max-width: 760px) {
+@media (width <= 760px) {
     .cloud-management-view {
         padding: 6px;
     }

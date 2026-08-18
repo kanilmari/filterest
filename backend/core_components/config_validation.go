@@ -5,6 +5,7 @@
 package backend
 
 import (
+	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
 	"log"
 	"os"
@@ -78,6 +79,9 @@ func ValidateConfig() error {
 	if missing != nil {
 		return fmt.Errorf("missing required environment variables:\n  %s",
 			strings.Join(missing, "\n  "))
+	}
+	if err := e_sessions.ValidateAuthCookieEnvironment(); err != nil {
+		return fmt.Errorf("invalid authentication-cookie configuration: %w", err)
 	}
 
 	return nil

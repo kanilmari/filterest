@@ -9,8 +9,24 @@ const DEFAULT_LANGUAGE = 'en';
 function normalizeLanguageCode(lang) {
     const normalized = String(lang || '').trim().toLowerCase().replaceAll('_', '-');
     if (normalized === 'yue' || normalized.startsWith('yue-')) return 'yue';
-    if (normalized === 'zh-hk' || normalized.startsWith('zh-hant')) return 'yue';
-    if (normalized === 'zh' || normalized.startsWith('zh-')) return 'ch';
+    if (normalized === 'ch') return 'ch';
+    if (
+        normalized === 'zh-hk'
+        || normalized === 'zh-mo'
+        || normalized.startsWith('zh-hant-hk')
+        || normalized.startsWith('zh-hant-mo')
+    ) return 'zh-HK';
+    if (
+        normalized === 'zh-tw'
+        || normalized === 'zh-hant'
+        || normalized.startsWith('zh-hant-tw')
+    ) return 'zh-TW';
+    if (
+        normalized === 'zh'
+        || normalized === 'zh-cn'
+        || normalized === 'zh-sg'
+        || normalized.startsWith('zh-hans')
+    ) return 'zh-CN';
     const primary = normalized.split('-')[0];
     return /^[a-z]{2,3}$/.test(primary) ? primary : '';
 }
@@ -85,7 +101,7 @@ export function getLanguage() {
  * @returns {string}
  */
 export function getLanguageWithBrowserFallback() {
-    return getLanguage() || getBrowserLanguageCandidates()[0] || DEFAULT_LANGUAGE;
+    return normalizeLanguageCode(getLanguage()) || getBrowserLanguageCandidates()[0] || DEFAULT_LANGUAGE;
 }
 
 /**
@@ -93,5 +109,6 @@ export function getLanguageWithBrowserFallback() {
  * @param {string} lang - language code (e.g., 'en', 'fi', 'yue')
  */
 export function setLanguage(lang) {
-    localStorage.setItem(STORAGE_KEY, lang);
+    const normalized = normalizeLanguageCode(lang);
+    localStorage.setItem(STORAGE_KEY, normalized || DEFAULT_LANGUAGE);
 }

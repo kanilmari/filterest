@@ -59,6 +59,23 @@ describe("card_detail_tile_builder", () => {
         expect(container.querySelector(".card_detail_tile_icon svg")).not.toBeNull();
         expect(link?.getAttribute("href")).toBe("https://example.test");
         expect(link?.getAttribute("target")).toBe("_blank");
+        expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+    });
+
+    test("renders unsafe semantic link values as non-clickable text", () => {
+        const container = document.createElement("div");
+
+        renderModernCardDetails(container, [{
+            column: "website_url",
+            label: "Website",
+            rawValue: "javascript:alert(1)",
+            isLink: true,
+        }]);
+
+        expect(container.querySelector(".card_detail_tile_value_link")).toBeNull();
+        expect(container.querySelector(".card_detail_tile_value")?.textContent).toBe(
+            "javascript:alert(1)"
+        );
     });
 
     test("keeps icon-only labels accessible through tile metadata", () => {

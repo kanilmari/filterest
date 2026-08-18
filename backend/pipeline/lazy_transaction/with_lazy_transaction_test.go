@@ -148,7 +148,12 @@ func installRequestTransactionTestRuntime(t *testing.T, db *sql.DB) {
 	e_sessions.Store = nil
 	t.Setenv("SESSION_KEY", "12345678901234567890123456789012")
 	t.Setenv("SESSION_SECRET_KEY", "abcdefghijklmnopqrstuvwxyz123456")
-	t.Setenv("INSTANCE_NAME", "")
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("INSTANCE_NAME", "lazy-transaction-test")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "lazy_transaction_test")
 	e_sessions.InitSessionStore()
 
 	t.Cleanup(func() {

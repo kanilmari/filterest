@@ -45,7 +45,7 @@
   transform: translateY(-50%);
   pointer-events: none;
   color: var(--text_color);
-  background-color: currentColor;
+  background-color: currentcolor;
 }
 
 .msd-clear-btn {
@@ -67,7 +67,7 @@
   z-index: calc(var(--z-filterbar, 100001) + 10);
   transition: opacity 0.2s ease-out;
   opacity: 1;
-  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
+  box-shadow: 5px 5px 15px rgb(0 0 0 / 0.4);
   border-radius: var(--border_radius_small);
   display: flex;
   flex-direction: column;

@@ -83,6 +83,9 @@ export interface SaveChildTabConfigRequest {
 export interface CardVisibilityColumn {
     column_uid: number;
     column_name: string;
+    co_number: number;
+    hide_everywhere_locked: boolean;
+    hide_everywhere_lock_reason: string;
     card_element: string;
     card_detail_label_mode: string;
     card_detail_icon_svg: string;

@@ -18,6 +18,56 @@ import (
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
 
+const addRowColumnsWithTypesQuery = `
+    SELECT
+        c.column_name,
+        c.data_type,
+        c.is_nullable,
+        c.column_default,
+        c.is_identity,
+        c.generation_expression,
+        fk_info.foreign_table_schema,
+        fk_info.foreign_table_name,
+        fk_info.foreign_column_name,
+        c.udt_name,
+		fk_rel.insert_new_target_with_source,
+		fk_rel.insert_new_source_with_target,
+		fk_rel.source_insert_specs,
+		fk_rel.target_insert_specs,
+		scd.insertable
+    FROM information_schema.columns c
+    JOIN system_db_tables sdt
+        ON sdt.table_uid = $1 AND sdt.table_name = c.table_name
+    LEFT JOIN system_column_details scd
+        ON scd.table_uid = sdt.table_uid AND scd.column_name = c.column_name
+    LEFT JOIN (
+        SELECT
+            kcu.column_name,
+            kcu.table_name AS column_table_name,
+            ccu.table_schema AS foreign_table_schema,
+            ccu.table_name AS foreign_table_name,
+            ccu.column_name AS foreign_column_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+        WHERE
+            tc.constraint_type = 'FOREIGN KEY'
+    ) AS fk_info
+        ON c.column_name = fk_info.column_name
+        AND c.table_name = fk_info.column_table_name
+    LEFT JOIN system_foreign_key_relations_1_m fk_rel
+        ON fk_rel.source_table_uid = sdt.table_uid AND c.column_name = fk_rel.source_column_name
+    WHERE
+        c.table_schema = $2
+        AND sdt.table_uid = $1
+        AND COALESCE(scd.hide_everywhere, false) = false
+    ORDER BY
+        scd.co_number,
+        c.ordinal_position;
+`
+
 // GetAddRowColumnsHandlerWrapper on HTTP-rajapintafunktio, joka hakee lisättävän rivin saraketiedot.
 // Se ottaa vastaan tauluparametrin, jonka avulla ohjataan varsinaiseen käsittelijään.
 func GetAddRowColumnsHandlerWrapper(w http.ResponseWriter, r *http.Request) {
@@ -114,56 +164,7 @@ ColLoop:
 
 // getAddRowColumnsWithTypes hakee saraketiedot tietokannan information_schema.columns -näkymästä.
 func getAddRowColumnsWithTypes(tableUID, schemaName string) ([]dtt_models.AddRowColumnInfo, error) {
-	query := `
-    SELECT
-        c.column_name,
-        c.data_type,
-        c.is_nullable,
-        c.column_default,
-        c.is_identity,
-        c.generation_expression,
-        fk_info.foreign_table_schema,
-        fk_info.foreign_table_name,
-        fk_info.foreign_column_name,
-        c.udt_name,
-		fk_rel.insert_new_target_with_source,
-		fk_rel.insert_new_source_with_target,
-		fk_rel.source_insert_specs,
-		fk_rel.target_insert_specs,
-		scd.insertable
-    FROM information_schema.columns c
-    JOIN system_db_tables sdt
-        ON sdt.table_uid = $1 AND sdt.table_name = c.table_name
-    LEFT JOIN system_column_details scd
-        ON scd.table_uid = sdt.table_uid AND scd.column_name = c.column_name
-    LEFT JOIN (
-        SELECT
-            kcu.column_name,
-            kcu.table_name AS column_table_name,
-            ccu.table_schema AS foreign_table_schema,
-            ccu.table_name AS foreign_table_name,
-            ccu.column_name AS foreign_column_name
-        FROM information_schema.table_constraints AS tc
-        JOIN information_schema.key_column_usage AS kcu
-            ON tc.constraint_name = kcu.constraint_name
-        JOIN information_schema.constraint_column_usage AS ccu
-            ON ccu.constraint_name = tc.constraint_name
-        WHERE
-            tc.constraint_type = 'FOREIGN KEY'
-    ) AS fk_info
-        ON c.column_name = fk_info.column_name
-        AND c.table_name = fk_info.column_table_name
-    LEFT JOIN system_foreign_key_relations_1_m fk_rel
-        ON fk_rel.source_table_uid = sdt.table_uid AND c.column_name = fk_rel.source_column_name
-    WHERE
-        c.table_schema = $2
-        AND sdt.table_uid = $1
-    ORDER BY
-        scd.co_number,
-        c.ordinal_position;
-`
-
-	rows, err := backend.Db.Query(query, tableUID, schemaName)
+	rows, err := backend.Db.Query(addRowColumnsWithTypesQuery, tableUID, schemaName)
 	if err != nil {
 		return nil, err
 	}

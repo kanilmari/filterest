@@ -72,6 +72,13 @@ REQUIRED_APP_DATASET_FIELD_KEYS = frozenset(
     """.split()
 )
 
+REQUIRED_CALENDAR_KEYS = frozenset(
+    """
+    calendar_month calendar_week calendar_day calendar_agenda calendar_today
+    calendar_no_events calendar_no_date_column
+    """.split()
+)
+
 REQUIRED_FIRST_RUN_KEYS = frozenset(
     """
     first_run_admin_title first_run_admin_description first_run_admin_submit
@@ -170,6 +177,14 @@ def test_public_app_language_seed_does_not_duplicate_keys() -> None:
     lang_keys = [row[0] for row in _seed_rows()]
 
     assert len(lang_keys) == len(set(lang_keys))
+
+
+def test_calendar_controls_have_complete_four_language_seed_rows() -> None:
+    rows_by_key = {row[0]: row for row in _seed_rows()}
+
+    assert REQUIRED_CALENDAR_KEYS <= rows_by_key.keys()
+    for lang_key in REQUIRED_CALENDAR_KEYS:
+        assert all(value.strip() for value in rows_by_key[lang_key][1:5])
 
 
 def test_first_run_has_complete_four_language_seed_rows() -> None:

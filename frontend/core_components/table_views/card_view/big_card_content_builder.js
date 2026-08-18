@@ -512,6 +512,7 @@ export async function buildRowArticleContent(
                         href: resolvedHref,
                         openInNewTabHref: d.openInNewTabHref || resolvedHref,
                         openPrimaryInNewTab: !d.href,
+                        externalHttpOnly: !d.href,
                         storedRawValue: d.storedRawValue ?? d.rawValue,
                         labelMeta: resolveRowArticleLabelMetadata(data_types, d),
                     })

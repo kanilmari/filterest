@@ -55,7 +55,14 @@ INSERT INTO public.system_functions (
   (4014, 'dtt_1_row_read.GetResultsVector', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_1_row_read', TRUE, 'public fixture seed', 200, 20, '/api/get-results-vector', FALSE),
   (4015, 'dtt_3_table_read.GetTableViewHandlerWrapper', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_3_table_read', TRUE, 'public fixture seed', 200, 20, '/api/get-metadata', FALSE),
   (4016, 'dtt_2_column_crud.GetTableColumnsHandler', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_2_column_crud', TRUE, 'public fixture seed', 200, 20, '/api/dataset-columns/', FALSE),
-  (4017, 'dtt_1_row_read.GetDynamicChildItemsHandler', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_1_row_read', TRUE, 'public fixture seed', 200, 20, '/api/fetch-dynamic-children', FALSE);
+  (4017, 'dtt_1_row_read.GetDynamicChildItemsHandler', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_1_row_read', TRUE, 'public fixture seed', 200, 20, '/api/fetch-dynamic-children', FALSE),
+  (4020, 'dtt_crud_workflows.CreateTableHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'dtt_crud_workflows', FALSE, 'public fixture seed', 200, 20, '/api/create_dataset', FALSE),
+  (4021, 'dtt_crud_workflows.ModifyColumnsHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'dtt_crud_workflows', TRUE, 'public fixture seed', 200, 20, '/api/modify-columns', FALSE),
+  (4022, 'dtt_3_table_delete.DropTableHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'dtt_3_table_delete', TRUE, 'public fixture seed', 200, 20, '/api/drop-dataset', FALSE),
+  (4023, 'system_table_tools.GetCardVisibilityHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/card-visibility/', FALSE),
+  (4024, 'system_table_tools.UpdateCardVisibilityHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/card-visibility/update', FALSE),
+  (4025, 'lang.GetPublicUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/ui-languages', FALSE),
+  (4026, 'lang.AdminUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/admin/ui-languages', FALSE);
 
 INSERT INTO public.system_group_table_func_rights (
   user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
@@ -67,6 +74,29 @@ JOIN public.system_functions functions
     'system_table_tools.GetGroupedTables',
     'router.GetDatasetAliasesHandler',
     'system_table_tools.GetFilterbarSectionLayoutHandler'
+  );
+
+INSERT INTO public.system_group_table_func_rights (
+  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT 1, functions.id, 'public', 'public fixture seed', NULL
+FROM public.system_functions functions
+WHERE functions.name IN (
+  'dtt_crud_workflows.CreateTableHandler',
+  'system_table_tools.GetCardVisibilityHandler',
+  'system_table_tools.UpdateCardVisibilityHandler',
+  'lang.AdminUILanguagesHandler'
+);
+
+INSERT INTO public.system_group_table_func_rights (
+  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT 1, functions.id, 'public', 'public fixture seed', table_uids.table_uid
+FROM (VALUES (7), (8), (9), (10)) AS table_uids(table_uid)
+JOIN public.system_functions functions
+  ON functions.name IN (
+    'dtt_crud_workflows.ModifyColumnsHandler',
+    'dtt_3_table_delete.DropTableHandler'
   );
 
 INSERT INTO public.system_group_table_func_rights (
@@ -102,6 +132,10 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, creation_spec) VALUES
   ('search_relevance', 'Hakurelevanssi', 'Search relevance', 'Search relevance', 'public fixture seed'),
   ('reset_search', 'Tyhjennä haku', 'Reset search', 'Reset search', 'public fixture seed'),
   ('filters', 'Suodattimet', 'Filters', 'Filters', 'public fixture seed'),
+  ('filterbar_filter_results', 'Suodata tuloksia', 'Filter results', '筛选结果', 'public fixture seed'),
+  ('filterbar_view_content_as', 'Näytä sisältö muodossa…', 'View content as…', '内容显示方式…', 'public fixture seed'),
+  ('filterbar_add_manage_content', 'Lisää ja hallitse sisältöä', 'Add & manage content', '添加和管理内容', 'public fixture seed'),
+  ('filterbar_select_visible_fields', 'Valitse näkyvät kentät', 'Select visible fields', '选择可见字段', 'public fixture seed'),
   ('text_search', 'Tekstihaku', 'Text search', 'Text search', 'public fixture seed'),
   ('created', 'Luotu', 'Created', 'Created', 'public fixture seed'),
   ('updated', 'Päivitetty', 'Updated', 'Updated', 'public fixture seed'),
@@ -176,6 +210,10 @@ SET yue = CASE lang_key
     WHEN 'search_relevance' THEN '搜尋相關度'
     WHEN 'reset_search' THEN '清除搜尋'
     WHEN 'filters' THEN '篩選器'
+    WHEN 'filterbar_filter_results' THEN '篩選結果'
+    WHEN 'filterbar_view_content_as' THEN '內容顯示方式…'
+    WHEN 'filterbar_add_manage_content' THEN '新增及管理內容'
+    WHEN 'filterbar_select_visible_fields' THEN '選擇顯示欄位'
     WHEN 'text_search' THEN '文字搜尋'
     WHEN 'created' THEN '建立時間'
     WHEN 'updated' THEN '更新時間'
@@ -201,7 +239,7 @@ VALUES (
 );
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('8.0.59', 'Filterest generated public bootstrap');
+VALUES ('9.0.0', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -307,7 +345,10 @@ VALUES
   (222, 'system_foreign_key_relations_1_m', 'One-to-many relation metadata', 222, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Foreign-key relations 1:M', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'link'),
   (223, 'system_table_row_view_counts', 'Row-view counters', 223, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Table row view counts', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'counter'),
   (224, 'system_table_views', 'Dataset view configuration', 224, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Table views', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, 'view_name', 'view'),
-  (225, 'system_schema_migrations', 'Applied schema migrations', 225, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Schema migrations', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, 'filename', 'history');
+  (225, 'system_schema_migrations', 'Applied schema migrations', 225, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Schema migrations', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, 'filename', 'history'),
+  (226, 'system_languages', 'Canonical UI-language registry and site availability controls', 226, NULL, 11, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Languages', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'native_name', 'language'),
+  (227, 'system_lang_key_translations', 'Normalized translations for stable UI language keys', 227, NULL, 11, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Language key translations', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'translation', 'language'),
+  (228, 'system_embedding_refresh_jobs', 'Content-free durable queue for refreshing row embeddings after committed data changes', 228, NULL, 8, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Embedding refresh jobs', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, 'refresh');
 
 INSERT INTO public.system_functions
     (id, name, disabled, created, updated, package, specific_table_related,
@@ -373,6 +414,100 @@ VALUES
   (10, 'dokumentaatio_id', 'Document ID', 'integer', 'hidden', 11, NULL, NULL, 'dokumentaatio_id', 'public fixture seed', FALSE, FALSE, TRUE, FALSE, FALSE, NULL),
   (10, 'user_id', 'User ID', 'integer', 'hidden', 12, -10, NULL, NULL, 'public fixture seed', FALSE, FALSE, TRUE, TRUE, FALSE, NULL),
   (10, 'cached_username', 'Username', 'character varying', 'username', 13, -60, NULL, 'username', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, FALSE, NULL);
+
+-- Register every language-registry field for the built-in administration
+-- views. These rows are presentation metadata only; editing remains disabled
+-- until the dedicated Site settings -> Languages UI is implemented.
+INSERT INTO public.system_column_details (
+    table_uid,
+    column_name,
+    column_label,
+    data_type,
+    card_element,
+    co_number,
+    lang_key,
+    creation_spec,
+    show_key_on_card,
+    show_value_on_card,
+    editable_in_ui
+)
+SELECT registered.table_uid,
+       columns.column_name,
+       initcap(replace(columns.column_name, '_', ' ')),
+       columns.data_type,
+       'details',
+       columns.ordinal_position,
+       columns.column_name,
+       'public normalized language metadata seed',
+       FALSE,
+       TRUE,
+       FALSE
+FROM information_schema.columns AS columns
+JOIN public.system_db_tables AS registered
+  ON registered.table_name = columns.table_name
+ AND registered.schema_name = columns.table_schema
+WHERE columns.table_schema = 'public'
+  AND columns.table_name IN (
+      'system_languages',
+      'system_lang_key_translations',
+      'system_embedding_refresh_jobs'
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_column_details AS existing
+      WHERE existing.table_uid = registered.table_uid
+        AND existing.column_name = columns.column_name
+  )
+ORDER BY registered.table_uid, columns.ordinal_position;
+
+-- The embedding switches live on existing metadata tables, so register only
+-- their newly added fields without manufacturing a second metadata source.
+INSERT INTO public.system_column_details (
+    table_uid,
+    column_name,
+    column_label,
+    data_type,
+    card_element,
+    co_number,
+    lang_key,
+    creation_spec,
+    show_key_on_card,
+    show_value_on_card,
+    editable_in_ui
+)
+SELECT registered.table_uid,
+       columns.column_name,
+       initcap(replace(columns.column_name, '_', ' ')),
+       columns.data_type,
+       'details',
+       columns.ordinal_position,
+       columns.column_name,
+       'public embedding policy metadata seed',
+       FALSE,
+       TRUE,
+       FALSE
+FROM information_schema.columns AS columns
+JOIN public.system_db_tables AS registered
+  ON registered.table_name = columns.table_name
+ AND registered.schema_name = columns.table_schema
+WHERE columns.table_schema = 'public'
+  AND (
+      (columns.table_name = 'system_column_details'
+       AND columns.column_name = 'external_embedding_allowed')
+      OR
+      (columns.table_name = 'system_db_tables'
+       AND columns.column_name IN (
+           'external_embedding_enabled',
+           'external_embedding_policy_configured'
+       ))
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_column_details AS existing
+      WHERE existing.table_uid = registered.table_uid
+        AND existing.column_name = columns.column_name
+  )
+ORDER BY registered.table_uid, columns.ordinal_position;
 
 UPDATE public.system_column_details
 SET insertable = FALSE
@@ -717,9 +852,24 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('search_for_cached_username', 'Hae käyttäjänimellä', 'Search by username', '按用户名搜索', '按用戶名稱搜尋', 'public fixture seed'),
   ('sort_images_first', 'Kuvalliset ensin', 'Rows with images first', '有图片的行优先', '有圖片嘅資料列優先', 'public fixture seed'),
 
+  -- Calendar presentation controls are product-owned copy. They must be
+  -- available before the view renders; the public runtime never calls AI to
+  -- repair missing translations.
+  ('calendar_month', 'Kuukausi', 'Month', '月', '月', 'public fixture seed'),
+  ('calendar_week', 'Viikko', 'Week', '周', '週', 'public fixture seed'),
+  ('calendar_day', 'Päivä', 'Day', '日', '日', 'public fixture seed'),
+  ('calendar_agenda', 'Agenda', 'Agenda', '日程', '議程', 'public fixture seed'),
+  ('calendar_today', 'Tänään', 'Today', '今天', '今日', 'public fixture seed'),
+  ('calendar_no_events', 'Ei tapahtumia', 'No events', '没有事件', '冇活動', 'public fixture seed'),
+  ('calendar_no_date_column', 'Kalenterille sopivaa päivämääräkenttää ei löytynyt', 'No calendar date column found', '未找到日历日期字段', '搵唔到日曆日期欄位', 'public fixture seed'),
+
   -- Shared navigation and tool labels rendered by the public application shell.
   ('account', 'Tili', 'Account', '账户', '帳戶', 'public fixture seed'),
   ('logout', 'Kirjaudu ulos', 'Logout', '退出登录', '登出', 'public fixture seed'),
+  ('privacy_notice_login_acceptance', 'Kirjautuaksesi sinun on hyväksyttävä tietosuojaseloste.', 'To sign in, you must accept the privacy notice.', '登录前，您必须接受隐私声明。', '登入前，你必須接受私隱聲明。', 'Single linked sentence beside the sign-in privacy acceptance checkbox.'),
+  ('privacy_notice_login_acceptance_prefix', 'Kirjautuaksesi sinun on hyväksyttävä ', 'To sign in, you must accept the ', '登录前，您必须接受', '登入前，你必須接受', 'Plain-text prefix before the linked privacy notice name; spacing is intentional for languages that use it.'),
+  ('privacy_notice_login_acceptance_link', 'tietosuojaseloste', 'privacy notice', '隐私声明', '私隱聲明', 'Only the privacy notice name linked to the notice modal in the login acceptance sentence.'),
+  ('privacy_notice_login_acceptance_suffix', '.', '.', '。', '。', 'Plain-text locale-specific sentence terminator after the linked privacy notice name.'),
   ('system_config', 'Järjestelmäasetukset', 'System configuration', '系统配置', '系統設定', 'public fixture seed'),
   ('users', 'Käyttäjät', 'Users', '用户', '用戶', 'public fixture seed'),
   ('system_users_front_page', 'Käyttäjät', 'Users', '用户', '用戶', 'public fixture seed'),
@@ -786,10 +936,13 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('system_column_details', 'Sarakkeiden tiedot', 'Column details', '列详情', '欄位詳細資料', 'public fixture seed'),
   ('system_db_tables', 'Tietokannan taulut', 'Database tables', '数据库表', '資料庫資料表', 'public fixture seed'),
   ('system_db_version', 'Tietokantaversio', 'Database version', '数据库版本', '資料庫版本', 'public fixture seed'),
+  ('system_embedding_refresh_jobs', 'Embedding-päivitysjono', 'Embedding refresh jobs', '嵌入刷新任务', '嵌入重新整理工作', 'public fixture seed'),
   ('system_foreign_key_relations_1_m', 'Vierasavainrelaatiot 1:M', 'Foreign-key relations 1:M', '外键关系 1:M', '外鍵關係 1:M', 'public fixture seed'),
   ('system_foreign_key_relations_m_m', 'Vierasavainrelaatiot M:M', 'Foreign-key relations M:M', '外键关系 M:M', '外鍵關係 M:M', 'public fixture seed'),
   ('system_functions', 'Järjestelmätoiminnot', 'System functions', '系统功能', '系統功能', 'public fixture seed'),
   ('system_group_table_func_rights', 'Ryhmien taulutoimintojen oikeudet', 'Group table-function rights', '组表功能权限', '群組資料表功能權限', 'public fixture seed'),
+  ('system_languages', 'Kielet', 'Languages', '语言', '語言', 'Static database-tree label for the canonical UI-language registry; authored for every supported locale so normal navigation never requests an AI translation.'),
+  ('system_lang_key_translations', 'Kieliavainten käännökset', 'Language key translations', '语言键翻译', '語言鍵翻譯', 'Static database-tree label for normalized UI language-key translations; authored for every supported locale so normal navigation never requests an AI translation.'),
   ('system_lang_keys', 'Kieliavaimet', 'Language keys', '语言键', '語言鍵', 'public fixture seed'),
   ('system_lang_keys_archive', 'Kieliavainarkisto', 'Language-key archive', '语言键归档', '語言鍵封存', 'public fixture seed'),
   ('system_lang_key_sources', 'Kieliavainlähteet', 'Language-key sources', '语言键来源', '語言鍵來源', 'public fixture seed'),
@@ -1128,6 +1281,60 @@ SET fi = EXCLUDED.fi,
     updated = now(),
     creation_spec = EXCLUDED.creation_spec;
 
+-- Field labels for the canonical language registry and its normalized values.
+-- Seed these before derived search labels so the fresh installation never
+-- needs a page-load AI request for the new administration fields.
+INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) VALUES
+  ('site_settings', 'Sivustoasetukset', 'Site settings', '站点设置', '網站設定', 'Admin navigation group for site-wide settings.'),
+  ('site_languages', 'Sivuston kielet', 'Site languages', '站点语言', '網站語言', 'Admin view for the canonical site-language registry.'),
+  ('site_languages_description', 'Valitse sivuston kielet, yksi oletuskieli, selkeät varakielet ja julkisessa kielivalitsimessa näkyvät tarkistetut kielet.', 'Choose the site languages, one default, explicit fallbacks, and which reviewed languages may appear publicly.', '选择站点语言、一个默认语言、明确的后备语言，以及可在公共语言选择器中显示的已审核语言。', '選擇網站語言、一個預設語言、明確嘅後備語言，同埋可以喺公開語言選擇器顯示嘅已審核語言。', 'Explanation above the administrator-owned site-language registry.'),
+  ('language', 'Kieli', 'Language', '语言', '語言', 'Column heading in the site-language registry.'),
+  ('default_language', 'Oletuskieli', 'Default language', '默认语言', '預設語言', 'The one root language used by the site.'),
+  ('fallback_language', 'Varakieli', 'Fallback language', '后备语言', '後備語言', 'Explicit fallback used when a translation is unavailable.'),
+  ('translation_coverage', 'Käännösten kattavuus', 'Translation coverage', '翻译覆盖率', '翻譯覆蓋程度', 'Coverage status shown in the site-language registry.'),
+  ('public_selector', 'Julkinen kielivalitsin', 'Public language selector', '公共语言选择器', '公開語言選擇器', 'Whether an approved language may appear in the public selector.'),
+  ('save', 'Tallenna', 'Save', '保存', '儲存', 'Shared save action.'),
+  ('saving', 'Tallennetaan…', 'Saving…', '正在保存…', '儲存緊…', 'Progress copy while site-language settings are saved.'),
+  ('settings_saved', 'Asetukset tallennettu.', 'Settings saved.', '设置已保存。', '設定已儲存。', 'Confirmation after settings are saved.'),
+  ('save_failed', 'Tallennus epäonnistui.', 'Save failed.', '保存失败。', '儲存失敗。', 'Safe generic failure copy for a settings update.'),
+  ('load_failed', 'Lataus epäonnistui.', 'Loading failed.', '加载失败。', '載入失敗。', 'Safe generic failure copy for a settings view load.'),
+  ('language_code', 'Kielikoodi', 'Language code', '语言代码', '語言代碼', 'Canonical language registry field.'),
+  ('english_name', 'Englanninkielinen nimi', 'English name', '英文名称', '英文名稱', 'Canonical language registry field.'),
+  ('native_name', 'Omankielinen nimi', 'Native name', '本地名称', '本地名稱', 'Canonical language registry field.'),
+  ('script_code', 'Kirjoitusjärjestelmän koodi', 'Script code', '文字代码', '文字代碼', 'Canonical language registry field.'),
+  ('region_code', 'Aluekoodi', 'Region code', '地区代码', '地區代碼', 'Canonical language registry field.'),
+  ('is_enabled', 'Käytössä sivustolla', 'Enabled on site', '在网站上启用', '在網站上啟用', 'Canonical language registry field.'),
+  ('fallback_language_code', 'Varakieli', 'Fallback language', '后备语言', '後備語言', 'Canonical language registry field.'),
+  ('coverage_status', 'Käännöskattavuus', 'Translation coverage', '翻译覆盖率', '翻譯覆蓋率', 'Canonical language registry field.'),
+  ('review_status', 'Tarkistustila', 'Review status', '审核状态', '審核狀態', 'Canonical language registry field.'),
+  ('public_selector_ready', 'Valmis kielivalitsimeen', 'Ready for language selector', '可用于语言选择器', '可用於語言選擇器', 'Canonical language registry field.'),
+  ('translation', 'Käännös', 'Translation', '翻译', '翻譯', 'Normalized translation field.'),
+  ('source_kind', 'Käännöksen alkuperä', 'Translation source', '翻译来源', '翻譯來源', 'Normalized translation field.')
+ON CONFLICT (lang_key) DO NOTHING;
+
+INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) VALUES
+  ('external_embedding_allowed', 'Sallittu ulkoiseen embeddingiin', 'Allowed for external embeddings', '允许用于外部嵌入', '允許用於外部嵌入', 'Per-field administrator choice for the configured external embedding provider.'),
+  ('external_embedding_enabled', 'Ulkoiset embeddingit käytössä', 'External embeddings enabled', '已启用外部嵌入', '已啟用外部嵌入', 'Per-table administrator switch for the configured external embedding provider.'),
+  ('external_embedding_policy_configured', 'Embedding-kenttävalinta määritetty', 'Embedding field policy configured', '已配置嵌入字段策略', '已設定嵌入欄位政策', 'Technical marker showing that the administrator has saved an explicit field selection.'),
+  ('generation', 'Sukupolvi', 'Generation', '生成版本', '產生版本', 'Content-free embedding refresh queue field.'),
+  ('attempt_count', 'Yritysten määrä', 'Attempt count', '尝试次数', '嘗試次數', 'Content-free embedding refresh queue field.'),
+  ('available_at', 'Käsiteltävissä', 'Available at', '可处理时间', '可處理時間', 'Content-free embedding refresh queue field.'),
+  ('lease_token', 'Työvarauksen tunniste', 'Lease token', '租约令牌', '租約權杖', 'Content-free embedding refresh queue field.'),
+  ('lease_expires_at', 'Työvaraus päättyy', 'Lease expires at', '租约到期时间', '租約到期時間', 'Content-free embedding refresh queue field.'),
+  ('last_error_code', 'Viimeisin virhekoodi', 'Last error code', '最后错误代码', '最後錯誤代碼', 'Content-free embedding refresh queue field.'),
+  ('embedding_external_fields', 'Ulkoiseen embedding-palveluun lähetettävät kentät', 'Fields sent to the external embedding provider', '发送到外部嵌入服务的字段', '傳送到外部嵌入服務嘅欄位', 'Admin label for selecting technically eligible dataset fields for the configured external embedding provider.'),
+  ('embedding_enable_dataset', 'Salli ulkoiset embeddingit tälle taululle', 'Enable external embeddings for this table', '为此表启用外部嵌入', '為此資料表啟用外部嵌入', 'Admin switch that enables external embedding processing for one public-schema dataset.'),
+  ('embedding_external_warning', 'Kun taulu otetaan käyttöön, sen teknisesti sopivat tekstikentät ovat aluksi valittuina. Poista valinta kentistä, joita et halua lähettää määritetylle ulkoiselle embedding-palvelulle. Restricted-skeeman kenttiä ei voi valita tässä.', 'When a table is enabled, its technically eligible text fields are initially selected. Clear any fields you do not want sent to the configured external embedding provider. Restricted-schema fields cannot be selected here.', '启用表后，技术上适用的文本字段将默认被选中。请取消选择不希望发送到已配置外部嵌入服务的字段。此处无法选择受限架构中的字段。', '啟用資料表後，技術上適用嘅文字欄位會預設揀選。請取消揀選唔想傳送到已設定外部嵌入服務嘅欄位。受限制綱要嘅欄位無法喺呢度揀選。', 'Explanation beside the administrator-owned table and field policy for external embedding generation.'),
+  ('embedding_save_field_policy', 'Tallenna embedding-asetukset', 'Save embedding settings', '保存嵌入设置', '儲存嵌入設定', 'Admin action that saves the table switch and explicit field selection.'),
+  ('embedding_field_policy_saved', 'Embedding-asetukset tallennettu ja päivitys jonotettu', 'Embedding settings saved and refresh queued', '嵌入设置已保存，刷新已排队', '嵌入設定已儲存，重新整理已排程', 'Confirmation after enabled embedding settings are saved and refresh work is queued.')
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = EXCLUDED.fi,
+    en = EXCLUDED.en,
+    ch = EXCLUDED.ch,
+    yue = EXCLUDED.yue,
+    updated = now(),
+    creation_spec = EXCLUDED.creation_spec;
+
 -- Filter inputs derive predictable labels from their already translated field
 -- name. Existing hand-written labels (including the four example apps) win.
 INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec)
@@ -1167,10 +1374,10 @@ FROM (
     JOIN public.system_lang_keys base ON base.lang_key = tables.table_name
     UNION ALL
     SELECT tables.table_name || '_front_page' AS lang_key,
-           base.fi || ' – etusivu' AS fi,
-           base.en || ' front page' AS en,
-           COALESCE(NULLIF(base.ch, ''), base.en) || '首页' AS ch,
-           COALESCE(NULLIF(base.yue, ''), NULLIF(base.ch, ''), base.en) || '首頁' AS yue
+           base.fi AS fi,
+           base.en AS en,
+           COALESCE(NULLIF(base.ch, ''), base.en) AS ch,
+           COALESCE(NULLIF(base.yue, ''), NULLIF(base.ch, ''), base.en) AS yue
     FROM public.system_db_tables tables
     JOIN public.system_lang_keys base ON base.lang_key = tables.table_name
 ) derived
@@ -1179,3 +1386,102 @@ WHERE NOT EXISTS (
     FROM public.system_lang_keys existing
     WHERE existing.lang_key = derived.lang_key
 );
+
+-- Fresh installs receive exactly the same five-locale registry as an upgraded
+-- database. Only semantically proven legacy values are copied. In particular,
+-- Cantonese yue text is not relabelled as reviewed Hong Kong Chinese (zh-HK).
+INSERT INTO public.system_languages (
+    language_code,
+    english_name,
+    native_name,
+    script_code,
+    region_code,
+    is_enabled,
+    is_default,
+    fallback_language_code,
+    coverage_status,
+    review_status,
+    public_selector_ready,
+    sort_order
+) VALUES
+  ('en',    'English',                              'English',              'Latn', NULL, TRUE,  TRUE,  NULL, 'complete',    'approved',     TRUE,   10),
+  ('fi',    'Finnish',                              'Suomi',                'Latn', NULL, TRUE,  FALSE, 'en', 'complete',    'approved',     TRUE,   20),
+  ('zh-CN', 'Chinese (Simplified, Mainland China)', '简体中文（中国大陆）',   'Hans', 'CN', FALSE, FALSE, 'en', 'partial',     'needs_review', FALSE,  30),
+  ('zh-TW', 'Chinese (Traditional, Taiwan)',        '繁體中文（台灣）',     'Hant', 'TW', FALSE, FALSE, 'en', 'not_started', 'unreviewed',   FALSE,  40),
+  ('zh-HK', 'Chinese (Traditional, Hong Kong)',     '繁體中文（香港）',     'Hant', 'HK', FALSE, FALSE, 'en', 'not_started', 'unreviewed',   FALSE,  50)
+ON CONFLICT (language_code) DO NOTHING;
+
+WITH legacy_translations AS (
+    SELECT source.id AS lang_key_id,
+           'en'::TEXT AS language_code,
+           source.en AS translation,
+           'legacy_en'::TEXT AS source_kind,
+           'approved'::TEXT AS review_status
+    FROM public.system_lang_keys AS source
+    UNION ALL
+    SELECT source.id, 'fi'::TEXT, source.fi, 'legacy_fi'::TEXT, 'approved'::TEXT
+    FROM public.system_lang_keys AS source
+    UNION ALL
+    SELECT source.id, 'zh-CN'::TEXT, source.ch, 'legacy_ch'::TEXT, 'needs_review'::TEXT
+    FROM public.system_lang_keys AS source
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id,
+    language_code,
+    translation,
+    source_kind,
+    review_status
+)
+SELECT source.lang_key_id,
+       source.language_code,
+       source.translation,
+       source.source_kind,
+       source.review_status
+FROM legacy_translations AS source
+WHERE NULLIF(btrim(source.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO NOTHING;
+
+-- The two language-model table labels are authored static navigation copy,
+-- not candidates for runtime AI fallback. Seed every canonical locale row;
+-- the legacy columns above remain available during the compatibility period.
+WITH authored_translations(lang_key, language_code, translation, review_status) AS (
+    VALUES
+        ('system_languages', 'en', 'Languages', 'approved'),
+        ('system_languages', 'fi', 'Kielet', 'approved'),
+        ('system_languages', 'zh-CN', '语言', 'needs_review'),
+        ('system_languages', 'zh-TW', '語言', 'needs_review'),
+        ('system_languages', 'zh-HK', '語言', 'needs_review'),
+        ('system_lang_key_translations', 'en', 'Language key translations', 'approved'),
+        ('system_lang_key_translations', 'fi', 'Kieliavainten käännökset', 'approved'),
+        ('system_lang_key_translations', 'zh-CN', '语言键翻译', 'needs_review'),
+        ('system_lang_key_translations', 'zh-TW', '語言鍵翻譯', 'needs_review'),
+        ('system_lang_key_translations', 'zh-HK', '語言鍵翻譯', 'needs_review')
+), resolved AS (
+    SELECT
+        keys.id AS lang_key_id,
+        authored.language_code,
+        authored.translation,
+        authored.review_status
+    FROM authored_translations AS authored
+    JOIN public.system_lang_keys AS keys
+      ON keys.lang_key = authored.lang_key
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id,
+    language_code,
+    translation,
+    source_kind,
+    review_status
+)
+SELECT
+    resolved.lang_key_id,
+    resolved.language_code,
+    resolved.translation,
+    'manual',
+    resolved.review_status
+FROM resolved
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation,
+    source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status,
+    updated = now();

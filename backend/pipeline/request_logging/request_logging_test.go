@@ -135,7 +135,12 @@ func initRequestLoggingSessionStore(t *testing.T) {
 	e_sessions.SessionName = "session"
 	t.Setenv("SESSION_KEY", requestLoggingSessionKey)
 	t.Setenv("SESSION_SECRET_KEY", requestLoggingSessionSecretKey)
-	t.Setenv("INSTANCE_NAME", "")
+	t.Setenv("SESSION_COOKIE_MODE", "isolated")
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("INSTANCE_NAME", "request-logging-test")
+	t.Setenv("DB_HOST", "127.0.0.1")
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_NAME", "request_logging_test")
 	e_sessions.InitSessionStore()
 	t.Cleanup(func() {
 		e_sessions.Store = nil

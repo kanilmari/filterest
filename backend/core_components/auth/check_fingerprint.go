@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 )
 
 // setFingerprintCookie updates the fingerprint HTTP cookie to keep it in sync
@@ -18,15 +17,7 @@ import (
 // UUID cookie would mismatch the HMAC stored by this handler, causing
 // WithFingerprintCheck to reject subsequent requests.
 func setFingerprintCookie(w http.ResponseWriter, hmacVal string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "fingerprint",
-		Value:    hmacVal,
-		Path:     "/",
-		HttpOnly: false,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-	})
+	e_sessions.SetFingerprintCookie(w, hmacVal)
 }
 
 func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {

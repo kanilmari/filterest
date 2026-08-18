@@ -21,6 +21,8 @@
 
 .table_from_db th,
 .table_from_db td {
+    position: relative;
+    overflow: hidden;
     border: 0;
     border-right: var(--table-body-grid-border-width) solid var(--table-grid-border-color);
     border-bottom: var(--table-body-grid-border-width) solid var(--table-grid-border-color);
@@ -76,13 +78,6 @@ table.table_from_db {
     to   { opacity: 1; }
 }
 
-/* Perustyyli taulukon soluille */
-.table_from_db th,
-.table_from_db td {
-    position: relative;
-    overflow: hidden;
-}
-
 .table_from_db .table_cell_content {
     display: block;
     max-width: var(--table-cell-max-inline-size);
@@ -97,8 +92,7 @@ table.table_from_db {
 .table_from_db .table_cell_content--compact {
     max-width: var(--table-cell-compact-inline-size);
     max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto hidden;
     white-space: nowrap;
     word-break: normal;
     overflow-wrap: normal;
