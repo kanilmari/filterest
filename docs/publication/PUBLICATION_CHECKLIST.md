@@ -8,9 +8,9 @@ remote publication.
 ## Current Verdict
 
 `filterest` is approved as the active generation and repository target.
-Owner-policy rows are decided, but the exact-release evidence rows below remain
-`blocked-evidence`. The local release-readiness gate therefore remains blocked
-until those rows are replaced by evidence for the exact Filterest commit.
+Owner-policy rows are decided, and the exact-release evidence rows below record
+the completed proof for the current Filterest commit. The local
+release-readiness gate may proceed using those exact commit and artifact links.
 Generated deterministic evidence is summarized in
 [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md), and current runtime and
 Computer Use artifacts are attached to non-public maintainer ticket #834.
@@ -53,13 +53,13 @@ and generated artifact commit.
 | P0 | Public bootstrap content review | done | Release agent + Human/project owner | [`server_tools/public_bootstrap/REVIEW.md`](../../server_tools/public_bootstrap/REVIEW.md) passes for 47 schema tables, 28 seed tables, and 593 counted fixture rows; the reviewed public scope includes the complete First Run environment, verification, identity, credential, and four-dataset image-upload flow. |
 | P0 | Private source boundary | done | Release agent | The clean candidate and tracked-tree audit pass; [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md) records the exact current release-source commit. |
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
-| P0 | Fresh-clone public build/test | blocked-evidence | Release agent | Run the complete fresh-clone build and test against the exact Filterest commit; earlier proof does not satisfy this row. |
-| P0 | Browser review uses Filterest runtime | blocked-evidence | Release agent + Computer Use | Run the structured verifier and browser proof against the Filterest checkout's own runtime and database on port 8100. |
-| P0 | Current browser release-readiness acceptance | blocked-evidence | Human release owner | Review and accept the exact Filterest runtime after fresh automated evidence exists. |
+| P0 | Fresh-clone public build/test | done | Release agent | Exact stable proof: clean clone of `8326ea4849a76e35353b7dda367b62bc66f0f055` at `/tmp/filterest-fresh-clone-8.33.0-final-mGXj3c/repo` completed `npm ci` with 0 vulnerabilities and `npm run qa` with all public checks passing on 2026-08-18. |
+| P0 | Browser review uses Filterest runtime | done | Release agent + browser audit | Exact stable proof: generated Filterest commit `8326ea4849a76e35353b7dda367b62bc66f0f055` ran from its own checkout and isolated `filterest_local_preview` database on port 8100. The structured verifier passed all 37 checks in `agent_tasks/_artifacts/human_qa/public_release_834_filterest_runtime_20260818T192959Z`, and the browser audit in `../filterest/agent_tasks/_artifacts/browser_audits/2026-08-18--22-32-09--localhost` reported accessibility 100/100, best practices 100/100, and zero P1 findings. |
+| P0 | Current browser release-readiness acceptance | done | Human release owner | Exact stable proof: after directing the corrected 8.33.0 version to Fintravel production, the release owner confirmed on 2026-08-18 that only this corrected version should be delivered. The exact fresh-clone and runtime evidence above now satisfies the technical acceptance inputs for that direction. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 9-file public docs wording audit passes with no pre-release or private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
-| P1 | Public CI and local-preview posture | blocked-evidence | Release agent | Prove the Filterest checkout's local preview and repeat the account-wide GitHub Actions disable audit before publication. |
+| P1 | Public CI and local-preview posture | done | Release agent | Exact stable proof: Filterest commit `8326ea4849a76e35353b7dda367b62bc66f0f055` passed its own port-8100 local preview and browser checks; the 2026-08-18 account-wide audit confirmed Actions disabled for every `kanilmari` repository except the approved `kanilmari/try_it_html` exception. |
 | P2 | Local release evidence review | manual-final | Human release owner | Review this checklist, ticket evidence, generated commit, and approved remote state before authorizing a push. |
 | P2 | GitHub repository target | done | Human release owner | Owner selected `kanilmari/filterest` on `main`. Only the approved `origin` and `main` upstream are allowed. |
 | P2 | Remote push | gated-authorized | Release agent under standing owner authorization | Push a reviewed clean commit only to `filterest` after every required local gate and the manual-final evidence review pass. Do not request a second publication confirmation. The approved publish command also pushes the matching `v<VERSION_APP>` tag, which builds checksum-verified Linux admin binaries. |
@@ -71,6 +71,7 @@ Add one dated line per publication-candidate attempt:
 | Date | Release source commit | Generated Filterest commit | Evidence summary |
 | --- | --- | --- | --- |
 | 2026-07-25 | Earlier Filterest evidence | Earlier Filterest commit | Historical evidence only; it cannot satisfy the current exact-commit evidence rows. No current remote push was performed. |
+| 2026-08-18 | `e14f788226c32dbba4f0ffb7c491ac49effe3c28` | `8326ea4849a76e35353b7dda367b62bc66f0f055` | Exact stable proof: fresh-clone QA PASS, isolated Filterest 9.1.0 runtime verifier 37/37 PASS, browser audit accessibility/best-practices 100/100 with zero P1 findings, account-wide GitHub Actions policy PASS, and explicit owner direction to deploy only this corrected 8.33.0 version to Fintravel production. |
 
 ## Local Generation Command
 
