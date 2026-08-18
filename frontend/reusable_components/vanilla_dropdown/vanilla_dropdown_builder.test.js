@@ -102,4 +102,33 @@ describe("createVanillaDropdown", () => {
         expect(onChange).not.toHaveBeenCalled();
         expect(dropdown.getValue()).toBeNull();
     });
+
+    test("keeps an opt-in menu width inside the viewport", async () => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        Object.defineProperty(window, "innerWidth", { configurable: true, value: 240 });
+
+        const dropdown = createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "created:DESC", label: "Newest first" }],
+            useSearch: false,
+            showClearButton: false,
+            menuMaxWidth: 300,
+        });
+        container.querySelector(".vdw-dropdown-input-row").getBoundingClientRect = () => ({
+            bottom: 48,
+            height: 40,
+            left: 190,
+            right: 230,
+            top: 8,
+            width: 40,
+        });
+
+        dropdown.open();
+
+        const list = document.querySelector(".vdw-dropdown-list");
+        expect(list.style.width).toBe("224px");
+        expect(list.style.left).toBe("8px");
+    });
 });

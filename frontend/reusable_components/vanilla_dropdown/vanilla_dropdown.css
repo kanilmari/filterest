@@ -114,16 +114,29 @@
 
 .vdw-option--with-trailing-action {
   align-items: center;
-  display: flex;
+  display: grid;
   gap: 0.5rem;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto);
+}
+
+.vdw-option-label {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .vdw-option-trailing-action {
-  flex: 0 0 auto;
+  justify-self: end;
+  line-height: 1.2;
+  max-width: 8.5rem;
   opacity: 0;
   padding: 0.2rem 0.45rem;
   pointer-events: none;
+  text-align: center;
+  white-space: normal;
   transition: opacity 120ms ease-out;
 }
 
@@ -144,6 +157,12 @@
   background-color: var(--button_hover_bg_color);
   color: var(--button_hover_text_color);
   border: 1px solid var(--border_color);
+}
+
+@media (width <= 360px) {
+  .vdw-option--with-trailing-action {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* “Ei tuloksia” -viestille yksinkertainen tyyli */

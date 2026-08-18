@@ -485,11 +485,19 @@ export function buildAdminVersionInfoIndicator() {
     const closePanel = () => {
         panel.hidden = true;
         indicator.setAttribute("aria-expanded", "false");
+        if (indicator.dataset.closedTooltip) {
+            indicator.title = indicator.dataset.closedTooltip;
+        }
     };
     const togglePanel = () => {
         const shouldOpen = panel.hidden;
         panel.hidden = !shouldOpen;
         indicator.setAttribute("aria-expanded", String(shouldOpen));
+        if (shouldOpen) {
+            indicator.removeAttribute("title");
+        } else if (indicator.dataset.closedTooltip) {
+            indicator.title = indicator.dataset.closedTooltip;
+        }
     };
 
     indicator.addEventListener("click", (event) => {
@@ -527,7 +535,12 @@ async function hydrateAdminVersionInfoIndicator(shell, indicator, panel, signal)
         const renderLanguage = (language) => {
             const rows = buildAdminVersionInfoRows(versionInfo, language, siteName);
             const label = formatAdminVersionInfoLabel(versionInfo, language);
-            indicator.title = label;
+            indicator.dataset.closedTooltip = label;
+            if (panel.hidden) {
+                indicator.title = label;
+            } else {
+                indicator.removeAttribute("title");
+            }
             indicator.setAttribute("aria-label", label.replaceAll("\n", ". "));
             const panelTitle = getAdminSiteInfoTitle(language);
             panel.setAttribute("aria-label", panelTitle);

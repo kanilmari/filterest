@@ -154,6 +154,48 @@ describe('card_field_formatter multilingual editing', () => {
         expect(container.querySelector('.multilang-selector')).toBeNull();
     });
 
+    test('keeps split multilingual keyword tags read-only while other multilingual article fields remain editable', () => {
+        setColumnDetails([
+            {
+                table_name: 'demo_dataset',
+                column_name: 'title',
+                editable_in_ui: true,
+                data_type: 'text',
+                is_multilingual: true,
+            },
+            {
+                table_name: 'demo_dataset',
+                column_name: 'keywords',
+                editable_in_ui: true,
+                data_type: 'text',
+                is_multilingual: true,
+            },
+        ]);
+        const container = document.createElement('div');
+        const titleField = createEditableField(
+            'title',
+            JSON.stringify({ fi: 'Matkatarjous', en: 'Travel deal' })
+        );
+        const keywordTag = createEditableField('keywords', 'risteilyt');
+        keywordTag.dataset.articleEditReadonly = 'true';
+        container.append(titleField, keywordTag);
+
+        enableEditing(container, 'demo_dataset');
+
+        expect(titleField.querySelector('input')?.value).toBe('Matkatarjous');
+        expect(keywordTag.querySelector('input, textarea, select')).toBeNull();
+        expect(keywordTag.textContent).toBe('risteilyt');
+
+        titleField.querySelector('input').value = 'Matkatarjous päivitetty';
+        const updates = disableEditing(container);
+
+        expect(JSON.parse(updates.title)).toEqual({
+            fi: 'Matkatarjous päivitetty',
+            en: 'Travel deal',
+        });
+        expect(updates).not.toHaveProperty('keywords');
+    });
+
     test('restores localized read-mode text after save instead of showing the raw multilingual JSON blob', () => {
         getLanguageWithBrowserFallbackMock.mockReturnValue('en');
         const container = buildMultilangContainer();

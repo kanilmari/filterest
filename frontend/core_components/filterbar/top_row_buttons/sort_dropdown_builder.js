@@ -81,6 +81,7 @@ export function createSortDropdown(tableName, columns, dataTypes) {
         placeholder: "Select...",
         showClearButton: false,
         useSearch: false,
+        menuMaxWidth: 300,
         renderOptionTrailingAction: (option, { close }) =>
             createDatasetSortDefaultAction(tableName, option, {
                 selectOption: async (value) => {

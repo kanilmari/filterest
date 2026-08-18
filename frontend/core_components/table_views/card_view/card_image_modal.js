@@ -9,6 +9,7 @@ import {
 } from "../../../reusable_components/modal/modal_builder.js";
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
+const IMAGE_MODAL_CONTROL_IDLE_DELAY_MS = 1200;
 
 /**
  * Creates and opens the shared large image modal.
@@ -53,6 +54,21 @@ export function openImageModal(image_src) {
 
     modal.classList.add("image_modal");
     modal_overlay.classList.add("modal_overlay_blur");
+
+    let controlsIdleTimer = null;
+    const hideControls = () => {
+        modal_overlay.classList.remove("image-modal-controls-active");
+    };
+    const revealControls = () => {
+        modal_overlay.classList.add("image-modal-controls-active");
+        if (controlsIdleTimer !== null) {
+            window.clearTimeout(controlsIdleTimer);
+        }
+        controlsIdleTimer = window.setTimeout(hideControls, IMAGE_MODAL_CONTROL_IDLE_DELAY_MS);
+    };
+    modal_overlay.onpointermove = revealControls;
+    modal_overlay.onpointerleave = hideControls;
+    revealControls();
 
     showModal();
 
