@@ -88,6 +88,7 @@ const MULTILINE_TAB_TEXT_CLASS = "tab_button_text--multiline";
 let _tabTextLayoutFrame = 0;
 let _tabTextObserver = null;
 let _observedTabContainer = null;
+let _tabRenderGeneration = 0;
 
 function getTabOrderIdentifier(tabId) {
     return STATIC_TAB_IDS.has(tabId)
@@ -161,7 +162,7 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
 
             const orderedTabs = [];
             if (mainTable) orderedTabs.push(buildTabObj(mainTable));
-            if (systemUsers) orderedTabs.push(buildTabObj(systemUsers));
+            if (systemUsers && systemUsers !== mainTable) orderedTabs.push(buildTabObj(systemUsers));
             if (aboutTable) orderedTabs.push(buildTabObj(aboutTable));
             for (const table of otherTables) orderedTabs.push(buildTabObj(table));
 
@@ -353,6 +354,7 @@ function hasExplicitAuthShellEntry() {
 }
 
 export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTablesResponse = null } = {}) {
+    const renderGeneration = ++_tabRenderGeneration;
     const container = document.getElementById("navmenu");
 
     // Tarkistetaan löytyikö container
@@ -378,6 +380,13 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         ? await fetchProjectTabs({ preloadedContentTablesResponse })
         : await fetchProjectTabs({ suppressAuthRedirect: true });
 
+    // Authentication, bootstrap, and tree-refresh paths can request a rebuild
+    // concurrently. Only the newest request may append buttons; otherwise an
+    // older response can finish later and add a second Users tab to the new bar.
+    if (renderGeneration !== _tabRenderGeneration) {
+        return;
+    }
+
     const datasetPermissionFallbackRequests = allTabs
         .filter((tabData) => tabData.dataset && tabData.route)
         .filter((tabData) => canReadDatasetFromRegistry(tabData.dataset) === null)
@@ -389,8 +398,13 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         ? primeMultipleDatasetPermissions(datasetPermissionFallbackRequests)
         : Promise.resolve(new Map());
 
+    // A dataset can appear twice in an older tab-order payload even though it
+    // has only one database registration. Render each stable tab identifier
+    // once so both buttons cannot target and activate the same dataset.
+    const renderedTabIds = new Set();
     allTabs.forEach((tabData) => {
         if (AUTH_ACTION_TAB_IDS.has(tabData.id)) return;
+        if (renderedTabIds.has(tabData.id)) return;
 
         // Filter by auth state: nonUserContent tabs only for anon, userContent only for logged-in
         if (tabData.nonUserContent && isLoggedIn) return;
@@ -401,6 +415,8 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
             const regEnabled = localStorage.getItem('registration_enabled');
             if (regEnabled !== 'true') return;
         }
+
+        renderedTabIds.add(tabData.id);
 
         const tabButton = document.createElement("button");
         tabButton.classList.add("navtablinks");

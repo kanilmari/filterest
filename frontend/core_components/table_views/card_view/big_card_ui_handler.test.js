@@ -49,6 +49,24 @@ describe("big_card_ui_handler label icons", () => {
         expect(svg).not.toBeNull();
         expect(labelText?.dataset.langKey).toBe("website");
         expect(labelText?.textContent).toBe("Website");
+        expect(element.querySelector('.two_line_value a')?.getAttribute('href'))
+            .toBe('https://example.test');
+    });
+
+    test("createRowArticleKeyValueElement links an address inside ordinary text", () => {
+        const element = createRowArticleKeyValueElement(
+            "Description",
+            "More at https://example.test/details.",
+            "description",
+            false,
+            "big_description_value",
+            true,
+        );
+
+        const value = element.querySelector('[data-column="description"]');
+        expect(value?.querySelector('a')?.getAttribute('href'))
+            .toBe('https://example.test/details');
+        expect(value?.textContent).toBe('More at https://example.test/details.');
     });
 
     test("createRowArticleKeyValueElement gives unconfigured detail labels a generic icon", () => {

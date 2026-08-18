@@ -58,7 +58,11 @@ type dynamicDatasetTranslationContext struct {
 
 func isSyntheticE2ETranslationKey(key string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(key))
-	return strings.HasPrefix(normalized, "e2e_") || strings.HasPrefix(normalized, "e2e-")
+	padded := "_" + normalized
+	return strings.Contains(padded, "_e2e_") ||
+		strings.Contains(padded, "_e2e-") ||
+		strings.Contains(padded, "_test_") ||
+		strings.Contains(padded, "_test-")
 }
 
 func filterAIEligibleMissingKeys(keys []string) ([]string, int) {
@@ -105,7 +109,7 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 
 	filteredKeys, skippedSyntheticKeys := filterAIEligibleMissingKeys(requestData.MissingKeys)
 	if skippedSyntheticKeys > 0 {
-		log.Printf("[GenerateTranslations] skipping %d synthetic E2E key(s)", skippedSyntheticKeys)
+		log.Printf("[GenerateTranslations] skipping %d synthetic test key(s)", skippedSyntheticKeys)
 	}
 	requestData.MissingKeys = filteredKeys
 

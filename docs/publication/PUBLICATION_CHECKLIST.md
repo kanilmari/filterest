@@ -8,22 +8,17 @@ remote publication.
 ## Current Verdict
 
 `filterest` is approved as the active generation and repository target.
-Owner-policy rows are decided, and the exact-release evidence rows are
-complete for generated Filterest commit
-`cd589bc98accf0b00dfefe49e2989fc2fe23d03c` from release-source commit
-`70610c116bb2d3f83d673251e51eb66d01d7b750`. The release owner explicitly
-directed the agent to update Fintravel production with version 8.32.2 on
-2026-08-18, so the local release-readiness gate can proceed to its final
-deterministic preflight.
+Owner-policy rows are decided, but the exact-release evidence rows below remain
+`blocked-evidence`. The local release-readiness gate therefore remains blocked
+until those rows are replaced by evidence for the exact Filterest commit.
 Generated deterministic evidence is summarized in
 [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md), and current runtime and
 Computer Use artifacts are attached to non-public maintainer ticket #834.
 
-Earlier Filterest runtime and Computer Use artifacts remain historical. Exact
-stable proof for this candidate consists of the clean-clone QA pass for
-`cd589bc98accf0b00dfefe49e2989fc2fe23d03c`, the final published Docker image
-rehearsal against the restored Fintravel database, and the browser audit under
-`/tmp/fintravel-8322-final-browser-proof`.
+Earlier Filterest runtime and Computer Use artifacts are historical. They must
+not be described as evidence for the current release. Create fresh structured
+runtime, browser, and Computer Use artifacts for the exact Filterest commit
+before changing the blocked rows below to `done`.
 
 This checklist governs the current `filterest` release. Filterest is generated
 from a clean non-public maintainer release-source commit into its own GitHub
@@ -58,13 +53,13 @@ and generated artifact commit.
 | P0 | Public bootstrap content review | done | Release agent + Human/project owner | [`server_tools/public_bootstrap/REVIEW.md`](../../server_tools/public_bootstrap/REVIEW.md) passes for 47 schema tables, 28 seed tables, and 593 counted fixture rows; the reviewed public scope includes the complete First Run environment, verification, identity, credential, and four-dataset image-upload flow. |
 | P0 | Private source boundary | done | Release agent | The clean candidate and tracked-tree audit pass; [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md) records the exact current release-source commit. |
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
-| P0 | Fresh-clone public build/test | done | Release agent | Exact stable proof: clean clone of `cd589bc98accf0b00dfefe49e2989fc2fe23d03c` completed `npm ci` with 0 vulnerabilities and `npm run qa` with all checks passing on 2026-08-18. |
-| P0 | Browser review uses Filterest runtime | done | Release agent + browser audit | Exact stable proof: `fintravel-production-app:8.32.2-cd589bc` ran from its embedded published identity against an isolated restore of Fintravel's pre-update database; `/health` and `/login` returned 200, DB 9.0.0 had the original content counts and matching credential digest, and the final browser audit reported accessibility 100/100, best practices 100/100, and no P1 findings. |
-| P0 | Current browser release-readiness acceptance | done | Human release owner | Exact stable proof: after the clean-clone, database-upgrade rehearsal, and final published-image browser evidence were available, the release owner explicitly directed the agent on 2026-08-18 to update Fintravel production with Filterest 8.32.2. |
+| P0 | Fresh-clone public build/test | blocked-evidence | Release agent | Run the complete fresh-clone build and test against the exact Filterest commit; earlier proof does not satisfy this row. |
+| P0 | Browser review uses Filterest runtime | blocked-evidence | Release agent + Computer Use | Run the structured verifier and browser proof against the Filterest checkout's own runtime and database on port 8100. |
+| P0 | Current browser release-readiness acceptance | blocked-evidence | Human release owner | Review and accept the exact Filterest runtime after fresh automated evidence exists. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 9-file public docs wording audit passes with no pre-release or private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
-| P1 | Public CI and local-preview posture | done | Release agent | Exact stable proof: the final published Docker runtime passed the isolated Fintravel preview, and the 2026-08-18 account-wide audit confirmed Actions disabled for every `kanilmari` repository except the approved `kanilmari/try_it_html` exception. |
+| P1 | Public CI and local-preview posture | blocked-evidence | Release agent | Prove the Filterest checkout's local preview and repeat the account-wide GitHub Actions disable audit before publication. |
 | P2 | Local release evidence review | manual-final | Human release owner | Review this checklist, ticket evidence, generated commit, and approved remote state before authorizing a push. |
 | P2 | GitHub repository target | done | Human release owner | Owner selected `kanilmari/filterest` on `main`. Only the approved `origin` and `main` upstream are allowed. |
 | P2 | Remote push | gated-authorized | Release agent under standing owner authorization | Push a reviewed clean commit only to `filterest` after every required local gate and the manual-final evidence review pass. Do not request a second publication confirmation. The approved publish command also pushes the matching `v<VERSION_APP>` tag, which builds checksum-verified Linux admin binaries. |
@@ -76,7 +71,6 @@ Add one dated line per publication-candidate attempt:
 | Date | Release source commit | Generated Filterest commit | Evidence summary |
 | --- | --- | --- | --- |
 | 2026-07-25 | Earlier Filterest evidence | Earlier Filterest commit | Historical evidence only; it cannot satisfy the current exact-commit evidence rows. No current remote push was performed. |
-| 2026-08-18 | `70610c116bb2d3f83d673251e51eb66d01d7b750` | `cd589bc98accf0b00dfefe49e2989fc2fe23d03c` | Exact stable proof: fresh-clone QA PASS, isolated Fintravel 8.0.59 → 9.0.0 database rehearsal with unchanged content and credential digest PASS, final published-image browser audit accessibility/best-practices 100/100 with no P1 findings, account-wide GitHub Actions policy PASS, and explicit owner direction to deploy 8.32.2 to Fintravel production. |
 
 ## Local Generation Command
 

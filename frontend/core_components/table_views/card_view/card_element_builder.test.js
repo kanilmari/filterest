@@ -95,6 +95,23 @@ describe('card_element_builder link details', () => {
         expect(container.querySelector('tr.script-column td a')).toBeNull();
         expect(container.querySelector('tr.script-column td')?.textContent).toBe('javascript:alert(1)');
     });
+
+    test('links an HTTP(S) address in an ordinary details field', () => {
+        const container = document.createElement('div');
+
+        addDetailsSection([{
+            suffix_number: 1,
+            column: 'notes',
+            columnClass: 'notes-column',
+            rawValue: 'Read https://example.test/guide for details.',
+            isLink: false,
+        }], {}, 'orders', container);
+
+        const link = container.querySelector('tr.notes-column td a');
+        expect(link?.getAttribute('href')).toBe('https://example.test/guide');
+        expect(container.querySelector('tr.notes-column td')?.textContent)
+            .toBe('Read https://example.test/guide for details.');
+    });
 });
 
 describe('card_element_builder addHeaderElement', () => {

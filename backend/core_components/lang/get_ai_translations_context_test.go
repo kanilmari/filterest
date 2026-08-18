@@ -49,3 +49,19 @@ func TestFilterTranslationKeysWithUsageExplanationSkipsUnknownMeaning(t *testing
 		t.Fatalf("skipped = %#v, want unknown_key", skipped)
 	}
 }
+
+func TestFilterAIEligibleMissingKeysSkipsSyntheticTestDatasets(t *testing.T) {
+	filtered, skipped := filterAIEligibleMissingKeys([]string{
+		"test_perm_table_desktop_card_1786923499508_assets",
+		"search_slogan_test_perm_table_desktop_card_1786923499508",
+		"add_row_e2e_dataset_123",
+		"sort_newest",
+	})
+
+	if skipped != 3 {
+		t.Fatalf("skipped = %d, want 3 synthetic test keys", skipped)
+	}
+	if len(filtered) != 1 || filtered[0] != "sort_newest" {
+		t.Fatalf("filtered = %#v, want only sort_newest", filtered)
+	}
+}

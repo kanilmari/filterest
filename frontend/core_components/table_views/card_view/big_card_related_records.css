@@ -20,14 +20,18 @@
     box-sizing: border-box;
     width: 100%;
     overflow-x: auto;
+    overflow-y: hidden;
+    padding-top: 10px;
     border-bottom: 2px solid var(--border_color);
 }
 
 .child_tab_button {
     appearance: none;
     flex: 0 0 auto;
-    min-height: 42px;
-    padding: 0.6rem 1rem;
+    box-sizing: border-box;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 1rem;
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
@@ -65,7 +69,7 @@
 
 .comments_tab_panel {
     box-sizing: border-box;
-    padding-bottom: calc(0.75rem + 10px);
+    padding-bottom: 0.75rem;
     overflow: visible;
 }
 

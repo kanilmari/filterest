@@ -39,7 +39,11 @@ describe("big_card_related_records.css", () => {
         expect(containerRule).toContain("border-top: 0");
         expect(containerRule).toContain("padding-top: 0");
         expect(barRule).toContain("width: 100%");
+        expect(barRule).toContain("padding-top: 10px");
+        expect(barRule).toContain("overflow-y: hidden");
         expect(barRule).toContain("border-bottom: 2px solid var(--border_color)");
+        expect(buttonRule).toContain("height: 38px");
+        expect(buttonRule).toContain("min-height: 38px");
         expect(buttonRule).toContain("border-radius: 0");
         expect(buttonRule).toContain("box-shadow: none");
         expect(activeRule).toContain("border-bottom-color: var(--accent_color");
@@ -47,10 +51,10 @@ describe("big_card_related_records.css", () => {
         expect(activeRule).toContain("font-weight: 700");
     });
 
-    test("gives the comments panel ten extra pixels before the following article action row", () => {
+    test("keeps comments spacing in the tab bar rather than inflating the panel", () => {
         const commentsPanelRule = ruleBody("\\.comments_tab_panel");
 
-        expect(commentsPanelRule).toContain("padding-bottom: calc(0.75rem + 10px)");
+        expect(commentsPanelRule).toContain("padding-bottom: 0.75rem");
         expect(commentsPanelRule).toContain("overflow: visible");
     });
 });

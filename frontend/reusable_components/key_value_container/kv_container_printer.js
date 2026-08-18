@@ -4,6 +4,7 @@
 // Exists to centralise reusable key-value rendering behavior for cards, details, and modal content.
 
 import { resolveSafeExternalHttpUrl } from "../safe_external_http_url.js";
+import { appendTextWithHttpLinks } from "../http_text_linkifier.js";
 
 function isEmptyValue(value) {
     return value === "" || value === null || value === undefined;
@@ -266,7 +267,7 @@ export function renderKeyValuePairs(
             const unknown = translate("unknown");
             dest.setAttribute("title", unknown);
         } else {
-            dest.textContent = pairObj.value;
+            appendTextWithHttpLinks(dest, pairObj.value);
         }
     }
 

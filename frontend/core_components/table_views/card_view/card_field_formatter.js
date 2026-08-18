@@ -10,6 +10,7 @@ import { renderAllowedHtml, containsAllowedHtml } from '../../../reusable_compon
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
 import { readCachedUserPermissions, canEditServiceCatalogColumn } from '../../service_catalog/service_catalog_moderation.js';
 import { formatTimestampDisplayParts } from '../timestamp_display_formatter.js';
+import { linkifyHttpTextNodes } from '../../../reusable_components/http_text_linkifier.js';
 import {
     formatTemporalValueForInput,
     getTemporalValueKind,
@@ -109,6 +110,7 @@ export function createKeyValueElement(
             valueDiv.textContent = resolvedDisplayText;
             valueDiv.style.whiteSpace = "pre-wrap";
         }
+        linkifyHttpTextNodes(valueDiv);
     }
 
     wrapper.appendChild(valueDiv);
@@ -129,6 +131,7 @@ function restoreReadOnlyFieldContent(fieldElem, displayValue, fallbackText = '')
         fieldElem.textContent = resolvedDisplayValue;
         fieldElem.style.whiteSpace = 'pre-wrap';
     }
+    linkifyHttpTextNodes(fieldElem);
 }
 
 function normalizeComparableCardValue(value) {

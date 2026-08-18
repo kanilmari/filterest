@@ -213,6 +213,8 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/column-view-presets/", system_table_tools.ListColumnViewPresetsHandler, "system_table_tools.ListColumnViewPresetsHandler")
 	functionRegisterHandler("/api/filterbar-section-layout/save", system_table_tools.SaveFilterbarSectionLayoutHandler, "system_table_tools.SaveFilterbarSectionLayoutHandler")
 	functionRegisterHandler("/api/filterbar-section-layout", system_table_tools.GetFilterbarSectionLayoutHandler, "system_table_tools.GetFilterbarSectionLayoutHandler")
+	functionRegisterHandler("/api/dataset-sort-default", system_table_tools.GetDatasetSortDefaultHandler, "system_table_tools.GetDatasetSortDefaultHandler")
+	functionRegisterHandler("/api/admin/dataset-sort-default", system_table_tools.SaveDatasetSortDefaultHandler, "system_table_tools.SaveDatasetSortDefaultHandler")
 	functionRegisterHandler("/api/task-todo-progress", system_table_tools.GetTaskTodoProgressHandler, "system_table_tools.GetTaskTodoProgressHandler")
 
 	// dtt_1_row_create

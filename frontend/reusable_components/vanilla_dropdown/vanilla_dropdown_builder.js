@@ -78,6 +78,7 @@ function resolveDropdownOptionLabel(option, translate) {
  * @param {boolean} [config.useSearch=true] - Näytetäänkö hakukenttä
  * @param {function} [config.onChange] - Kutsutaan, kun valinta muuttuu (parametrina valittu arvo)
  * @param {function} [config.translate] - Optional translation function (key) => string
+ * @param {function} [config.renderOptionTrailingAction] - Optional opt-in action renderer for each option
  */
 export function createVanillaDropdown({
 	containerElement,
@@ -88,6 +89,7 @@ export function createVanillaDropdown({
 	useSearch = true,
 	onChange,
 	translate = () => undefined,
+	renderOptionTrailingAction = null,
   }) {
 	if (!containerElement) {
 	  throw new Error("containerElement puuttuu tai on virheellinen.");
@@ -293,8 +295,23 @@ export function createVanillaDropdown({
 					if (opt.__dropdownOptionTestId) {
 						item.dataset.testid = opt.__dropdownOptionTestId;
 					}
-                item.textContent = opt.label;
-                if (opt.langKey) item.dataset.langKey = opt.langKey;
+		const trailingAction = typeof renderOptionTrailingAction === 'function'
+		  ? renderOptionTrailingAction(opt, { close })
+		  : null;
+		if (trailingAction instanceof HTMLElement) {
+		  const optionLabel = document.createElement('span');
+		  optionLabel.classList.add('vdw-option-label');
+		  optionLabel.textContent = opt.label;
+		  if (opt.langKey) optionLabel.dataset.langKey = opt.langKey;
+		  item.classList.add('vdw-option--with-trailing-action');
+		  trailingAction.addEventListener('click', (event) => {
+			event.stopPropagation();
+		  });
+		  item.append(optionLabel, trailingAction);
+		} else {
+		  item.textContent = opt.label;
+		  if (opt.langKey) item.dataset.langKey = opt.langKey;
+		}
   
 		if (opt.value === selectedValue) {
 		  item.classList.add('vdw-selected');

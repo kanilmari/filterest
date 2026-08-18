@@ -282,7 +282,7 @@
 .column-preset-more-menu {
     position: absolute;
     right: 0;
-    top: 100%;
+    bottom: calc(100% + 4px);
     z-index: 100;
     min-width: 200px;
     padding: 0.25rem 0;

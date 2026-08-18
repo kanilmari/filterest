@@ -18,6 +18,7 @@ import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preferen
 import { buildGoogleMapsEmbedUrl, resolveImagePaths } from "./card_element_builder_helpers.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
+import { appendTextWithHttpLinks } from "../../../reusable_components/http_text_linkifier.js";
 
 /* ----------------------------------------------------------- */
 /** Palauttaa Google Maps -Embed-iframe-src-osoitteen. */
@@ -368,12 +369,23 @@ function createDetailsTable(detailsList, row_item, table_name) {
                 value_cell.textContent = linkValue;
             }
         } else if (!detailObj.hasLangKey && detailObj.rawValue.length > 80) {
-            value_cell.textContent = detailObj.rawValue.slice(0, 80) + "... ";
+            const displayText = detailObj.rawValue.slice(0, 80) + "... ";
+            const fullValueHref = resolveSafeExternalHttpUrl(detailObj.rawValue);
+            if (fullValueHref) {
+                const link = document.createElement("a");
+                link.href = fullValueHref;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = displayText;
+                value_cell.appendChild(link);
+            } else {
+                appendTextWithHttpLinks(value_cell, displayText);
+            }
             if (show_more_button_on_cards) {
                 value_cell.appendChild(createShowMoreLink(row_item, table_name));
             }
         } else {
-            value_cell.textContent = detailObj.rawValue;
+            appendTextWithHttpLinks(value_cell, detailObj.rawValue);
             if (detailObj.titleValue) {
                 value_cell.title = detailObj.titleValue;
             }

@@ -201,6 +201,52 @@ describe("initTabs", () => {
         expect(usersIconPath?.getAttribute("d")).toBe(getTabIconPath("group_filled"));
     });
 
+    test("renders system users once when it is also marked as the main table", async () => {
+        const { initTabs } = await import("./main_tab_printer.js");
+        const preloadedContentTablesResponse = {
+            datasets: [
+                {
+                    dataset_name: "system_users",
+                    is_main_table: true,
+                    is_in_current_project: true,
+                    is_top_level_in_current_project: true,
+                },
+            ],
+            tab_order: [
+                { tab_id: "static:system_users", sort_order: 1 },
+            ],
+        };
+
+        await initTabs({ preloadedContentTablesResponse });
+
+        expect(document.querySelectorAll('.navtablinks[data-id="system_users"]')).toHaveLength(1);
+    });
+
+    test("renders a legacy-ordered dataset once when the API payload contains it twice", async () => {
+        const { initTabs } = await import("./main_tab_printer.js");
+        const preloadedContentTablesResponse = {
+            datasets: [
+                {
+                    dataset_name: "system_users",
+                    is_in_current_project: true,
+                    is_top_level_in_current_project: true,
+                },
+                {
+                    dataset_name: "system_users",
+                    is_in_current_project: true,
+                    is_top_level_in_current_project: true,
+                },
+            ],
+            tab_order: [
+                { dataset_name: "system_users", sort_order: 1 },
+            ],
+        };
+
+        await initTabs({ preloadedContentTablesResponse });
+
+        expect(document.querySelectorAll('.navtablinks[data-id="system_users"]')).toHaveLength(1);
+    });
+
     test("does not fetch user profile while guest tabs are rendering", async () => {
         vi.mocked(getButtonState).mockReturnValue("login");
 
@@ -431,5 +477,49 @@ describe("initTabs", () => {
 
         expect(endpoint_router).not.toHaveBeenCalledWith("fetchContentTables", expect.anything());
         expect(document.querySelector('.navtablinks[data-id="app_service_catalog"]')).not.toBeNull();
+    });
+
+    test("ignores an older tab request that finishes after a newer render", async () => {
+        let resolveOlderRequest;
+        vi.mocked(endpoint_router).mockImplementationOnce(() => new Promise((resolve) => {
+            resolveOlderRequest = resolve;
+        }));
+        const { initTabs } = await import("./main_tab_printer.js");
+
+        const olderRender = initTabs();
+        await Promise.resolve();
+        const newerRender = initTabs({
+            preloadedContentTablesResponse: {
+                datasets: [
+                    {
+                        dataset_name: "travel_deals",
+                        is_in_current_project: true,
+                        is_top_level_in_current_project: true,
+                    },
+                    {
+                        dataset_name: "system_users",
+                        is_in_current_project: true,
+                        is_top_level_in_current_project: true,
+                    },
+                ],
+                tab_order: null,
+            },
+        });
+        await newerRender;
+
+        resolveOlderRequest({
+            datasets: [
+                {
+                    dataset_name: "system_users",
+                    is_in_current_project: true,
+                    is_top_level_in_current_project: true,
+                },
+            ],
+            tab_order: null,
+        });
+        await olderRender;
+
+        expect(document.querySelectorAll('.navtablinks[data-id="travel_deals"]')).toHaveLength(1);
+        expect(document.querySelectorAll('.navtablinks[data-id="system_users"]')).toHaveLength(1);
     });
 });

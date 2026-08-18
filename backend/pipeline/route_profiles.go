@@ -109,9 +109,10 @@ var RouteProfiles = map[string]RouteProfile{
 	"e_sessions.ResetSessionHandler": PublicProfile,
 
 	// Public data endpoints
-	"lang.GetTranslationsHandler":           PublicProfile,
-	"lang.GetPublicUILanguagesHandler":      PublicProfile,
-	"system_table_tools.GetAboutRowHandler": PublicProfile, // login page fetches privacy policy
+	"lang.GetTranslationsHandler":                     PublicProfile,
+	"lang.GetPublicUILanguagesHandler":                PublicProfile,
+	"system_table_tools.GetAboutRowHandler":           PublicProfile, // login page fetches privacy policy
+	"system_table_tools.GetDatasetSortDefaultHandler": PublicProfile,
 
 	// Dev tools — registered conditionally in init() below
 
@@ -172,6 +173,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.DeleteColumnViewPresetHandler":         AdminProfile,
 	"system_table_tools.GetFilterbarSectionLayoutHandler":      AdminProfile,
 	"system_table_tools.SaveFilterbarSectionLayoutHandler":     AdminProfile,
+	"system_table_tools.SaveDatasetSortDefaultHandler":         AdminProfile,
 	"system_table_tools.GetTaskTodoProgressHandler":            LoginOnlyProfile,
 	"router.GetDatasetAliasManagementHandler":                  AdminProfile,
 	"router.SaveDatasetAliasManagementHandler":                 AdminProfile,

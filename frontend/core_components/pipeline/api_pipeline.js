@@ -138,6 +138,8 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     deleteColumnViewPreset: 'system_table_tools.DeleteColumnViewPresetHandler',
     getFilterbarSectionLayout: 'system_table_tools.GetFilterbarSectionLayoutHandler',
     saveFilterbarSectionLayout: 'system_table_tools.SaveFilterbarSectionLayoutHandler',
+    getDatasetSortDefault: 'system_table_tools.GetDatasetSortDefaultHandler',
+    saveDatasetSortDefault: 'system_table_tools.SaveDatasetSortDefaultHandler',
     getTaskTodoProgress: 'system_table_tools.GetTaskTodoProgressHandler',
     getChildTabConfig: 'system_table_tools.GetChildTabConfigHandler',
     saveChildTabConfig: 'system_table_tools.SaveChildTabConfigHandler',

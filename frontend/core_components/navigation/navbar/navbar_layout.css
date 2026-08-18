@@ -28,7 +28,7 @@
        SVG tabs intentionally cross this visual edge so their outline can blend
        seamlessly with card content; a real border would paint over that shape.
        The navbar intentionally has only this right structural edge. */
-    box-shadow: inset -2px 0 0 0 var(--navbar-structural-border);
+    box-shadow: inset -2px 0 0 0 var(--border_color);
     grid-auto-rows: min-content;
     /* padding: var(--navbar_padding); */
     padding-top: unset;
@@ -86,23 +86,22 @@
 #admin_tools_tree .general_button_admin {
     font-family: 'Courier New', Courier, monospace;
     font-size: 16px;
-    background-color: var(--admin-tree-surface);
-    border-left: 3px solid var(--admin-tree-border);
-    color: var(--text_color);
+    background-color: rgb(63 50 120 / 0.15);
+    border-left: 3px solid rgb(75 60 140 / 0.4);
     padding: 4px 8px;
     transition: background-color 0.2s, border-color 0.2s;
 }
 
 #admin_tools_tree .general_button_admin:hover {
-    background-color: var(--admin-tree-surface-hover);
-    border-left-color: var(--admin-tree-accent);
+    background-color: rgb(75 60 160 / 0.3);
+    border-left-color: rgb(100 80 200 / 0.7);
 }
 
 /* Admin-puun aktiivinen: indigo-korostus */
 #admin_tools_tree .general_button_admin.active {
-    background-color: var(--admin-tree-surface-hover);
+    background-color: rgb(75 50 180 / 0.25);
     color: var(--button_active_text_color);
-    outline: 2px solid var(--admin-tree-accent);
+    outline: 2px solid rgb(100 70 200 / 0.5);
 }
 
 /* Kolmio puun oikeaan reunaan — node-row-tasolla, ei napin sisällä */
@@ -117,7 +116,7 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 10px;
-    color: var(--admin-tree-accent);
+    color: rgb(140 120 255);
     font-family: sans-serif;
     pointer-events: none;
 }
@@ -126,7 +125,7 @@
 #admin_tools_tree .node-row > span {
     font-family: 'Courier New', Courier, monospace;
     font-size: 16px;
-    color: var(--admin-tree-accent);
+    color: rgb(180 170 220);
 }
 
 #nav_tree .node[data-current-project="true"] > .node-row > span {
@@ -173,7 +172,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 
 /* Admin-puun reunaviiva haaran vasempaan reunaan */
 #admin_tools_tree .children {
-    border-left: 1px solid var(--admin-tree-border);
+    border-left: 1px solid rgb(100 80 180 / 0.3);
     margin-left: 8px;
 }
 
@@ -285,7 +284,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     padding: 12px;
     background-color: var(--bg_color);
     z-index: calc(var(--z-navbar) + 1);
-    border-bottom: 2px solid var(--navbar-structural-border);
+    border-bottom: 2px solid var(--border_color);
     /* Leave the final 2px clear so #navbar's single right edge remains visible. */
     margin-right: 2px;
     height: 70px; /* Matches the filterbar title row, including the restored bottom divider. */
@@ -336,7 +335,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     max-width: 100%;
     min-height: 44px;
     padding: 8px 12px;
-    border: 1px solid var(--navbar-structural-border);
+    border: 1px solid var(--border_color);
     border-radius: var(--navbar-control-radius);
     background-color: var(--button_bg_color);
     color: var(--button_text_color);
@@ -394,7 +393,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     width: 40px;
     height: 44px;
     border-radius: 8px;
-    border: 1px solid var(--navbar-structural-border);
+    border: 1px solid var(--border_color);
     background-color: var(--button_bg_color);
     color: var(--button_text_color);
     cursor: pointer;
@@ -566,7 +565,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 }
 
 .navbar-admin-tools-content > .navbar-disclosure-section {
-    border-block: 2px solid var(--navbar-structural-border);
+    border-block: 2px solid var(--border_color);
     margin-top: -2px;
 }
 
@@ -597,7 +596,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     min-height: 56px;
     box-sizing: border-box;
     padding: 0 14px 0 22px;
-    border-block: 2px solid var(--navbar-structural-border);
+    border-block: 2px solid var(--border_color);
     margin-top: -2px;
     background: var(--bg_color_extreme);
 }

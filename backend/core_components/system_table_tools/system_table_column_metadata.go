@@ -262,6 +262,7 @@ func UpdateTabOrderHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	normalizedEntries = deduplicateTabOrderEntries(normalizedEntries)
 	normalizedJSON, marshalErr := json.Marshal(normalizedEntries)
 	if marshalErr != nil {
 		log.Printf("\033[31merror: failed to marshal normalized tab_order_json: %v\033[0m", marshalErr)
@@ -288,6 +289,26 @@ func UpdateTabOrderHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// deduplicateTabOrderEntries keeps the first occurrence of every tab identity.
+// Between browser drag-order payloads and the active project's persisted JSON,
+// this prevents a duplicated DOM tab from becoming durable navigation data.
+func deduplicateTabOrderEntries(entries []map[string]interface{}) []map[string]interface{} {
+	deduplicated := make([]map[string]interface{}, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		tabID, _ := entry["tab_id"].(string)
+		if tabID == "" {
+			continue
+		}
+		if _, exists := seen[tabID]; exists {
+			continue
+		}
+		seen[tabID] = struct{}{}
+		deduplicated = append(deduplicated, entry)
+	}
+	return deduplicated
 }
 
 func GetColumnNameToIDMap(tableName string) (map[string]int, error) {
