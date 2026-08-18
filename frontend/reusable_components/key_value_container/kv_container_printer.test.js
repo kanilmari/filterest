@@ -98,7 +98,7 @@ describe("renderKeyValuePairs", () => {
         expect(kvContainer.querySelector(".kv-key")?.textContent).toBe("Parent name");
     });
 
-    test("makes only semantic HTTP(S) link fields clickable", () => {
+    test("links HTTP(S) addresses in semantic and ordinary text fields", () => {
         const kvContainer = document.createElement("div");
         document.body.appendChild(kvContainer);
 
@@ -113,10 +113,12 @@ describe("renderKeyValuePairs", () => {
         );
 
         const links = kvContainer.querySelectorAll("a");
-        expect(links).toHaveLength(1);
+        expect(links).toHaveLength(2);
         expect(links[0].getAttribute("href")).toBe("https://example.test");
         expect(links[0].getAttribute("target")).toBe("_blank");
         expect(links[0].getAttribute("rel")).toBe("noopener noreferrer");
+        expect(links[1].getAttribute("href")).toBe("https://plain-text.test");
+        expect(links[1].getAttribute("target")).toBe("_blank");
         expect(kvContainer.textContent).toContain("javascript:alert(1)");
         expect(kvContainer.textContent).toContain("https://plain-text.test");
     });

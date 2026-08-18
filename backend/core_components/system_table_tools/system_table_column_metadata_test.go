@@ -6,9 +6,25 @@
 package system_table_tools
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestDeduplicateTabOrderEntriesKeepsFirstOccurrence(t *testing.T) {
+	entries := []map[string]interface{}{
+		{"tab_id": "travel_info", "sort_order": 1},
+		{"tab_id": "travel_deals", "sort_order": 2},
+		{"tab_id": "static:system_users", "sort_order": 3},
+		{"tab_id": "static:system_users", "sort_order": 4},
+	}
+
+	got := deduplicateTabOrderEntries(entries)
+	want := entries[:3]
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("deduplicated tab order = %#v, want %#v", got, want)
+	}
+}
 
 func TestBuildGroupedTablesQueryUsesRecursiveCurrentProjectFolders(t *testing.T) {
 	query := buildGroupedTablesQuery("NULL::varchar AS icon_key")

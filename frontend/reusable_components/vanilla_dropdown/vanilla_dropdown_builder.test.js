@@ -4,7 +4,7 @@
 // Exists to keep shared dropdown controls from regressing back to inline SVG markup.
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 describe("createVanillaDropdown", () => {
     beforeEach(() => {
@@ -53,5 +53,53 @@ describe("createVanillaDropdown", () => {
         const trigger = container.querySelector(".vdw-dropdown-input");
         expect(trigger.value).toBe("Search relevance");
         expect(trigger.value).not.toBe("undefined");
+    });
+
+    test("keeps ordinary option markup action-free unless the caller opts in", async () => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+
+        const dropdown = createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "asc", label: "Ascending" }],
+            useSearch: false,
+            showClearButton: false,
+        });
+        dropdown.open();
+
+        expect(document.querySelector(".vdw-option-trailing-action")).toBeNull();
+        expect(document.querySelector(".vdw-option")?.textContent).toBe("Ascending");
+    });
+
+    test("renders an opt-in trailing action without selecting the option", async () => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const onChange = vi.fn();
+        const onAction = vi.fn();
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+
+        const dropdown = createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "created:DESC", label: "Newest" }],
+            useSearch: false,
+            showClearButton: false,
+            onChange,
+            renderOptionTrailingAction: () => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.classList.add("vdw-option-trailing-action");
+                button.textContent = "Set default";
+                button.addEventListener("click", onAction);
+                return button;
+            },
+        });
+        dropdown.open();
+
+        document.querySelector(".vdw-option-trailing-action")?.click();
+
+        expect(onAction).toHaveBeenCalledTimes(1);
+        expect(onChange).not.toHaveBeenCalled();
+        expect(dropdown.getValue()).toBeNull();
     });
 });

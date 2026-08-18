@@ -62,7 +62,9 @@ INSERT INTO public.system_functions (
   (4023, 'system_table_tools.GetCardVisibilityHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/card-visibility/', FALSE),
   (4024, 'system_table_tools.UpdateCardVisibilityHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/card-visibility/update', FALSE),
   (4025, 'lang.GetPublicUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/ui-languages', FALSE),
-  (4026, 'lang.AdminUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/admin/ui-languages', FALSE);
+  (4026, 'lang.AdminUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/admin/ui-languages', FALSE),
+  (4027, 'system_table_tools.GetDatasetSortDefaultHandler', FALSE, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 300, 20, '/api/dataset-sort-default', FALSE),
+  (4028, 'system_table_tools.SaveDatasetSortDefaultHandler', FALSE, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 300, 20, '/api/admin/dataset-sort-default', FALSE);
 
 INSERT INTO public.system_group_table_func_rights (
   user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
@@ -85,7 +87,8 @@ WHERE functions.name IN (
   'dtt_crud_workflows.CreateTableHandler',
   'system_table_tools.GetCardVisibilityHandler',
   'system_table_tools.UpdateCardVisibilityHandler',
-  'lang.AdminUILanguagesHandler'
+  'lang.AdminUILanguagesHandler',
+  'system_table_tools.SaveDatasetSortDefaultHandler'
 );
 
 INSERT INTO public.system_group_table_func_rights (
@@ -239,7 +242,7 @@ VALUES (
 );
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.0.0', 'Filterest generated public bootstrap');
+VALUES ('9.1.0', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -348,7 +351,8 @@ VALUES
   (225, 'system_schema_migrations', 'Applied schema migrations', 225, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Schema migrations', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, 'filename', 'history'),
   (226, 'system_languages', 'Canonical UI-language registry and site availability controls', 226, NULL, 11, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Languages', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'native_name', 'language'),
   (227, 'system_lang_key_translations', 'Normalized translations for stable UI language keys', 227, NULL, 11, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Language key translations', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'translation', 'language'),
-  (228, 'system_embedding_refresh_jobs', 'Content-free durable queue for refreshing row embeddings after committed data changes', 228, NULL, 8, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Embedding refresh jobs', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, 'refresh');
+  (228, 'system_embedding_refresh_jobs', 'Content-free durable queue for refreshing row embeddings after committed data changes', 228, NULL, 8, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Embedding refresh jobs', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, 'refresh'),
+  (229, 'system_dataset_sort_defaults', 'Per-dataset site-wide and administrator-specific default sorting', 229, NULL, 8, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'public fixture seed', NULL, 'public', 'Dataset Sort Defaults', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'sort_column', 'settings');
 
 INSERT INTO public.system_functions
     (id, name, disabled, created, updated, package, specific_table_related,
@@ -450,7 +454,8 @@ WHERE columns.table_schema = 'public'
   AND columns.table_name IN (
       'system_languages',
       'system_lang_key_translations',
-      'system_embedding_refresh_jobs'
+      'system_embedding_refresh_jobs',
+      'system_dataset_sort_defaults'
   )
   AND NOT EXISTS (
       SELECT 1
@@ -937,6 +942,7 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('system_db_tables', 'Tietokannan taulut', 'Database tables', '数据库表', '資料庫資料表', 'public fixture seed'),
   ('system_db_version', 'Tietokantaversio', 'Database version', '数据库版本', '資料庫版本', 'public fixture seed'),
   ('system_embedding_refresh_jobs', 'Embedding-päivitysjono', 'Embedding refresh jobs', '嵌入刷新任务', '嵌入重新整理工作', 'public fixture seed'),
+  ('system_dataset_sort_defaults', 'Taulujen lajitteluoletukset', 'Dataset Sort Defaults', '数据表排序默认值', '資料表排序預設值', 'public fixture seed'),
   ('system_foreign_key_relations_1_m', 'Vierasavainrelaatiot 1:M', 'Foreign-key relations 1:M', '外键关系 1:M', '外鍵關係 1:M', 'public fixture seed'),
   ('system_foreign_key_relations_m_m', 'Vierasavainrelaatiot M:M', 'Foreign-key relations M:M', '外键关系 M:M', '外鍵關係 M:M', 'public fixture seed'),
   ('system_functions', 'Järjestelmätoiminnot', 'System functions', '系统功能', '系統功能', 'public fixture seed'),

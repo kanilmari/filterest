@@ -17,6 +17,10 @@ import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
+import {
+    appendTextWithHttpLinks,
+    linkifyHttpTextNodes,
+} from "../../../reusable_components/http_text_linkifier.js";
 
 let highlightedCard = null;
 const OPEN_IN_NEW_TAB_LANG_KEY = "open_in_new_tab";
@@ -130,6 +134,7 @@ export function createTwoLineKeyValueElement(
             valueDiv.textContent = displayText;
             valueDiv.style.whiteSpace = "pre-wrap";
         }
+        linkifyHttpTextNodes(valueDiv);
     }
 
     container.appendChild(valueDiv);
@@ -179,18 +184,7 @@ export function createLinkTwoLine(
         valueDiv.dataset.langKey = linkValue;
     } else {
         const resolved = resolveLocalizedValue(linkValue, isMultilingual);
-        const trimmed = resolved.trim();
-        const safeHref = resolveSafeExternalHttpUrl(trimmed);
-        if (safeHref) {
-            const linkEl = document.createElement("a");
-            linkEl.href = safeHref;
-            linkEl.target = "_blank";
-            linkEl.rel = "noopener noreferrer";
-            linkEl.textContent = trimmed;
-            valueDiv.appendChild(linkEl);
-        } else {
-            valueDiv.textContent = trimmed;
-        }
+        appendTextWithHttpLinks(valueDiv, resolved.trim());
     }
 
     container.appendChild(valueDiv);

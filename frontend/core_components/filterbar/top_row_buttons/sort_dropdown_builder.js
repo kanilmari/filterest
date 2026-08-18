@@ -19,6 +19,10 @@ import {
     hasCachedSearchResults,
     sortCachedSearchResults,
 } from "../text_search/dataset_search_executor.js";
+import {
+    applyDatasetSortDefault,
+    createDatasetSortDefaultAction,
+} from "./dataset_sort_default_controller.js";
 
 export function createSortDropdown(tableName, columns, dataTypes) {
     const wrapper = document.createElement("div");
@@ -36,45 +40,56 @@ export function createSortDropdown(tableName, columns, dataTypes) {
     const sortableColumns = filterSortableColumns(columns, dataTypes);
     const options = buildSortOptions(sortableColumns);
 
-    const dropdown = createVanillaDropdown({
+    async function applySortSelection(value) {
+        const st = getUnifiedTableState(tableName);
+        if (!st.sort) st.sort = { column: null, direction: null };
+        const params = getParams(tableName);
+
+        if (!value) {
+            st.sort.column = null;
+            st.sort.direction = null;
+            delete params.sort_column;
+            delete params.sort_order;
+        } else {
+            const [col, dir] = value.split(":");
+            st.sort.column = col;
+            st.sort.direction = dir;
+            params.sort_column = col;
+            params.sort_order = dir;
+        }
+
+        setUnifiedTableState(tableName, st);
+        setParams(tableName, params);
+        updateURL(tableName, params, undefined, { replace: true });
+        emitDatasetSortSelection(tableName, value || "");
+
+        if (String(params.search || "").trim() && hasCachedSearchResults(tableName)) {
+            await sortCachedSearchResults(tableName, {
+                sortColumn: st.sort.column,
+                sortOrder: st.sort.direction,
+            });
+            return;
+        }
+
+        await refreshTableUnified(tableName, { skipUrlParams: true });
+    }
+
+    let dropdown;
+    dropdown = createVanillaDropdown({
         containerElement: dropdownContainer,
         options,
         placeholder: "Select...",
         showClearButton: false,
         useSearch: false,
-        onChange: (value) => {
-            const st = getUnifiedTableState(tableName);
-            if (!st.sort) st.sort = { column: null, direction: null };
-            const params = getParams(tableName);
-
-            if (!value) {
-                st.sort.column = null;
-                st.sort.direction = null;
-                delete params.sort_column;
-                delete params.sort_order;
-            } else {
-                const [col, dir] = value.split(":");
-                st.sort.column = col;
-                st.sort.direction = dir;
-                params.sort_column = col;
-                params.sort_order = dir;
-            }
-
-            setUnifiedTableState(tableName, st);
-            setParams(tableName, params);
-            updateURL(tableName, params, undefined, { replace: true });
-            emitDatasetSortSelection(tableName, value || "");
-
-            if (String(params.search || "").trim() && hasCachedSearchResults(tableName)) {
-                void sortCachedSearchResults(tableName, {
-                    sortColumn: st.sort.column,
-                    sortOrder: st.sort.direction,
-                });
-                return;
-            }
-
-            refreshTableUnified(tableName, { skipUrlParams: true });
-        },
+        renderOptionTrailingAction: (option, { close }) =>
+            createDatasetSortDefaultAction(tableName, option, {
+                selectOption: async (value) => {
+                    dropdown.setValue(value, false);
+                    await applySortSelection(value);
+                },
+                closeDropdown: close,
+            }),
+        onChange: applySortSelection,
     });
 
     const inputEl = dropdownContainer.querySelector(".vdw-dropdown-input");
@@ -83,6 +98,12 @@ export function createSortDropdown(tableName, columns, dataTypes) {
     const unsubscribeSortSelection = subscribeDatasetSortSelection(tableName, (value) => {
         dropdown.setValue(value || "");
     });
+
+    void applyDatasetSortDefault(
+        tableName,
+        dropdown,
+        new Set(options.map((option) => option.value))
+    );
 
     wrapper.destroy = () => {
         unsubscribeSortSelection();

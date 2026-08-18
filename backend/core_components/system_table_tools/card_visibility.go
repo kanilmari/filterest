@@ -5,6 +5,7 @@
 package system_table_tools
 
 import (
+	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
@@ -354,6 +355,23 @@ type updateCardVisibilityRequest struct {
 	Columns           []CardVisibilityColumn `json:"columns"`
 }
 
+// scheduleCardVisibilitySchemaCacheInvalidation clears cached card metadata only
+// after the surrounding request transaction has committed successfully. Between
+// the card-settings write path and get-results metadata reads, this prevents an
+// immediate refresh from repopulating the cache with pre-commit values.
+func scheduleCardVisibilitySchemaCacheInvalidation(
+	ctx context.Context,
+	tableName string,
+	invalidate func(string),
+) {
+	hook := func() {
+		invalidate(tableName)
+	}
+	if !dbutils.RegisterAfterCommitHook(ctx, hook) {
+		hook()
+	}
+}
+
 // UpdateCardVisibilityHandler batch-updates card visibility flags for a table.
 // POST /api/card-visibility/update
 func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
@@ -473,9 +491,14 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Invalidate schema cache so visibility changes take effect immediately
-	// instead of waiting for the 5-minute TTL to expire.
-	dtt_1_row_read.InvalidateSchemaCache(req.TableName)
+	// The lazy request transaction commits after this handler returns. Clearing
+	// the cache before that commit lets a fast client refresh cache the old row
+	// again for five minutes, so schedule invalidation for successful commit.
+	scheduleCardVisibilitySchemaCacheInvalidation(
+		r.Context(),
+		req.TableName,
+		dtt_1_row_read.InvalidateSchemaCache,
+	)
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",

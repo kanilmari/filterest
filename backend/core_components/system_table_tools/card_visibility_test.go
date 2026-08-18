@@ -1,10 +1,40 @@
 package system_table_tools
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
+
+	"easelect/backend/core_components/dbutils"
 )
+
+func TestScheduleCardVisibilitySchemaCacheInvalidationDefersToCommitHook(t *testing.T) {
+	calledWith := ""
+	lazyTx := dbutils.NewLazyTx(nil)
+	ctx := dbutils.SetLazyTx(context.Background(), lazyTx)
+
+	scheduleCardVisibilitySchemaCacheInvalidation(ctx, "travel_deals", func(tableName string) {
+		calledWith = tableName
+	})
+
+	if calledWith != "" {
+		t.Fatalf("cache invalidated before commit for %q", calledWith)
+	}
+}
+
+func TestScheduleCardVisibilitySchemaCacheInvalidationFallsBackWithoutLazyTx(t *testing.T) {
+	calledWith := ""
+	scheduleCardVisibilitySchemaCacheInvalidation(
+		context.Background(),
+		"travel_deals",
+		func(tableName string) { calledWith = tableName },
+	)
+
+	if calledWith != "travel_deals" {
+		t.Fatalf("fallback invalidation table = %q, want travel_deals", calledWith)
+	}
+}
 
 func TestNormalizeCardDetailsLayout(t *testing.T) {
 	tests := []struct {

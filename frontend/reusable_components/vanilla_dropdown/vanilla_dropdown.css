@@ -112,6 +112,27 @@
   padding: 0.25rem 0.5rem;
 }
 
+.vdw-option--with-trailing-action {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.vdw-option-trailing-action {
+  flex: 0 0 auto;
+  opacity: 0;
+  padding: 0.2rem 0.45rem;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
+.vdw-option--with-trailing-action:hover .vdw-option-trailing-action,
+.vdw-option--with-trailing-action:focus-within .vdw-option-trailing-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* Hover-korostus (kun hiiri on päällä) */
 .vdw-option:hover {
   background-color: var(--button_bg_color);

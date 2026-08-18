@@ -1,8 +1,8 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "8.32.2",
-  "db_version": "9.0.0",
+  "app_version": "8.33.0",
+  "db_version": "9.1.0",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -28,6 +28,7 @@
     "public.system_column_view_presets",
     "public.system_comments",
     "public.system_config",
+    "public.system_dataset_sort_defaults",
     "public.system_db_table_aliases",
     "public.system_db_tables",
     "public.system_db_version",
@@ -100,10 +101,10 @@
     "public.system_about": 1,
     "public.system_column_details": 47,
     "public.system_config": 9,
-    "public.system_db_tables": 44,
+    "public.system_db_tables": 45,
     "public.system_db_version": 1,
     "public.system_foreign_key_relations_1_m": 4,
-    "public.system_functions": 22,
+    "public.system_functions": 24,
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_translations": 10,
     "public.system_lang_keys": 390,
@@ -117,10 +118,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "be6220da2d401da0c935529af3dc4f295496ba0e4232bc896733a412cd1e18ad"
+      "sha256": "591dc8fa68137f42e55e9fa9d9a9bf75746f86119b28cec0aa47b07643f34ae9"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "e3f103b237176913b871f7a06babf76d646b3c585785874e57cf95c1d15b74c9"
+      "sha256": "9c6df42d478c9c51f93e81cb0e356b7835216f2f2ba3b475b826de981ccf1314"
     }
   },
   "source_files": {
@@ -131,7 +132,7 @@
       "sha256": "f91192e8fb91e56a7d069dad0dc4c333dc213cfb9607af5adde9dffe209dc51a"
     },
     "server_tools/public_slice_export/public_bootstrap/runtime.schema.sql": {
-      "sha256": "8bf955278c29b7b14d8abd0a0e1d02c8892d8d88d7fa49f18869a6d585a421d8"
+      "sha256": "ba2bf1c44ddd56b9658f6f2eb74002a7ae0a8ba3bcd49e58e9ab6db32a088091"
     },
     "server_tools/public_slice_export/public_bootstrap/runtime.seed.sql": {
       "sha256": "76117887c4c8b95026fb604cdc7b88ab68dc492d32557c0dca1006eb0f27d904"
@@ -140,10 +141,10 @@
       "sha256": "e7d93194c36e209253016c50c3a78b84a6a6ea17e438b4600981133514d4b47f"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.seed.sql": {
-      "sha256": "56631a02d1940f57ba1a3c30be102da7adaa2a68c33665c3d5f59420f9fa1437"
+      "sha256": "91404845928abcd39dc282de2e63718aca7f84476467bedc996773b74695b891"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql": {
-      "sha256": "35c598840dcafe75229cde127adba6eaa37119b92583649105a068d554867633"
+      "sha256": "7de45e9fdabb9183cfb2c1ff3b9c2a7c888cfc0ca10d6f762e558a6780cea3cc"
     },
     "server_tools/public_slice_export/public_bootstrap/fixtures/docs/first-dataset.png": {
       "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"

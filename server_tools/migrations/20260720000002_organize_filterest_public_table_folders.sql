@@ -21,6 +21,7 @@ DECLARE
     v_columns_folder_id BIGINT;
     v_other_tables_folder_id BIGINT;
     v_admin_user_id BIGINT;
+    v_existing_current_project_id BIGINT;
 BEGIN
     SELECT text_value
     INTO v_instance_kind
@@ -123,6 +124,17 @@ BEGIN
     WHERE folder_name = 'filterest' AND parent_id = v_apps_folder_id
     ORDER BY id LIMIT 1;
 
+    -- An upgrade must not replace the site's selected project with the public
+    -- example workspace. Fresh Filterest databases have no competing current
+    -- project here, while established sites retain their existing selection.
+    SELECT id
+    INTO v_existing_current_project_id
+    FROM public.system_table_folders
+    WHERE is_current_project = TRUE
+      AND id IS DISTINCT FROM v_filterest_folder_id
+    ORDER BY id
+    LIMIT 1;
+
     INSERT INTO public.system_table_folders (
         folder_name, folder_description, created, updated, parent_id,
         creation_spec, is_current_project, admin_user_id, tab_order_json
@@ -189,18 +201,14 @@ BEGIN
     WHERE folder_name = 'other_tables' AND parent_id = v_database_folder_id
     ORDER BY id LIMIT 1;
 
-    UPDATE public.system_table_folders
-    SET is_current_project = FALSE,
-        updated = CURRENT_DATE
-    WHERE is_current_project = TRUE
-      AND id IS DISTINCT FROM v_filterest_folder_id;
-
-    UPDATE public.system_table_folders
-    SET is_current_project = TRUE,
-        admin_user_id = COALESCE(admin_user_id, v_admin_user_id),
-        tab_order_json = '[{"tab_id":"palvelukatalogi","sort_order":1},{"tab_id":"riskienhallinta","sort_order":2},{"tab_id":"dokumentaatio","sort_order":3},{"tab_id":"tiketit","sort_order":4},{"tab_id":"system_users","sort_order":5},{"tab_id":"static:user","sort_order":6},{"tab_id":"static:logout","sort_order":7}]'::jsonb,
-        updated = CURRENT_DATE
-    WHERE id = v_filterest_folder_id;
+    IF v_existing_current_project_id IS NULL THEN
+        UPDATE public.system_table_folders
+        SET is_current_project = TRUE,
+            admin_user_id = COALESCE(admin_user_id, v_admin_user_id),
+            tab_order_json = '[{"tab_id":"palvelukatalogi","sort_order":1},{"tab_id":"riskienhallinta","sort_order":2},{"tab_id":"dokumentaatio","sort_order":3},{"tab_id":"tiketit","sort_order":4},{"tab_id":"system_users","sort_order":5},{"tab_id":"static:user","sort_order":6},{"tab_id":"static:logout","sort_order":7}]'::jsonb,
+            updated = CURRENT_DATE
+        WHERE id = v_filterest_folder_id;
+    END IF;
 
     UPDATE public.system_db_tables SET folder_id = v_filterest_folder_id, updated = NOW()
     WHERE table_name IN ('palvelukatalogi', 'riskienhallinta', 'dokumentaatio', 'tiketit')

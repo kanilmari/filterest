@@ -3,11 +3,11 @@
 This file is generated from the Filterest public-slice candidate flow.
 It is evidence for review, not approval to publish.
 
-- Generated at: `2026-08-18T14:43:49Z`
-- Release source commit used by the generator: `70610c116bb2d3f83d673251e51eb66d01d7b750`
+- Generated at: `2026-08-18T19:01:45Z`
+- Release source commit used by the generator: `7b3ac2304bbe54812a42a629da58f3505f5a9555`
 - Generated Filterest commit: this repository commit; run `git log -1 --oneline`
-- Filterest app version: `8.32.2`
-- Database version: `9.0.0`
+- Filterest app version: `8.33.0`
+- Database version: `9.1.0`
 
 ## Automated Evidence Included In This Commit
 
@@ -21,7 +21,7 @@ It is evidence for review, not approval to publish.
 | Public source license | `LICENSE` and package metadata declare GPLv2 / `GPL-2.0-only`. |
 | Third-party notice inventory | `THIRD_PARTY_NOTICES.md` |
 | Third-party notice inventory review | `docs/publication/THIRD_PARTY_NOTICE_REVIEW.md` |
-| Public app/DB compatibility | `server_tools/versioning/app_db_compatibility.jsonl` and `server_tools/versioning/schema_snapshots/db-9.0.0.sql` |
+| Public app/DB compatibility | `server_tools/versioning/app_db_compatibility.jsonl` and `server_tools/versioning/schema_snapshots/db-9.1.0.sql` |
 | Private source boundary | Candidate contract requires private app/tool paths to be absent before this commit is created. |
 | Secret/private-material scan | Candidate contract runs the tracked-file public-slice audit before this commit is accepted. |
 | Public build posture | Candidate generation runs Go builds, route-manifest check, npm install, and npm build before this commit is accepted. |

@@ -90,6 +90,21 @@ async function isRequestedViewSurfaceActive(page: Page, viewMode: ViewMode): Pro
   }, VIEW_SURFACE_SUFFIXES[viewMode]);
 }
 
+/** Opens the shared view-selector disclosure when the current UI keeps tool groups collapsed. */
+async function openViewSelectorSectionIfCollapsed(page: Page): Promise<void> {
+  const section = page.locator('.dataset-filter-views-section:visible').first();
+  if (!await section.isVisible({ timeout: 2000 }).catch(() => false)) {
+    return;
+  }
+  if (!await section.evaluate((element) => element.classList.contains('is-collapsed'))) {
+    return;
+  }
+
+  const header = section.locator(':scope > .animated-disclosure-header').first();
+  await header.click({ timeout: 5000 });
+  await expect(section).not.toHaveClass(/\bis-collapsed\b/, { timeout: 5000 });
+}
+
 /**
  * Switches to the specified view mode using the view selector buttons.
  *
@@ -129,6 +144,7 @@ export async function switchToView(
   const openedFilterbarForSwitch = await openActiveFilterbarIfCollapsed(page);
 
   try {
+    await openViewSelectorSectionIfCollapsed(page);
     const directTestId = DIRECT_VIEW_TEST_IDS[viewMode];
     if (directTestId) {
       const btnByTestId = page.locator(`[data-testid="${directTestId}"]:visible`).first();

@@ -145,9 +145,11 @@ vi.mock('./card_detail_standard_key_decorator.js', () => ({
 }));
 
 import { create_card_view, refreshCardLanguages } from './card_view_printer.js';
+import { addKeywordsSection } from './card_keyword_builder.js';
 
 describe('card language refresh', () => {
     beforeEach(() => {
+        vi.clearAllMocks();
         document.body.innerHTML = '';
         localStorage.clear();
     });
@@ -189,5 +191,30 @@ describe('card language refresh', () => {
         expect(finnishCard.textContent).toContain('Ominaisuuksien kehitys');
         expect(finnishCard.textContent).not.toContain('Feature development');
         expect(finnishCard.textContent).not.toContain('{"en"');
+    });
+
+    test('routes a keywords card role to the keyword-tag renderer', async () => {
+        const tableName = 'travel_deals';
+        localStorage.setItem(`${tableName}_dataTypes`, JSON.stringify({
+            keywords: {
+                card_element: 'keywords',
+                show_key_on_card: false,
+                show_value_on_card: true,
+            },
+        }));
+
+        await create_card_view(
+            ['keywords'],
+            [{ id: 6, keywords: 'Risteilyt, matkat, Tallinna' }],
+            tableName,
+        );
+
+        expect(addKeywordsSection).toHaveBeenCalledTimes(1);
+        expect(addKeywordsSection.mock.calls[0][0]).toEqual([
+            expect.objectContaining({
+                column: 'keywords',
+                rawValue: 'Risteilyt, matkat, Tallinna',
+            }),
+        ]);
     });
 });

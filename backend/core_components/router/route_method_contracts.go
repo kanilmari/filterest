@@ -49,6 +49,8 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"system_table_tools.DeleteColumnViewPresetHandler":     {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetFilterbarSectionLayoutHandler":  {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.SaveFilterbarSectionLayoutHandler": {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.GetDatasetSortDefaultHandler":      {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.SaveDatasetSortDefaultHandler":     {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetTaskTodoProgressHandler":        {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 
 	// Management-Easelect cloud view routes.

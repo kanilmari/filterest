@@ -132,7 +132,7 @@ const _aiRequestedKeys = new Set();
 
 function _isSyntheticE2ETranslationKey(key) {
     const normalized = String(key || '').trim().toLowerCase();
-    return normalized.startsWith('e2e_') || normalized.startsWith('e2e-');
+    return /(^|_)(e2e|test)(_|-)/.test(normalized);
 }
 
 /**
@@ -348,7 +348,7 @@ function observeDomChanges() {
                     // Merkitään haetuksi ettei haeta uudestaan
                     uniqueMissing.forEach(k => _aiRequestedKeys.add(k));
 
-                    if (IS_DEV_MODE && skippedSyntheticKeys.length > 0) console.log('[AI Translation] Skipping synthetic E2E key(s):', skippedSyntheticKeys);
+                    if (IS_DEV_MODE && skippedSyntheticKeys.length > 0) console.log('[AI Translation] Skipping synthetic test key(s):', skippedSyntheticKeys);
 
                     if (aiEligibleMissing.length === 0) {
                         return;
