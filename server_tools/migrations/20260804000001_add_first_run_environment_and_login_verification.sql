@@ -34,19 +34,15 @@ BEGIN
     END IF;
 END $$;
 
-INSERT INTO public.system_config (key, json_value, creation_spec, text_value, value_type)
+-- Public Filterest bootstraps intentionally omit the optional
+-- system_config_value_data_types catalog. Keep the setting portable by
+-- leaving value_type unset; text_value remains authoritative.
+INSERT INTO public.system_config (key, json_value, creation_spec, text_value)
 SELECT
     'installation_environment',
     '{"value":""}'::jsonb,
     'User-facing installation purpose selected during First Run. Empty preserves the deployment-defined fallback until First Run saves an explicit choice.',
-    '',
-    (
-        SELECT id
-        FROM public.system_config_value_data_types
-        WHERE lower(data_type) IN ('text', 'string')
-        ORDER BY id
-        LIMIT 1
-    )
+    ''
 WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'installation_environment');
 
 INSERT INTO public.system_lang_keys (lang_key, en, fi, ch, yue, creation_spec)

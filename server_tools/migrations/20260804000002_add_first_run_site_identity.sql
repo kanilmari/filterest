@@ -3,19 +3,15 @@
 -- VERSION_DB_OWNER: 20260804000001_add_first_run_environment_and_login_verification.sql
 -- Makes the First Run site name an explicit, multilingual, persisted identity.
 
-INSERT INTO public.system_config (key, json_value, creation_spec, text_value, value_type)
+-- Public Filterest bootstraps intentionally omit the optional
+-- system_config_value_data_types catalog. Keep the site identity portable by
+-- leaving value_type unset; text_value remains authoritative.
+INSERT INTO public.system_config (key, json_value, creation_spec, text_value)
 SELECT
     'site_name',
     '{"value":""}'::jsonb,
     'Administrator-owned browser-facing identity selected during First Run.',
-    '',
-    (
-        SELECT id
-        FROM public.system_config_value_data_types
-        WHERE lower(data_type) IN ('text', 'string')
-        ORDER BY id
-        LIMIT 1
-    )
+    ''
 WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'site_name');
 
 INSERT INTO public.system_lang_keys (lang_key, en, fi, ch, yue, creation_spec)

@@ -105,6 +105,9 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY docs/ ./docs/
 # Copy migrations so existing production databases can receive reviewed schema updates.
 COPY server_tools/migrations/ ./server_tools/migrations/
+COPY BUILD_IDENTITY.json ./BUILD_IDENTITY.json
+RUN mkdir -p ./server_tools/versioning
+COPY server_tools/versioning/release_ledger.v1.jsonl ./server_tools/versioning/release_ledger.v1.jsonl
 COPY VERSION_* ./
 RUN app_file=""; app_version="${EASELECT_APP_VERSION}"; \
     if [ -f VERSION_EASELECT ]; then app_file="VERSION_EASELECT"; app_version="$(cat VERSION_EASELECT)"; \

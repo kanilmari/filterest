@@ -3,7 +3,10 @@
 -- Adds a fail-closed first-run flag and four-language browser setup labels.
 -- Existing databases with a login-ready admin start closed; fresh public databases start pending.
 
-INSERT INTO public.system_config (key, json_value, creation_spec, boolean_value, value_type)
+-- Public Filterest bootstraps intentionally omit the optional
+-- system_config_value_data_types catalog. Keep first-run state portable by
+-- leaving value_type unset; the typed boolean column remains authoritative.
+INSERT INTO public.system_config (key, json_value, creation_spec, boolean_value)
 SELECT
     'first_run',
     jsonb_build_object(
@@ -27,13 +30,6 @@ SELECT
         JOIN restricted.users_restricted ur ON ur.id = u.id
         WHERE u.enabled IS TRUE
           AND u.admin_access_allowed IS TRUE
-    ),
-    (
-        SELECT id
-        FROM public.system_config_value_data_types
-        WHERE lower(data_type) IN ('boolean', 'bool')
-        ORDER BY id
-        LIMIT 1
     )
 WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'first_run');
 
