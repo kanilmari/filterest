@@ -40,7 +40,7 @@ describe("big_card_related_records.css", () => {
         expect(containerRule).toContain("padding-top: 0");
         expect(barRule).toContain("width: 100%");
         expect(barRule).toContain("padding-top: 10px");
-        expect(barRule).toContain("overflow-y: hidden");
+        expect(barRule).toContain("overflow: auto hidden");
         expect(barRule).toContain("border-bottom: 2px solid var(--border_color)");
         expect(buttonRule).toContain("height: 38px");
         expect(buttonRule).toContain("min-height: 38px");
