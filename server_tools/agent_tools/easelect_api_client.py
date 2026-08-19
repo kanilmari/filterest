@@ -226,9 +226,15 @@ class EaselectAPIClient:
             self.fetch_csrf_token(force=True)
             return first
         if first.get("otp_required") is True:
-            verification_code = self.otp_code
-            if not verification_code and callable(self.verification_code_provider):
+            # A visible interactive prompt must win over any stale code loaded
+            # from the developer environment. Otherwise a previous OTP can be
+            # submitted silently and the human never gets a chance to enter the
+            # factor requested by the server.
+            verification_code = None
+            if callable(self.verification_code_provider):
                 verification_code = self.verification_code_provider(first)
+            elif self.otp_code:
+                verification_code = self.otp_code
             if not verification_code:
                 raise EaselectAPIError(
                     "login requires a verification code but no configured code or provider is available"

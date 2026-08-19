@@ -117,6 +117,38 @@ def print_columns(columns):
         print(f"{column.get('column_name', '')}\t{column.get('data_type', '')}")
 
 
+def print_authentication_context(args):
+    """Explain visible credential prompts before asking a human for secrets."""
+    base_url = args.base_url or "https://localhost:8082"
+    command = str(getattr(args, "command", "administrative API operation"))
+    credential_username = str(getattr(args, "credential_username", "") or "").strip()
+    print("Administrator authentication required")
+    print(f"Service: {base_url}")
+    print(
+        "Credentials requested: the existing working administrator account "
+        f"'{credential_username}'."
+    )
+    if command == "user-auth-set":
+        method_labels = {
+            "none": "password only (no additional verification)",
+            "fixed_pin": "fixed PIN",
+            "email": "email verification code",
+        }
+        method = method_labels.get(args.verification_method, args.verification_method)
+        print(
+            f"Account being changed: user ID {args.user_id}; "
+            f"new sign-in method: {method}."
+        )
+        print("Do not enter the credentials of the account being changed unless it is already a working administrator.")
+    else:
+        print(f"Operation being authorized: {command}.")
+    print(
+        "After the username and password are accepted, this terminal will ask "
+        "for that administrator's configured PIN or verification code when required."
+    )
+    print()
+
+
 def extract_rows(payload):
     """Normalize API row payloads between paged responses and export output."""
     if isinstance(payload, dict) and isinstance(payload.get("data"), list):
@@ -199,17 +231,25 @@ def make_client(args):
     if not getattr(args, "prompt_credentials", False):
         return EaselectAPIClient(base_url=args.base_url)
 
-    username = input("Admin username: ").strip()
-    password = getpass.getpass("Admin password: ")
+    username = str(getattr(args, "credential_username", "") or "").strip()
+    if not username:
+        raise ValueError(
+            "--credential-username is required with --prompt-credentials so the "
+            "visible terminal can name the exact account being requested"
+        )
+    print_authentication_context(args)
+    password = getpass.getpass(f"Password for existing administrator '{username}': ")
 
     def verification_code_provider(response):
         method = str(response.get("verification_method") or "").strip()
         prompts = {
-            "fixed_pin": "Fixed PIN: ",
-            "totp": "Authenticator code: ",
-            "email": "Email verification code: ",
+            "fixed_pin": "Existing administrator's fixed PIN: ",
+            "totp": "Existing administrator's authenticator code: ",
+            "email": "Existing administrator's email verification code: ",
         }
-        return getpass.getpass(prompts.get(method, "Login verification code: ")).strip()
+        return getpass.getpass(
+            prompts.get(method, "Existing administrator's login verification code: ")
+        ).strip()
 
     return EaselectAPIClient(
         base_url=args.base_url,
@@ -393,6 +433,10 @@ def build_parser():
         "--prompt-credentials",
         action="store_true",
         help="Prompt for credentials and the configured login factor in the visible terminal",
+    )
+    parser.add_argument(
+        "--credential-username",
+        help="Exact non-secret username to name in a visible credential prompt",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)

@@ -5,7 +5,9 @@
  * (cookies, localStorage) to .auth/user.json. All test projects then
  * re-use that session via storageState so login only happens once.
  *
- * This avoids hitting the server's per-IP rate limit (10 attempts / 15 min).
+ * This avoids repeated authentication work and keeps every project on one
+ * deterministic session. Successful logins no longer consume the server's
+ * failed-login limit (10 rejected credentials or factors / 15 min).
  */
 
 import { chromium, type Browser, type FullConfig } from '@playwright/test';

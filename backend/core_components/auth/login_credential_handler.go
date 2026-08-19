@@ -6,7 +6,9 @@
 package auth
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -55,12 +57,14 @@ type loginJSONRequest struct {
 //   - Phase 1 (otp_code empty): verify credentials → send OTP → respond {otp_required}
 //   - Phase 2 (otp_code present): verify OTP → authenticate → respond {authenticated}
 func handleLoginJSON(w http.ResponseWriter, r *http.Request) {
-	if shouldBlockLoginAttempt(w, r) {
+	releaseLoginIP, blocked := beginFailedLoginAttempt(w, r)
+	if blocked {
 		respondJSON(w, http.StatusTooManyRequests, map[string]interface{}{
 			"error": loginRateLimitErrorMessage,
 		})
 		return
 	}
+	defer releaseLoginIP()
 
 	var req loginJSONRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -105,7 +109,13 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 		req.Username,
 	).Scan(&userID)
 	if err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
+		if errors.Is(err, sql.ErrNoRows) {
+			recordLoginFailure(getClientIP(r))
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
+			return
+		}
+		logging.Errorf("[login-json] failed to load user credentials: %v", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
 		return
 	}
 
@@ -115,11 +125,18 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 		`SELECT password FROM restricted.users_restricted WHERE id = $1`, userID,
 	).Scan(&hashedPassword)
 	if err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
+		logging.Errorf("[login-json] failed to load password record for user %d: %v", userID, err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
 		return
 	}
 	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.Password)); err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			recordLoginFailure(getClientIP(r))
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
+			return
+		}
+		logging.Errorf("[login-json] stored password hash is invalid for user %d: %v", userID, err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
 		return
 	}
 	log.Printf("[login-json] credentials OK for user %s (id=%d) 🔑", req.Username, userID)
@@ -224,13 +241,26 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 
 	verified := false
 	attemptsRemaining := -1
+	recordFactorFailure := false
 	switch verificationRecord.Method {
 	case verificationFixedPIN:
+		if _, hashErr := bcrypt.Cost([]byte(verificationRecord.PINHash)); hashErr != nil {
+			logging.Errorf("[login-json] stored fixed PIN hash is invalid for user %d: %v", userID, hashErr)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "verification_method_unavailable"})
+			return
+		}
 		verified = verifyFixedPIN(verificationRecord.PINHash, req.OTPCode)
 		attemptsRemaining = localLoginFactorAttemptsRemaining(session, verified)
+		recordFactorFailure = !verified
 	case verificationTOTP:
+		if _, secretErr := totpCodeForCounter(verificationRecord.TOTPSecret, uint64(time.Now().Unix()/totpPeriod)); secretErr != nil {
+			logging.Errorf("[login-json] stored TOTP secret is invalid for user %d: %v", userID, secretErr)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "verification_method_unavailable"})
+			return
+		}
 		verified = verifyTOTPAt(verificationRecord.TOTPSecret, req.OTPCode, time.Now())
 		attemptsRemaining = localLoginFactorAttemptsRemaining(session, verified)
+		recordFactorFailure = !verified
 	case verificationEmail:
 		verification, err := otp.VerifyOTP(userID, otp.ProfileLogin, req.OTPCode)
 		if err != nil {
@@ -240,11 +270,16 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 		}
 		verified = verification.IsVerified()
 		attemptsRemaining = verification.AttemptsRemaining
+		recordFactorFailure = verification.Status == otp.VerificationInvalid ||
+			verification.Status == otp.VerificationAttemptsExhausted
 	case verificationNone:
 		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "no_pending_otp"})
 		return
 	}
 	if !verified {
+		if recordFactorFailure {
+			recordLoginFailure(getClientIP(r))
+		}
 		if attemptsRemaining == 0 {
 			clearPendingLoginState(session)
 		}
@@ -324,6 +359,7 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 		return
 	}
 
+	clearLoginFailures(getClientIP(r))
 	log.Printf("[login-json] user '%s' (id=%d) authenticated successfully 🎉", username, userID)
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"authenticated": true,

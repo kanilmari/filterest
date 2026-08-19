@@ -1,5 +1,5 @@
 // login_rate_checker.go
-// Provides IP-based rate limiting for login attempts within a sliding window.
+// Provides IP-based rate limiting for login attempts within a fixed window.
 // Bridges client IP extraction and the login handlers that check attempt thresholds.
 // Exists to prevent brute-force login attacks by tracking per-IP attempt counts.
 package auth
@@ -22,6 +22,27 @@ var authRateLimiter = struct {
 	sync.Mutex
 	attempts map[string]*loginAttempt
 }{attempts: make(map[string]*loginAttempt)}
+
+// loginFailureRateLimiter is separate from the request-count limiter used by
+// registration and first-run setup. Interactive login must count only rejected
+// credentials or verification factors, never successful steps or harmless requests.
+var loginFailureRateLimiter = struct {
+	sync.Mutex
+	attempts    map[string]*loginAttempt
+	lastCleanup time.Time
+}{attempts: make(map[string]*loginAttempt)}
+
+type loginIPGate struct {
+	mutex sync.Mutex
+	refs  int
+}
+
+// loginIPGates serializes authentication work from one IP without serializing
+// unrelated clients. Ref-counted entries are removed after the last waiter.
+var loginIPGates = struct {
+	sync.Mutex
+	entries map[string]*loginIPGate
+}{entries: make(map[string]*loginIPGate)}
 
 type loginReverseDNSEntry struct {
 	hostname  string
@@ -63,6 +84,109 @@ func checkLoginRateLimit(ip string) bool {
 	}
 	entry.count++
 	return entry.count > loginRateLimitMax
+}
+
+// isLoginFailureRateLimited checks an IP's current failed-login window without
+// consuming an attempt. Failures are recorded only at the authentication branch
+// that actually rejects a password or verification factor.
+func isLoginFailureRateLimited(ip string) bool {
+	loginFailureRateLimiter.Lock()
+	defer loginFailureRateLimiter.Unlock()
+
+	now := time.Now()
+	entry, exists := loginFailureRateLimiter.attempts[ip]
+	if !exists {
+		return false
+	}
+	if now.Sub(entry.windowStart) > loginRateLimitWindow {
+		delete(loginFailureRateLimiter.attempts, ip)
+		return false
+	}
+	return entry.count >= loginRateLimitMax
+}
+
+// recordLoginFailure adds one rejected password or verification factor to the IP window.
+func recordLoginFailure(ip string) {
+	loginFailureRateLimiter.Lock()
+	defer loginFailureRateLimiter.Unlock()
+
+	now := time.Now()
+	if loginFailureRateLimiter.lastCleanup.IsZero() || now.Sub(loginFailureRateLimiter.lastCleanup) > loginRateLimitWindow {
+		for storedIP, storedEntry := range loginFailureRateLimiter.attempts {
+			if now.Sub(storedEntry.windowStart) > loginRateLimitWindow {
+				delete(loginFailureRateLimiter.attempts, storedIP)
+			}
+		}
+		loginFailureRateLimiter.lastCleanup = now
+	}
+	entry, exists := loginFailureRateLimiter.attempts[ip]
+	if !exists || now.Sub(entry.windowStart) > loginRateLimitWindow {
+		loginFailureRateLimiter.attempts[ip] = &loginAttempt{count: 1, windowStart: now}
+		return
+	}
+	entry.count++
+}
+
+// clearLoginFailures removes the IP's rejected-login history after the complete
+// password-and-factor flow has produced a persisted authenticated session.
+func clearLoginFailures(ip string) {
+	loginFailureRateLimiter.Lock()
+	delete(loginFailureRateLimiter.attempts, ip)
+	loginFailureRateLimiter.Unlock()
+}
+
+func lockLoginIP(ip string) func() {
+	loginIPGates.Lock()
+	gate := loginIPGates.entries[ip]
+	if gate == nil {
+		gate = &loginIPGate{}
+		loginIPGates.entries[ip] = gate
+	}
+	gate.refs++
+	loginIPGates.Unlock()
+
+	gate.mutex.Lock()
+	return func() {
+		gate.mutex.Unlock()
+		loginIPGates.Lock()
+		gate.refs--
+		if gate.refs == 0 {
+			delete(loginIPGates.entries, ip)
+		}
+		loginIPGates.Unlock()
+	}
+}
+
+// beginFailedLoginAttempt prevents a same-IP burst from passing the limit check
+// concurrently. The caller must defer the returned release function.
+func beginFailedLoginAttempt(w http.ResponseWriter, r *http.Request) (release func(), blocked bool) {
+	release = lockLoginIP(getClientIP(r))
+	if shouldBlockFailedLoginAttempt(w, r) {
+		release()
+		return nil, true
+	}
+	return release, false
+}
+
+// shouldBlockFailedLoginAttempt applies the production/dev policy to the
+// failure-only login counter without incrementing it.
+func shouldBlockFailedLoginAttempt(w http.ResponseWriter, r *http.Request) bool {
+	if os.Getenv("ENVIRONMENT_TYPE") == "dev" && r.Header.Get("X-Bypass-Ratelimit") == "test-mode" {
+		return false
+	}
+
+	clientIP := getClientIP(r)
+	if !isLoginFailureRateLimited(clientIP) {
+		return false
+	}
+
+	if os.Getenv("ENVIRONMENT_TYPE") == "dev" {
+		w.Header().Set(loginRateLimitHeader, "true")
+		log.Printf("\033[33mwarning: failed-login rate limit would have blocked ip=%s outside dev\033[0m", clientIP)
+		return false
+	}
+
+	return true
 }
 
 // shouldBlockLoginAttempt returns true when login rate limiting should hard-block the request.

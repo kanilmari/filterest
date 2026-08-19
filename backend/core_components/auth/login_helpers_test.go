@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -21,6 +23,30 @@ func resetRateLimiter() {
 	authRateLimiter.Lock()
 	authRateLimiter.attempts = make(map[string]*loginAttempt)
 	authRateLimiter.Unlock()
+	resetLoginFailureLimiter()
+}
+
+func resetLoginFailureLimiter() {
+	loginFailureRateLimiter.Lock()
+	loginFailureRateLimiter.attempts = make(map[string]*loginAttempt)
+	loginFailureRateLimiter.lastCleanup = time.Time{}
+	loginFailureRateLimiter.Unlock()
+}
+
+func resetLoginIPGates() {
+	loginIPGates.Lock()
+	loginIPGates.entries = make(map[string]*loginIPGate)
+	loginIPGates.Unlock()
+}
+
+func loginFailureCount(ip string) int {
+	loginFailureRateLimiter.Lock()
+	defer loginFailureRateLimiter.Unlock()
+	entry := loginFailureRateLimiter.attempts[ip]
+	if entry == nil {
+		return 0
+	}
+	return entry.count
 }
 
 // resetLoginReverseDNSCache clears cached login hostname lookups between tests.
@@ -181,6 +207,113 @@ func TestShouldBlockLoginAttempt(t *testing.T) {
 		}
 		if got := rr.Header().Get(loginRateLimitHeader); got != "" {
 			t.Fatalf("warning header = %q, want empty", got)
+		}
+	})
+}
+
+func TestFailedLoginRateLimit(t *testing.T) {
+	t.Run("checks do not consume successful login capacity", func(t *testing.T) {
+		resetLoginFailureLimiter()
+		ip := "10.3.0.1"
+
+		for i := 0; i < loginRateLimitMax+5; i++ {
+			if isLoginFailureRateLimited(ip) {
+				t.Fatalf("read-only check %d unexpectedly blocked", i+1)
+			}
+		}
+		if got := loginFailureCount(ip); got != 0 {
+			t.Fatalf("failure count = %d, want 0", got)
+		}
+	})
+
+	t.Run("ten failures are retained and the next request is blocked", func(t *testing.T) {
+		resetLoginFailureLimiter()
+		ip := "10.3.0.2"
+
+		for i := 1; i <= loginRateLimitMax; i++ {
+			if isLoginFailureRateLimited(ip) {
+				t.Fatalf("failure %d should be recordable before the limit is reached", i)
+			}
+			recordLoginFailure(ip)
+		}
+		if !isLoginFailureRateLimited(ip) {
+			t.Fatal("request after ten failures should be blocked")
+		}
+	})
+
+	t.Run("successful login clears only its own IP", func(t *testing.T) {
+		resetLoginFailureLimiter()
+		ipA := "10.3.0.3"
+		ipB := "10.3.0.4"
+		recordLoginFailure(ipA)
+		recordLoginFailure(ipB)
+
+		clearLoginFailures(ipA)
+
+		if got := loginFailureCount(ipA); got != 0 {
+			t.Fatalf("cleared IP failure count = %d, want 0", got)
+		}
+		if got := loginFailureCount(ipB); got != 1 {
+			t.Fatalf("other IP failure count = %d, want 1", got)
+		}
+	})
+
+	t.Run("expired failure window is removed without consuming a request", func(t *testing.T) {
+		resetLoginFailureLimiter()
+		ip := "10.3.0.5"
+		recordLoginFailure(ip)
+		loginFailureRateLimiter.Lock()
+		loginFailureRateLimiter.attempts[ip].windowStart = time.Now().Add(-(loginRateLimitWindow + time.Second))
+		loginFailureRateLimiter.Unlock()
+
+		if isLoginFailureRateLimited(ip) {
+			t.Fatal("expired failure window should not block")
+		}
+		if got := loginFailureCount(ip); got != 0 {
+			t.Fatalf("expired failure count = %d, want 0", got)
+		}
+	})
+
+	t.Run("same IP concurrent burst cannot exceed ten failures", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT_TYPE", "prod")
+		resetLoginFailureLimiter()
+		resetLoginIPGates()
+		ip := "10.3.0.6"
+		const requestCount = 20
+		start := make(chan struct{})
+		var allowed atomic.Int64
+		var blocked atomic.Int64
+		var group sync.WaitGroup
+
+		for i := 0; i < requestCount; i++ {
+			group.Add(1)
+			go func() {
+				defer group.Done()
+				<-start
+				req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+				req.RemoteAddr = ip + ":1234"
+				rr := httptest.NewRecorder()
+				release, isBlocked := beginFailedLoginAttempt(rr, req)
+				if isBlocked {
+					blocked.Add(1)
+					return
+				}
+				allowed.Add(1)
+				recordLoginFailure(ip)
+				release()
+			}()
+		}
+		close(start)
+		group.Wait()
+
+		if got := allowed.Load(); got != loginRateLimitMax {
+			t.Fatalf("allowed concurrent failures = %d, want %d", got, loginRateLimitMax)
+		}
+		if got := blocked.Load(); got != requestCount-loginRateLimitMax {
+			t.Fatalf("blocked concurrent requests = %d, want %d", got, requestCount-loginRateLimitMax)
+		}
+		if got := loginFailureCount(ip); got != loginRateLimitMax {
+			t.Fatalf("stored failure count = %d, want %d", got, loginRateLimitMax)
 		}
 	})
 }
