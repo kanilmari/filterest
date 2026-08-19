@@ -50,6 +50,15 @@
     padding-inline: 1rem;
 }
 
+.card_image_content--clickable {
+    cursor: pointer;
+}
+
+.card_image_content--clickable [role="button"]:focus-visible {
+    outline: 2px solid var(--primary_color, hsl(207deg 70% 53%));
+    outline-offset: -2px;
+}
+
 .big_card_details_container > div {
     padding-bottom: 20px !important;
     margin-bottom: 20px !important;
@@ -334,6 +343,21 @@
 .big_card_action_bar .fw-btn {
     min-height: 36px;
     padding: 0.45rem 0.9rem;
+}
+
+.row_article_row_navigation {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem 0;
+    background: var(--bg_color_extreme);
+}
+
+.row_article_row_navigation_button {
+    min-width: 44px;
+    min-height: 40px;
+    justify-content: center;
+    font-size: 1.4rem;
 }
 
 .big_card_checkbox {

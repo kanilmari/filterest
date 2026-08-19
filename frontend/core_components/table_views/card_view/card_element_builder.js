@@ -5,7 +5,7 @@
 
 import { createImageElement, create_seeded_avatar } from "./card_avatar_builder.js";
 import { openRowArticleView } from "./row_article_opener.js";
-import { openImageModal } from "./card_image_modal.js";
+import { activateImageFirstView } from "./image_first_view_activation.js";
 import { createKeyValueElement } from "./card_field_formatter.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import {
@@ -106,7 +106,8 @@ async function addImageOrAvatar(
     imageContainer,
     table_name = "",
     row_label = "",
-    image_render_options = {}
+    image_render_options = {},
+    row_item = null
 ) {
     let foundImage = false;
     const elem_div = document.createElement("div");
@@ -127,9 +128,30 @@ async function addImageOrAvatar(
             rowLabel: row_label,
             ...image_render_options,
         });
-        // Lisätään klikkauskuuntelija, joka avaa modaalin
-        blurredImageElement.addEventListener("click", () => {
-            openImageModal(original_src);
+        const openImageView = () => {
+            // Load the standalone viewer only when media is activated. Keeping
+            // this edge dynamic avoids a module cycle through the shared
+            // article-content builder used by image-first itself.
+            void activateImageFirstView({
+                imageSrc: original_src,
+                rowItem: row_item,
+                tableName: table_name,
+                selectedCard: imageContainer.closest(".card"),
+            }).catch((error) => {
+                console.warn("image-first view could not be opened", error?.message || error);
+            });
+        };
+        blurredImageElement.tabIndex = 0;
+        blurredImageElement.setAttribute("role", "button");
+        blurredImageElement.dataset.imageFirstSrc = original_src;
+        blurredImageElement.dataset.ariaLabelLangKey = "open_article";
+        blurredImageElement.setAttribute("aria-label", "Open article");
+        blurredImageElement.addEventListener("click", openImageView);
+        blurredImageElement.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openImageView();
+            }
         });
 
         elem_div.appendChild(blurredImageElement);

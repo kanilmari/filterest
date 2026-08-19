@@ -4,8 +4,9 @@
 // Exists to display and manage images attached to a parent row inside the big card modal.
 
 import { createImageUploadPlaceholder } from "./big_card_image_upload.js";
-import { openImageModal } from "./card_image_modal.js";
+import { activateImageFirstView } from "./image_first_view_activation.js";
 import { resolveImagePath } from "./row_article_content_builder_helpers.js";
+import { resolveRowArticleImageRows as resolveCanonicalImageRows } from "./row_article_image_rows.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { showConfirmModal } from "../../../reusable_components/modal/confirm_modal_builder.js";
@@ -23,14 +24,13 @@ const VISIBLE_THUMBNAIL_COUNT = 5;
  * @param {number|string} parentRowId - parent row id
  * @param {Object|null} childTableData - child entry from fetchDynamicChildren (has .rows, .dataset, .column) or null
  * @param {() => void} onImageAdded - callback after successful upload (caller should refresh gallery)
- * @param {{ canUpload?: boolean, canDelete?: boolean, canSetPrimary?: boolean, canEditMetadata?: boolean, parentImageRows?: Object[] }} [options]
+ * @param {{ canUpload?: boolean, canDelete?: boolean, canSetPrimary?: boolean, canEditMetadata?: boolean, parentImageRows?: Object[], imageFirstContext?: Object }} [options]
  * @returns {HTMLElement}
  */
 export function buildImageGallery(parentTableName, parentRowId, childTableData, onImageAdded, options = {}) {
     const container = document.createElement("div");
     container.classList.add("big_card_image_gallery", "row_article_image_gallery");
-
-    const rows = resolveImageRows(
+    const rows = resolveCanonicalImageRows(
         childTableData?.rows || [],
         options.parentImageRows || [],
     );
@@ -353,7 +353,14 @@ export function buildImageGallery(parentTableName, parentRowId, childTableData, 
         };
         const openThumbnailPreview = () => {
             selectThumbnail();
-            openImageModal(resolveImagePath(row.filename));
+            void activateImageFirstView({
+                imageSrc: resolveImagePath(row.filename),
+                imageRows: rows,
+                activeImageRow: row,
+                rowItem: options.imageFirstContext?.rowItem || null,
+                tableName: options.imageFirstContext?.tableName || parentTableName,
+                selectedCard: options.imageFirstContext?.selectedCard || null,
+            });
         };
 
         thumb.addEventListener("click", openThumbnailPreview);
@@ -424,28 +431,7 @@ export function buildImageGallery(parentTableName, parentRowId, childTableData, 
     return container;
 }
 
-export function resolveImageRows(rows, supplementaryRows = []) {
-    const canonicalRows = Array.isArray(rows) ? rows : [];
-    const fallbackRows = Array.isArray(supplementaryRows) ? supplementaryRows : [];
-    const seenPaths = new Set();
-
-    return [...canonicalRows, ...fallbackRows]
-        .filter((row) => {
-            const assetKind = String(row?.asset_kind || "").toLowerCase();
-            const hasFilename = typeof row?.filename === "string" && row.filename.trim() !== "";
-            if (!hasFilename || !(assetKind === "image" || assetKind === "")) {
-                return false;
-            }
-
-            const resolvedPath = resolveImagePath(row.filename.trim());
-            if (seenPaths.has(resolvedPath)) {
-                return false;
-            }
-            seenPaths.add(resolvedPath);
-            return true;
-        })
-        .sort(compareImageRowsByPriority);
-}
+export const resolveImageRows = resolveCanonicalImageRows;
 
 export function canUploadImageToChildDataset(childTableData) {
     return Boolean(
@@ -494,43 +480,8 @@ function resolveImageAltText(row = {}) {
     return preferredText ? preferredText.trim() : "";
 }
 
-function compareImageRowsByPriority(left, right) {
-    const primaryDelta = Number(rowIsPrimary(right)) - Number(rowIsPrimary(left));
-    if (primaryDelta !== 0) {
-        return primaryDelta;
-    }
-
-    const leftSortOrder = normalizeSortOrder(left?.sort_order);
-    const rightSortOrder = normalizeSortOrder(right?.sort_order);
-    if (leftSortOrder !== rightSortOrder) {
-        return leftSortOrder - rightSortOrder;
-    }
-
-    const leftCreated = normalizeCreatedValue(left?.created);
-    const rightCreated = normalizeCreatedValue(right?.created);
-    if (leftCreated !== rightCreated) {
-        return leftCreated.localeCompare(rightCreated);
-    }
-
-    return normalizeNumericId(left?.id) - normalizeNumericId(right?.id);
-}
-
 function rowIsPrimary(row) {
     return row?.is_primary === true || row?.is_primary === 1 || row?.is_primary === "true";
-}
-
-function normalizeSortOrder(value) {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : Number.MAX_SAFE_INTEGER;
-}
-
-function normalizeCreatedValue(value) {
-    return value == null ? "" : String(value);
-}
-
-function normalizeNumericId(value) {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : Number.MAX_SAFE_INTEGER;
 }
 
 async function deleteImageRow({ row, childDataset, triggerButton, onRefresh }) {
