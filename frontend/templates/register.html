@@ -35,6 +35,39 @@
         <p class="error" data-lang-key="{{.EmailErr}}"></p>
         {{end}}
 
+        <fieldset class="first-run-choice-group" data-testid="register-verification-methods">
+            <legend data-lang-key="first_run_verification_legend">Sign-in verification</legend>
+            <div class="first-run-choice-grid">
+                <label class="first-run-choice-card">
+                    <input type="radio" name="verification_method" value="none" {{if eq .VerificationMethod "none"}}checked{{end}} required data-testid="register-verification-none">
+                    <span class="first-run-choice-title" data-lang-key="verification_none">No additional verification</span>
+                    <span class="first-run-choice-description" data-lang-key="verification_none_description">Sign in with username and password only.</span>
+                </label>
+                <label class="first-run-choice-card">
+                    <input type="radio" name="verification_method" value="fixed_pin" {{if eq .VerificationMethod "fixed_pin"}}checked{{end}} required data-testid="register-verification-fixed-pin">
+                    <span class="first-run-choice-title" data-lang-key="verification_fixed_pin">Fixed PIN</span>
+                    <span class="first-run-choice-description" data-lang-key="verification_fixed_pin_description">Use the same private 4–8 digit PIN at every sign-in.</span>
+                </label>
+                {{if .EmailVerificationAvailable}}
+                <label class="first-run-choice-card">
+                    <input type="radio" name="verification_method" value="email" {{if eq .VerificationMethod "email"}}checked{{end}} required data-testid="register-verification-email">
+                    <span class="first-run-choice-title" data-lang-key="verification_email">Email</span>
+                    <span class="first-run-choice-description" data-lang-key="verification_email_description">Sends a one-time code through Postmark.</span>
+                </label>
+                {{end}}
+            </div>
+        </fieldset>
+
+        <div class="first-run-method-fields" data-register-verification-fields="fixed_pin" hidden>
+            <label for="fixed_pin" data-lang-key="fixed_pin">Fixed PIN</label>
+            <input type="password" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="new-password" data-testid="register-fixed-pin">
+            <label for="confirm_fixed_pin" data-lang-key="confirm_fixed_pin">Confirm fixed PIN</label>
+            <input type="password" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="new-password" data-testid="register-fixed-pin-confirmation">
+        </div>
+        {{if .VerificationErr}}
+        <p class="error" data-lang-key="{{.VerificationErr}}"></p>
+        {{end}}
+
         <label for="full_name" data-lang-key="full_name"></label>
         <input type="text" id="full_name" name="full_name" required data-testid="register-full-name">
 

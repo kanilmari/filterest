@@ -15,6 +15,7 @@ const showSuccessToastMock = vi.fn();
 const showWarningToastMock = vi.fn();
 const translatePageMock = vi.fn();
 const getLanguageWithBrowserFallbackMock = vi.fn();
+const datasetDropdownSetValueMock = vi.fn();
 
 function buildConfig(overrides = {}) {
     return {
@@ -99,10 +100,11 @@ describe('dataset_header_config_view', () => {
         showWarningToastMock.mockReset();
         translatePageMock.mockReset();
         getLanguageWithBrowserFallbackMock.mockReset();
+        datasetDropdownSetValueMock.mockReset();
         getLanguageWithBrowserFallbackMock.mockReturnValue('fi');
         localStorage.clear();
         createVanillaDropdownMock.mockImplementation(() => ({
-            setValue: vi.fn(),
+            setValue: datasetDropdownSetValueMock,
         }));
         vi.restoreAllMocks();
     });
@@ -127,6 +129,23 @@ describe('dataset_header_config_view', () => {
 			'/storage/104/dataset_media/cover/original/cover.webp',
 			'/storage/104/dataset_media/background/original/background.webp',
 		]);
+    });
+
+    test('selects the requested active dataset when opened from its hero', async () => {
+        endpointRouterMock.mockResolvedValue(['orders', 'invoices']);
+        fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig({
+            dataset_name: 'invoices',
+        }));
+        const { generate_dataset_header_config_view } = await loadModule();
+        const container = document.createElement('div');
+
+        await generate_dataset_header_config_view(container, {
+            initialDatasetName: 'invoices',
+        });
+
+        expect(datasetDropdownSetValueMock).toHaveBeenCalledWith('invoices');
+        expect(fetchDatasetHeaderConfigMock).toHaveBeenCalledTimes(1);
+        expect(fetchDatasetHeaderConfigMock).toHaveBeenCalledWith('invoices');
     });
 
     test('submits multipart saves through the candidate wrapper', async () => {

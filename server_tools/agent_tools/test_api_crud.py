@@ -59,6 +59,22 @@ class FakeClient:
         self.calls.append(("delete_rows", dataset_name, ids))
         return {"message": "deleted"}
 
+    def rename_tree_node(self, item_id, item_type, new_name, translations):
+        self.calls.append(("rename_tree_node", item_id, item_type, new_name, translations))
+        return {"message": "renamed"}
+
+    def set_registration_enabled(self, enabled):
+        self.calls.append(("set_registration_enabled", enabled))
+        return {"verified": True, "after": enabled}
+
+    def list_user_authentication(self):
+        self.calls.append(("list_user_authentication",))
+        return [{"user_id": 42, "verification_method": "none"}]
+
+    def set_user_authentication(self, user_id, verification_method, *, fixed_pin=None):
+        self.calls.append(("set_user_authentication", user_id, verification_method, fixed_pin))
+        return {"user_id": user_id, "verification_method": verification_method}
+
 
 class API_CRUDTest(unittest.TestCase):
     def setUp(self):
@@ -180,6 +196,53 @@ class API_CRUDTest(unittest.TestCase):
             [call[2]["offset"] for call in self.client.calls],
             [0, 2, 3],
         )
+
+    def test_rename_tree_node_requires_matching_name_confirmation(self):
+        exit_code, output = self.run_main([
+            "rename-tree-node",
+            "10000",
+            "folder",
+            "fintravel",
+            "--translations-json",
+            '{"fi":"Fintravel","en":"Fintravel"}',
+            "--confirm-new-name",
+            "fintravel",
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(self.client.calls[0][:4], ("rename_tree_node", 10000, "folder", "fintravel"))
+        self.assertEqual(json.loads(output), {"message": "renamed"})
+
+    def test_registration_requires_explicit_confirmation(self):
+        exit_code, _ = self.run_main(["registration", "true"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(self.client.calls, [])
+
+        exit_code, output = self.run_main(["registration", "true", "--confirm"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(self.client.calls, [("set_registration_enabled", True)])
+        self.assertTrue(json.loads(output)["verified"])
+
+    def test_user_auth_set_none_requires_exact_confirmation(self):
+        exit_code, _ = self.run_main([
+            "user-auth-set", "42", "none",
+            "--confirm-user-id", "41",
+            "--confirm-method", "none",
+        ])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(self.client.calls, [])
+
+        exit_code, output = self.run_main([
+            "user-auth-set", "42", "none",
+            "--confirm-user-id", "42",
+            "--confirm-method", "none",
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            self.client.calls,
+            [("set_user_authentication", 42, "none", None)],
+        )
+        self.assertEqual(json.loads(output)["verification_method"], "none")
 
 
 if __name__ == "__main__":

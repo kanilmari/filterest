@@ -311,6 +311,36 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/user-authentication",
+      "match_type": "exact",
+      "handler_name": "auth.AdminUserAuthenticationHandler",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/version-info",
       "match_type": "exact",
       "handler_name": "router.adminVersionInfoHandler",

@@ -20,7 +20,7 @@ describe("card image modal", () => {
     test("shows controls on pointer movement and fades them after inactivity", async () => {
         const { openImageModal } = await import("./card_image_modal.js");
 
-        openImageModal("/storage/104/example.jpg");
+        const modalResult = openImageModal("/storage/104/example.jpg");
 
         const overlay = document.querySelector("#custom_modal_overlay");
         const modal = document.querySelector("#custom_modal");
@@ -32,6 +32,7 @@ describe("card image modal", () => {
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
         expect(image.getAttribute("src")).toBe("/storage/104/example.jpg");
         expect(closeButton).not.toBeNull();
+        expect(modalResult.close).toEqual(expect.any(Function));
 
         vi.advanceTimersByTime(1200);
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
@@ -52,5 +53,8 @@ describe("card image modal", () => {
 
         closeButton.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
+
+        modalResult.close();
+        expect(overlay.style.display).toBe("none");
     });
 });

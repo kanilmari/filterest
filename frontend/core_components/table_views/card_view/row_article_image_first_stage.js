@@ -7,6 +7,28 @@ import { getTranslationForKey } from "../../lang/translation_handler.js";
 
 const SWIPE_NAVIGATION_THRESHOLD_PX = 44;
 
+function resolveBackdropImageValue(imagePath) {
+    try {
+        const absoluteUrl = new URL(imagePath, window.location.origin);
+        return `url("${absoluteUrl.href.replaceAll('"', "%22")}")`;
+    } catch {
+        return "none";
+    }
+}
+
+function scrollToArticleContent(stage) {
+    const articleContent = stage.nextElementSibling;
+    if (!(articleContent instanceof HTMLElement)
+        || typeof articleContent.scrollIntoView !== "function") {
+        return;
+    }
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    articleContent.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+    });
+}
+
 function rowsMatch(left, right) {
     if (!left || !right) {
         return false;
@@ -49,6 +71,7 @@ export function buildRowArticleImageFirstStage({
     imageEntries,
     getActiveRow,
     onSelectRow,
+    onBackdropActivate = null,
     resolvePath,
     resolveAlt,
 }) {
@@ -77,6 +100,28 @@ export function buildRowArticleImageFirstStage({
     position.dataset.testid = "row-article-image-position";
     position.setAttribute("aria-live", "polite");
 
+    const scrollHint = document.createElement("button");
+    scrollHint.type = "button";
+    scrollHint.classList.add(
+        "row_article_image_first_scroll_hint",
+        "fw-btn",
+        "fw-btn--ghost",
+    );
+    scrollHint.dataset.testid = "row-article-image-scroll-hint";
+    scrollHint.dataset.titleLangKey = "show_more";
+    scrollHint.dataset.ariaLabelLangKey = "show_more";
+    scrollHint.textContent = getTranslationForKey("show_more") || "Show article";
+    scrollHint.title = scrollHint.textContent;
+    scrollHint.setAttribute("aria-label", scrollHint.textContent);
+    const scrollHintArrow = document.createElement("span");
+    scrollHintArrow.setAttribute("aria-hidden", "true");
+    scrollHintArrow.textContent = "⌄";
+    scrollHint.appendChild(scrollHintArrow);
+    scrollHint.addEventListener("click", (event) => {
+        event.stopPropagation();
+        scrollToArticleContent(stage);
+    });
+
     const activeIndex = () => {
         const index = imageEntries.findIndex(({ row }) => rowsMatch(row, getActiveRow()));
         return index >= 0 ? index : 0;
@@ -88,8 +133,13 @@ export function buildRowArticleImageFirstStage({
         if (!row) {
             return;
         }
-        image.src = resolvePath(row.filename);
+        const imagePath = resolvePath(row.filename);
+        image.src = imagePath;
         image.alt = resolveAlt(row);
+        stage.style.setProperty(
+            "--row-article-image-first-backdrop",
+            resolveBackdropImageValue(imagePath),
+        );
         previousButton.disabled = index === 0;
         nextButton.disabled = index === imageEntries.length - 1;
         position.textContent = `${index + 1} / ${imageEntries.length}`;
@@ -114,6 +164,12 @@ export function buildRowArticleImageFirstStage({
         }
     });
 
+    stage.addEventListener("click", (event) => {
+        if (event.target === stage && typeof onBackdropActivate === "function") {
+            onBackdropActivate();
+        }
+    });
+
     let touchStartX = null;
     stage.addEventListener("touchstart", (event) => {
         touchStartX = event.touches?.[0]?.clientX ?? null;
@@ -132,7 +188,7 @@ export function buildRowArticleImageFirstStage({
         activateRelative(deltaX > 0 ? -1 : 1);
     }, { passive: true });
 
-    stage.append(image, previousButton, nextButton, position);
+    stage.append(image, previousButton, nextButton, position, scrollHint);
     sync();
     return { element: stage, sync };
 }

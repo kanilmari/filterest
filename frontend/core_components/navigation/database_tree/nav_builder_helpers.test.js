@@ -134,6 +134,7 @@ describe('getAdminToolsStructure', () => {
         expect(structure[1].id).toBe('queen_chat');
         expect(structure[2].id).toBe('site_settings');
         expect(structure[2].children[0].id).toBe('site_languages');
+        expect(structure[2].children[1].id).toBe('user_authentication');
         expect(structure[3].id).toBe('table_tools');
         expect(structure[4].id).toBe('maintenance');
     });

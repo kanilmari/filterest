@@ -40,7 +40,10 @@ describe('filterbar layout CSS', () => {
         expect(indicatorRule).toContain('height: 18px');
         expect(indicatorRule).toContain('border: 0');
         expect(iconRule).toContain('pointer-events: none');
-        expect(panelRule).toContain('bottom: calc(100% + 8px)');
+        expect(panelRule).toContain('position: fixed');
+        expect(panelRule).toContain('z-index: calc(var(--z-modal, 101000) + 10)');
+        expect(panelRule).not.toContain('bottom:');
+        expect(panelRule).not.toContain('right:');
         expect(panelRule).toContain('border-collapse: separate');
         expect(panelRule).toContain('border-spacing: 0 2px');
         expect(keyRule).toContain('padding: 0 19px 0 0');

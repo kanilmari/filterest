@@ -15,7 +15,7 @@ vi.mock("./card_image_modal.js", () => ({
     openImageModalContent: openImageModalContentMock,
 }));
 
-vi.mock("./row_article_content_builder.js", () => ({
+vi.mock("./big_card_content_builder.js", () => ({
     buildRowArticleContent: buildContentMock,
 }));
 
@@ -77,7 +77,7 @@ describe("openImageFirstView", () => {
         }));
         openImageModalContentMock.mockImplementation(({ contentElement }) => {
             document.body.appendChild(contentElement);
-            return { modal: document.createElement("div") };
+            return { modal: document.createElement("div"), close: vi.fn() };
         });
     });
 
@@ -103,5 +103,8 @@ describe("openImageFirstView", () => {
         expect(openImageModalContentMock).toHaveBeenCalledWith(expect.objectContaining({
             classNames: ["image_first_view_modal"],
         }));
+        const closeView = openImageModalContentMock.mock.results[0].value.close;
+        view.querySelector('[data-testid="row-article-image-first-stage"]').click();
+        expect(closeView).toHaveBeenCalledOnce();
     });
 });

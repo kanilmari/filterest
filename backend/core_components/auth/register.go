@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	e_sessions "easelect/backend/core_components/sessions"
 
@@ -24,6 +25,8 @@ import (
 )
 
 var registrationEnabledFunc = middlewares.CheckRegistrationEnabled
+
+const defaultRegistrationVerificationMethod = verificationFixedPIN
 
 func buildRegisterEntryRedirectTarget(redirect string) string {
 	params := url.Values{}
@@ -50,7 +53,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, buildRegisterEntryRedirectTarget(r.URL.Query().Get("redirect")), http.StatusSeeOther)
 			return
 		}
-		showRegisterForm(w, r, registerErrors{})
+		showRegisterForm(w, r, registerErrors{}, string(defaultRegistrationVerificationMethod))
 		return
 	}
 	httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -87,27 +90,40 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "form processing failed")
 		return
 	}
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+	email := r.FormValue("email")
+	fullName := r.FormValue("full_name")
+	verificationMethodValue := strings.ToLower(strings.TrimSpace(r.FormValue("verification_method")))
+	fixedPIN := strings.TrimSpace(r.FormValue("fixed_pin"))
+	confirmFixedPIN := strings.TrimSpace(r.FormValue("confirm_fixed_pin"))
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("error: session get failed: %s", err.Error())
-		showRegisterForm(w, r, registerErrors{General: "session_error"})
+		showRegisterForm(w, r, registerErrors{General: "session_error"}, verificationMethodValue)
 		return
 	}
 	postedToken := r.FormValue("csrf_token")
 	sessionToken, _ := session.Values["csrf_token"].(string)
 	if postedToken == "" || sessionToken == "" || postedToken != sessionToken {
 		w.WriteHeader(http.StatusForbidden)
-		showRegisterForm(w, r, registerErrors{General: "csrf_token_invalid"})
+		showRegisterForm(w, r, registerErrors{General: "csrf_token_invalid"}, verificationMethodValue)
 		return
 	}
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-	email := r.FormValue("email")
-	full_name := r.FormValue("full_name")
+
+	verificationMethod, verificationError := validateRegistrationVerification(
+		verificationMethodValue,
+		fixedPIN,
+		confirmFixedPIN,
+	)
+	if verificationError != "" {
+		showRegisterForm(w, r, registerErrors{Verification: verificationError}, verificationMethodValue)
+		return
+	}
 
 	logging.Infof("received registration data: username=%s, email=%s, full_name=%s",
-		username, email, full_name)
+		username, email, fullName)
 
 	var existing int
 	err = backend.Db.QueryRow(`
@@ -119,7 +135,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (check)")
 		return
 	case err != sql.ErrNoRows:
-		showRegisterForm(w, r, registerErrors{Username: "username_exists"})
+		showRegisterForm(w, r, registerErrors{Username: "username_exists"}, string(verificationMethod))
 		return
 	}
 
@@ -132,7 +148,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (check)")
 		return
 	case err != sql.ErrNoRows:
-		showRegisterForm(w, r, registerErrors{Email: "email_exists"})
+		showRegisterForm(w, r, registerErrors{Email: "email_exists"}, string(verificationMethod))
 		return
 	}
 
@@ -140,6 +156,12 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logging.Errorf("error: password hashing failed: %s", err.Error())
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "password hashing failed")
+		return
+	}
+	fixedPINHash, err := buildRegistrationFixedPINHash(verificationMethod, fixedPIN)
+	if err != nil {
+		logging.Errorf("error: fixed PIN hashing failed: %s", err.Error())
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (verification)")
 		return
 	}
 
@@ -162,7 +184,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
             )
             VALUES ($1, $2, NOW(), NOW(), $3, false)
             RETURNING id
-        `, username, full_name, enabled).Scan(&newUserID)
+	`, username, fullName, enabled).Scan(&newUserID)
 	if err != nil {
 		logging.Errorf("error: user insert failed: %s", err.Error())
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (step 1)")
@@ -171,9 +193,11 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 
 	// 2) Lisätään salasanatieto restricted.users_restricted-tauluun (rajatulla yhteydellä)
 	_, err = backend.DbConfidential.Exec(`
-            INSERT INTO restricted.users_restricted (id, password, email)
-            VALUES ($1, $2, $3)
-        `, newUserID, string(hashed_password), email)
+			INSERT INTO restricted.users_restricted (
+				id, password, email, login_verification_method, fixed_pin_hash
+			)
+			VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+		`, newUserID, string(hashed_password), email, string(verificationMethod), fixedPINHash)
 	if err != nil {
 		logging.Errorf("error: restricted table insert failed: %s", err.Error())
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (step 2)")
@@ -207,12 +231,63 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 }
 
 type registerErrors struct {
-	Username string
-	Email    string
-	General  string
+	Username     string
+	Email        string
+	Verification string
+	General      string
 }
 
-func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerErrors) {
+// validateRegistrationVerification accepts only methods that ordinary self-registration can finish safely.
+// It bridges untrusted form values with the restricted credential fields created for the new user.
+// It exists to keep unsupported or incompletely configured factors out of login-ready account records.
+func validateRegistrationVerification(methodValue, fixedPIN, confirmFixedPIN string) (loginVerificationMethod, string) {
+	method, err := parseLoginVerificationMethod(methodValue)
+	if err != nil || method == verificationTOTP {
+		return "", "first_run_verification_invalid"
+	}
+	switch method {
+	case verificationFixedPIN:
+		if !isValidFixedPIN(fixedPIN) {
+			return "", "first_run_fixed_pin_invalid"
+		}
+		if fixedPIN != confirmFixedPIN {
+			return "", "first_run_fixed_pin_mismatch"
+		}
+	case verificationEmail:
+		if !registrationEmailVerificationAvailable() {
+			return "", "first_run_postmark_required"
+		}
+	}
+	return method, ""
+}
+
+// registrationEmailVerificationAvailable exposes email choice only when delivery has both required credentials.
+// It bridges protected process configuration with the public registration form and server validation.
+// It exists so users cannot select an authentication method that the installation cannot deliver.
+func registrationEmailVerificationAvailable() bool {
+	return isPostmarkDeliveryConfiguredForAuth() &&
+		firstConfiguredAuthEnv("EMAIL_FROM_ADDRESS", "POSTMARK_FROM_ADDRESS") != ""
+}
+
+// buildRegistrationFixedPINHash turns a validated fixed PIN into restricted credential material.
+// It bridges the selected registration method with the bcrypt-based sign-in verifier.
+// It exists so plaintext PIN values never enter the stored user record.
+func buildRegistrationFixedPINHash(method loginVerificationMethod, fixedPIN string) (string, error) {
+	if method != verificationFixedPIN {
+		return "", nil
+	}
+	return hashFixedPIN(fixedPIN)
+}
+
+func selectedRegistrationVerificationMethod(value string, emailAvailable bool) string {
+	method, err := parseLoginVerificationMethod(value)
+	if err != nil || method == verificationTOTP || (method == verificationEmail && !emailAvailable) {
+		return string(defaultRegistrationVerificationMethod)
+	}
+	return string(method)
+}
+
+func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerErrors, verificationMethod string) {
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("[showRegisterForm] session get failed: %v, resetting", err)
@@ -238,18 +313,25 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 		return
 	}
 
+	emailVerificationAvailable := registrationEmailVerificationAvailable()
 	data := struct {
-		UsernameErr string
-		EmailErr    string
-		GeneralErr  string
-		CSRFToken   string
-		FormAction  string
+		UsernameErr                string
+		EmailErr                   string
+		VerificationErr            string
+		GeneralErr                 string
+		CSRFToken                  string
+		FormAction                 string
+		VerificationMethod         string
+		EmailVerificationAvailable bool
 	}{
-		UsernameErr: errs.Username,
-		EmailErr:    errs.Email,
-		GeneralErr:  errs.General,
-		CSRFToken:   csrfToken,
-		FormAction:  buildRegisterFormActionPath(r),
+		UsernameErr:                errs.Username,
+		EmailErr:                   errs.Email,
+		VerificationErr:            errs.Verification,
+		GeneralErr:                 errs.General,
+		CSRFToken:                  csrfToken,
+		FormAction:                 buildRegisterFormActionPath(r),
+		VerificationMethod:         selectedRegistrationVerificationMethod(verificationMethod, emailVerificationAvailable),
+		EmailVerificationAvailable: emailVerificationAvailable,
 	}
 
 	if err = tmpl.Execute(w, data); err != nil {

@@ -7,6 +7,10 @@
     max-width: 1280px;
 }
 
+.dataset-header-config-modal-content .dataset-header-config-view {
+    max-width: none;
+}
+
 .dataset-header-config-form {
     width: 100%;
 }

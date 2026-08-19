@@ -6,6 +6,7 @@ vi.mock("../../lang/translation_handler.js", () => ({
     getTranslationForKey: vi.fn((key) => ({
         next_image: "Next image",
         previous_image: "Previous image",
+        show_more: "Show article",
     })[key] || ""),
 }));
 
@@ -14,6 +15,7 @@ import { buildRowArticleImageFirstStage } from "./row_article_image_first_stage.
 function createStage(rows) {
     let activeRow = rows[0];
     const selected = [];
+    const onBackdropActivate = vi.fn();
     const result = buildRowArticleImageFirstStage({
         imageEntries: rows.map((row) => ({ row })),
         getActiveRow: () => activeRow,
@@ -23,8 +25,9 @@ function createStage(rows) {
         },
         resolvePath: (filename) => `/storage/${filename}`,
         resolveAlt: (row) => row.alt,
+        onBackdropActivate,
     });
-    return { ...result, selected };
+    return { ...result, onBackdropActivate, selected };
 }
 
 describe("row article image-first stage", () => {
@@ -66,5 +69,31 @@ describe("row article image-first stage", () => {
         expect(element.querySelector("img").getAttribute("src")).toBe("/storage/two.jpg");
         expect(element.querySelector("[data-testid='row-article-image-previous']")
             .getAttribute("aria-label")).toBe("Previous image");
+    });
+
+    test("shows the article cue, paints a blurred-image source, and closes only from backdrop", () => {
+        const { element, onBackdropActivate } = createStage([
+            { id: 1, filename: "one.jpg", alt: "One" },
+        ]);
+        const articleContent = document.createElement("article");
+        articleContent.scrollIntoView = vi.fn();
+        document.body.append(element, articleContent);
+
+        expect(element.style.getPropertyValue("--row-article-image-first-backdrop"))
+            .toContain("/storage/one.jpg");
+        const image = element.querySelector("img");
+        image.click();
+        expect(onBackdropActivate).not.toHaveBeenCalled();
+
+        element.click();
+        expect(onBackdropActivate).toHaveBeenCalledOnce();
+
+        const scrollHint = element.querySelector("[data-testid='row-article-image-scroll-hint']");
+        expect(scrollHint.textContent).toContain("Show article");
+        scrollHint.click();
+        expect(articleContent.scrollIntoView).toHaveBeenCalledWith({
+            behavior: "smooth",
+            block: "start",
+        });
     });
 });

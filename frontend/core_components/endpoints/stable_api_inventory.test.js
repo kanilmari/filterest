@@ -69,6 +69,7 @@ describe('stable_api_inventory', () => {
             'saveDatasetAliasManagement',
             'getDatasetHeaderConfig',
             'saveDatasetHeaderConfig',
+            'adminUserAuthentication',
             'listColumnViewPresets',
             'checkJsonColumns',
         ]));
@@ -95,6 +96,15 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/dataset-header-config/save',
             accessProfile: 'admin',
             methods: ['POST'],
+            methodSource: 'explicit_stable_contract',
+            availableScenarios: ['production', 'development', 'api_language'],
+        });
+
+        expect(getStableCandidateRouteDescriptor('adminUserAuthentication')).toMatchObject({
+            handlerName: 'auth.AdminUserAuthenticationHandler',
+            backendPath: '/api/admin/user-authentication',
+            accessProfile: 'admin',
+            methods: ['GET', 'POST'],
             methodSource: 'explicit_stable_contract',
             availableScenarios: ['production', 'development', 'api_language'],
         });

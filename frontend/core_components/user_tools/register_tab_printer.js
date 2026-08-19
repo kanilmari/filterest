@@ -5,6 +5,7 @@
 // PIPELINE_EXCEPTION: Register fragments are pre-auth HTML form loads/submits, not JSON API calls.
 
 import { handleLoginShellEntry, navigateToLoginEntry } from "../auth/login_shell_entry.js";
+import { initializeRegistrationVerificationFields } from "../auth/register_page_builder.js";
 import { translatePage } from "../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 
@@ -73,6 +74,7 @@ async function mountRegisterForm(container, form) {
     });
 
     container.replaceChildren(form);
+    initializeRegistrationVerificationFields(form);
     await translatePage(getLanguageWithBrowserFallback());
 }
 

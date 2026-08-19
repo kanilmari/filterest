@@ -221,6 +221,79 @@ describe("admin version info indicator", () => {
         shell.destroy();
     });
 
+    test("portals the open panel above toolbar stacking contexts and keeps it anchored", async () => {
+        hasRoutePermissionMock.mockReturnValue(true);
+        fetchAdminVersionInfoMock.mockResolvedValue({
+            product_name: "Filterest",
+            app_version: "8.34.1",
+            db_version: "9.2.0",
+            required_db_version: "9.2.0",
+            db_compatible: true,
+            runtime_mode: "native",
+        });
+        const { buildAdminVersionInfoIndicator } = await import(
+            "./admin_version_info_indicator.js"
+        );
+        const shell = buildAdminVersionInfoIndicator();
+        document.body.appendChild(shell);
+        await vi.waitFor(() => expect(shell.hidden).toBe(false));
+
+        const indicator = shell.querySelector('[data-testid="filterbar-admin-version-info"]');
+        const panel = shell.querySelector('[data-testid="filterbar-admin-version-info-panel"]');
+        let anchorRect = {
+            left: 700,
+            right: 718,
+            top: 600,
+            bottom: 618,
+            width: 18,
+            height: 18,
+        };
+        indicator.getBoundingClientRect = vi.fn(() => anchorRect);
+        panel.getBoundingClientRect = vi.fn(() => ({
+            left: 0,
+            right: 320,
+            top: 0,
+            bottom: 220,
+            width: 320,
+            height: 220,
+        }));
+
+        indicator.click();
+        expect(panel.parentElement).toBe(document.body);
+        expect(panel.classList.contains("filterbar-clock-bar__version-info-panel--portaled"))
+            .toBe(true);
+        expect(panel.style.left).toBe("398px");
+        expect(panel.style.top).toBe("372px");
+        expect(panel.dataset.versionInfoPlacement).toBe("top");
+
+        anchorRect = { ...anchorRect, top: 20, bottom: 38 };
+        window.dispatchEvent(new Event("resize"));
+        expect(panel.style.top).toBe("46px");
+        expect(panel.dataset.versionInfoPlacement).toBe("bottom");
+
+        anchorRect = { ...anchorRect, left: 500, right: 518 };
+        document.dispatchEvent(new Event("scroll"));
+        expect(panel.style.left).toBe("198px");
+
+        panel.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(panel.hidden).toBe(false);
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        expect(panel.hidden).toBe(true);
+        expect(panel.parentElement).toBe(shell);
+        expect(panel.classList.contains("filterbar-clock-bar__version-info-panel--portaled"))
+            .toBe(false);
+        expect(panel.style.left).toBe("");
+        expect(panel.style.top).toBe("");
+        expect(indicator.getAttribute("aria-expanded")).toBe("false");
+        expect(document.activeElement).toBe(indicator);
+
+        indicator.click();
+        expect(panel.parentElement).toBe(document.body);
+        shell.destroy();
+        expect(panel.hidden).toBe(true);
+        expect(panel.parentElement).toBe(shell);
+    });
+
     test.each([
         ["fi", "Ajotapa Tavallinen"],
         ["en", "Runtime Native"],

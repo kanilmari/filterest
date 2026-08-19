@@ -7,7 +7,7 @@ Why: Keeps row/table maintenance examples close to the canonical no-direct-SQL w
 
 # API CRUD Examples
 
-Use `./filterest data` when you need table, column, or row maintenance through the application API. It logs in to the native dev app, fetches CSRF, and calls the same backend routes as the UI/MCP tooling. Do not replace these commands with direct SQL writes.
+Use `./filterest data` when you need table, column, row, or supported administrator maintenance through the application API. It logs in to the native dev app, fetches CSRF, and calls the same backend routes as the UI/MCP tooling. Do not replace these commands with direct SQL writes.
 
 ## Basic Inspection
 
@@ -101,3 +101,25 @@ ROW_ID_TO_DELETE=replace_with_target_id
 ```
 
 Run a read command immediately before destructive operations and keep the output in the terminal scrollback. That makes the intended target visible without bypassing application validation.
+
+## Administrator Accounts And Sign-in Verification
+
+Administrators can inspect non-secret account state and provision another administrator directly through the protected application API. For a remote site such as Fintravel, keep credentials out of shell history by asking the command to prompt in the visible terminal:
+
+```bash
+./api_crud --base-url https://fintravel.fi --prompt-credentials user-auth-list
+```
+
+The list contains the user id, username, enabled state, admins-group membership, administrator-access flag, and sign-in verification method. It never returns email addresses, passwords, PINs, PIN hashes, or authenticator secrets.
+
+After copying the current user id from that fresh read, the following command enables the account, adds it to the admins group, allows administrator access, and selects password-only sign-in in one transaction:
+
+```bash
+USER_ID=replace_with_fresh_user_id
+./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  user-auth-set "$USER_ID" none \
+  --confirm-user-id "$USER_ID" \
+  --confirm-method none
+```
+
+Use `fixed_pin` instead of `none` to set a 4–8 digit fixed PIN. The command asks for the new PIN and its confirmation without echoing or placing either value in command history. The `email` method is accepted only when the installation has a working Postmark token and sender address. TOTP authenticator secrets are deliberately not managed by this command.

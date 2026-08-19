@@ -1,0 +1,131 @@
+/* user_authentication.css
+ * Styles administrator-owned user activation and verification controls.
+ * Bridges shared theme variables with status details, method cards, and protected PIN fields.
+ * Exists so a security-sensitive action remains readable, explicit, and responsive.
+ */
+
+.user-authentication-view {
+    display: grid;
+    gap: 1rem;
+    width: min(100%, 760px);
+    margin: 0 auto;
+    padding: 1rem;
+    color: var(--text_color);
+}
+
+.user-authentication-field,
+.user-authentication-pin-fields {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.user-authentication-field select,
+.user-authentication-pin-fields input {
+    width: 100%;
+    padding: 0.65rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+    background: var(--input_bg_color);
+    color: var(--text_color);
+}
+
+.user-authentication-editor {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius);
+    background: var(--bg_color_extreme);
+}
+
+.user-authentication-editor[hidden],
+.user-authentication-pin-fields[hidden] {
+    display: none;
+}
+
+.user-authentication-status {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.user-authentication-status__item {
+    padding: 0.75rem;
+    border-radius: var(--border_radius_small);
+    background: var(--bg_color_2);
+}
+
+.user-authentication-status dt {
+    color: var(--empty_field_text_color);
+    font-size: 0.8rem;
+}
+
+.user-authentication-status dd {
+    margin: 0.25rem 0 0;
+    font-weight: 600;
+}
+
+.user-authentication-form,
+.user-authentication-form fieldset {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.user-authentication-form fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.user-authentication-form legend {
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+}
+
+.user-authentication-method {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    align-items: start;
+    padding: 0.75rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+    cursor: pointer;
+}
+
+.user-authentication-method:has(input:checked) {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+    background: var(--bg_color_2);
+}
+
+.user-authentication-method strong,
+.user-authentication-method small {
+    display: block;
+}
+
+.user-authentication-method small {
+    margin-top: 0.25rem;
+    color: var(--empty_field_text_color);
+}
+
+.user-authentication-activation-notice {
+    padding: 0.75rem;
+    border-inline-start: 0.25rem solid var(--accent_color, hsl(207deg 70% 53%));
+    background: var(--bg_color_2);
+}
+
+.user-authentication-feedback {
+    min-height: 1.4rem;
+    color: var(--empty_field_text_color);
+}
+
+@media (width <= 600px) {
+    .user-authentication-view {
+        padding: 0.5rem;
+    }
+
+    .user-authentication-status {
+        grid-template-columns: 1fr;
+    }
+}

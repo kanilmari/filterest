@@ -112,15 +112,37 @@ test.describe('E9 — Admin version info', () => {
       ),
     );
 
-    const panel = page
-      .locator('.tab_parts_container:visible')
-      .first()
-      .locator('[data-testid="filterbar-admin-version-info-panel"]')
-      .first();
+    const panel = page.locator('[data-testid="filterbar-admin-version-info-panel"]').first();
     await expect(panel).toBeHidden();
     await indicator.click();
     await expect(indicator).toHaveAttribute('aria-expanded', 'true');
     await expect(panel).toBeVisible();
+    const stackingContract = await panel.evaluate((element) => {
+      const competingElements = Array.from(document.querySelectorAll(
+        '.dataset-shared-topbar, .filterbar-panel, .column-preset-more-menu',
+      ));
+      const competingZIndexes = competingElements
+        .map((candidate) => Number.parseInt(window.getComputedStyle(candidate).zIndex, 10))
+        .filter(Number.isFinite);
+      const panelRect = element.getBoundingClientRect();
+      return {
+        parentIsBody: element.parentElement === document.body,
+        position: window.getComputedStyle(element).position,
+        panelZIndex: Number.parseInt(window.getComputedStyle(element).zIndex, 10),
+        maximumCompetingZIndex: Math.max(0, ...competingZIndexes),
+        insideViewport:
+          panelRect.left >= 0
+          && panelRect.top >= 0
+          && panelRect.right <= window.innerWidth
+          && panelRect.bottom <= window.innerHeight,
+      };
+    });
+    expect(stackingContract.parentIsBody).toBe(true);
+    expect(stackingContract.position).toBe('fixed');
+    expect(stackingContract.panelZIndex).toBeGreaterThan(
+      stackingContract.maximumCompetingZIndex,
+    );
+    expect(stackingContract.insideViewport).toBe(true);
     await expect(panel.locator('thead th')).toHaveText('Site information');
     const expectedSiteName = await page.locator('meta[property="og:site_name"]').getAttribute('content');
     const expectedSiteDisplayName = String(expectedSiteName || expectedProductName)

@@ -96,6 +96,7 @@ export function getAdminToolsStructure() {
         {
             id: 'site_settings', name: 'site_settings', children: [
                 { id: 'site_languages', name: 'site_languages' },
+                { id: 'user_authentication', name: 'user_authentication' },
             ],
         },
         {

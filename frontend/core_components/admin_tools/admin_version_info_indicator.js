@@ -16,6 +16,9 @@ export const ADMIN_VERSION_INFO_ROUTE = "/api/admin/version-info";
 
 let versionInfoPanelSequence = 0;
 
+const VERSION_INFO_PANEL_GAP_PX = 8;
+const VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX = 12;
+
 const VERSION_LABELS = Object.freeze({
     fi: {
         title: "Sivustotiedot",
@@ -449,6 +452,49 @@ function renderAdminVersionInfoRows(panel, rows, title) {
     panel.replaceChildren(heading, body);
 }
 
+function clampPanelCoordinate(value, minimum, maximum) {
+    return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+}
+
+function positionAdminVersionInfoPanel(indicator, panel) {
+    if (panel.hidden || panel.parentElement !== document.body) {
+        return;
+    }
+
+    const anchorRect = indicator.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const maximumLeft = viewportWidth
+        - VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX
+        - panelRect.width;
+    const left = clampPanelCoordinate(
+        anchorRect.right - panelRect.width,
+        VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX,
+        maximumLeft,
+    );
+    const topWhenAbove = anchorRect.top - VERSION_INFO_PANEL_GAP_PX - panelRect.height;
+    const topWhenBelow = anchorRect.bottom + VERSION_INFO_PANEL_GAP_PX;
+    const spaceAbove = anchorRect.top - VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX;
+    const spaceBelow = viewportHeight
+        - anchorRect.bottom
+        - VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX;
+    const placeAbove = topWhenAbove >= VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX
+        || spaceAbove >= spaceBelow;
+    const maximumTop = viewportHeight
+        - VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX
+        - panelRect.height;
+    const top = clampPanelCoordinate(
+        placeAbove ? topWhenAbove : topWhenBelow,
+        VERSION_INFO_PANEL_VIEWPORT_MARGIN_PX,
+        maximumTop,
+    );
+
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+    panel.dataset.versionInfoPlacement = placeAbove ? "top" : "bottom";
+}
+
 export function buildAdminVersionInfoIndicator() {
     if (!hasRoutePermission(ADMIN_VERSION_INFO_ROUTE)) {
         return null;
@@ -482,22 +528,38 @@ export function buildAdminVersionInfoIndicator() {
     indicator.appendChild(icon);
     shell.append(indicator, panel);
 
+    const restorePanelToShell = () => {
+        panel.classList.remove("filterbar-clock-bar__version-info-panel--portaled");
+        panel.style.removeProperty("left");
+        panel.style.removeProperty("top");
+        delete panel.dataset.versionInfoPlacement;
+        if (shell.isConnected) {
+            shell.appendChild(panel);
+        } else {
+            panel.remove();
+        }
+    };
     const closePanel = () => {
         panel.hidden = true;
+        restorePanelToShell();
         indicator.setAttribute("aria-expanded", "false");
         if (indicator.dataset.closedTooltip) {
             indicator.title = indicator.dataset.closedTooltip;
         }
     };
+    const positionOpenPanel = () => positionAdminVersionInfoPanel(indicator, panel);
     const togglePanel = () => {
         const shouldOpen = panel.hidden;
-        panel.hidden = !shouldOpen;
-        indicator.setAttribute("aria-expanded", String(shouldOpen));
         if (shouldOpen) {
+            document.body.appendChild(panel);
+            panel.classList.add("filterbar-clock-bar__version-info-panel--portaled");
+            panel.hidden = false;
+            positionOpenPanel();
+            indicator.setAttribute("aria-expanded", "true");
             indicator.removeAttribute("title");
-        } else if (indicator.dataset.closedTooltip) {
-            indicator.title = indicator.dataset.closedTooltip;
+            return;
         }
+        closePanel();
     };
 
     indicator.addEventListener("click", (event) => {
@@ -505,7 +567,9 @@ export function buildAdminVersionInfoIndicator() {
         togglePanel();
     }, { signal });
     document.addEventListener("click", (event) => {
-        if (!panel.hidden && !shell.contains(event.target)) {
+        if (!panel.hidden
+            && !shell.contains(event.target)
+            && !panel.contains(event.target)) {
             closePanel();
         }
     }, { signal, capture: true });
@@ -515,17 +579,35 @@ export function buildAdminVersionInfoIndicator() {
             indicator.focus();
         }
     }, { signal });
+    window.addEventListener("resize", positionOpenPanel, { signal });
+    document.addEventListener("scroll", positionOpenPanel, {
+        signal,
+        capture: true,
+        passive: true,
+    });
 
     shell.destroy = () => {
         lifetimeController.abort();
         closePanel();
     };
 
-    void hydrateAdminVersionInfoIndicator(shell, indicator, panel, signal);
+    void hydrateAdminVersionInfoIndicator(
+        shell,
+        indicator,
+        panel,
+        signal,
+        positionOpenPanel,
+    );
     return shell;
 }
 
-async function hydrateAdminVersionInfoIndicator(shell, indicator, panel, signal) {
+async function hydrateAdminVersionInfoIndicator(
+    shell,
+    indicator,
+    panel,
+    signal,
+    positionOpenPanel,
+) {
     try {
         const versionInfo = await fetchAdminVersionInfo({ suppressAuthRedirect: true });
         if (signal.aborted) return;
@@ -545,6 +627,7 @@ async function hydrateAdminVersionInfoIndicator(shell, indicator, panel, signal)
             const panelTitle = getAdminSiteInfoTitle(language);
             panel.setAttribute("aria-label", panelTitle);
             renderAdminVersionInfoRows(panel, rows, panelTitle);
+            positionOpenPanel();
         };
 
         renderLanguage(getLanguageWithBrowserFallback());
