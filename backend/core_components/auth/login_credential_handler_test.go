@@ -25,10 +25,13 @@ import (
 )
 
 type credentialMockConfig struct {
-	userLookupOK     bool
-	userID           int
-	hashedPassword   string
-	adminGroupMember bool
+	userLookupOK       bool
+	userID             int
+	hashedPassword     string
+	adminGroupMember   bool
+	verificationMethod string
+	fixedPINHash       string
+	totpSecret         string
 }
 
 type credentialMockDriver struct{ cfg credentialMockConfig }
@@ -83,6 +86,15 @@ func (c *credentialMockConn) QueryContext(_ context.Context, query string, _ []d
 			return &credentialMockRows{cols: []string{"password"}, done: true}, nil
 		}
 		return &credentialMockRows{cols: []string{"password"}, vals: []driver.Value{c.cfg.hashedPassword}}, nil
+	case strings.Contains(query, "SELECT login_verification_method"):
+		method := c.cfg.verificationMethod
+		if method == "" {
+			method = string(verificationNone)
+		}
+		return &credentialMockRows{
+			cols: []string{"login_verification_method", "fixed_pin_hash", "totp_secret", "email"},
+			vals: []driver.Value{method, c.cfg.fixedPINHash, c.cfg.totpSecret, ""},
+		}, nil
 	case strings.Contains(query, "FROM system_user_group_memberships"):
 		if !c.cfg.adminGroupMember {
 			return &credentialMockRows{cols: []string{"?column?"}, done: true}, nil
@@ -138,7 +150,7 @@ func TestLoginAPIHandler_JSONRateLimitBlocked(t *testing.T) {
 	resetRateLimiter()
 	ip := "10.10.10.10"
 	for i := 0; i < loginRateLimitMax; i++ {
-		_ = checkLoginRateLimit(ip)
+		recordLoginFailure(ip)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":"u"}`))
@@ -162,7 +174,7 @@ func TestLoginAPIHandler_JSONDevBypassSkipsRateLimit(t *testing.T) {
 	resetRateLimiter()
 	ip := "10.10.10.11"
 	for i := 0; i < loginRateLimitMax+1; i++ {
-		_ = checkLoginRateLimit(ip)
+		recordLoginFailure(ip)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":`))
@@ -187,7 +199,7 @@ func TestLoginAPIHandler_JSONDevRateLimitWarnsWithoutBlocking(t *testing.T) {
 	resetRateLimiter()
 	ip := "10.10.10.12"
 	for i := 0; i < loginRateLimitMax+1; i++ {
-		_ = checkLoginRateLimit(ip)
+		recordLoginFailure(ip)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":`))
@@ -206,6 +218,51 @@ func TestLoginAPIHandler_JSONDevRateLimitWarnsWithoutBlocking(t *testing.T) {
 	body := decodeJSONBody(t, rr)
 	if body["error"] != "invalid_request_body" {
 		t.Fatalf("unexpected body: %#v", body)
+	}
+	if got := loginFailureCount(ip); got != loginRateLimitMax+1 {
+		t.Fatalf("invalid body changed failure count to %d", got)
+	}
+}
+
+func TestHandleLoginJSON_CSRFFailureDoesNotConsumeLoginFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	prepareLoginHandlerSessionStore(t)
+	ip := "10.10.10.13"
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(`{"username":"alice","password":"secret"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = ip + ":1234"
+	rr := httptest.NewRecorder()
+
+	handleLoginJSON(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusForbidden, rr.Body.String())
+	}
+	if got := loginFailureCount(ip); got != 0 {
+		t.Fatalf("CSRF failure count = %d, want 0", got)
+	}
+}
+
+func TestHandleLoginOTPVerify_NoPendingChallengeDoesNotConsumeFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	ip := "10.10.10.14"
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = ip + ":1234"
+	rr := httptest.NewRecorder()
+	session := &sessions.Session{Values: map[interface{}]interface{}{}}
+
+	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1234"})
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+	if got := loginFailureCount(ip); got != 0 {
+		t.Fatalf("missing challenge failure count = %d, want 0", got)
 	}
 }
 
@@ -258,11 +315,13 @@ func TestHandleLoginCredentials_UsernameAndPasswordRequired(t *testing.T) {
 }
 
 func TestHandleLoginCredentials_WrongCredentialsOnUserLookup(t *testing.T) {
+	resetLoginFailureLimiter()
 	origDB := backend.Db
 	backend.Db = openCredentialMockDB(t, credentialMockConfig{userLookupOK: false})
 	t.Cleanup(func() { backend.Db = origDB })
 
 	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.1:1234"
 	rr := httptest.NewRecorder()
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
 
@@ -275,9 +334,13 @@ func TestHandleLoginCredentials_WrongCredentialsOnUserLookup(t *testing.T) {
 	if body["error"] != "wrong_credentials" {
 		t.Fatalf("unexpected body: %#v", body)
 	}
+	if got := loginFailureCount("10.20.0.1"); got != 1 {
+		t.Fatalf("wrong username failure count = %d, want 1", got)
+	}
 }
 
 func TestHandleLoginCredentials_WrongCredentialsOnPasswordMismatch(t *testing.T) {
+	resetLoginFailureLimiter()
 	hashBytes, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
 	if err != nil {
 		t.Fatalf("bcrypt hash setup failed: %v", err)
@@ -298,6 +361,7 @@ func TestHandleLoginCredentials_WrongCredentialsOnPasswordMismatch(t *testing.T)
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.2:1234"
 	rr := httptest.NewRecorder()
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
 
@@ -309,6 +373,298 @@ func TestHandleLoginCredentials_WrongCredentialsOnPasswordMismatch(t *testing.T)
 	body := decodeJSONBody(t, rr)
 	if body["error"] != "wrong_credentials" {
 		t.Fatalf("unexpected body: %#v", body)
+	}
+	if got := loginFailureCount("10.20.0.2"); got != 1 {
+		t.Fatalf("wrong password failure count = %d, want 1", got)
+	}
+}
+
+func TestHandleLoginCredentials_MalformedStoredPasswordHashDoesNotConsumeFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	mockCfg := credentialMockConfig{
+		userLookupOK:   true,
+		userID:         42,
+		hashedPassword: "not-a-bcrypt-hash",
+	}
+
+	origDB := backend.Db
+	origConf := backend.DbConfidential
+	backend.Db = openCredentialMockDB(t, mockCfg)
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() {
+		backend.Db = origDB
+		backend.DbConfidential = origConf
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.8:1234"
+	rr := httptest.NewRecorder()
+	session := &sessions.Session{Values: map[interface{}]interface{}{}}
+
+	handleLoginCredentials(rr, req, session, loginJSONRequest{Username: "alice", Password: "secret"})
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+	if got := loginFailureCount("10.20.0.8"); got != 0 {
+		t.Fatalf("malformed stored hash failure count = %d, want 0", got)
+	}
+}
+
+func TestHandleLoginOTPVerify_MalformedStoredPINHashDoesNotConsumeFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	mockCfg := credentialMockConfig{
+		userID:             42,
+		verificationMethod: string(verificationFixedPIN),
+		fixedPINHash:       "not-a-bcrypt-hash",
+	}
+
+	origConf := backend.DbConfidential
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() { backend.DbConfidential = origConf })
+
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	testStore := prepareLoginHandlerSessionStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.9:1234"
+	session, err := testStore.New(req, "session")
+	if err != nil {
+		t.Fatalf("create test session: %v", err)
+	}
+	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	rr := httptest.NewRecorder()
+
+	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1357"})
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusInternalServerError, rr.Body.String())
+	}
+	if got := loginFailureCount("10.20.0.9"); got != 0 {
+		t.Fatalf("malformed stored PIN hash failure count = %d, want 0", got)
+	}
+}
+
+func TestHandleLoginCredentials_CorrectPasswordAndPendingPINDoNotConsumeFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	for i := 0; i < 3; i++ {
+		recordLoginFailure("10.20.0.3")
+	}
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("bcrypt hash setup failed: %v", err)
+	}
+	mockCfg := credentialMockConfig{
+		userLookupOK:       true,
+		userID:             42,
+		hashedPassword:     string(hashBytes),
+		verificationMethod: string(verificationFixedPIN),
+	}
+
+	origDB := backend.Db
+	origConf := backend.DbConfidential
+	backend.Db = openCredentialMockDB(t, mockCfg)
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() {
+		backend.Db = origDB
+		backend.DbConfidential = origConf
+	})
+
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	testStore := prepareLoginHandlerSessionStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.3:1234"
+	session, err := testStore.New(req, "session")
+	if err != nil {
+		t.Fatalf("create test session: %v", err)
+	}
+	rr := httptest.NewRecorder()
+
+	handleLoginCredentials(rr, req, session, loginJSONRequest{
+		Username:    "alice",
+		Password:    "correct-password",
+		Fingerprint: "test-fingerprint",
+	})
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if got := loginFailureCount("10.20.0.3"); got != 3 {
+		t.Fatalf("successful password phase failure count = %d, want unchanged 3", got)
+	}
+}
+
+func TestHandleLoginOTPVerify_WrongFixedPINRecordsFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	pinHash, err := hashFixedPIN("2468")
+	if err != nil {
+		t.Fatalf("fixed PIN hash setup failed: %v", err)
+	}
+	mockCfg := credentialMockConfig{
+		userID:             42,
+		verificationMethod: string(verificationFixedPIN),
+		fixedPINHash:       pinHash,
+	}
+
+	origConf := backend.DbConfidential
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() { backend.DbConfidential = origConf })
+
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	testStore := prepareLoginHandlerSessionStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.4:1234"
+	session, err := testStore.New(req, "session")
+	if err != nil {
+		t.Fatalf("create test session: %v", err)
+	}
+	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	rr := httptest.NewRecorder()
+
+	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1357"})
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusUnauthorized, rr.Body.String())
+	}
+	if got := loginFailureCount("10.20.0.4"); got != 1 {
+		t.Fatalf("wrong fixed PIN failure count = %d, want 1", got)
+	}
+}
+
+func TestHandleLoginOTPVerify_WrongTOTPRecordsFailure(t *testing.T) {
+	resetLoginFailureLimiter()
+	secret, err := generateTOTPSecret()
+	if err != nil {
+		t.Fatalf("TOTP secret setup failed: %v", err)
+	}
+	mockCfg := credentialMockConfig{
+		userID:             42,
+		verificationMethod: string(verificationTOTP),
+		totpSecret:         secret,
+	}
+
+	origConf := backend.DbConfidential
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() { backend.DbConfidential = origConf })
+
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	testStore := prepareLoginHandlerSessionStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = "10.20.0.6:1234"
+	session, err := testStore.New(req, "session")
+	if err != nil {
+		t.Fatalf("create test session: %v", err)
+	}
+	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	rr := httptest.NewRecorder()
+
+	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "not-a-code"})
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusUnauthorized, rr.Body.String())
+	}
+	if got := loginFailureCount("10.20.0.6"); got != 1 {
+		t.Fatalf("wrong TOTP failure count = %d, want 1", got)
+	}
+}
+
+func TestHandleLoginOTPVerify_CorrectFixedPINClearsFailures(t *testing.T) {
+	resetLoginFailureLimiter()
+	pinHash, err := hashFixedPIN("2468")
+	if err != nil {
+		t.Fatalf("fixed PIN hash setup failed: %v", err)
+	}
+	mockCfg := credentialMockConfig{
+		userID:             42,
+		adminGroupMember:   true,
+		verificationMethod: string(verificationFixedPIN),
+		fixedPINHash:       pinHash,
+	}
+
+	origConf := backend.DbConfidential
+	origGuest := backend.DbGuest
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	backend.DbGuest = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() {
+		backend.DbConfidential = origConf
+		backend.DbGuest = origGuest
+	})
+
+	ip := "10.20.0.7"
+	for i := 0; i < loginRateLimitMax-1; i++ {
+		recordLoginFailure(ip)
+	}
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	testStore := prepareLoginHandlerSessionStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = ip + ":1234"
+	session, err := testStore.New(req, "session")
+	if err != nil {
+		t.Fatalf("create test session: %v", err)
+	}
+	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	rr := httptest.NewRecorder()
+
+	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "2468"})
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if got := loginFailureCount(ip); got != 0 {
+		t.Fatalf("completed fixed-PIN login failure count = %d, want 0", got)
+	}
+}
+
+func TestHandleLoginCredentials_CompleteSuccessClearsFailures(t *testing.T) {
+	resetLoginFailureLimiter()
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("bcrypt hash setup failed: %v", err)
+	}
+	mockCfg := credentialMockConfig{
+		userLookupOK:       true,
+		userID:             42,
+		hashedPassword:     string(hashBytes),
+		adminGroupMember:   true,
+		verificationMethod: string(verificationNone),
+	}
+
+	origDB := backend.Db
+	origConf := backend.DbConfidential
+	origGuest := backend.DbGuest
+	backend.Db = openCredentialMockDB(t, mockCfg)
+	backend.DbConfidential = openCredentialMockDB(t, mockCfg)
+	backend.DbGuest = openCredentialMockDB(t, mockCfg)
+	t.Cleanup(func() {
+		backend.Db = origDB
+		backend.DbConfidential = origConf
+		backend.DbGuest = origGuest
+	})
+
+	ip := "10.20.0.5"
+	for i := 0; i < loginRateLimitMax-1; i++ {
+		recordLoginFailure(ip)
+	}
+	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+	testStore := prepareLoginHandlerSessionStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+	req.RemoteAddr = ip + ":1234"
+	session, err := testStore.New(req, "session")
+	if err != nil {
+		t.Fatalf("create test session: %v", err)
+	}
+	rr := httptest.NewRecorder()
+
+	handleLoginCredentials(rr, req, session, loginJSONRequest{
+		Username:    "alice",
+		Password:    "correct-password",
+		Fingerprint: "test-fingerprint",
+	})
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if got := loginFailureCount(ip); got != 0 {
+		t.Fatalf("completed login failure count = %d, want 0", got)
 	}
 }
 

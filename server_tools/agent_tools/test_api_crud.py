@@ -244,6 +244,43 @@ class API_CRUDTest(unittest.TestCase):
         )
         self.assertEqual(json.loads(output)["verification_method"], "none")
 
+    def test_prompt_credentials_explains_authorizer_and_target_account(self):
+        args = argparse.Namespace(
+            prompt_credentials=True,
+            base_url="https://fintravel.fi",
+            credential_username="existing-admin",
+            command="user-auth-set",
+            user_id=10001,
+            verification_method="none",
+        )
+        output = io.StringIO()
+        with (
+            patch.object(api_crud.getpass, "getpass", return_value="secret"),
+            redirect_stdout(output),
+        ):
+            api_crud.make_client(args)
+
+        explanation = output.getvalue()
+        self.assertIn("existing working administrator account 'existing-admin'", explanation)
+        self.assertIn("user ID 10001", explanation)
+        self.assertIn("password only (no additional verification)", explanation)
+        self.assertIn("Do not enter the credentials of the account being changed", explanation)
+        _, kwargs = api_crud.EaselectAPIClient.call_args
+        self.assertEqual(kwargs["username"], "existing-admin")
+        self.assertEqual(kwargs["password"], "secret")
+        self.assertTrue(callable(kwargs["verification_code_provider"]))
+
+    def test_prompt_credentials_requires_exact_account_name(self):
+        args = argparse.Namespace(
+            prompt_credentials=True,
+            base_url="https://fintravel.fi",
+            credential_username=None,
+            command="user-auth-list",
+        )
+
+        with self.assertRaisesRegex(ValueError, "--credential-username is required"):
+            api_crud.make_client(args)
+
 
 if __name__ == "__main__":
     unittest.main()

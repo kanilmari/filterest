@@ -107,7 +107,8 @@ Run a read command immediately before destructive operations and keep the output
 Administrators can inspect non-secret account state and provision another administrator directly through the protected application API. For a remote site such as Fintravel, keep credentials out of shell history by asking the command to prompt in the visible terminal:
 
 ```bash
-./api_crud --base-url https://fintravel.fi --prompt-credentials user-auth-list
+./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  --credential-username EXISTING_ADMIN_USERNAME user-auth-list
 ```
 
 The list contains the user id, username, enabled state, admins-group membership, administrator-access flag, and sign-in verification method. It never returns email addresses, passwords, PINs, PIN hashes, or authenticator secrets.
@@ -117,6 +118,7 @@ After copying the current user id from that fresh read, the following command en
 ```bash
 USER_ID=replace_with_fresh_user_id
 ./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  --credential-username EXISTING_ADMIN_USERNAME \
   user-auth-set "$USER_ID" none \
   --confirm-user-id "$USER_ID" \
   --confirm-method none
