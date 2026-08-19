@@ -122,7 +122,7 @@
       "sha256": "cc52f26861b41645937b84b3a0833a424b61cd16beaf21a44034d2568b81d279"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "39acab8d3ed00a177211b9ef601e3bdb365bc88eb804584a902cb40955eed585"
+      "sha256": "112da6865cd0f6dc2c8a04214686ff222c842f53535e1d3d4663d860b06dd332"
     }
   },
   "source_files": {
