@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const {
     endpointRouterMock,
-    openImageModalMock,
+    openImageFirstViewMock,
     showConfirmModalMock,
     showErrorToastMock,
     showSuccessToastMock,
 } = vi.hoisted(() => ({
     endpointRouterMock: vi.fn(),
-    openImageModalMock: vi.fn(),
+    openImageFirstViewMock: vi.fn(),
     showConfirmModalMock: vi.fn(),
     showErrorToastMock: vi.fn(),
     showSuccessToastMock: vi.fn(),
@@ -20,8 +20,8 @@ vi.mock('../../endpoints/endpoint_router.js', () => ({
     endpoint_router: endpointRouterMock,
 }));
 
-vi.mock('./card_image_modal.js', () => ({
-    openImageModal: openImageModalMock,
+vi.mock('./image_first_view_activation.js', () => ({
+    activateImageFirstView: openImageFirstViewMock,
 }));
 
 vi.mock('../../../reusable_components/modal/confirm_modal_builder.js', () => ({
@@ -49,7 +49,7 @@ beforeEach(() => {
     endpointRouterMock.mockResolvedValue({ ok: true });
     showConfirmModalMock.mockReset();
     showConfirmModalMock.mockResolvedValue(true);
-    openImageModalMock.mockReset();
+    openImageFirstViewMock.mockReset();
     showErrorToastMock.mockReset();
     showSuccessToastMock.mockReset();
 });
@@ -183,7 +183,9 @@ describe('buildImageGallery', () => {
         },
     );
 
-    test('opens the shared on-demand image modal when a thumbnail is clicked', () => {
+    test('opens the standalone image-first view when a thumbnail is clicked', () => {
+        const rowItem = { id: 1, title: 'Service' };
+        const selectedCard = document.createElement('article');
         const gallery = buildImageGallery(
             'services',
             1,
@@ -193,12 +195,51 @@ describe('buildImageGallery', () => {
                 rows: [{ id: 11, asset_kind: 'image', filename: 'hero.png' }],
             },
             () => {},
-            { canUpload: false },
+            {
+                canUpload: false,
+                imageFirstContext: { rowItem, tableName: 'services', selectedCard },
+            },
         );
 
         gallery.querySelector('[data-testid="big-card-image-thumb-0"]').click();
 
-        expect(openImageModalMock).toHaveBeenCalledWith('/storage/hero.png');
+        expect(openImageFirstViewMock).toHaveBeenCalledWith(expect.objectContaining({
+            imageSrc: '/storage/hero.png',
+            imageRows: [{ id: 11, asset_kind: 'image', filename: 'hero.png' }],
+            activeImageRow: { id: 11, asset_kind: 'image', filename: 'hero.png' },
+            rowItem,
+            tableName: 'services',
+            selectedCard,
+        }));
+    });
+
+    test('keeps the ordinary gallery unchanged and hands all images to image-first', () => {
+        const gallery = buildImageGallery(
+            'services',
+            1,
+            {
+                dataset: 'services_assets',
+                column: 'services_id',
+                rows: [
+                    { id: 11, asset_kind: 'image', filename: 'hero.png' },
+                    { id: 12, asset_kind: 'image', filename: 'map.png' },
+                ],
+            },
+            () => {},
+            {
+                canUpload: false,
+                imageFirstContext: { rowItem: { id: 1 }, tableName: 'services' },
+            },
+        );
+
+        gallery.querySelector('[data-testid="big-card-image-thumb-0"]').click();
+        expect(gallery.querySelector('[data-testid="row-article-image-first-stage"]')).toBeNull();
+        expect(openImageFirstViewMock).toHaveBeenCalledWith(expect.objectContaining({
+            imageRows: [
+                { id: 11, asset_kind: 'image', filename: 'hero.png' },
+                { id: 12, asset_kind: 'image', filename: 'map.png' },
+            ],
+        }));
     });
 
     test('shows five image thumbnails at a time and pages carousel arrows to the end', () => {

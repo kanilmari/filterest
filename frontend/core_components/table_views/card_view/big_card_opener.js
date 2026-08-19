@@ -249,6 +249,11 @@ export async function openRowArticleView(
                         canSetPrimary: canUpdate,
                         canEditMetadata: canUpdate,
                         parentImageRows: parent_row_image_rows,
+                        imageFirstContext: {
+                            rowItem: row_item,
+                            tableName: table_name,
+                            selectedCard,
+                        },
                     };
                     return buildRowArticleImageGallery(
                         table_name,

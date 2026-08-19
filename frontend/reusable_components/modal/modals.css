@@ -225,7 +225,17 @@
     line-height: 0;
 }
 
-.image_modal img {
+/* Image-first extends the image viewer with article content below the 100dvh
+   stage. Keep this exception after the generic viewer rule so real wheel and
+   touch scrolling reach the article instead of relying on scripted scrolls. */
+.image_modal.image_first_view_modal .modal_body {
+    overflow: hidden auto;
+    line-height: normal;
+    overscroll-behavior: contain;
+}
+
+.image_modal_wrapper > img,
+.image_modal .row_article_image_first_media {
     display: block;
     min-width: 200px;
     min-height: 200px;
@@ -235,11 +245,17 @@
     position: fixed;
     top: 15px;
     right: 20px;
+    border: 1px solid var(--image-modal-control-color);
     color: var(--image-modal-control-color) !important;
     background: var(--image-modal-control-bg);
 }
 
-.image_modal :is(button, a[href], input, select, [role="button"]) {
+.image_modal :is(
+    .modal_close_button,
+    .row_article_image_first_arrow,
+    .row_article_image_first_position,
+    .row_article_row_navigation
+) {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease,
@@ -247,8 +263,13 @@
                 color 0.2s ease;
 }
 
-.modal_overlay_blur.image-modal-controls-active .image_modal :is(button, a[href], input, select, [role="button"]),
-.image_modal :is(button, a[href], input, select, [role="button"]):focus-visible {
+.modal_overlay_blur.image-modal-controls-active .image_modal :is(
+    .modal_close_button,
+    .row_article_image_first_arrow,
+    .row_article_image_first_position,
+    .row_article_row_navigation
+),
+.image_modal :is(.modal_close_button, .row_article_image_first_arrow):focus-visible {
     opacity: 1;
     pointer-events: auto;
 }

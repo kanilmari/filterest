@@ -14,6 +14,11 @@ import { destroy_chat } from '../../ai_features/table_chat/table_chat_printer.js
 import { clearSSEActiveDataset, setSSEActiveDataset } from '../../endpoints/sse_subscriber.js';
 import { setSidebarGroupExpandedState } from '../database_tree/nav_collapsible_state.js';
 import {
+    captureDatasetScrollState,
+    clearDatasetScrollState,
+    restoreDatasetScrollState,
+} from './dataset_scroll_retention.js';
+import {
     applyMainTabActiveState,
     clearMainTabActiveState,
 } from '../main_tabs/main_tab_active_state.js';
@@ -128,6 +133,13 @@ async function _performNavigationCore(
     // Cleanup: call __cleanupListeners on containers that define it (e.g. manage_permissions)
     const all_containers = document.querySelectorAll('#tabs_container > .content_div');
     all_containers.forEach(container_element => {
+        if (
+            !forceReload
+            && previousDataset !== data_lang_key
+            && container_element.id === `${previousDataset}_container`
+        ) {
+            captureDatasetScrollState(container_element);
+        }
         if (typeof container_element.__cleanupListeners === 'function') {
             container_element.__cleanupListeners();
         }
@@ -135,14 +147,21 @@ async function _performNavigationCore(
     });
 
     let container_element = document.getElementById(container_id);
+    let contentWasReloaded = false;
     if (!container_element) {
         await load_function();
         container_element = document.getElementById(container_id);
+        contentWasReloaded = true;
     } else if (forceReload || !container_element.hasChildNodes()) {
+        clearDatasetScrollState(container_element);
         await load_function();
+        contentWasReloaded = true;
     }
     if (container_element) {
         container_element.classList.remove('hidden');
+        if (!contentWasReloaded && previousDataset !== data_lang_key) {
+            restoreDatasetScrollState(container_element);
+        }
     }
 
     update_active_heading(groupName);

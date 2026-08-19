@@ -86,6 +86,12 @@ export const row_article_relation_details_mode =
 export const show_search_and_filter_button = false; //a.k.a. "Advanced search" button
 export const show_search_only_bar_in_big_card_view = true; // Show the flat top search bar when a big card is open
 export const show_more_button_on_cards = true;
+// Experimental record-to-record article navigation. It only traverses rows
+// already returned by the active filtered/sorted query and is off by default.
+export const enable_experimental_row_article_row_navigation = false;
+// Global content ordering for the standalone image-first view. This is not a
+// dataset activation switch: every real content image opens the view.
+export const image_first_view_details_position = "after_description";
 // Global Favefox filter section layout mode.
 // Options:
 // - "accordion": current two-part filter-header/filter-content accordion

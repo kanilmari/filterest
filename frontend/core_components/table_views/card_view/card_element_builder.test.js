@@ -9,10 +9,12 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 const {
     createImageElementMock,
     createSeededAvatarMock,
+    openImageFirstViewMock,
     resolveCardMediaFolderMock,
 } = vi.hoisted(() => ({
     createImageElementMock: vi.fn(),
     createSeededAvatarMock: vi.fn(),
+    openImageFirstViewMock: vi.fn(),
     resolveCardMediaFolderMock: vi.fn((width = window.innerWidth) =>
         width <= 1060 ? '1000' : '300'
     ),
@@ -26,6 +28,10 @@ vi.mock('./card_avatar_builder.js', () => ({
 vi.mock('./row_article_opener.js', () => ({
     openRowArticleView: vi.fn(),
     open_big_card_view: vi.fn(),
+}));
+
+vi.mock('./image_first_view_activation.js', () => ({
+    activateImageFirstView: openImageFirstViewMock,
 }));
 
 vi.mock('../../../reusable_components/modal/modal_builder.js', () => ({
@@ -62,11 +68,66 @@ vi.mock('../../state_stores/lang_preference_reader.js', () => ({
 }));
 
 import {
+    addImageOrAvatar,
     addDetailsSection,
     addHeaderElement,
     addUsernameElement,
     updateCardImageSources,
 } from './card_element_builder.js';
+
+describe('card_element_builder image-first activation', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+        createImageElementMock.mockReset();
+        createImageElementMock.mockImplementation((src) => {
+            const wrapper = document.createElement('div');
+            wrapper.classList.add('wrapper');
+            const image = document.createElement('img');
+            image.src = src;
+            wrapper.appendChild(image);
+            return wrapper;
+        });
+        openImageFirstViewMock.mockReset();
+        openImageFirstViewMock.mockResolvedValue(null);
+    });
+
+    test('opens the separate image-first view by click and keyboard', async () => {
+        const card = document.createElement('article');
+        card.classList.add('card');
+        const imageContainer = document.createElement('div');
+        card.appendChild(imageContainer);
+        const rowItem = { id: 7, title: 'Example', image: '7_7_1.png' };
+
+        await addImageOrAvatar(
+            '7_7_1.png',
+            true,
+            'seed',
+            'E',
+            imageContainer,
+            'examples',
+            'Example',
+            {},
+            rowItem,
+        );
+
+        const imageActivator = imageContainer.querySelector('[role="button"]');
+        const image = imageActivator.querySelector('img');
+        expect(imageActivator?.dataset.imageFirstSrc).toContain('/storage/7/7/original/7_7_1.png');
+
+        // Pointer activation on the visible image bubbles to its accessible wrapper.
+        image.click();
+        imageActivator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+        await vi.waitFor(() => {
+            expect(openImageFirstViewMock).toHaveBeenCalledTimes(2);
+        });
+        expect(openImageFirstViewMock).toHaveBeenLastCalledWith(expect.objectContaining({
+            rowItem,
+            tableName: 'examples',
+            selectedCard: card,
+        }));
+    });
+});
 
 describe('card_element_builder link details', () => {
     test('links safe HTTP(S) values and renders unsafe schemes as text', () => {

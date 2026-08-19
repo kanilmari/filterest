@@ -21,6 +21,68 @@ function clearImageModalControlTimer(modalOverlay) {
     }
 }
 
+function installTransientImageControls(modalOverlay) {
+    const hideControls = () => {
+        clearImageModalControlTimer(modalOverlay);
+        modalOverlay.classList.remove("image-modal-controls-active");
+    };
+    const scheduleControlsHide = () => {
+        clearImageModalControlTimer(modalOverlay);
+        imageModalControlTimers.set(
+            modalOverlay,
+            window.setTimeout(hideControls, IMAGE_MODAL_CONTROL_IDLE_DELAY_MS)
+        );
+    };
+    const revealControls = () => {
+        modalOverlay.classList.add("image-modal-controls-active");
+        scheduleControlsHide();
+    };
+    modalOverlay.onpointermove = revealControls;
+    modalOverlay.onpointerleave = scheduleControlsHide;
+    const previousFocusHandler = imageModalFocusHandlers.get(modalOverlay);
+    if (previousFocusHandler) {
+        modalOverlay.removeEventListener("focusin", previousFocusHandler);
+    }
+    modalOverlay.addEventListener("focusin", revealControls);
+    imageModalFocusHandlers.set(modalOverlay, revealControls);
+    revealControls();
+}
+
+/**
+ * Opens the edge-free image surface with caller-supplied content.
+ * The standalone preview and image-first article share modal lifecycle and
+ * transient controls without coupling ordinary row articles to this overlay.
+ */
+export function openImageModalContent({
+    contentElement,
+    classNames = [],
+    ariaLabel = "Image preview",
+} = {}) {
+    if (!(contentElement instanceof HTMLElement)) {
+        return null;
+    }
+
+    const { modal_overlay, modal } = createModal({
+        skipModalTitle: true,
+        contentElements: [contentElement],
+        width: "auto",
+        maxWidth: "100vw",
+        maxHeight: "100vh",
+    });
+
+    const previousClassNames = Array.isArray(modal._imageModalClassNames)
+        ? modal._imageModalClassNames
+        : [];
+    modal.classList.remove(...previousClassNames);
+    modal._imageModalClassNames = [...classNames];
+    modal.classList.add("image_modal", ...classNames);
+    modal.setAttribute("aria-label", ariaLabel);
+    modal_overlay.classList.add("modal_overlay_blur");
+    installTransientImageControls(modal_overlay);
+    showModal();
+    return { modalOverlay: modal_overlay, modal };
+}
+
 /**
  * Creates and opens the shared large image modal.
  *
@@ -54,43 +116,7 @@ export function openImageModal(image_src) {
         }
     });
 
-    const { modal_overlay, modal } = createModal({
-        skipModalTitle: true,
-        contentElements: [wrapper],
-        width: "auto",
-        maxWidth: "100vw",
-        maxHeight: "100vh",
-    });
-
-    modal.classList.add("image_modal");
-    modal_overlay.classList.add("modal_overlay_blur");
-
-    const hideControls = () => {
-        clearImageModalControlTimer(modal_overlay);
-        modal_overlay.classList.remove("image-modal-controls-active");
-    };
-    const scheduleControlsHide = () => {
-        clearImageModalControlTimer(modal_overlay);
-        imageModalControlTimers.set(
-            modal_overlay,
-            window.setTimeout(hideControls, IMAGE_MODAL_CONTROL_IDLE_DELAY_MS)
-        );
-    };
-    const revealControls = () => {
-        modal_overlay.classList.add("image-modal-controls-active");
-        scheduleControlsHide();
-    };
-    modal_overlay.onpointermove = revealControls;
-    modal_overlay.onpointerleave = scheduleControlsHide;
-    const previousFocusHandler = imageModalFocusHandlers.get(modal_overlay);
-    if (previousFocusHandler) {
-        modal_overlay.removeEventListener("focusin", previousFocusHandler);
-    }
-    modal_overlay.addEventListener("focusin", revealControls);
-    imageModalFocusHandlers.set(modal_overlay, revealControls);
-    revealControls();
-
-    showModal();
+    openImageModalContent({ contentElement: wrapper });
 
     if (IS_DEV_MODE) console.log("modal avattu klikatulle kuvalle");
 }

@@ -116,8 +116,8 @@ PASS
 - `public.system_foreign_key_relations_1_m`: 4
 - `public.system_functions`: 24
 - `public.system_group_table_func_rights`: 24
-- `public.system_lang_key_translations`: 25
-- `public.system_lang_keys`: 390
+- `public.system_lang_key_translations`: 55
+- `public.system_lang_keys`: 396
 - `public.system_languages`: 5
 - `public.system_table_folders`: 14
 - `public.system_user_group_memberships`: 2

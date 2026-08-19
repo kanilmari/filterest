@@ -3,7 +3,7 @@
 // Bridges image-asset status rows and shared asset rows into one deterministic choice.
 // Exists so the big-card opener can prefer canonical shared assets without embedding more branching logic.
 
-import { resolveRowArticleImageRows } from "./row_article_image_gallery.js";
+import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 import { isBridgeRelationTable } from "./big_card_child_tabs_helpers.js";
 
 function readRelationKind(childTableData) {
