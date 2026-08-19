@@ -35,6 +35,23 @@ const FILTER_DISPLAY_MODES = Object.freeze({
     RANGE: "range",
     QUERY: "query",
 });
+const FILTER_DISPLAY_MODE_PRESENTATION = Object.freeze({
+    [FILTER_DISPLAY_MODES.VALUE]: Object.freeze({
+        symbol: "=",
+        langKey: "filter_mode_exact_value",
+        fallback: "Exact value",
+    }),
+    [FILTER_DISPLAY_MODES.RANGE]: Object.freeze({
+        symbol: "↔",
+        langKey: "filter_mode_range",
+        fallback: "Range",
+    }),
+    [FILTER_DISPLAY_MODES.QUERY]: Object.freeze({
+        symbol: "ƒx",
+        langKey: "filter_mode_condition_expression",
+        fallback: "Condition or expression",
+    }),
+});
 
 function getFilterDisplayModeStorageKey(tableName) {
     return `${tableName}_filter_display_modes`;
@@ -258,13 +275,21 @@ function createFilterDisplayModeControls(tableName, column, colType, filterEleme
     };
 
     modes.forEach((mode) => {
+        const presentation = FILTER_DISPLAY_MODE_PRESENTATION[mode];
         const button = document.createElement("button");
         button.type = "button";
         button.classList.add("filter-display-mode-button", "fw-btn");
         button.dataset.filterDisplayMode = mode;
         button.dataset.testid = `filter-display-mode-${safeColumnName}-${mode}`;
-        button.textContent = mode.charAt(0).toUpperCase();
-        button.title = mode.charAt(0).toUpperCase() + mode.slice(1);
+        button.textContent = presentation.symbol;
+        button.title = getTranslationForKey(presentation.langKey, {
+            fallback: presentation.fallback,
+        });
+        button.setAttribute("aria-label", button.title);
+        button.dataset.titleLangKey = presentation.langKey;
+        button.dataset.titleLangKeyFallback = presentation.fallback;
+        button.dataset.ariaLabelLangKey = presentation.langKey;
+        button.dataset.ariaLabelLangKeyFallback = presentation.fallback;
         button.addEventListener("click", (event) => {
             event.stopPropagation();
             activateMode(mode);

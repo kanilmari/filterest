@@ -118,6 +118,7 @@ vi.mock('../state_stores/table_specs_reader.js', () => ({
             search_slogan: 'Search demo',
             icon_key: 'task',
             filterbar_visible_by_default: true,
+			dataset_cover_image_path: '/storage/104/dataset_media/cover/original/cover.webp',
         },
         riskienhallinta: {
             display_name: 'riskienhallinta',

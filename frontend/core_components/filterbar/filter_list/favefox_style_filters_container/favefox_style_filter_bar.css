@@ -207,6 +207,7 @@ body.dark-mode .favefox-filterbar .filter-section:nth-child(even) {
     padding: 0;
     font-size: 0.78rem;
     font-weight: 700;
+    line-height: 1;
 }
 
 .favefox-filterbar .filter-display-mode-button.is-active {

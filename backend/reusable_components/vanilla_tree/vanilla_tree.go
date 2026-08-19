@@ -22,20 +22,22 @@ import (
 // TableUID edustaa yksilöivää tunnistetta (UUID tms.),
 // DefaultViewID on oletusnäkymän numeroinen ID, jos sellainen on tallennettu.
 type TreeNode struct {
-	ID                        string  `json:"id"`
-	Name                      string  `json:"name"`
-	ParentID                  string  `json:"parent_id"`
-	DbID                      int     `json:"db_id"`
-	TableUID                  string  `json:"table_uid,omitempty"`
-	DisplayName               *string `json:"display_name,omitempty"`
-	SearchSlogan              *string `json:"search_slogan,omitempty"`
-	SearchPlaceholder         *string `json:"search_placeholder,omitempty"`
-	IconKey                   *string `json:"icon_key,omitempty"`
-	DefaultViewID             *int64  `json:"default_view_id,omitempty"`
-	DefaultViewName           *string `json:"default_view_name,omitempty"`
-	FilterbarVisibleByDefault *bool   `json:"filterbar_visible_by_default,omitempty"`
-	IsCurrentProject          bool    `json:"is_current_project,omitempty"`
-	IsView                    bool    `json:"is_view,omitempty"`
+	ID                         string  `json:"id"`
+	Name                       string  `json:"name"`
+	ParentID                   string  `json:"parent_id"`
+	DbID                       int     `json:"db_id"`
+	TableUID                   string  `json:"table_uid,omitempty"`
+	DisplayName                *string `json:"display_name,omitempty"`
+	SearchSlogan               *string `json:"search_slogan,omitempty"`
+	SearchPlaceholder          *string `json:"search_placeholder,omitempty"`
+	DatasetCoverImagePath      *string `json:"dataset_cover_image_path,omitempty"`
+	DatasetBackgroundImagePath *string `json:"dataset_background_image_path,omitempty"`
+	IconKey                    *string `json:"icon_key,omitempty"`
+	DefaultViewID              *int64  `json:"default_view_id,omitempty"`
+	DefaultViewName            *string `json:"default_view_name,omitempty"`
+	FilterbarVisibleByDefault  *bool   `json:"filterbar_visible_by_default,omitempty"`
+	IsCurrentProject           bool    `json:"is_current_project,omitempty"`
+	IsView                     bool    `json:"is_view,omitempty"`
 }
 
 type folderTreeRow struct {
@@ -238,6 +240,20 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 						t.display_name,
 						t.search_slogan,
 						t.search_placeholder,
+						(
+							SELECT '/storage/' || media.storage_key
+							FROM public.system_dataset_media AS media
+							WHERE media.table_uid = t.table_uid
+							  AND media.media_role = 'cover'
+							LIMIT 1
+						),
+						(
+							SELECT '/storage/' || media.storage_key
+							FROM public.system_dataset_media AS media
+							WHERE media.table_uid = t.table_uid
+							  AND media.media_role = 'background'
+							LIMIT 1
+						),
 						t.icon_key,
                         t.default_view_id,
                         v.name,
@@ -260,6 +276,8 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 		var displayName sql.NullString
 		var searchSlogan sql.NullString
 		var searchPlaceholder sql.NullString
+		var datasetCoverImagePath sql.NullString
+		var datasetBackgroundImagePath sql.NullString
 		var iconKey sql.NullString
 		var defaultViewID sql.NullInt64
 		var defaultViewName sql.NullString
@@ -273,6 +291,8 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 			&displayName,
 			&searchSlogan,
 			&searchPlaceholder,
+			&datasetCoverImagePath,
+			&datasetBackgroundImagePath,
 			&iconKey,
 			&defaultViewID,
 			&defaultViewName,
@@ -310,6 +330,12 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 		}
 		if searchPlaceholder.Valid {
 			node.SearchPlaceholder = &searchPlaceholder.String
+		}
+		if datasetCoverImagePath.Valid {
+			node.DatasetCoverImagePath = &datasetCoverImagePath.String
+		}
+		if datasetBackgroundImagePath.Valid {
+			node.DatasetBackgroundImagePath = &datasetBackgroundImagePath.String
 		}
 		if iconKey.Valid {
 			node.IconKey = &iconKey.String

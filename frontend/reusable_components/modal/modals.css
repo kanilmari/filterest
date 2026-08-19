@@ -207,6 +207,9 @@
 
 /* Styles specifically for image modals */
 .image_modal {
+    --image-modal-control-bg: color-mix(in srgb, var(--bg_color_extreme) 90%, transparent);
+    --image-modal-control-color: var(--text_color);
+
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -232,18 +235,22 @@
     position: fixed;
     top: 15px;
     right: 20px;
-    color: #fff !important;
-    background: rgb(0 0 0 / 8%);
-    opacity: 0.08;
-    transition: opacity 0.2s ease, background-color 0.2s ease;
+    color: var(--image-modal-control-color) !important;
+    background: var(--image-modal-control-bg);
 }
 
-.modal_overlay_blur.image-modal-controls-active .image_modal .modal_close_button,
-.image_modal .modal_close_button:hover,
-.image_modal .modal_close_button:focus-visible {
-    color: #fff !important;
-    background: rgb(0 0 0 / 0.8);
+.image_modal :is(button, a[href], input, select, [role="button"]) {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease,
+                background-color 0.2s ease,
+                color 0.2s ease;
+}
+
+.modal_overlay_blur.image-modal-controls-active .image_modal :is(button, a[href], input, select, [role="button"]),
+.image_modal :is(button, a[href], input, select, [role="button"]):focus-visible {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .image_modal_wrapper {

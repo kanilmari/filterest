@@ -30,14 +30,14 @@ describe('create_filter_bar inline hero mounting', () => {
 
         expect(panel).toBeTruthy();
         expect(activeScrollable.firstElementChild?.className).toBe('filterbar-scroll-sentinel');
-        expect(activeScrollable.children[1]?.className).toBe('filterbar-inline-hero');
+        expect(activeScrollable.children[1]?.classList.contains('filterbar-inline-hero')).toBe(true);
 
         activeScrollable.replaceChildren(document.createElement('div'));
         await flushObserverFrame();
 
         expect(document.querySelectorAll('.filterbar-inline-hero')).toHaveLength(1);
         expect(activeScrollable.firstElementChild?.className).toBe('filterbar-scroll-sentinel');
-        expect(activeScrollable.children[1]?.className).toBe('filterbar-inline-hero');
+        expect(activeScrollable.children[1]?.classList.contains('filterbar-inline-hero')).toBe(true);
     });
 
     test('replaces the project logo grid with the dataset svg icon in inline hero', async () => {
@@ -52,6 +52,9 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(inlineHero?.querySelector('.logo-letter-backgrounds-container')).toBeNull();
         expect(heroIcon?.getAttribute('viewBox')).toBe('0 -960 960 960');
         expect(heroIconPath?.getAttribute('d')).toBe(getTabIconPath('task'));
+		expect(inlineHero?.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
+		expect(inlineHero?.style.getPropertyValue('--dataset-cover-image'))
+			.toContain('/storage/104/dataset_media/cover/original/cover.webp');
     });
 
     test('falls back to the localized dataset title when the site identity is unavailable', async () => {

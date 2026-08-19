@@ -1,6 +1,6 @@
 // dataset_header_config_view.js
-// Renders the admin view for editing dataset hero copy and the shared project banner.
-// Bridges dataset config endpoints, table spec cache updates, and framework.css-based form layout.
+// Renders the admin view for dataset hero copy, project branding, and dataset presentation media.
+// Bridges dataset config endpoints, table-spec refreshes, and framework.css-based form layout.
 // Exists to give admins a dedicated editor for dataset header content without code changes.
 
 import { endpoint_router } from '../endpoints/endpoint_router.js';
@@ -9,6 +9,7 @@ import { createVanillaDropdown } from '../../reusable_components/vanilla_dropdow
 import { showErrorToast, showInfoToast, showSuccessToast, showWarningToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { translatePage } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
+import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js';
 
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderConfigResponse} DatasetHeaderConfigResponse */
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderTextConfig} DatasetHeaderTextConfig */
@@ -123,8 +124,23 @@ export async function generate_dataset_header_config_view(container) {
     removeBannerWrapper.appendChild(removeBannerText);
     bannerCard.appendChild(removeBannerWrapper);
 
+    const coverEditor = createDatasetMediaEditor({
+        title: 'Dataset cover image',
+        hint: 'Shown behind the dataset hero. The image belongs only to the selected dataset.',
+        fileFieldName: 'cover_image',
+        removeFieldName: 'remove_cover_image',
+    });
+    const backgroundEditor = createDatasetMediaEditor({
+        title: 'Dataset content background',
+        hint: 'Shown subtly behind the result count and dataset content, independently of the hero cover.',
+        fileFieldName: 'background_image',
+        removeFieldName: 'remove_background_image',
+    });
+
     formGrid.appendChild(copyCard);
     formGrid.appendChild(bannerCard);
+    formGrid.appendChild(coverEditor.wrapper);
+    formGrid.appendChild(backgroundEditor.wrapper);
     datasetCard.appendChild(formGrid);
     form.appendChild(datasetCard);
 
@@ -149,6 +165,8 @@ export async function generate_dataset_header_config_view(container) {
         onChange: async (datasetName) => {
             selectedDataset = datasetName || '';
             clearPendingPreview();
+            coverEditor.clearPendingPreview();
+            backgroundEditor.clearPendingPreview();
             fileInput.value = '';
             removeBannerCheckbox.checked = false;
             await loadDatasetConfig();
@@ -196,6 +214,8 @@ export async function generate_dataset_header_config_view(container) {
         if (bannerFile) {
             payload.append('project_banner_image', bannerFile);
         }
+        coverEditor.appendPayload(payload);
+        backgroundEditor.appendPayload(payload);
 
         saveButton.disabled = true;
 
@@ -209,6 +229,11 @@ export async function generate_dataset_header_config_view(container) {
 
             applyConfigToForm(savedConfig);
             syncProjectLogoMeta(savedConfig.project_logo_path || '');
+            syncDatasetPresentationMedia(
+                selectedDataset,
+                savedConfig.cover_image_path || '',
+                savedConfig.background_image_path || ''
+            );
             await translatePage(getLanguageWithBrowserFallback());
             showSuccessToast(response?.message || 'Dataset header config saved');
         } catch (error) {
@@ -235,6 +260,8 @@ export async function generate_dataset_header_config_view(container) {
             applyLangKeyConfig(placeholderEditor, null);
             currentBannerPath = '';
             renderBannerPreview('', false);
+            coverEditor.applyPath('');
+            backgroundEditor.applyPath('');
             return;
         }
 
@@ -259,6 +286,8 @@ export async function generate_dataset_header_config_view(container) {
         fileInput.value = '';
         clearPendingPreview();
         renderBannerPreview(currentBannerPath, false);
+        coverEditor.applyPath(config?.cover_image_path || '');
+        backgroundEditor.applyPath(config?.background_image_path || '');
     }
 
     function renderBannerPreview(src, isPending) {
@@ -300,6 +329,185 @@ export async function generate_dataset_header_config_view(container) {
         URL.revokeObjectURL(pendingPreviewUrl);
         pendingPreviewUrl = '';
     }
+}
+
+/**
+ * Keeps the active dataset surfaces and the shared table-spec cache in sync
+ * with a successful media save. The authoritative values still come from the
+ * backend response; this only avoids making the administrator reload the page.
+ */
+function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundImagePath) {
+    if (!datasetName) return;
+
+    const specs = getAllSpecs();
+    const nextDatasetSpec = { ...(specs[datasetName] || {}) };
+    setOptionalSpecPath(nextDatasetSpec, 'dataset_cover_image_path', coverImagePath);
+    setOptionalSpecPath(nextDatasetSpec, 'dataset_background_image_path', backgroundImagePath);
+    setAllSpecs({
+        ...specs,
+        [datasetName]: nextDatasetSpec,
+    });
+
+    for (const hero of document.querySelectorAll('.filterbar-inline-hero')) {
+        if (hero.dataset.filterbarInlineHeroFor !== datasetName) continue;
+        applyPresentationImage(
+            hero,
+            'filterbar-inline-hero--has-cover',
+            '--dataset-cover-image',
+            coverImagePath
+        );
+    }
+
+    for (const surface of document.querySelectorAll('.dataset-results-surface')) {
+        const datasetContainer = surface.closest('.tab_parts_container');
+        if (datasetContainer?.dataset.tableName !== datasetName) continue;
+        applyPresentationImage(
+            surface,
+            'dataset-results-surface--has-background',
+            '--dataset-background-image',
+            backgroundImagePath
+        );
+    }
+}
+
+function setOptionalSpecPath(spec, key, path) {
+    const normalizedPath = typeof path === 'string' ? path.trim() : '';
+    if (normalizedPath) {
+        spec[key] = normalizedPath;
+        return;
+    }
+    delete spec[key];
+}
+
+function applyPresentationImage(element, enabledClass, propertyName, path) {
+    const normalizedPath = typeof path === 'string' ? path.trim() : '';
+    element.classList.toggle(enabledClass, Boolean(normalizedPath));
+    if (!normalizedPath) {
+        element.style.removeProperty(propertyName);
+        return;
+    }
+    element.style.setProperty(
+        propertyName,
+        `url("${encodeURI(normalizedPath).replaceAll('"', '%22')}")`
+    );
+}
+
+function createDatasetMediaEditor({
+    title,
+    hint,
+    fileFieldName,
+    removeFieldName,
+}) {
+    let currentPath = '';
+    let pendingPreviewUrl = '';
+
+    const wrapper = document.createElement('section');
+    wrapper.classList.add('fw-card', 'fw-flex', 'fw-flex-col', 'fw-gap-4', 'dataset-header-config-media-card');
+
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    wrapper.appendChild(heading);
+
+    const description = document.createElement('p');
+    description.classList.add('fw-text-muted', 'fw-text-sm');
+    description.textContent = hint;
+    wrapper.appendChild(description);
+
+    const preview = document.createElement('div');
+    preview.classList.add('dataset-header-config-banner-preview', 'fw-panel');
+    wrapper.appendChild(preview);
+
+    const fileLabel = document.createElement('label');
+    fileLabel.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
+    const fileLabelText = document.createElement('span');
+    fileLabelText.classList.add('fw-label');
+    fileLabelText.textContent = 'Replace image';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.name = fileFieldName;
+    fileInput.accept = '.png,.jpg,.jpeg,.webp,.svg,.gif';
+    fileInput.classList.add('fw-form-control');
+    fileLabel.append(fileLabelText, fileInput);
+    wrapper.appendChild(fileLabel);
+
+    const removeLabel = document.createElement('label');
+    removeLabel.classList.add('dataset-header-config-checkbox', 'fw-flex', 'fw-gap-2', 'fw-items-center');
+    const removeCheckbox = document.createElement('input');
+    removeCheckbox.type = 'checkbox';
+    removeCheckbox.name = removeFieldName;
+    const removeText = document.createElement('span');
+    removeText.textContent = 'Remove current image on save';
+    removeLabel.append(removeCheckbox, removeText);
+    wrapper.appendChild(removeLabel);
+
+    function clearPendingPreview() {
+        if (!pendingPreviewUrl) return;
+        URL.revokeObjectURL(pendingPreviewUrl);
+        pendingPreviewUrl = '';
+    }
+
+    function renderPreview(src, isPending = false) {
+        preview.replaceChildren();
+        if (!src) {
+            const emptyState = document.createElement('p');
+            emptyState.classList.add('fw-text-muted', 'fw-text-sm');
+            emptyState.textContent = 'No image uploaded yet.';
+            preview.appendChild(emptyState);
+            return;
+        }
+        const image = document.createElement('img');
+        image.src = src;
+        image.alt = '';
+        image.classList.add('dataset-header-config-banner-image');
+        preview.appendChild(image);
+        if (isPending) {
+            const badge = document.createElement('span');
+            badge.classList.add('fw-badge');
+            badge.textContent = 'Unsaved preview';
+            preview.appendChild(badge);
+        }
+    }
+
+    function applyPath(path) {
+        currentPath = path || '';
+        removeCheckbox.checked = false;
+        fileInput.value = '';
+        clearPendingPreview();
+        renderPreview(currentPath);
+    }
+
+    fileInput.addEventListener('change', () => {
+        clearPendingPreview();
+        removeCheckbox.checked = false;
+        const [file] = fileInput.files || [];
+        if (!file) {
+            renderPreview(currentPath);
+            return;
+        }
+        pendingPreviewUrl = URL.createObjectURL(file);
+        renderPreview(pendingPreviewUrl, true);
+    });
+
+    removeCheckbox.addEventListener('change', () => {
+        if (removeCheckbox.checked) {
+            clearPendingPreview();
+            fileInput.value = '';
+            renderPreview('');
+            return;
+        }
+        renderPreview(currentPath);
+    });
+
+    return {
+        wrapper,
+        applyPath,
+        clearPendingPreview,
+        appendPayload(payload) {
+            payload.append(removeFieldName, removeCheckbox.checked ? 'true' : 'false');
+            const [file] = fileInput.files || [];
+            if (file) payload.append(fileFieldName, file);
+        },
+    };
 }
 
 async function loadDatasetOptions() {

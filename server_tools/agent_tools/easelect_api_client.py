@@ -386,6 +386,20 @@ class EaselectAPIClient:
             csrf=True,
         )
 
+    def set_column_multilingual(self, dataset_name, column_uid, is_multilingual):
+        """Set one column's multilingual contract through the canonical admin API."""
+        self.login()
+        return self.request(
+            "POST",
+            "/api/admin/column-multilingual",
+            data={
+                "dataset": str(dataset_name),
+                "column_uid": int(column_uid),
+                "is_multilingual": bool(is_multilingual),
+            },
+            csrf=True,
+        )
+
     def delete_rows(self, dataset_name, ids):
         """Delete rows between confirmed MCP ids and the delete-rows API."""
         self.login()

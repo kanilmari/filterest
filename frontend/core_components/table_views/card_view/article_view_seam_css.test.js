@@ -18,10 +18,10 @@ describe("article view top seam", () => {
     test("removes the empty top-controls grid row from article mode", () => {
         const css = readCss("cards.css");
         const controlsRule = css.match(
-            /\.scrollable_content:has\(\.card_view_wrapper\.big-card-open\) > \.card_top_controls\s*\{([^}]*)\}/
+            /\.scrollable_content:has\(\.card_view_wrapper\.big-card-open\) > \.dataset-results-surface > \.card_top_controls\s*\{([^}]*)\}/
         )?.[1] || "";
         const wrapperRule = css.match(
-            /\.scrollable_content:has\(\.card_view_wrapper\.big-card-open\) > \.card_view_wrapper\.big-card-open\s*\{([^}]*)\}/
+            /\.scrollable_content:has\(\.card_view_wrapper\.big-card-open\) > \.dataset-results-surface > \.card_view_wrapper\.big-card-open\s*\{([^}]*)\}/
         )?.[1] || "";
 
         expect(controlsRule).toContain("display: none");

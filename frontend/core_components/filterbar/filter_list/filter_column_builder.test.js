@@ -54,6 +54,38 @@ describe("filter column row builders", () => {
             "range",
             "query",
         ]);
+        expect(Array.from(modeButtons).map((button) => button.textContent)).toEqual([
+            "=",
+            "↔",
+            "ƒx",
+        ]);
+        expect(Array.from(modeButtons).map((button) => button.title)).toEqual([
+            "Exact value",
+            "Range",
+            "Condition or expression",
+        ]);
+        expect(Array.from(modeButtons).map((button) => button.getAttribute("aria-label"))).toEqual([
+            "Exact value",
+            "Range",
+            "Condition or expression",
+        ]);
+        expect(Array.from(modeButtons).map((button) => button.dataset.titleLangKey)).toEqual([
+            "filter_mode_exact_value",
+            "filter_mode_range",
+            "filter_mode_condition_expression",
+        ]);
+        expect(Array.from(modeButtons).map((button) => button.dataset.titleLangKeyFallback)).toEqual([
+            "Exact value",
+            "Range",
+            "Condition or expression",
+        ]);
+        expect(Array.from(modeButtons).map((button) => button.dataset.ariaLabelLangKeyFallback)).toEqual([
+            "Exact value",
+            "Range",
+            "Condition or expression",
+        ]);
+        expect(parts.displayModeControls.querySelector(".sort_button")).toBeNull();
+        expect(parts.sortButton.classList.contains("sort_button")).toBe(true);
     });
 
     test("buildFilterRowParts wraps shared controls in the standard legacy row shell", () => {

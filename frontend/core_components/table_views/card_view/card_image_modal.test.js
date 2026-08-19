@@ -25,16 +25,32 @@ describe("card image modal", () => {
         const overlay = document.querySelector("#custom_modal_overlay");
         const modal = document.querySelector("#custom_modal");
         const image = modal.querySelector("img");
+        const closeButton = modal.querySelector(".modal_close_button");
 
         expect(modal.classList.contains("image_modal")).toBe(true);
         expect(overlay.classList.contains("modal_overlay_blur")).toBe(true);
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
         expect(image.getAttribute("src")).toBe("/storage/104/example.jpg");
+        expect(closeButton).not.toBeNull();
 
         vi.advanceTimersByTime(1200);
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
 
         overlay.dispatchEvent(new PointerEvent("pointermove"));
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
+
+        overlay.dispatchEvent(new PointerEvent("pointerleave"));
+        vi.advanceTimersByTime(1199);
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
+
+        vi.advanceTimersByTime(1);
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
+
+        overlay.dispatchEvent(new PointerEvent("pointermove"));
+        vi.advanceTimersByTime(1200);
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
+
+        closeButton.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
     });
 });
