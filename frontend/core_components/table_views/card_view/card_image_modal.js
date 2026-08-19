@@ -5,6 +5,7 @@
 
 import {
     createModal,
+    hideModal,
     showModal,
 } from "../../../reusable_components/modal/modal_builder.js";
 
@@ -80,7 +81,7 @@ export function openImageModalContent({
     modal_overlay.classList.add("modal_overlay_blur");
     installTransientImageControls(modal_overlay);
     showModal();
-    return { modalOverlay: modal_overlay, modal };
+    return { modalOverlay: modal_overlay, modal, close: hideModal };
 }
 
 /**
@@ -116,7 +117,8 @@ export function openImageModal(image_src) {
         }
     });
 
-    openImageModalContent({ contentElement: wrapper });
+    const modalResult = openImageModalContent({ contentElement: wrapper });
 
     if (IS_DEV_MODE) console.log("modal avattu klikatulle kuvalle");
+    return modalResult;
 }

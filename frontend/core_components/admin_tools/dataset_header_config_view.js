@@ -20,7 +20,10 @@ import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js'
  * @property {DatasetHeaderConfigResponse} [config]
  */
 
-export async function generate_dataset_header_config_view(container) {
+export async function generate_dataset_header_config_view(
+    container,
+    { initialDatasetName = '' } = {}
+) {
     if (!container) return;
     container.replaceChildren();
 
@@ -245,7 +248,11 @@ export async function generate_dataset_header_config_view(container) {
     });
 
     if (datasetOptions.length > 0) {
-        selectedDataset = datasetOptions[0].value;
+        const requestedDataset = String(initialDatasetName || '').trim();
+        const initialOption = datasetOptions.find(
+            (option) => option.value === requestedDataset
+        );
+        selectedDataset = initialOption?.value || datasetOptions[0].value;
         datasetDropdown.setValue(selectedDataset);
         await loadDatasetConfig();
     } else {

@@ -84,6 +84,7 @@
 @import url("../core_components/admin_tools/dataset_alias_management.css");
 @import url("../core_components/admin_tools/dataset_header_config.css");
 @import url("../core_components/admin_tools/site_language_settings.css");
+@import url("../core_components/admin_tools/user_authentication.css");
 @import url("../core_components/admin_tools/field_view_editor.css");
 @import url("../core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/create_table_admin.css");
 @import url("../custom_views/search_vector_maintenance.css");

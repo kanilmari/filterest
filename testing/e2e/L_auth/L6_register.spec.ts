@@ -27,6 +27,12 @@ test.describe('L6 — Register', () => {
     await page.locator('[data-testid="register-password"]').fill('TestPassword123!');
     await page.locator('[data-testid="register-email"]').fill(`spa_register_${uniqueSuffix}@example.com`);
     await page.locator('[data-testid="register-full-name"]').fill('SPA Register Test');
+
+    await expect(page.locator('[data-testid="register-verification-fixed-pin"]')).toBeVisible();
+    await expect(page.locator('[data-testid="register-verification-none"]')).toBeVisible();
+    await page.locator('[data-testid="register-verification-none"]').check();
+    await expect(page.locator('[data-register-verification-fields="fixed_pin"]')).toBeHidden();
+
     await page.locator('[data-testid="register-submit"]').click();
 
     await page.locator('[data-testid="login-form"]').waitFor({ state: 'visible', timeout: 10000 });

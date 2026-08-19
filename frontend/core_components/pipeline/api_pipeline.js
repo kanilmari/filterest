@@ -95,6 +95,7 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     embeddingSourcePolicy: 'ai_features.ExternalEmbeddingSourcePolicyHandler',
     publicUiLanguages: 'lang.GetPublicUILanguagesHandler',
     adminUiLanguages: 'lang.AdminUILanguagesHandler',
+    adminUserAuthentication: 'auth.AdminUserAuthenticationHandler',
     createTrigger: 'dtt_triggers.CreateTriggerHandler',
     updateRow: 'dtt_1_row_update.UpdateRowHandlerWrapper',
     getColumns: 'dtt_1_row_create.GetAddRowColumnsHandlerWrapper',

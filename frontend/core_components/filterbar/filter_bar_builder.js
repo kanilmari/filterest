@@ -65,6 +65,7 @@ import {
 import { buildFilterbarDisclosureSection } from "./filterbar_section_heading_builder.js";
 import { setupFilterbarSectionOrdering } from "./filterbar_section_order_handler.js";
 import { buildAdminVersionInfoIndicator } from "../admin_tools/admin_version_info_indicator.js";
+import { createDatasetHeaderConfigHeroButton } from "../admin_tools/dataset_header_config_modal.js";
 
 /* ===========================================================
  *  Yleiset muuttujat ja apurit
@@ -522,6 +523,10 @@ function createInlineHeroContent(tableName, {
     const inlineHeroHost = document.createElement("div");
     inlineHeroHost.classList.add("filterbar-inline-hero");
     inlineHeroHost.dataset.filterbarInlineHeroFor = tableName;
+	const configButton = createDatasetHeaderConfigHeroButton(tableName);
+	if (configButton) {
+		inlineHeroHost.appendChild(configButton);
+	}
 	if (coverImagePath) {
 		inlineHeroHost.classList.add("filterbar-inline-hero--has-cover");
 		inlineHeroHost.style.setProperty(

@@ -65,3 +65,81 @@ func TestRegisterHandlerRedirectsGuestEntryWithEncodedRedirectParam(t *testing.T
 		t.Fatalf("redirect = %q, want %q", parsed.Query().Get("redirect"), "/app_service_catalog?foo=1&bar=2")
 	}
 }
+
+func TestValidateRegistrationVerificationAcceptsPasswordOnly(t *testing.T) {
+	method, validationKey := validateRegistrationVerification("none", "", "")
+	if validationKey != "" {
+		t.Fatalf("validation key = %q, want empty", validationKey)
+	}
+	if method != verificationNone {
+		t.Fatalf("method = %q, want %q", method, verificationNone)
+	}
+}
+
+func TestValidateRegistrationVerificationRequiresMatchingFixedPIN(t *testing.T) {
+	if _, key := validateRegistrationVerification("fixed_pin", "123", "123"); key != "first_run_fixed_pin_invalid" {
+		t.Fatalf("short PIN validation key = %q", key)
+	}
+	if _, key := validateRegistrationVerification("fixed_pin", "1234", "5678"); key != "first_run_fixed_pin_mismatch" {
+		t.Fatalf("mismatched PIN validation key = %q", key)
+	}
+	method, key := validateRegistrationVerification("fixed_pin", "1234", "1234")
+	if key != "" || method != verificationFixedPIN {
+		t.Fatalf("valid PIN result = (%q, %q), want (%q, empty)", method, key, verificationFixedPIN)
+	}
+}
+
+func TestValidateRegistrationVerificationRejectsMissingAndTOTPMethods(t *testing.T) {
+	for _, method := range []string{"", "totp", "unknown"} {
+		if _, key := validateRegistrationVerification(method, "", ""); key != "first_run_verification_invalid" {
+			t.Errorf("method %q validation key = %q", method, key)
+		}
+	}
+}
+
+func TestValidateRegistrationVerificationOffersEmailOnlyWhenDeliveryIsConfigured(t *testing.T) {
+	t.Setenv("POSTMARK_API_KEY", "test-token")
+	t.Setenv("POSTMARK_SERVER_TOKEN", "")
+	t.Setenv("EMAIL_FROM_ADDRESS", "")
+	t.Setenv("POSTMARK_FROM_ADDRESS", "")
+	if _, key := validateRegistrationVerification("email", "", ""); key != "first_run_postmark_required" {
+		t.Fatalf("email without sender validation key = %q", key)
+	}
+
+	t.Setenv("EMAIL_FROM_ADDRESS", "noreply@example.test")
+	method, key := validateRegistrationVerification("email", "", "")
+	if key != "" || method != verificationEmail {
+		t.Fatalf("configured email result = (%q, %q), want (%q, empty)", method, key, verificationEmail)
+	}
+}
+
+func TestBuildRegistrationFixedPINHashNeverStoresPlainPIN(t *testing.T) {
+	const pin = "2468"
+	hash, err := buildRegistrationFixedPINHash(verificationFixedPIN, pin)
+	if err != nil {
+		t.Fatalf("build fixed PIN hash: %v", err)
+	}
+	if hash == "" || hash == pin {
+		t.Fatalf("fixed PIN hash must be non-empty and different from the PIN")
+	}
+	if !verifyFixedPIN(hash, pin) {
+		t.Fatalf("fixed PIN hash does not verify")
+	}
+
+	noneHash, err := buildRegistrationFixedPINHash(verificationNone, pin)
+	if err != nil || noneHash != "" {
+		t.Fatalf("password-only hash = %q, err = %v; want empty, nil", noneHash, err)
+	}
+}
+
+func TestSelectedRegistrationVerificationMethodDefaultsToFixedPIN(t *testing.T) {
+	if got := selectedRegistrationVerificationMethod("", false); got != "fixed_pin" {
+		t.Fatalf("empty selection = %q, want fixed_pin", got)
+	}
+	if got := selectedRegistrationVerificationMethod("email", false); got != "fixed_pin" {
+		t.Fatalf("unavailable email selection = %q, want fixed_pin", got)
+	}
+	if got := selectedRegistrationVerificationMethod("none", false); got != "none" {
+		t.Fatalf("explicit password-only selection = %q, want none", got)
+	}
+}

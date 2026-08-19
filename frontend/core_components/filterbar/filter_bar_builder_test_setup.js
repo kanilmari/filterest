@@ -21,6 +21,20 @@ vi.mock('../admin_tools/admin_version_info_indicator.js', () => ({
     }),
 }));
 
+vi.mock('../admin_tools/dataset_header_config_modal.js', () => ({
+    createDatasetHeaderConfigHeroButton: vi.fn(() => {
+        const permissions = JSON.parse(
+            sessionStorage.getItem('user_permissions') || '[]'
+        );
+        if (!permissions.includes('/ui/admin/dataset_header_config')) {
+            return null;
+        }
+        const button = document.createElement('button');
+        button.dataset.testid = 'dataset-header-config-hero-button';
+        return button;
+    }),
+}));
+
 vi.mock('./text_search/create_text_search_panel.js', () => ({
     DEFAULT_TITLE_LANG_KEY_MODE: 'dataset',
     tableMetaCache: new Map(),
@@ -155,6 +169,7 @@ vi.mock('./shared_topbar_builder.js', () => ({
 
 export function resetFilterBarBuilderTestDom() {
     vi.resetModules();
+    sessionStorage.clear();
     mockUiConfig.favefoxFilterLayoutMode = 'inline-open';
     mockUiConfig.filterbarPanelMode = 'inline-hero';
     document.body.innerHTML = `

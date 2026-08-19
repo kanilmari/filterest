@@ -248,6 +248,15 @@ test.describe('C10 — Standalone Image-first View', () => {
       await expect(stage.locator('[data-testid="row-article-image-first-media"]')).toBeVisible();
       await expect(stage.locator('[data-testid="row-article-image-previous"]')).toBeDisabled();
       await expect(stage.locator('[data-testid="row-article-image-next"]')).toBeDisabled();
+      await expect(stage.locator('[data-testid="row-article-image-scroll-hint"]')).toBeVisible();
+      await expect.poll(
+        () => stage.evaluate(
+          (stageElement) => Math.abs(
+            stageElement.getBoundingClientRect().height - window.innerHeight,
+          ),
+        ),
+        { timeout: 5_000 },
+      ).toBeLessThanOrEqual(1);
 
       const layout = await imageFirstView.evaluate((viewElement) => {
         const content = viewElement.querySelector<HTMLElement>(
@@ -283,6 +292,28 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(layout.articleWidth).toBeLessThanOrEqual(801);
       expect(layout.detailsImmediatelyAfterDescription).toBe(true);
       expect(layout.scrollRange).toBeGreaterThan(0);
+      const visualContract = await stage.evaluate((stageElement) => {
+        const stageStyle = window.getComputedStyle(stageElement);
+        const backdropStyle = window.getComputedStyle(stageElement, '::before');
+        const imageFirstView = stageElement.closest<HTMLElement>('.image_first_view');
+        return {
+          animationDuration: imageFirstView
+            ? window.getComputedStyle(imageFirstView).animationDuration
+            : '',
+          backdropImage: backdropStyle.backgroundImage,
+          backdropFilter: backdropStyle.filter,
+          imageWidth: stageElement
+            .querySelector<HTMLElement>('[data-testid="row-article-image-first-media"]')
+            ?.getBoundingClientRect().width || 0,
+          stageWidth: stageElement.getBoundingClientRect().width,
+          stageBackground: stageStyle.backgroundColor,
+        };
+      });
+      expect(visualContract.animationDuration).toBe('0.5s');
+      expect(visualContract.backdropImage).not.toBe('none');
+      expect(visualContract.backdropFilter).toContain('blur(');
+      expect(visualContract.imageWidth).toBeLessThan(visualContract.stageWidth);
+      expect(visualContract.stageBackground).not.toBe('rgba(0, 0, 0, 0)');
       const modalScrollSurface = page.locator('.image_modal.image_first_view_modal .modal_body');
       const initialScrollTop = await modalScrollSurface.evaluate((element) => element.scrollTop);
       await stage.hover();
@@ -296,7 +327,8 @@ test.describe('C10 — Standalone Image-first View', () => {
       await expect(articleContent.locator('.row_article_details_section')).toContainText(
         'Article details proof',
       );
-      await page.locator('[data-testid="modal-close-button"]:visible').click();
+      await modalScrollSurface.evaluate((element) => element.scrollTo({ top: 0 }));
+      await stage.click({ position: { x: 6, y: 6 } });
       await expect(imageFirstView).toBeHidden();
     } finally {
       if (!page.isClosed()) {

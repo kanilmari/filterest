@@ -98,6 +98,37 @@
     );
 }
 
+.filterbar-inline-hero__config-button {
+	position: absolute;
+	z-index: 2;
+	top: 12px;
+	right: 12px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 42px;
+	height: 42px;
+	padding: 0;
+	color: var(--text_color);
+	background: color-mix(in srgb, var(--filter_panel_bg) 82%, transparent);
+	border: 1px solid var(--filter_panel_border);
+	border-radius: 50%;
+	box-shadow: var(--fw-shadow-raised);
+	backdrop-filter: blur(10px);
+}
+
+.filterbar-inline-hero__config-button:hover,
+.filterbar-inline-hero__config-button:focus-visible {
+	color: var(--button_hover_text_color, var(--text_color));
+	background: var(--button_hover_bg_color);
+}
+
+.filterbar-inline-hero__config-icon {
+	width: 22px;
+	height: 22px;
+	fill: currentcolor;
+}
+
 .filterbar-inline-hero--has-cover::before,
 .filterbar-inline-hero--has-cover::after {
 	position: absolute;

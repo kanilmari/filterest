@@ -131,6 +131,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"auth.UserPermissionsHandler":                   LoginOnlyProfile, // User's own permissions — no table-level check needed
 	"auth.RequestEmailChangeOTPHandler":             LoginOnlyProfile, // Sends OTP for email change; user-owned operation, no table permissions needed
 	"auth.RequestPasswordChangeOTPHandler":          LoginOnlyProfile, // Sends OTP for password change; user-owned operation, no table permissions needed
+	"auth.AdminUserAuthenticationHandler":           AdminProfile,
 	"router.adminHandler":                           AdminProfile,
 	"dtt_1_row_read.FilterbarAIConversationHandler": LoginOnlyProfile,
 

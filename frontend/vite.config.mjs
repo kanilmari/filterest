@@ -299,6 +299,7 @@ const DEV_TRUE_VARS = new Set(['IsDev']);
 const KNOWN_CONDITIONAL_VARS = new Set([
   'UseMinifiedAssets', 'IsDev', 'RobotsNoIndex',
   'StandalonePage', 'ShowCloseButton', 'ShowTourScreenshots',
+  'EmailVerificationAvailable',
   'SiteNameErr', 'UsernameErr', 'EmailErr', 'PasswordErr', 'GeneralErr',
   'EnvironmentErr', 'VerificationErr', 'FactorErr',
 ]);

@@ -74,9 +74,11 @@ const STABLE_CANDIDATE_ROUTE_SPECS = Object.freeze({
         { routeName: 'updateCardVisibility', handlerName: 'system_table_tools.UpdateCardVisibilityHandler' },
         { routeName: 'getDatasetHeaderConfig', handlerName: 'system_table_tools.GetDatasetHeaderConfigHandler' },
         { routeName: 'saveDatasetHeaderConfig', handlerName: 'system_table_tools.SaveDatasetHeaderConfigHandler' },
+        { routeName: 'adminUserAuthentication', handlerName: 'auth.AdminUserAuthenticationHandler' },
         { routeName: 'getChildTabConfig', handlerName: 'system_table_tools.GetChildTabConfigHandler' },
         { routeName: 'saveChildTabConfig', handlerName: 'system_table_tools.SaveChildTabConfigHandler' },
         { routeName: 'setCurrentProjectFolder', handlerName: 'dtt_system_table_folders.HandleSetCurrentProjectFolder' },
+        { routeName: 'saveDatasetSortDefault', handlerName: 'system_table_tools.SaveDatasetSortDefaultHandler' },
     ]),
     adminMaintenance: Object.freeze([
         { routeName: 'adminVersionInfo', handlerName: 'router.adminVersionInfoHandler' },
@@ -203,6 +205,7 @@ export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
         'checkTableRights',
         'checkTableRightsMulti',
         'getTaskTodoProgress',
+        'getDatasetSortDefault',
     ]),
     datasetWritesAndSchema: Object.freeze([
         'fetchForeignKeys',

@@ -29,6 +29,7 @@ import { generate_service_catalog_moderation_view } from '../../admin_tools/serv
 import { generate_queen_chat_view } from '../../admin_tools/queen_chat_view.js';
 import { generate_asset_linking_view } from '../../admin_tools/asset_linking/asset_linking_view.js';
 import { generate_site_language_settings_view } from '../../admin_tools/site_language_settings_view.js';
+import { generate_user_authentication_view } from '../../admin_tools/user_authentication_view.js';
 
 // Nämä user_tools-näkymät:
 import { generate_register_view } from '../../user_tools/register_tab_printer.js';
@@ -223,6 +224,15 @@ export const custom_views = [
         containerId: 'site_languages_container',
         group: 'admin_tools',
         requiredPermission: '/api/admin/ui-languages',
+    },
+    {
+        name: 'user_authentication',
+        loadFunction: async () => {
+            return loadManagementView('user_authentication_container', generate_user_authentication_view);
+        },
+        containerId: 'user_authentication_container',
+        group: 'admin_tools',
+        requiredPermission: '/api/admin/user-authentication',
     },
 
     // --- user_tools -ryhmä ---

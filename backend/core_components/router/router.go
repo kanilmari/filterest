@@ -134,6 +134,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/update-profile", auth.UserProfileUpdateHandler, "auth.UserProfileUpdateHandler")
 	functionRegisterHandler("/api/request-email-change-otp", auth.RequestEmailChangeOTPHandler, "auth.RequestEmailChangeOTPHandler")
 	functionRegisterHandler("/api/request-password-change-otp", auth.RequestPasswordChangeOTPHandler, "auth.RequestPasswordChangeOTPHandler")
+	functionRegisterHandler("/api/admin/user-authentication", auth.AdminUserAuthenticationHandler, "auth.AdminUserAuthenticationHandler")
 
 	// DevTools-reitit (vain eksplisiittisessä kehitysympäristössä)
 	envType := os.Getenv("ENVIRONMENT_TYPE")

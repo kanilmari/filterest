@@ -127,6 +127,17 @@ func authModesBoolRow(col string, val bool) driver.Rows {
 	return &authModesMockRows{cols: []string{col}, vals: []driver.Value{val}}
 }
 
+func authModesRegistrationRow(val bool) driver.Rows {
+	jsonValue := []byte(`{"value":false}`)
+	if val {
+		jsonValue = []byte(`{"value":true}`)
+	}
+	return &authModesMockRows{
+		cols: []string{"boolean_value", "json_value"},
+		vals: []driver.Value{val, jsonValue},
+	}
+}
+
 func authModesOneRow() driver.Rows {
 	return &authModesMockRows{cols: []string{"?column?"}, vals: []driver.Value{1}}
 }
@@ -148,7 +159,7 @@ func (c *authModesMockConn) QueryContext(_ context.Context, query string, _ []dr
 	case strings.Contains(query, "login_to_browse"):
 		return authModesBoolRow("boolean_value", c.cfg.loginToBrowse), nil
 	case strings.Contains(query, "registration_enabled"):
-		return authModesBoolRow("boolean_value", c.cfg.registrationEnable), nil
+		return authModesRegistrationRow(c.cfg.registrationEnable), nil
 	case strings.Contains(query, "FROM system_users"):
 		if c.cfg.userExists {
 			return authModesOneRow(), nil

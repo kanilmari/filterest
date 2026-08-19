@@ -19,6 +19,12 @@ const baseFormHtml = `
       <input type="text" name="username" data-testid="register-username" />
       <input type="password" name="password" data-testid="register-password" />
       <input type="email" name="email" data-testid="register-email" />
+      <label><input type="radio" name="verification_method" value="none" />None</label>
+      <label><input type="radio" name="verification_method" value="fixed_pin" checked />PIN</label>
+      <div data-register-verification-fields="fixed_pin" hidden>
+        <input type="password" name="fixed_pin" data-testid="register-fixed-pin" />
+        <input type="password" name="confirm_fixed_pin" />
+      </div>
       <input type="text" name="full_name" data-testid="register-full-name" />
       <input type="hidden" name="csrf_token" value="csrf-1" />
       <input type="submit" value="Register" data-testid="register-submit" />
@@ -33,6 +39,7 @@ async function loadModule() {
     }));
     vi.doMock("../state_stores/lang_preference_reader.js", () => ({
         getLanguageWithBrowserFallback: () => "fi",
+        getPreferredAvailableLanguage: () => "fi",
     }));
     vi.doMock("../auth/login_shell_entry.js", () => ({
         handleLoginShellEntry: handleLoginShellEntryMock,
@@ -63,6 +70,8 @@ describe("generate_register_view", () => {
             headers: { Accept: "text/html" },
         });
         expect(container.querySelector('[data-testid="register-form"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="register-fixed-pin"]').required).toBe(true);
+        expect(container.querySelector('[data-register-verification-fields="fixed_pin"]').hidden).toBe(false);
         expect(translatePageMock).toHaveBeenCalledWith("fi");
     });
 

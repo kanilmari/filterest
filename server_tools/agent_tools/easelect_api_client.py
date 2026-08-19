@@ -62,6 +62,7 @@ class EaselectAPIClient:
         username=None,
         password=None,
         otp_code=None,
+        verification_code_provider=None,
     ):
         self.project_root = project_root
         self.project_env = load_project_env(project_root)
@@ -88,6 +89,7 @@ class EaselectAPIClient:
             or os.environ.get("EASELECT_API_OTP_CODE")
             or self.project_env.get("LOGIN_OTP_CODE")
         )
+        self.verification_code_provider = verification_code_provider
         self._authenticated = False
         self.cookie_jar = http.cookiejar.CookieJar()
         self._csrf_token = None
@@ -224,16 +226,19 @@ class EaselectAPIClient:
             self.fetch_csrf_token(force=True)
             return first
         if first.get("otp_required") is True:
-            if not self.otp_code:
+            verification_code = self.otp_code
+            if not verification_code and callable(self.verification_code_provider):
+                verification_code = self.verification_code_provider(first)
+            if not verification_code:
                 raise EaselectAPIError(
-                    "login requires OTP but LOGIN_OTP_CODE/EASELECT_API_OTP_CODE is missing"
+                    "login requires a verification code but no configured code or provider is available"
                 )
             second = self.request("POST", "/api/login", data={
                 "username": self.username,
                 "password": self.password,
                 "fingerprint": "easelect-agent-tools",
                 "csrf_token": csrf_token,
-                "otp_code": self.otp_code,
+                "otp_code": verification_code,
             })
             if second.get("authenticated") is not True:
                 raise EaselectAPIError(f"OTP login did not authenticate: {second}")
@@ -329,6 +334,173 @@ class EaselectAPIClient:
         if isinstance(filters, dict):
             query.update({key: value for key, value in filters.items() if value is not None})
         return self.request("GET", "/api/get-results", query=query)
+
+    def get_all_dataset_rows(
+        self,
+        dataset_name,
+        *,
+        offset=0,
+        sort_column=None,
+        sort_order=None,
+        filters=None,
+        max_pages=1000,
+    ):
+        """Read every row without misusing get-results row_count as a page size."""
+        rows = []
+        seen_pages = set()
+        current_offset = int(offset or 0)
+        for _ in range(int(max_pages)):
+            payload = self.get_dataset_rows(
+                dataset_name,
+                offset=current_offset,
+                sort_column=sort_column,
+                sort_order=sort_order,
+                filters=filters,
+            )
+            page = payload.get("data", []) if isinstance(payload, dict) else payload
+            if not isinstance(page, list):
+                raise EaselectAPIError("row response did not contain a data list")
+            if not page:
+                return rows
+            marker = json.dumps(page, sort_keys=True, default=str)
+            if marker in seen_pages:
+                raise EaselectAPIError("row pagination repeated a previous page")
+            seen_pages.add(marker)
+            rows.extend(page)
+            current_offset += len(page)
+        raise EaselectAPIError(f"row export exceeded max_pages={max_pages}")
+
+    def rename_tree_node(self, item_id, item_type, new_name, translations):
+        """Rename one folder or dataset through the transactional tree API."""
+        self.login()
+        return self.request(
+            "POST",
+            "/api/rename-tree-node",
+            data={
+                "item_id": int(item_id),
+                "item_type": str(item_type),
+                "new_name": str(new_name),
+                "translations": dict(translations or {}),
+            },
+            csrf=True,
+        )
+
+    def get_auth_modes(self):
+        """Read public authentication switches for post-mutation verification."""
+        return self.request("GET", "/api/auth-modes")
+
+    def set_registration_enabled(self, enabled):
+        """Set and verify the registration flag through ordinary row APIs."""
+        def normalized_json_value(row):
+            value = row.get("json_value")
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except json.JSONDecodeError:
+                    return None
+            return value
+
+        self.login()
+        matches = [
+            row
+            for row in self.get_all_dataset_rows("system_config")
+            if row.get("key") == "registration_enabled"
+        ]
+        if len(matches) > 1:
+            raise EaselectAPIError("registration_enabled config row was not unique")
+        before = bool(matches[0].get("boolean_value")) if matches else False
+        json_value = {"value": bool(enabled)}
+        canonical_values = {
+            # Generic row APIs accept JSON/JSONB fields as serialized values;
+            # PostgreSQL drivers cannot bind a Python mapping directly.
+            "json_value": json.dumps(json_value, separators=(",", ":")),
+            "boolean_value": bool(enabled),
+            # system_config value type 2 is the boolean editor. Keep it
+            # canonical even when repairing an older or API-created row.
+            "value_type": 2,
+        }
+        if not matches:
+            self.add_row(
+                "system_config",
+                {
+                    "key": "registration_enabled",
+                    **canonical_values,
+                    "creation_spec": (
+                        "Administrator-owned self-registration availability setting."
+                    ),
+                },
+            )
+        elif int(matches[0].get("id") or 0) <= 0:
+            raise EaselectAPIError("registration_enabled config row had no usable id")
+        elif (
+            matches[0].get("boolean_value") != bool(enabled)
+            or normalized_json_value(matches[0]) != json_value
+            or int(matches[0].get("value_type") or 0) != 2
+        ):
+            self.update_row(
+                "system_config",
+                int(matches[0]["id"]),
+                canonical_values,
+            )
+        readback = [
+            row
+            for row in self.get_all_dataset_rows("system_config")
+            if row.get("key") == "registration_enabled"
+        ]
+        if (
+            len(readback) != 1
+            or normalized_json_value(readback[0]) != json_value
+            or (
+                readback[0].get("boolean_value") is not None
+                and readback[0].get("boolean_value") != bool(enabled)
+            )
+            or int(readback[0].get("value_type") or 0) != 2
+        ):
+            raise EaselectAPIError("registration_enabled config row readback did not match")
+        auth_modes = self.get_auth_modes()
+        if auth_modes.get("registration_enabled") != bool(enabled):
+            raise EaselectAPIError("registration_enabled readback did not match")
+        return {
+            "key": "registration_enabled",
+            "before": before,
+            "after": bool(enabled),
+            "verified": True,
+        }
+
+    def list_user_authentication(self):
+        """List non-secret user provisioning and sign-in-method state for admins."""
+        self.login()
+        payload = self.request("GET", "/api/admin/user-authentication")
+        users = payload.get("users") if isinstance(payload, dict) else None
+        if not isinstance(users, list):
+            raise EaselectAPIError("user-authentication response did not contain a users list")
+        return users
+
+    def set_user_authentication(self, user_id, verification_method, *, fixed_pin=None):
+        """Provision one administrator and set its sign-in method without exposing secrets."""
+        method = str(verification_method or "").strip().lower()
+        if method not in {"none", "email", "fixed_pin"}:
+            raise EaselectAPIError("verification_method must be none, email, or fixed_pin")
+        pin = str(fixed_pin or "").strip()
+        if method == "fixed_pin" and (not pin.isdigit() or not 4 <= len(pin) <= 8):
+            raise EaselectAPIError("fixed_pin must contain 4-8 digits")
+        if method != "fixed_pin" and pin:
+            raise EaselectAPIError("fixed_pin is allowed only with verification_method=fixed_pin")
+
+        request_data = {
+            "user_id": int(user_id),
+            "verification_method": method,
+        }
+        if method == "fixed_pin":
+            request_data["fixed_pin"] = pin
+
+        self.login()
+        return self.request(
+            "POST",
+            "/api/admin/user-authentication",
+            data=request_data,
+            csrf=True,
+        )
 
     def create_dataset(self, request_data):
         """Create a dataset between MCP payloads and the create_dataset API."""

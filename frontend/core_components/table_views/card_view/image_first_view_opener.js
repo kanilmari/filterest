@@ -171,6 +171,7 @@ export async function openImageFirstView({
         activeImageRow,
     );
     const imageEntries = resolvedRows.map((row, index) => ({ row, index }));
+    let closeImageFirstView = null;
     const stage = buildRowArticleImageFirstStage({
         imageEntries,
         getActiveRow: () => currentImageRow,
@@ -179,6 +180,7 @@ export async function openImageFirstView({
         },
         resolvePath: resolveImagePath,
         resolveAlt: resolveImageAltText,
+        onBackdropActivate: () => closeImageFirstView?.(),
     });
     if (!stage) {
         return null;
@@ -230,6 +232,7 @@ export async function openImageFirstView({
         classNames: ["image_first_view_modal"],
         ariaLabel,
     });
+    closeImageFirstView = modalResult?.close || null;
     stage.sync();
     return modalResult;
 }

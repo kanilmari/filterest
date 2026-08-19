@@ -5,6 +5,7 @@
 # Exists so agents and developers can change datasets, columns, and rows without direct SQL.
 
 import argparse
+import getpass
 import json
 import sys
 
@@ -195,7 +196,27 @@ def build_modify_columns_payload(args):
 
 def make_client(args):
     """Create an Easelect API client between parsed CLI args and shared auth logic."""
-    return EaselectAPIClient(base_url=args.base_url)
+    if not getattr(args, "prompt_credentials", False):
+        return EaselectAPIClient(base_url=args.base_url)
+
+    username = input("Admin username: ").strip()
+    password = getpass.getpass("Admin password: ")
+
+    def verification_code_provider(response):
+        method = str(response.get("verification_method") or "").strip()
+        prompts = {
+            "fixed_pin": "Fixed PIN: ",
+            "totp": "Authenticator code: ",
+            "email": "Email verification code: ",
+        }
+        return getpass.getpass(prompts.get(method, "Login verification code: ")).strip()
+
+    return EaselectAPIClient(
+        base_url=args.base_url,
+        username=username,
+        password=password,
+        verification_code_provider=verification_code_provider,
+    )
 
 
 def command_list_datasets(args):
@@ -315,12 +336,64 @@ def command_delete_rows(args):
     print_json(result)
 
 
+def command_rename_tree_node(args):
+    if args.confirm_new_name != args.new_name:
+        raise ValueError("--confirm-new-name must match new_name")
+    translations = load_json_argument(args.translations_json, "--translations-json")
+    if not isinstance(translations, dict):
+        raise ValueError("--translations-json must be an object")
+    result = make_client(args).rename_tree_node(
+        args.item_id,
+        args.item_type,
+        args.new_name,
+        translations,
+    )
+    print_json(result)
+
+
+def command_registration(args):
+    if not args.confirm:
+        raise ValueError("--confirm is required when changing registration")
+    result = make_client(args).set_registration_enabled(args.enabled == "true")
+    print_json(result)
+
+
+def command_user_auth_list(args):
+    """List non-secret user authentication state through the administrator API."""
+    print_json({"users": make_client(args).list_user_authentication()})
+
+
+def command_user_auth_set(args):
+    """Provision one admin and set its sign-in method after exact confirmation."""
+    if args.confirm_user_id != args.user_id:
+        raise ValueError("--confirm-user-id must match user_id")
+    if args.confirm_method != args.verification_method:
+        raise ValueError("--confirm-method must match verification_method")
+    fixed_pin = None
+    if args.verification_method == "fixed_pin":
+        fixed_pin = getpass.getpass("New fixed PIN (4-8 digits): ").strip()
+        confirmation = getpass.getpass("Confirm new fixed PIN: ").strip()
+        if fixed_pin != confirmation:
+            raise ValueError("fixed PIN confirmation did not match")
+    result = make_client(args).set_user_authentication(
+        args.user_id,
+        args.verification_method,
+        fixed_pin=fixed_pin,
+    )
+    print_json(result)
+
+
 def build_parser():
     """Build the api_crud parser between terminal commands and client methods."""
     parser = argparse.ArgumentParser(
         description="Maintain Easelect datasets, columns, and rows through application APIs."
     )
     parser.add_argument("--base-url", help="Easelect base URL, default https://localhost:8082")
+    parser.add_argument(
+        "--prompt-credentials",
+        action="store_true",
+        help="Prompt for credentials and the configured login factor in the visible terminal",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -404,6 +477,48 @@ def build_parser():
     delete_rows_parser.add_argument("--id", type=int, action="append", required=True)
     delete_rows_parser.add_argument("--confirm", action="store_true")
     delete_rows_parser.set_defaults(func=command_delete_rows)
+
+    rename_parser = subparsers.add_parser(
+        "rename-tree-node",
+        help="Rename one folder or dataset through the transactional tree API",
+    )
+    rename_parser.add_argument("item_id", type=int)
+    rename_parser.add_argument("item_type", choices=["folder", "table"])
+    rename_parser.add_argument("new_name")
+    rename_parser.add_argument("--translations-json", required=True)
+    rename_parser.add_argument("--confirm-new-name", required=True)
+    rename_parser.set_defaults(func=command_rename_tree_node)
+
+    registration_parser = subparsers.add_parser(
+        "registration",
+        help="Enable or disable self-registration with API readback",
+    )
+    registration_parser.add_argument("enabled", choices=["true", "false"])
+    registration_parser.add_argument("--confirm", action="store_true")
+    registration_parser.set_defaults(func=command_registration)
+
+    user_auth_list_parser = subparsers.add_parser(
+        "user-auth-list",
+        help="List users and their non-secret administrator/authentication state",
+    )
+    user_auth_list_parser.set_defaults(func=command_user_auth_list)
+
+    user_auth_set_parser = subparsers.add_parser(
+        "user-auth-set",
+        help="Provision one administrator and select its sign-in method",
+    )
+    user_auth_set_parser.add_argument("user_id", type=int)
+    user_auth_set_parser.add_argument(
+        "verification_method",
+        choices=["none", "fixed_pin", "email"],
+    )
+    user_auth_set_parser.add_argument("--confirm-user-id", type=int, required=True)
+    user_auth_set_parser.add_argument(
+        "--confirm-method",
+        choices=["none", "fixed_pin", "email"],
+        required=True,
+    )
+    user_auth_set_parser.set_defaults(func=command_user_auth_set)
 
     return parser
 

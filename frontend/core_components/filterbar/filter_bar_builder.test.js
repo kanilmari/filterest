@@ -40,6 +40,21 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(activeScrollable.children[1]?.classList.contains('filterbar-inline-hero')).toBe(true);
     });
 
+    test('mounts the dataset header settings action in an authorized admin hero', async () => {
+        sessionStorage.setItem(
+            'user_permissions',
+            JSON.stringify(['/ui/admin/dataset_header_config'])
+        );
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
+
+        const heroButton = document.querySelector(
+            '[data-filterbar-inline-hero-for="demo"] [data-testid="dataset-header-config-hero-button"]'
+        );
+
+        expect(heroButton).toBeTruthy();
+    });
+
     test('replaces the project logo grid with the dataset svg icon in inline hero', async () => {
         const { getTabIconPath } = await import('../navigation/main_tabs/tab_icon_library.js');
         const { create_filter_bar } = await import('./filter_bar_builder.js');

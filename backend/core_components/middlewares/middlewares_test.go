@@ -18,6 +18,27 @@ func okHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func TestRegistrationEnabledValuePrefersBooleanAndSupportsJSON(t *testing.T) {
+	tests := []struct {
+		name      string
+		boolean   sql.NullBool
+		jsonValue []byte
+		want      bool
+	}{
+		{name: "boolean true", boolean: sql.NullBool{Bool: true, Valid: true}, jsonValue: []byte(`{"value":false}`), want: true},
+		{name: "boolean false", boolean: sql.NullBool{Bool: false, Valid: true}, jsonValue: []byte(`{"value":true}`), want: false},
+		{name: "json fallback", jsonValue: []byte(`{"value":true}`), want: true},
+		{name: "invalid defaults closed", jsonValue: []byte(`{"value":"yes"}`), want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := registrationEnabledValue(tc.boolean, tc.jsonValue); got != tc.want {
+				t.Fatalf("registrationEnabledValue() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // ---------- WithSecurityHeaders -----------------------------------------------
 
 func TestWithSecurityHeaders_HeadersPresent(t *testing.T) {
