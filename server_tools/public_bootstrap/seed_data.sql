@@ -21,8 +21,8 @@ INSERT INTO public.system_db_tables (id, table_name, description, table_uid, cac
 
 
 INSERT INTO public.system_config (id, key, json_value, created, updated, creation_spec, boolean_value, text_value, int_value, value_type) VALUES
-  (3001, 'login_to_browse', '{"value": false}'::jsonb, '2026-03-29 00:00:00', '2026-03-29 00:00:00', 'public fixture seed', FALSE, 'false', NULL, 1),
-  (3002, 'site_name', '{"value": "Filterest"}'::jsonb, '2026-03-29 00:00:00', '2026-03-29 00:00:00', 'public fixture seed', NULL, 'Filterest', NULL, 2);
+  (3001, 'login_to_browse', '{"value": false}'::jsonb, '2026-03-29 00:00:00', '2026-03-29 00:00:00', 'public fixture seed', FALSE, 'false', NULL, 2),
+  (3002, 'site_name', '{"value": ""}'::jsonb, '2026-03-29 00:00:00', '2026-08-04 00:00:00', 'Administrator-owned browser-facing identity selected during First Run.', NULL, '', NULL, 6);
 
 
 
