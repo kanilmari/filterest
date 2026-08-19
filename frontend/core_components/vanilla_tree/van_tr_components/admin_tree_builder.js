@@ -727,6 +727,12 @@ export async function initializeTreeCallAdmin({ forceRefresh = false } = {}) {
                     ...(node.search_placeholder
                         ? { search_placeholder: node.search_placeholder }
                         : {}),
+                    ...(node.dataset_cover_image_path
+                        ? { dataset_cover_image_path: node.dataset_cover_image_path }
+                        : {}),
+                    ...(node.dataset_background_image_path
+                        ? { dataset_background_image_path: node.dataset_background_image_path }
+                        : {}),
                 };
             }
         });

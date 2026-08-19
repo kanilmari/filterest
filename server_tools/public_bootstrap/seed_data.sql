@@ -242,7 +242,7 @@ VALUES (
 );
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.1.0', 'Filterest generated public bootstrap');
+VALUES ('9.2.0', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -352,7 +352,8 @@ VALUES
   (226, 'system_languages', 'Canonical UI-language registry and site availability controls', 226, NULL, 11, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Languages', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'native_name', 'language'),
   (227, 'system_lang_key_translations', 'Normalized translations for stable UI language keys', 227, NULL, 11, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Language key translations', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'translation', 'language'),
   (228, 'system_embedding_refresh_jobs', 'Content-free durable queue for refreshing row embeddings after committed data changes', 228, NULL, 8, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'public fixture seed', NULL, 'public', 'Embedding refresh jobs', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, 'refresh'),
-  (229, 'system_dataset_sort_defaults', 'Per-dataset site-wide and administrator-specific default sorting', 229, NULL, 8, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'public fixture seed', NULL, 'public', 'Dataset Sort Defaults', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'sort_column', 'settings');
+  (229, 'system_dataset_sort_defaults', 'Per-dataset site-wide and administrator-specific default sorting', 229, NULL, 8, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'public fixture seed', NULL, 'public', 'Dataset Sort Defaults', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'sort_column', 'settings'),
+  (230, 'system_dataset_media', 'Dataset-level cover and content-background image registry', 230, NULL, 8, '2026-08-19 00:00:00', '2026-08-19 00:00:00', 'public fixture seed', NULL, 'public', 'Dataset Media', FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'original_name', 'image');
 
 INSERT INTO public.system_functions
     (id, name, disabled, created, updated, package, specific_table_related,
@@ -455,7 +456,8 @@ WHERE columns.table_schema = 'public'
       'system_languages',
       'system_lang_key_translations',
       'system_embedding_refresh_jobs',
-      'system_dataset_sort_defaults'
+      'system_dataset_sort_defaults',
+      'system_dataset_media'
   )
   AND NOT EXISTS (
       SELECT 1
@@ -875,6 +877,9 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('privacy_notice_login_acceptance_prefix', 'Kirjautuaksesi sinun on hyväksyttävä ', 'To sign in, you must accept the ', '登录前，您必须接受', '登入前，你必須接受', 'Plain-text prefix before the linked privacy notice name; spacing is intentional for languages that use it.'),
   ('privacy_notice_login_acceptance_link', 'tietosuojaseloste', 'privacy notice', '隐私声明', '私隱聲明', 'Only the privacy notice name linked to the notice modal in the login acceptance sentence.'),
   ('privacy_notice_login_acceptance_suffix', '.', '.', '。', '。', 'Plain-text locale-specific sentence terminator after the linked privacy notice name.'),
+  ('filter_mode_exact_value', 'Tarkka arvo', 'Exact value', '精确值', '精確值', 'Tooltip and accessible name for the filter mode that matches one exact value.'),
+  ('filter_mode_range', 'Arvoväli', 'Range', '范围', '範圍', 'Tooltip and accessible name for the filter mode that matches a lower-to-upper range.'),
+  ('filter_mode_condition_expression', 'Ehto tai lauseke', 'Condition or expression', '条件或表达式', '條件或運算式', 'Tooltip and accessible name for the filter mode that accepts a condition or expression.'),
   ('system_config', 'Järjestelmäasetukset', 'System configuration', '系统配置', '系統設定', 'public fixture seed'),
   ('users', 'Käyttäjät', 'Users', '用户', '用戶', 'public fixture seed'),
   ('system_users_front_page', 'Käyttäjät', 'Users', '用户', '用戶', 'public fixture seed'),
@@ -943,6 +948,7 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('system_db_version', 'Tietokantaversio', 'Database version', '数据库版本', '資料庫版本', 'public fixture seed'),
   ('system_embedding_refresh_jobs', 'Embedding-päivitysjono', 'Embedding refresh jobs', '嵌入刷新任务', '嵌入重新整理工作', 'public fixture seed'),
   ('system_dataset_sort_defaults', 'Taulujen lajitteluoletukset', 'Dataset Sort Defaults', '数据表排序默认值', '資料表排序預設值', 'public fixture seed'),
+  ('system_dataset_media', 'Tietojoukkojen kuvat', 'Dataset Media', '数据集媒体', '資料集媒體', 'public fixture seed'),
   ('system_foreign_key_relations_1_m', 'Vierasavainrelaatiot 1:M', 'Foreign-key relations 1:M', '外键关系 1:M', '外鍵關係 1:M', 'public fixture seed'),
   ('system_foreign_key_relations_m_m', 'Vierasavainrelaatiot M:M', 'Foreign-key relations M:M', '外键关系 M:M', '外鍵關係 M:M', 'public fixture seed'),
   ('system_functions', 'Järjestelmätoiminnot', 'System functions', '系统功能', '系統功能', 'public fixture seed'),
@@ -1461,7 +1467,22 @@ WITH authored_translations(lang_key, language_code, translation, review_status) 
         ('system_lang_key_translations', 'fi', 'Kieliavainten käännökset', 'approved'),
         ('system_lang_key_translations', 'zh-CN', '语言键翻译', 'needs_review'),
         ('system_lang_key_translations', 'zh-TW', '語言鍵翻譯', 'needs_review'),
-        ('system_lang_key_translations', 'zh-HK', '語言鍵翻譯', 'needs_review')
+        ('system_lang_key_translations', 'zh-HK', '語言鍵翻譯', 'needs_review'),
+        ('filter_mode_exact_value', 'en', 'Exact value', 'approved'),
+        ('filter_mode_exact_value', 'fi', 'Tarkka arvo', 'approved'),
+        ('filter_mode_exact_value', 'zh-CN', '精确值', 'needs_review'),
+        ('filter_mode_exact_value', 'zh-TW', '精確值', 'needs_review'),
+        ('filter_mode_exact_value', 'zh-HK', '精確值', 'needs_review'),
+        ('filter_mode_range', 'en', 'Range', 'approved'),
+        ('filter_mode_range', 'fi', 'Arvoväli', 'approved'),
+        ('filter_mode_range', 'zh-CN', '范围', 'needs_review'),
+        ('filter_mode_range', 'zh-TW', '範圍', 'needs_review'),
+        ('filter_mode_range', 'zh-HK', '範圍', 'needs_review'),
+        ('filter_mode_condition_expression', 'en', 'Condition or expression', 'approved'),
+        ('filter_mode_condition_expression', 'fi', 'Ehto tai lauseke', 'approved'),
+        ('filter_mode_condition_expression', 'zh-CN', '条件或表达式', 'needs_review'),
+        ('filter_mode_condition_expression', 'zh-TW', '條件或運算式', 'needs_review'),
+        ('filter_mode_condition_expression', 'zh-HK', '條件或運算式', 'needs_review')
 ), resolved AS (
     SELECT
         keys.id AS lang_key_id,

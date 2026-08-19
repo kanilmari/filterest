@@ -517,10 +517,18 @@ function createInlineHeroContent(tableName, {
     columns = [],
     dataTypes = {},
     resetTargetElement = null,
+    coverImagePath = "",
 } = {}) {
     const inlineHeroHost = document.createElement("div");
     inlineHeroHost.classList.add("filterbar-inline-hero");
     inlineHeroHost.dataset.filterbarInlineHeroFor = tableName;
+	if (coverImagePath) {
+		inlineHeroHost.classList.add("filterbar-inline-hero--has-cover");
+		inlineHeroHost.style.setProperty(
+			"--dataset-cover-image",
+			`url("${encodeURI(coverImagePath).replaceAll('"', '%22')}")`
+		);
+	}
 
     const heroInner = document.createElement("div");
     heroInner.classList.add("filter-content-inner");
@@ -951,6 +959,9 @@ export function create_filter_bar(
             columns,
             dataTypes,
             resetTargetElement: tablePartsContainer,
+			coverImagePath: typeof tableSpec.dataset_cover_image_path === "string"
+				? tableSpec.dataset_cover_image_path.trim()
+				: "",
         })
         : null;
 

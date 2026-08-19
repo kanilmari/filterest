@@ -1,6 +1,6 @@
 // dataset_header_config.go
-// Admin API handlers for managing dataset header copy overrides and the project hero banner.
-// Bridges system_db_tables metadata, multipart logo uploads, and the admin editor workflow.
+// Admin API handlers for dataset header copy, project branding, and dataset presentation media.
+// Bridges system metadata, validated storage uploads, and the admin editor workflow.
 // Exists to keep dataset header configuration in one backend surface instead of generic CRUD routes.
 package system_table_tools
 
@@ -18,7 +18,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var projectLogoExtensions = []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
@@ -32,11 +34,17 @@ type datasetHeaderTextConfig struct {
 }
 
 type datasetHeaderConfigResponse struct {
-	DatasetName       string                  `json:"dataset_name"`
-	Title             datasetHeaderTextConfig `json:"title"`
-	Slogan            datasetHeaderTextConfig `json:"slogan"`
-	SearchPlaceholder datasetHeaderTextConfig `json:"search_placeholder"`
-	ProjectLogoPath   string                  `json:"project_logo_path"`
+	DatasetName         string                  `json:"dataset_name"`
+	Title               datasetHeaderTextConfig `json:"title"`
+	Slogan              datasetHeaderTextConfig `json:"slogan"`
+	SearchPlaceholder   datasetHeaderTextConfig `json:"search_placeholder"`
+	ProjectLogoPath     string                  `json:"project_logo_path"`
+	CoverImagePath      string                  `json:"cover_image_path"`
+	BackgroundImagePath string                  `json:"background_image_path"`
+}
+
+type datasetHeaderQueryer interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
 // GetDatasetHeaderConfigHandler returns dataset header copy overrides for one dataset.
@@ -53,7 +61,7 @@ func GetDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	config, err := readDatasetHeaderConfig(datasetName)
+	config, err := readDatasetHeaderConfigWithQueryer(backend.Db, datasetName)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
@@ -67,7 +75,7 @@ func GetDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, config)
 }
 
-// SaveDatasetHeaderConfigHandler stores dataset header copy overrides and optionally replaces the shared project logo.
+// SaveDatasetHeaderConfigHandler stores header copy, shared branding, and dataset-specific presentation media.
 // POST /api/dataset-header-config/save
 func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -96,14 +104,14 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var datasetExists bool
-	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)`, datasetName).Scan(&datasetExists); err != nil {
+	var tableUID int
+	if err := tx.QueryRow(`SELECT table_uid FROM system_db_tables WHERE table_name = $1`, datasetName).Scan(&tableUID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
+			return
+		}
 		log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] dataset existence check failed for %q: %v\033[0m", datasetName, err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error validating dataset")
-		return
-	}
-	if !datasetExists {
-		httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
 		return
 	}
 
@@ -135,10 +143,53 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// NOTE: readDatasetHeaderConfig currently uses backend.Db, not this in-flight tx.
-	// The response can therefore lag behind the just-written values until commit becomes visible.
-	// Keep this caveat documented until readback is moved to the same transaction or post-commit path.
-	config, err := readDatasetHeaderConfig(datasetName)
+	for _, request := range []struct {
+		role        string
+		fileField   string
+		removeField string
+	}{
+		{role: "cover", fileField: "cover_image", removeField: "remove_cover_image"},
+		{role: "background", fileField: "background_image", removeField: "remove_background_image"},
+	} {
+		removeMedia := strings.EqualFold(strings.TrimSpace(r.FormValue(request.removeField)), "true")
+		fileHeader, err := readOptionalMultipartFile(r, request.fileField)
+		if err != nil {
+			log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s upload read failed: %v\033[0m", request.role, err)
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if removeMedia {
+			if _, err := tx.Exec(`DELETE FROM public.system_dataset_media WHERE table_uid = $1 AND media_role = $2`, tableUID, request.role); err != nil {
+				log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s removal failed: %v\033[0m", request.role, err)
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error removing dataset media")
+				return
+			}
+		}
+		if fileHeader != nil {
+			savedFile, err := saveDatasetMediaFile(storageDir, tableUID, request.role, fileHeader)
+			if err != nil {
+				log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s save failed: %v\033[0m", request.role, err)
+				httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if _, err := tx.Exec(`
+				INSERT INTO public.system_dataset_media (
+					table_uid, media_role, storage_key, original_name, mime_type
+				) VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (table_uid, media_role) DO UPDATE
+				SET storage_key = EXCLUDED.storage_key,
+				    original_name = EXCLUDED.original_name,
+				    mime_type = EXCLUDED.mime_type,
+				    updated = now()
+			`, tableUID, request.role, savedFile.StorageKey, savedFile.OriginalName, savedFile.MIMEType); err != nil {
+				log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s metadata save failed: %v\033[0m", request.role, err)
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving dataset media metadata")
+				return
+			}
+		}
+	}
+
+	config, err := readDatasetHeaderConfigWithQueryer(tx, datasetName)
 	if err != nil {
 		log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] read-after-write failed for %q: %v\033[0m", datasetName, err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading saved dataset header config")
@@ -153,10 +204,14 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func readDatasetHeaderConfig(datasetName string) (datasetHeaderConfigResponse, error) {
+	return readDatasetHeaderConfigWithQueryer(backend.Db, datasetName)
+}
+
+func readDatasetHeaderConfigWithQueryer(q datasetHeaderQueryer, datasetName string) (datasetHeaderConfigResponse, error) {
 	config := datasetHeaderConfigResponse{DatasetName: datasetName}
 
 	var exists bool
-	if err := backend.Db.QueryRow(`SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)`, datasetName).Scan(&exists); err != nil {
+	if err := q.QueryRow(`SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)`, datasetName).Scan(&exists); err != nil {
 		return datasetHeaderConfigResponse{}, err
 	}
 	if !exists {
@@ -165,19 +220,29 @@ func readDatasetHeaderConfig(datasetName string) (datasetHeaderConfigResponse, e
 
 	var err error
 	langKeys := datasetHeaderLangKeys(datasetName)
-	config.Title, err = readDatasetHeaderTextConfig(langKeys.Title, datasetName, "title")
+	config.Title, err = readDatasetHeaderTextConfig(q, langKeys.Title, datasetName, "title")
 	if err != nil {
 		return datasetHeaderConfigResponse{}, err
 	}
-	config.Slogan, err = readDatasetHeaderTextConfig(langKeys.Slogan, datasetName, "slogan")
+	config.Slogan, err = readDatasetHeaderTextConfig(q, langKeys.Slogan, datasetName, "slogan")
 	if err != nil {
 		return datasetHeaderConfigResponse{}, err
 	}
-	config.SearchPlaceholder, err = readDatasetHeaderTextConfig(langKeys.SearchPlaceholder, datasetName, "search_placeholder")
+	config.SearchPlaceholder, err = readDatasetHeaderTextConfig(q, langKeys.SearchPlaceholder, datasetName, "search_placeholder")
 	if err != nil {
 		return datasetHeaderConfigResponse{}, err
 	}
 	config.ProjectLogoPath = findProjectLogoPublicPath(resolveStorageDir())
+	if err := q.QueryRow(`
+		SELECT
+			COALESCE(MAX(CASE WHEN media.media_role = 'cover' THEN '/storage/' || media.storage_key END), ''),
+			COALESCE(MAX(CASE WHEN media.media_role = 'background' THEN '/storage/' || media.storage_key END), '')
+		FROM public.system_db_tables AS tables
+		LEFT JOIN public.system_dataset_media AS media ON media.table_uid = tables.table_uid
+		WHERE tables.table_name = $1
+	`, datasetName).Scan(&config.CoverImagePath, &config.BackgroundImagePath); err != nil {
+		return datasetHeaderConfigResponse{}, err
+	}
 	return config, nil
 }
 
@@ -242,12 +307,12 @@ func buildDatasetHeaderTextConfigs(r *http.Request, datasetName string) []datase
 	}
 }
 
-func readDatasetHeaderTextConfig(langKey, datasetName, fieldName string) (datasetHeaderTextConfig, error) {
+func readDatasetHeaderTextConfig(q datasetHeaderQueryer, langKey, datasetName, fieldName string) (datasetHeaderTextConfig, error) {
 	config := datasetHeaderTextConfig{LangKey: langKey}
 	var fi, en, ch, usageExplanation sql.NullString
 	preferredSourceHigh := datasetHeaderSourceHigh(datasetName, fieldName)
 	legacySourceHigh := legacyDatasetHeaderSourceHigh(datasetName, fieldName)
-	err := backend.Db.QueryRow(`
+	err := q.QueryRow(`
 		SELECT COALESCE(k.fi, ''),
 		       COALESCE(k.en, ''),
 		       COALESCE(k.ch, ''),
@@ -289,6 +354,68 @@ func readDatasetHeaderTextConfig(langKey, datasetName, fieldName string) (datase
 	config.Ch = ch.String
 	config.UsageExplanation = usageExplanation.String
 	return config, nil
+}
+
+type savedDatasetMediaFile struct {
+	StorageKey   string
+	OriginalName string
+	MIMEType     string
+}
+
+func saveDatasetMediaFile(storageDir string, tableUID int, role string, fileHeader *multipart.FileHeader) (savedDatasetMediaFile, error) {
+	if role != "cover" && role != "background" {
+		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media role: %s", role)
+	}
+	if fileHeader == nil {
+		return savedDatasetMediaFile{}, fmt.Errorf("dataset media file is required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if !isAllowedProjectLogoExtension(ext) {
+		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media file type: %s", ext)
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		return savedDatasetMediaFile{}, err
+	}
+	defer src.Close()
+	if err := filevalidation.ValidateExtensionSignature(src, ext); err != nil {
+		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media file type: %w", err)
+	}
+
+	relativeDir := filepath.Join(strconv.Itoa(tableUID), "dataset_media", role, "original")
+	absDir := filepath.Join(storageDir, relativeDir)
+	if err := os.MkdirAll(absDir, 0o755); err != nil {
+		return savedDatasetMediaFile{}, err
+	}
+	fileName := time.Now().UTC().Format("20060102T150405.000000000Z") + ext
+	absPath := filepath.Join(absDir, fileName)
+	dst, err := os.OpenFile(absPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return savedDatasetMediaFile{}, err
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, src); err != nil {
+		return savedDatasetMediaFile{}, err
+	}
+
+	return savedDatasetMediaFile{
+		StorageKey:   filepath.ToSlash(filepath.Join(relativeDir, fileName)),
+		OriginalName: filepath.Base(fileHeader.Filename),
+		MIMEType:     datasetMediaMIMEType(ext),
+	}, nil
+}
+
+func datasetMediaMIMEType(ext string) string {
+	return map[string]string{
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".webp": "image/webp",
+		".svg":  "image/svg+xml",
+		".gif":  "image/gif",
+	}[ext]
 }
 
 func saveDatasetHeaderLangKeyConfig(tx *sql.Tx, datasetName string, configs []datasetHeaderTextSaveRequest) error {

@@ -479,9 +479,24 @@ export async function generate_table(
             hasGeo,
             current_view
         );
+		const scrollableContainer = viewContainers[current_view];
+		const resultsSurface = document.createElement("div");
+		resultsSurface.classList.add("dataset-results-surface");
+		const datasetSpec = getAllSpecs()[dataset_name] || {};
+		const backgroundImagePath = typeof datasetSpec.dataset_background_image_path === "string"
+			? datasetSpec.dataset_background_image_path.trim()
+			: "";
+		if (backgroundImagePath) {
+			resultsSurface.classList.add("dataset-results-surface--has-background");
+			resultsSurface.style.setProperty(
+				"--dataset-background-image",
+				`url("${encodeURI(backgroundImagePath).replaceAll('"', '%22')}")`
+			);
+		}
+		scrollableContainer.appendChild(resultsSurface);
         if (currentViewElementPromise) {
             currentViewElement = await currentViewElementPromise;
-            viewContainers[current_view].appendChild(currentViewElement);
+            resultsSurface.appendChild(currentViewElement);
             viewContainers[current_view].style.display = "block";
         }
         // syncDatasetSearchVisibility(dataset_name); // REMOVED: No longer needed as we have a single filter bar
@@ -489,8 +504,6 @@ export async function generate_table(
         // right after the hero and before the actual view element.
         // This ensures active filter tags (and results count) appear
         // between the hero bar and the table/card headers — not inside them.
-        const scrollableContainer = viewContainers[current_view];
-
         let topControls = document.getElementById(
             `${dataset_name}_card_top_controls`
         );
@@ -500,7 +513,7 @@ export async function generate_table(
             topControls.classList.add("card_top_controls");
         }
         // Always ensure it's at the right position: after hero, before view element
-        scrollableContainer.insertBefore(topControls, currentViewElement);
+		resultsSurface.insertBefore(topControls, currentViewElement);
 
         let searchButton = topControls.querySelector(
             ".card_search_filter_button"

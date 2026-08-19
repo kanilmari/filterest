@@ -41,6 +41,8 @@ function buildConfig(overrides = {}) {
             usage_explanation: 'Dataset hero search prompt',
         },
         project_logo_path: '/media/project-logo.png',
+		cover_image_path: '/storage/104/dataset_media/cover/original/cover.webp',
+		background_image_path: '/storage/104/dataset_media/background/original/background.webp',
         ...overrides,
     };
 }
@@ -98,6 +100,7 @@ describe('dataset_header_config_view', () => {
         translatePageMock.mockReset();
         getLanguageWithBrowserFallbackMock.mockReset();
         getLanguageWithBrowserFallbackMock.mockReturnValue('fi');
+        localStorage.clear();
         createVanillaDropdownMock.mockImplementation(() => ({
             setValue: vi.fn(),
         }));
@@ -117,6 +120,13 @@ describe('dataset_header_config_view', () => {
         expect(fetchDatasetHeaderConfigMock).toHaveBeenCalledWith('orders');
         expect(container.textContent).toContain('Dataset Header Configuration');
         expect(getTitleFiInput(container)?.value).toBe('Tilaukset');
+		expect(container.querySelectorAll('.dataset-header-config-media-card')).toHaveLength(2);
+		const previewSources = Array.from(container.querySelectorAll('.dataset-header-config-media-card img'))
+			.map((image) => image.getAttribute('src'));
+		expect(previewSources).toEqual([
+			'/storage/104/dataset_media/cover/original/cover.webp',
+			'/storage/104/dataset_media/background/original/background.webp',
+		]);
     });
 
     test('submits multipart saves through the candidate wrapper', async () => {
@@ -126,6 +136,8 @@ describe('dataset_header_config_view', () => {
             status: 'ok',
             message: 'Saved from wrapper',
             config: buildConfig({
+                cover_image_path: '/storage/104/dataset_media/cover/original/new-cover.webp',
+                background_image_path: '/storage/104/dataset_media/background/original/new-background.webp',
                 title: {
                     lang_key: 'orders_front_page',
                     fi: 'Tilaukset nyt',
@@ -137,6 +149,21 @@ describe('dataset_header_config_view', () => {
         });
         const { generate_dataset_header_config_view } = await loadModule();
         const container = document.createElement('div');
+
+        localStorage.setItem('table_specs', JSON.stringify({
+            orders: { table_uid: 104, card_style_variant: 'standard' },
+            invoices: { table_uid: 105 },
+        }));
+        const hero = document.createElement('div');
+        hero.className = 'filterbar-inline-hero';
+        hero.dataset.filterbarInlineHeroFor = 'orders';
+        const tabParts = document.createElement('div');
+        tabParts.className = 'tab_parts_container';
+        tabParts.dataset.tableName = 'orders';
+        const resultsSurface = document.createElement('div');
+        resultsSurface.className = 'dataset-results-surface';
+        tabParts.appendChild(resultsSurface);
+        document.body.append(hero, tabParts);
 
         await generate_dataset_header_config_view(container);
 
@@ -154,8 +181,23 @@ describe('dataset_header_config_view', () => {
         expect(payload).toBeInstanceOf(FormData);
         expect(payload.get('dataset_name')).toBe('orders');
         expect(payload.get('remove_project_banner')).toBe('false');
+		expect(payload.get('remove_cover_image')).toBe('false');
+		expect(payload.get('remove_background_image')).toBe('false');
         expect(payload.get('title_fi')).toBe('Tilaukset nyt');
         expect(showSuccessToastMock).toHaveBeenCalledWith('Saved from wrapper');
         expect(translatePageMock).toHaveBeenCalledWith('fi');
+
+        const tableSpecs = JSON.parse(localStorage.getItem('table_specs'));
+        expect(tableSpecs.orders).toEqual(expect.objectContaining({
+            table_uid: 104,
+            card_style_variant: 'standard',
+            dataset_cover_image_path: '/storage/104/dataset_media/cover/original/new-cover.webp',
+            dataset_background_image_path: '/storage/104/dataset_media/background/original/new-background.webp',
+        }));
+        expect(tableSpecs.invoices).toEqual({ table_uid: 105 });
+        expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
+        expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('new-cover.webp');
+        expect(resultsSurface.classList.contains('dataset-results-surface--has-background')).toBe(true);
+        expect(resultsSurface.style.getPropertyValue('--dataset-background-image')).toContain('new-background.webp');
     });
 });

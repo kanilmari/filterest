@@ -85,6 +85,9 @@
 }
 
 .filterbar-inline-hero {
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
   padding: 24px 24px 18px;
   border-bottom: 1px solid var(--filter_panel_border);
   background:
@@ -93,6 +96,53 @@
       color-mix(in srgb, var(--filter_panel_bg) 86%, var(--bg_color_extreme) 14%) 0%,
       color-mix(in srgb, var(--filter_panel_bg) 94%, transparent 6%) 100%
     );
+}
+
+.filterbar-inline-hero--has-cover::before,
+.filterbar-inline-hero--has-cover::after {
+	position: absolute;
+	inset: 0;
+	content: '';
+	pointer-events: none;
+}
+
+.filterbar-inline-hero--has-cover::before {
+	z-index: -2;
+	background-image: var(--dataset-cover-image);
+	background-position: center;
+	background-size: cover;
+}
+
+.filterbar-inline-hero--has-cover::after {
+	z-index: -1;
+	background: radial-gradient(
+		ellipse 68% 88% at 50% 45%,
+		color-mix(in srgb, var(--filter_panel_bg) 94%, transparent) 0%,
+		color-mix(in srgb, var(--filter_panel_bg) 76%, transparent) 48%,
+		color-mix(in srgb, var(--filter_panel_bg) 24%, transparent) 100%
+	);
+}
+
+.dataset-results-surface {
+	position: relative;
+	isolation: isolate;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	min-width: 0;
+}
+
+.dataset-results-surface--has-background::before {
+	position: absolute;
+	z-index: -1;
+	inset: 0;
+	background-image: var(--dataset-background-image);
+	background-position: center top;
+	background-size: cover;
+	content: '';
+	opacity: 0.2;
+	pointer-events: none;
+	mask-image: radial-gradient(ellipse at center, transparent 0%, transparent 42%, #000 100%);
 }
 
 /* ============================================
