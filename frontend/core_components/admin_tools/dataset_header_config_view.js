@@ -22,7 +22,11 @@ import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js'
 
 export async function generate_dataset_header_config_view(
     container,
-    { initialDatasetName = '' } = {}
+    {
+        initialDatasetName = '',
+        onDismiss = null,
+        onSaved = null,
+    } = {}
 ) {
     if (!container) return;
     container.replaceChildren();
@@ -37,9 +41,24 @@ export async function generate_dataset_header_config_view(
     const introCard = document.createElement('section');
     introCard.classList.add('fw-card', 'fw-flex', 'fw-flex-col', 'fw-gap-2');
 
+    const introHeadingRow = document.createElement('div');
+    introHeadingRow.classList.add('fw-flex', 'fw-items-center', 'fw-justify-between', 'fw-gap-2');
+
     const introTitle = document.createElement('h2');
     introTitle.textContent = 'Dataset Header Configuration';
-    introCard.appendChild(introTitle);
+    introHeadingRow.appendChild(introTitle);
+
+    if (typeof onDismiss === 'function') {
+        const dismissButton = document.createElement('button');
+        dismissButton.type = 'button';
+        dismissButton.classList.add('dataset-header-config-dismiss', 'fw-btn', 'fw-btn--ghost');
+        dismissButton.textContent = '×';
+        dismissButton.title = 'Close';
+        dismissButton.setAttribute('aria-label', 'Close');
+        dismissButton.addEventListener('click', onDismiss);
+        introHeadingRow.appendChild(dismissButton);
+    }
+    introCard.appendChild(introHeadingRow);
 
     const introText = document.createElement('p');
     introText.classList.add('fw-text-muted');
@@ -239,6 +258,9 @@ export async function generate_dataset_header_config_view(
             );
             await translatePage(getLanguageWithBrowserFallback());
             showSuccessToast(response?.message || 'Dataset header config saved');
+            if (typeof onSaved === 'function') {
+                await onSaved(savedConfig);
+            }
         } catch (error) {
             console.warn('dataset_header_config_view: save failed', error);
             showErrorToast(error?.message || 'Saving dataset header config failed');

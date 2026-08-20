@@ -5,6 +5,8 @@
 
 import { loadManagementView } from '../../../reusable_components/dom_container_builder.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
+import { getSelectedDataset } from '../../state_stores/dataset_selection_saver.js';
+import { buildDatasetPath } from '../nav_engine/dataset_aliases.js';
 
 // Tuodaan generaattorifunktiot, jotka rakentavat varsinaisen sisällön.
 // Nämä funktiot voivat sijaita esim. eri tiedostoissa:
@@ -36,6 +38,20 @@ import { generate_symbol_registry_view } from '../../admin_tools/symbol_registry
 import { generate_register_view } from '../../user_tools/register_tab_printer.js';
 import { generate_user_view } from '../../user_tools/user_profile_printer.js';
 import { generate_create_view } from '../../user_tools/asset_tab_printer.js';
+
+function returnFromDatasetHeaderConfiguration() {
+    const selectedDataset = getSelectedDataset();
+    const selectedDatasetButton = Array.from(
+        document.querySelectorAll('.general_button_nav')
+    ).find((button) => button.dataset.langKey === selectedDataset);
+
+    if (selectedDatasetButton instanceof HTMLElement) {
+        selectedDatasetButton.click();
+        return;
+    }
+
+    window.location.assign(selectedDataset ? buildDatasetPath(selectedDataset) : '/');
+}
 
 /**
  * Kaikki custom-view -määrittelyt samassa listassa.
@@ -193,7 +209,13 @@ export const custom_views = [
     {
         name: 'dataset_header_config',
         loadFunction: async () => {
-            return loadManagementView('dataset_header_config_container', generate_dataset_header_config_view);
+            return loadManagementView(
+                'dataset_header_config_container',
+                (container) => generate_dataset_header_config_view(container, {
+                    onDismiss: returnFromDatasetHeaderConfiguration,
+                    onSaved: returnFromDatasetHeaderConfiguration,
+                })
+            );
         },
         containerId: 'dataset_header_config_container',
         group: 'admin_tools',

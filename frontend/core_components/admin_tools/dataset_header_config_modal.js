@@ -7,6 +7,7 @@ import { getTabIconPath } from '../navigation/main_tabs/tab_icon_library.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import {
     createModal,
+    hideModal,
     showModal,
 } from '../../reusable_components/modal/modal_builder.js';
 import { generate_dataset_header_config_view } from './dataset_header_config_view.js';
@@ -76,15 +77,16 @@ export async function openDatasetHeaderConfigModal(datasetName) {
         titleDataLangKey: 'dataset_header_config',
         titleDataLangKeyFallback: 'Dataset header configuration',
         contentElements: [content],
-        width: 'calc(100vw - 32px)',
-        maxWidth: '1280px',
-        maxHeight: 'calc(100dvh - 32px)',
+        width: 'min(calc(100vw - 48px), 1080px)',
+        maxWidth: '1080px',
+        maxHeight: 'min(calc(100dvh - 48px), 860px)',
     });
     modal.dataset.testid = 'dataset-header-config-modal';
     showModal();
 
     await generate_dataset_header_config_view(content, {
         initialDatasetName: normalizedDatasetName,
+        onSaved: hideModal,
     });
     return modal;
 }
