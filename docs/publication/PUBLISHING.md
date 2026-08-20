@@ -34,6 +34,26 @@ From the maintainer release source, use the release wrapper:
 `verify` repeats the checks against the current artifact without regenerating
 it. Ordinary source commits only mark the release pending.
 
+For candidate-to-published promotion, the normal sequence is:
+
+```bash
+./filterest_release generate
+# Review the fully checked candidate.
+./filterest_release promote
+# Commit and push the promotion-only source-ledger change and its exact test update.
+./filterest_release fast-patch
+./filterest_release publish --yes
+```
+
+Successful full generation records a clone-local marker for the exact candidate
+commit, build identity, source-evidence commit, and committed `frontend/dist`
+tree. `fast-patch` accepts only that marker plus exactly one promotion-only
+source commit. It reuses the committed bundles, regenerates the final
+third-party notices and review from the complete final file set, performs
+focused identity/root/notice checks, and creates one local published-export
+commit. It performs no push. Any drift requires another full `generate`, and
+`publish --yes` always reruns the full publication gate before remote mutation.
+
 Treat this local sibling checkout and its preview database as review candidates.
 Make durable code, schema, seed, env, language-key, and setup fixes
 in the maintainer release-source generator or source files, then regenerate this
@@ -75,7 +95,9 @@ administrator does not inherit the maintainer machine's Linux library version.
 ## Updating Later Releases
 
 Regenerate with `./filterest_release generate`, inspect the resulting commit,
-and run `verify`. Use `publish --yes` only after every gate passes; do not ask
+and run `verify`. When the next source commit is strictly the published-identity
+promotion, `fast-patch` may assemble the final identity without rebuilding the
+already audited bundles. Use `publish --yes` only after every gate passes; do not ask
 for a second publication confirmation. Keep private apps, config, runtime data, and unclear media outside the
 public history.
 

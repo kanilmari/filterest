@@ -70,6 +70,7 @@ describe('stable_api_inventory', () => {
             'getDatasetHeaderConfig',
             'saveDatasetHeaderConfig',
             'adminSymbols',
+            'adminUiFeatureFlags',
             'adminUserAuthentication',
             'listColumnViewPresets',
             'checkJsonColumns',
@@ -97,6 +98,14 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/admin/symbols',
             accessProfile: 'admin',
             methods: ['GET', 'POST'],
+            methodSource: 'explicit_stable_contract',
+        });
+
+        expect(getStableCandidateRouteDescriptor('adminUiFeatureFlags')).toMatchObject({
+            handlerName: 'system_table_tools.GetAdminUIFeatureFlagsHandler',
+            backendPath: '/api/admin/ui-feature-flags',
+            accessProfile: 'admin',
+            methods: ['GET'],
             methodSource: 'explicit_stable_contract',
         });
 

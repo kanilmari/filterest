@@ -81,6 +81,13 @@ Add one dated line per publication-candidate attempt:
 ./filterest_release verify
 ```
 
+After a fully reviewed candidate is promoted in exactly one source commit, the
+maintainer may use `./filterest_release fast-patch`. The command requires the
+clone-local audited-candidate marker to match the clean candidate commit,
+identity, evidence source, and `frontend/dist` tree. It creates one local
+published-identity commit and refreshes final third-party notice evidence, but
+does not publish and does not replace the final `publish --yes` full gate.
+
 Run the command from the non-public maintainer release source. During iterative local
 testing, use repo-local ignored staging targets rather than overwriting the
 active publication checkout from dirty source state. The only active sibling

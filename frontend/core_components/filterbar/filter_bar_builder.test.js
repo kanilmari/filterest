@@ -56,6 +56,9 @@ describe('create_filter_bar inline hero mounting', () => {
     });
 
     test('replaces the project logo grid with the dataset symbol asset in inline hero', async () => {
+        const { mountDatasetCoverTestPalette } = await import(
+            '../admin_tools/dataset_cover_test_palette.js'
+        );
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
 
@@ -70,6 +73,7 @@ describe('create_filter_bar inline hero mounting', () => {
 		expect(inlineHero?.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
 		expect(inlineHero?.style.getPropertyValue('--dataset-cover-image'))
 			.toContain('/storage/104/dataset_media/cover/original/cover.webp');
+        expect(mountDatasetCoverTestPalette).toHaveBeenCalledWith(inlineHero, 'demo');
     });
 
     test('falls back to the localized dataset title when the site identity is unavailable', async () => {

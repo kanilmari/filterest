@@ -316,6 +316,35 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/ui-feature-flags",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetAdminUIFeatureFlagsHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/ui-languages",
       "match_type": "exact",
       "handler_name": "lang.AdminUILanguagesHandler",

@@ -168,6 +168,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.GetCardVisibilityHandler":              AdminProfile,
 	"system_table_tools.UpdateCardVisibilityHandler":           AdminProfile,
 	"system_table_tools.UpdateColumnMultilingualHandler":       AdminProfile,
+	"system_table_tools.GetAdminUIFeatureFlagsHandler":         AdminProfile,
 	"system_table_tools.GetDatasetHeaderConfigHandler":         AdminProfile,
 	"system_table_tools.SaveDatasetHeaderConfigHandler":        AdminProfile,
 	"system_table_tools.GetChildTabConfigHandler":              LoginOnlyProfile, // Read by all users for reverse-FK/referring-tab rendering

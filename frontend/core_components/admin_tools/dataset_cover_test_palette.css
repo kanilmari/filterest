@@ -1,0 +1,136 @@
+/* dataset_cover_test_palette.css
+ * Temporary administrator live-preview controls for dataset hero cover images.
+ * Kept separate from the canonical hero mask so the experiment stays isolated.
+ */
+
+.filterbar-inline-hero__cover-palette-button {
+	position: absolute;
+	z-index: 3;
+	top: 62px;
+	right: 17px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	color: var(--text_color);
+	background: color-mix(in srgb, var(--filter_panel_bg) 82%, transparent);
+	border: 1px solid var(--filter_panel_border);
+	border-radius: 50%;
+	box-shadow: var(--fw-shadow-raised);
+	backdrop-filter: blur(10px);
+}
+
+.filterbar-inline-hero__cover-palette-button:hover,
+.filterbar-inline-hero__cover-palette-button:focus-visible {
+	color: var(--button_hover_text_color, var(--text_color));
+	background: var(--button_hover_bg_color);
+}
+
+.filterbar-inline-hero__cover-palette-icon {
+	width: 18px;
+	height: 18px;
+	background-color: currentcolor;
+}
+
+.dataset-cover-test-palette {
+	position: absolute;
+	z-index: 4;
+	top: 12px;
+	right: 64px;
+	box-sizing: border-box;
+	width: min(420px, calc(100% - 88px));
+	max-height: min(520px, calc(100dvh - 48px), calc(100% - 24px));
+	padding: 14px;
+	overflow: auto;
+	color: var(--text_color);
+	background: color-mix(in srgb, var(--filter_panel_bg) 94%, transparent);
+	border: 1px solid var(--filter_panel_border);
+	border-radius: 12px;
+	box-shadow: var(--fw-shadow-raised);
+	backdrop-filter: blur(16px);
+}
+
+.dataset-cover-test-palette[hidden] {
+	display: none;
+}
+
+.dataset-cover-test-palette__heading {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.dataset-cover-test-palette__close {
+	display: inline-grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	color: currentcolor;
+	font-size: 1.25rem;
+	line-height: 1;
+	background: transparent;
+	border: 1px solid var(--filter_panel_border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.dataset-cover-test-palette__notice {
+	margin: 8px 0 12px;
+	color: var(--text_color_muted, var(--text_color));
+	font-size: 0.8rem;
+	line-height: 1.35;
+}
+
+.dataset-cover-test-palette__toggle {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 12px;
+	font-size: 0.875rem;
+}
+
+.dataset-cover-test-palette__controls {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px 14px;
+}
+
+.dataset-cover-test-palette__range {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 4px 8px;
+	align-items: center;
+	min-width: 0;
+	font-size: 0.8rem;
+}
+
+.dataset-cover-test-palette__range output {
+	font-variant-numeric: tabular-nums;
+}
+
+.dataset-cover-test-palette__range input {
+	grid-column: 1 / -1;
+	width: 100%;
+}
+
+.dataset-cover-test-palette__reset {
+	margin-top: 14px;
+}
+
+@media (width <= 600px) {
+	.dataset-cover-test-palette {
+		top: 62px;
+		right: 12px;
+		width: calc(100% - 24px);
+		max-height: min(420px, calc(100dvh - 86px), calc(100% - 74px));
+	}
+
+	.dataset-cover-test-palette__controls {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

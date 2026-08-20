@@ -97,6 +97,20 @@ describe('stable_endpoint_router', () => {
         expect(endpointRouterMock).toHaveBeenCalledWith('fetchUserPermissions', { method: 'GET' });
     });
 
+    test('fetchAdminUIFeatureFlags uses the protected candidate GET route', async () => {
+        endpointRouterMock.mockResolvedValue({
+            view_admin_cover_image_test_palette: true,
+        });
+        const mod = await loadModule();
+
+        await expect(mod.fetchAdminUIFeatureFlags()).resolves.toEqual({
+            view_admin_cover_image_test_palette: true,
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('adminUiFeatureFlags', {
+            method: 'GET',
+        });
+    });
+
     test('fetchAdminVersionInfo uses the protected candidate GET route', async () => {
         endpointRouterMock.mockResolvedValue({
             product_name: 'Filterest',

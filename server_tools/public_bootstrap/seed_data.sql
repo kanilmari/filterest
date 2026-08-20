@@ -40,7 +40,8 @@ INSERT INTO public.system_config (id, key, json_value, created, updated, creatio
   (3007, 'use_minified_js_css_in_dev_env', '{"value": false}'::jsonb, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'public fixture seed', FALSE, 'false', NULL, 2),
   (3008, 'first_run', '{"value": true}'::jsonb, '2026-08-03 00:00:00', '2026-08-03 00:00:00', 'Controls the one-time browser form for creating the first login-ready administrator. It is closed atomically after successful account creation.', TRUE, 'true', NULL, 2),
   (3009, 'installation_environment', '{"value": ""}'::jsonb, '2026-08-04 00:00:00', '2026-08-04 00:00:00', 'User-facing installation purpose selected during First Run. Empty preserves the deployment-defined fallback until First Run saves an explicit choice.', NULL, '', NULL, 6),
-  (3010, 'registration_enabled', '{"value": true}'::jsonb, '2026-08-19 00:00:00', '2026-08-19 00:00:00', 'Administrator-owned self-registration availability setting.', TRUE, 'true', NULL, 2);
+  (3010, 'registration_enabled', '{"value": true}'::jsonb, '2026-08-19 00:00:00', '2026-08-19 00:00:00', 'Administrator-owned self-registration availability setting.', TRUE, 'true', NULL, 2),
+  (3011, 'view_admin_cover_image_test_palette', '{"value": true}'::jsonb, '2026-08-20 00:00:00', '2026-08-20 00:00:00', 'Temporary administrator-only dataset cover-image test palette switch.', TRUE, 'true', NULL, 2);
 
 INSERT INTO public.system_functions (
   id, name, disabled, created, updated, "package", specific_table_related,
@@ -65,7 +66,8 @@ INSERT INTO public.system_functions (
   (4025, 'lang.GetPublicUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/ui-languages', FALSE),
   (4026, 'lang.AdminUILanguagesHandler', FALSE, '2026-08-17 00:00:00', '2026-08-17 00:00:00', 'lang', FALSE, 'public fixture seed', 200, 20, '/api/admin/ui-languages', FALSE),
   (4027, 'system_table_tools.GetDatasetSortDefaultHandler', FALSE, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 300, 20, '/api/dataset-sort-default', FALSE),
-  (4028, 'system_table_tools.SaveDatasetSortDefaultHandler', FALSE, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 300, 20, '/api/admin/dataset-sort-default', FALSE);
+  (4028, 'system_table_tools.SaveDatasetSortDefaultHandler', FALSE, '2026-08-18 00:00:00', '2026-08-18 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 300, 20, '/api/admin/dataset-sort-default', FALSE),
+  (4029, 'system_table_tools.GetAdminUIFeatureFlagsHandler', FALSE, '2026-08-20 00:00:00', '2026-08-20 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/admin/ui-feature-flags', FALSE);
 
 INSERT INTO public.system_group_table_func_rights (
   user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
@@ -89,8 +91,17 @@ WHERE functions.name IN (
   'system_table_tools.GetCardVisibilityHandler',
   'system_table_tools.UpdateCardVisibilityHandler',
   'lang.AdminUILanguagesHandler',
-  'system_table_tools.SaveDatasetSortDefaultHandler'
+  'system_table_tools.SaveDatasetSortDefaultHandler',
+  'system_table_tools.GetAdminUIFeatureFlagsHandler'
 );
+
+INSERT INTO public.system_group_table_func_rights (
+  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT 1, functions.id, 'public', 'public fixture seed', 102
+FROM public.system_functions functions
+WHERE functions.disabled IS FALSE
+  AND COALESCE(functions.specific_table_related, TRUE) IS TRUE;
 
 INSERT INTO public.system_group_table_func_rights (
   user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
@@ -243,7 +254,7 @@ VALUES (
 );
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.2.2', 'Filterest generated public bootstrap');
+VALUES ('9.2.3', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
