@@ -144,10 +144,10 @@
 	background-size: cover;
 	mask-image: radial-gradient(
 		ellipse 68% 82% at 50% 48%,
-		transparent 0%,
-		transparent 30%,
-		rgb(0 0 0 / 35%) 58%,
-		#000 100%
+		rgb(0 0 0 / 20%) 0%,
+		rgb(0 0 0 / 20%) 30%,
+		rgb(0 0 0 / 45%) 58%,
+		rgb(0 0 0 / 70%) 100%
 	);
 }
 
