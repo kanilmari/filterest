@@ -1,6 +1,7 @@
-// Verifies row article presentation settings consume only the typed public contract.
-// Bridges the settings cache, safe timestamp-mode fallback, and the stable endpoint wrapper.
-// Exists so invalid or unavailable site configuration never restores raw ISO timestamps.
+// Verifies card-family presentation settings consume only the typed public contract.
+// Bridges the settings cache, safe timestamp-mode fallback, and stable endpoint wrapper.
+// Covers ordinary cards and article rendering through one shared public setting.
+// Exists so invalid or unavailable configuration never restores raw ISO timestamps.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -15,6 +16,7 @@ vi.mock("../../endpoints/stable_endpoint_router.js", () => ({
 import {
     resetRowArticlePresentationSettingsCacheForTests,
     resolveRowArticleTimestampDisplayOptions,
+    resolveSiteTimestampDisplayOptions,
 } from "./row_article_presentation_settings.js";
 
 describe("row_article_presentation_settings", () => {
@@ -53,5 +55,16 @@ describe("row_article_presentation_settings", () => {
         await resolveRowArticleTimestampDisplayOptions("fi");
 
         expect(fetchSitePresentationSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("shares the same typed timestamp policy with ordinary cards", async () => {
+        fetchSitePresentationSettingsMock.mockResolvedValue({
+            row_article_timestamp_display_mode: "date_only",
+        });
+
+        await expect(resolveSiteTimestampDisplayOptions("fi")).resolves.toEqual({
+            displayMode: "date_only",
+            locale: "fi",
+        });
     });
 });

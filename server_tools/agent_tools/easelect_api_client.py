@@ -271,6 +271,7 @@ class EaselectAPIClient:
             "fi": before.get("fi", ""),
             "en": before.get("en", ""),
             "ch": before.get("ch", ""),
+            "yue": before.get("yue", ""),
             "usage_explanation": before.get("usage_explanation", ""),
         }
         for field in ("fi", "en", "ch", "yue", "usage_explanation"):
@@ -280,7 +281,7 @@ class EaselectAPIClient:
         if dry_run:
             after = dict(next_values)
         else:
-            self.request("POST", "/api/update-lang-key", data=next_values, csrf=True)
+            self.request("POST", "/api/admin/lang-key", data=next_values, csrf=True)
             after = self.get_lang_key(lang_key)
 
         return {

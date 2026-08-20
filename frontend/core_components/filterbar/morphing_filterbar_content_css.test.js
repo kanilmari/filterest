@@ -38,6 +38,7 @@ describe('morphing filterbar content CSS', () => {
         expect(defaultsRule).toContain('--dataset-cover-light-mask-mid-stop: 55%');
         expect(defaultsRule).toContain('--dataset-cover-light-mask-edge-stop: 80%');
         expect(defaultsRule).toContain('--dataset-cover-hero-extra-height: 40px');
+        expect(defaultsRule).toContain('--dataset-cover-hero-bottom-fade: 48px');
         expect(defaultsRule).toContain('--dataset-cover-image-blur: 1px');
         expect(defaultsRule).toContain(
             'padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height))'
@@ -53,8 +54,9 @@ describe('morphing filterbar content CSS', () => {
         expect(darkRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-dark-image-opacity)');
         expect(lightRule).toContain('--dataset-cover-mask-image: var(--dataset-cover-light-mask-image)');
         expect(lightRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-light-image-opacity)');
-        expect(overlayRule).toContain('background: #000');
-        expect(overlayRule).toContain('opacity: var(--dataset-cover-overlay-opacity)');
+        expect(overlayRule).toContain('rgb(0 0 0 / var(--dataset-cover-overlay-opacity))');
+        expect(overlayRule).toContain('calc(100% - var(--dataset-cover-hero-bottom-fade))');
+        expect(overlayRule).toContain('var(--bg_color) 100%');
     });
 
     test('uses the title colour for wide slogans and outlines the inline sort row', () => {
@@ -81,9 +83,19 @@ describe('morphing filterbar content CSS', () => {
 
         expect(paletteRule).toContain('position: fixed');
         expect(paletteRule).toContain('width: min(420px, calc(100% - 88px))');
-        expect(paletteRule).toContain('max-height: min(520px, calc(100dvh - 48px), calc(100% - 24px))');
-        expect(paletteRule).toContain('overflow: auto');
+        expect(paletteRule).toContain('height: min(820px, 97dvh)');
+        expect(paletteRule).toContain('max-height: 97dvh');
+        expect(paletteRule).toContain('overflow: hidden');
         expect(paletteRule).toContain('resize: both');
+
+        const bodyRule = css.match(
+            /\.dataset-cover-test-palette__body\s*\{([\s\S]*?)\n\}/,
+        )?.[1] || '';
+        const headingRule = css.match(
+            /\.dataset-cover-test-palette__heading\s*\{([\s\S]*?)\n\}/,
+        )?.[1] || '';
+        expect(bodyRule).toContain('overflow: auto');
+        expect(headingRule).toContain('position: sticky');
     });
 
     test('loads the palette immediately after the canonical hero styles', () => {
@@ -99,4 +111,21 @@ describe('morphing filterbar content CSS', () => {
         expect(themeIndex).toBeGreaterThan(heroIndex);
         expect(paletteIndex).toBeGreaterThan(themeIndex);
     });
+
+    test('applies the configured wide-card image width without overriding stacked cards', () => {
+        const css = readFileSync(
+            resolve(CURRENT_DIR, '../table_views/card_view/cards.css'),
+            'utf8'
+        );
+        const wideImageRule = css.match(
+            /\.card_content_large \.card_image_content\s*\{([\s\S]*?)\n\}/,
+        )?.[1] || '';
+        const responsiveRule = css.match(
+            /@container card-list \(max-width: 1060px\)\s*\{([\s\S]*?)\n\}/,
+        )?.[1] || '';
+
+        expect(wideImageRule).toContain('width: var(--card_image_large_width)');
+        expect(responsiveRule).toContain('width: 100%');
+    });
+
 });

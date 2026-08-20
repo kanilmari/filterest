@@ -74,6 +74,7 @@ describe('stable_api_inventory', () => {
             'sitePresentationSettings',
             'adminSitePresentationSettings',
             'adminUserAuthentication',
+            'adminLangKey',
             'listColumnViewPresets',
             'checkJsonColumns',
         ]));
@@ -108,6 +109,14 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/admin/ui-feature-flags',
             accessProfile: 'admin',
             methods: ['GET'],
+            methodSource: 'explicit_stable_contract',
+        });
+
+        expect(getStableCandidateRouteDescriptor('adminLangKey')).toMatchObject({
+            handlerName: 'lang.AdminLangKeyHandler',
+            backendPath: '/api/admin/lang-key',
+            accessProfile: 'admin',
+            methods: ['POST'],
             methodSource: 'explicit_stable_contract',
         });
 

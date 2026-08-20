@@ -64,13 +64,21 @@ export function capitalizeCardDetailDisplayText(value) {
     return `${text.slice(0, firstIndex)}${upperFirstCharacter}${text.slice(firstIndex + 1)}`;
 }
 
-export function formatCardDetailEntryForCardDisplay(detailEntry, dataTypes = {}) {
+export function formatCardDetailEntryForCardDisplay(
+    detailEntry,
+    dataTypes = {},
+    timestampDisplayOptions = {}
+) {
     if (!detailEntry || detailEntry.isLink === true) {
         return detailEntry;
     }
 
     const metadata = getCardDetailMetadata(detailEntry, dataTypes);
-    const timestampDisplay = formatTimestampDisplayParts(detailEntry.rawValue, metadata);
+    const timestampDisplay = formatTimestampDisplayParts(
+        detailEntry.rawValue,
+        metadata,
+        timestampDisplayOptions
+    );
     if (timestampDisplay) {
         return {
             ...detailEntry,
@@ -94,7 +102,15 @@ export function formatCardDetailEntryForCardDisplay(detailEntry, dataTypes = {})
     };
 }
 
-export function formatCardDetailEntriesForCardDisplay(detailEntries, dataTypes = {}) {
+export function formatCardDetailEntriesForCardDisplay(
+    detailEntries,
+    dataTypes = {},
+    timestampDisplayOptions = {}
+) {
     return (Array.isArray(detailEntries) ? detailEntries : [])
-        .map((entry) => formatCardDetailEntryForCardDisplay(entry, dataTypes));
+        .map((entry) => formatCardDetailEntryForCardDisplay(
+            entry,
+            dataTypes,
+            timestampDisplayOptions
+        ));
 }

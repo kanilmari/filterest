@@ -78,6 +78,16 @@ describe("buildTabPresentationState", () => {
             })
         ).toBe("button-inactive");
     });
+
+    test("forces opaque button presets when the active dataset has presentation media", () => {
+        expect(buildTabPresentationState({
+            forceRectangular: true,
+            isNarrow: false,
+            isNavbarOverlay: false,
+            isActive: true,
+            viewKey: "card",
+        })).toBe("button-active");
+    });
 });
 
 describe("shouldUseButtonTabsForView", () => {
@@ -99,6 +109,14 @@ describe("buildNavTabsRightOffset", () => {
                 viewKey: "card",
             })
         ).toBe("-2px");
+        expect(
+            buildNavTabsRightOffset({
+                forceRectangular: true,
+                isNarrow: false,
+                isNavbarOverlay: false,
+                viewKey: "card",
+            })
+        ).toBe("0px");
         expect(
             buildNavTabsRightOffset({
                 isNarrow: false,
@@ -216,6 +234,20 @@ describe("buildTabOutlinePresentation", () => {
         expect(activeButton.pathD).toBe(inactiveButton.pathD);
         expect(activeButton.fill).toBe("none");
         expect(activeButton.strokeWidth).toBe("2");
+    });
+
+    test("forces rectangular geometry for wide card tabs on media-bearing datasets", () => {
+        const activeButton = buildTabOutlinePresentation({
+            forceRectangular: true,
+            isNarrow: false,
+            isNavbarOverlay: false,
+            isActive: true,
+            viewKey: "card",
+        });
+
+        expect(activeButton.state).toBe("button-active");
+        expect(activeButton.pathD).toContain("A 0 0");
+        expect(activeButton.fill).toBe("none");
     });
 });
 

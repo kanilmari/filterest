@@ -522,9 +522,10 @@ function createInlineHeroContent(tableName, {
 	}
 	if (coverImagePath) {
 		inlineHeroHost.classList.add("filterbar-inline-hero--has-cover");
+		const encodedCoverImage = `url("${encodeURI(coverImagePath).replaceAll('"', '%22')}")`;
 		inlineHeroHost.style.setProperty(
 			"--dataset-cover-image",
-			`url("${encodeURI(coverImagePath).replaceAll('"', '%22')}")`
+			encodedCoverImage
 		);
 	}
 
@@ -1678,7 +1679,6 @@ export function create_filter_bar(
             cleanupScrollListener = null;
         }
         activeScrollable = nextScrollable;
-
         if (panelMode === FILTERBAR_PANEL_MODES.INLINE_HERO) {
             inlineHeroVisible = measureInlineHeroVisibility();
             setCompactMode();

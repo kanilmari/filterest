@@ -2,6 +2,14 @@
  * Maps persisted light/dark dataset-cover settings to the active hero surface.
  * Keeps public rendering independent from the administrator-only palette UI.
  */
+:root {
+	--navtab-active-fade-width: 25px;
+	--navtab-active-max-opacity: 1;
+	--navtab-active-glow-intensity: 0.3;
+	--navtab-active-glow-width: 1.5px;
+	--navtab-active-glow-blur: 2px;
+}
+
 .filterbar-inline-hero--has-cover {
 	--dataset-cover-light-mask-image: initial;
 	--dataset-cover-light-mask-oval-x: 32%;
@@ -29,6 +37,7 @@
 	--dataset-cover-dark-overlay-opacity: 0;
 	--dataset-cover-image-blur: 1px;
 	--dataset-cover-hero-extra-height: 40px;
+	--dataset-cover-hero-bottom-fade: 48px;
 	padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height));
 }
 body:not(.dark-mode) .filterbar-inline-hero--has-cover {
@@ -84,6 +93,15 @@ body.dark-mode .filterbar-inline-hero--has-cover {
 }
 .filterbar-inline-hero--has-cover::after {
 	z-index: -1;
-	background: #000;
-	opacity: var(--dataset-cover-overlay-opacity);
+	background:
+		linear-gradient(
+			rgb(0 0 0 / var(--dataset-cover-overlay-opacity)),
+			rgb(0 0 0 / var(--dataset-cover-overlay-opacity))
+		),
+		linear-gradient(
+			to bottom,
+			transparent 0,
+			transparent calc(100% - var(--dataset-cover-hero-bottom-fade)),
+			var(--bg_color) 100%
+		);
 }

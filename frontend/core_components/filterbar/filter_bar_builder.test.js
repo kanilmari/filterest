@@ -73,6 +73,8 @@ describe('create_filter_bar inline hero mounting', () => {
 		expect(inlineHero?.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
 		expect(inlineHero?.style.getPropertyValue('--dataset-cover-image'))
 			.toContain('/storage/104/dataset_media/cover/original/cover.webp');
+        expect(document.documentElement.style.getPropertyValue('--active-dataset-cover-image'))
+            .toBe('');
         expect(mountDatasetCoverTestPalette).toHaveBeenCalledWith(inlineHero, 'demo');
     });
 

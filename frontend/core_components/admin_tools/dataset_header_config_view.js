@@ -10,6 +10,7 @@ import { showErrorToast, showInfoToast, showSuccessToast, showWarningToast } fro
 import { translatePage } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js';
+import { refreshMainTabPresentation } from '../navigation/main_tabs/main_tab_active_state.js';
 
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderConfigResponse} DatasetHeaderConfigResponse */
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderTextConfig} DatasetHeaderTextConfig */
@@ -376,6 +377,13 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
         ...specs,
         [datasetName]: nextDatasetSpec,
     });
+    const tabButton = Array.from(document.querySelectorAll('.navtablinks'))
+        .find((button) => button.dataset.id === datasetName);
+    if (tabButton instanceof HTMLElement) {
+        tabButton.dataset.hasPresentationMedia = String(
+            Boolean(coverImagePath || backgroundImagePath)
+        );
+    }
 
     for (const hero of document.querySelectorAll('.filterbar-inline-hero')) {
         if (hero.dataset.filterbarInlineHeroFor !== datasetName) continue;
@@ -397,6 +405,7 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
             backgroundImagePath
         );
     }
+    refreshMainTabPresentation();
 }
 
 function setOptionalSpecPath(spec, key, path) {

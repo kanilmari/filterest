@@ -79,6 +79,7 @@ const STABLE_CANDIDATE_ROUTE_SPECS = Object.freeze({
         { routeName: 'getDatasetHeaderConfig', handlerName: 'system_table_tools.GetDatasetHeaderConfigHandler' },
         { routeName: 'saveDatasetHeaderConfig', handlerName: 'system_table_tools.SaveDatasetHeaderConfigHandler' },
         { routeName: 'adminUserAuthentication', handlerName: 'auth.AdminUserAuthenticationHandler' },
+        { routeName: 'adminLangKey', handlerName: 'lang.AdminLangKeyHandler' },
         { routeName: 'adminSymbols', handlerName: 'symbol_registry.AdminHandler' },
         { routeName: 'adminUiFeatureFlags', handlerName: 'system_table_tools.GetAdminUIFeatureFlagsHandler' },
         { routeName: 'getChildTabConfig', handlerName: 'system_table_tools.GetChildTabConfigHandler' },

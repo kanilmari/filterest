@@ -73,6 +73,8 @@ import {
 } from "./card_detail_layout_options.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { decorateStandardCardDetailKey } from "./card_detail_standard_key_decorator.js";
+import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
+import { resolveSiteTimestampDisplayOptions } from "./row_article_presentation_settings.js";
 
 /** Update all mass-delete bars to reflect current selection count. */
 export function updateMassDeleteBar() {
@@ -153,11 +155,19 @@ function ensureSmallSummaryMedia(card) {
     void card._ensureSmallSummaryMedia?.();
 }
 
-async function resolveCardRenderContext(table_name, columns, data_types) {
-    const hasDeleteRight = await hasDatasetPermission(
-        "/api/delete-rows",
-        table_name
-    );
+async function resolveCardRenderContext(
+    table_name,
+    columns,
+    data_types,
+    locale = getLanguageWithBrowserFallback()
+) {
+    const [hasDeleteRight, timestampDisplayOptions] = await Promise.all([
+        hasDatasetPermission(
+            "/api/delete-rows",
+            table_name
+        ),
+        resolveSiteTimestampDisplayOptions(locale),
+    ]);
     const tableHasImageRole = columns.some((column) =>
         parseRoleString(data_types[column]?.card_element || "").baseRoles.includes(
             "image"
@@ -167,6 +177,7 @@ async function resolveCardRenderContext(table_name, columns, data_types) {
     return {
         hasDeleteRight,
         tableHasImageRole,
+        timestampDisplayOptions,
     };
 }
 
@@ -388,8 +399,17 @@ async function createSingleCard(
         (el.dataset.hideFieldOnCard = hideFieldsOnCardsString);
 
     const resolvedContext = renderContext ||
-        await resolveCardRenderContext(table_name, columns, data_types);
-    const { hasDeleteRight, tableHasImageRole } = resolvedContext;
+        await resolveCardRenderContext(
+            table_name,
+            columns,
+            data_types,
+            chosenLang
+        );
+    const {
+        hasDeleteRight,
+        tableHasImageRole,
+        timestampDisplayOptions,
+    } = resolvedContext;
     const fallbackImageValue = resolveFallbackCardImageValue(row_item);
     const usesLargeImageLayout =
         tableHasImageRole ||
@@ -459,8 +479,13 @@ async function createSingleCard(
     let header_first_letter = "";
     let preferred_image_alt_header = "";
     let preferred_image_alt_username = "";
-    const creation_date_small =
-        row_item.created || row_item.created_at || row_item.luontiaika || "";
+    const creationDateColumn = ["created", "created_at", "luontiaika"]
+        .find((column) => row_item[column] !== null
+            && row_item[column] !== undefined
+            && String(row_item[column]).trim() !== "");
+    const creation_date_small = creationDateColumn
+        ? row_item[creationDateColumn]
+        : "";
     const creation_seed =
         String(row_item.id ?? "x") + "_" + creation_date_small;
     let header_text_small = "";
@@ -888,7 +913,8 @@ async function createSingleCard(
         );
         const formattedDetailsEntries = formatCardDetailEntriesForCardDisplay(
             expandedDetailsEntries,
-            data_types
+            data_types,
+            timestampDisplayOptions
         );
 
         if (formattedDetailsEntries.length) {
@@ -1052,7 +1078,16 @@ async function createSingleCard(
     if (creation_date_small) {
         const dateEl = document.createElement("div");
         dateEl.classList.add("small_card_date");
-        dateEl.textContent = creation_date_small;
+        const timestampDisplay = formatTimestampDisplayParts(
+            creation_date_small,
+            data_types[creationDateColumn] || {},
+            timestampDisplayOptions
+        );
+        dateEl.textContent = timestampDisplay?.displayText
+            ?? String(creation_date_small);
+        if (timestampDisplay?.titleText) {
+            dateEl.title = timestampDisplay.titleText;
+        }
         textWrap.appendChild(dateEl);
     }
 

@@ -235,6 +235,15 @@ function getActiveMainTabId() {
     return document.querySelector(".navtablinks.active")?.dataset?.id || "";
 }
 
+// Resolves whether the active dataset owns either presentation image role.
+// Operates between authoritative tab metadata and the shared shape policy.
+// Keeps image-bearing datasets on opaque rectangular tabs in every navbar state.
+function activeDatasetHasPresentationMedia(activeTabId, allTabButtons) {
+    if (!activeTabId) return false;
+    const activeButton = allTabButtons.find((button) => button.dataset.id === activeTabId);
+    return activeButton?.dataset.hasPresentationMedia === "true";
+}
+
 // Applies the active presentation to the dataset tab that owns the current view.
 // Operates between nav tab DOM buttons, persisted view mode, and SVG outline paths.
 // Prevents non-dataset tool views from leaving stale SVG tabs visually open.
@@ -249,9 +258,14 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
     const navTabs = document.querySelector(".navtabs");
     const allTabButtons = Array.from(document.querySelectorAll(".navtablinks"));
     const navbarWidth = getNavbarWidthPx();
+    const forceRectangular = activeDatasetHasPresentationMedia(
+        normalizedActiveTabId,
+        allTabButtons
+    );
 
     if (navTabs) {
         navTabs.style.right = buildNavTabsRightOffset({
+            forceRectangular,
             isNarrow,
             isNavbarOverlay,
             viewKey,
@@ -271,6 +285,7 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
         }
 
         const presentation = buildTabOutlinePresentation({
+            forceRectangular,
             isNarrow,
             isNavbarOverlay,
             isActive,
@@ -279,7 +294,12 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
         });
         btn.dataset.tabPresentation = presentation.state;
         const outlineSvg = btn.querySelector(".svg-container");
-        const outlinePath = outlineSvg?.querySelector("path");
+        const outlinePath = outlineSvg?.querySelector(".navtab-stroke-path")
+            || outlineSvg?.querySelector("path");
+        const fillPath = outlineSvg?.querySelector(".navtab-fill-path");
+        const shapePaths = Array.from(
+            outlineSvg?.querySelectorAll(".navtab-shape-path") || []
+        );
         btn.style.setProperty(
             "--navtab-rounded-left-offset",
             `${formatMorphNumber(presentation.roundedLeft)}px`
@@ -290,9 +310,21 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
             outlineSvg.setAttribute("height", formatMorphNumber(presentation.height));
         }
 
+        const morphPaths = shapePaths.length > 0
+            ? shapePaths
+            : (outlinePath ? [outlinePath] : []);
+        morphPaths.forEach((path) => {
+            applyOutlinePathWithMorph(path, presentation.pathD);
+        });
+
+        if (fillPath) {
+            fillPath.setAttribute(
+                "fill",
+                isActive ? "var(--bg_color_2)" : presentation.fill
+            );
+        }
         if (outlinePath) {
-            applyOutlinePathWithMorph(outlinePath, presentation.pathD);
-            outlinePath.setAttribute("fill", presentation.fill);
+            if (!fillPath) outlinePath.setAttribute("fill", presentation.fill);
             outlinePath.setAttribute("stroke-width", presentation.strokeWidth);
         }
     });

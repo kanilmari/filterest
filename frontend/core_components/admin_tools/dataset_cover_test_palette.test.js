@@ -43,6 +43,7 @@ describe('dataset cover presentation settings', () => {
     });
 
     afterEach(() => {
+        document.documentElement.removeAttribute('style');
         vi.restoreAllMocks();
     });
 
@@ -52,6 +53,13 @@ describe('dataset cover presentation settings', () => {
         settings.dataset_cover_theme.light.oval_width = 36;
         settings.dataset_cover_theme.dark.image_opacity = 0.35;
         settings.dataset_cover_theme.shared.image_blur = 2;
+        settings.dataset_cover_theme.shared.card_image_width = 360;
+        settings.dataset_cover_theme.shared.active_tab_fade = 32;
+        settings.dataset_cover_theme.shared.active_tab_max_opacity = 0.85;
+        settings.dataset_cover_theme.shared.active_tab_glow_intensity = 0.2;
+        settings.dataset_cover_theme.shared.active_tab_glow_width = 1;
+        settings.dataset_cover_theme.shared.active_tab_glow_blur = 1.5;
+        settings.dataset_cover_theme.shared.brand_color = '#cc3366';
         const flagRequest = vi.fn();
 
         await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
@@ -66,6 +74,15 @@ describe('dataset cover presentation settings', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-dark-mask-image')).toBe('none');
         expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.35');
         expect(hero.style.getPropertyValue('--dataset-cover-image-blur')).toBe('2px');
+        expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('360px');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-fade-width')).toBe('32px');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.85');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-intensity')).toBe('0.2');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-width')).toBe('1px');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-blur')).toBe('1.5px');
+        expect(document.documentElement.style.getPropertyValue('--brand-hue')).toBe('340');
+        expect(document.documentElement.style.getPropertyValue('--brand-sat')).toBe('60%');
+        expect(document.documentElement.style.getPropertyValue('--brand-light')).toBe('50%');
         expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
     });
 
@@ -110,7 +127,15 @@ describe('dataset cover presentation settings', () => {
         )).toHaveLength(11);
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(2);
+        )).toHaveLength(9);
+        const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
+        expect(toolboxes).toHaveLength(6);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(6);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(6);
+        expect(toolboxes[0].open).toBe(true);
+        expect(toolboxes[2].open).toBe(false);
+        toolboxes[2].querySelector('summary').click();
+        expect(toolboxes[2].open).toBe(true);
         expect(panel.querySelector('[data-testid="dataset-cover-test-palette-mask-enabled"]')
             .closest('.dataset-cover-test-palette__group')).not.toBeNull();
 
@@ -129,6 +154,28 @@ describe('dataset cover presentation settings', () => {
         blur.value = '3';
         blur.dispatchEvent(new Event('input', { bubbles: true }));
         expect(hero.style.getPropertyValue('--dataset-cover-image-blur')).toBe('3px');
+        const cardWidth = panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-width"]');
+        cardWidth.value = '420';
+        cardWidth.dispatchEvent(new Event('input', { bubbles: true }));
+        const glowIntensity = panel.querySelector(
+            '[data-testid="dataset-cover-test-palette-active-tab-glow-intensity"]'
+        );
+        glowIntensity.value = '0.15';
+        glowIntensity.dispatchEvent(new Event('input', { bubbles: true }));
+        const maximumOpacity = panel.querySelector(
+            '[data-testid="dataset-cover-test-palette-active-tab-max-opacity"]'
+        );
+        maximumOpacity.value = '0.9';
+        maximumOpacity.dispatchEvent(new Event('input', { bubbles: true }));
+        const brandColor = panel.querySelector('[data-testid="dataset-cover-test-palette-brand-color"]');
+        brandColor.value = '#00aa77';
+        brandColor.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('420px');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-intensity')).toBe('0.15');
+        expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.9');
+        expect(document.documentElement.style.getPropertyValue('--brand-hue')).toBe('162');
+        expect(document.documentElement.style.getPropertyValue('--brand-sat')).toBe('100%');
+        expect(document.documentElement.style.getPropertyValue('--brand-light')).toBe('33.33%');
 
         panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
         await vi.waitFor(() => expect(saveRequestFn).toHaveBeenCalledOnce());
@@ -137,6 +184,10 @@ describe('dataset cover presentation settings', () => {
         expect(payload.dataset_cover_theme.light.image_opacity).toBe(1);
         expect(payload.dataset_cover_theme.dark.image_opacity).toBe(0.5);
         expect(payload.dataset_cover_theme.shared.image_blur).toBe(3);
+        expect(payload.dataset_cover_theme.shared.card_image_width).toBe(420);
+        expect(payload.dataset_cover_theme.shared.active_tab_glow_intensity).toBe(0.15);
+        expect(payload.dataset_cover_theme.shared.active_tab_max_opacity).toBe(0.9);
+        expect(payload.dataset_cover_theme.shared.brand_color).toBe('#00aa77');
         await vi.waitFor(() => expect(panel.querySelector(
             '[data-testid="dataset-cover-test-palette-status"]'
         ).textContent).toMatch(/saved|tallennettu/i));

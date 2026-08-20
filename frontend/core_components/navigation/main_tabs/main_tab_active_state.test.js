@@ -132,4 +132,23 @@ describe("applyMainTabActiveState", () => {
         expect(svgContainer.getAttribute("viewBox")).toBe("0 0 300 65");
         expect(tabButton.style.getPropertyValue("--navtab-rounded-left-offset")).toBe("56px");
     });
+
+    test("forces a rectangular card tab when authoritative dataset metadata reports media", async () => {
+        localStorage.setItem("app_service_catalog_view", "card");
+        const tabButton = document.querySelector(".navtablinks");
+        tabButton.dataset.hasPresentationMedia = "true";
+        const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
+
+        applyMainTabActiveState("app_service_catalog", {
+            viewDatasetName: "app_service_catalog",
+        });
+
+        expect(tabButton.dataset.tabPresentation).toBe("button-active");
+        expect(document.querySelector(".navtabs").style.right).toBe("0px");
+        while (frameCallbacks.length > 0) {
+            runQueuedFrames(5000);
+        }
+        expect(document.querySelector(".svg-container path").getAttribute("d"))
+            .toContain("A 0 0");
+    });
 });
