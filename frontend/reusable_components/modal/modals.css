@@ -254,7 +254,7 @@
     .modal_close_button,
     .row_article_image_first_arrow,
     .row_article_image_first_position,
-    .row_article_row_navigation
+    .row_article_row_navigation_button
 ) {
     opacity: 0;
     pointer-events: none;
@@ -267,7 +267,7 @@
     .modal_close_button,
     .row_article_image_first_arrow,
     .row_article_image_first_position,
-    .row_article_row_navigation
+    .row_article_row_navigation_button
 ),
 .image_modal :is(.modal_close_button, .row_article_image_first_arrow):focus-visible {
     opacity: 1;

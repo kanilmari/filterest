@@ -126,12 +126,17 @@
 .big_card_header {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.75rem;
+    box-sizing: border-box;
+    width: 100%;
+    margin-inline: auto;
     font-size: 2rem;
     font-weight: bold;
     color: var(--text_color);
     padding-block-start: 19px;
     padding-inline: 1rem;
+    text-align: center;
 }
 
 .big_card_header_dataset_icon {

@@ -51,6 +51,17 @@ describe("card image modal", () => {
         vi.advanceTimersByTime(1200);
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
 
+        closeButton.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+        vi.advanceTimersByTime(2400);
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
+
+        closeButton.dispatchEvent(new PointerEvent("pointerout", {
+            bubbles: true,
+            relatedTarget: overlay,
+        }));
+        vi.advanceTimersByTime(1200);
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
+
         closeButton.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
         expect(overlay.classList.contains("image-modal-controls-active")).toBe(true);
 

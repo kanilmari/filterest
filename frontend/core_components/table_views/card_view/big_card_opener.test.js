@@ -6,10 +6,16 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const { closeRowArticleMock, getParamsMock, setParamsMock } = vi.hoisted(() => ({
+const {
+    closeRowArticleMock,
+    dispatchCardArticleToggleMock,
+    getParamsMock,
+    setParamsMock,
+} = vi.hoisted(() => ({
     closeRowArticleMock: vi.fn((_wrapper, _cardContainer, rowArticleElement) => {
         rowArticleElement.remove();
     }),
+    dispatchCardArticleToggleMock: vi.fn(),
     getParamsMock: vi.fn(() => ({})),
     setParamsMock: vi.fn(),
 }));
@@ -89,6 +95,7 @@ vi.mock("./row_article_content_builder.js", () => ({
 
 vi.mock("./row_article_ui_handler.js", () => ({
     closeRowArticle: closeRowArticleMock,
+    dispatchCardArticleToggle: dispatchCardArticleToggleMock,
     saveScrollBeforeRowArticle: vi.fn(),
     updateHighlightedCard: vi.fn(),
 }));
@@ -164,6 +171,7 @@ describe("openRowArticleView", () => {
         window.history.replaceState({}, "", "/");
         localStorage.clear();
         closeRowArticleMock.mockClear();
+        dispatchCardArticleToggleMock.mockClear();
         vi.mocked(buildRowArticleRelatedTabs).mockReset();
         vi.mocked(buildRowArticleImageGallery).mockReset();
         vi.mocked(parseRoleString).mockReset();
@@ -232,6 +240,7 @@ describe("openRowArticleView", () => {
         expect(host).toBeNull();
         expect(article).not.toBeNull();
         expect(document.querySelector(".card_container .small-card")).toBe(selectedCard);
+        expect(dispatchCardArticleToggleMock).toHaveBeenCalledWith("events", true);
 
         article?.querySelector(".big_card_close")?.click();
 
@@ -465,6 +474,66 @@ describe("openRowArticleView", () => {
             null,
             expect.any(Function),
             expect.objectContaining({ parentImageRows }),
+        );
+    });
+
+    test("does not resurrect a deleted cached image after the authoritative child gallery refreshes", async () => {
+        document.body.innerHTML = `
+            <div id="tickets_card_view_container">
+                <div class="card_view_wrapper">
+                    <div class="card_container">
+                        <div class="card" data-id="2"></div>
+                    </div>
+                    <div class="big_card_placeholder row_article_placeholder"></div>
+                </div>
+            </div>
+        `;
+        const selectedCard = document.querySelector(".card[data-id='2']");
+        selectedCard._data_types = {
+            cached_image: { card_element: "image" },
+            title: { card_element: "header" },
+        };
+        const staleParentImageRows = [{
+            asset_kind: "image",
+            filename: "deleted-image.webp",
+            is_parent_row_image: true,
+            is_primary: true,
+        }];
+        const authoritativeImageChild = {
+            dataset: "tickets_assets",
+            column: "tickets_id",
+            relation_kind: "shared_asset",
+            rows: [],
+        };
+        vi.mocked(parseRoleString).mockImplementation((roleString = "") => ({
+            baseRoles: String(roleString).split(/\s+/).filter(Boolean),
+        }));
+        vi.mocked(resolveRowArticleParentImageRows).mockReturnValueOnce(staleParentImageRows);
+        vi.mocked(createRowArticleLoadSession).mockReturnValueOnce({
+            fetchAttachmentLinking: vi.fn(() => Promise.resolve(null)),
+            fetchDynamicChildren: vi.fn(() => Promise.resolve({ child_tables: [authoritativeImageChild] })),
+            fetchImageLinking: vi.fn(() => Promise.resolve({ child_table: "tickets_assets" })),
+        });
+        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReturnValueOnce({
+            assetsChild: authoritativeImageChild,
+            imagesChild: null,
+        });
+        vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValueOnce(authoritativeImageChild);
+        vi.mocked(buildRowArticleImageGallery).mockReturnValueOnce(document.createElement("div"));
+
+        await openRowArticleView(
+            { id: 2, title: "VPN disconnects", cached_image: "deleted-image.webp" },
+            "tickets",
+            selectedCard,
+        );
+        await flushRowArticleHydration();
+
+        expect(buildRowArticleImageGallery).toHaveBeenCalledWith(
+            "tickets",
+            2,
+            authoritativeImageChild,
+            expect.any(Function),
+            expect.objectContaining({ parentImageRows: [] }),
         );
     });
 

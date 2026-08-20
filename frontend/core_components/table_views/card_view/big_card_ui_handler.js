@@ -310,7 +310,12 @@ function createTwoLineLabelElement({
     return labelDiv;
 }
 
-function dispatchCardArticleToggle(tableName, isOpen) {
+/**
+ * Announces that a dataset's article view opened or closed.
+ * Bridges article UI transitions to listeners that track both legacy big cards and row articles.
+ * Keeping both events together prevents open and close paths from drifting apart.
+ */
+export function dispatchCardArticleToggle(tableName, isOpen) {
     if (!tableName) {
         return;
     }

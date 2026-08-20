@@ -221,6 +221,34 @@ describe('stable_endpoint_router', () => {
         });
     });
 
+    test('symbol registry wrappers use the same protected route for list and assignment', async () => {
+        endpointRouterMock
+            .mockResolvedValueOnce({ symbols: [{ key: 'table' }] })
+            .mockResolvedValueOnce({ status: 'ok' });
+        const mod = await loadModule();
+
+        await expect(mod.fetchAdminSymbols()).resolves.toEqual({
+            symbols: [{ key: 'table' }],
+        });
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(1, 'adminSymbols', {
+            method: 'GET',
+        });
+
+        await expect(mod.saveAdminSymbolAssignment({
+            target_type: 'dataset',
+            target_uid: 12,
+            icon_key: 'payments',
+        })).resolves.toEqual({ status: 'ok' });
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(2, 'adminSymbols', {
+            method: 'POST',
+            body_data: {
+                target_type: 'dataset',
+                target_uid: 12,
+                icon_key: 'payments',
+            },
+        });
+    });
+
     test('listColumnViewPresets loads candidate-route data with the manifest-backed GET default', async () => {
         endpointRouterMock.mockResolvedValue([{ id: 7, preset_name: 'Compact', hidden_columns: { title: true } }]);
         const mod = await loadModule();

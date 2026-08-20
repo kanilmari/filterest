@@ -1,64 +1,14 @@
 // card_detail_single_line_helpers.test.js
-// Verifies single-line card detail SVG sanitization, label fallback, and KV class reuse.
+// Verifies filesystem symbol rendering, legacy SVG rejection, and KV class reuse.
 // Bridges metadata-driven icon settings and the conditional-style card detail row DOM.
-// Exists to keep SVG handling safe while preserving one-line detail rendering.
+// Exists so database-held raw SVG cannot return to the card rendering path.
 // @vitest-environment jsdom
 
 import { describe, expect, test } from "vitest";
 
-import {
-    appendSafeCardDetailSvg,
-    renderSingleLineCardDetails,
-} from "./card_detail_single_line_helpers.js";
+import { renderSingleLineCardDetails } from "./card_detail_single_line_helpers.js";
 
 describe("card_detail_single_line_helpers", () => {
-    test("appendSafeCardDetailSvg strips dangerous attributes from otherwise valid SVG", () => {
-        const container = document.createElement("span");
-
-        const rendered = appendSafeCardDetailSvg(
-            container,
-            '<svg viewBox="0 0 16 16" onload="alert(1)"><path d="M0 0" style="fill:red" href="https://bad.example" /></svg>'
-        );
-
-        expect(rendered).toBe(true);
-        const svg = container.querySelector("svg");
-        const path = container.querySelector("path");
-        expect(svg).not.toBeNull();
-        expect(svg?.getAttribute("viewBox")).toBe("0 0 16 16");
-        expect(svg?.getAttribute("onload")).toBeNull();
-        expect(path?.getAttribute("style")).toBeNull();
-        expect(path?.getAttribute("href")).toBeNull();
-    });
-
-    test("appendSafeCardDetailSvg keeps child shape dimensions while CSS owns root size", () => {
-        const container = document.createElement("span");
-
-        const rendered = appendSafeCardDetailSvg(
-            container,
-            '<svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="5" width="16" height="15" rx="2" /></svg>'
-        );
-
-        expect(rendered).toBe(true);
-        const svg = container.querySelector("svg");
-        const rect = container.querySelector("rect");
-        expect(svg?.getAttribute("width")).toBeNull();
-        expect(svg?.getAttribute("height")).toBeNull();
-        expect(rect?.getAttribute("width")).toBe("16");
-        expect(rect?.getAttribute("height")).toBe("15");
-    });
-
-    test("appendSafeCardDetailSvg rejects disallowed SVG content", () => {
-        const container = document.createElement("span");
-
-        expect(
-            appendSafeCardDetailSvg(
-                container,
-                '<svg viewBox="0 0 16 16"><image href="https://bad.example/icon.png" /></svg>'
-            )
-        ).toBe(false);
-        expect(container.children).toHaveLength(0);
-    });
-
     test("renderSingleLineCardDetails keeps translated label text for both mode", () => {
         const container = document.createElement("div");
 
@@ -74,7 +24,9 @@ describe("card_detail_single_line_helpers", () => {
             },
         });
 
-        expect(container.querySelector(".card_detail_row_icon_svg")).not.toBeNull();
+        expect(container.querySelector(".card_detail_row_icon_svg")?.dataset.symbolKey)
+            .toBe("check-circle");
+        expect(container.querySelector("svg")).toBeNull();
         const labelText = container.querySelector(".card_detail_row_label_text");
         expect(labelText?.textContent).toBe("Status");
         expect(labelText?.getAttribute("data-lang-key")).toBe("status");
@@ -95,9 +47,12 @@ describe("card_detail_single_line_helpers", () => {
             },
         });
 
-        const svg = container.querySelector(".card_detail_row_icon_svg");
-        expect(svg).not.toBeNull();
-        expect(svg?.getAttribute("viewBox")).toBe("0 -960 960 960");
+        const icon = container.querySelector(".card_detail_row_icon_svg");
+        expect(icon).not.toBeNull();
+        expect(icon?.dataset.symbolKey).toBe("calendar");
+        expect(icon?.style.getPropertyValue("--metadata-symbol-url"))
+            .toContain("/symbol-assets/calendar.svg");
+        expect(icon?.querySelector("svg")).toBeNull();
         expect(container.querySelector(".card_detail_row_label_text")?.textContent).toBe("Created");
     });
 
@@ -154,7 +109,7 @@ describe("card_detail_single_line_helpers", () => {
         expect(container.textContent).toContain("javascript:alert(1)");
     });
 
-    test("renderSingleLineCardDetails uses the generic icon when icon SVG is rejected", () => {
+    test("renderSingleLineCardDetails never renders legacy raw SVG and uses the key fallback", () => {
         const container = document.createElement("div");
 
         renderSingleLineCardDetails(container, [{
@@ -164,15 +119,17 @@ describe("card_detail_single_line_helpers", () => {
         }], {
             custom_field: {
                 card_detail_label_mode: "icon",
-                card_detail_icon_svg: '<svg viewBox="0 0 16 16"><image href="https://bad.example/icon.png" /></svg>',
+                card_detail_icon_svg: '<svg viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg>',
             },
         });
 
         const label = container.querySelector(".card_detail_row_label");
-        const svg = container.querySelector(".card_detail_row_icon_svg");
+        const icon = container.querySelector(".card_detail_row_icon_svg");
 
-        expect(svg).not.toBeNull();
-        expect(svg?.querySelector("image")).toBeNull();
+        expect(icon).not.toBeNull();
+        expect(icon?.dataset.symbolKey).toBe("info");
+        expect(container.querySelector("svg")).toBeNull();
+        expect(container.innerHTML).not.toContain("M1 1h14v14H1z");
         expect(label?.getAttribute("aria-label")).toBe("Owner");
         expect(container.querySelector(".card_detail_row_label_text")).toBeNull();
     });

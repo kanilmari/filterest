@@ -29,6 +29,8 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"auth.GetAuthModesHandler":                 {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"auth.FirstRunAdminHandler":                {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"auth.AdminUserAuthenticationHandler":      {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"symbol_registry.AssetHandler":             {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
+	"symbol_registry.AdminHandler":             {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"product_identity.Handler":                 {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"auth.UserPermissionsHandler":              {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 

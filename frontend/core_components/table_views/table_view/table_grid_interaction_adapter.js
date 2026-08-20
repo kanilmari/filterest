@@ -32,7 +32,9 @@ export function addTableGridInteractionAdapter(table, columns, data) {
 
     const state = {
         isSelecting: false,
+        suppressNativeTextSelection: false,
         selectionStartCoordinate: null,
+        selectionAnchorCoordinate: null,
     };
 
     table.addEventListener('mousedown', (event) => {
@@ -42,8 +44,7 @@ export function addTableGridInteractionAdapter(table, columns, data) {
         handleTableMouseMove({ event, table, state });
     });
     table.addEventListener('mouseup', () => {
-        state.isSelecting = false;
-        state.selectionStartCoordinate = null;
+        finishTableRangeSelection({ table, state });
     });
     table.addEventListener('contextmenu', (event) => {
         handleTableContextMenu({ event, table, columns, data });
@@ -73,6 +74,7 @@ function handleTableMouseDown({ event, table, state }) {
         if (!menu?.contains(event.target)) {
             clearTableGridSelection(table);
             hideSelectionMenu(menu);
+            state.selectionAnchorCoordinate = null;
         }
         return;
     }
@@ -86,11 +88,25 @@ function handleTableMouseDown({ event, table, state }) {
         return;
     }
 
+    const shouldExtendSelection = event.shiftKey && state.selectionAnchorCoordinate;
+    if (shouldExtendSelection) {
+        event.preventDefault();
+        clearNativeTextSelection(table);
+    } else {
+        state.selectionAnchorCoordinate = startCoordinate;
+    }
+
     state.isSelecting = true;
-    state.selectionStartCoordinate = startCoordinate;
+    state.suppressNativeTextSelection = Boolean(shouldExtendSelection);
+    state.selectionStartCoordinate = shouldExtendSelection
+        ? state.selectionAnchorCoordinate
+        : startCoordinate;
     clearTableGridSelection(table);
     hideSelectionMenu(menu);
-    highlightTableRange(table, normalizeRangeSelection(startCoordinate, startCoordinate));
+    highlightTableRange(table, normalizeRangeSelection(
+        state.selectionStartCoordinate,
+        startCoordinate
+    ));
 }
 
 /**
@@ -115,11 +131,70 @@ function handleTableMouseMove({ event, table, state }) {
         return;
     }
 
+    if (!coordinatesMatch(state.selectionStartCoordinate, currentCoordinate)) {
+        state.suppressNativeTextSelection = true;
+    }
+    if (state.suppressNativeTextSelection) {
+        event.preventDefault();
+        clearNativeTextSelection(table);
+    }
+
     clearTableGridSelection(table);
     highlightTableRange(table, normalizeRangeSelection(
         state.selectionStartCoordinate,
         currentCoordinate
     ));
+}
+
+/**
+ * Ends one mouse-driven table range selection and clears transient browser selection.
+ * Operates between adapter gesture state and the document Selection API.
+ * Exists so a completed multi-cell gesture cannot leave a duplicate native text highlight.
+ *
+ * @param {Object} params
+ * @param {HTMLTableElement} params.table
+ * @param {Object} params.state
+ * @returns {void}
+ */
+function finishTableRangeSelection({ table, state }) {
+    if (state.suppressNativeTextSelection) {
+        clearNativeTextSelection(table);
+    }
+    state.isSelecting = false;
+    state.suppressNativeTextSelection = false;
+    state.selectionStartCoordinate = null;
+}
+
+/**
+ * Compares two normalized grid coordinates without depending on object identity.
+ * Operates between the mousedown anchor and the current mousemove cell.
+ * Exists to distinguish intentional text selection inside one cell from a grid range gesture.
+ *
+ * @param {Object|null} firstCoordinate
+ * @param {Object|null} secondCoordinate
+ * @returns {boolean}
+ */
+function coordinatesMatch(firstCoordinate, secondCoordinate) {
+    return Boolean(
+        firstCoordinate
+        && secondCoordinate
+        && firstCoordinate.rowIndex === secondCoordinate.rowIndex
+        && firstCoordinate.columnIndex === secondCoordinate.columnIndex
+    );
+}
+
+/**
+ * Removes native browser text ranges owned by the table document.
+ * Operates between grid-range gestures and the browser Selection API.
+ * Exists because a multi-cell drag is represented by cell highlighting, not duplicate text highlighting.
+ *
+ * @param {HTMLTableElement} table
+ * @returns {void}
+ */
+function clearNativeTextSelection(table) {
+    const selection = table.ownerDocument?.getSelection?.()
+        || table.ownerDocument?.defaultView?.getSelection?.();
+    selection?.removeAllRanges?.();
 }
 
 /**

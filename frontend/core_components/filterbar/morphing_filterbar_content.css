@@ -142,15 +142,22 @@
 	background-image: var(--dataset-cover-image);
 	background-position: center;
 	background-size: cover;
+	mask-image: radial-gradient(
+		ellipse 68% 82% at 50% 48%,
+		transparent 0%,
+		transparent 30%,
+		rgb(0 0 0 / 35%) 58%,
+		#000 100%
+	);
 }
 
 .filterbar-inline-hero--has-cover::after {
 	z-index: -1;
-	background: radial-gradient(
-		ellipse 68% 88% at 50% 45%,
-		color-mix(in srgb, var(--filter_panel_bg) 94%, transparent) 0%,
-		color-mix(in srgb, var(--filter_panel_bg) 76%, transparent) 48%,
-		color-mix(in srgb, var(--filter_panel_bg) 24%, transparent) 100%
+	background: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--filter_panel_bg) 8%, transparent) 0%,
+		transparent 45%,
+		color-mix(in srgb, var(--filter_panel_bg) 18%, transparent) 100%
 	);
 }
 
@@ -183,9 +190,16 @@
 
 .filterbar-panel--wide .filter-content-inner,
 .filterbar-inline-hero .filter-content-inner {
-  max-width: var(--filterbar-hero-content-max-width, 550px);
-  width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-content-max-width, 550px));
+  max-width: var(--filterbar-hero-title-max-width, 1200px);
+  width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-title-max-width, 1200px));
   margin: 12px auto 0;
+}
+
+.filterbar-panel--wide .filter-content-inner > :not(.morphing-header),
+.filterbar-inline-hero .filter-content-inner > :not(.morphing-header) {
+  align-self: center;
+  width: 100%;
+  max-width: var(--filterbar-hero-content-max-width, 550px);
 }
 
 .filterbar-panel--wide .morphing-header,
@@ -193,7 +207,7 @@
   margin-bottom: 16px;
   text-align: center;
   width: 100%;
-  max-width: var(--filterbar-hero-title-max-width, 800px);
+  max-width: var(--filterbar-hero-title-max-width, 1200px);
   align-self: center;
 }
 
@@ -204,10 +218,6 @@
   margin: 0 auto 16px;
   color: var(--primary_color, var(--text_color));
   opacity: 0.95;
-}
-
-.filterbar-hero-dataset-icon--users {
-  color: #fff;
 }
 
 .filterbar-panel--wide .morphing-title,

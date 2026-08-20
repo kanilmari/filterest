@@ -6,13 +6,13 @@ not legal advice and still needs human/project approval before publication.
 
 ## Candidate
 
-- Filterest app version: `8.35.2`
-- Database version: `9.2.1`
+- Filterest app version: `8.36.0`
+- Database version: `9.2.2`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
 - Go modules listed: `96`
 - npm packages listed: `441`
-- bundled asset files listed: `72`
+- bundled asset files listed: `136`
 - dependency rows still requiring license review: `0`
 
 ## Review Notes
@@ -55,7 +55,7 @@ not legal advice and still needs human/project approval before publication.
 - `.ico`: 1
 - `.jpg`: 22
 - `.png`: 14
-- `.svg`: 35
+- `.svg`: 99
 
 ## Go Modules
 
@@ -652,6 +652,70 @@ not legal advice and still needs human/project approval before publication.
 | `frontend/icons/navigation/theme-locked-dark-icon.svg` | `.svg` |
 | `frontend/icons/navigation/theme-locked-light-icon.svg` | `.svg` |
 | `frontend/icons/navigation/theme-system-icon.svg` | `.svg` |
+| `frontend/icons/symbols/alert-circle.svg` | `.svg` |
+| `frontend/icons/symbols/article.svg` | `.svg` |
+| `frontend/icons/symbols/attachment.svg` | `.svg` |
+| `frontend/icons/symbols/bolt-pattern.svg` | `.svg` |
+| `frontend/icons/symbols/bookmark.svg` | `.svg` |
+| `frontend/icons/symbols/build.svg` | `.svg` |
+| `frontend/icons/symbols/building.svg` | `.svg` |
+| `frontend/icons/symbols/calendar-clock.svg` | `.svg` |
+| `frontend/icons/symbols/calendar.svg` | `.svg` |
+| `frontend/icons/symbols/car.svg` | `.svg` |
+| `frontend/icons/symbols/category.svg` | `.svg` |
+| `frontend/icons/symbols/chat.svg` | `.svg` |
+| `frontend/icons/symbols/check-circle.svg` | `.svg` |
+| `frontend/icons/symbols/check_circle.svg` | `.svg` |
+| `frontend/icons/symbols/clock.svg` | `.svg` |
+| `frontend/icons/symbols/dashboard.svg` | `.svg` |
+| `frontend/icons/symbols/database.svg` | `.svg` |
+| `frontend/icons/symbols/description.svg` | `.svg` |
+| `frontend/icons/symbols/eco.svg` | `.svg` |
+| `frontend/icons/symbols/euro.svg` | `.svg` |
+| `frontend/icons/symbols/file-text.svg` | `.svg` |
+| `frontend/icons/symbols/folder.svg` | `.svg` |
+| `frontend/icons/symbols/grid_view.svg` | `.svg` |
+| `frontend/icons/symbols/group.svg` | `.svg` |
+| `frontend/icons/symbols/group_filled.svg` | `.svg` |
+| `frontend/icons/symbols/hash.svg` | `.svg` |
+| `frontend/icons/symbols/help.svg` | `.svg` |
+| `frontend/icons/symbols/home.svg` | `.svg` |
+| `frontend/icons/symbols/hourglass.svg` | `.svg` |
+| `frontend/icons/symbols/image.svg` | `.svg` |
+| `frontend/icons/symbols/info.svg` | `.svg` |
+| `frontend/icons/symbols/inventory.svg` | `.svg` |
+| `frontend/icons/symbols/label.svg` | `.svg` |
+| `frontend/icons/symbols/layers.svg` | `.svg` |
+| `frontend/icons/symbols/link.svg` | `.svg` |
+| `frontend/icons/symbols/list.svg` | `.svg` |
+| `frontend/icons/symbols/location.svg` | `.svg` |
+| `frontend/icons/symbols/login.svg` | `.svg` |
+| `frontend/icons/symbols/logout.svg` | `.svg` |
+| `frontend/icons/symbols/mail.svg` | `.svg` |
+| `frontend/icons/symbols/map-pin.svg` | `.svg` |
+| `frontend/icons/symbols/map.svg` | `.svg` |
+| `frontend/icons/symbols/notifications.svg` | `.svg` |
+| `frontend/icons/symbols/palette.svg` | `.svg` |
+| `frontend/icons/symbols/payments.svg` | `.svg` |
+| `frontend/icons/symbols/person.svg` | `.svg` |
+| `frontend/icons/symbols/receipt.svg` | `.svg` |
+| `frontend/icons/symbols/ruler.svg` | `.svg` |
+| `frontend/icons/symbols/schedule.svg` | `.svg` |
+| `frontend/icons/symbols/school.svg` | `.svg` |
+| `frontend/icons/symbols/science.svg` | `.svg` |
+| `frontend/icons/symbols/search.svg` | `.svg` |
+| `frontend/icons/symbols/settings.svg` | `.svg` |
+| `frontend/icons/symbols/shopping-bag.svg` | `.svg` |
+| `frontend/icons/symbols/shopping_cart.svg` | `.svg` |
+| `frontend/icons/symbols/star.svg` | `.svg` |
+| `frontend/icons/symbols/store.svg` | `.svg` |
+| `frontend/icons/symbols/table.svg` | `.svg` |
+| `frontend/icons/symbols/tag.svg` | `.svg` |
+| `frontend/icons/symbols/task.svg` | `.svg` |
+| `frontend/icons/symbols/tune.svg` | `.svg` |
+| `frontend/icons/symbols/user.svg` | `.svg` |
+| `frontend/icons/symbols/warning.svg` | `.svg` |
+| `frontend/icons/symbols/wrench.svg` | `.svg` |
 | `frontend/imageERR.png` | `.png` |
 | `frontend/public/auth-tour/platform-card-view.jpg` | `.jpg` |
 | `frontend/public/auth-tour/platform-filterbar.jpg` | `.jpg` |

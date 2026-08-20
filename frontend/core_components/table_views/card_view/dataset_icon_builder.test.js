@@ -7,7 +7,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
-import { getTabIconPath } from "../../navigation/main_tabs/tab_icon_library.js";
 
 describe("dataset_icon_builder", () => {
     beforeEach(() => {
@@ -28,16 +27,28 @@ describe("dataset_icon_builder", () => {
         expect(icon.classList.contains("dataset_table_icon")).toBe(true);
         expect(icon.classList.contains("card_header_dataset_icon")).toBe(true);
         expect(icon.getAttribute("aria-hidden")).toBe("true");
-        expect(icon.querySelector("path")?.getAttribute("d")).toBe(
-            getTabIconPath("building")
-        );
+        expect(icon.dataset.symbolKey).toBe("building");
+        expect(icon.style.getPropertyValue("--metadata-symbol-url"))
+            .toContain("/symbol-assets/building.svg");
+        expect(icon.innerHTML).toBe("");
     });
 
-    test("falls back to the default table icon when metadata is missing", () => {
+    test("omits the icon when metadata does not configure one", () => {
         const icon = createDatasetIconElement("dev_agent_tasks");
 
-        expect(icon.querySelector("path")?.getAttribute("d")).toBe(
-            getTabIconPath(undefined)
+        expect(icon).toBeNull();
+    });
+
+    test("renders the table symbol when icon_key explicitly configures it", () => {
+        localStorage.setItem(
+            "dev_agent_tasks_tableMeta",
+            JSON.stringify({ icon_key: "table" })
         );
+
+        const icon = createDatasetIconElement("dev_agent_tasks");
+
+        expect(icon?.dataset.symbolKey).toBe("table");
+        expect(icon?.style.getPropertyValue("--metadata-symbol-url"))
+            .toContain("/symbol-assets/table.svg");
     });
 });

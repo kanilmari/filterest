@@ -45,6 +45,29 @@ beforeEach(() => {
     localStorage.clear();
 });
 
+function multilingualTextColumn(columnName) {
+    return {
+        column_name: columnName,
+        data_type: "text",
+        is_nullable: "NO",
+        is_multilingual: true,
+        multilingual_languages: [
+            {
+                language_code: "fi",
+                native_name: "Suomi",
+                english_name: "Finnish",
+                is_default: true,
+            },
+            {
+                language_code: "en",
+                native_name: "English",
+                english_name: "English",
+                is_default: false,
+            },
+        ],
+    };
+}
+
 describe("resolveFileUploadProfiles", () => {
     test("expands shared asset profile maps in stable image-then-attachment order", () => {
         const profiles = resolveFileUploadProfiles({
@@ -191,6 +214,44 @@ describe("isSharedAssetRelation", () => {
 });
 
 describe("buildOneToManySection", () => {
+    test("stores child multilingual input as a language map without a scalar fallback", async () => {
+        fetchColumnsInfo.mockResolvedValue([
+            { column_name: "article_id", data_type: "integer" },
+            multilingualTextColumn("caption"),
+        ]);
+
+        const form = document.createElement("form");
+        const modalFormState = {};
+
+        await buildOneToManySection(form, [{
+            source_table_uid: "501",
+            source_dataset_name: "article_captions",
+            source_column_name: "article_id",
+        }], modalFormState);
+
+        const multilingualGroup = form.querySelector(
+            '[data-multilingual-column="caption"]'
+        );
+        const finnish = multilingualGroup?.querySelector('[data-language-code="fi"]');
+        const english = multilingualGroup?.querySelector('[data-language-code="en"]');
+
+        expect(multilingualGroup).not.toBeNull();
+        expect(finnish).not.toBeNull();
+        expect(english).not.toBeNull();
+        expect(form.querySelector('[data-col-name="caption"]')).toBeNull();
+
+        finnish.value = "Sataman iltavalaistus";
+        finnish.dispatchEvent(new Event("input"));
+        english.value = "Harbour lighting at dusk";
+        english.dispatchEvent(new Event("input"));
+
+        expect(modalFormState._childRowsArray).toHaveLength(1);
+        expect(JSON.parse(modalFormState._childRowsArray[0].data.caption)).toEqual({
+            fi: "Sataman iltavalaistus",
+            en: "Harbour lighting at dusk",
+        });
+    });
+
     test("renders multi-file attachment selection chips for shared asset profiles", async () => {
         fetchColumnsInfo.mockResolvedValue([
             { column_name: "filename", data_type: "TEXT" },
@@ -260,6 +321,55 @@ describe("buildOneToManySection", () => {
 });
 
 describe("buildManyToManySection", () => {
+    test("stores a new related row multilingual value without creating a scalar text input", async () => {
+        fetchColumnsInfo.mockResolvedValue([
+            { column_name: "id", data_type: "integer" },
+            multilingualTextColumn("name"),
+            { column_name: "created", data_type: "timestamp with time zone" },
+            { column_name: "updated", data_type: "timestamp with time zone" },
+        ]);
+        fetchReferencedData.mockResolvedValue([]);
+
+        const form = document.createElement("form");
+        const modalFormState = {};
+
+        await buildManyToManySection(form, [{
+            bridging_dataset_name: "articles_destinations_relation",
+            main_dataset_fk_column: "article_id",
+            third_table_uid: "777",
+            third_dataset_name: "destinations",
+            third_dataset_fk_column: "destination_id",
+        }], modalFormState);
+
+        const newRadio = form.querySelector(
+            'input[name="m2m_mode_destinations"][value="new"]'
+        );
+        newRadio.checked = true;
+        newRadio.dispatchEvent(new Event("change"));
+
+        const multilingualGroup = form.querySelector(
+            '[data-multilingual-column="name"]'
+        );
+        const finnish = multilingualGroup?.querySelector('[data-language-code="fi"]');
+        const english = multilingualGroup?.querySelector('[data-language-code="en"]');
+        const newRowContainer = multilingualGroup?.parentElement;
+
+        expect(multilingualGroup).not.toBeNull();
+        expect(finnish).not.toBeNull();
+        expect(english).not.toBeNull();
+        expect(newRowContainer?.querySelector('input[type="text"]')).toBeNull();
+
+        finnish.value = "Saaristokohde";
+        finnish.dispatchEvent(new Event("input"));
+        english.value = "Archipelago destination";
+        english.dispatchEvent(new Event("input"));
+
+        expect(JSON.parse(modalFormState._m2m_new_destinations.name)).toEqual({
+            fi: "Saaristokohde",
+            en: "Archipelago destination",
+        });
+    });
+
     test("normalizes backend M2M metadata and stores submission state", async () => {
         localStorage.setItem("chosen_language", "fi");
         fetchColumnsInfo.mockResolvedValue([

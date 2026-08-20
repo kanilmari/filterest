@@ -201,8 +201,26 @@ describe('card_element_builder addHeaderElement', () => {
 
         expect(header.classList.contains('card_header--with-dataset-icon')).toBe(true);
         expect(header.firstElementChild?.classList.contains('card_header_dataset_icon')).toBe(true);
-        expect(header.querySelector('.card_header_dataset_icon path')?.getAttribute('d')).toBeTruthy();
+        expect(header.querySelector('.card_header_dataset_icon')?.dataset.symbolKey).toBe('building');
         expect(container.firstElementChild).toBe(header);
+    });
+
+    test('does not add an automatic table icon when icon_key is missing', () => {
+        const container = document.createElement('div');
+
+        const header = addHeaderElement(
+            'Firefox',
+            '',
+            'title',
+            false,
+            { id: 392, title: 'Firefox' },
+            'app_service_catalog',
+            container,
+            'Firefox'
+        );
+
+        expect(header.classList.contains('card_header--with-dataset-icon')).toBe(false);
+        expect(header.querySelector('.card_header_dataset_icon')).toBeNull();
     });
 });
 

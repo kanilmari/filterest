@@ -3,7 +3,11 @@
 // Bridges row selection, cell events, column resizing, filtering, and infinite-scroll handlers into one table build pass.
 // Exists to centralise table DOM construction so all renderers and refresh paths share one consistent structure.
 
-import { toggle_select_all, update_row_selection } from './row_selection_handler.js';
+import {
+    toggle_select_all,
+    update_row_selection,
+    update_row_selection_from_click,
+} from './row_selection_handler.js';
 import { addEventListenersToCells } from './table_cell_event_handler.js';
 import { addTableGridInteractionAdapter } from './table_grid_interaction_adapter.js';
 import { initialize_column_resizing } from './column_resize_handler.js';
@@ -322,6 +326,7 @@ export function createCheckboxCell(row, _table_name) {
     row_checkbox.type = 'checkbox';
     row_checkbox.classList.add('row_checkbox');
     row_checkbox.dataset.testid = 'row-select-checkbox';
+    row_checkbox.addEventListener('click', (event) => update_row_selection_from_click(event, row));
     row_checkbox.addEventListener('change', () => update_row_selection(row));
     checkbox_td.appendChild(row_checkbox);
 

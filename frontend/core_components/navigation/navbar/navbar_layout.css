@@ -285,8 +285,9 @@ body.light-mode #nav_tree .tree-current-project-badge {
     background-color: var(--bg_color);
     z-index: calc(var(--z-navbar) + 1);
     border-bottom: 2px solid var(--border_color);
-    /* Leave the final 2px clear so #navbar's single right edge remains visible. */
-    margin-right: 2px;
+    /* Keep the sticky row's own edge above dataset tabs that scroll underneath it. */
+    border-right: 2px solid var(--border_color);
+    margin-right: 0;
     height: 70px; /* Matches the filterbar title row, including the restored bottom divider. */
     box-sizing: border-box;
     align-items: center;

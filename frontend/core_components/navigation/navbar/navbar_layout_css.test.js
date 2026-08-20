@@ -21,4 +21,13 @@ describe('navbar layout CSS', () => {
         expect(css).toContain('cursor: pointer !important;');
         expect(css).not.toContain('#navbar:not(.collapsed) .top-button-bar *');
     });
+
+    test('keeps a dedicated sticky top-row edge above scrolling dataset tabs', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
+        const topBarRule = css.match(/\.top-button-bar\s*\{([^}]*)\}/)?.[1] || '';
+
+        expect(topBarRule).toContain('position: sticky;');
+        expect(topBarRule).toContain('border-right: 2px solid var(--border_color);');
+        expect(topBarRule).toContain('margin-right: 0;');
+    });
 });

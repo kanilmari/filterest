@@ -34,7 +34,28 @@ const addRowColumnsWithTypesQuery = `
 		fk_rel.insert_new_source_with_target,
 		fk_rel.source_insert_specs,
 		fk_rel.target_insert_specs,
-		scd.insertable
+		scd.insertable,
+		COALESCE(scd.is_multilingual, false) AS is_multilingual,
+		CASE WHEN COALESCE(scd.is_multilingual, false) THEN (
+			SELECT COALESCE(
+				jsonb_agg(
+					jsonb_build_object(
+						'language_code', sl.language_code,
+						'english_name', sl.english_name,
+						'native_name', sl.native_name,
+						'is_default', sl.is_default,
+						'sort_order', sl.sort_order
+					)
+					ORDER BY sl.is_default DESC, sl.sort_order, sl.language_code
+				),
+				'[]'::jsonb
+			)
+			FROM system_languages sl
+			WHERE sl.is_enabled = true
+				AND sl.public_selector_ready = true
+				AND sl.coverage_status = 'complete'
+				AND sl.review_status = 'approved'
+		) ELSE '[]'::jsonb END AS multilingual_languages
     FROM information_schema.columns c
     JOIN system_db_tables sdt
         ON sdt.table_uid = $1 AND sdt.table_name = c.table_name
@@ -188,6 +209,7 @@ func getAddRowColumnsWithTypes(tableUID, schemaName string) ([]dtt_models.AddRow
 		var sourceInsertSpecs sql.NullString
 		var targetInsertSpecs sql.NullString
 		var insertable sql.NullBool
+		var multilingualLanguagesJSON []byte
 
 		if err := rows.Scan(
 			&col.ColumnName,
@@ -205,8 +227,15 @@ func getAddRowColumnsWithTypes(tableUID, schemaName string) ([]dtt_models.AddRow
 			&sourceInsertSpecs,
 			&targetInsertSpecs,
 			&insertable,
+			&col.IsMultilingual,
+			&multilingualLanguagesJSON,
 		); err != nil {
 			return nil, err
+		}
+		if len(multilingualLanguagesJSON) > 0 {
+			if err := json.Unmarshal(multilingualLanguagesJSON, &col.MultilingualLanguages); err != nil {
+				return nil, fmt.Errorf("decode multilingual languages for %s: %w", col.ColumnName, err)
+			}
 		}
 
 		col.ColumnDefault = columnDefault.String

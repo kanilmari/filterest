@@ -90,9 +90,11 @@ func setupStorageHandlerTest(t *testing.T) *sql.DB {
 	savedStorageDir := localStorageDir
 	localStorageDir = t.TempDir()
 	savedAuthorizer := storageAuthorizeRead
+	savedDatasetMediaAuthorizer := storageAuthorizeDatasetMediaRead
 	savedLoginCheck := storageCheckLoginToBrowse
 	t.Cleanup(func() {
 		storageAuthorizeRead = savedAuthorizer
+		storageAuthorizeDatasetMediaRead = savedDatasetMediaAuthorizer
 		storageCheckLoginToBrowse = savedLoginCheck
 		localStorageDir = savedStorageDir
 		backend.Db, backend.DbAdmin = savedDB, savedAdmin
@@ -100,6 +102,71 @@ func setupStorageHandlerTest(t *testing.T) *sql.DB {
 		_ = testDB.Close()
 	})
 	return testDB
+}
+
+func TestParseDatasetMediaStoragePathAcceptsOnlyCanonicalRegistryShape(t *testing.T) {
+	for _, role := range []string{"cover", "background"} {
+		valid := "104/dataset_media/" + role + "/original/20260819T214754.209243708Z.png"
+		parsed, ok := parseDatasetMediaStoragePath(valid)
+		if !ok {
+			t.Fatalf("parseDatasetMediaStoragePath(%q) rejected canonical path", valid)
+		}
+		if parsed.TableUID != "104" || parsed.Role != role || parsed.Variant != "original" || parsed.Filename != "20260819T214754.209243708Z.png" {
+			t.Fatalf("parseDatasetMediaStoragePath(%q) = %#v", valid, parsed)
+		}
+	}
+
+	for _, input := range []string{
+		"104/dataset_media/cover/original",
+		"104/dataset_media/cover/300/file.png",
+		"104/dataset_media/thumbnail/original/file.png",
+		"0104/dataset_media/background/original/file.png",
+		`104/dataset_media/cover/original/bad\file.png`,
+		"104/dataset_media/cover/original/file.png/extra",
+	} {
+		if rejected, accepted := parseDatasetMediaStoragePath(input); accepted {
+			t.Errorf("parseDatasetMediaStoragePath(%q) = %#v, want rejection", input, rejected)
+		}
+	}
+}
+
+func TestServeStorageAuthorizesRegistryBackedDatasetMedia(t *testing.T) {
+	setupStorageHandlerTest(t)
+	const relativePath = "104/dataset_media/cover/original/cover.png"
+	writeStorageHandlerFixture(t, relativePath, "cover-image")
+
+	authorizationCalls := 0
+	storageAuthorizeDatasetMediaRead = func(
+		_ dbutils.Querier,
+		actor dbutils.RequestActorContext,
+		request dtt_1_row_read.DatasetMediaStorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		authorizationCalls++
+		if actor.UserID != 42 || request.TableUID != "104" || request.Role != "cover" || request.Filename != "cover.png" {
+			t.Fatalf("dataset media authorization input = actor %#v request %#v", actor, request)
+		}
+		return dtt_1_row_read.StorageReadAllowed, nil
+	}
+	storageAuthorizeRead = func(
+		context.Context,
+		dbutils.Querier,
+		*sql.DB,
+		dbutils.RequestActorContext,
+		dtt_1_row_read.StorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		t.Fatal("row-scoped authorizer must not handle dataset media")
+		return dtt_1_row_read.StorageReadNotFound, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/storage/"+relativePath, nil)
+	attachRootHandlerSessionUser(t, req, 42)
+	rr := httptest.NewRecorder()
+	ServeStorage(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.String() != "cover-image" || authorizationCalls != 1 {
+		t.Fatalf("dataset media response = status %d body %q calls %d, want 200 cover-image and one authorization", rr.Code, rr.Body.String(), authorizationCalls)
+	}
+	assertProtectedStorageHeaders(t, rr)
 }
 
 func writeStorageHandlerFixture(t *testing.T, relativePath, content string) {

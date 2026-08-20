@@ -1,61 +1,13 @@
 // card_detail_single_line_helpers.js
-// Renders and sanitizes single-line card detail rows for the card view.
+// Renders single-line card detail rows with filesystem-backed metadata symbols.
 // Bridges metadata-driven label/icon settings and the card detail DOM structure.
-// Exists so the SVG/fallback logic stays testable without importing the whole card renderer.
+// Exists so database-held legacy SVG can never enter the DOM rendering path.
 
-import { getCardDetailIconSvgMarkup } from "./card_detail_icon_builder.js";
+import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
+import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
-const SAFE_CARD_DETAIL_SVG_TAGS = new Set([
-    "svg",
-    "g",
-    "path",
-    "circle",
-    "ellipse",
-    "line",
-    "polyline",
-    "polygon",
-    "rect",
-    "title",
-    "desc",
-]);
-
-const SAFE_CARD_DETAIL_SVG_ATTRIBUTES = new Set([
-    "viewbox",
-    "fill",
-    "fill-rule",
-    "fill-opacity",
-    "stroke",
-    "stroke-width",
-    "stroke-linecap",
-    "stroke-linejoin",
-    "stroke-miterlimit",
-    "stroke-dasharray",
-    "stroke-dashoffset",
-    "stroke-opacity",
-    "opacity",
-    "transform",
-    "cx",
-    "cy",
-    "width",
-    "height",
-    "r",
-    "rx",
-    "ry",
-    "x",
-    "y",
-    "x1",
-    "y1",
-    "x2",
-    "y2",
-    "d",
-    "points",
-    "xmlns",
-    "preserveaspectratio",
-]);
-
 const SINGLE_LINE_CARD_DETAIL_DESKTOP_COLUMNS = 2;
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 const FALLBACK_CARD_DETAIL_ICON_KEY = "info";
 
 export function normalizeClientCardDetailLabelMode(labelMode) {
@@ -64,103 +16,6 @@ export function normalizeClientCardDetailLabelMode(labelMode) {
         return normalized;
     }
     return "label";
-}
-
-function isSafeCardDetailSvgAttribute(attribute) {
-    const attributeName = attribute.name.toLowerCase();
-    const attributeValue = String(attribute.value || "").trim().toLowerCase();
-    const isDangerousValue = attributeValue.includes("javascript:")
-        || attributeValue.includes("data:")
-        || attributeValue.includes("url(");
-
-    return !attributeName.startsWith("on")
-        && attributeName !== "style"
-        && attributeName !== "href"
-        && attributeName !== "xlink:href"
-        && SAFE_CARD_DETAIL_SVG_ATTRIBUTES.has(attributeName)
-        && !isDangerousValue;
-}
-
-function cloneSafeCardDetailSvgElement(sourceElement) {
-    const tagName = sourceElement.tagName.toLowerCase();
-    if (!SAFE_CARD_DETAIL_SVG_TAGS.has(tagName)) {
-        return null;
-    }
-
-    const targetElement = document.createElementNS(SVG_NAMESPACE, tagName);
-    for (const attribute of Array.from(sourceElement.attributes)) {
-        const attributeName = attribute.name.toLowerCase();
-        if (
-            isSafeCardDetailSvgAttribute(attribute)
-            && !(tagName === "svg" && (attributeName === "width" || attributeName === "height"))
-        ) {
-            targetElement.setAttribute(attribute.name, attribute.value);
-        }
-    }
-
-    for (const childNode of Array.from(sourceElement.childNodes)) {
-        if (childNode.nodeType === Node.TEXT_NODE) {
-            if (tagName === "title" || tagName === "desc") {
-                targetElement.appendChild(document.createTextNode(childNode.textContent || ""));
-            }
-            continue;
-        }
-
-        if (childNode.nodeType !== Node.ELEMENT_NODE) {
-            continue;
-        }
-
-        const clonedChild = cloneSafeCardDetailSvgElement(childNode);
-        if (!clonedChild) {
-            return null;
-        }
-        targetElement.appendChild(clonedChild);
-    }
-
-    return targetElement;
-}
-
-function sanitizeCardDetailSvgElement(rootSvgElement) {
-    const sanitizedSvg = cloneSafeCardDetailSvgElement(rootSvgElement);
-    if (!sanitizedSvg || sanitizedSvg.tagName.toLowerCase() !== "svg") {
-        return null;
-    }
-
-    sanitizedSvg.classList.add("card_detail_row_icon_svg");
-    sanitizedSvg.setAttribute("aria-hidden", "true");
-    sanitizedSvg.setAttribute("focusable", "false");
-    return sanitizedSvg;
-}
-
-export function appendSafeCardDetailSvg(container, svgMarkup) {
-    const trimmedSvg = String(svgMarkup || "").trim();
-    if (!trimmedSvg.startsWith("<svg")) {
-        return false;
-    }
-
-    try {
-        const parser = new DOMParser();
-        const svgDocument = parser.parseFromString(trimmedSvg, "image/svg+xml");
-        const svgElement = svgDocument.documentElement;
-        if (!svgElement || svgElement.tagName.toLowerCase() !== "svg") {
-            return false;
-        }
-        if (svgDocument.querySelector("parsererror, script, foreignObject")) {
-            return false;
-        }
-
-        const sanitizedSvg = sanitizeCardDetailSvgElement(
-            document.importNode(svgElement, true)
-        );
-        if (!sanitizedSvg || sanitizedSvg.tagName.toLowerCase() !== "svg") {
-            return false;
-        }
-
-        container.appendChild(sanitizedSvg);
-        return true;
-    } catch {
-        return false;
-    }
 }
 
 function resolveCardDetailMetadata(detailEntry, dataTypes = {}) {
@@ -175,23 +30,20 @@ function resolveCardDetailMetadata(detailEntry, dataTypes = {}) {
 }
 
 export function appendConfiguredCardDetailIcon(container, labelMeta = {}, columnName = "") {
-    const registrySvg = getCardDetailIconSvgMarkup(
+    const resolvedKey = resolveCardDetailIconKey(
         labelMeta?.card_detail_icon_key,
         columnName
     );
-
-    if (registrySvg && appendSafeCardDetailSvg(container, registrySvg)) {
+    if (resolvedKey) {
+        container.appendChild(createSymbolMaskElement(resolvedKey, "card_detail_row_icon_svg"));
         return true;
     }
 
-    if (appendSafeCardDetailSvg(container, labelMeta?.card_detail_icon_svg)) {
-        return true;
-    }
-
-    return appendSafeCardDetailSvg(
-        container,
-        getCardDetailIconSvgMarkup(FALLBACK_CARD_DETAIL_ICON_KEY)
-    );
+    container.appendChild(createSymbolMaskElement(
+        FALLBACK_CARD_DETAIL_ICON_KEY,
+        "card_detail_row_icon_svg"
+    ));
+    return true;
 }
 
 /**

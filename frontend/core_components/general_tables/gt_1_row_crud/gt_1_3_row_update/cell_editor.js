@@ -34,6 +34,7 @@ import {
     resolveDatasetDisplayValue,
     setLocalizedDatasetText,
 } from '../../../table_views/dataset_value_localizer.js';
+import { resolveCellEditorLayout } from './cell_editor_layout_resolver.js';
 
 export async function editCell(cell, columns, data, dataTypes, table_name) {
     let originalContent = cell.textContent;
@@ -313,10 +314,6 @@ async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_nam
 }
 
 async function handleRegularEditing(cell, columns, data, dataTypes, table_name, columnName, originalContent) {
-    const editorWidthPx = resolveCellEditorWidthPx(cell);
-    cell.textContent = '';
-    cell.classList.add('editing');
-
     const dataTypeInfo = dataTypes[columnName];
     const rawDataType = dataTypeInfo && typeof dataTypeInfo === 'object'
         ? dataTypeInfo.data_type
@@ -349,6 +346,16 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
         columnName,
         translate: getTranslationForKey,
     });
+    const inputType = getEditInputType(dataType);
+    const editorValue = multilingualValue?.displayText
+        ?? (originalValue !== null && originalValue !== undefined ? originalValue : '');
+    const editorLayout = resolveCellEditorLayout(cell, {
+        inputType,
+        value: editorValue,
+    });
+
+    cell.textContent = '';
+    cell.classList.add('editing');
 
     if (inlineOptions.length > 0) {
         await handleOptionEditing({
@@ -361,19 +368,25 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             options: inlineOptions,
             rowData,
             rowIndex,
-            editorWidthPx,
+            editorWidthPx: editorLayout.widthPx,
         });
         return;
     }
 
-    const inputType = getEditInputType(dataType);
-
-    const input = document.createElement('input');
-    input.type = inputType;
+    const input = document.createElement(editorLayout.useTextarea ? 'textarea' : 'input');
+    if (input instanceof HTMLInputElement) {
+        input.type = inputType;
+    } else {
+        input.classList.add('table-editor-textarea');
+        input.rows = 1;
+    }
     input.classList.add('table-editor-input');
     input.dataset.testid = 'table-editor';
-    if (editorWidthPx > 0 && inputType !== 'checkbox') {
-        input.style.width = `${Math.floor(editorWidthPx)}px`;
+    if (editorLayout.widthPx > 0 && inputType !== 'checkbox') {
+        input.style.width = `${Math.floor(editorLayout.widthPx)}px`;
+    }
+    if (editorLayout.useTextarea && editorLayout.heightPx > 0) {
+        input.style.height = `${Math.floor(editorLayout.heightPx)}px`;
     }
 
     if (inputType === 'checkbox') {
@@ -381,8 +394,7 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
     } else if (inputType === 'date' || inputType === 'datetime-local') {
         input.value = formatDateForInput(originalValue, inputType, dataType);
     } else {
-        input.value = multilingualValue?.displayText
-            ?? (originalValue !== null && originalValue !== undefined ? originalValue : '');
+        input.value = editorValue;
     }
 
     cell.appendChild(input);
@@ -406,9 +418,11 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             : inputType === 'checkbox' || temporalKind
             ? originalEditorValue
             : originalValue;
-        const valueChanged = hasValueChanged(comparisonValue, newValue, input.type);
-
-        // Debug-tulostus
+        const valueChanged = hasValueChanged(
+            comparisonValue,
+            newValue,
+            editorLayout.useTextarea ? 'text' : input.type
+        );
 
         if (!valueChanged) {
             if (multilingualValue) {
@@ -470,7 +484,8 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
     });
 
     input.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
+        if (event.key === 'Enter' && (!editorLayout.useTextarea || event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
             input.blur();
         } else if (event.key === 'Escape') {
             if (input.type === 'checkbox') {
@@ -481,20 +496,6 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             input.blur();
         }
     });
-}
-
-function resolveCellEditorWidthPx(cell) {
-    if (!(cell instanceof HTMLElement)) {
-        return 0;
-    }
-
-    const cellRect = cell.getBoundingClientRect();
-    const style = getComputedStyle(cell);
-    const horizontalPadding =
-        (Number.parseFloat(style.paddingLeft) || 0)
-        + (Number.parseFloat(style.paddingRight) || 0);
-    const contentWidthPx = cellRect.width - horizontalPadding;
-    return Number.isFinite(contentWidthPx) && contentWidthPx > 0 ? contentWidthPx : 0;
 }
 
 async function handleOptionEditing({

@@ -69,6 +69,7 @@ describe('stable_api_inventory', () => {
             'saveDatasetAliasManagement',
             'getDatasetHeaderConfig',
             'saveDatasetHeaderConfig',
+            'adminSymbols',
             'adminUserAuthentication',
             'listColumnViewPresets',
             'checkJsonColumns',
@@ -88,6 +89,14 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/admin/version-info',
             accessProfile: 'admin',
             methods: ['GET'],
+            methodSource: 'explicit_stable_contract',
+        });
+
+        expect(getStableCandidateRouteDescriptor('adminSymbols')).toMatchObject({
+            handlerName: 'symbol_registry.AdminHandler',
+            backendPath: '/api/admin/symbols',
+            accessProfile: 'admin',
+            methods: ['GET', 'POST'],
             methodSource: 'explicit_stable_contract',
         });
 

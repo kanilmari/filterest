@@ -28,6 +28,7 @@ vi.mock('./table_cell_event_handler.js', () => ({
 vi.mock('./row_selection_handler.js', () => ({
     toggle_select_all: vi.fn(),
     update_row_selection: vi.fn(),
+    update_row_selection_from_click: vi.fn(),
 }));
 
 vi.mock('./column_resize_handler.js', () => ({

@@ -39,7 +39,7 @@ function addHeaderElement(
     columnMeta = {}
 ) {
     const headerDiv = document.createElement("div");
-    headerDiv.classList.add("card_header", "card_header--with-dataset-icon");
+    headerDiv.classList.add("card_header");
     headerDiv.dataset.testid = 'card-item-header';
 
     const kvElem = createKeyValueElement(
@@ -54,9 +54,11 @@ function addHeaderElement(
 
     // Header needs the value wrapper directly so title width is governed by
     // the header container, not by an extra generic card_pair layer.
-    headerDiv.appendChild(
-        createDatasetIconElement(table_name, "card_header_dataset_icon")
-    );
+    const datasetIcon = createDatasetIconElement(table_name, "card_header_dataset_icon");
+    if (datasetIcon) {
+        headerDiv.classList.add("card_header--with-dataset-icon");
+        headerDiv.appendChild(datasetIcon);
+    }
     headerDiv.appendChild(kvElem);
     headerDiv.title = val_str;
 

@@ -9,6 +9,7 @@ import { buildGeometryField } from "./row_geometry_builder.js";
 import { buildFieldTestId, getInputType } from "./row_input_builder_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
+import { buildMultilingualTextareaGroup } from "./row_multilingual_input_builder.js";
 
 /** @deprecated Use getInputType from row_input_builder_helpers.js */
 export const get_input_type = getInputType;
@@ -86,6 +87,19 @@ export function buildRegularField(form, table_name, column, modal_form_state) {
     label.style.margin = "10px 0 5px";
 
     const data_type_lower = column.data_type.toLowerCase();
+
+    if (column.is_multilingual === true) {
+        buildMultilingualTextareaGroup(form, {
+            tableName: table_name,
+            column,
+            initialValue: modal_form_state[column.column_name] || "",
+            fieldName: column.column_name,
+            onValueChange: (value) => {
+                modal_form_state[column.column_name] = value;
+            },
+        });
+        return;
+    }
 
     // Esimerkki: geometry/position
     if (

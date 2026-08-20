@@ -51,6 +51,25 @@ test.describe('E10 — Site identity and menu contract', () => {
     await expect(hero.locator('.morphing-title__dataset-name')).not.toHaveText('');
     await expect(page.locator('.navbar-site-identity')).toHaveCount(0);
 
+    const heroHeader = page
+      .locator('.tab_parts_container:visible .morphing-header:visible')
+      .first();
+    const heroGeometry = await heroHeader.evaluate((headerElement) => {
+      const header = headerElement.getBoundingClientRect();
+      const content = headerElement.parentElement;
+      const searchPanel = content?.querySelector<HTMLElement>('.dataset-search-panel');
+      return {
+        declaredMaxWidth: window.getComputedStyle(headerElement).maxWidth,
+        headerWidth: header.width,
+        searchWidth: searchPanel?.getBoundingClientRect().width || 0,
+      };
+    });
+    expect(heroGeometry.declaredMaxWidth).toBe('1200px');
+    expect(heroGeometry.headerWidth).toBeGreaterThan(550);
+    expect(heroGeometry.headerWidth).toBeLessThanOrEqual(1201);
+    expect(heroGeometry.searchWidth).toBeGreaterThan(0);
+    expect(heroGeometry.searchWidth).toBeLessThanOrEqual(551);
+
     const sectionHeadings = {
       filters: { key: 'filterbar_filter_results', label: 'Filter results' },
       tools: { key: 'filterbar_add_manage_content', label: 'Add & manage content' },

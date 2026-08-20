@@ -536,10 +536,12 @@ export async function generate_table(
             searchButton = null;
         }
 
-        // Results count is now rendered inside the filterbar (create_filter_bar.js)
+        // Build count mirrors before filling them. The inline hero intentionally
+        // has no primary count element, so filling first left the new mirror empty
+        // until infinite scroll happened to update it later.
+        renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
         seedInfiniteScrollRowCount(dataset_name, rowCount);
-        renderActiveFilters(dataset_name);
         syncFilterBarVisibilityState(dataset_name);
         initializeInfiniteScroll(
             dataset_name,

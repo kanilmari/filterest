@@ -26,6 +26,8 @@ type TabMetrics = {
   topBarBoxShadow: string | null;
   topBarBorderBottomWidth: string | null;
   topBarBorderBottomStyle: string | null;
+  topBarBorderRightWidth: string | null;
+  topBarBorderRightStyle: string | null;
   tabPresentation: string | null;
   outlineD: string | null;
   outlineFill: string | null;
@@ -74,6 +76,8 @@ async function readTabMetrics(page: Page, testId: string): Promise<TabMetrics> {
       topBarBoxShadow: topBarStyle?.boxShadow ?? null,
       topBarBorderBottomWidth: topBarStyle?.borderBottomWidth ?? null,
       topBarBorderBottomStyle: topBarStyle?.borderBottomStyle ?? null,
+      topBarBorderRightWidth: topBarStyle?.borderRightWidth ?? null,
+      topBarBorderRightStyle: topBarStyle?.borderRightStyle ?? null,
       tabPresentation: tab.dataset.tabPresentation ?? null,
       outlineD: outline?.getAttribute('d') ?? null,
       outlineFill: outline?.getAttribute('fill') ?? null,
@@ -127,6 +131,8 @@ test.describe('G4 — SVG Tab Alignment', () => {
     expect(tableMetrics.navbarBoxShadow).toContain('inset');
     expect(tableMetrics.topBarBorderBottomWidth).toBe('2px');
     expect(tableMetrics.topBarBorderBottomStyle).toBe('solid');
+    expect(tableMetrics.topBarBorderRightWidth).toBe('2px');
+    expect(tableMetrics.topBarBorderRightStyle).toBe('solid');
 
     await showTabPresentationForView(page, 'app_service_catalog', 'normal');
     const listMetrics = await readTabMetrics(page, 'tab-app_service_catalog');

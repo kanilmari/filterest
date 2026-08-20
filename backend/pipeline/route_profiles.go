@@ -73,6 +73,8 @@ var AdminProfile = RouteProfile{
 
 // RouteProfiles is the single source of truth for per-route pipeline configuration.
 var RouteProfiles = map[string]RouteProfile{
+	"symbol_registry.AssetHandler": PublicProfile,
+	"symbol_registry.AdminHandler": AdminProfile,
 
 	// ── Public routes (no auth required) ──────────────────────
 

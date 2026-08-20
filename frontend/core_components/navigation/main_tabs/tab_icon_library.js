@@ -1,14 +1,14 @@
 // tab_icon_library.js
-// Curated registry of Material Symbols SVG path data keyed by short icon names.
-// Bridges the icon_key column in system_db_tables with renderable SVG path strings.
-// Exists to centralise icon definitions so every tab renderer shares one authoritative source.
+// Legacy inline Material Symbols paths retained for static authentication controls.
+// Dataset and field icon metadata now resolves through frontend/icons/symbols on disk.
+// Exists only for established non-metadata controls that still render inline SVG paths.
 
 // ============================================================
 //  ICON REGISTRY
 //  Keys are short, descriptive names. Values are SVG path `d`
 //  strings from Google Material Symbols (Outlined, 960×960).
-//  To add a new icon: https://fonts.google.com/icons
-//  Copy the `<path d="…">` content and add it below.
+//  Do not add database-selectable symbols here. Add reviewed SVG files to
+//  frontend/icons/symbols and assign their safe key through the Symbols tool.
 // ============================================================
 
 const ICON_PATHS = {

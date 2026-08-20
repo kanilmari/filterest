@@ -145,6 +145,14 @@
     box-sizing: border-box;
 }
 
+.cell.editing .table-editor-textarea {
+    min-height: 3lh;
+    resize: vertical;
+    overflow: auto;
+    font: inherit;
+    line-height: inherit;
+}
+
 /* Pieni valikko (context menu -tyyppinen) */
 .selection-menu {
     position: absolute;

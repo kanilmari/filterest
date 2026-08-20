@@ -3,11 +3,12 @@ import { describe, test, expect } from 'vitest';
 // Only the pure parse/build helpers are safe to unit test.
 // We import the module dynamically after ensuring jsdom globals are ready.
 
-let parseTableQueryString, buildTableQueryString, normalizePath, updateURL;
+let parseDatasetParamsFromSearch, parseTableQueryString, buildTableQueryString, normalizePath, updateURL;
 
 // Dynamic import to let jsdom setup complete before side effects fire
 const mod = await import('./query_params.js');
 parseTableQueryString = mod.parseTableQueryString;
+parseDatasetParamsFromSearch = mod.parseDatasetParamsFromSearch;
 buildTableQueryString = mod.buildTableQueryString;
 normalizePath = mod.normalizePath;
 updateURL = mod.updateURL;
@@ -38,9 +39,29 @@ describe('parseTableQueryString', () => {
     expect(result.view).toBe('card');
   });
 
+  test('keeps auth-shell navigation markers out of dataset filters while preserving explicit search', () => {
+    const result = parseTableQueryString(
+      '?login-entry=1&register-entry=1&redirect=%2Freports&search=ferry&status=active',
+    );
+
+    expect(result.search).toBe('ferry');
+    expect(result.filters).toEqual({ status: 'active' });
+  });
+
   test('handles non-numeric offset gracefully', () => {
     const result = parseTableQueryString('?offset=abc');
     expect(result.offset).toBe(0);
+  });
+});
+
+describe('parseDatasetParamsFromSearch', () => {
+  test('does not persist transient auth-shell parameters in dataset URL state', () => {
+    expect(parseDatasetParamsFromSearch(
+      '?login-entry=1&redirect=%2Ftravel_info&search=harbour&status=active',
+    )).toEqual({
+      search: 'harbour',
+      status: 'active',
+    });
   });
 });
 

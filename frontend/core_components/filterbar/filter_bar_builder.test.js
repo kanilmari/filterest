@@ -55,18 +55,18 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(heroButton).toBeTruthy();
     });
 
-    test('replaces the project logo grid with the dataset svg icon in inline hero', async () => {
-        const { getTabIconPath } = await import('../navigation/main_tabs/tab_icon_library.js');
+    test('replaces the project logo grid with the dataset symbol asset in inline hero', async () => {
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
 
         const inlineHero = document.querySelector('.filterbar-inline-hero');
         const heroIcon = inlineHero?.querySelector('.filterbar-hero-dataset-icon');
-        const heroIconPath = heroIcon?.querySelector('path');
 
         expect(inlineHero?.querySelector('.logo-letter-backgrounds-container')).toBeNull();
-        expect(heroIcon?.getAttribute('viewBox')).toBe('0 -960 960 960');
-        expect(heroIconPath?.getAttribute('d')).toBe(getTabIconPath('task'));
+        expect(heroIcon?.dataset.symbolKey).toBe('task');
+        expect(heroIcon?.style.getPropertyValue('--metadata-symbol-url'))
+            .toContain('/symbol-assets/task.svg');
+        expect(heroIcon?.querySelector('svg')).toBeNull();
 		expect(inlineHero?.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
 		expect(inlineHero?.style.getPropertyValue('--dataset-cover-image'))
 			.toContain('/storage/104/dataset_media/cover/original/cover.webp');
@@ -84,7 +84,7 @@ describe('create_filter_bar inline hero mounting', () => {
             .toBe('demo_front_page');
     });
 
-    test('uses the users tab icon fallback for system_users hero', async () => {
+    test('does not add an automatic icon when the dataset has no icon_key', async () => {
         document.body.insertAdjacentHTML('beforeend', `
             <div id="system_users_container" class="content_div">
                 <div id="system_users_tab_parts_container" class="tab_parts_container">
@@ -96,17 +96,13 @@ describe('create_filter_bar inline hero mounting', () => {
                 </div>
             </div>
         `);
-        const { getTabIconPath } = await import('../navigation/main_tabs/tab_icon_library.js');
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         create_filter_bar('system_users', 'system_users_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
 
         const heroIcon = document.querySelector(
             '[data-filterbar-inline-hero-for="system_users"] .filterbar-hero-dataset-icon'
         );
-        const heroIconPath = heroIcon?.querySelector('path')?.getAttribute('d');
-
-        expect(heroIcon?.classList.contains('filterbar-hero-dataset-icon--users')).toBe(true);
-        expect(heroIconPath).toBe(getTabIconPath('group_filled'));
+        expect(heroIcon).toBeNull();
     });
 
     test('keeps translated dataset title key when display_name only repeats the technical table name', async () => {

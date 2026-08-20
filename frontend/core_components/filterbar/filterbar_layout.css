@@ -16,7 +16,7 @@
  *
  * WIDTH VARIABLES (variables.css):
  * --filterbar-hero-title-max-width    → .morphing-header (wide state)
- * --filterbar-hero-content-max-width  → .filter-content-inner (wide state)
+ * --filterbar-hero-content-max-width  → non-title hero content (wide state)
  */
 
 /* ============================================

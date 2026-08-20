@@ -1,0 +1,13 @@
+/* symbol_asset_resolver.css
+ * Renders filesystem-backed SVGs as theme-colored masks shared by metadata icons.
+ * Bridges symbol URL variables with dataset, navigation, and card-detail dimensions.
+ * Exists so light and dark themes use one safe icon rendering primitive. */
+
+.metadata-symbol-icon {
+    display: inline-block;
+    background-color: currentcolor;
+    mask-image: var(--metadata-symbol-url);
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+}

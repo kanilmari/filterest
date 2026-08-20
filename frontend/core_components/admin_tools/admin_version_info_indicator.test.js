@@ -72,7 +72,8 @@ describe("admin version info indicator", () => {
 
         expect(fetchAdminVersionInfoMock).toHaveBeenCalledWith({ suppressAuthRedirect: true });
         expect(indicator.tagName).toBe("BUTTON");
-        expect(indicator.querySelector("svg")).toBeTruthy();
+        expect(indicator.querySelector('[data-symbol-key="info"]')).toBeTruthy();
+        expect(indicator.querySelector("svg")).toBeNull();
         expect(indicator.title).toContain("Filterest v. 8.27.99");
         expect(indicator.title).toContain("Julkaisukanava Vakaa");
         expect(indicator.title).toContain("Julkaisun tarkoitus Julkiseksi tarkoitettu");

@@ -169,6 +169,31 @@ describe('generate_table', () => {
         expect(initializeInfiniteScrollMock).toHaveBeenCalledWith('demo_dataset', 'vertical');
     });
 
+    test('creates the result-count mirror before filling the initial dataset count', async () => {
+        const events = [];
+        renderActiveFiltersMock.mockImplementationOnce(() => {
+            events.push('create-count-mirror');
+        });
+        setResultsCountMock.mockImplementationOnce(() => {
+            events.push('fill-count');
+        });
+        localStorage.setItem('demo_dataset_view', 'card');
+
+        const { generate_table } = await import('./dataset_view_printer.js');
+        await generate_table(
+            'demo_dataset',
+            ['id'],
+            [{ id: 1 }],
+            { id: 'INTEGER' },
+            1,
+            false,
+            null
+        );
+
+        expect(events).toEqual(['create-count-mirror', 'fill-count']);
+        expect(setResultsCountMock).toHaveBeenCalledWith('demo_dataset', 1);
+    });
+
     test('falls back from map view when the dataset has no map-capable fields', async () => {
         datasetSupportsMapViewMock.mockReturnValueOnce(false);
         localStorage.setItem('demo_dataset_view', 'map');

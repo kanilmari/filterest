@@ -48,59 +48,61 @@ type systemHealthResponse struct {
 }
 
 type systemReadyResponse struct {
-	Ready                bool     `json:"ready"`
-	Status               string   `json:"status"`
-	Reasons              []string `json:"reasons"`
-	InstanceID           string   `json:"instance_id"`
-	ProductName          string   `json:"product_name"`
-	AppVersion           string   `json:"app_version"`
-	AppVersionFile       string   `json:"app_version_file"`
-	ReleaseChannel       string   `json:"release_channel"`
-	ArtifactPurpose      string   `json:"artifact_purpose"`
-	ArtifactType         string   `json:"artifact_type"`
-	ReleaseMaturity      string   `json:"release_maturity"`
-	IdentityVerification string   `json:"identity_verification"`
-	BuildID              string   `json:"build_id,omitempty"`
-	PublicDistribution   bool     `json:"public_distribution"`
-	RequiredDBVersion    string   `json:"required_db_version"`
-	DBVersion            string   `json:"db_version"`
-	DBCompatible         bool     `json:"db_compatible"`
-	AcceptingNewWork     bool     `json:"accepting_new_work"`
-	ActiveRequests       int      `json:"active_requests"`
-	ActiveLongJobs       int      `json:"active_long_jobs"`
-	DrainSupported       bool     `json:"drain_supported"`
+	Ready                   bool     `json:"ready"`
+	Status                  string   `json:"status"`
+	Reasons                 []string `json:"reasons"`
+	InstanceID              string   `json:"instance_id"`
+	InstallationEnvironment string   `json:"installation_environment"`
+	ProductName             string   `json:"product_name"`
+	AppVersion              string   `json:"app_version"`
+	AppVersionFile          string   `json:"app_version_file"`
+	ReleaseChannel          string   `json:"release_channel"`
+	ArtifactPurpose         string   `json:"artifact_purpose"`
+	ArtifactType            string   `json:"artifact_type"`
+	ReleaseMaturity         string   `json:"release_maturity"`
+	IdentityVerification    string   `json:"identity_verification"`
+	BuildID                 string   `json:"build_id,omitempty"`
+	PublicDistribution      bool     `json:"public_distribution"`
+	RequiredDBVersion       string   `json:"required_db_version"`
+	DBVersion               string   `json:"db_version"`
+	DBCompatible            bool     `json:"db_compatible"`
+	AcceptingNewWork        bool     `json:"accepting_new_work"`
+	ActiveRequests          int      `json:"active_requests"`
+	ActiveLongJobs          int      `json:"active_long_jobs"`
+	DrainSupported          bool     `json:"drain_supported"`
 }
 
 type systemInstanceStatusResponse struct {
-	Ready                 bool                                `json:"ready"`
-	Status                string                              `json:"status"`
-	Reasons               []string                            `json:"reasons"`
-	InstanceID            string                              `json:"instance_id"`
-	DesiredStateSeenByApp string                              `json:"desired_state_seen_by_app"`
-	ProductName           string                              `json:"product_name"`
-	AppVersion            string                              `json:"app_version"`
-	AppVersionFile        string                              `json:"app_version_file"`
-	ReleaseChannel        string                              `json:"release_channel"`
-	ArtifactPurpose       string                              `json:"artifact_purpose"`
-	ArtifactType          string                              `json:"artifact_type"`
-	ReleaseMaturity       string                              `json:"release_maturity"`
-	IdentityVerification  string                              `json:"identity_verification"`
-	BuildID               string                              `json:"build_id,omitempty"`
-	PublicDistribution    bool                                `json:"public_distribution"`
-	RequiredDBVersion     string                              `json:"required_db_version"`
-	DBVersion             string                              `json:"db_version"`
-	DBCompatible          bool                                `json:"db_compatible"`
-	AcceptingNewWork      bool                                `json:"accepting_new_work"`
-	ActiveRequests        int                                 `json:"active_requests"`
-	ActiveLongJobs        int                                 `json:"active_long_jobs"`
-	BackgroundWorkerRole  string                              `json:"background_worker_role"`
-	StorageRoot           string                              `json:"storage_root"`
-	DatabasePools         []backend.DatabasePoolRuntimeStatus `json:"database_pools"`
-	DatabasePoolHeadroom  backend.DatabasePoolHeadroomStatus  `json:"database_pool_headroom"`
-	DrainSupported        bool                                `json:"drain_supported"`
-	DrainState            string                              `json:"drain_state"`
-	ProcessUptimeSeconds  int64                               `json:"process_uptime_seconds"`
-	Time                  string                              `json:"time"`
+	Ready                   bool                                `json:"ready"`
+	Status                  string                              `json:"status"`
+	Reasons                 []string                            `json:"reasons"`
+	InstanceID              string                              `json:"instance_id"`
+	InstallationEnvironment string                              `json:"installation_environment"`
+	DesiredStateSeenByApp   string                              `json:"desired_state_seen_by_app"`
+	ProductName             string                              `json:"product_name"`
+	AppVersion              string                              `json:"app_version"`
+	AppVersionFile          string                              `json:"app_version_file"`
+	ReleaseChannel          string                              `json:"release_channel"`
+	ArtifactPurpose         string                              `json:"artifact_purpose"`
+	ArtifactType            string                              `json:"artifact_type"`
+	ReleaseMaturity         string                              `json:"release_maturity"`
+	IdentityVerification    string                              `json:"identity_verification"`
+	BuildID                 string                              `json:"build_id,omitempty"`
+	PublicDistribution      bool                                `json:"public_distribution"`
+	RequiredDBVersion       string                              `json:"required_db_version"`
+	DBVersion               string                              `json:"db_version"`
+	DBCompatible            bool                                `json:"db_compatible"`
+	AcceptingNewWork        bool                                `json:"accepting_new_work"`
+	ActiveRequests          int                                 `json:"active_requests"`
+	ActiveLongJobs          int                                 `json:"active_long_jobs"`
+	BackgroundWorkerRole    string                              `json:"background_worker_role"`
+	StorageRoot             string                              `json:"storage_root"`
+	DatabasePools           []backend.DatabasePoolRuntimeStatus `json:"database_pools"`
+	DatabasePoolHeadroom    backend.DatabasePoolHeadroomStatus  `json:"database_pool_headroom"`
+	DrainSupported          bool                                `json:"drain_supported"`
+	DrainState              string                              `json:"drain_state"`
+	ProcessUptimeSeconds    int64                               `json:"process_uptime_seconds"`
+	Time                    string                              `json:"time"`
 }
 
 type systemDrainRequest struct {
@@ -210,35 +212,36 @@ func systemInstanceStatusHandler(w http.ResponseWriter, r *http.Request) {
 	databasePools, databasePoolHeadroom := backend.CurrentDatabasePoolRuntimeStatus()
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, systemInstanceStatusResponse{
-		Ready:                 readiness.Ready,
-		Status:                readiness.Status,
-		Reasons:               readiness.Reasons,
-		InstanceID:            readiness.InstanceID,
-		DesiredStateSeenByApp: currentSystemDesiredState(),
-		ProductName:           readiness.ProductName,
-		AppVersion:            readiness.AppVersion,
-		AppVersionFile:        readiness.AppVersionFile,
-		ReleaseChannel:        readiness.ReleaseChannel,
-		ArtifactPurpose:       readiness.ArtifactPurpose,
-		ArtifactType:          readiness.ArtifactType,
-		ReleaseMaturity:       readiness.ReleaseMaturity,
-		IdentityVerification:  readiness.IdentityVerification,
-		BuildID:               readiness.BuildID,
-		PublicDistribution:    readiness.PublicDistribution,
-		RequiredDBVersion:     readiness.RequiredDBVersion,
-		DBVersion:             readiness.DBVersion,
-		DBCompatible:          readiness.DBCompatible,
-		AcceptingNewWork:      readiness.AcceptingNewWork,
-		ActiveRequests:        currentSystemActiveRequests(),
-		ActiveLongJobs:        readiness.ActiveLongJobs,
-		BackgroundWorkerRole:  currentSystemBackgroundWorkerRole(),
-		StorageRoot:           currentSystemStorageRoot(),
-		DatabasePools:         databasePools,
-		DatabasePoolHeadroom:  databasePoolHeadroom,
-		DrainSupported:        readiness.DrainSupported,
-		DrainState:            drainState,
-		ProcessUptimeSeconds:  int64(now.Sub(systemProcessStartedAt).Seconds()),
-		Time:                  now.Format(time.RFC3339),
+		Ready:                   readiness.Ready,
+		Status:                  readiness.Status,
+		Reasons:                 readiness.Reasons,
+		InstanceID:              readiness.InstanceID,
+		InstallationEnvironment: readiness.InstallationEnvironment,
+		DesiredStateSeenByApp:   currentSystemDesiredState(),
+		ProductName:             readiness.ProductName,
+		AppVersion:              readiness.AppVersion,
+		AppVersionFile:          readiness.AppVersionFile,
+		ReleaseChannel:          readiness.ReleaseChannel,
+		ArtifactPurpose:         readiness.ArtifactPurpose,
+		ArtifactType:            readiness.ArtifactType,
+		ReleaseMaturity:         readiness.ReleaseMaturity,
+		IdentityVerification:    readiness.IdentityVerification,
+		BuildID:                 readiness.BuildID,
+		PublicDistribution:      readiness.PublicDistribution,
+		RequiredDBVersion:       readiness.RequiredDBVersion,
+		DBVersion:               readiness.DBVersion,
+		DBCompatible:            readiness.DBCompatible,
+		AcceptingNewWork:        readiness.AcceptingNewWork,
+		ActiveRequests:          currentSystemActiveRequests(),
+		ActiveLongJobs:          readiness.ActiveLongJobs,
+		BackgroundWorkerRole:    currentSystemBackgroundWorkerRole(),
+		StorageRoot:             currentSystemStorageRoot(),
+		DatabasePools:           databasePools,
+		DatabasePoolHeadroom:    databasePoolHeadroom,
+		DrainSupported:          readiness.DrainSupported,
+		DrainState:              drainState,
+		ProcessUptimeSeconds:    int64(now.Sub(systemProcessStartedAt).Seconds()),
+		Time:                    now.Format(time.RFC3339),
 	})
 }
 
@@ -282,14 +285,15 @@ func buildSystemReadinessResponse() systemReadyResponse {
 	desiredState := currentSystemDesiredState()
 	acceptingNewWork := systemDesiredStateAcceptsNewWork(desiredState)
 	response := systemReadyResponse{
-		Ready:            true,
-		Status:           "ready",
-		Reasons:          []string{},
-		InstanceID:       currentSystemInstanceID(),
-		AcceptingNewWork: acceptingNewWork,
-		ActiveRequests:   currentSystemActiveRequests(),
-		ActiveLongJobs:   0,
-		DrainSupported:   true,
+		Ready:                   true,
+		Status:                  "ready",
+		Reasons:                 []string{},
+		InstanceID:              currentSystemInstanceID(),
+		InstallationEnvironment: currentSystemInstallationEnvironment(),
+		AcceptingNewWork:        acceptingNewWork,
+		ActiveRequests:          currentSystemActiveRequests(),
+		ActiveLongJobs:          0,
+		DrainSupported:          true,
 	}
 	if !acceptingNewWork {
 		response.addNotReadyReason(systemNotReadyReasonForDesiredState(desiredState))

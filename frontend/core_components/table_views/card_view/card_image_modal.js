@@ -11,8 +11,18 @@ import {
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 const IMAGE_MODAL_CONTROL_IDLE_DELAY_MS = 1200;
+const IMAGE_MODAL_TRANSIENT_CONTROL_SELECTOR = [
+    ".modal_close_button",
+    ".row_article_image_first_arrow",
+    ".row_article_row_navigation_button",
+].join(", ");
 const imageModalControlTimers = new WeakMap();
 const imageModalFocusHandlers = new WeakMap();
+
+function isTransientImageControl(target) {
+    return target instanceof Element
+        && Boolean(target.closest(IMAGE_MODAL_TRANSIENT_CONTROL_SELECTOR));
+}
 
 function clearImageModalControlTimer(modalOverlay) {
     const existingTimer = imageModalControlTimers.get(modalOverlay);
@@ -22,6 +32,11 @@ function clearImageModalControlTimer(modalOverlay) {
     }
 }
 
+/**
+ * Shows image controls after pointer or focus activity and pauses their idle
+ * timer while the pointer remains over an actionable control. This bridges the
+ * shared modal overlay with image-first controls so hovered actions stay usable.
+ */
 function installTransientImageControls(modalOverlay) {
     const hideControls = () => {
         clearImageModalControlTimer(modalOverlay);
@@ -34,18 +49,36 @@ function installTransientImageControls(modalOverlay) {
             window.setTimeout(hideControls, IMAGE_MODAL_CONTROL_IDLE_DELAY_MS)
         );
     };
-    const revealControls = () => {
+    const revealControls = ({ keepVisible = false } = {}) => {
         modalOverlay.classList.add("image-modal-controls-active");
-        scheduleControlsHide();
+        if (keepVisible) {
+            clearImageModalControlTimer(modalOverlay);
+        } else {
+            scheduleControlsHide();
+        }
     };
-    modalOverlay.onpointermove = revealControls;
+    modalOverlay.onpointermove = (event) => {
+        revealControls({ keepVisible: isTransientImageControl(event.target) });
+    };
+    modalOverlay.onpointerover = (event) => {
+        if (isTransientImageControl(event.target)) {
+            revealControls({ keepVisible: true });
+        }
+    };
+    modalOverlay.onpointerout = (event) => {
+        if (isTransientImageControl(event.target)
+            && !isTransientImageControl(event.relatedTarget)) {
+            scheduleControlsHide();
+        }
+    };
     modalOverlay.onpointerleave = scheduleControlsHide;
     const previousFocusHandler = imageModalFocusHandlers.get(modalOverlay);
     if (previousFocusHandler) {
         modalOverlay.removeEventListener("focusin", previousFocusHandler);
     }
-    modalOverlay.addEventListener("focusin", revealControls);
-    imageModalFocusHandlers.set(modalOverlay, revealControls);
+    const focusHandler = () => revealControls();
+    modalOverlay.addEventListener("focusin", focusHandler);
+    imageModalFocusHandlers.set(modalOverlay, focusHandler);
     revealControls();
 }
 

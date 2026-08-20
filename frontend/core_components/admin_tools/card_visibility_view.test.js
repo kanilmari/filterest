@@ -175,7 +175,9 @@ describe('card_visibility_view', () => {
         fetchCardVisibilityMock.mockResolvedValue({
             card_details_layout: 'conditional_multiline',
             card_style_variant: 'standard',
-            columns: [buildColumn()],
+            columns: [buildColumn({
+                card_detail_icon_svg: '<svg viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg>',
+            })],
         });
         saveCardVisibilityMock.mockResolvedValue({ status: 'ok', message: 'Saved via wrapper' });
         const { generate_card_visibility_form } = await loadModule();
@@ -236,13 +238,8 @@ describe('card_visibility_view', () => {
         iconKeySelect.dispatchEvent(new Event('change', { bubbles: true }));
         await flushAsyncWork();
 
-        const iconSvgInput = /** @type {HTMLInputElement | null} */ (
-            container.querySelector('tbody tr input[type="text"]')
-        );
-        expect(iconSvgInput).not.toBeNull();
-        iconSvgInput.value = '<svg viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg>';
-        iconSvgInput.dispatchEvent(new Event('input', { bubbles: true }));
-        await flushAsyncWork();
+        expect(container.textContent).not.toContain('card_detail_icon_svg');
+        expect(container.querySelector('tbody tr input[type="text"]')).toBeNull();
 
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"show_key_on_card":false');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_element":"details_link"');
