@@ -110,11 +110,11 @@ PASS
 - `public.riskienhallinta_tiketit_relation`: 1
 - `public.system_about`: 1
 - `public.system_column_details`: 47
-- `public.system_config`: 10
+- `public.system_config`: 11
 - `public.system_db_tables`: 46
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
-- `public.system_functions`: 24
+- `public.system_functions`: 25
 - `public.system_group_table_func_rights`: 24
 - `public.system_lang_key_translations`: 55
 - `public.system_lang_keys`: 396

@@ -253,6 +253,15 @@ export async function saveAdminSymbolAssignment(request) {
 }
 
 /**
+ * Returns the explicit administrator-only UI feature-flag allowlist.
+ *
+ * @returns {Promise<{ view_admin_cover_image_test_palette: boolean }>}
+ */
+export async function fetchAdminUIFeatureFlags() {
+    return stable_candidate_endpoint_router('adminUiFeatureFlags');
+}
+
+/**
  * fetchChildTabConfig returns the legacy-named child-tab editor payload for one parent table.
  * The payload drives reverse-FK "referring tab" UI copy even though the route name stays stable.
  *

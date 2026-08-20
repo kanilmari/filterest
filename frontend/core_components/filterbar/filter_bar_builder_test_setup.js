@@ -8,6 +8,7 @@ const mockUiConfig = vi.hoisted(() => ({
     favefoxFilterLayoutMode: 'inline-open',
     filterbarPanelMode: 'inline-hero',
 }));
+const mockMountDatasetCoverTestPalette = vi.hoisted(() => vi.fn(async () => null));
 
 vi.mock('../admin_tools/admin_button_builder.js', () => ({
     appendChatUIIfAllowed: vi.fn(),
@@ -33,6 +34,10 @@ vi.mock('../admin_tools/dataset_header_config_modal.js', () => ({
         button.dataset.testid = 'dataset-header-config-hero-button';
         return button;
     }),
+}));
+
+vi.mock('../admin_tools/dataset_cover_test_palette.js', () => ({
+    mountDatasetCoverTestPalette: mockMountDatasetCoverTestPalette,
 }));
 
 vi.mock('./text_search/create_text_search_panel.js', () => ({

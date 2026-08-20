@@ -66,6 +66,7 @@ import { buildFilterbarDisclosureSection } from "./filterbar_section_heading_bui
 import { setupFilterbarSectionOrdering } from "./filterbar_section_order_handler.js";
 import { buildAdminVersionInfoIndicator } from "../admin_tools/admin_version_info_indicator.js";
 import { createDatasetHeaderConfigHeroButton } from "../admin_tools/dataset_header_config_modal.js";
+import { mountDatasetCoverTestPalette } from "../admin_tools/dataset_cover_test_palette.js";
 
 /* ===========================================================
  *  Yleiset muuttujat ja apurit
@@ -565,7 +566,22 @@ function createInlineHeroContent(tableName, {
     heroInner.appendChild(heroSortRow);
 
     inlineHeroHost.appendChild(heroInner);
+    let paletteControl = null;
+    let isDestroyed = false;
+    if (coverImagePath) {
+        void mountDatasetCoverTestPalette(inlineHeroHost, tableName)
+            .then((control) => {
+                if (isDestroyed) {
+                    control?.destroy?.();
+                    return;
+                }
+                paletteControl = control;
+            })
+            .catch(() => null);
+    }
     inlineHeroHost.destroy = () => {
+        isDestroyed = true;
+        paletteControl?.destroy?.();
         searchPanel.destroy?.();
     };
     return inlineHeroHost;

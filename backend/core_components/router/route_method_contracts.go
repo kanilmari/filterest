@@ -44,6 +44,7 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"system_table_tools.GetCardVisibilityHandler":          {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.UpdateCardVisibilityHandler":       {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.UpdateColumnMultilingualHandler":   {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.GetAdminUIFeatureFlagsHandler":     {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetDatasetHeaderConfigHandler":     {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.SaveDatasetHeaderConfigHandler":    {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetChildTabConfigHandler":          {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},

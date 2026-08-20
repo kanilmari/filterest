@@ -1,8 +1,8 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "8.36.2",
-  "db_version": "9.2.2",
+  "app_version": "8.36.3",
+  "db_version": "9.2.3",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -101,11 +101,11 @@
     "public.riskienhallinta_tiketit_relation": 1,
     "public.system_about": 1,
     "public.system_column_details": 47,
-    "public.system_config": 10,
+    "public.system_config": 11,
     "public.system_db_tables": 46,
     "public.system_db_version": 1,
     "public.system_foreign_key_relations_1_m": 4,
-    "public.system_functions": 24,
+    "public.system_functions": 25,
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_translations": 55,
     "public.system_lang_keys": 396,
@@ -122,7 +122,7 @@
       "sha256": "cc52f26861b41645937b84b3a0833a424b61cd16beaf21a44034d2568b81d279"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "e4302d6fa6040a3954f34a8ec616d53326337ccb37985d3c9508b5f9f52574ad"
+      "sha256": "65215d4b12ebfc3e26456fac4baefe40aa623d4bc4fa82e0ead3f52ebccb089c"
     }
   },
   "source_files": {

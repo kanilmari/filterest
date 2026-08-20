@@ -3,12 +3,10 @@
  * Panel morphs between wide (hero bar) and compact (sidebar).
  * CSS classes control content appearance per mode.
  */
-
 /* ============================================
    FIXED TOGGLE BUTTON
    Always visible in top-right corner
    ============================================ */
-
 .filterbar-fixed-toggle {
   position: fixed;
   top: 12px;
@@ -37,7 +35,6 @@
   box-shadow: var(--fw-shadow-raised);
   appearance: none;
 }
-
 .filterbar-fixed-toggle--exposed {
   visibility: visible;
   opacity: 1;
@@ -50,27 +47,22 @@
     background-color 0.3s ease,
     border-color 0.3s ease;
 }
-
 .filterbar-fixed-toggle:hover {
   background: var(--button_hover_bg_color);
   border-color: rgb(0 255 136 / 0.3);
 }
-
 .filterbar-fixed-toggle:active {
   transform: scale(0.95);
 }
-
 .filterbar-fixed-toggle-icon {
   width: 22px;
   height: 22px;
   background-color: currentcolor;
 }
-
 /* ============================================
    FILTER CONTENT INNER
    Flex column layout for all content.
    ============================================ */
-
 .filter-content-inner {
   width: auto;
   max-width: 100%;
@@ -83,7 +75,6 @@
     gap 180ms ease,
     margin 180ms ease;
 }
-
 .filterbar-inline-hero {
 	position: relative;
 	isolation: isolate;
@@ -97,7 +88,6 @@
       color-mix(in srgb, var(--filter_panel_bg) 94%, transparent 6%) 100%
     );
 }
-
 .filterbar-inline-hero__config-button {
 	position: absolute;
 	z-index: 2;
@@ -116,19 +106,29 @@
 	box-shadow: var(--fw-shadow-raised);
 	backdrop-filter: blur(10px);
 }
-
 .filterbar-inline-hero__config-button:hover,
 .filterbar-inline-hero__config-button:focus-visible {
 	color: var(--button_hover_text_color, var(--text_color));
 	background: var(--button_hover_bg_color);
 }
-
 .filterbar-inline-hero__config-icon {
 	width: 22px;
 	height: 22px;
 	fill: currentcolor;
 }
-
+.filterbar-inline-hero--has-cover {
+	--dataset-cover-mask-oval-x: 68%;
+	--dataset-cover-mask-oval-y: 82%;
+	--dataset-cover-mask-center-opacity: 20%;
+	--dataset-cover-mask-mid-opacity: 45%;
+	--dataset-cover-mask-edge-opacity: 70%;
+	--dataset-cover-mask-center-stop: 30%;
+	--dataset-cover-mask-mid-stop: 58%;
+	--dataset-cover-mask-edge-stop: 100%;
+	--dataset-cover-image-opacity: 1;
+	--dataset-cover-overlay-opacity: 1;
+	--dataset-cover-image-blur: 0px;
+}
 .filterbar-inline-hero--has-cover::before,
 .filterbar-inline-hero--has-cover::after {
 	position: absolute;
@@ -136,19 +136,21 @@
 	content: '';
 	pointer-events: none;
 }
-
 .filterbar-inline-hero--has-cover::before {
 	z-index: -2;
+	inset: calc(0px - var(--dataset-cover-image-blur));
 	background-image: var(--dataset-cover-image);
 	background-position: center;
 	background-size: cover;
-	mask-image: radial-gradient(
-		ellipse 68% 82% at 50% 48%,
-		rgb(0 0 0 / 20%) 0%,
-		rgb(0 0 0 / 20%) 30%,
-		rgb(0 0 0 / 45%) 58%,
-		rgb(0 0 0 / 70%) 100%
-	);
+	filter: blur(var(--dataset-cover-image-blur));
+	opacity: var(--dataset-cover-image-opacity);
+	mask-image: var(--dataset-cover-mask-image, radial-gradient(
+		ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% 48%,
+		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) 0%,
+		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) var(--dataset-cover-mask-center-stop),
+		rgb(0 0 0 / var(--dataset-cover-mask-mid-opacity)) var(--dataset-cover-mask-mid-stop),
+		rgb(0 0 0 / var(--dataset-cover-mask-edge-opacity)) var(--dataset-cover-mask-edge-stop)
+	));
 }
 
 .filterbar-inline-hero--has-cover::after {
@@ -159,6 +161,7 @@
 		transparent 45%,
 		color-mix(in srgb, var(--filter_panel_bg) 18%, transparent) 100%
 	);
+	opacity: var(--dataset-cover-overlay-opacity);
 }
 
 .dataset-results-surface {
