@@ -45,6 +45,7 @@
 @import url("../core_components/admin_tools/admin_version_info_indicator.css");
 @import url("../core_components/filterbar/text_search/text_search.css");
 @import url("../core_components/filterbar/morphing_filterbar_content.css");
+@import url("../core_components/filterbar/dataset_cover_theme.css");
 @import url("../core_components/admin_tools/dataset_cover_test_palette.css");
 @import url("../core_components/filterbar/filter_list/favefox_style_filters_container/favefox_style_filter_bar.css");
 @import url("../core_components/filterbar/filter_list/active_filter_tags.css");

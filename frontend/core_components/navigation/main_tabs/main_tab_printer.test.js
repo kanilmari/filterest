@@ -181,7 +181,7 @@ describe("initTabs", () => {
         expect(document.querySelector('.navtablinks[data-id="dev_agent_tasks"]')).toBeNull();
     });
 
-    test("uses the filled users icon for the system users tab fallback", async () => {
+    test("uses the filled-center group icon for the system users tab fallback", async () => {
         const { initTabs } = await import("./main_tab_printer.js");
         const preloadedContentTablesResponse = {
             datasets: [
@@ -199,9 +199,37 @@ describe("initTabs", () => {
         const usersIcon = document.querySelector(
             '.navtablinks[data-id="system_users"] .navtab_icon'
         );
-        expect(usersIcon?.dataset.symbolKey).toBe("group_filled");
+        expect(usersIcon?.dataset.symbolKey).toBe("group_center_filled");
         expect(usersIcon?.style.getPropertyValue("--metadata-symbol-url"))
-            .toContain("/symbol-assets/group_filled.svg");
+            .toContain("/symbol-assets/group_center_filled.svg");
+    });
+
+    test("renders travel dataset icon metadata with exact translation keys", async () => {
+        const { initTabs } = await import("./main_tab_printer.js");
+        const preloadedContentTablesResponse = {
+            datasets: [
+                {
+                    dataset_name: "travel_info",
+                    is_top_level_in_current_project: true,
+                    icon_key: "map",
+                },
+                {
+                    dataset_name: "travel_deals",
+                    is_top_level_in_current_project: true,
+                    icon_key: "payments",
+                },
+            ],
+            tab_order: null,
+        };
+
+        await initTabs({ preloadedContentTablesResponse });
+
+        const infoTab = document.querySelector('.navtablinks[data-id="travel_info"]');
+        const dealsTab = document.querySelector('.navtablinks[data-id="travel_deals"]');
+        expect(infoTab?.dataset.langKey).toBe("travel_info");
+        expect(dealsTab?.dataset.langKey).toBe("travel_deals");
+        expect(infoTab?.querySelector(".navtab_icon")?.dataset.symbolKey).toBe("map");
+        expect(dealsTab?.querySelector(".navtab_icon")?.dataset.symbolKey).toBe("payments");
     });
 
     test("renders system users once when it is also marked as the main table", async () => {

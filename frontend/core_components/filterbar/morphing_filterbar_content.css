@@ -116,58 +116,6 @@
 	height: 22px;
 	fill: currentcolor;
 }
-.filterbar-inline-hero--has-cover {
-	--dataset-cover-mask-oval-x: 68%;
-	--dataset-cover-mask-oval-y: 82%;
-	--dataset-cover-mask-position-y: 48%;
-	--dataset-cover-mask-center-opacity: 20%;
-	--dataset-cover-mask-mid-opacity: 45%;
-	--dataset-cover-mask-edge-opacity: 70%;
-	--dataset-cover-mask-center-stop: 30%;
-	--dataset-cover-mask-mid-stop: 58%;
-	--dataset-cover-mask-edge-stop: 100%;
-	--dataset-cover-image-opacity: 1;
-	--dataset-cover-overlay-opacity: 0;
-	--dataset-cover-image-blur: 0px;
-	--dataset-cover-hero-extra-height: 40px;
-	padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height));
-}
-body.dark-mode .filterbar-inline-hero--has-cover {
-	--dataset-cover-mask-image: none;
-	--dataset-cover-image-opacity: 0.3;
-}
-body:not(.dark-mode) .filterbar-inline-hero--has-cover {
-	--dataset-cover-mask-image: initial;
-	--dataset-cover-image-opacity: 1;
-}
-.filterbar-inline-hero--has-cover::before,
-.filterbar-inline-hero--has-cover::after {
-	position: absolute;
-	inset: 0;
-	content: '';
-	pointer-events: none;
-}
-.filterbar-inline-hero--has-cover::before {
-	z-index: -2;
-	inset: calc(0px - var(--dataset-cover-image-blur));
-	background-image: var(--dataset-cover-image);
-	background-position: center;
-	background-size: cover;
-	filter: blur(var(--dataset-cover-image-blur));
-	opacity: var(--dataset-cover-image-opacity);
-	mask-image: var(--dataset-cover-mask-image, radial-gradient(
-		ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y),
-		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) 0%,
-		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) var(--dataset-cover-mask-center-stop),
-		rgb(0 0 0 / var(--dataset-cover-mask-mid-opacity)) var(--dataset-cover-mask-mid-stop),
-		rgb(0 0 0 / var(--dataset-cover-mask-edge-opacity)) var(--dataset-cover-mask-edge-stop)
-	));
-}
-.filterbar-inline-hero--has-cover::after {
-	z-index: -1;
-	background: #000;
-	opacity: var(--dataset-cover-overlay-opacity);
-}
 .dataset-results-surface {
 	position: relative;
 	isolation: isolate;
@@ -236,7 +184,7 @@ body:not(.dark-mode) .filterbar-inline-hero--has-cover {
 .filterbar-panel--wide .morphing-subtitle,
 .filterbar-inline-hero .morphing-subtitle {
   font-size: 16px;
-  color: #8a8a9b;
+  color: var(--text_color);
   margin-bottom: 0;
 }
 
@@ -248,6 +196,7 @@ body:not(.dark-mode) .filterbar-inline-hero--has-cover {
 .filterbar-inline-hero-sort-row {
   justify-content: center;
   margin-top: 16px;
+  border: 1px solid var(--border_color);
 }
 
 /* ============================================

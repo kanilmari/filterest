@@ -1,215 +1,105 @@
 // dataset_cover_test_palette.js
-// Mounts an admin-only, flag-gated live preview palette beside a dataset hero.
-// Bridges the protected UI-feature flag, hero CSS variables, and ephemeral controls.
-// Exists so cover-mask values can be explored without persisting drafts or changing routes.
+// Applies public dataset-cover presentation settings and mounts their admin editor.
+// Bridges the typed presentation API, theme CSS variables, and flag-gated controls.
+// Exists so live visual tuning and durable saves share one validated configuration shape.
 
-import { fetchAdminUIFeatureFlags } from '../endpoints/stable_endpoint_router.js';
+import {
+    fetchAdminUIFeatureFlags,
+    fetchSitePresentationSettings,
+    saveAdminSitePresentationSettings,
+} from '../endpoints/stable_endpoint_router.js';
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
-const MASK_OVERRIDE_VARIABLE = '--dataset-cover-mask-image';
-const MASK_ENABLED_VALUE = 'initial';
+
+export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
+    light: Object.freeze({
+        oval_enabled: true,
+        oval_width: 32,
+        oval_height: 67,
+        oval_position_y: 56,
+        center_opacity: 0.4,
+        mid_opacity: 0.7,
+        edge_opacity: 1,
+        center_stop: 39,
+        mid_stop: 55,
+        edge_stop: 80,
+        image_opacity: 1,
+        overlay_opacity: 0,
+    }),
+    dark: Object.freeze({
+        oval_enabled: false,
+        oval_width: 32,
+        oval_height: 67,
+        oval_position_y: 56,
+        center_opacity: 0.4,
+        mid_opacity: 0.7,
+        edge_opacity: 1,
+        center_stop: 39,
+        mid_stop: 55,
+        edge_stop: 80,
+        image_opacity: 0.3,
+        overlay_opacity: 0,
+    }),
+    shared: Object.freeze({
+        hero_extra_height: 40,
+        image_blur: 1,
+    }),
+});
 
 const RANGE_CONTROLS = Object.freeze([
-    {
-        id: 'oval-x',
-        label: 'ovalX',
-        variable: '--dataset-cover-mask-oval-x',
-        min: 20,
-        max: 140,
-        step: 1,
-        value: 68,
-        unit: '%',
-    },
-    {
-        id: 'oval-y',
-        label: 'ovalY',
-        variable: '--dataset-cover-mask-oval-y',
-        min: 20,
-        max: 140,
-        step: 1,
-        value: 82,
-        unit: '%',
-    },
-    {
-        id: 'oval-position-y',
-        label: 'ovalPositionY',
-        variable: '--dataset-cover-mask-position-y',
-        min: 0,
-        max: 100,
-        step: 1,
-        value: 48,
-        unit: '%',
-    },
-    {
-        id: 'center-opacity',
-        label: 'centerOpacity',
-        variable: '--dataset-cover-mask-center-opacity',
-        min: 0,
-        max: 1,
-        step: 0.05,
-        value: 0.2,
-        unit: '',
-    },
-    {
-        id: 'mid-opacity',
-        label: 'midOpacity',
-        variable: '--dataset-cover-mask-mid-opacity',
-        min: 0,
-        max: 1,
-        step: 0.05,
-        value: 0.45,
-        unit: '',
-    },
-    {
-        id: 'edge-opacity',
-        label: 'edgeOpacity',
-        variable: '--dataset-cover-mask-edge-opacity',
-        min: 0,
-        max: 1,
-        step: 0.05,
-        value: 0.7,
-        unit: '',
-    },
-    {
-        id: 'center-stop',
-        label: 'centerStop',
-        variable: '--dataset-cover-mask-center-stop',
-        min: 0,
-        max: 100,
-        step: 1,
-        value: 30,
-        unit: '%',
-    },
-    {
-        id: 'mid-stop',
-        label: 'midStop',
-        variable: '--dataset-cover-mask-mid-stop',
-        min: 0,
-        max: 100,
-        step: 1,
-        value: 58,
-        unit: '%',
-    },
-    {
-        id: 'edge-stop',
-        label: 'edgeStop',
-        variable: '--dataset-cover-mask-edge-stop',
-        min: 0,
-        max: 100,
-        step: 1,
-        value: 100,
-        unit: '%',
-    },
-    {
-        id: 'image-opacity',
-        label: 'imageOpacity',
-        variable: '--dataset-cover-image-opacity',
-        min: 0,
-        max: 1,
-        step: 0.05,
-        value: 1,
-        unit: '',
-    },
-    {
-        id: 'hero-height',
-        label: 'heroHeight',
-        variable: '--dataset-cover-hero-extra-height',
-        min: 0,
-        max: 240,
-        step: 5,
-        value: 40,
-        unit: 'px',
-    },
-    {
-        id: 'overlay-opacity',
-        label: 'overlayOpacity',
-        variable: '--dataset-cover-overlay-opacity',
-        min: 0,
-        max: 1,
-        step: 0.01,
-        value: 0,
-        unit: '',
-    },
-    {
-        id: 'image-blur',
-        label: 'imageBlur',
-        variable: '--dataset-cover-image-blur',
-        min: 0,
-        max: 24,
-        step: 1,
-        value: 0,
-        unit: 'px',
-    },
+    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', min: 20, max: 140, step: 1, unit: '%' },
+    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', min: 20, max: 140, step: 1, unit: '%' },
+    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', min: 0, max: 100, step: 1, unit: '%' },
+    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', min: 0, max: 1, step: 0.05, unit: '' },
+    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', min: 0, max: 1, step: 0.05, unit: '' },
+    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', min: 0, max: 1, step: 0.05, unit: '' },
+    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', min: 0, max: 100, step: 1, unit: '%' },
+    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', min: 0, max: 100, step: 1, unit: '%' },
+    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', min: 0, max: 100, step: 1, unit: '%' },
+    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', min: 0, max: 1, step: 0.05, unit: '' },
+    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true },
+    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '' },
+    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', shared: true },
 ]);
 
 const COPY = Object.freeze({
     en: Object.freeze({
-        button: 'Open cover image test palette',
-        title: 'Cover image live preview',
-        close: 'Close preview controls',
-        notice: 'Browser preview only. Reset or refresh the page to restore default values.',
-        maskEnabled: 'Use oval mask',
-        reset: 'Reset preview',
-        ovalX: 'Oval width',
-        ovalY: 'Oval height',
-        ovalPositionY: 'Oval vertical position',
-        centerOpacity: 'Centre opacity',
-        midOpacity: 'Mid opacity',
-        edgeOpacity: 'Edge opacity',
-        centerStop: 'Centre stop',
-        midStop: 'Mid stop',
-        edgeStop: 'Edge stop',
-        imageOpacity: 'Whole image opacity',
-        heroHeight: 'Hero extra height',
-        overlayOpacity: 'Darkening overlay opacity',
-        imageBlur: 'Whole image blur',
+        button: 'Open cover image palette', title: 'Cover image settings', close: 'Close cover image settings',
+        notice: 'Changes preview immediately. Save stores both light and dark theme values.',
+        light: 'Light', dark: 'Dark', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
+        themeGroup: 'Selected theme', sharedGroup: 'Shared by both themes',
+        save: 'Save settings', saving: 'Saving…', saved: 'Settings saved.', saveFailed: 'Saving failed.',
+        ovalX: 'Oval width', ovalY: 'Oval height', ovalPositionY: 'Oval vertical position',
+        centerOpacity: 'Centre opacity', midOpacity: 'Mid opacity', edgeOpacity: 'Edge opacity',
+        centerStop: 'Centre stop', midStop: 'Mid stop', edgeStop: 'Edge stop',
+        imageOpacity: 'Whole image opacity', heroHeight: 'Hero extra height',
+        overlayOpacity: 'Darkening overlay opacity', imageBlur: 'Whole image blur',
     }),
     fi: Object.freeze({
-        button: 'Avaa kansikuvan testipaletti',
-        title: 'Kansikuvan live-esikatselu',
-        close: 'Sulje esikatselusäätimet',
-        notice: 'Vain selainesikatselu. Palautus tai sivun päivitys palauttaa oletusarvot.',
-        maskEnabled: 'Käytä ovaalimaskia',
-        reset: 'Palauta esikatselu',
-        ovalX: 'Ovaalin leveys',
-        ovalY: 'Ovaalin korkeus',
-        ovalPositionY: 'Ovaalin pystysijainti',
-        centerOpacity: 'Keskustan opacity',
-        midOpacity: 'Keskialueen opacity',
-        edgeOpacity: 'Reunan opacity',
-        centerStop: 'Keskustan stop-piste',
-        midStop: 'Keskialueen stop-piste',
-        edgeStop: 'Reunan stop-piste',
-        imageOpacity: 'Koko kuvan opacity',
-        heroHeight: 'Heron lisäkorkeus',
-        overlayOpacity: 'Tummentavan overlayn opacity',
-        imageBlur: 'Koko kuvan blur',
+        button: 'Avaa kansikuvan paletti', title: 'Kansikuvan asetukset', close: 'Sulje kansikuvan asetukset',
+        notice: 'Muutokset näkyvät heti. Tallennus säilyttää vaalean ja tumman teeman arvot.',
+        light: 'Vaalea', dark: 'Tumma', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
+        themeGroup: 'Valittu teema', sharedGroup: 'Molemmille teemoille yhteiset',
+        save: 'Tallenna asetukset', saving: 'Tallennetaan…', saved: 'Asetukset tallennettu.', saveFailed: 'Tallennus epäonnistui.',
+        ovalX: 'Ovaalin leveys', ovalY: 'Ovaalin korkeus', ovalPositionY: 'Ovaalin pystysijainti',
+        centerOpacity: 'Keskustan opacity', midOpacity: 'Keskialueen opacity', edgeOpacity: 'Reunan opacity',
+        centerStop: 'Keskustan stop-piste', midStop: 'Keskialueen stop-piste', edgeStop: 'Reunan stop-piste',
+        imageOpacity: 'Koko kuvan opacity', heroHeight: 'Heron lisäkorkeus',
+        overlayOpacity: 'Tummentavan overlayn opacity', imageBlur: 'Koko kuvan blur',
     }),
 });
+
+function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+}
 
 function getCopy() {
     const language = String(getLanguageWithBrowserFallback() || 'en').toLowerCase();
     return COPY[language] || COPY[language.split('-')[0]] || COPY.en;
-}
-
-function readInitialControlValue(hero, control) {
-    const computedValue = getComputedStyle(hero)
-        .getPropertyValue(control.variable)
-        .trim();
-    const parsedValue = Number.parseFloat(computedValue);
-    if (
-        Number.isFinite(parsedValue)
-        && computedValue.endsWith('%')
-        && control.unit === ''
-        && control.max === 1
-    ) {
-        return parsedValue / 100;
-    }
-    return Number.isFinite(parsedValue) ? parsedValue : control.value;
 }
 
 function renderControlValue(value, unit) {
@@ -220,106 +110,83 @@ function renderControlValue(value, unit) {
     return `${displayValue}${unit}`;
 }
 
-function createRangeControl(hero, control, copy, originalValues) {
-    const row = document.createElement('label');
-    row.classList.add('dataset-cover-test-palette__range');
-
-    const labelText = document.createElement('span');
-    labelText.textContent = copy[control.label];
-
-    const output = document.createElement('output');
-    output.dataset.testid = `dataset-cover-test-palette-${control.id}-value`;
-
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.min = String(control.min);
-    input.max = String(control.max);
-    input.step = String(control.step);
-    input.value = String(readInitialControlValue(hero, control));
-    input.dataset.testid = `dataset-cover-test-palette-${control.id}`;
-    input.setAttribute('aria-label', copy[control.label]);
-
-    const updatePreview = () => {
-        hero.style.setProperty(control.variable, `${input.value}${control.unit}`);
-        output.value = renderControlValue(input.value, control.unit);
-    };
-    output.value = renderControlValue(input.value, control.unit);
-    input.addEventListener('input', updatePreview);
-
-    originalValues.set(control.variable, hero.style.getPropertyValue(control.variable));
-    row.append(labelText, output, input);
-    return { row, input, output };
-}
-
-function restoreInlineVariable(hero, variable, originalValue) {
-    if (originalValue) {
-        hero.style.setProperty(variable, originalValue);
-        return;
+function isValidThemeConfig(config) {
+    const themeKeys = ['light', 'dark'];
+    const numericKeys = RANGE_CONTROLS.filter((control) => !control.shared);
+    if (!config || !config.shared || !themeKeys.every((key) => config[key])) return false;
+    for (const themeName of themeKeys) {
+        const theme = config[themeName];
+        if (typeof theme.oval_enabled !== 'boolean') return false;
+        if (!numericKeys.every((control) => Number.isFinite(Number(theme[control.key])))) return false;
     }
-    hero.style.removeProperty(variable);
+    return RANGE_CONTROLS.filter((control) => control.shared)
+        .every((control) => Number.isFinite(Number(config.shared[control.key])));
 }
 
-function isOvalMaskEnabled(hero) {
-    return getComputedStyle(hero)
-        .getPropertyValue(MASK_OVERRIDE_VARIABLE)
-        .trim() !== 'none';
+function normalizePresentationSettings(payload) {
+    const datasetCoverTheme = isValidThemeConfig(payload?.dataset_cover_theme)
+        ? clone(payload.dataset_cover_theme)
+        : clone(DEFAULT_DATASET_COVER_THEME);
+    const timestampMode = ['date_time', 'date_only'].includes(payload?.row_article_timestamp_display_mode)
+        ? payload.row_article_timestamp_display_mode
+        : 'date_time';
+    return {
+        dataset_cover_theme: datasetCoverTheme,
+        row_article_timestamp_display_mode: timestampMode,
+    };
+}
+
+function setThemeVariable(hero, themeName, control, value) {
+    const prefix = control.shared ? '' : `${themeName}-`;
+    hero.style.setProperty(`--dataset-cover-${prefix}${control.css}`, `${value}${control.unit}`);
+}
+
+export function applyDatasetCoverThemeConfig(hero, config) {
+    if (!(hero instanceof HTMLElement) || !isValidThemeConfig(config)) return false;
+    ['light', 'dark'].forEach((themeName) => {
+        RANGE_CONTROLS.filter((control) => !control.shared).forEach((control) => {
+            setThemeVariable(hero, themeName, control, config[themeName][control.key]);
+        });
+        hero.style.setProperty(
+            `--dataset-cover-${themeName}-mask-image`,
+            config[themeName].oval_enabled ? 'initial' : 'none'
+        );
+    });
+    RANGE_CONTROLS.filter((control) => control.shared).forEach((control) => {
+        setThemeVariable(hero, 'shared', control, config.shared[control.key]);
+    });
+    return true;
 }
 
 function setupPanelDragging(panel, dragHandle) {
     let dragState = null;
-
     function handlePointerDown(event) {
-        if (event.button !== 0 || event.target.closest('button, input, output')) {
-            return;
-        }
-        const panelRect = panel.getBoundingClientRect();
-        panel.style.left = `${panelRect.left}px`;
-        panel.style.top = `${panelRect.top}px`;
+        if (event.button !== 0 || event.target.closest('button, input, output')) return;
+        const rect = panel.getBoundingClientRect();
+        panel.style.left = `${rect.left}px`;
+        panel.style.top = `${rect.top}px`;
         panel.style.right = 'auto';
-        dragState = {
-            offsetX: event.clientX - panelRect.left,
-            offsetY: event.clientY - panelRect.top,
-        };
+        dragState = { offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
         panel.classList.add('dataset-cover-test-palette--dragging');
-        if (Number.isInteger(event.pointerId)) {
-            dragHandle.setPointerCapture?.(event.pointerId);
-        }
+        if (Number.isInteger(event.pointerId)) dragHandle.setPointerCapture?.(event.pointerId);
         event.preventDefault();
     }
-
     function handlePointerMove(event) {
-        if (!dragState) {
-            return;
-        }
+        if (!dragState) return;
         const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth);
         const maxTop = Math.max(0, window.innerHeight - panel.offsetHeight);
-        const left = Math.min(
-            Math.max(0, event.clientX - dragState.offsetX),
-            maxLeft
-        );
-        const top = Math.min(
-            Math.max(0, event.clientY - dragState.offsetY),
-            maxTop
-        );
-        panel.style.left = `${left}px`;
-        panel.style.top = `${top}px`;
+        panel.style.left = `${Math.min(Math.max(0, event.clientX - dragState.offsetX), maxLeft)}px`;
+        panel.style.top = `${Math.min(Math.max(0, event.clientY - dragState.offsetY), maxTop)}px`;
         event.preventDefault();
     }
-
     function handlePointerUp(event) {
-        if (Number.isInteger(event.pointerId)) {
-            dragHandle.releasePointerCapture?.(event.pointerId);
-        }
+        if (Number.isInteger(event.pointerId)) dragHandle.releasePointerCapture?.(event.pointerId);
         dragState = null;
         panel.classList.remove('dataset-cover-test-palette--dragging');
     }
-
     function resetGeometry() {
-        ['left', 'top', 'right', 'width', 'height'].forEach((property) => {
-            panel.style.removeProperty(property);
-        });
+        ['left', 'top', 'right', 'width', 'height'].forEach((property) => panel.style.removeProperty(property));
     }
-
     dragHandle.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
@@ -335,9 +202,11 @@ function setupPanelDragging(panel, dragHandle) {
     };
 }
 
-function buildPaletteControl(hero, datasetName) {
+function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) {
     const copy = getCopy();
-    const originalValues = new Map();
+    let savedSettings = clone(initialSettings);
+    let draftSettings = clone(initialSettings);
+    let activeTheme = 'light';
     const button = document.createElement('button');
     button.type = 'button';
     button.classList.add('filterbar-inline-hero__cover-palette-button', 'fw-btn');
@@ -345,10 +214,7 @@ function buildPaletteControl(hero, datasetName) {
     button.title = copy.button;
     button.setAttribute('aria-label', copy.button);
     button.setAttribute('aria-expanded', 'false');
-    button.appendChild(createMaskIconSpan(
-        PALETTE_ICON_PATH,
-        'filterbar-inline-hero__cover-palette-icon'
-    ));
+    button.appendChild(createMaskIconSpan(PALETTE_ICON_PATH, 'filterbar-inline-hero__cover-palette-icon'));
 
     const panel = document.createElement('section');
     panel.classList.add('dataset-cover-test-palette');
@@ -373,71 +239,152 @@ function buildPaletteControl(hero, datasetName) {
     notice.classList.add('dataset-cover-test-palette__notice');
     notice.textContent = copy.notice;
 
+    const tabs = document.createElement('div');
+    tabs.classList.add('dataset-cover-test-palette__tabs');
+    tabs.setAttribute('role', 'tablist');
+    const tabButtons = ['light', 'dark'].map((themeName) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.classList.add('dataset-cover-test-palette__tab', 'fw-btn');
+        tab.dataset.theme = themeName;
+        tab.dataset.testid = `dataset-cover-test-palette-tab-${themeName}`;
+        tab.setAttribute('role', 'tab');
+        tab.textContent = copy[themeName];
+        tabs.appendChild(tab);
+        return tab;
+    });
+
     const maskLabel = document.createElement('label');
     maskLabel.classList.add('dataset-cover-test-palette__toggle');
     const maskInput = document.createElement('input');
     maskInput.type = 'checkbox';
-    maskInput.checked = isOvalMaskEnabled(hero);
     maskInput.dataset.testid = 'dataset-cover-test-palette-mask-enabled';
     maskLabel.append(maskInput, document.createTextNode(copy.maskEnabled));
-    originalValues.set(
-        MASK_OVERRIDE_VARIABLE,
-        hero.style.getPropertyValue(MASK_OVERRIDE_VARIABLE)
-    );
-    maskInput.addEventListener('change', () => {
-        if (maskInput.checked) {
-            hero.style.setProperty(MASK_OVERRIDE_VARIABLE, MASK_ENABLED_VALUE);
-            return;
-        }
-        hero.style.setProperty(MASK_OVERRIDE_VARIABLE, 'none');
-    });
 
-    const controlGrid = document.createElement('div');
-    controlGrid.classList.add('dataset-cover-test-palette__controls');
+    const themeGroup = document.createElement('section');
+    themeGroup.classList.add('dataset-cover-test-palette__group');
+    const themeGroupTitle = document.createElement('strong');
+    themeGroupTitle.classList.add('dataset-cover-test-palette__group-title');
+    themeGroupTitle.textContent = copy.themeGroup;
+    const themeGrid = document.createElement('div');
+    themeGrid.classList.add('dataset-cover-test-palette__controls');
+    themeGrid.dataset.testid = 'dataset-cover-test-palette-theme-controls';
+    themeGroup.append(themeGroupTitle, maskLabel, themeGrid);
+
+    const sharedGroup = document.createElement('section');
+    sharedGroup.classList.add('dataset-cover-test-palette__group');
+    const sharedGroupTitle = document.createElement('strong');
+    sharedGroupTitle.classList.add('dataset-cover-test-palette__group-title');
+    sharedGroupTitle.textContent = copy.sharedGroup;
+    const sharedGrid = document.createElement('div');
+    sharedGrid.classList.add('dataset-cover-test-palette__controls');
+    sharedGrid.dataset.testid = 'dataset-cover-test-palette-shared-controls';
+    sharedGroup.append(sharedGroupTitle, sharedGrid);
     const rangeControls = RANGE_CONTROLS.map((control) => {
-        const elements = createRangeControl(hero, control, copy, originalValues);
-        controlGrid.appendChild(elements.row);
-        return { ...control, ...elements };
+        const row = document.createElement('label');
+        row.classList.add('dataset-cover-test-palette__range');
+        const labelText = document.createElement('span');
+        labelText.textContent = copy[control.label];
+        const output = document.createElement('output');
+        output.dataset.testid = `dataset-cover-test-palette-${control.id}-value`;
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = String(control.min);
+        input.max = String(control.max);
+        input.step = String(control.step);
+        input.dataset.testid = `dataset-cover-test-palette-${control.id}`;
+        input.setAttribute('aria-label', copy[control.label]);
+        input.addEventListener('input', () => {
+            const target = control.shared
+                ? draftSettings.dataset_cover_theme.shared
+                : draftSettings.dataset_cover_theme[activeTheme];
+            target[control.key] = Number(input.value);
+            output.value = renderControlValue(input.value, control.unit);
+            applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        });
+        row.append(labelText, output, input);
+        (control.shared ? sharedGrid : themeGrid).appendChild(row);
+        return { ...control, input, output };
     });
 
+    const actions = document.createElement('div');
+    actions.classList.add('dataset-cover-test-palette__actions');
     const resetButton = document.createElement('button');
     resetButton.type = 'button';
     resetButton.classList.add('dataset-cover-test-palette__reset', 'fw-btn');
     resetButton.dataset.testid = 'dataset-cover-test-palette-reset';
     resetButton.textContent = copy.reset;
-    const dragControls = setupPanelDragging(panel, headingRow);
+    const saveButton = document.createElement('button');
+    saveButton.type = 'button';
+    saveButton.classList.add('dataset-cover-test-palette__save', 'fw-btn');
+    saveButton.dataset.testid = 'dataset-cover-test-palette-save';
+    saveButton.textContent = copy.save;
+    const status = document.createElement('span');
+    status.classList.add('dataset-cover-test-palette__status');
+    status.setAttribute('role', 'status');
+    status.dataset.testid = 'dataset-cover-test-palette-status';
+    actions.append(resetButton, saveButton, status);
 
+    function syncControls() {
+        const theme = draftSettings.dataset_cover_theme[activeTheme];
+        maskInput.checked = theme.oval_enabled;
+        tabButtons.forEach((tab) => {
+            const selected = tab.dataset.theme === activeTheme;
+            tab.setAttribute('aria-selected', String(selected));
+            tab.classList.toggle('is-active', selected);
+        });
+        rangeControls.forEach((control) => {
+            const source = control.shared ? draftSettings.dataset_cover_theme.shared : theme;
+            control.input.value = String(source[control.key]);
+            control.output.value = renderControlValue(control.input.value, control.unit);
+        });
+    }
+
+    maskInput.addEventListener('change', () => {
+        draftSettings.dataset_cover_theme[activeTheme].oval_enabled = maskInput.checked;
+        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+    });
+    tabButtons.forEach((tab) => tab.addEventListener('click', () => {
+        activeTheme = tab.dataset.theme;
+        syncControls();
+    }));
+
+    const dragControls = setupPanelDragging(panel, headingRow);
     function closePanel() {
         panel.hidden = true;
         button.setAttribute('aria-expanded', 'false');
     }
-
-    function handleDocumentPointerDown(event) {
-        if (!panel.hidden && !panel.contains(event.target) && !button.contains(event.target)) {
-            closePanel();
+    function resetPreview() {
+        draftSettings = clone(savedSettings);
+        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        syncControls();
+        status.textContent = '';
+        dragControls.resetGeometry();
+    }
+    async function saveSettings() {
+        saveButton.disabled = true;
+        status.textContent = copy.saving;
+        try {
+            const response = await saveRequestFn(clone(draftSettings));
+            savedSettings = normalizePresentationSettings(response);
+            draftSettings = clone(savedSettings);
+            applyDatasetCoverThemeConfig(hero, savedSettings.dataset_cover_theme);
+            syncControls();
+            status.textContent = copy.saved;
+        } catch (_error) {
+            status.textContent = copy.saveFailed;
+        } finally {
+            saveButton.disabled = false;
         }
     }
-
+    function handleDocumentPointerDown(event) {
+        if (!panel.hidden && !panel.contains(event.target) && !button.contains(event.target)) closePanel();
+    }
     function handleDocumentKeyDown(event) {
         if (event.key === 'Escape' && !panel.hidden) {
             closePanel();
             button.focus();
         }
-    }
-
-    function resetPreview() {
-        restoreInlineVariable(
-            hero,
-            MASK_OVERRIDE_VARIABLE,
-            originalValues.get(MASK_OVERRIDE_VARIABLE)
-        );
-        maskInput.checked = isOvalMaskEnabled(hero);
-        rangeControls.forEach((control) => {
-            restoreInlineVariable(hero, control.variable, originalValues.get(control.variable));
-            control.input.value = String(readInitialControlValue(hero, control));
-            control.output.value = renderControlValue(control.input.value, control.unit);
-        });
-        dragControls.resetGeometry();
     }
 
     button.addEventListener('click', (event) => {
@@ -448,13 +395,15 @@ function buildPaletteControl(hero, datasetName) {
     });
     closeButton.addEventListener('click', closePanel);
     resetButton.addEventListener('click', resetPreview);
+    saveButton.addEventListener('click', saveSettings);
     panel.addEventListener('click', (event) => event.stopPropagation());
     document.addEventListener('pointerdown', handleDocumentPointerDown);
     document.addEventListener('keydown', handleDocumentKeyDown);
 
-    panel.append(headingRow, notice, maskLabel, controlGrid, resetButton);
+    panel.append(headingRow, notice, tabs, themeGroup, sharedGroup, actions);
     hero.appendChild(button);
     document.body.appendChild(panel);
+    syncControls();
 
     return {
         button,
@@ -473,33 +422,29 @@ function buildPaletteControl(hero, datasetName) {
 
 export async function mountDatasetCoverTestPalette(hero, datasetName, {
     requestFn = fetchAdminUIFeatureFlags,
+    settingsRequestFn = fetchSitePresentationSettings,
+    saveRequestFn = saveAdminSitePresentationSettings,
     permissionCheck = hasRoutePermission,
 } = {}) {
     const normalizedDatasetName = String(datasetName || '').trim();
-    if (
-        !(hero instanceof HTMLElement)
-        || !normalizedDatasetName
-        || !hero.classList.contains('filterbar-inline-hero--has-cover')
-        || !permissionCheck(DATASET_HEADER_CONFIG_PERMISSION)
-    ) {
-        return null;
-    }
-    const existingButton = hero.querySelector(
-        '[data-testid="dataset-cover-test-palette-button"]'
-    );
-    if (existingButton) {
-        return null;
-    }
+    if (!(hero instanceof HTMLElement) || !normalizedDatasetName
+        || !hero.classList.contains('filterbar-inline-hero--has-cover')) return null;
 
-    let flags;
+    let settings = normalizePresentationSettings(null);
     try {
-        flags = await requestFn();
+        settings = normalizePresentationSettings(await settingsRequestFn());
+    } catch (_error) {
+        // Canonical in-source defaults keep the public hero usable during a transient API failure.
+    }
+    applyDatasetCoverThemeConfig(hero, settings.dataset_cover_theme);
+
+    if (!permissionCheck(DATASET_HEADER_CONFIG_PERMISSION)) return null;
+    if (hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')) return null;
+    try {
+        const flags = await requestFn();
+        if (flags?.view_admin_cover_image_test_palette !== true) return null;
     } catch (_error) {
         return null;
     }
-    if (flags?.view_admin_cover_image_test_palette !== true) {
-        return null;
-    }
-
-    return buildPaletteControl(hero, normalizedDatasetName);
+    return buildPaletteControl(hero, normalizedDatasetName, settings, saveRequestFn);
 }

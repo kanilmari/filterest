@@ -286,6 +286,36 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/site-presentation-settings",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AdminSitePresentationSettingsHandler",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/symbols",
       "match_type": "exact",
       "handler_name": "symbol_registry.AdminHandler",
@@ -3909,6 +3939,56 @@
           "name": "api_language",
           "profile_name": "default",
           "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/site-presentation-settings",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetSitePresentationSettingsHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
           "admin_only": false
         }
       ]

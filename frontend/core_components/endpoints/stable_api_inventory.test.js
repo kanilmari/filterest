@@ -71,6 +71,8 @@ describe('stable_api_inventory', () => {
             'saveDatasetHeaderConfig',
             'adminSymbols',
             'adminUiFeatureFlags',
+            'sitePresentationSettings',
+            'adminSitePresentationSettings',
             'adminUserAuthentication',
             'listColumnViewPresets',
             'checkJsonColumns',
@@ -106,6 +108,22 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/admin/ui-feature-flags',
             accessProfile: 'admin',
             methods: ['GET'],
+            methodSource: 'explicit_stable_contract',
+        });
+
+        expect(getStableCandidateRouteDescriptor('sitePresentationSettings')).toMatchObject({
+            handlerName: 'system_table_tools.GetSitePresentationSettingsHandler',
+            backendPath: '/api/site-presentation-settings',
+            accessProfile: 'public',
+            methods: ['GET'],
+            methodSource: 'explicit_stable_contract',
+        });
+
+        expect(getStableCandidateRouteDescriptor('adminSitePresentationSettings')).toMatchObject({
+            handlerName: 'system_table_tools.AdminSitePresentationSettingsHandler',
+            backendPath: '/api/admin/site-presentation-settings',
+            accessProfile: 'admin',
+            methods: ['GET', 'POST'],
             methodSource: 'explicit_stable_contract',
         });
 

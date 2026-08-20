@@ -15,6 +15,18 @@ import {
 const TIMESTAMP_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/u;
 const TIME_ONLY_VALUE_PATTERN = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/u;
 export const DATE_TIME_DISPLAY_SEPARATOR = " \u2007";
+export const TIMESTAMP_DISPLAY_MODE_DATE_ONLY = "date_only";
+export const TIMESTAMP_DISPLAY_MODE_DATE_TIME = "date_time";
+
+const UI_LANGUAGE_LOCALES = Object.freeze({
+    fi: "fi-FI",
+    en: "en-GB",
+    ch: "zh-CN",
+    yue: "yue-Hant-HK",
+    "zh-CN": "zh-CN",
+    "zh-HK": "zh-HK",
+    "zh-TW": "zh-TW",
+});
 
 function normalizeColumnDataType(columnMeta = "") {
     if (typeof columnMeta === "string") {
@@ -61,6 +73,51 @@ function formatDateParts(date, includeSeconds = false) {
     return `${dateText}${separator}${timeText}`;
 }
 
+export function normalizeTimestampDisplayMode(value) {
+    return value === TIMESTAMP_DISPLAY_MODE_DATE_ONLY
+        ? TIMESTAMP_DISPLAY_MODE_DATE_ONLY
+        : TIMESTAMP_DISPLAY_MODE_DATE_TIME;
+}
+
+function resolveTimestampDisplayLocale(value = "") {
+    const normalized = String(value || "").trim();
+    return UI_LANGUAGE_LOCALES[normalized] || normalized || "en-GB";
+}
+
+function formatLocalizedTimestamp(date, displayMode, locale) {
+    const options = displayMode === TIMESTAMP_DISPLAY_MODE_DATE_ONLY
+        ? { dateStyle: "medium" }
+        : { dateStyle: "medium", timeStyle: "short" };
+
+    try {
+        return new Intl.DateTimeFormat(
+            resolveTimestampDisplayLocale(locale),
+            options
+        ).format(date);
+    } catch (_error) {
+        return new Intl.DateTimeFormat("en-GB", options).format(date);
+    }
+}
+
+function buildLocalCalendarDate(dateText, timeParts = {}) {
+    const [year, month, day] = String(dateText || "")
+        .split("-")
+        .map((part) => Number(part));
+    if (![year, month, day].every(Number.isFinite)) {
+        return null;
+    }
+
+    const date = new Date(
+        year,
+        month - 1,
+        day,
+        Number(timeParts.hours || 0),
+        Number(timeParts.minutes || 0),
+        Number(timeParts.seconds || 0)
+    );
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function valueHasTimePart(value) {
     return /[T\s]\d{2}:\d{2}/u.test(String(value || ""));
 }
@@ -90,6 +147,8 @@ export function formatTimestampDisplayParts(value, columnMeta = "", options = {}
     const textValue = value instanceof Date
         ? value.toISOString()
         : String(value).trim();
+    const useLocalizedPresentation = options.displayMode !== undefined;
+    const displayMode = normalizeTimestampDisplayMode(options.displayMode);
     const temporalKind = getTemporalValueKind(columnMeta);
     const shouldTryFormatting = options.force === true
         || temporalKind !== null
@@ -100,12 +159,38 @@ export function formatTimestampDisplayParts(value, columnMeta = "", options = {}
 
     if (temporalKind === TEMPORAL_KIND_DATE) {
         const dateOnly = extractCalendarDate(textValue);
-        return dateOnly ? { displayText: dateOnly, titleText: dateOnly } : null;
+        if (!dateOnly) {
+            return null;
+        }
+        const calendarDate = buildLocalCalendarDate(dateOnly);
+        return {
+            displayText: useLocalizedPresentation && calendarDate
+                ? formatLocalizedTimestamp(
+                    calendarDate,
+                    TIMESTAMP_DISPLAY_MODE_DATE_ONLY,
+                    options.locale
+                )
+                : dateOnly,
+            titleText: dateOnly,
+        };
     }
 
     if (!valueHasTimePart(textValue)) {
         const dateOnly = extractCalendarDate(textValue);
-        return dateOnly ? { displayText: dateOnly, titleText: dateOnly } : null;
+        if (!dateOnly) {
+            return null;
+        }
+        const calendarDate = buildLocalCalendarDate(dateOnly);
+        return {
+            displayText: useLocalizedPresentation && calendarDate
+                ? formatLocalizedTimestamp(
+                    calendarDate,
+                    TIMESTAMP_DISPLAY_MODE_DATE_ONLY,
+                    options.locale
+                )
+                : dateOnly,
+            titleText: dateOnly,
+        };
     }
 
     const explicitTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/u.test(textValue);
@@ -116,8 +201,11 @@ export function formatTimestampDisplayParts(value, columnMeta = "", options = {}
         if (!parsedNaive) {
             return null;
         }
+        const localDate = buildLocalCalendarDate(parsedNaive.dateText, parsedNaive);
         return {
-            displayText: `${parsedNaive.dateText}${DATE_TIME_DISPLAY_SEPARATOR}${parsedNaive.hours}:${parsedNaive.minutes}`,
+            displayText: useLocalizedPresentation && localDate
+                ? formatLocalizedTimestamp(localDate, displayMode, options.locale)
+                : `${parsedNaive.dateText}${DATE_TIME_DISPLAY_SEPARATOR}${parsedNaive.hours}:${parsedNaive.minutes}`,
             titleText: `${parsedNaive.dateText} ${parsedNaive.hours}:${parsedNaive.minutes}:${parsedNaive.seconds}`,
         };
     }
@@ -128,7 +216,9 @@ export function formatTimestampDisplayParts(value, columnMeta = "", options = {}
     }
 
     return {
-        displayText: formatDateParts(parsedDate, false),
+        displayText: useLocalizedPresentation
+            ? formatLocalizedTimestamp(parsedDate, displayMode, options.locale)
+            : formatDateParts(parsedDate, false),
         titleText: formatDateParts(parsedDate, true),
     };
 }

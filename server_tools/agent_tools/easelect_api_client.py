@@ -482,6 +482,66 @@ class EaselectAPIClient:
             raise EaselectAPIError("user-authentication response did not contain a users list")
         return users
 
+    def get_symbol_registry_snapshot(self):
+        """Read safe symbols and current dataset/field assignments through the admin API."""
+        self.login()
+        payload = self.request("GET", "/api/admin/symbols")
+        if not isinstance(payload, dict):
+            raise EaselectAPIError("symbol registry response was not an object")
+        for key in ("symbols", "datasets", "fields"):
+            if not isinstance(payload.get(key), list):
+                raise EaselectAPIError(f"symbol registry response did not contain a {key} list")
+        return payload
+
+    def assign_symbol(self, target_type, target_uid, icon_key):
+        """Assign one safe key and verify authoritative metadata readback through the admin API."""
+        normalized_type = str(target_type or "").strip().lower()
+        if normalized_type not in {"dataset", "field"}:
+            raise EaselectAPIError("target_type must be dataset or field")
+        normalized_uid = int(target_uid)
+        if normalized_uid <= 0:
+            raise EaselectAPIError("target_uid must be positive")
+        normalized_key = str(icon_key or "").strip().lower()
+        if not normalized_key:
+            raise EaselectAPIError("icon_key is required")
+
+        identity_key = "table_uid" if normalized_type == "dataset" else "column_uid"
+        collection_key = "datasets" if normalized_type == "dataset" else "fields"
+
+        def find_assignment(snapshot):
+            matches = [
+                item
+                for item in snapshot[collection_key]
+                if int(item.get(identity_key) or 0) == normalized_uid
+            ]
+            if len(matches) != 1:
+                raise EaselectAPIError(
+                    f"symbol assignment target {normalized_type} {normalized_uid} was not unique"
+                )
+            return matches[0]
+
+        before = find_assignment(self.get_symbol_registry_snapshot())
+        self.request(
+            "POST",
+            "/api/admin/symbols",
+            data={
+                "target_type": normalized_type,
+                "target_uid": normalized_uid,
+                "icon_key": normalized_key,
+            },
+            csrf=True,
+        )
+        after = find_assignment(self.get_symbol_registry_snapshot())
+        if str(after.get("icon_key") or "") != normalized_key:
+            raise EaselectAPIError("symbol assignment readback did not match")
+        return {
+            "target_type": normalized_type,
+            "target_uid": normalized_uid,
+            "before": before,
+            "after": after,
+            "verified": True,
+        }
+
     def set_user_authentication(self, user_id, verification_method, *, fixed_pin=None):
         """Provision one administrator and set its sign-in method without exposing secrets."""
         method = str(verification_method or "").strip().lower()

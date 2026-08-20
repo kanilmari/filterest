@@ -423,6 +423,26 @@ def command_user_auth_set(args):
     print_json(result)
 
 
+def command_symbols(args):
+    """Print safe filesystem symbols and current metadata assignments."""
+    print_json(make_client(args).get_symbol_registry_snapshot())
+
+
+def command_assign_symbol(args):
+    """Assign one reviewed symbol after exact target and key confirmation."""
+    if args.confirm_target_uid != args.target_uid:
+        raise ValueError("--confirm-target-uid must match target_uid")
+    if args.confirm_icon_key != args.icon_key:
+        raise ValueError("--confirm-icon-key must match icon_key")
+    print_json(
+        make_client(args).assign_symbol(
+            args.target_type,
+            args.target_uid,
+            args.icon_key,
+        )
+    )
+
+
 def build_parser():
     """Build the api_crud parser between terminal commands and client methods."""
     parser = argparse.ArgumentParser(
@@ -563,6 +583,23 @@ def build_parser():
         required=True,
     )
     user_auth_set_parser.set_defaults(func=command_user_auth_set)
+
+    symbols_parser = subparsers.add_parser(
+        "symbols",
+        help="List safe symbol files and dataset/field metadata assignments",
+    )
+    symbols_parser.set_defaults(func=command_symbols)
+
+    assign_symbol_parser = subparsers.add_parser(
+        "assign-symbol",
+        help="Assign one safe filesystem symbol to one dataset or field",
+    )
+    assign_symbol_parser.add_argument("target_type", choices=["dataset", "field"])
+    assign_symbol_parser.add_argument("target_uid", type=int)
+    assign_symbol_parser.add_argument("icon_key")
+    assign_symbol_parser.add_argument("--confirm-target-uid", type=int, required=True)
+    assign_symbol_parser.add_argument("--confirm-icon-key", required=True)
+    assign_symbol_parser.set_defaults(func=command_assign_symbol)
 
     return parser
 

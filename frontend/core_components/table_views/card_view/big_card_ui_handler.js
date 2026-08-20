@@ -96,7 +96,8 @@ export function createTwoLineKeyValueElement(
     showKey = true,
     isMultilingual = null,
     storedRawValue = value,
-    labelMeta = {}
+    labelMeta = {},
+    timestampDisplayOptions = {}
 ) {
     count_this_function("createTwoLineKeyValueElement"); // 🔢
 
@@ -123,7 +124,11 @@ export function createTwoLineKeyValueElement(
         valueDiv.dataset.langKey = value;
     } else {
         const resolved = resolveLocalizedValue(value, isMultilingual);
-        const timestampDisplay = formatTimestampDisplayParts(resolved, labelMeta);
+        const timestampDisplay = formatTimestampDisplayParts(
+            resolved,
+            labelMeta,
+            timestampDisplayOptions
+        );
         const displayText = timestampDisplay?.displayText ?? resolved;
         if (timestampDisplay?.titleText) {
             valueDiv.title = timestampDisplay.titleText;

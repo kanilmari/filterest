@@ -13,6 +13,7 @@ const {
     createRowArticleNavigableElementMock,
     createTicketStatusBadgeMock,
     isTicketStatusFieldMock,
+    resolveRowArticleTimestampDisplayOptionsMock,
     resolveRowArticleRelationDetailEntriesMock,
 } = vi.hoisted(() => ({
     createImageElementMock: vi.fn(),
@@ -21,6 +22,7 @@ const {
     createRowArticleNavigableElementMock: vi.fn(),
     createTicketStatusBadgeMock: vi.fn(),
     isTicketStatusFieldMock: vi.fn(),
+    resolveRowArticleTimestampDisplayOptionsMock: vi.fn(),
     resolveRowArticleRelationDetailEntriesMock: vi.fn((entries) => entries),
 }));
 
@@ -74,6 +76,10 @@ vi.mock('../../state_stores/lang_preference_reader.js', () => ({
     getLanguageWithBrowserFallback: vi.fn(() => 'en'),
 }));
 
+vi.mock('./row_article_presentation_settings.js', () => ({
+    resolveRowArticleTimestampDisplayOptions: resolveRowArticleTimestampDisplayOptionsMock,
+}));
+
 vi.mock('./row_article_ui_handler.js', () => ({
     createTwoLineKeyValueElement: vi.fn(() => document.createElement('div')),
     createRowArticleKeyValueElement: createRowArticleKeyValueElementMock,
@@ -113,6 +119,11 @@ describe('big_card_content_builder', () => {
         createTicketStatusBadgeMock.mockImplementation(() => document.createElement('div'));
         isTicketStatusFieldMock.mockReset();
         isTicketStatusFieldMock.mockReturnValue(false);
+        resolveRowArticleTimestampDisplayOptionsMock.mockReset();
+        resolveRowArticleTimestampDisplayOptionsMock.mockResolvedValue({
+            displayMode: 'date_time',
+            locale: 'en',
+        });
         resolveRowArticleRelationDetailEntriesMock.mockReset();
         resolveRowArticleRelationDetailEntriesMock.mockImplementation((entries) => entries);
 
@@ -177,6 +188,43 @@ describe('big_card_content_builder', () => {
 
         expect(built.rowArticleContentElement).toBe(built.card_modal_content_div);
         expect(built.rowArticleHeaderText).toBe(built.modal_header_text);
+    });
+
+    test('passes the DB-backed timestamp presentation mode to article detail fields', async () => {
+        resolveRowArticleTimestampDisplayOptionsMock.mockResolvedValueOnce({
+            displayMode: 'date_only',
+            locale: 'fi',
+        });
+
+        await buildRowArticleContent(
+            { created: '2026-08-20T08:55:25' },
+            'travel_info',
+            {
+                created: {
+                    card_element: 'details',
+                    data_type: 'timestamp with time zone',
+                    show_key_on_card: true,
+                },
+            },
+            ['created'],
+            'seed-1',
+            'T',
+            false
+        );
+
+        expect(resolveRowArticleTimestampDisplayOptionsMock).toHaveBeenCalledWith('en');
+        expect(createRowArticleKeyValueElementMock).toHaveBeenCalledWith(
+            'created',
+            '2026-08-20T08:55:25',
+            'created',
+            false,
+            'big_card_detail_value',
+            true,
+            false,
+            '2026-08-20T08:55:25',
+            expect.objectContaining({ data_type: 'timestamp with time zone' }),
+            { displayMode: 'date_only', locale: 'fi' }
+        );
     });
 
     test('prepends the dataset icon to the row article header', async () => {

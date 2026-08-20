@@ -125,3 +125,41 @@ USER_ID=replace_with_fresh_user_id
 ```
 
 Use `fixed_pin` instead of `none` to set a 4–8 digit fixed PIN. The command asks for the new PIN and its confirmation without echoing or placing either value in command history. The `email` method is accepted only when the installation has a working Postmark token and sender address. TOTP authenticator secrets are deliberately not managed by this command.
+
+## Dataset And Field Symbols
+
+The Symbols administrator API stores only a reviewed filesystem symbol key in
+dataset or field metadata. Start with a fresh read so the terminal shows the
+current positive dataset UID and available keys:
+
+```bash
+./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  --credential-username EXISTING_ADMIN_USERNAME symbols
+```
+
+After copying the UIDs from that response, assign one exact key with matching
+confirmations. The command reads the target before the write and verifies the
+authoritative API state afterwards:
+
+```bash
+TRAVEL_INFO_UID=replace_with_fresh_table_uid
+./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  --credential-username EXISTING_ADMIN_USERNAME \
+  assign-symbol dataset "$TRAVEL_INFO_UID" map \
+  --confirm-target-uid "$TRAVEL_INFO_UID" --confirm-icon-key map
+
+TRAVEL_DEALS_UID=replace_with_fresh_table_uid
+./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  --credential-username EXISTING_ADMIN_USERNAME \
+  assign-symbol dataset "$TRAVEL_DEALS_UID" payments \
+  --confirm-target-uid "$TRAVEL_DEALS_UID" --confirm-icon-key payments
+
+USERS_UID=replace_with_fresh_table_uid
+./api_crud --base-url https://fintravel.fi --prompt-credentials \
+  --credential-username EXISTING_ADMIN_USERNAME \
+  assign-symbol dataset "$USERS_UID" group_center_filled \
+  --confirm-target-uid "$USERS_UID" --confirm-icon-key group_center_filled
+```
+
+Use `./api_lang upsert` for corresponding dataset-language keys; keep those
+writes separate so names and icons have independent readback evidence.
