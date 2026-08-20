@@ -12,7 +12,7 @@ not legal advice and still needs human/project approval before publication.
 - npm metadata source: `package-lock.json with installed package.json license metadata`
 - Go modules listed: `96`
 - npm packages listed: `441`
-- bundled asset files listed: `136`
+- bundled asset files listed: `131`
 - dependency rows still requiring license review: `0`
 
 ## Review Notes
@@ -53,7 +53,7 @@ not legal advice and still needs human/project approval before publication.
 ### Bundled Assets
 
 - `.ico`: 1
-- `.jpg`: 22
+- `.jpg`: 17
 - `.png`: 14
 - `.svg`: 99
 
@@ -608,11 +608,6 @@ not legal advice and still needs human/project approval before publication.
 
 | Path | Type |
 | --- | --- |
-| `frontend/dist/auth-tour/platform-card-view.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-filterbar.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-full-shell.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-navbar.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-table-view.jpg` | `.jpg` |
 | `frontend/favicon.ico` | `.ico` |
 | `frontend/favicon4E.png` | `.png` |
 | `frontend/favicon4ER.png` | `.png` |
