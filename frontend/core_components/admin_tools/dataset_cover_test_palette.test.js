@@ -86,11 +86,12 @@ describe('dataset cover test palette', () => {
         expect(panel.hidden).toBe(false);
         expect(button.getAttribute('aria-expanded')).toBe('true');
         expect(panel.dataset.datasetName).toBe('demo');
-        expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(11);
+        expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(13);
 
         const changes = [
             ['oval-x', '--dataset-cover-mask-oval-x', '72', '72%'],
             ['oval-y', '--dataset-cover-mask-oval-y', '95', '95%'],
+            ['oval-position-y', '--dataset-cover-mask-position-y', '42', '42%'],
             ['center-opacity', '--dataset-cover-mask-center-opacity', '0.1', '0.1'],
             ['mid-opacity', '--dataset-cover-mask-mid-opacity', '0.5', '0.5'],
             ['edge-opacity', '--dataset-cover-mask-edge-opacity', '0.9', '0.9'],
@@ -98,6 +99,7 @@ describe('dataset cover test palette', () => {
             ['mid-stop', '--dataset-cover-mask-mid-stop', '60', '60%'],
             ['edge-stop', '--dataset-cover-mask-edge-stop', '95', '95%'],
             ['image-opacity', '--dataset-cover-image-opacity', '0.75', '0.75'],
+            ['hero-height', '--dataset-cover-hero-extra-height', '80', '80px'],
             ['overlay-opacity', '--dataset-cover-overlay-opacity', '0.4', '0.4'],
             ['image-blur', '--dataset-cover-image-blur', '7', '7px'],
         ];
@@ -116,6 +118,11 @@ describe('dataset cover test palette', () => {
         maskInput.checked = false;
         maskInput.dispatchEvent(new Event('change', { bubbles: true }));
         expect(hero.style.getPropertyValue('--dataset-cover-mask-image')).toBe('none');
+        maskInput.checked = true;
+        maskInput.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(hero.style.getPropertyValue('--dataset-cover-mask-image')).toBe('initial');
+        maskInput.checked = false;
+        maskInput.dispatchEvent(new Event('change', { bubbles: true }));
         expect(localStorage).toHaveLength(0);
         expect(window.location.href).toBe(initialUrl);
 
@@ -132,7 +139,7 @@ describe('dataset cover test palette', () => {
         control.destroy();
     });
 
-    test('closes with its close button, Escape, and an outside pointer action', async () => {
+    test('closes with its button, Escape, or an outside pointer action', async () => {
         const hero = createCoverHero();
         const control = await mountDatasetCoverTestPalette(hero, 'demo', {
             requestFn: vi.fn(async () => ({
@@ -142,8 +149,7 @@ describe('dataset cover test palette', () => {
         });
 
         control.button.click();
-        control.panel.querySelector('[data-testid="dataset-cover-test-palette-close"]')
-            .click();
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
         expect(control.panel.hidden).toBe(true);
 
         control.button.click();
@@ -152,9 +158,77 @@ describe('dataset cover test palette', () => {
         expect(document.activeElement).toBe(control.button);
 
         control.button.click();
-        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-close"]')
+            .click();
         expect(control.panel.hidden).toBe(true);
 
         control.destroy();
+    });
+
+    test('moves by its heading and reset restores its temporary geometry', async () => {
+        const hero = createCoverHero();
+        const control = await mountDatasetCoverTestPalette(hero, 'demo', {
+            requestFn: vi.fn(async () => ({
+                view_admin_cover_image_test_palette: true,
+            })),
+            permissionCheck: () => true,
+        });
+        Object.defineProperties(control.panel, {
+            offsetWidth: { configurable: true, value: 420 },
+            offsetHeight: { configurable: true, value: 300 },
+        });
+        vi.spyOn(control.panel, 'getBoundingClientRect').mockReturnValue({
+            left: 400,
+            top: 100,
+            right: 820,
+            bottom: 400,
+            width: 420,
+            height: 300,
+        });
+
+        const heading = control.panel.querySelector('.dataset-cover-test-palette__heading');
+        heading.dispatchEvent(new MouseEvent('pointerdown', {
+            bubbles: true,
+            button: 0,
+            clientX: 410,
+            clientY: 110,
+        }));
+        document.dispatchEvent(new MouseEvent('pointermove', {
+            bubbles: true,
+            clientX: 260,
+            clientY: 210,
+        }));
+
+        expect(control.panel.style.left).toBe('250px');
+        expect(control.panel.style.top).toBe('200px');
+        expect(control.panel.style.right).toBe('auto');
+        expect(control.panel.classList.contains('dataset-cover-test-palette--dragging'))
+            .toBe(true);
+        document.dispatchEvent(new MouseEvent('pointermove', {
+            bubbles: true,
+            clientX: 2000,
+            clientY: 2000,
+        }));
+        expect(control.panel.style.left).toBe(`${window.innerWidth - 420}px`);
+        expect(control.panel.style.top).toBe(`${window.innerHeight - 300}px`);
+        document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+        expect(control.panel.classList.contains('dataset-cover-test-palette--dragging'))
+            .toBe(false);
+
+        control.panel.style.width = '320px';
+        control.panel.style.height = '240px';
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]')
+            .click();
+        expect(control.panel.style.left).toBe('');
+        expect(control.panel.style.top).toBe('');
+        expect(control.panel.style.right).toBe('');
+        expect(control.panel.style.width).toBe('');
+        expect(control.panel.style.height).toBe('');
+
+        const panel = control.panel;
+        const button = control.button;
+        control.destroy();
+        expect(panel.isConnected).toBe(false);
+        expect(button.isConnected).toBe(false);
     });
 });

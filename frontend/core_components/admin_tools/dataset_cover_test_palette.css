@@ -35,12 +35,15 @@
 }
 
 .dataset-cover-test-palette {
-	position: absolute;
-	z-index: 4;
+	position: fixed;
+	z-index: calc(var(--z-filterbar, 100004) + 2);
 	top: 12px;
 	right: 64px;
 	box-sizing: border-box;
 	width: min(420px, calc(100% - 88px));
+	min-width: min(280px, calc(100% - 24px));
+	max-width: calc(100% - 24px);
+	min-height: 180px;
 	max-height: min(520px, calc(100dvh - 48px), calc(100% - 24px));
 	padding: 14px;
 	overflow: auto;
@@ -50,6 +53,8 @@
 	border-radius: 12px;
 	box-shadow: var(--fw-shadow-raised);
 	backdrop-filter: blur(16px);
+	resize: both;
+	overscroll-behavior: contain;
 }
 
 .dataset-cover-test-palette[hidden] {
@@ -61,6 +66,14 @@
 	gap: 12px;
 	align-items: center;
 	justify-content: space-between;
+	cursor: move;
+	user-select: none;
+	touch-action: none;
+}
+
+.dataset-cover-test-palette--dragging,
+.dataset-cover-test-palette--dragging .dataset-cover-test-palette__heading {
+	cursor: grabbing;
 }
 
 .dataset-cover-test-palette__close {

@@ -11,6 +11,7 @@ import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
 const MASK_OVERRIDE_VARIABLE = '--dataset-cover-mask-image';
+const MASK_ENABLED_VALUE = 'initial';
 
 const RANGE_CONTROLS = Object.freeze([
     {
@@ -31,6 +32,16 @@ const RANGE_CONTROLS = Object.freeze([
         max: 140,
         step: 1,
         value: 82,
+        unit: '%',
+    },
+    {
+        id: 'oval-position-y',
+        label: 'ovalPositionY',
+        variable: '--dataset-cover-mask-position-y',
+        min: 0,
+        max: 100,
+        step: 1,
+        value: 48,
         unit: '%',
     },
     {
@@ -104,13 +115,23 @@ const RANGE_CONTROLS = Object.freeze([
         unit: '',
     },
     {
+        id: 'hero-height',
+        label: 'heroHeight',
+        variable: '--dataset-cover-hero-extra-height',
+        min: 0,
+        max: 240,
+        step: 5,
+        value: 40,
+        unit: 'px',
+    },
+    {
         id: 'overlay-opacity',
         label: 'overlayOpacity',
         variable: '--dataset-cover-overlay-opacity',
         min: 0,
         max: 1,
-        step: 0.05,
-        value: 1,
+        step: 0.01,
+        value: 0,
         unit: '',
     },
     {
@@ -135,6 +156,7 @@ const COPY = Object.freeze({
         reset: 'Reset preview',
         ovalX: 'Oval width',
         ovalY: 'Oval height',
+        ovalPositionY: 'Oval vertical position',
         centerOpacity: 'Centre opacity',
         midOpacity: 'Mid opacity',
         edgeOpacity: 'Edge opacity',
@@ -142,6 +164,7 @@ const COPY = Object.freeze({
         midStop: 'Mid stop',
         edgeStop: 'Edge stop',
         imageOpacity: 'Whole image opacity',
+        heroHeight: 'Hero extra height',
         overlayOpacity: 'Darkening overlay opacity',
         imageBlur: 'Whole image blur',
     }),
@@ -154,6 +177,7 @@ const COPY = Object.freeze({
         reset: 'Palauta esikatselu',
         ovalX: 'Ovaalin leveys',
         ovalY: 'Ovaalin korkeus',
+        ovalPositionY: 'Ovaalin pystysijainti',
         centerOpacity: 'Keskustan opacity',
         midOpacity: 'Keskialueen opacity',
         edgeOpacity: 'Reunan opacity',
@@ -161,6 +185,7 @@ const COPY = Object.freeze({
         midStop: 'Keskialueen stop-piste',
         edgeStop: 'Reunan stop-piste',
         imageOpacity: 'Koko kuvan opacity',
+        heroHeight: 'Heron lisäkorkeus',
         overlayOpacity: 'Tummentavan overlayn opacity',
         imageBlur: 'Koko kuvan blur',
     }),
@@ -234,6 +259,82 @@ function restoreInlineVariable(hero, variable, originalValue) {
     hero.style.removeProperty(variable);
 }
 
+function isOvalMaskEnabled(hero) {
+    return getComputedStyle(hero)
+        .getPropertyValue(MASK_OVERRIDE_VARIABLE)
+        .trim() !== 'none';
+}
+
+function setupPanelDragging(panel, dragHandle) {
+    let dragState = null;
+
+    function handlePointerDown(event) {
+        if (event.button !== 0 || event.target.closest('button, input, output')) {
+            return;
+        }
+        const panelRect = panel.getBoundingClientRect();
+        panel.style.left = `${panelRect.left}px`;
+        panel.style.top = `${panelRect.top}px`;
+        panel.style.right = 'auto';
+        dragState = {
+            offsetX: event.clientX - panelRect.left,
+            offsetY: event.clientY - panelRect.top,
+        };
+        panel.classList.add('dataset-cover-test-palette--dragging');
+        if (Number.isInteger(event.pointerId)) {
+            dragHandle.setPointerCapture?.(event.pointerId);
+        }
+        event.preventDefault();
+    }
+
+    function handlePointerMove(event) {
+        if (!dragState) {
+            return;
+        }
+        const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth);
+        const maxTop = Math.max(0, window.innerHeight - panel.offsetHeight);
+        const left = Math.min(
+            Math.max(0, event.clientX - dragState.offsetX),
+            maxLeft
+        );
+        const top = Math.min(
+            Math.max(0, event.clientY - dragState.offsetY),
+            maxTop
+        );
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+        event.preventDefault();
+    }
+
+    function handlePointerUp(event) {
+        if (Number.isInteger(event.pointerId)) {
+            dragHandle.releasePointerCapture?.(event.pointerId);
+        }
+        dragState = null;
+        panel.classList.remove('dataset-cover-test-palette--dragging');
+    }
+
+    function resetGeometry() {
+        ['left', 'top', 'right', 'width', 'height'].forEach((property) => {
+            panel.style.removeProperty(property);
+        });
+    }
+
+    dragHandle.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointercancel', handlePointerUp);
+    return {
+        resetGeometry,
+        destroy() {
+            dragHandle.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerUp);
+            document.removeEventListener('pointercancel', handlePointerUp);
+        },
+    };
+}
+
 function buildPaletteControl(hero, datasetName) {
     const copy = getCopy();
     const originalValues = new Map();
@@ -276,7 +377,7 @@ function buildPaletteControl(hero, datasetName) {
     maskLabel.classList.add('dataset-cover-test-palette__toggle');
     const maskInput = document.createElement('input');
     maskInput.type = 'checkbox';
-    maskInput.checked = hero.style.getPropertyValue(MASK_OVERRIDE_VARIABLE) !== 'none';
+    maskInput.checked = isOvalMaskEnabled(hero);
     maskInput.dataset.testid = 'dataset-cover-test-palette-mask-enabled';
     maskLabel.append(maskInput, document.createTextNode(copy.maskEnabled));
     originalValues.set(
@@ -285,7 +386,7 @@ function buildPaletteControl(hero, datasetName) {
     );
     maskInput.addEventListener('change', () => {
         if (maskInput.checked) {
-            hero.style.removeProperty(MASK_OVERRIDE_VARIABLE);
+            hero.style.setProperty(MASK_OVERRIDE_VARIABLE, MASK_ENABLED_VALUE);
             return;
         }
         hero.style.setProperty(MASK_OVERRIDE_VARIABLE, 'none');
@@ -304,6 +405,7 @@ function buildPaletteControl(hero, datasetName) {
     resetButton.classList.add('dataset-cover-test-palette__reset', 'fw-btn');
     resetButton.dataset.testid = 'dataset-cover-test-palette-reset';
     resetButton.textContent = copy.reset;
+    const dragControls = setupPanelDragging(panel, headingRow);
 
     function closePanel() {
         panel.hidden = true;
@@ -329,12 +431,13 @@ function buildPaletteControl(hero, datasetName) {
             MASK_OVERRIDE_VARIABLE,
             originalValues.get(MASK_OVERRIDE_VARIABLE)
         );
-        maskInput.checked = originalValues.get(MASK_OVERRIDE_VARIABLE) !== 'none';
+        maskInput.checked = isOvalMaskEnabled(hero);
         rangeControls.forEach((control) => {
             restoreInlineVariable(hero, control.variable, originalValues.get(control.variable));
             control.input.value = String(readInitialControlValue(hero, control));
             control.output.value = renderControlValue(control.input.value, control.unit);
         });
+        dragControls.resetGeometry();
     }
 
     button.addEventListener('click', (event) => {
@@ -350,7 +453,8 @@ function buildPaletteControl(hero, datasetName) {
     document.addEventListener('keydown', handleDocumentKeyDown);
 
     panel.append(headingRow, notice, maskLabel, controlGrid, resetButton);
-    hero.append(button, panel);
+    hero.appendChild(button);
+    document.body.appendChild(panel);
 
     return {
         button,
@@ -358,6 +462,7 @@ function buildPaletteControl(hero, datasetName) {
         resetPreview,
         destroy() {
             resetPreview();
+            dragControls.destroy();
             document.removeEventListener('pointerdown', handleDocumentPointerDown);
             document.removeEventListener('keydown', handleDocumentKeyDown);
             button.remove();
