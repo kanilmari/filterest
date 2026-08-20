@@ -276,6 +276,67 @@ describe('cell_editor', () => {
         expect(input.style.width).toBe('120px');
     });
 
+    test('edits multiline text in a cell-sized textarea and commits with Ctrl+Enter', async () => {
+        const { editCell } = await import('./cell_editor.js');
+        const cell = document.createElement('td');
+        cell.classList.add('table_data_cell');
+        cell.dataset.rowIndex = '0';
+        cell.dataset.colIndex = '1';
+        cell.style.padding = '8px 10px';
+        cell.textContent = 'First line\nSecond line';
+        cell.getBoundingClientRect = vi.fn(() => ({
+            width: 320,
+            height: 112,
+            top: 0,
+            right: 320,
+            bottom: 112,
+            left: 0,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+        }));
+        document.body.appendChild(cell);
+        const data = [{ id: 7, description: 'First line\nSecond line' }];
+
+        await editCell(
+            cell,
+            ['id', 'description'],
+            data,
+            { description: { data_type: 'text' } },
+            'orders'
+        );
+
+        const textarea = cell.querySelector('[data-testid="table-editor"]');
+        expect(textarea).toBeInstanceOf(HTMLTextAreaElement);
+        expect(textarea.style.width).toBe('300px');
+        expect(textarea.style.height).toBe('96px');
+
+        textarea.value = 'First line\nSecond line\nThird line';
+        textarea.dispatchEvent(new KeyboardEvent('keydown', {
+            bubbles: true,
+            key: 'Enter',
+        }));
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+
+        textarea.dispatchEvent(new KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            key: 'Enter',
+            ctrlKey: true,
+        }));
+
+        await vi.waitFor(() => expect(endpointRouterMock).toHaveBeenCalledTimes(1));
+        expect(endpointRouterMock).toHaveBeenCalledWith('updateRow', {
+            method: 'POST',
+            url_params: '?dataset=orders',
+            body_data: {
+                id: 7,
+                column: 'description',
+                value: 'First line\nSecond line\nThird line',
+            },
+        });
+    });
+
     test('does not POST when a DATE editor opens and closes without a change', async () => {
         const { editCell } = await import('./cell_editor.js');
         const cell = document.createElement('td');

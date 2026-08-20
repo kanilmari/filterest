@@ -20,3 +20,18 @@ func TestAddRowColumnsQueryExcludesGloballyHiddenFields(t *testing.T) {
 		t.Fatal("add-row metadata must preserve the global field order")
 	}
 }
+
+func TestAddRowColumnsQueryIncludesMultilingualStorageContract(t *testing.T) {
+	for _, requiredFragment := range []string{
+		"COALESCE(scd.is_multilingual, false) AS is_multilingual",
+		"FROM system_languages sl",
+		"sl.is_enabled = true",
+		"sl.public_selector_ready = true",
+		"sl.coverage_status = 'complete'",
+		"sl.review_status = 'approved'",
+	} {
+		if !strings.Contains(addRowColumnsWithTypesQuery, requiredFragment) {
+			t.Fatalf("add-row metadata query missing %q", requiredFragment)
+		}
+	}
+}

@@ -48,6 +48,7 @@ import {
 } from "./row_article_tool_section_wrapper.js";
 import {
     closeRowArticle,
+    dispatchCardArticleToggle,
     updateHighlightedCard,
     saveScrollBeforeRowArticle,
 } from "./row_article_ui_handler.js";
@@ -60,16 +61,6 @@ import { resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
 import { buildRowArticleQueryString } from "./row_article_url_state.js";
-
-function dispatchArticleToggle(tableName, isOpen) {
-    if (!tableName) {
-        return;
-    }
-
-    const detail = { tableName, isOpen };
-    document.dispatchEvent(new CustomEvent("big-card-toggle", { detail }));
-    document.dispatchEvent(new CustomEvent("row-article-toggle", { detail }));
-}
 
 /**
  * Opens the article-view overlay for one dataset row.
@@ -248,7 +239,10 @@ export async function openRowArticleView(
                         canDelete,
                         canSetPrimary: canUpdate,
                         canEditMetadata: canUpdate,
-                        parentImageRows: parent_row_image_rows,
+                        // Once the related image dataset has resolved, its rows are
+                        // authoritative. Reusing the parent row's cached image here
+                        // would resurrect a just-deleted asset until the next F5.
+                        parentImageRows: imgChild ? [] : parent_row_image_rows,
                         imageFirstContext: {
                             rowItem: row_item,
                             tableName: table_name,
@@ -643,7 +637,7 @@ export async function openRowArticleView(
                 );
             }
         }
-        dispatchArticleToggle(table_name, true);
+        dispatchCardArticleToggle(table_name, true);
         Array.from(card_container.children).forEach((c) => {
             if (c !== rowArticleElement && !c.classList.contains("results_count")) {
                 c.classList.add("small-card");

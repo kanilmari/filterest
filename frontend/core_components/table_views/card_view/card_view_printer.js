@@ -1039,9 +1039,10 @@ async function createSingleCard(
     if (header_text_small) {
         const nameEl = document.createElement("div");
         nameEl.classList.add("small_card_name");
-        nameEl.appendChild(
-            createDatasetIconElement(table_name, "small_card_dataset_icon")
-        );
+        const datasetIcon = createDatasetIconElement(table_name, "small_card_dataset_icon");
+        if (datasetIcon) {
+            nameEl.appendChild(datasetIcon);
+        }
         const nameText = document.createElement("span");
         nameText.classList.add("small_card_name_text");
         nameText.textContent = header_text_small;

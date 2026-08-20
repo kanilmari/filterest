@@ -286,6 +286,36 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/symbols",
+      "match_type": "exact",
+      "handler_name": "symbol_registry.AdminHandler",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/ui-languages",
       "match_type": "exact",
       "handler_name": "lang.AdminUILanguagesHandler",
@@ -4840,6 +4870,56 @@
       "path_pattern": "/storage/",
       "match_type": "prefix",
       "handler_name": "router.ServeStorage",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/symbol-assets/",
+      "match_type": "prefix",
+      "handler_name": "symbol_registry.AssetHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
       "scenarios": [
         {
           "name": "production",

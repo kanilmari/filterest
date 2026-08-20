@@ -58,6 +58,7 @@
 @import url("../reusable_components/multiselect_dropdown/multiselect_dropdown.css");
 @import url("../reusable_components/custom_dropdown/custom_dropdown.css");
 @import url("../reusable_components/modal/modals.css");
+@import url("../reusable_components/symbol_asset_resolver.css");
 @import url("../reusable_components/form_section_navigator/form_section_navigator.css");
 @import url("../reusable_components/animated_disclosure/animated_disclosure.css");
 @import url("../reusable_components/collapsible_section/collapsible_section.css");
@@ -85,6 +86,7 @@
 @import url("../core_components/admin_tools/dataset_header_config.css");
 @import url("../core_components/admin_tools/site_language_settings.css");
 @import url("../core_components/admin_tools/user_authentication.css");
+@import url("../core_components/admin_tools/symbol_registry.css");
 @import url("../core_components/admin_tools/field_view_editor.css");
 @import url("../core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/create_table_admin.css");
 @import url("../custom_views/search_vector_maintenance.css");

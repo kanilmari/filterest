@@ -47,20 +47,30 @@ type TableReadMeta struct {
 	CardStyleVariant  string `json:"card_style_variant"`
 }
 
+type AddRowLanguageInfo struct {
+	LanguageCode string `json:"language_code"`
+	EnglishName  string `json:"english_name"`
+	NativeName   string `json:"native_name"`
+	IsDefault    bool   `json:"is_default"`
+	SortOrder    int    `json:"sort_order"`
+}
+
 type AddRowColumnInfo struct {
-	ColumnName                string       `json:"column_name"`
-	DataType                  string       `json:"data_type"`
-	IsNullable                string       `json:"is_nullable"`
-	ColumnDefault             string       `json:"column_default"`
-	IsIdentity                string       `json:"is_identity"`
-	GenerationExpression      string       `json:"generation_expression"`
-	ForeignTableSchema        string       `json:"foreign_table_schema,omitempty"`
-	ForeignTableName          string       `json:"foreign_dataset_name,omitempty"`
-	ForeignColumnName         string       `json:"foreign_column_name,omitempty"`
-	UdtName                   string       `json:"udt_name"`
-	InsertNewSourceWithTarget sql.NullBool `json:"insert_new_source_with_target"`
-	InsertNewTargetWithSource sql.NullBool `json:"insert_new_target_with_source"`
-	SourceInsertSpecs         string       `json:"source_insert_specs"`
-	TargetInsertSpecs         string       `json:"target_insert_specs"`
-	Insertable                sql.NullBool `json:"insertable"`
+	ColumnName                string               `json:"column_name"`
+	DataType                  string               `json:"data_type"`
+	IsNullable                string               `json:"is_nullable"`
+	ColumnDefault             string               `json:"column_default"`
+	IsIdentity                string               `json:"is_identity"`
+	GenerationExpression      string               `json:"generation_expression"`
+	ForeignTableSchema        string               `json:"foreign_table_schema,omitempty"`
+	ForeignTableName          string               `json:"foreign_dataset_name,omitempty"`
+	ForeignColumnName         string               `json:"foreign_column_name,omitempty"`
+	UdtName                   string               `json:"udt_name"`
+	InsertNewSourceWithTarget sql.NullBool         `json:"insert_new_source_with_target"`
+	InsertNewTargetWithSource sql.NullBool         `json:"insert_new_target_with_source"`
+	SourceInsertSpecs         string               `json:"source_insert_specs"`
+	TargetInsertSpecs         string               `json:"target_insert_specs"`
+	Insertable                sql.NullBool         `json:"insertable"`
+	IsMultilingual            bool                 `json:"is_multilingual"`
+	MultilingualLanguages     []AddRowLanguageInfo `json:"multilingual_languages,omitempty"`
 }

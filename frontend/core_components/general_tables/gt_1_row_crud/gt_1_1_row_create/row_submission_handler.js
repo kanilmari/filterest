@@ -7,7 +7,10 @@ import { hideModal } from "../../../../reusable_components/modal/modal_builder.j
 import { refreshTableUnified } from "../gt_1_2_row_read/table_refresh_unified.js";
 import { endpoint_router } from "../../../endpoints/endpoint_router.js";
 import { getDatasetNameByUID } from "./row_api_fetcher.js";
-import { showSuccessToast } from "../../../../reusable_components/notifications/toast_notification_printer.js";
+import {
+    showSuccessToast,
+    showWarningToast,
+} from "../../../../reusable_components/notifications/toast_notification_printer.js";
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { applySelectedFileMetadata, isSharedAssetChildState } from "./row_relation_builder.js";
 
@@ -141,6 +144,11 @@ async function submit_new_row(table_uid, form, columns, modal_form_state, clearS
         });
     } catch (error) {
         console.warn("virhe uuden rivin lisäämisessä (multipart):", error);
+        showWarningToast(
+            error?.message
+            || getTranslationForKey("failed_to_save")
+            || "The row could not be saved. Check every required language."
+        );
     }
 }
 

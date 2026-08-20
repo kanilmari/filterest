@@ -205,7 +205,31 @@ describe('big_card_content_builder', () => {
 
         expect(header?.classList.contains('big_card_header--with-dataset-icon')).toBe(true);
         expect(header?.firstElementChild?.classList.contains('big_card_header_dataset_icon')).toBe(true);
-        expect(header?.querySelector('.big_card_header_dataset_icon path')?.getAttribute('d')).toBeTruthy();
+        expect(header?.querySelector('.big_card_header_dataset_icon')?.dataset.symbolKey).toBe('building');
+    });
+
+    test('does not add an automatic table icon to a row article header', async () => {
+        createRowArticleKeyValueElementMock.mockImplementation(() => {
+            const wrapper = document.createElement('span');
+            wrapper.classList.add('big_card_header_value');
+            wrapper.textContent = 'Firefox';
+            return wrapper;
+        });
+
+        const built = await buildRowArticleContent(
+            { title: 'Firefox' },
+            'app_service_catalog',
+            { title: { card_element: 'header' } },
+            ['title'],
+            'seed-1',
+            'F',
+            false
+        );
+
+        const header = built.rowArticleContentElement.querySelector('.big_card_header');
+
+        expect(header?.classList.contains('big_card_header--with-dataset-icon')).toBe(false);
+        expect(header?.querySelector('.big_card_header_dataset_icon')).toBeNull();
     });
 
     test('keeps the row article title before the first image', async () => {

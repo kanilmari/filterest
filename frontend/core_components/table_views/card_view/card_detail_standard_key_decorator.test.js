@@ -22,7 +22,9 @@ describe("decorateStandardCardDetailKey", () => {
 
         expect(keyElement.getAttribute("data-lang-key")).toBeNull();
         expect(keyElement.classList.contains("card_detail_row_label")).toBe(true);
-        expect(keyElement.querySelector(".card_detail_row_icon svg")).not.toBeNull();
+        expect(keyElement.querySelector(
+            ".card_detail_row_icon .card_detail_row_icon_svg"
+        )).not.toBeNull();
         expect(keyElement.querySelector(".card_detail_row_icon")?.getAttribute("aria-hidden")).toBe("true");
         const labelText = keyElement.querySelector(".card_detail_row_label_text");
         expect(labelText?.dataset.langKey).toBe("website");

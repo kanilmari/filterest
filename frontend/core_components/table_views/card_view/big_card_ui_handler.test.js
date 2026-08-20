@@ -23,6 +23,7 @@ import {
     createRowArticleKeyValueElement,
     createRowArticleLinkTwoLine,
     createRowArticleNavigableElement,
+    dispatchCardArticleToggle,
 } from "./big_card_ui_handler.js";
 
 describe("big_card_ui_handler label icons", () => {
@@ -119,7 +120,9 @@ describe("big_card_ui_handler label icons", () => {
             labelMeta: { card_detail_icon_key: "user" },
         });
 
-        expect(element.querySelector(".two_line_label_icon svg")).not.toBeNull();
+        expect(element.querySelector(
+            ".two_line_label_icon .card_detail_row_icon_svg"
+        )).not.toBeNull();
         expect(element.querySelector(".two_line_label_text")?.dataset.langKey).toBe("contact_details");
         expect(element.querySelector(".two_line_link_group a")?.getAttribute("href")).toBe(
             "https://support.example.test"
@@ -184,5 +187,25 @@ describe("big_card_ui_handler label icons", () => {
         expect(internal.querySelector("a")?.getAttribute("href")).toBe(
             "/documentation/1-read-documentation"
         );
+    });
+});
+
+describe("dispatchCardArticleToggle", () => {
+    test("keeps legacy and row-article listeners on the same toggle detail", () => {
+        const bigCardListener = vi.fn();
+        const rowArticleListener = vi.fn();
+        document.addEventListener("big-card-toggle", bigCardListener, { once: true });
+        document.addEventListener("row-article-toggle", rowArticleListener, { once: true });
+
+        dispatchCardArticleToggle("tickets", true);
+
+        expect(bigCardListener.mock.calls[0][0].detail).toEqual({
+            tableName: "tickets",
+            isOpen: true,
+        });
+        expect(rowArticleListener.mock.calls[0][0].detail).toEqual({
+            tableName: "tickets",
+            isOpen: true,
+        });
     });
 });

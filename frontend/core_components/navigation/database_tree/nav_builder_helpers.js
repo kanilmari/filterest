@@ -109,6 +109,7 @@ export function getAdminToolsStructure() {
                 { id: 'child_tab_config', name: 'child_tab_config' },
                 { id: 'dataset_alias_management', name: 'dataset_alias_management' },
                 { id: 'dataset_header_config', name: 'dataset_header_config' },
+                { id: 'symbols', name: 'symbols' },
             ]
         },
         {

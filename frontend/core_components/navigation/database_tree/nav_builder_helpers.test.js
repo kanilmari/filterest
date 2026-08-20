@@ -149,6 +149,7 @@ describe('getAdminToolsStructure', () => {
         expect(tableTools.children.some(c => c.id === 'card_visibility')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'service_catalog_moderation')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'dataset_alias_management')).toBe(true);
+        expect(tableTools.children.some(c => c.id === 'symbols')).toBe(true);
         expect(maintenance.children.some(c => c.id === 'database_consistency')).toBe(true);
         expect(maintenance.children.some(c => c.id === 'queen_chat')).toBe(false);
     });

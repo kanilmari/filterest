@@ -10,6 +10,11 @@ import {
 
 const STORAGE_KEY = 'dataset_query_params';
 export const DATASET_PREFIX = '/';
+const AUTH_SHELL_QUERY_KEYS = new Set([
+    'login-entry',
+    'register-entry',
+    'redirect',
+]);
 let datasetParams = {};
 let currentDataset = null;
 
@@ -27,6 +32,22 @@ function saveToStorage() {
     } catch {
         /* ignore quota errors */
     }
+}
+
+/**
+ * Reads only dataset-owned query parameters from a browser search string.
+ * Between authentication shell handoff URLs and per-dataset filter persistence.
+ * Exists so transient login/register navigation markers cannot become row filters.
+ */
+export function parseDatasetParamsFromSearch(searchString) {
+    const paramsObj = {};
+    const searchParams = new URLSearchParams(searchString);
+    searchParams.forEach((value, key) => {
+        if (!AUTH_SHELL_QUERY_KEYS.has(key.toLowerCase())) {
+            paramsObj[key] = value;
+        }
+    });
+    return paramsObj;
 }
 
 export function normalizePath(pathname) {
@@ -50,11 +71,7 @@ function parseCurrentSearch() {
         datasetPathName = datasetPathName.substring(0, datasetPathName.indexOf('/'));
     }
     currentDataset = getInternalDatasetName(datasetPathName) || null;
-    const paramsObj = {};
-    const sp = new URLSearchParams(window.location.search);
-    sp.forEach((v, k) => {
-        paramsObj[k] = v;
-    });
+    const paramsObj = parseDatasetParamsFromSearch(window.location.search);
     if (currentDataset) {
         datasetParams[currentDataset] = paramsObj;
         saveToStorage();
@@ -157,7 +174,15 @@ export function parseTableQueryString(searchString) {
     if (search) result.search = search;
     if (view) result.view = view;
 
-    const RESERVED_KEYS = new Set(['sort_column', 'sort_order', 'offset', 'table', 'search', 'view']);
+    const RESERVED_KEYS = new Set([
+        'sort_column',
+        'sort_order',
+        'offset',
+        'table',
+        'search',
+        'view',
+        ...AUTH_SHELL_QUERY_KEYS,
+    ]);
     sp.forEach((value, key) => {
         if (!RESERVED_KEYS.has(key.toLowerCase())) {
             result.filters[key] = value;

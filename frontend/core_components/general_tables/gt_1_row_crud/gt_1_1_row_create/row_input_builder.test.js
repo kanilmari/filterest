@@ -19,7 +19,7 @@ vi.mock("./row_geometry_builder.js", () => ({
 }));
 
 import { fetchReferencedData } from "./row_api_fetcher.js";
-import { buildForeignKeyField } from "./row_input_builder.js";
+import { buildForeignKeyField, buildRegularField } from "./row_input_builder.js";
 
 describe("buildForeignKeyField", () => {
     beforeEach(() => {
@@ -48,5 +48,27 @@ describe("buildForeignKeyField", () => {
             value: 7,
             label: "7 - Palvelut",
         }]);
+    });
+});
+
+describe("buildRegularField", () => {
+    test("routes multilingual metadata through separate language inputs", () => {
+        const form = document.createElement("form");
+
+        buildRegularField(form, "travel_info", {
+            column_name: "title",
+            data_type: "text",
+            is_nullable: "NO",
+            is_multilingual: true,
+            multilingual_languages: [
+                { language_code: "fi", native_name: "Suomi", english_name: "Finnish" },
+                { language_code: "en", native_name: "English", english_name: "English" },
+            ],
+        }, {});
+
+        expect(form.querySelector('[data-testid="form-input-title-fi"]')).not.toBeNull();
+        expect(form.querySelector('[data-testid="form-input-title-en"]')).not.toBeNull();
+        expect(form.querySelectorAll('textarea[name="title"]')).toHaveLength(0);
+        expect(form.querySelector('input[type="hidden"][name="title"]')).not.toBeNull();
     });
 });

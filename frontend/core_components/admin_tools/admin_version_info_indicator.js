@@ -10,7 +10,7 @@ import {
     formatSiteNameForDisplay,
     getCurrentSiteName,
 } from "../state_stores/site_identity_reader.js";
-import { getCardDetailIconSvgMarkup } from "../table_views/card_view/card_detail_icon_builder.js";
+import { createSymbolMaskElement } from "../../reusable_components/symbol_asset_resolver.js";
 
 export const ADMIN_VERSION_INFO_ROUTE = "/api/admin/version-info";
 
@@ -521,10 +521,7 @@ export function buildAdminVersionInfoIndicator() {
     panel.hidden = true;
     indicator.setAttribute("aria-controls", panelId);
 
-    const icon = document.createElement("span");
-    icon.classList.add("filterbar-clock-bar__version-info-icon");
-    icon.setAttribute("aria-hidden", "true");
-    icon.innerHTML = getCardDetailIconSvgMarkup("info");
+    const icon = createSymbolMaskElement("info", "filterbar-clock-bar__version-info-icon");
     indicator.appendChild(icon);
     shell.append(indicator, panel);
 

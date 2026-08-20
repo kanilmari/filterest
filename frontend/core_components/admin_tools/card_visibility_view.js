@@ -55,7 +55,6 @@ const VISIBILITY_FLAGS = [
     { key: 'hide_in_filter_panel',       type: 'checkbox' },
     { key: 'card_detail_label_mode',     type: 'select', options: CARD_DETAIL_LABEL_MODE_OPTIONS },
     { key: 'card_detail_icon_key',       type: 'select', options: getCardDetailIconOptions() },
-    { key: 'card_detail_icon_svg',       type: 'text', width: '18rem' },
 ];
 
 function getCardDetailsLayoutLabel(value) {

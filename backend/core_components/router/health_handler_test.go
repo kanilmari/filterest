@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	backend "easelect/backend/core_components"
 )
 
 func TestHealthHandlerReturnsOKJSON(t *testing.T) {
@@ -81,22 +83,23 @@ func TestSystemHealthHandlerReturnsManagerPayload(t *testing.T) {
 func TestSystemReadyHandlerReturnsOKWhenProbeReady(t *testing.T) {
 	restoreProbe := replaceSystemReadinessProbe(func() systemReadyResponse {
 		return systemReadyResponse{
-			Ready:             true,
-			Status:            "ready",
-			Reasons:           []string{},
-			InstanceID:        "easelect-a",
-			ProductName:       "Filterest",
-			AppVersion:        "8.0.126",
-			ReleaseChannel:    "development",
-			ArtifactPurpose:   "unknown",
-			ArtifactType:      "runtime",
-			ReleaseMaturity:   "snapshot",
-			RequiredDBVersion: "8.0.38",
-			DBVersion:         "8.0.38",
-			DBCompatible:      true,
-			AcceptingNewWork:  true,
-			ActiveRequests:    3,
-			ActiveLongJobs:    0,
+			Ready:                   true,
+			Status:                  "ready",
+			Reasons:                 []string{},
+			InstanceID:              "easelect-a",
+			InstallationEnvironment: "prod",
+			ProductName:             "Filterest",
+			AppVersion:              "8.0.126",
+			ReleaseChannel:          "development",
+			ArtifactPurpose:         "unknown",
+			ArtifactType:            "runtime",
+			ReleaseMaturity:         "snapshot",
+			RequiredDBVersion:       "8.0.38",
+			DBVersion:               "8.0.38",
+			DBCompatible:            true,
+			AcceptingNewWork:        true,
+			ActiveRequests:          3,
+			ActiveLongJobs:          0,
 		}
 	})
 	defer restoreProbe()
@@ -116,6 +119,9 @@ func TestSystemReadyHandlerReturnsOKWhenProbeReady(t *testing.T) {
 	}
 	if !response.Ready || response.Status != "ready" {
 		t.Fatalf("systemReadyHandler payload ready/status = %v/%q, want true/ready", response.Ready, response.Status)
+	}
+	if response.InstallationEnvironment != "prod" {
+		t.Fatalf("systemReadyHandler installation_environment = %q, want prod", response.InstallationEnvironment)
 	}
 	if response.Reasons == nil || len(response.Reasons) != 0 {
 		t.Fatalf("systemReadyHandler reasons = %#v, want empty slice", response.Reasons)
@@ -186,23 +192,24 @@ func TestSystemInstanceStatusHandlerReturnsManagerSnapshot(t *testing.T) {
 
 	restoreProbe := replaceSystemReadinessProbe(func() systemReadyResponse {
 		return systemReadyResponse{
-			Ready:             true,
-			Status:            "ready",
-			Reasons:           []string{},
-			InstanceID:        "easelect-a",
-			ProductName:       "Filterest",
-			AppVersion:        "8.0.128",
-			AppVersionFile:    "VERSION_EASELECT",
-			ReleaseChannel:    "development",
-			ArtifactPurpose:   "unknown",
-			ArtifactType:      "runtime",
-			ReleaseMaturity:   "snapshot",
-			RequiredDBVersion: "8.0.38",
-			DBVersion:         "8.0.38",
-			DBCompatible:      true,
-			AcceptingNewWork:  true,
-			ActiveLongJobs:    2,
-			DrainSupported:    false,
+			Ready:                   true,
+			Status:                  "ready",
+			Reasons:                 []string{},
+			InstanceID:              "easelect-a",
+			InstallationEnvironment: "prod",
+			ProductName:             "Filterest",
+			AppVersion:              "8.0.128",
+			AppVersionFile:          "VERSION_EASELECT",
+			ReleaseChannel:          "development",
+			ArtifactPurpose:         "unknown",
+			ArtifactType:            "runtime",
+			ReleaseMaturity:         "snapshot",
+			RequiredDBVersion:       "8.0.38",
+			DBVersion:               "8.0.38",
+			DBCompatible:            true,
+			AcceptingNewWork:        true,
+			ActiveLongJobs:          2,
+			DrainSupported:          false,
 		}
 	})
 	defer restoreProbe()
@@ -225,6 +232,9 @@ func TestSystemInstanceStatusHandlerReturnsManagerSnapshot(t *testing.T) {
 	}
 	if response.InstanceID != "easelect-a" {
 		t.Fatalf("systemInstanceStatusHandler instance_id = %q, want easelect-a", response.InstanceID)
+	}
+	if response.InstallationEnvironment != "prod" {
+		t.Fatalf("systemInstanceStatusHandler installation_environment = %q, want prod", response.InstallationEnvironment)
 	}
 	if response.ReleaseChannel != "development" || response.ArtifactType != "runtime" ||
 		response.ReleaseMaturity != "snapshot" || response.PublicDistribution {
@@ -259,6 +269,19 @@ func TestSystemInstanceStatusHandlerReturnsManagerSnapshot(t *testing.T) {
 	}
 	if response.ProcessUptimeSeconds < 0 {
 		t.Fatalf("systemInstanceStatusHandler uptime = %d, want >= 0", response.ProcessUptimeSeconds)
+	}
+}
+
+func TestBuildSystemReadinessResponseReportsRuntimeInstallationPurposeWithoutDatabase(t *testing.T) {
+	previousDB := backend.Db
+	backend.Db = nil
+	t.Cleanup(func() { backend.Db = previousDB })
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+
+	response := buildSystemReadinessResponse()
+
+	if response.InstallationEnvironment != "prod" {
+		t.Fatalf("buildSystemReadinessResponse installation_environment = %q, want prod", response.InstallationEnvironment)
 	}
 }
 

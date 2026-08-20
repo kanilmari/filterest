@@ -24,7 +24,9 @@ describe("card_detail_tile_builder", () => {
         });
 
         expect(container.classList.contains("card_details_modern_tiles")).toBe(true);
-        expect(container.querySelector(".card_detail_tile_icon svg")).not.toBeNull();
+        expect(container.querySelector(
+            ".card_detail_tile_icon .card_detail_row_icon_svg"
+        )).not.toBeNull();
         expect(container.querySelector(".card_detail_tile_label")?.textContent).toBe("Created");
         expect(container.querySelector(".card_detail_tile_value")?.textContent).toBe("2026-05-07");
     });
@@ -56,7 +58,9 @@ describe("card_detail_tile_builder", () => {
         }]);
 
         const link = container.querySelector(".card_detail_tile_value_link");
-        expect(container.querySelector(".card_detail_tile_icon svg")).not.toBeNull();
+        expect(container.querySelector(
+            ".card_detail_tile_icon .card_detail_row_icon_svg"
+        )).not.toBeNull();
         expect(link?.getAttribute("href")).toBe("https://example.test");
         expect(link?.getAttribute("target")).toBe("_blank");
         expect(link?.getAttribute("rel")).toBe("noopener noreferrer");

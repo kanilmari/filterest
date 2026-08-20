@@ -325,11 +325,16 @@ export async function buildRowArticleContent(
                     : `${column_label}: ${val}`;
 
                 const h = document.createElement("div");
-                h.classList.add("big_card_header", "big_card_header--with-dataset-icon");
+                h.classList.add("big_card_header");
                 h.style.whiteSpace = "pre-wrap";
-                h.appendChild(
-                    createDatasetIconElement(table_name, "big_card_header_dataset_icon")
+                const datasetIcon = createDatasetIconElement(
+                    table_name,
+                    "big_card_header_dataset_icon"
                 );
+                if (datasetIcon) {
+                    h.classList.add("big_card_header--with-dataset-icon");
+                    h.appendChild(datasetIcon);
+                }
                 if (hasLangKey) {
                     const translatedHeader = document.createElement("span");
                     translatedHeader.classList.add("big_card_header_value");

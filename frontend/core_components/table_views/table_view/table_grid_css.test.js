@@ -35,6 +35,8 @@ describe('table view grid CSS', () => {
         const stickyHeaderRule = extractRule(tablesCss, '.table_from_db thead tr:first-child th');
         const cellsCss = readCss('cells.css');
         const dataCellRule = extractRule(cellsCss, '.table_from_db td');
+        const selectedCellRule = extractRule(cellsCss, '.table_from_db td.table_data_cell.selected');
+        const textareaRule = extractRule(cellsCss, '.table_data_cell.editing .table-editor-textarea');
 
         expect(tableRule).toContain('border-collapse: separate');
         expect(tableRule).toContain('border-spacing: 0');
@@ -50,6 +52,10 @@ describe('table view grid CSS', () => {
         expect(dataCellRule).toContain('border-color: var(--table-grid-border-color, var(--table_border_color))');
         expect(dataCellRule).not.toContain('bg_color_blended');
         expect(dataCellRule).not.toContain('box-shadow');
+        expect(selectedCellRule).toContain('background-color: color-mix');
+        expect(selectedCellRule).toContain('box-shadow: inset 0 0 0 2px');
+        expect(textareaRule).toContain('min-height: 3lh');
+        expect(textareaRule).toContain('resize: vertical');
     });
 
     test('keeps the legacy table header border direct instead of shadow-based', () => {

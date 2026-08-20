@@ -111,7 +111,7 @@
 
     /* Hero filterbar section max-widths (morphing_filterbar_content.css,
        morphing_filterbar_search.css). Title needs more room than filters. */
-    --filterbar-hero-title-max-width: 800px;
+    --filterbar-hero-title-max-width: 1200px;
     --filterbar-hero-content-max-width: 550px;
     --filterbar-search-only-max-width: 800px;
 

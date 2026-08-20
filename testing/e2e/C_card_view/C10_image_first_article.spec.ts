@@ -272,9 +272,10 @@ test.describe('C10 — Standalone Image-first View', () => {
         const description = content?.querySelector<HTMLElement>(
           ':scope > .big_card_description_container',
         );
-        if (!content || !imageStage || !scrollSurface || !details || !description) {
+        const title = content?.querySelector<HTMLElement>(':scope > .big_card_header');
+        if (!content || !imageStage || !scrollSurface || !details || !description || !title) {
           throw new Error(
-            'Image-first article is missing its scroll surface, content, stage, details, or description.',
+            'Image-first article is missing its scroll surface, content, stage, title, details, or description.',
           );
         }
 
@@ -282,6 +283,15 @@ test.describe('C10 — Standalone Image-first View', () => {
           stageHeight: imageStage.getBoundingClientRect().height,
           viewportHeight: window.innerHeight,
           articleWidth: content.getBoundingClientRect().width,
+          articleTitleWidth: title.getBoundingClientRect().width,
+          articleTitleCenterOffset: Math.abs(
+            title.getBoundingClientRect().left
+              + (title.getBoundingClientRect().width / 2)
+              - (window.innerWidth / 2),
+          ),
+          hasAutomaticDatasetIcon: Boolean(
+            title.querySelector('.big_card_header_dataset_icon'),
+          ),
           detailsImmediatelyAfterDescription: description.nextElementSibling === details,
           scrollRange: scrollSurface.scrollHeight - scrollSurface.clientHeight,
         };
@@ -290,30 +300,64 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(Math.abs(layout.stageHeight - layout.viewportHeight)).toBeLessThanOrEqual(1);
       expect(layout.articleWidth).toBeGreaterThan(0);
       expect(layout.articleWidth).toBeLessThanOrEqual(801);
+      expect(layout.articleTitleWidth).toBeGreaterThan(800);
+      expect(layout.articleTitleWidth).toBeLessThanOrEqual(1201);
+      expect(layout.articleTitleCenterOffset).toBeLessThanOrEqual(1);
+      expect(layout.hasAutomaticDatasetIcon).toBe(false);
       expect(layout.detailsImmediatelyAfterDescription).toBe(true);
       expect(layout.scrollRange).toBeGreaterThan(0);
       const visualContract = await stage.evaluate((stageElement) => {
         const stageStyle = window.getComputedStyle(stageElement);
         const backdropStyle = window.getComputedStyle(stageElement, '::before');
         const imageFirstView = stageElement.closest<HTMLElement>('.image_first_view');
+        const rowNavigation = imageFirstView?.querySelector<HTMLElement>(
+          '[data-testid="row-article-row-navigation"]',
+        );
+        const rowNavigationButton = rowNavigation?.querySelector<HTMLElement>(
+          '.row_article_row_navigation_button',
+        );
+        const media = stageElement
+          .querySelector<HTMLElement>('[data-testid="row-article-image-first-media"]');
         return {
+          animationName: imageFirstView
+            ? window.getComputedStyle(imageFirstView).animationName
+            : '',
           animationDuration: imageFirstView
             ? window.getComputedStyle(imageFirstView).animationDuration
             : '',
           backdropImage: backdropStyle.backgroundImage,
           backdropFilter: backdropStyle.filter,
-          imageWidth: stageElement
-            .querySelector<HTMLElement>('[data-testid="row-article-image-first-media"]')
-            ?.getBoundingClientRect().width || 0,
+          imageHeight: media?.getBoundingClientRect().height || 0,
+          imageWidth: media?.getBoundingClientRect().width || 0,
+          rowNavigationBackground: rowNavigation
+            ? window.getComputedStyle(rowNavigation).backgroundColor
+            : '',
+          rowNavigationPointerEvents: rowNavigation
+            ? window.getComputedStyle(rowNavigation).pointerEvents
+            : '',
+          rowNavigationButtonPointerEvents: rowNavigationButton
+            ? window.getComputedStyle(rowNavigationButton).pointerEvents
+            : '',
           stageWidth: stageElement.getBoundingClientRect().width,
           stageBackground: stageStyle.backgroundColor,
         };
       });
+      expect(visualContract.animationName).toBe('image-first-view-grow-reveal');
       expect(visualContract.animationDuration).toBe('0.5s');
       expect(visualContract.backdropImage).not.toBe('none');
       expect(visualContract.backdropFilter).toContain('blur(');
+      expect(Math.abs(visualContract.imageHeight - layout.viewportHeight)).toBeLessThanOrEqual(1);
       expect(visualContract.imageWidth).toBeLessThan(visualContract.stageWidth);
+      expect(visualContract.rowNavigationBackground).toBe('rgba(0, 0, 0, 0)');
+      expect(visualContract.rowNavigationPointerEvents).toBe('none');
+      expect(visualContract.rowNavigationButtonPointerEvents).toBe('auto');
       expect(visualContract.stageBackground).not.toBe('rgba(0, 0, 0, 0)');
+      const closeButton = page.locator(
+        '.image_modal.image_first_view_modal [data-testid="modal-close-button"]',
+      );
+      await closeButton.hover();
+      await page.waitForTimeout(1_500);
+      await expect(closeButton).toHaveCSS('opacity', '1');
       const modalScrollSurface = page.locator('.image_modal.image_first_view_modal .modal_body');
       const initialScrollTop = await modalScrollSurface.evaluate((element) => element.scrollTop);
       await stage.hover();

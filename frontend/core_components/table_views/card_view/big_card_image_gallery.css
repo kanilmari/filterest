@@ -33,20 +33,26 @@
     width: 100%;
     min-height: 100%;
     background: var(--bg_color_extreme);
-    transform-origin: center top;
-    animation: image-first-view-reveal var(--transition-time, 0.5s)
+    animation: image-first-view-grow-reveal var(--transition-time, 0.5s)
         cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes image-first-view-reveal {
+/* Reveal the already-final 100dvh layout from one dim viewport-centre pixel.
+   Clipping instead of scaling keeps the image and article geometry stable, so
+   the final frame cannot flash or leave the media stage shorter than the viewport. */
+@keyframes image-first-view-grow-reveal {
     from {
-        opacity: 0.2;
-        transform: scale(0.92);
+        opacity: 0.12;
+        clip-path: inset(
+            calc(50dvh - 0.5px)
+            calc(50% - 0.5px)
+            calc(100% - 50dvh - 0.5px)
+        );
     }
 
     to {
         opacity: 1;
-        transform: scale(1);
+        clip-path: inset(0);
     }
 }
 
@@ -60,6 +66,15 @@
     overflow: visible;
 }
 
+.image_first_view_article_content > .big_card_header {
+    box-sizing: border-box;
+    left: 50%;
+    width: min(calc(100vw - 2rem), 1200px);
+    max-width: 1200px !important;
+    position: relative;
+    transform: translateX(-50%);
+}
+
 .image_first_view > .row_article_row_navigation {
     position: fixed;
     inset-block-start: 50%;
@@ -68,7 +83,9 @@
     display: flex;
     justify-content: space-between;
     padding-inline: clamp(8px, 1vw, 16px);
+    background: transparent;
     transform: translateY(-50%);
+    pointer-events: none;
 }
 
 .row_article_image_first_stage {
@@ -102,9 +119,9 @@
     position: relative;
     z-index: 1;
     width: auto;
-    height: auto;
+    height: 100dvh;
     max-width: 100%;
-    max-height: 100dvh;
+    max-height: none;
     object-fit: contain;
 }
 

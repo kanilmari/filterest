@@ -1,5 +1,5 @@
 // main_tab_printer.test.js
-// Verifies the main tab renderer creates stable inline SVG icons for nav tabs.
+// Verifies dataset tabs use safe symbol masks while auth controls keep inline SVG icons.
 // Bridges fetched tab metadata with the rendered tab shell in a jsdom runtime.
 // Exists to prevent regressions where nav-tab icons silently disappear after rerenders.
 // @vitest-environment jsdom
@@ -144,7 +144,7 @@ describe("initTabs", () => {
         vi.mocked(getSelectedDataset).mockReturnValue(null);
     });
 
-    test("renders nav tab icons as inline svg elements", async () => {
+    test("renders dataset metadata as symbol masks and auth controls as inline SVG", async () => {
         const { initTabs } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -157,8 +157,10 @@ describe("initTabs", () => {
         );
 
         expect(datasetIcon).not.toBeNull();
-        expect(datasetIcon.tagName.toLowerCase()).toBe("svg");
-        expect(datasetIcon.querySelector("path")).not.toBeNull();
+        expect(datasetIcon.tagName.toLowerCase()).toBe("span");
+        expect(datasetIcon.dataset.symbolKey).toBe("shopping_cart");
+        expect(datasetIcon.style.getPropertyValue("--metadata-symbol-url"))
+            .toContain("/symbol-assets/shopping_cart.svg");
         expect(accountIcon).not.toBeNull();
         expect(accountIcon.tagName.toLowerCase()).toBe("svg");
         expect(accountIcon.querySelector("path")).not.toBeNull();
@@ -180,7 +182,6 @@ describe("initTabs", () => {
     });
 
     test("uses the filled users icon for the system users tab fallback", async () => {
-        const { getTabIconPath } = await import("./tab_icon_library.js");
         const { initTabs } = await import("./main_tab_printer.js");
         const preloadedContentTablesResponse = {
             datasets: [
@@ -195,10 +196,12 @@ describe("initTabs", () => {
 
         await initTabs({ preloadedContentTablesResponse });
 
-        const usersIconPath = document.querySelector(
-            '.navtablinks[data-id="system_users"] .navtab_icon path'
+        const usersIcon = document.querySelector(
+            '.navtablinks[data-id="system_users"] .navtab_icon'
         );
-        expect(usersIconPath?.getAttribute("d")).toBe(getTabIconPath("group_filled"));
+        expect(usersIcon?.dataset.symbolKey).toBe("group_filled");
+        expect(usersIcon?.style.getPropertyValue("--metadata-symbol-url"))
+            .toContain("/symbol-assets/group_filled.svg");
     });
 
     test("renders system users once when it is also marked as the main table", async () => {

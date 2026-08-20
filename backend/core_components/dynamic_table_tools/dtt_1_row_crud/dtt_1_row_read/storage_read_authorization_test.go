@@ -184,6 +184,99 @@ func canonicalStorageRequest() StorageReadRequest {
 	return StorageReadRequest{TableUID: "104", ParentRowID: 7, Variant: "original", Filename: "104_7_9.png"}
 }
 
+func canonicalDatasetMediaStorageRequest() DatasetMediaStorageReadRequest {
+	return DatasetMediaStorageReadRequest{
+		TableUID: "104",
+		Role:     "cover",
+		Variant:  "original",
+		Filename: "cover.png",
+	}
+}
+
+func TestAuthorizeDatasetMediaStorageReadRequiresExactRegistryEntryAndDatasetRead(t *testing.T) {
+	t.Run("allowed", func(t *testing.T) {
+		permissionDB, state := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
+			{
+				contains: "FROM public.system_dataset_media AS media",
+				columns:  []string{"table_name"},
+				rows:     [][]driver.Value{{"app_docs"}},
+			},
+			storagePermissionLookup("app_docs"),
+		})
+
+		decision, err := AuthorizeDatasetMediaStorageRead(
+			permissionDB,
+			dbutils.NewRequestActorContext(42, "basic"),
+			canonicalDatasetMediaStorageRequest(),
+		)
+		if err != nil || decision != StorageReadAllowed {
+			t.Fatalf("AuthorizeDatasetMediaStorageRead() = (%v, %v), want allowed nil", decision, err)
+		}
+		assertStorageAuthorizationQueriesDrained(t, state)
+	})
+
+	t.Run("unregistered path", func(t *testing.T) {
+		permissionDB, state := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
+			{
+				contains: "media.storage_key = $3",
+				columns:  []string{"table_name"},
+				rows:     nil,
+			},
+		})
+
+		decision, err := AuthorizeDatasetMediaStorageRead(
+			permissionDB,
+			dbutils.NewRequestActorContext(42, "basic"),
+			canonicalDatasetMediaStorageRequest(),
+		)
+		if err != nil || decision != StorageReadNotFound {
+			t.Fatalf("AuthorizeDatasetMediaStorageRead(unregistered) = (%v, %v), want not-found nil", decision, err)
+		}
+		assertStorageAuthorizationQueriesDrained(t, state)
+	})
+
+	t.Run("dataset denied", func(t *testing.T) {
+		permissionDB, state := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
+			{
+				contains: "FROM public.system_dataset_media AS media",
+				columns:  []string{"table_name"},
+				rows:     [][]driver.Value{{"app_docs"}},
+			},
+			{
+				contains: "FROM system_group_table_func_rights",
+				columns:  []string{"allowed"},
+				rows:     nil,
+			},
+		})
+
+		decision, err := AuthorizeDatasetMediaStorageRead(
+			permissionDB,
+			dbutils.NewRequestActorContext(42, "basic"),
+			canonicalDatasetMediaStorageRequest(),
+		)
+		if err != nil || decision != StorageReadForbidden {
+			t.Fatalf("AuthorizeDatasetMediaStorageRead(denied) = (%v, %v), want forbidden nil", decision, err)
+		}
+		assertStorageAuthorizationQueriesDrained(t, state)
+	})
+
+	t.Run("invalid shape", func(t *testing.T) {
+		permissionDB, state := openStorageAuthorizationTestDB(t, nil)
+		request := canonicalDatasetMediaStorageRequest()
+		request.Variant = "300"
+
+		decision, err := AuthorizeDatasetMediaStorageRead(
+			permissionDB,
+			dbutils.NewRequestActorContext(42, "basic"),
+			request,
+		)
+		if err != nil || decision != StorageReadNotFound {
+			t.Fatalf("AuthorizeDatasetMediaStorageRead(invalid) = (%v, %v), want not-found nil", decision, err)
+		}
+		assertStorageAuthorizationQueriesDrained(t, state)
+	})
+}
+
 func TestAuthorizeStorageReadAllowsVisibleSelectableParentCache(t *testing.T) {
 	permissionDB, permissionState := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
 		storageTableLookup("app_docs"),

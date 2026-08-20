@@ -239,6 +239,19 @@ export async function saveCardVisibility(request) {
     });
 }
 
+/** Returns the safe filesystem symbol list and current dataset/field assignments. */
+export async function fetchAdminSymbols() {
+    return stable_candidate_endpoint_router('adminSymbols', { method: 'GET' });
+}
+
+/** Assigns one registered icon key to one dataset or field metadata row. */
+export async function saveAdminSymbolAssignment(request) {
+    return stable_candidate_endpoint_router('adminSymbols', {
+        method: 'POST',
+        body_data: request,
+    });
+}
+
 /**
  * fetchChildTabConfig returns the legacy-named child-tab editor payload for one parent table.
  * The payload drives reverse-FK "referring tab" UI copy even though the route name stays stable.

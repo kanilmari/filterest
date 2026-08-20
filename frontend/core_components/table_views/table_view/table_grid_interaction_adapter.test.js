@@ -43,15 +43,22 @@ describe('table_grid_interaction_adapter', () => {
             bubbles: true,
             button: 0,
         }));
-        getTableCell(table, 1, 1).dispatchEvent(new MouseEvent('mousemove', {
+        selectCellText(getTableCell(table, 0, 0));
+        expect(document.getSelection().toString()).toBe('Ada');
+
+        const rangeMouseMove = new MouseEvent('mousemove', {
             bubbles: true,
+            cancelable: true,
             buttons: 1,
-        }));
+        });
+        getTableCell(table, 1, 1).dispatchEvent(rangeMouseMove);
         table.dispatchEvent(new MouseEvent('mouseup', {
             bubbles: true,
         }));
 
         expect(table.querySelectorAll('td.table_data_cell.selected')).toHaveLength(4);
+        expect(rangeMouseMove.defaultPrevented).toBe(true);
+        expect(document.getSelection().toString()).toBe('');
 
         getTableCell(table, 1, 1).dispatchEvent(new MouseEvent('contextmenu', {
             bubbles: true,
@@ -91,6 +98,53 @@ describe('table_grid_interaction_adapter', () => {
         expect(contextMenuEvent.defaultPrevented).toBe(false);
         expect(document.querySelector('.selection-menu')).toBeNull();
     });
+
+    test('extends the anchor vertically with Shift while leaving same-cell text selection available', () => {
+        const table = buildTable([
+            ['Ada', 'Ready'],
+            ['Linus', 'Review'],
+            ['Grace', 'Done'],
+        ]);
+        document.body.appendChild(table);
+        addTableGridInteractionAdapter(table, ['name', 'status'], []);
+
+        const ordinaryMouseDown = new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+        });
+        getTableCell(table, 0, 1).dispatchEvent(ordinaryMouseDown);
+
+        selectCellText(getTableCell(table, 0, 1));
+        const sameCellMouseMove = new MouseEvent('mousemove', {
+            bubbles: true,
+            cancelable: true,
+            buttons: 1,
+        });
+        getTableCell(table, 0, 1).dispatchEvent(sameCellMouseMove);
+
+        expect(sameCellMouseMove.defaultPrevented).toBe(false);
+        expect(document.getSelection().toString()).toBe('Ready');
+        table.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+        expect(ordinaryMouseDown.defaultPrevented).toBe(false);
+
+        const shiftMouseDown = new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            shiftKey: true,
+        });
+        getTableCell(table, 2, 1).dispatchEvent(shiftMouseDown);
+        table.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+        expect(shiftMouseDown.defaultPrevented).toBe(true);
+        expect(table.querySelectorAll('td.table_data_cell.selected')).toHaveLength(3);
+        expect(getTableCell(table, 0, 1).classList.contains('selected')).toBe(true);
+        expect(getTableCell(table, 1, 1).classList.contains('selected')).toBe(true);
+        expect(getTableCell(table, 2, 1).classList.contains('selected')).toBe(true);
+        expect(getTableCell(table, 1, 0).classList.contains('selected')).toBe(false);
+    });
 });
 
 function buildTable(rows) {
@@ -120,4 +174,12 @@ function getTableCell(table, rowIndex, columnIndex) {
     return table.querySelector(
         `td.table_data_cell[data-row-index='${rowIndex}'][data-col-index='${columnIndex}']`
     );
+}
+
+function selectCellText(cell) {
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    const selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
 }

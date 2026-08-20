@@ -11,6 +11,7 @@ import { showWarningToast } from "../../../../reusable_components/notifications/
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
+import { buildMultilingualTextareaGroup } from "./row_multilingual_input_builder.js";
 
 const ASSET_PROFILE_LABELS = {
     image: () => getTranslationForKey("image") || "Image",
@@ -191,6 +192,18 @@ function appendChildColumnInput(fieldset, datasetName, ccol, childObjectState) {
     label.style.margin = "10px 0 5px";
 
     const dataTypeLower = ccol.data_type.toLowerCase();
+
+    if (ccol.is_multilingual === true) {
+        buildMultilingualTextareaGroup(fieldset, {
+            tableName: datasetName,
+            column: ccol,
+            idPrefix: childId,
+            onValueChange: (value) => {
+                childObjectState.data[ccol.column_name] = value;
+            },
+        });
+        return;
+    }
     if (
         dataTypeLower.includes("geometry") &&
         ccol.column_name.toLowerCase() === "position"
@@ -793,6 +806,17 @@ export async function buildManyToManySection(form, manyToManyInfos, modal_form_s
             });
 
             for (const col of sanitizedThirdCols) {
+                if (col.is_multilingual === true) {
+                    buildMultilingualTextareaGroup(newRowFieldset, {
+                        tableName: relationInfo.thirdTableName,
+                        column: col,
+                        idPrefix: `m2m-${relationInfo.thirdTableName}-${col.column_name}`,
+                        onValueChange: (value) => {
+                            newRowState.data[col.column_name] = value;
+                        },
+                    });
+                    continue;
+                }
                 const l = document.createElement("label");
                 // l.textContent = col.column_name;
                 l.dataset.langKey = col.column_name;
@@ -810,6 +834,12 @@ export async function buildManyToManySection(form, manyToManyInfos, modal_form_s
                 newRowFieldset.appendChild(l);
                 newRowFieldset.appendChild(inp);
             }
+            const setNewRowInputsEnabled = (enabled) => {
+                newRowFieldset.querySelectorAll("input, textarea, select").forEach((input) => {
+                    input.disabled = !enabled;
+                });
+            };
+            setNewRowInputsEnabled(false);
             fieldset.appendChild(newRowFieldset);
 
             // Radio-logiikka
@@ -817,6 +847,7 @@ export async function buildManyToManySection(form, manyToManyInfos, modal_form_s
                 if (existingRadio.checked) {
                     dropdown_container.style.display = "block";
                     newRowFieldset.style.display = "none";
+                    setNewRowInputsEnabled(false);
                     modal_form_state[
                         `_m2m_mode_${relationInfo.thirdTableName}`
                     ] = "existing";
@@ -826,6 +857,7 @@ export async function buildManyToManySection(form, manyToManyInfos, modal_form_s
                 if (newRadio.checked) {
                     dropdown_container.style.display = "none";
                     newRowFieldset.style.display = "block";
+                    setNewRowInputsEnabled(true);
                     modal_form_state[
                         `_m2m_mode_${relationInfo.thirdTableName}`
                     ] = "new";

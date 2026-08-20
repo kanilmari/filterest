@@ -27,6 +27,28 @@
     border-radius: var(--border_radius_small);
 }
 
+.row-creation-multilingual-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+    margin: 10px 0 5px;
+    padding: 12px;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+}
+
+.row-creation-multilingual-field legend {
+    padding-inline: 4px;
+    font-weight: 600;
+}
+
+.row-creation-multilingual-field label {
+    margin-top: 6px;
+    color: var(--empty_field_text_color);
+    font-size: 0.9rem;
+}
+
 .row-creation-form__section .vanilla-dropdown,
 .row-creation-form__section input,
 .row-creation-form__section select,

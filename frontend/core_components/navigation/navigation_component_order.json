@@ -42,7 +42,7 @@
         "files": [
             "tabs.js                     — initTabs(), openNavTab(), SVG tab rendering, auth filtering",
             "tabs.css                     — tab bar styling",
-            "tab_icon_library.js          — Material Symbols SVG path registry (getTabIconPath)",
+            "tab_icon_library.js          — legacy inline paths for static auth controls; metadata symbols live in frontend/icons/symbols",
             "tab_reorder_drag_and_drop.js — drag-and-drop tab reordering with API persistence"
         ]
     },

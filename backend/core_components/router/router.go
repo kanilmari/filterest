@@ -33,6 +33,7 @@ import (
 	lang "easelect/backend/core_components/lang"
 	productidentity "easelect/backend/core_components/product_identity"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/symbol_registry"
 	"easelect/backend/core_components/system_table_tools"
 	"easelect/backend/pipeline"
 	"easelect/backend/reusable_components/vanilla_tree"
@@ -83,6 +84,7 @@ const (
 func RegisterRoutes(frontendDir string, storagePath string) {
 	ResetRouteDefinitions()
 	localFrontendDir = frontendDir
+	symbol_registry.ConfigureDirectory(filepath.Join(frontendDir, "icons", "symbols"))
 
 	// Otetaan storagePath talteen
 	localStorageDir = storagePath
@@ -97,6 +99,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	// Staattiset reitit
 	functionRegisterHandler("/favicon4S.png", faviconHandler, "router.faviconHandler")
 	functionRegisterHandler("/frontend/", handleFrontend, "router.handleFrontend")
+	functionRegisterHandler("/symbol-assets/", symbol_registry.AssetHandler, "symbol_registry.AssetHandler")
 	functionRegisterHandler("/apps/", handleApps, "router.handleApps")
 	functionRegisterHandler("/storage/", ServeStorage, "router.ServeStorage")
 	functionRegisterHandler("/robots.txt", robotsHandler, "router.robotsHandler")
@@ -135,6 +138,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/request-email-change-otp", auth.RequestEmailChangeOTPHandler, "auth.RequestEmailChangeOTPHandler")
 	functionRegisterHandler("/api/request-password-change-otp", auth.RequestPasswordChangeOTPHandler, "auth.RequestPasswordChangeOTPHandler")
 	functionRegisterHandler("/api/admin/user-authentication", auth.AdminUserAuthenticationHandler, "auth.AdminUserAuthenticationHandler")
+	functionRegisterHandler("/api/admin/symbols", symbol_registry.AdminHandler, "symbol_registry.AdminHandler")
 
 	// DevTools-reitit (vain eksplisiittisessä kehitysympäristössä)
 	envType := os.Getenv("ENVIRONMENT_TYPE")

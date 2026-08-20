@@ -44,6 +44,7 @@ var protectedStorageVariants = map[string]struct{}{
 }
 
 var storageAuthorizeRead = dtt_1_row_read.AuthorizeStorageRead
+var storageAuthorizeDatasetMediaRead = dtt_1_row_read.AuthorizeDatasetMediaStorageRead
 var storageCheckLoginToBrowse = middlewares.CheckLoginToBrowse
 
 type storageAuthorizationDecision uint8
@@ -89,6 +90,33 @@ func parseProtectedStoragePath(cleanRel string) (dtt_1_row_read.StorageReadReque
 		ParentRowID: parentRowID,
 		Variant:     parts[2],
 		Filename:    filename,
+	}, true
+}
+
+func parseDatasetMediaStoragePath(cleanRel string) (dtt_1_row_read.DatasetMediaStorageReadRequest, bool) {
+	normalized := filepath.ToSlash(cleanRel)
+	if strings.Contains(normalized, `\`) {
+		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
+	}
+	parts := strings.Split(normalized, "/")
+	if len(parts) != 5 || !canonicalStorageID(parts[0]) || parts[1] != "dataset_media" {
+		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
+	}
+	if parts[2] != "cover" && parts[2] != "background" {
+		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
+	}
+	if parts[3] != "original" {
+		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
+	}
+	filename := parts[4]
+	if filename == "" || filename != strings.TrimSpace(filename) || filename == "." || filename == ".." || filepath.Base(filename) != filename {
+		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
+	}
+	return dtt_1_row_read.DatasetMediaStorageReadRequest{
+		TableUID: parts[0],
+		Role:     parts[2],
+		Variant:  parts[3],
+		Filename: filename,
 	}, true
 }
 
@@ -183,6 +211,29 @@ func authorizeStorageRequest(w http.ResponseWriter, r *http.Request, cleanRel st
 		return storageAuthorizationAllowed
 	}
 
+	if datasetMediaRequest, ok := parseDatasetMediaStoragePath(cleanRel); ok {
+		actor, actorDecision := storageRequestActor(w, r)
+		if actorDecision != storageAuthorizationAllowed {
+			return actorDecision
+		}
+		if backend.Db == nil {
+			log.Printf("\033[31m[ServeStorage] dataset media authorization database unavailable for user_id=%d\033[0m", actor.UserID)
+			return storageAuthorizationInternalError
+		}
+		decision, err := storageAuthorizeDatasetMediaRead(backend.Db, actor, datasetMediaRequest)
+		if err != nil {
+			log.Printf(
+				"\033[31m[ServeStorage] dataset media authorization failed for table_uid=%s role=%s user_id=%d: %v\033[0m",
+				datasetMediaRequest.TableUID,
+				datasetMediaRequest.Role,
+				actor.UserID,
+				err,
+			)
+			return storageAuthorizationInternalError
+		}
+		return storageReadDecisionToAuthorization(decision)
+	}
+
 	storageRequest, ok := parseProtectedStoragePath(cleanRel)
 	if !ok {
 		return storageAuthorizationNotFound
@@ -214,6 +265,10 @@ func authorizeStorageRequest(w http.ResponseWriter, r *http.Request, cleanRel st
 		)
 		return storageAuthorizationInternalError
 	}
+	return storageReadDecisionToAuthorization(decision)
+}
+
+func storageReadDecisionToAuthorization(decision dtt_1_row_read.StorageReadDecision) storageAuthorizationDecision {
 	switch decision {
 	case dtt_1_row_read.StorageReadAllowed:
 		return storageAuthorizationAllowed

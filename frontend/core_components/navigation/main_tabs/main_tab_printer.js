@@ -33,6 +33,7 @@ import {
 } from "./main_tab_active_state.js";
 import { NAVBAR_VISIBILITY_CHANGED_EVENT } from "../menu_button/navbar_visibility_handler.js";
 import { resolveFilterBarElement } from "../../filterbar/filterbar_engine/filterbar_visibility_handler.js";
+import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 
 /** User friendly tabs **/
 // Imports and SVG paths defined already...
@@ -133,14 +134,14 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                     id: 'system_users',
                     text: 'Users',
                     langKey: 'users',
-                    svgPath: getTabIconPath(table.icon_key || 'group_filled'),
+                    iconKey: table.icon_key || 'group_filled',
                 };
             }
             return {
                 id: table.dataset_name,
                 text: formatTableName(table.dataset_name),
                 langKey: table.dataset_name,
-                svgPath: getTabIconPath(getDatasetTabIconKey(table)),
+                iconKey: getDatasetTabIconKey(table),
                 isProjectTable: true,
                 dataset: table.dataset_name,
                 route: '/api/get-results',
@@ -427,7 +428,7 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         }
         attachFastTabOpenHandlers(tabButton, tabData.id);
 
-        createSVGTabButton(tabButton, tabData.text, tabData.svgPath);
+        createSVGTabButton(tabButton, tabData.text, tabData.svgPath, tabData.iconKey);
         /* Skip permission checks for public-facing tabs (login, register) —
            anonymous users have no cached permissions so applyPermission
            would incorrectly hide them.
@@ -614,7 +615,7 @@ function createNavbarAuthActionIcon(iconPathD) {
     return icon;
 }
 
-function createSVGTabButton(tabElement, buttonText, iconPathD) {
+function createSVGTabButton(tabElement, buttonText, iconPathD, iconKey = "") {
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     const initialOutlinePresentation = buildTabOutlinePresentation({
@@ -640,18 +641,21 @@ function createSVGTabButton(tabElement, buttonText, iconPathD) {
 
     tabElement.appendChild(svg);
 
-    // Keep nav icons as inline SVG instead of CSS masks.
-    // The mask-based version intermittently lost icons during long SPA sessions,
-    // while hard reload restored them. Inline SVG keeps the icon tied to the tab DOM.
-    const icon = document.createElementNS(svgNS, "svg");
-    icon.classList.add("navtab_icon");
-    icon.setAttribute("aria-hidden", "true");
-    icon.setAttribute("width", "26");
-    icon.setAttribute("height", "26");
-    icon.setAttribute("viewBox", "0 -960 960 960");
-    const iconPath = document.createElementNS(svgNS, "path");
-    iconPath.setAttribute("d", iconPathD);
-    icon.appendChild(iconPath);
+    // Database-driven icons use reviewed filesystem assets. Static auth controls
+    // keep their established inline paths so this metadata slice cannot affect them.
+    const icon = iconKey
+        ? createSymbolMaskElement(iconKey, "navtab_icon")
+        : document.createElementNS(svgNS, "svg");
+    if (!iconKey) {
+        icon.classList.add("navtab_icon");
+        icon.setAttribute("aria-hidden", "true");
+        icon.setAttribute("width", "26");
+        icon.setAttribute("height", "26");
+        icon.setAttribute("viewBox", "0 -960 960 960");
+        const iconPath = document.createElementNS(svgNS, "path");
+        iconPath.setAttribute("d", iconPathD);
+        icon.appendChild(iconPath);
+    }
     tabElement.appendChild(icon);
 
     const textSpan = document.createElement("span");

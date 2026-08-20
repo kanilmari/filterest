@@ -57,7 +57,7 @@ import {
     toggleNavbarVisibility,
     updateShowMenuButtonPosition,
 } from "../navigation/menu_button/navbar_visibility_handler.js";
-import { getTabIconPath } from "../navigation/main_tabs/tab_icon_library.js";
+import { createSymbolMaskElement } from "../../reusable_components/symbol_asset_resolver.js";
 import {
     isSharedTopBarHostActive,
     shouldShowSharedTopBar,
@@ -349,27 +349,17 @@ function resolveFilterbarPanelMode(modeRaw) {
 }
 
 function createDatasetTitleIcon(iconKey, className = "filterbar-dataset-title-icon") {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.classList.add(className);
-    svg.setAttribute("viewBox", "0 -960 960 960");
-    svg.setAttribute("aria-hidden", "true");
-    svg.setAttribute("focusable", "false");
-
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", getTabIconPath(iconKey));
-    path.setAttribute("fill", "currentColor");
-    svg.appendChild(path);
-    return svg;
+    if (typeof iconKey !== "string" || !iconKey.trim()) {
+        return null;
+    }
+    return createSymbolMaskElement(iconKey, className);
 }
 
 function resolveDatasetIconKey(tableName, tableSpec = {}) {
     if (tableSpec.icon_key) {
         return tableSpec.icon_key;
     }
-    if (tableName === "system_users") {
-        return "group_filled";
-    }
-    return undefined;
+    return "";
 }
 
 function resolveDatasetHeaderTitleOverride(tableName, tableSpec = {}) {
@@ -398,10 +388,9 @@ function buildFilterbarHeroHeader(tableName, {
     header.classList.add("morphing-header");
 
     const heroIcon = createDatasetTitleIcon(iconKey, "filterbar-hero-dataset-icon");
-    if (tableName === "system_users") {
-        heroIcon.classList.add("filterbar-hero-dataset-icon--users");
+    if (heroIcon) {
+        header.appendChild(heroIcon);
     }
-    header.appendChild(heroIcon);
 
     const titleEl = document.createElement("h1");
     titleEl.classList.add("morphing-title");
@@ -451,7 +440,10 @@ function buildFilterbarDatasetTitleRow(tableName, tableSpec = {}, titleOverride 
     const row = document.createElement("div");
     row.classList.add("filterbar-dataset-title-row");
 
-    row.appendChild(createDatasetTitleIcon(resolveDatasetIconKey(tableName, tableSpec)));
+    const datasetIcon = createDatasetTitleIcon(resolveDatasetIconKey(tableName, tableSpec));
+    if (datasetIcon) {
+        row.appendChild(datasetIcon);
+    }
 
     const label = document.createElement("span");
     label.classList.add("filterbar-dataset-title-text");

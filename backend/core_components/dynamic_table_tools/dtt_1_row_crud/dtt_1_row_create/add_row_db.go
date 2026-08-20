@@ -85,6 +85,10 @@ func insertDataAccordingToPayload(
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching columns")
 		return 0, nil, err
 	}
+	if err := normalizeMultilingualCreatePayload(payload, columnsInfo); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return 0, nil, err
+	}
 
 	columnTypeMap := make(map[string]string)
 	colNullableMap := make(map[string]bool) // YES → true
@@ -226,6 +230,10 @@ func insertDataAccordingToPayload(
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching child table columns")
 			return 0, nil, err
 		}
+		if err := normalizeMultilingualCreatePayload(child.Data, childCols); err != nil {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return 0, nil, err
+		}
 		childType := map[string]string{}
 		childNull := map[string]bool{}
 		for _, cc := range childCols {
@@ -293,6 +301,20 @@ func insertDataAccordingToPayload(
 	for _, m2m := range manyToManyRows {
 		linkVal := m2m.SelectedValue
 		if m2m.IsNewRow && m2m.NewRowData != nil {
+			thirdUID, err := getTableUID(m2m.ThirdTableName, tx)
+			if err != nil {
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching relation table metadata")
+				return 0, nil, err
+			}
+			thirdColumns, err := getAddRowColumnsWithTypes(thirdUID, schemaName)
+			if err != nil {
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching relation table columns")
+				return 0, nil, err
+			}
+			if err := normalizeMultilingualCreatePayload(m2m.NewRowData, thirdColumns); err != nil {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+				return 0, nil, err
+			}
 			newID, err := insertNewThirdTableRow(tx, m2m.ThirdTableName, m2m.NewRowData)
 			if err != nil {
 				fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())

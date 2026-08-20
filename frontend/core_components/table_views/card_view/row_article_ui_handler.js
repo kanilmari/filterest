@@ -12,6 +12,7 @@ export {
     createRowArticleNavigableElement,
     createNavigableTwoLineElement,
     createTwoLineKeyValueElement,
+    dispatchCardArticleToggle,
     resolveLocalizedValue,
     resolveRowArticleLocalizedValue,
     restoreScrollAfterBigCard,

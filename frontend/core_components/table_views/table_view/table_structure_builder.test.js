@@ -13,6 +13,7 @@ function displayDateTime(dateText, timeText) {
 
 const toggleSelectAllMock = vi.fn();
 const updateRowSelectionMock = vi.fn();
+const updateRowSelectionFromClickMock = vi.fn();
 const addEventListenersToCellsMock = vi.fn();
 const initializeColumnResizingMock = vi.fn();
 const getUnifiedTableStateMock = vi.fn();
@@ -29,6 +30,7 @@ async function loadModule() {
     vi.doMock('./row_selection_handler.js', () => ({
         toggle_select_all: toggleSelectAllMock,
         update_row_selection: updateRowSelectionMock,
+        update_row_selection_from_click: updateRowSelectionFromClickMock,
     }));
     vi.doMock('./table_cell_event_handler.js', () => ({
         addEventListenersToCells: addEventListenersToCellsMock,
@@ -61,6 +63,7 @@ describe('table_structure_builder resize affordances', () => {
         localStorage.clear();
         toggleSelectAllMock.mockReset();
         updateRowSelectionMock.mockReset();
+        updateRowSelectionFromClickMock.mockReset();
         addEventListenersToCellsMock.mockReset();
         initializeColumnResizingMock.mockReset();
         getUnifiedTableStateMock.mockReset();
