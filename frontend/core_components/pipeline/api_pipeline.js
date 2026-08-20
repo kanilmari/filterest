@@ -98,6 +98,8 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     adminUserAuthentication: 'auth.AdminUserAuthenticationHandler',
     adminSymbols: 'symbol_registry.AdminHandler',
     adminUiFeatureFlags: 'system_table_tools.GetAdminUIFeatureFlagsHandler',
+    sitePresentationSettings: 'system_table_tools.GetSitePresentationSettingsHandler',
+    adminSitePresentationSettings: 'system_table_tools.AdminSitePresentationSettingsHandler',
     createTrigger: 'dtt_triggers.CreateTriggerHandler',
     updateRow: 'dtt_1_row_update.UpdateRowHandlerWrapper',
     getColumns: 'dtt_1_row_create.GetAddRowColumnsHandlerWrapper',

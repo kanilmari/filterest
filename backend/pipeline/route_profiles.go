@@ -111,10 +111,11 @@ var RouteProfiles = map[string]RouteProfile{
 	"e_sessions.ResetSessionHandler": PublicProfile,
 
 	// Public data endpoints
-	"lang.GetTranslationsHandler":                     PublicProfile,
-	"lang.GetPublicUILanguagesHandler":                PublicProfile,
-	"system_table_tools.GetAboutRowHandler":           PublicProfile, // login page fetches privacy policy
-	"system_table_tools.GetDatasetSortDefaultHandler": PublicProfile,
+	"lang.GetTranslationsHandler":                           PublicProfile,
+	"lang.GetPublicUILanguagesHandler":                      PublicProfile,
+	"system_table_tools.GetAboutRowHandler":                 PublicProfile, // login page fetches privacy policy
+	"system_table_tools.GetDatasetSortDefaultHandler":       PublicProfile,
+	"system_table_tools.GetSitePresentationSettingsHandler": PublicProfile,
 
 	// Dev tools — registered conditionally in init() below
 
@@ -169,6 +170,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.UpdateCardVisibilityHandler":           AdminProfile,
 	"system_table_tools.UpdateColumnMultilingualHandler":       AdminProfile,
 	"system_table_tools.GetAdminUIFeatureFlagsHandler":         AdminProfile,
+	"system_table_tools.AdminSitePresentationSettingsHandler":  AdminProfile,
 	"system_table_tools.GetDatasetHeaderConfigHandler":         AdminProfile,
 	"system_table_tools.SaveDatasetHeaderConfigHandler":        AdminProfile,
 	"system_table_tools.GetChildTabConfigHandler":              LoginOnlyProfile, // Read by all users for reverse-FK/referring-tab rendering

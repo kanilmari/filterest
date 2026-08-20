@@ -1,0 +1,89 @@
+/* dataset_cover_theme.css
+ * Maps persisted light/dark dataset-cover settings to the active hero surface.
+ * Keeps public rendering independent from the administrator-only palette UI.
+ */
+.filterbar-inline-hero--has-cover {
+	--dataset-cover-light-mask-image: initial;
+	--dataset-cover-light-mask-oval-x: 32%;
+	--dataset-cover-light-mask-oval-y: 67%;
+	--dataset-cover-light-mask-position-y: 56%;
+	--dataset-cover-light-mask-center-opacity: 0.4;
+	--dataset-cover-light-mask-mid-opacity: 0.7;
+	--dataset-cover-light-mask-edge-opacity: 1;
+	--dataset-cover-light-mask-center-stop: 39%;
+	--dataset-cover-light-mask-mid-stop: 55%;
+	--dataset-cover-light-mask-edge-stop: 80%;
+	--dataset-cover-light-image-opacity: 1;
+	--dataset-cover-light-overlay-opacity: 0;
+	--dataset-cover-dark-mask-image: none;
+	--dataset-cover-dark-mask-oval-x: 32%;
+	--dataset-cover-dark-mask-oval-y: 67%;
+	--dataset-cover-dark-mask-position-y: 56%;
+	--dataset-cover-dark-mask-center-opacity: 0.4;
+	--dataset-cover-dark-mask-mid-opacity: 0.7;
+	--dataset-cover-dark-mask-edge-opacity: 1;
+	--dataset-cover-dark-mask-center-stop: 39%;
+	--dataset-cover-dark-mask-mid-stop: 55%;
+	--dataset-cover-dark-mask-edge-stop: 80%;
+	--dataset-cover-dark-image-opacity: 0.3;
+	--dataset-cover-dark-overlay-opacity: 0;
+	--dataset-cover-image-blur: 1px;
+	--dataset-cover-hero-extra-height: 40px;
+	padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height));
+}
+body:not(.dark-mode) .filterbar-inline-hero--has-cover {
+	--dataset-cover-mask-image: var(--dataset-cover-light-mask-image);
+	--dataset-cover-mask-oval-x: var(--dataset-cover-light-mask-oval-x);
+	--dataset-cover-mask-oval-y: var(--dataset-cover-light-mask-oval-y);
+	--dataset-cover-mask-position-y: var(--dataset-cover-light-mask-position-y);
+	--dataset-cover-mask-center-opacity: var(--dataset-cover-light-mask-center-opacity);
+	--dataset-cover-mask-mid-opacity: var(--dataset-cover-light-mask-mid-opacity);
+	--dataset-cover-mask-edge-opacity: var(--dataset-cover-light-mask-edge-opacity);
+	--dataset-cover-mask-center-stop: var(--dataset-cover-light-mask-center-stop);
+	--dataset-cover-mask-mid-stop: var(--dataset-cover-light-mask-mid-stop);
+	--dataset-cover-mask-edge-stop: var(--dataset-cover-light-mask-edge-stop);
+	--dataset-cover-image-opacity: var(--dataset-cover-light-image-opacity);
+	--dataset-cover-overlay-opacity: var(--dataset-cover-light-overlay-opacity);
+}
+body.dark-mode .filterbar-inline-hero--has-cover {
+	--dataset-cover-mask-image: var(--dataset-cover-dark-mask-image);
+	--dataset-cover-mask-oval-x: var(--dataset-cover-dark-mask-oval-x);
+	--dataset-cover-mask-oval-y: var(--dataset-cover-dark-mask-oval-y);
+	--dataset-cover-mask-position-y: var(--dataset-cover-dark-mask-position-y);
+	--dataset-cover-mask-center-opacity: var(--dataset-cover-dark-mask-center-opacity);
+	--dataset-cover-mask-mid-opacity: var(--dataset-cover-dark-mask-mid-opacity);
+	--dataset-cover-mask-edge-opacity: var(--dataset-cover-dark-mask-edge-opacity);
+	--dataset-cover-mask-center-stop: var(--dataset-cover-dark-mask-center-stop);
+	--dataset-cover-mask-mid-stop: var(--dataset-cover-dark-mask-mid-stop);
+	--dataset-cover-mask-edge-stop: var(--dataset-cover-dark-mask-edge-stop);
+	--dataset-cover-image-opacity: var(--dataset-cover-dark-image-opacity);
+	--dataset-cover-overlay-opacity: var(--dataset-cover-dark-overlay-opacity);
+}
+.filterbar-inline-hero--has-cover::before,
+.filterbar-inline-hero--has-cover::after {
+	position: absolute;
+	inset: 0;
+	content: '';
+	pointer-events: none;
+}
+.filterbar-inline-hero--has-cover::before {
+	z-index: -2;
+	inset: calc(0px - var(--dataset-cover-image-blur));
+	background-image: var(--dataset-cover-image);
+	background-position: center;
+	background-size: cover;
+	filter: blur(var(--dataset-cover-image-blur));
+	opacity: var(--dataset-cover-image-opacity);
+	mask-image: var(--dataset-cover-mask-image, radial-gradient(
+		ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y),
+		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) 0%,
+		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) var(--dataset-cover-mask-center-stop),
+		rgb(0 0 0 / var(--dataset-cover-mask-mid-opacity)) var(--dataset-cover-mask-mid-stop),
+		rgb(0 0 0 / var(--dataset-cover-mask-edge-opacity)) var(--dataset-cover-mask-edge-stop)
+	));
+}
+.filterbar-inline-hero--has-cover::after {
+	z-index: -1;
+	background: #000;
+	opacity: var(--dataset-cover-overlay-opacity);
+}

@@ -107,6 +107,11 @@ func TestRepositorySymbolLibraryContainsOnlySafeSVGFiles(t *testing.T) {
 	if !Contains(defaultSymbolKey) {
 		t.Fatal("repository symbol library is missing the safe table fallback")
 	}
+	for _, key := range []string{"map", "payments", "group_center_filled"} {
+		if !Contains(key) {
+			t.Fatalf("repository symbol library is missing reviewed dataset symbol %q", key)
+		}
+	}
 }
 
 func writeTestSymbol(t *testing.T, directory, name, content string) {

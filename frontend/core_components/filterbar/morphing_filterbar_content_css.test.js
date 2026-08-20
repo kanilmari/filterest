@@ -11,7 +11,7 @@ const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 
 describe('morphing filterbar content CSS', () => {
     test('keeps the light oval defaults and gives dark mode an unmasked 30 percent cover', () => {
-        const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
+        const css = readFileSync(resolve(CURRENT_DIR, 'dataset_cover_theme.css'), 'utf8');
         const defaultsRule = css.match(
             /\.filterbar-inline-hero--has-cover\s*\{([\s\S]*?)\n\}/,
         )?.[1] || '';
@@ -28,32 +28,46 @@ describe('morphing filterbar content CSS', () => {
             /\.filterbar-inline-hero--has-cover::after\s*\{([\s\S]*?)\n\}/g,
         )).at(-1)?.[1] || '';
 
-        expect(defaultsRule).toContain('--dataset-cover-mask-oval-x: 68%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-oval-y: 82%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-position-y: 48%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-center-opacity: 20%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-mid-opacity: 45%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-edge-opacity: 70%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-center-stop: 30%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-mid-stop: 58%');
-        expect(defaultsRule).toContain('--dataset-cover-mask-edge-stop: 100%');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-oval-x: 32%');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-oval-y: 67%');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-position-y: 56%');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-center-opacity: 0.4');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-mid-opacity: 0.7');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-edge-opacity: 1');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-center-stop: 39%');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-mid-stop: 55%');
+        expect(defaultsRule).toContain('--dataset-cover-light-mask-edge-stop: 80%');
         expect(defaultsRule).toContain('--dataset-cover-hero-extra-height: 40px');
+        expect(defaultsRule).toContain('--dataset-cover-image-blur: 1px');
         expect(defaultsRule).toContain(
             'padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height))'
         );
-        expect(defaultsRule).toContain('--dataset-cover-overlay-opacity: 0');
+        expect(defaultsRule).toContain('--dataset-cover-light-overlay-opacity: 0');
         expect(coverRule).toContain('mask-image: var(--dataset-cover-mask-image, radial-gradient(');
         expect(coverRule).toContain(
             'ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y)'
         );
         expect(coverRule).toContain('opacity: var(--dataset-cover-image-opacity)');
         expect(coverRule).toContain('filter: blur(var(--dataset-cover-image-blur))');
-        expect(darkRule).toContain('--dataset-cover-mask-image: none');
-        expect(darkRule).toContain('--dataset-cover-image-opacity: 0.3');
-        expect(lightRule).toContain('--dataset-cover-mask-image: initial');
-        expect(lightRule).toContain('--dataset-cover-image-opacity: 1');
+        expect(darkRule).toContain('--dataset-cover-mask-image: var(--dataset-cover-dark-mask-image)');
+        expect(darkRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-dark-image-opacity)');
+        expect(lightRule).toContain('--dataset-cover-mask-image: var(--dataset-cover-light-mask-image)');
+        expect(lightRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-light-image-opacity)');
         expect(overlayRule).toContain('background: #000');
         expect(overlayRule).toContain('opacity: var(--dataset-cover-overlay-opacity)');
+    });
+
+    test('uses the title colour for wide slogans and outlines the inline sort row', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
+        const subtitleRule = css.match(
+            /\.filterbar-panel--wide \.morphing-subtitle,[\s\S]*?\.filterbar-inline-hero \.morphing-subtitle\s*\{([\s\S]*?)\n\}/,
+        )?.[1] || '';
+        const sortRule = css.match(
+            /\.filterbar-inline-hero-sort-row\s*\{([\s\S]*?)\n\}/,
+        )?.[1] || '';
+
+        expect(subtitleRule).toContain('color: var(--text_color)');
+        expect(sortRule).toContain('border: 1px solid var(--border_color)');
     });
 
     test('keeps the compact palette inside the visible area and scrollable', () => {
@@ -78,9 +92,11 @@ describe('morphing filterbar content CSS', () => {
             'utf8'
         );
         const heroIndex = imports.indexOf('morphing_filterbar_content.css');
+        const themeIndex = imports.indexOf('dataset_cover_theme.css');
         const paletteIndex = imports.indexOf('dataset_cover_test_palette.css');
 
         expect(heroIndex).toBeGreaterThan(-1);
-        expect(paletteIndex).toBeGreaterThan(heroIndex);
+        expect(themeIndex).toBeGreaterThan(heroIndex);
+        expect(paletteIndex).toBeGreaterThan(themeIndex);
     });
 });

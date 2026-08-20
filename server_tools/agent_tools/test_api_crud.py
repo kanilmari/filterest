@@ -75,6 +75,18 @@ class FakeClient:
         self.calls.append(("set_user_authentication", user_id, verification_method, fixed_pin))
         return {"user_id": user_id, "verification_method": verification_method}
 
+    def get_symbol_registry_snapshot(self):
+        self.calls.append(("get_symbol_registry_snapshot",))
+        return {
+            "symbols": [{"key": "map"}],
+            "datasets": [{"table_uid": 10006, "dataset_name": "travel_info", "icon_key": "map"}],
+            "fields": [],
+        }
+
+    def assign_symbol(self, target_type, target_uid, icon_key):
+        self.calls.append(("assign_symbol", target_type, target_uid, icon_key))
+        return {"target_type": target_type, "target_uid": target_uid, "verified": True}
+
 
 class API_CRUDTest(unittest.TestCase):
     def setUp(self):
@@ -280,6 +292,34 @@ class API_CRUDTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "--credential-username is required"):
             api_crud.make_client(args)
+
+    def test_symbols_lists_safe_registry_metadata(self):
+        exit_code, output = self.run_main(["symbols"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(self.client.calls, [("get_symbol_registry_snapshot",)])
+        self.assertEqual(json.loads(output)["symbols"], [{"key": "map"}])
+
+    def test_assign_symbol_requires_exact_uid_and_key_confirmation(self):
+        exit_code, _ = self.run_main([
+            "assign-symbol", "dataset", "10006", "map",
+            "--confirm-target-uid", "10007",
+            "--confirm-icon-key", "map",
+        ])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(self.client.calls, [])
+
+        exit_code, output = self.run_main([
+            "assign-symbol", "dataset", "10006", "map",
+            "--confirm-target-uid", "10006",
+            "--confirm-icon-key", "map",
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            self.client.calls,
+            [("assign_symbol", "dataset", 10006, "map")],
+        )
+        self.assertTrue(json.loads(output)["verified"])
 
 
 if __name__ == "__main__":

@@ -111,6 +111,29 @@ describe('stable_endpoint_router', () => {
         });
     });
 
+    test('site presentation wrappers preserve public read and atomic admin write methods', async () => {
+        const settings = {
+            dataset_cover_theme: { light: {}, dark: {}, shared: {} },
+            row_article_timestamp_display_mode: 'date_time',
+        };
+        endpointRouterMock.mockResolvedValue(settings);
+        const mod = await loadModule();
+
+        await expect(mod.fetchSitePresentationSettings()).resolves.toEqual(settings);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('sitePresentationSettings', {
+            method: 'GET',
+        });
+        await expect(mod.fetchAdminSitePresentationSettings()).resolves.toEqual(settings);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('adminSitePresentationSettings', {
+            method: 'GET',
+        });
+        await expect(mod.saveAdminSitePresentationSettings(settings)).resolves.toEqual(settings);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('adminSitePresentationSettings', {
+            method: 'POST',
+            body_data: settings,
+        });
+    });
+
     test('fetchAdminVersionInfo uses the protected candidate GET route', async () => {
         endpointRouterMock.mockResolvedValue({
             product_name: 'Filterest',

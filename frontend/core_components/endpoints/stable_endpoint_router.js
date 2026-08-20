@@ -261,6 +261,26 @@ export async function fetchAdminUIFeatureFlags() {
     return stable_candidate_endpoint_router('adminUiFeatureFlags');
 }
 
+/** Returns the public-safe dataset-cover and article timestamp presentation settings. */
+export async function fetchSitePresentationSettings() {
+    return stable_candidate_endpoint_router('sitePresentationSettings');
+}
+
+/** Returns the administrator-editable site presentation settings. */
+export async function fetchAdminSitePresentationSettings() {
+    return stable_candidate_endpoint_router('adminSitePresentationSettings', {
+        method: 'GET',
+    });
+}
+
+/** Atomically replaces the typed site presentation settings object. */
+export async function saveAdminSitePresentationSettings(request) {
+    return stable_candidate_endpoint_router('adminSitePresentationSettings', {
+        method: 'POST',
+        body_data: request,
+    });
+}
+
 /**
  * fetchChildTabConfig returns the legacy-named child-tab editor payload for one parent table.
  * The payload drives reverse-FK "referring tab" UI copy even though the route name stays stable.

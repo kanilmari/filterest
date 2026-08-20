@@ -53,7 +53,7 @@ const staticTabsData = [
         id: "system_users",
         text: "Users",
         langKey: "users",
-        svgPath: getTabIconPath("group_filled"),
+        iconKey: "group_center_filled",
     },
     {
         nonUserContent: true,
@@ -134,7 +134,7 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                     id: 'system_users',
                     text: 'Users',
                     langKey: 'users',
-                    iconKey: table.icon_key || 'group_filled',
+                    iconKey: table.icon_key || 'group_center_filled',
                 };
             }
             return {

@@ -107,6 +107,33 @@
 	font-size: 0.875rem;
 }
 
+.dataset-cover-test-palette__tabs,
+.dataset-cover-test-palette__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.dataset-cover-test-palette__tabs {
+	margin-bottom: 12px;
+}
+
+.dataset-cover-test-palette__tab.is-active {
+	background: var(--button_active_bg_color);
+	color: var(--button_active_text_color);
+}
+
+.dataset-cover-test-palette__group + .dataset-cover-test-palette__group {
+	margin-top: 14px;
+}
+
+.dataset-cover-test-palette__group-title {
+	display: block;
+	margin-bottom: 8px;
+	font-size: 0.85rem;
+}
+
 .dataset-cover-test-palette__controls {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -131,8 +158,12 @@
 	width: 100%;
 }
 
-.dataset-cover-test-palette__reset {
+.dataset-cover-test-palette__actions {
 	margin-top: 14px;
+}
+
+.dataset-cover-test-palette__status {
+	font-size: 0.8rem;
 }
 
 @media (width <= 600px) {

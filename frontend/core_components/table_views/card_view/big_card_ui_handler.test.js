@@ -108,6 +108,26 @@ describe("big_card_ui_handler label icons", () => {
         expect(value?.getAttribute("data-raw-value")).toBe("2026-06-15T21:36:10");
     });
 
+    test("createRowArticleKeyValueElement applies the configured article timestamp mode", () => {
+        const element = createRowArticleKeyValueElement(
+            "Created",
+            "2026-06-15T21:36:10",
+            "created",
+            false,
+            "big_card_detail_value",
+            true,
+            null,
+            "2026-06-15T21:36:10",
+            { data_type: "timestamp without time zone" },
+            { displayMode: "date_only", locale: "fi" },
+        );
+
+        const value = element.querySelector('[data-column="created"]');
+
+        expect(value?.textContent).toBe("15.6.2026");
+        expect(value?.title).toBe("2026-06-15 21:36:10");
+    });
+
     test("createRowArticleNavigableElement keeps link labels icon-capable", () => {
         const element = createRowArticleNavigableElement({
             label: "Contact details",

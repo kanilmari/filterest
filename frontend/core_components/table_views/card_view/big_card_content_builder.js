@@ -39,6 +39,7 @@ import {
 import { resolveRowArticleRelationDetailEntries } from "./relation_detail_helpers.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
+import { resolveRowArticleTimestampDisplayOptions } from "./row_article_presentation_settings.js";
 
 const DETAILS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
 
@@ -83,6 +84,7 @@ export async function buildRowArticleContent(
     const rowArticleHeaderElements = [];
     const rowArticleHeaderValues = new Set();
     const chosenLang = getLanguageWithBrowserFallback();
+    const timestampDisplayOptions = await resolveRowArticleTimestampDisplayOptions(chosenLang);
 
     for (const column of sorted_columns) {
         if (isGeneratedForeignDisplayColumn(column, data_types)) {
@@ -197,7 +199,8 @@ export async function buildRowArticleContent(
                     showKeyOnCard,
                     colIsMultilingual,
                     storedRawValue,
-                    data_types[column]
+                    data_types[column],
+                    timestampDisplayOptions
                 )
             );
             continue;
@@ -351,7 +354,8 @@ export async function buildRowArticleContent(
                             showKeyOnCard,
                             colIsMultilingual,
                             storedRawValue,
-                            data_types[column]
+                            data_types[column],
+                            timestampDisplayOptions
                         )
                     );
                 }
@@ -377,7 +381,8 @@ export async function buildRowArticleContent(
                             showKeyOnCard,
                             colIsMultilingual,
                             storedRawValue,
-                            data_types[column]
+                            data_types[column],
+                            timestampDisplayOptions
                         )
                     );
                 }
@@ -396,7 +401,8 @@ export async function buildRowArticleContent(
                     showKeyOnCard,
                     colIsMultilingual,
                     storedRawValue,
-                    data_types[column]
+                    data_types[column],
+                    timestampDisplayOptions
                 )
             );
         }
@@ -455,7 +461,8 @@ export async function buildRowArticleContent(
                     d.showKeyOnCard,
                     d.isMultilingual,
                     d.storedRawValue,
-                    resolveRowArticleLabelMetadata(data_types, d)
+                    resolveRowArticleLabelMetadata(data_types, d),
+                    timestampDisplayOptions
                 )
             );
         });
@@ -481,7 +488,8 @@ export async function buildRowArticleContent(
                         k.showKeyOnCard,
                         k.isMultilingual,
                         undefined,
-                        resolveRowArticleLabelMetadata(data_types, k)
+                        resolveRowArticleLabelMetadata(data_types, k),
+                        timestampDisplayOptions
                     );
                     contentElement.classList.add(
                         "key_value_wrapper",
@@ -543,7 +551,8 @@ export async function buildRowArticleContent(
                     d.showKeyOnCard,
                     d.isMultilingual,
                     d.storedRawValue,
-                    resolveRowArticleLabelMetadata(data_types, d)
+                    resolveRowArticleLabelMetadata(data_types, d),
+                    timestampDisplayOptions
                 )
             );
         });

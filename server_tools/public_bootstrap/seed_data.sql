@@ -254,7 +254,7 @@ VALUES (
 );
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.2.3', 'Filterest generated public bootstrap');
+VALUES ('9.2.4', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -870,6 +870,14 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('cached_username', 'Käyttäjänimi', 'Username', '用户名', '用戶名稱', 'public fixture seed'),
   ('search_for_cached_username', 'Hae käyttäjänimellä', 'Search by username', '按用户名搜索', '按用戶名稱搜尋', 'public fixture seed'),
   ('sort_images_first', 'Kuvalliset ensin', 'Rows with images first', '有图片的行优先', '有圖片嘅資料列優先', 'public fixture seed'),
+
+  -- Travel datasets keep exact bilingual navigation names before and after
+  -- the planned app_ technical-prefix normalization. Other locales fall back
+  -- to English until project-owned translations are authored and reviewed.
+  ('travel_info', 'Matkainfo', 'Travel info', '', '', 'curated bilingual travel dataset label'),
+  ('app_travel_info', 'Matkainfo', 'Travel info', '', '', 'curated bilingual travel dataset label'),
+  ('travel_deals', 'Matkatarjoukset', 'Travel deals', '', '', 'curated bilingual travel dataset label'),
+  ('app_travel_deals', 'Matkatarjoukset', 'Travel deals', '', '', 'curated bilingual travel dataset label'),
 
   -- Calendar presentation controls are product-owned copy. They must be
   -- available before the view renders; the public runtime never calls AI to

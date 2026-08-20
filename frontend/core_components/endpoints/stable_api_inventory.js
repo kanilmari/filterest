@@ -67,6 +67,10 @@ const TYPED_STABLE_ROUTE_SPECS = Object.freeze({
 });
 
 const STABLE_CANDIDATE_ROUTE_SPECS = Object.freeze({
+    sitePresentation: Object.freeze([
+        { routeName: 'sitePresentationSettings', handlerName: 'system_table_tools.GetSitePresentationSettingsHandler' },
+        { routeName: 'adminSitePresentationSettings', handlerName: 'system_table_tools.AdminSitePresentationSettingsHandler' },
+    ]),
     adminConfiguration: Object.freeze([
         { routeName: 'getDatasetAliasManagement', handlerName: 'router.GetDatasetAliasManagementHandler' },
         { routeName: 'saveDatasetAliasManagement', handlerName: 'router.SaveDatasetAliasManagementHandler' },

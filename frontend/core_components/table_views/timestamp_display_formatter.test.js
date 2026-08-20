@@ -10,6 +10,9 @@ import {
     formatTimestampDisplayParts,
     formatTimestampDisplayText,
     isTimestampColumn,
+    normalizeTimestampDisplayMode,
+    TIMESTAMP_DISPLAY_MODE_DATE_ONLY,
+    TIMESTAMP_DISPLAY_MODE_DATE_TIME,
 } from "./timestamp_display_formatter.js";
 
 function displayDateTime(dateText, timeText) {
@@ -77,6 +80,37 @@ describe("timestamp_display_formatter", () => {
             displayText: displayDateTime("2026-06-14", "09:30"),
             titleText: "2026-06-14 09:30:00",
         });
+    });
+
+    test("renders article date_time values in a human-readable UI locale", () => {
+        expect(formatTimestampDisplayParts(
+            "2026-06-14 09:30:10",
+            "timestamp without time zone",
+            { displayMode: TIMESTAMP_DISPLAY_MODE_DATE_TIME, locale: "en" },
+        )).toEqual({
+            displayText: "14 Jun 2026, 09:30",
+            titleText: "2026-06-14 09:30:10",
+        });
+    });
+
+    test("renders date_only without discarding the precise hover value", () => {
+        expect(formatTimestampDisplayParts(
+            "2026-06-14 09:30:10",
+            "timestamp without time zone",
+            { displayMode: TIMESTAMP_DISPLAY_MODE_DATE_ONLY, locale: "fi" },
+        )).toEqual({
+            displayText: "14.6.2026",
+            titleText: "2026-06-14 09:30:10",
+        });
+    });
+
+    test("normalizes missing and unsupported presentation modes to date_time", () => {
+        expect(normalizeTimestampDisplayMode(TIMESTAMP_DISPLAY_MODE_DATE_ONLY))
+            .toBe(TIMESTAMP_DISPLAY_MODE_DATE_ONLY);
+        expect(normalizeTimestampDisplayMode("raw_iso"))
+            .toBe(TIMESTAMP_DISPLAY_MODE_DATE_TIME);
+        expect(normalizeTimestampDisplayMode())
+            .toBe(TIMESTAMP_DISPLAY_MODE_DATE_TIME);
     });
 
     test("formats time-only columns without seconds but keeps seconds in title", () => {
