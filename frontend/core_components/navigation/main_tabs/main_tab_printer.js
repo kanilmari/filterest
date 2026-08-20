@@ -90,6 +90,7 @@ let _tabTextLayoutFrame = 0;
 let _tabTextObserver = null;
 let _observedTabContainer = null;
 let _tabRenderGeneration = 0;
+let _tabSvgDefinitionId = 0;
 
 function getTabOrderIdentifier(tabId) {
     return STATIC_TAB_IDS.has(tabId)
@@ -127,6 +128,7 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
 
         // Helper: build tab object from dataset
         const buildTabObj = (table) => {
+            const hasPresentationMedia = table.has_presentation_media === true;
             // system_users gets special treatment (langKey, userContent flag)
             if (table.dataset_name === 'system_users') {
                 return {
@@ -135,6 +137,7 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                     text: 'Users',
                     langKey: 'users',
                     iconKey: table.icon_key || 'group_center_filled',
+                    hasPresentationMedia,
                 };
             }
             return {
@@ -145,6 +148,7 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                 isProjectTable: true,
                 dataset: table.dataset_name,
                 route: '/api/get-results',
+                hasPresentationMedia,
             };
         };
 
@@ -423,6 +427,9 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         tabButton.classList.add("navtablinks");
         tabButton.setAttribute("data-id", tabData.id);
         tabButton.dataset.testid = `tab-${tabData.id}`;
+        tabButton.dataset.hasPresentationMedia = String(
+            tabData.hasPresentationMedia === true
+        );
         if (tabData.langKey) {
             tabButton.dataset.langKey = tabData.langKey;
         }
@@ -630,14 +637,53 @@ function createSVGTabButton(tabElement, buttonText, iconPathD, iconKey = "") {
     svg.classList.add("svg-container");
     svg.setAttribute("aria-hidden", "true");
 
+    _tabSvgDefinitionId += 1;
+    const definitionId = `navtab-${_tabSvgDefinitionId}`;
+    const glowId = `${definitionId}-glow`;
+    const defs = document.createElementNS(svgNS, "defs");
+    const glowGradient = document.createElementNS(svgNS, "linearGradient");
+    glowGradient.setAttribute("id", glowId);
+    glowGradient.setAttribute("x1", "0%");
+    glowGradient.setAttribute("x2", "100%");
+    glowGradient.setAttribute("y1", "0%");
+    glowGradient.setAttribute("y2", "0%");
+    [
+        ["0%", "1"],
+        ["28%", "0.72"],
+        ["100%", "0"],
+    ].forEach(([offset, opacity]) => {
+        const stop = document.createElementNS(svgNS, "stop");
+        stop.setAttribute("offset", offset);
+        stop.setAttribute("stop-opacity", opacity);
+        stop.classList.add("navtab-active-glow-stop");
+        glowGradient.appendChild(stop);
+    });
+    defs.appendChild(glowGradient);
+    svg.appendChild(defs);
+
+    const fillPath = document.createElementNS(svgNS, "path");
+    fillPath.classList.add("navtab-shape-path", "navtab-fill-path");
+    fillPath.setAttribute("d", initialOutlinePresentation.pathD);
+    fillPath.setAttribute("fill", initialOutlinePresentation.fill);
+    svg.appendChild(fillPath);
+
     const outlinePath = document.createElementNS(svgNS, "path");
-    outlinePath.classList.add("navtab-stroke-path");
+    outlinePath.classList.add("navtab-shape-path", "navtab-stroke-path");
     outlinePath.setAttribute("d", initialOutlinePresentation.pathD);
     outlinePath.setAttribute("stroke", "var(--border_color)");
     outlinePath.setAttribute("stroke-width", initialOutlinePresentation.strokeWidth);
     outlinePath.setAttribute("vector-effect", "non-scaling-stroke");
-    outlinePath.setAttribute("fill", initialOutlinePresentation.fill);
+    outlinePath.setAttribute("fill", "none");
     svg.appendChild(outlinePath);
+
+    const glowPath = document.createElementNS(svgNS, "path");
+    glowPath.classList.add("navtab-shape-path", "navtab-active-glow-path");
+    glowPath.setAttribute("d", initialOutlinePresentation.pathD);
+    glowPath.setAttribute("fill", "none");
+    glowPath.setAttribute("stroke", `url(#${glowId})`);
+    glowPath.setAttribute("stroke-width", "3");
+    glowPath.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(glowPath);
 
     tabElement.appendChild(svg);
 

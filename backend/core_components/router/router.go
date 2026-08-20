@@ -138,6 +138,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/request-email-change-otp", auth.RequestEmailChangeOTPHandler, "auth.RequestEmailChangeOTPHandler")
 	functionRegisterHandler("/api/request-password-change-otp", auth.RequestPasswordChangeOTPHandler, "auth.RequestPasswordChangeOTPHandler")
 	functionRegisterHandler("/api/admin/user-authentication", auth.AdminUserAuthenticationHandler, "auth.AdminUserAuthenticationHandler")
+	functionRegisterHandler("/api/admin/lang-key", lang.AdminLangKeyHandler, "lang.AdminLangKeyHandler")
 	functionRegisterHandler("/api/admin/symbols", symbol_registry.AdminHandler, "symbol_registry.AdminHandler")
 	functionRegisterHandler("/api/admin/ui-feature-flags", system_table_tools.GetAdminUIFeatureFlagsHandler, "system_table_tools.GetAdminUIFeatureFlagsHandler")
 	functionRegisterHandler("/api/site-presentation-settings", system_table_tools.GetSitePresentationSettingsHandler, "system_table_tools.GetSitePresentationSettingsHandler")

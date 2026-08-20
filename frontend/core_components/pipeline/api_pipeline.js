@@ -96,6 +96,7 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     publicUiLanguages: 'lang.GetPublicUILanguagesHandler',
     adminUiLanguages: 'lang.AdminUILanguagesHandler',
     adminUserAuthentication: 'auth.AdminUserAuthenticationHandler',
+    adminLangKey: 'lang.AdminLangKeyHandler',
     adminSymbols: 'symbol_registry.AdminHandler',
     adminUiFeatureFlags: 'system_table_tools.GetAdminUIFeatureFlagsHandler',
     sitePresentationSettings: 'system_table_tools.GetSitePresentationSettingsHandler',

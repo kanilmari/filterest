@@ -34,8 +34,14 @@ func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T)
 	if dark.OvalEnabled || dark.ImageOpacity != 0.3 || dark.OverlayOpacity != 0 {
 		t.Fatalf("dark defaults = %#v", dark)
 	}
-	if shared.HeroExtraHeight != 40 || shared.ImageBlur != 1 {
+	if shared.HeroExtraHeight != 40 || shared.HeroBottomFade != 48 || shared.ImageBlur != 1 {
+		t.Fatalf("shared hero defaults = %#v", shared)
+	}
+	if shared.CardImageWidth != 300 || shared.ActiveTabFade != 25 || shared.ActiveTabMaxOpacity != 1 || shared.BrandColor != "#1a8fe6" {
 		t.Fatalf("shared defaults = %#v", shared)
+	}
+	if shared.ActiveTabGlowIntensity != 0.3 || shared.ActiveTabGlowWidth != 1.5 || shared.ActiveTabGlowBlur != 2 {
+		t.Fatalf("shared glow defaults = %#v", shared)
 	}
 	if settings.RowArticleTimestampDisplayMode != rowArticleTimestampDateTime {
 		t.Fatalf("timestamp mode = %q", settings.RowArticleTimestampDisplayMode)
@@ -156,13 +162,31 @@ func TestAdminSitePresentationSettingsHandlerRejectsIncompleteUnknownAndInvalidV
 	)
 	invalidStop := strings.Replace(string(validBody), `"center_stop":39`, `"center_stop":90`, 1)
 	invalidMode := strings.Replace(string(validBody), `"date_time"`, `"relative"`, 1)
+	invalidCardWidth := strings.Replace(string(validBody), `"card_image_width":300`, `"card_image_width":601`, 1)
+	invalidGlowIntensity := strings.Replace(
+		string(validBody),
+		`"active_tab_glow_intensity":0.3`,
+		`"active_tab_glow_intensity":1.1`,
+		1,
+	)
+	invalidTabMaxOpacity := strings.Replace(
+		string(validBody),
+		`"active_tab_max_opacity":1`,
+		`"active_tab_max_opacity":1.1`,
+		1,
+	)
+	invalidBrandColor := strings.Replace(string(validBody), `"brand_color":"#1a8fe6"`, `"brand_color":"red"`, 1)
 
 	for name, body := range map[string]string{
-		"incomplete":    `{"dataset_cover_theme":{}}`,
-		"unknown":       unknown,
-		"invalid stops": invalidStop,
-		"invalid mode":  invalidMode,
-		"trailing":      string(validBody) + `{}`,
+		"incomplete":           `{"dataset_cover_theme":{}}`,
+		"unknown":              unknown,
+		"invalid stops":        invalidStop,
+		"invalid mode":         invalidMode,
+		"invalid card width":   invalidCardWidth,
+		"invalid glow":         invalidGlowIntensity,
+		"invalid tab opacity":  invalidTabMaxOpacity,
+		"invalid brand colour": invalidBrandColor,
+		"trailing":             string(validBody) + `{}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			response := httptest.NewRecorder()

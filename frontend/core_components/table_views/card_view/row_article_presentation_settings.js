@@ -1,6 +1,7 @@
-// Resolves the public site presentation settings used by row article rendering.
-// Bridges the typed site-settings API and the article timestamp formatter.
-// Exists so a missing or temporarily unavailable setting degrades to Filterest's safe default.
+// Resolves public site presentation settings used by card-family rendering.
+// Bridges the typed site-settings API with card and article timestamp formatters.
+// Keeps one cached policy so ordinary cards and article-side summaries stay consistent.
+// Falls back safely when the public setting is temporarily unavailable.
 
 import { fetchSitePresentationSettings } from "../../endpoints/stable_endpoint_router.js";
 import {
@@ -21,7 +22,12 @@ async function loadSitePresentationSettings() {
     return presentationSettingsPromise;
 }
 
-export async function resolveRowArticleTimestampDisplayOptions(locale = "") {
+/**
+ * Resolves the site-wide card and article timestamp presentation policy.
+ * Bridges the typed public site setting with all card-family renderers.
+ * Keeps the legacy row-article setting key as the shared compatibility contract.
+ */
+export async function resolveSiteTimestampDisplayOptions(locale = "") {
     const settings = await loadSitePresentationSettings();
     return {
         displayMode: normalizeTimestampDisplayMode(
@@ -30,6 +36,10 @@ export async function resolveRowArticleTimestampDisplayOptions(locale = "") {
         ),
         locale,
     };
+}
+
+export async function resolveRowArticleTimestampDisplayOptions(locale = "") {
+    return resolveSiteTimestampDisplayOptions(locale);
 }
 
 export function resetRowArticlePresentationSettingsCacheForTests() {

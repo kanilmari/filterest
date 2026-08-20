@@ -254,64 +254,10 @@ func GetLangKeyTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateLangKeyHandler upserts one lang key and optional usage explanation from the dev editor.
+// Between the browser editor and translation storage, it delegates to the shared strict write path.
+// The route remains development-only so production automation uses the explicitly protected admin API.
 func UpdateLangKeyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "POST only")
-		return
-	}
-
-	var req struct {
-		LangKey          string `json:"lang_key"`
-		Fi               string `json:"fi"`
-		En               string `json:"en"`
-		Ch               string `json:"ch"`
-		Yue              string `json:"yue"`
-		UsageExplanation string `json:"usage_explanation"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if strings.TrimSpace(req.LangKey) == "" {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "missing lang_key")
-		return
-	}
-
-	// Upsert: luo avain jos ei ole olemassa, muuten päivitä
-	_, err := backend.Db.Exec(`
-		INSERT INTO system_lang_keys (lang_key, fi, en, ch, yue, updated)
-		VALUES ($1, $2, $3, $4, $5, NOW())
-		ON CONFLICT (lang_key) DO UPDATE
-		SET fi = EXCLUDED.fi, en = EXCLUDED.en, ch = EXCLUDED.ch,
-		    yue = EXCLUDED.yue, updated = NOW()
-	`, req.LangKey, req.Fi, req.En, req.Ch, req.Yue)
-	if err != nil {
-		log.Printf("\033[31m[UpdateLangKeyHandler] DB error: %v\033[0m", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "database error")
-		return
-	}
-
-	// Tallenna usage_explanation system_lang_key_sources -tauluun (dev_editor source)
-	if req.UsageExplanation != "" {
-		var langKeyID int64
-		idErr := backend.Db.QueryRow(
-			"SELECT id FROM system_lang_keys WHERE lang_key = $1", req.LangKey,
-		).Scan(&langKeyID)
-		if idErr == nil {
-			_, _ = backend.Db.Exec(`
-				INSERT INTO system_lang_key_sources (lang_key_id, source_type, source_high, usage_explanation, last_seen)
-				VALUES ($1, 'dev_editor', 'dev_lang_key_editor', $2, CURRENT_DATE)
-				ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
-				SET usage_explanation = EXCLUDED.usage_explanation, last_seen = CURRENT_DATE
-			`, langKeyID, req.UsageExplanation)
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":  true,
-		"lang_key": req.LangKey,
-	})
+	handleLangKeyUpdate(w, r, "dev_editor", "dev_lang_key_editor")
 }
 
 // AiTranslateSingleHandler returns AI suggestions for one lang key before the user saves them.

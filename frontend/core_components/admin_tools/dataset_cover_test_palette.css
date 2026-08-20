@@ -15,7 +15,7 @@
 	height: 32px;
 	padding: 0;
 	color: var(--text_color);
-	background: color-mix(in srgb, var(--filter_panel_bg) 82%, transparent);
+	background: color-mix(in srgb, var(--bg_color_2) 82%, transparent);
 	border: 1px solid var(--filter_panel_border);
 	border-radius: 50%;
 	box-shadow: var(--fw-shadow-raised);
@@ -40,15 +40,18 @@
 	top: 12px;
 	right: 64px;
 	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
 	width: min(420px, calc(100% - 88px));
 	min-width: min(280px, calc(100% - 24px));
 	max-width: calc(100% - 24px);
-	min-height: 180px;
-	max-height: min(520px, calc(100dvh - 48px), calc(100% - 24px));
-	padding: 14px;
-	overflow: auto;
+	height: min(820px, 97dvh);
+	min-height: 240px;
+	max-height: 97dvh;
+	padding: 0;
+	overflow: hidden;
 	color: var(--text_color);
-	background: color-mix(in srgb, var(--filter_panel_bg) 94%, transparent);
+	background: color-mix(in srgb, var(--bg_color_2) 94%, transparent);
 	border: 1px solid var(--filter_panel_border);
 	border-radius: 12px;
 	box-shadow: var(--fw-shadow-raised);
@@ -62,13 +65,28 @@
 }
 
 .dataset-cover-test-palette__heading {
+	position: sticky;
+	z-index: 2;
+	top: 0;
 	display: flex;
 	gap: 12px;
 	align-items: center;
 	justify-content: space-between;
+	padding: 12px 14px;
+	background: color-mix(in srgb, var(--bg_color_2) 97%, transparent);
+	border-bottom: 1px solid var(--filter_panel_border);
 	cursor: move;
 	user-select: none;
 	touch-action: none;
+}
+
+.dataset-cover-test-palette__body {
+	flex: 1 1 auto;
+	box-sizing: border-box;
+	min-height: 0;
+	padding: 0 14px 14px;
+	overflow: auto;
+	overscroll-behavior: contain;
 }
 
 .dataset-cover-test-palette--dragging,
@@ -93,7 +111,7 @@
 }
 
 .dataset-cover-test-palette__notice {
-	margin: 8px 0 12px;
+	margin: 12px 0;
 	color: var(--text_color_muted, var(--text_color));
 	font-size: 0.8rem;
 	line-height: 1.35;
@@ -124,14 +142,66 @@
 	color: var(--button_active_text_color);
 }
 
-.dataset-cover-test-palette__group + .dataset-cover-test-palette__group {
-	margin-top: 14px;
+.dataset-cover-test-palette__toolboxes + .dataset-cover-test-palette__toolboxes {
+	margin-top: 12px;
 }
 
 .dataset-cover-test-palette__group-title {
-	display: block;
-	margin-bottom: 8px;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	min-height: 38px;
+	padding: 0 10px;
+	cursor: pointer;
 	font-size: 0.85rem;
+	font-weight: 700;
+	list-style: none;
+}
+
+.dataset-cover-test-palette__group-title::-webkit-details-marker {
+	display: none;
+}
+
+.dataset-cover-test-palette__group-chevron,
+.dataset-cover-test-palette__group-icon {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	background-color: currentcolor;
+}
+
+.dataset-cover-test-palette__group-chevron {
+	width: 14px;
+	height: 14px;
+	transform: rotate(-90deg);
+	transition: transform var(--transition-time, 0.5s) ease;
+}
+
+.dataset-cover-test-palette__group[open]
+	> .dataset-cover-test-palette__group-title
+	.dataset-cover-test-palette__group-chevron {
+	transform: rotate(0deg);
+}
+
+.dataset-cover-test-palette__group-label {
+	min-width: 0;
+}
+
+.dataset-cover-test-palette__group {
+	border: 1px solid var(--filter_panel_border);
+	border-radius: 8px;
+}
+
+.dataset-cover-test-palette__group + .dataset-cover-test-palette__group {
+	margin-top: 8px;
+}
+
+.dataset-cover-test-palette__group[open] > .dataset-cover-test-palette__group-title {
+	border-bottom: 1px solid var(--filter_panel_border);
+}
+
+.dataset-cover-test-palette__group-content {
+	padding: 10px;
 }
 
 .dataset-cover-test-palette__controls {
@@ -158,6 +228,24 @@
 	width: 100%;
 }
 
+.dataset-cover-test-palette__color {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 10px;
+	font-size: 0.8rem;
+}
+
+.dataset-cover-test-palette__color input {
+	width: 52px;
+	height: 32px;
+	padding: 2px;
+	border: 1px solid var(--filter_panel_border);
+	border-radius: 6px;
+	background: transparent;
+}
+
 .dataset-cover-test-palette__actions {
 	margin-top: 14px;
 }
@@ -168,10 +256,11 @@
 
 @media (width <= 600px) {
 	.dataset-cover-test-palette {
-		top: 62px;
+		top: 1.5dvh;
 		right: 12px;
 		width: calc(100% - 24px);
-		max-height: min(420px, calc(100dvh - 86px), calc(100% - 74px));
+		height: 97dvh;
+		max-height: 97dvh;
 	}
 
 	.dataset-cover-test-palette__controls {

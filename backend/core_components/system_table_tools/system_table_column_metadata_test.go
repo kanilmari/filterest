@@ -6,10 +6,23 @@
 package system_table_tools
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
+
+	"easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
+
+func TestGroupedTableJSONExposesPresentationMediaAsTypedBoolean(t *testing.T) {
+	payload, err := json.Marshal(dtt_models.Table{HasPresentationMedia: true})
+	if err != nil {
+		t.Fatalf("marshal grouped table metadata: %v", err)
+	}
+	if !strings.Contains(string(payload), `"has_presentation_media":true`) {
+		t.Fatalf("grouped table JSON missing typed media flag: %s", payload)
+	}
+}
 
 func TestDeduplicateTabOrderEntriesKeepsFirstOccurrence(t *testing.T) {
 	entries := []map[string]interface{}{
@@ -39,6 +52,10 @@ func TestBuildGroupedTablesQueryUsesRecursiveCurrentProjectFolders(t *testing.T)
 		"COALESCE(cpf.id IS NOT NULL, false) AS is_in_current_project",
 		"LEFT JOIN current_project_roots cpr ON t.folder_id = cpr.id",
 		"COALESCE(cpr.id IS NOT NULL, false) AS is_top_level_in_current_project",
+		"FROM public.system_dataset_media media",
+		"media.table_uid = t.table_uid",
+		"media.media_role IN ('cover', 'background')",
+		") AS has_presentation_media",
 	}
 
 	for _, fragment := range requiredFragments {

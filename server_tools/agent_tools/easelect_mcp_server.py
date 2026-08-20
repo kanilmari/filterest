@@ -36,7 +36,7 @@ Use these MCP tools for language keys:
 - repeat `upsert_lang_keys` with `dry_run:false` after the preview looks correct
 
 Rules:
-- This path logs in to the dev app, fetches CSRF, and calls `/api/update-lang-key`.
+- This path logs in to the app, fetches CSRF, and calls the administrator-only `/api/admin/lang-key` route.
 - Do not write `system_lang_keys` with direct SQL.
 - Omitted fields are preserved by reading the existing key before writing.
 - `fi`, `en`, `ch`, `yue`, and `usage_explanation` are accepted update fields.
@@ -245,7 +245,7 @@ TOOL_DEFINITIONS = [
     {
         "name": "upsert_lang_keys",
         "description": (
-            "Upsert system_lang_keys entries through /api/update-lang-key. Use dry_run=true first."
+            "Upsert language-key entries through /api/admin/lang-key. Use dry_run=true first."
         ),
         "inputSchema": {
             "type": "object",

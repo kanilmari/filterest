@@ -182,7 +182,11 @@ describe('dataset_header_config_view', () => {
         const resultsSurface = document.createElement('div');
         resultsSurface.className = 'dataset-results-surface';
         tabParts.appendChild(resultsSurface);
-        document.body.append(hero, tabParts);
+        const tabButton = document.createElement('button');
+        tabButton.className = 'navtablinks';
+        tabButton.dataset.id = 'orders';
+        tabButton.dataset.hasPresentationMedia = 'false';
+        document.body.append(hero, tabParts, tabButton);
 
         await generate_dataset_header_config_view(container);
 
@@ -218,5 +222,6 @@ describe('dataset_header_config_view', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('new-cover.webp');
         expect(resultsSurface.classList.contains('dataset-results-surface--has-background')).toBe(true);
         expect(resultsSurface.style.getPropertyValue('--dataset-background-image')).toContain('new-background.webp');
+        expect(tabButton.dataset.hasPresentationMedia).toBe('true');
     });
 });

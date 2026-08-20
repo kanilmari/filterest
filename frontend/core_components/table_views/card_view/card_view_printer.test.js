@@ -1,9 +1,14 @@
 // card_view_printer.test.js
-// Verifies language refresh for visible card values supplied by generated FK aliases.
-// Bridges numeric foreign keys and multilingual display aliases through a real card rebuild.
-// Exists to prevent cards from staying in the old language when only the alias contains JSON.
+// Verifies card rendering for language refresh and site-wide timestamp presentation.
+// Bridges row metadata, multilingual aliases, and typed settings through real card builds.
+// Covers both ordinary card details and article-side compact card summaries.
+// Exists to prevent raw values from surviving rebuilds or compact-mode transitions.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+
+const { resolveSiteTimestampDisplayOptionsMock } = vi.hoisted(() => ({
+    resolveSiteTimestampDisplayOptionsMock: vi.fn(),
+}));
 
 vi.mock('../table_view/row_selection_handler.js', () => ({
     update_card_selection: vi.fn(),
@@ -71,7 +76,16 @@ vi.mock('../../filterbar/filter_list/column_visibility_handler.js', () => ({
 }));
 
 vi.mock('../../../reusable_components/key_value_container/kv_container_printer.js', () => ({
-    renderKeyValuePairs: vi.fn(),
+    renderKeyValuePairs: vi.fn((container, entries) => {
+        entries.forEach((entry) => {
+            const value = document.createElement('span');
+            value.classList.add('test-card-detail-value');
+            value.dataset.column = entry.column;
+            value.textContent = entry.value;
+            if (entry.titleValue) value.title = entry.titleValue;
+            container.appendChild(value);
+        });
+    }),
 }));
 
 vi.mock('../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js', () => ({
@@ -144,6 +158,10 @@ vi.mock('./card_detail_standard_key_decorator.js', () => ({
     decorateStandardCardDetailKey: vi.fn(),
 }));
 
+vi.mock('./row_article_presentation_settings.js', () => ({
+    resolveSiteTimestampDisplayOptions: resolveSiteTimestampDisplayOptionsMock,
+}));
+
 import { create_card_view, refreshCardLanguages } from './card_view_printer.js';
 import { addKeywordsSection } from './card_keyword_builder.js';
 
@@ -152,6 +170,10 @@ describe('card language refresh', () => {
         vi.clearAllMocks();
         document.body.innerHTML = '';
         localStorage.clear();
+        resolveSiteTimestampDisplayOptionsMock.mockResolvedValue({
+            displayMode: 'date_time',
+            locale: 'en',
+        });
     });
 
     test('rebuilds a numeric FK card from its multilingual alias using the requested language', async () => {
@@ -216,5 +238,49 @@ describe('card language refresh', () => {
                 rawValue: 'Risteilyt, matkat, Tallinna',
             }),
         ]);
+    });
+
+    test('applies date_only to ordinary card details and the article sidebar summary', async () => {
+        const tableName = 'travel_deals';
+        resolveSiteTimestampDisplayOptionsMock.mockResolvedValue({
+            displayMode: 'date_only',
+            locale: 'fi',
+        });
+        localStorage.setItem(`${tableName}_dataTypes`, JSON.stringify({
+            created: {
+                card_element: 'details',
+                data_type: 'timestamp without time zone',
+                show_key_on_card: true,
+                show_value_on_card: true,
+            },
+            updated: {
+                card_element: 'details2',
+                data_type: 'timestamp without time zone',
+                show_key_on_card: true,
+                show_value_on_card: true,
+            },
+        }));
+
+        const view = await create_card_view(
+            ['created', 'updated'],
+            [{
+                id: 14,
+                created: '2026-08-20T00:24:42.000000',
+                updated: '2026-08-20T08:55:25.000000',
+            }],
+            tableName,
+        );
+        document.body.appendChild(view);
+
+        const detailValues = Array.from(
+            view.querySelectorAll('.test-card-detail-value')
+        ).map((element) => element.textContent);
+        expect(detailValues).toEqual(['20.8.2026', '20.8.2026']);
+        expect(detailValues.join(' ')).not.toContain('T');
+        expect(detailValues.join(' ')).not.toMatch(/\d{2}:\d{2}/u);
+
+        const sidebarDate = view.querySelector('.small_card_date');
+        expect(sidebarDate?.textContent).toBe('20.8.2026');
+        expect(sidebarDate?.title).toBe('2026-08-20 00:24:42');
     });
 });

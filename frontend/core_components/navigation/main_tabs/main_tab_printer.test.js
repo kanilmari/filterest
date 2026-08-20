@@ -380,11 +380,16 @@ describe("initTabs", () => {
             '.navtablinks[data-id="app_service_catalog"]'
         );
         const outlinePath = activeTab?.querySelector(".svg-container .navtab-stroke-path");
+        const fillPath = activeTab?.querySelector(".svg-container .navtab-fill-path");
+        const glowPath = activeTab?.querySelector(".svg-container .navtab-active-glow-path");
 
         expect(container?.style.right).toBe("0px");
         expect(activeTab?.dataset.tabPresentation).toBe("button-active");
         expect(outlinePath?.getAttribute("d")).toContain("A 0 0");
         expect(outlinePath?.getAttribute("fill")).toBe("none");
+        expect(fillPath?.getAttribute("fill")).toBe("var(--bg_color_2)");
+        expect(activeTab?.querySelector(".navtab-cover-layer")).toBeNull();
+        expect(glowPath?.getAttribute("stroke")).toMatch(/^url\(#navtab-\d+-glow\)$/);
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");
         expect(outlinePath?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
         expect(outlinePath?.closest("svg")?.getAttribute("preserveAspectRatio")).toBe("none");
@@ -411,6 +416,44 @@ describe("initTabs", () => {
         expect(activeTab?.dataset.tabPresentation).toBe("tab-active");
         expect(outlinePath?.getAttribute("d")?.startsWith("M 300 1")).toBe(true);
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");
+    });
+
+    test("uses rectangular tabs for every dataset when the active dataset has cover or background media", async () => {
+        Object.defineProperty(window, "innerWidth", {
+            configurable: true,
+            value: 1920,
+        });
+        localStorage.setItem("media_dataset_view", "card");
+        const { initTabs, openNavTab } = await import("./main_tab_printer.js");
+        await initTabs({
+            preloadedContentTablesResponse: {
+                datasets: [
+                    {
+                        dataset_name: "media_dataset",
+                        is_top_level_in_current_project: true,
+                        has_presentation_media: true,
+                    },
+                    {
+                        dataset_name: "plain_dataset",
+                        is_top_level_in_current_project: true,
+                        has_presentation_media: false,
+                    },
+                ],
+                tab_order: null,
+            },
+        });
+        await openNavTab("media_dataset");
+
+        const tabs = Array.from(document.querySelectorAll(".navtablinks"));
+        expect(tabs).toHaveLength(2);
+        expect(tabs[0].dataset.hasPresentationMedia).toBe("true");
+        expect(tabs[0].dataset.tabPresentation).toBe("button-active");
+        expect(tabs[1].dataset.tabPresentation).toBe("button-inactive");
+        tabs.forEach((tab) => {
+            expect(tab.querySelector(".navtab-stroke-path")?.getAttribute("d"))
+                .toContain("A 0 0");
+        });
+        expect(document.querySelector(".navtabs")?.style.right).toBe("0px");
     });
 
     test("uses button tabs for card view when the navbar is in overlay layout", async () => {

@@ -60,6 +60,27 @@
     transition-timing-function: var(--navtab-presentation-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
+.navtab-stroke-path {
+	fill: none;
+}
+
+.navtab-active-glow-stop {
+    stop-color: var(--primary_color);
+}
+
+.navtab-active-glow-path {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.navtablinks.active .navtab-active-glow-path {
+    stroke-width: var(--navtab-active-glow-width, 1.5px);
+    opacity: var(--navtab-active-glow-intensity, 0.3);
+    filter: drop-shadow(
+        0 0 var(--navtab-active-glow-blur, 2px) var(--primary_color)
+    );
+}
+
 .navtab_icon {
     position: absolute;
     left: calc(var(--navtab-rounded-left-offset, 50px) + 14px);
@@ -121,11 +142,12 @@
 }
 
 .navtablinks[data-tab-presentation="button-active"] {
-    background-color: var(--bg_color_2);
+    background-color: transparent;
 }
 
 .navtablinks[data-tab-presentation="tab-active"] {
     z-index: 2;
+    background: none;
 }
 
 .navtablinks[data-tab-presentation^="button"] .navtab_icon {

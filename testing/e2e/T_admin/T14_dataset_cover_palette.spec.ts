@@ -30,9 +30,13 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   const panel = page.locator('[data-testid="dataset-cover-test-palette"]');
   await expect(panel).toBeVisible();
   const box = await panel.boundingBox();
+  const viewportHeight = page.viewportSize()!.height;
   expect(box).not.toBeNull();
   expect(box!.width).toBeLessThanOrEqual(440);
-  expect(box!.height).toBeLessThanOrEqual(800);
+  expect(box!.height).toBeLessThanOrEqual(viewportHeight * 0.97 + 1);
+  await expect(panel.locator('.dataset-cover-test-palette__heading')).toBeVisible();
+  await expect(panel.locator('.dataset-cover-test-palette__group-icon')).toHaveCount(6);
+  await expect(panel.locator('.dataset-cover-test-palette__group-chevron')).toHaveCount(6);
 
   const defaultHeight = (await hero.boundingBox())!.height;
   const heroHeight = page.locator('[data-testid="dataset-cover-test-palette-hero-height"]');
@@ -59,9 +63,73 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     input.value = '0.35';
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+  await expect.poll(async () => hero.evaluate((element) => ({
+    configuredOpacity: getComputedStyle(element)
+      .getPropertyValue('--dataset-cover-light-overlay-opacity').trim(),
+    background: getComputedStyle(element, '::after').backgroundImage,
+  }))).toMatchObject({ configuredOpacity: '0.35' });
+
+  const bottomFade = page.locator('[data-testid="dataset-cover-test-palette-hero-bottom-fade"]');
+  await bottomFade.evaluate((input: HTMLInputElement) => {
+    input.value = '80';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   await expect.poll(async () => hero.evaluate((element) => (
-    getComputedStyle(element, '::after').opacity
-  ))).toBe('0.35');
+    getComputedStyle(element, '::after').backgroundImage
+  ))).toContain('80px');
+
+  const cardImageWidth = page.locator('[data-testid="dataset-cover-test-palette-card-image-width"]');
+  await cardImageWidth.evaluate((input: HTMLInputElement) => {
+    input.value = '360';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => page.evaluate(() => (
+    getComputedStyle(document.documentElement).getPropertyValue('--card_image_large_width').trim()
+  ))).toBe('360px');
+
+  const activeTabFade = page.locator('[data-testid="dataset-cover-test-palette-active-tab-fade"]');
+  await activeTabFade.evaluate((input: HTMLInputElement) => {
+    input.value = '42';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => page.evaluate(() => (
+    getComputedStyle(document.documentElement).getPropertyValue('--navtab-active-fade-width').trim()
+  ))).toBe('42px');
+  const activeTabMaximumOpacity = page.locator(
+    '[data-testid="dataset-cover-test-palette-active-tab-max-opacity"]'
+  );
+  await expect(activeTabMaximumOpacity).toHaveValue('1');
+  await activeTabMaximumOpacity.evaluate((input: HTMLInputElement) => {
+    input.value = '0.2';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => page.evaluate(() => (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--navtab-active-max-opacity').trim()
+  ))).toBe('0.2');
+
+  const glowIntensity = page.locator(
+    '[data-testid="dataset-cover-test-palette-active-tab-glow-intensity"]'
+  );
+  await glowIntensity.evaluate((input: HTMLInputElement) => {
+    input.value = '0.15';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => page.evaluate(() => (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--navtab-active-glow-intensity').trim()
+  ))).toBe('0.15');
+
+  const brandColor = page.locator('[data-testid="dataset-cover-test-palette-brand-color"]');
+  await brandColor.evaluate((input: HTMLInputElement) => {
+    input.value = '#cc3366';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => page.evaluate(() => ({
+    hue: getComputedStyle(document.documentElement).getPropertyValue('--brand-hue').trim(),
+    saturation: getComputedStyle(document.documentElement).getPropertyValue('--brand-sat').trim(),
+    lightness: getComputedStyle(document.documentElement).getPropertyValue('--brand-light').trim(),
+  }))).toEqual({ hue: '340', saturation: '60%', lightness: '50%' });
 
   const heading = panel.locator('.dataset-cover-test-palette__heading');
   const beforeDrag = (await panel.boundingBox())!;

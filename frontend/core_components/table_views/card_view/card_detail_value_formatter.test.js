@@ -73,6 +73,45 @@ describe("card_detail_value_formatter", () => {
         expect(entry.titleValue).toBe("2026-06-15 21:36:10");
     });
 
+    test("applies the site date-only policy to ordinary card timestamp details", () => {
+        const entry = formatCardDetailEntryForCardDisplay({
+            column: "created",
+            rawValue: "2026-06-15T21:36:10",
+        }, {
+            created: {
+                card_element: "details",
+                data_type: "timestamp without time zone",
+            },
+        }, {
+            displayMode: "date_only",
+            locale: "fi",
+        });
+
+        expect(entry.rawValue).toBe("15.6.2026");
+        expect(entry.rawValue).not.toContain("T");
+        expect(entry.rawValue).not.toContain("21:36");
+        expect(entry.titleValue).toBe("2026-06-15 21:36:10");
+    });
+
+    test("renders date-time card details in a clean localized form", () => {
+        const entry = formatCardDetailEntryForCardDisplay({
+            column: "updated",
+            rawValue: "2026-06-15T21:36:10",
+        }, {
+            updated: {
+                card_element: "details",
+                data_type: "timestamp without time zone",
+            },
+        }, {
+            displayMode: "date_time",
+            locale: "en",
+        });
+
+        expect(entry.rawValue).toBe("15 Jun 2026, 21:36");
+        expect(entry.rawValue).not.toContain("T");
+        expect(entry.titleValue).toBe("2026-06-15 21:36:10");
+    });
+
     test("leaves dates, numbers, JSON, URLs, and links untouched", () => {
         expect(capitalizeCardDetailDisplayText("2026-05-07 10:00:00")).toBe("2026-05-07 10:00:00");
         expect(capitalizeCardDetailDisplayText("16")).toBe("16");

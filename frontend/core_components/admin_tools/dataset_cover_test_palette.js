@@ -14,6 +14,15 @@ import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_
 
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
+const TOOLBOX_CHEVRON_PATH = '/frontend/icons/general/chevron-down-icon.svg';
+const TOOLBOX_ICON_PATHS = Object.freeze({
+    themeImage: '/frontend/icons/symbols/image.svg',
+    ovalGeometry: '/frontend/icons/symbols/ruler.svg',
+    ovalGradient: '/frontend/icons/symbols/tune.svg',
+    heroLayout: '/frontend/icons/symbols/layers.svg',
+    cardLayout: '/frontend/icons/symbols/grid_view.svg',
+    navigation: '/frontend/icons/symbols/settings.svg',
+});
 
 export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
     light: Object.freeze({
@@ -46,24 +55,39 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
     }),
     shared: Object.freeze({
         hero_extra_height: 40,
+        hero_bottom_fade: 48,
         image_blur: 1,
+        card_image_width: 300,
+        active_tab_fade: 25,
+        active_tab_max_opacity: 1,
+        active_tab_glow_intensity: 0.3,
+        active_tab_glow_width: 1.5,
+        active_tab_glow_blur: 2,
+        brand_color: '#1a8fe6',
     }),
 });
 
 const RANGE_CONTROLS = Object.freeze([
-    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', min: 20, max: 140, step: 1, unit: '%' },
-    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', min: 20, max: 140, step: 1, unit: '%' },
-    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', min: 0, max: 100, step: 1, unit: '%' },
-    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', min: 0, max: 1, step: 0.05, unit: '' },
-    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', min: 0, max: 1, step: 0.05, unit: '' },
-    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', min: 0, max: 1, step: 0.05, unit: '' },
-    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', min: 0, max: 100, step: 1, unit: '%' },
-    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', min: 0, max: 100, step: 1, unit: '%' },
-    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', min: 0, max: 100, step: 1, unit: '%' },
-    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', min: 0, max: 1, step: 0.05, unit: '' },
-    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true },
-    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '' },
-    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', shared: true },
+    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', min: 20, max: 140, step: 1, unit: '%', group: 'ovalGeometry' },
+    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', min: 20, max: 140, step: 1, unit: '%', group: 'ovalGeometry' },
+    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGeometry' },
+    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'ovalGradient' },
+    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'ovalGradient' },
+    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'ovalGradient' },
+    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGradient' },
+    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGradient' },
+    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGradient' },
+    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'themeImage' },
+    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '', group: 'themeImage' },
+    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true, group: 'heroLayout' },
+    { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'heroLayout' },
+    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', shared: true, group: 'heroLayout' },
+    { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
+    { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', min: 0, max: 100, step: 1, unit: 'px', shared: true, group: 'navigation' },
+    { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
+    { id: 'active-tab-glow-intensity', key: 'active_tab_glow_intensity', label: 'activeTabGlowIntensity', css: 'active-tab-glow-intensity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
+    { id: 'active-tab-glow-width', key: 'active_tab_glow_width', label: 'activeTabGlowWidth', css: 'active-tab-glow-width', min: 0, max: 8, step: 0.25, unit: 'px', shared: true, group: 'navigation' },
+    { id: 'active-tab-glow-blur', key: 'active_tab_glow_blur', label: 'activeTabGlowBlur', css: 'active-tab-glow-blur', min: 0, max: 12, step: 0.5, unit: 'px', shared: true, group: 'navigation' },
 ]);
 
 const COPY = Object.freeze({
@@ -72,24 +96,37 @@ const COPY = Object.freeze({
         notice: 'Changes preview immediately. Save stores both light and dark theme values.',
         light: 'Light', dark: 'Dark', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
         themeGroup: 'Selected theme', sharedGroup: 'Shared by both themes',
+        themeImage: 'Image and overlay', ovalGeometry: 'Oval shape', ovalGradient: 'Oval gradient',
+        heroLayout: 'Hero image and transition', cardLayout: 'Card layout', navigation: 'Dataset tabs',
         save: 'Save settings', saving: 'Saving…', saved: 'Settings saved.', saveFailed: 'Saving failed.',
         ovalX: 'Oval width', ovalY: 'Oval height', ovalPositionY: 'Oval vertical position',
         centerOpacity: 'Centre opacity', midOpacity: 'Mid opacity', edgeOpacity: 'Edge opacity',
         centerStop: 'Centre stop', midStop: 'Mid stop', edgeStop: 'Edge stop',
-        imageOpacity: 'Whole image opacity', heroHeight: 'Hero extra height',
+        imageOpacity: 'Whole image opacity', heroHeight: 'Hero extra height', heroBottomFade: 'Bottom fade height',
         overlayOpacity: 'Darkening overlay opacity', imageBlur: 'Whole image blur',
+        cardImageWidth: 'Card image width', activeTabFade: 'Active tab fade width',
+        activeTabMaxOpacity: 'Active tab edge opacity (reserved)',
+        activeTabGlowIntensity: 'Active tab glow intensity', activeTabGlowWidth: 'Active tab glow width',
+        activeTabGlowBlur: 'Active tab glow blur', brandColor: 'Site brand colour',
     }),
     fi: Object.freeze({
         button: 'Avaa kansikuvan paletti', title: 'Kansikuvan asetukset', close: 'Sulje kansikuvan asetukset',
         notice: 'Muutokset näkyvät heti. Tallennus säilyttää vaalean ja tumman teeman arvot.',
         light: 'Vaalea', dark: 'Tumma', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
         themeGroup: 'Valittu teema', sharedGroup: 'Molemmille teemoille yhteiset',
+        themeImage: 'Kuva ja tummennus', ovalGeometry: 'Ovaalin muoto', ovalGradient: 'Ovaalin liukuväri',
+        heroLayout: 'Herokuva ja häivytys', cardLayout: 'Korttien asettelu', navigation: 'Dataset-välilehdet',
         save: 'Tallenna asetukset', saving: 'Tallennetaan…', saved: 'Asetukset tallennettu.', saveFailed: 'Tallennus epäonnistui.',
         ovalX: 'Ovaalin leveys', ovalY: 'Ovaalin korkeus', ovalPositionY: 'Ovaalin pystysijainti',
         centerOpacity: 'Keskustan opacity', midOpacity: 'Keskialueen opacity', edgeOpacity: 'Reunan opacity',
         centerStop: 'Keskustan stop-piste', midStop: 'Keskialueen stop-piste', edgeStop: 'Reunan stop-piste',
-        imageOpacity: 'Koko kuvan opacity', heroHeight: 'Heron lisäkorkeus',
+        imageOpacity: 'Koko kuvan opacity', heroHeight: 'Heron lisäkorkeus', heroBottomFade: 'Alahäivytyksen korkeus',
         overlayOpacity: 'Tummentavan overlayn opacity', imageBlur: 'Koko kuvan blur',
+        cardImageWidth: 'Korttikuvan leveys', activeTabFade: 'Aktiivisen välilehden häivytysleveys',
+        activeTabMaxOpacity: 'Aktiivisen välilehden reunaopacity (varattu)',
+        activeTabGlowIntensity: 'Aktiivisen välilehden hohdon voimakkuus',
+        activeTabGlowWidth: 'Aktiivisen välilehden hohdon leveys',
+        activeTabGlowBlur: 'Aktiivisen välilehden hohdon sumennus', brandColor: 'Sivuston brändiväri',
     }),
 });
 
@@ -110,6 +147,34 @@ function renderControlValue(value, unit) {
     return `${displayValue}${unit}`;
 }
 
+function applySiteBrandColor(documentRoot, hexColor) {
+    const channels = String(hexColor).slice(1).match(/.{2}/g)?.map((part) => (
+        Number.parseInt(part, 16) / 255
+    ));
+    if (!channels || channels.length !== 3 || channels.some((channel) => !Number.isFinite(channel))) {
+        return false;
+    }
+    const [red, green, blue] = channels;
+    const maximum = Math.max(red, green, blue);
+    const minimum = Math.min(red, green, blue);
+    const delta = maximum - minimum;
+    const lightness = (maximum + minimum) / 2;
+    let hue = 0;
+    if (delta > 0) {
+        if (maximum === red) hue = 60 * (((green - blue) / delta) % 6);
+        else if (maximum === green) hue = 60 * (((blue - red) / delta) + 2);
+        else hue = 60 * (((red - green) / delta) + 4);
+    }
+    if (hue < 0) hue += 360;
+    const saturation = delta === 0
+        ? 0
+        : delta / (1 - Math.abs((2 * lightness) - 1));
+    documentRoot.style.setProperty('--brand-hue', String(Number(hue.toFixed(2))));
+    documentRoot.style.setProperty('--brand-sat', `${Number((saturation * 100).toFixed(2))}%`);
+    documentRoot.style.setProperty('--brand-light', `${Number((lightness * 100).toFixed(2))}%`);
+    return true;
+}
+
 function isValidThemeConfig(config) {
     const themeKeys = ['light', 'dark'];
     const numericKeys = RANGE_CONTROLS.filter((control) => !control.shared);
@@ -120,7 +185,8 @@ function isValidThemeConfig(config) {
         if (!numericKeys.every((control) => Number.isFinite(Number(theme[control.key])))) return false;
     }
     return RANGE_CONTROLS.filter((control) => control.shared)
-        .every((control) => Number.isFinite(Number(config.shared[control.key])));
+        .every((control) => Number.isFinite(Number(config.shared[control.key])))
+        && /^#[0-9a-f]{6}$/i.test(String(config.shared.brand_color || ''));
 }
 
 function normalizePresentationSettings(payload) {
@@ -155,6 +221,27 @@ export function applyDatasetCoverThemeConfig(hero, config) {
     RANGE_CONTROLS.filter((control) => control.shared).forEach((control) => {
         setThemeVariable(hero, 'shared', control, config.shared[control.key]);
     });
+    const documentRoot = document.documentElement;
+    documentRoot.style.setProperty('--card_image_large_width', `${config.shared.card_image_width}px`);
+    documentRoot.style.setProperty('--navtab-active-fade-width', `${config.shared.active_tab_fade}px`);
+    documentRoot.style.setProperty(
+        '--navtab-active-max-opacity',
+        String(config.shared.active_tab_max_opacity)
+    );
+    documentRoot.style.setProperty(
+        '--navtab-active-glow-intensity',
+        String(config.shared.active_tab_glow_intensity)
+    );
+    documentRoot.style.setProperty(
+        '--navtab-active-glow-width',
+        `${config.shared.active_tab_glow_width}px`
+    );
+    documentRoot.style.setProperty(
+        '--navtab-active-glow-blur',
+        `${config.shared.active_tab_glow_blur}px`
+    );
+    applySiteBrandColor(documentRoot, config.shared.brand_color);
+    window.dispatchEvent(new Event('dataset-cover-presentation-changed'));
     return true;
 }
 
@@ -202,6 +289,38 @@ function setupPanelDragging(panel, dragHandle) {
     };
 }
 
+function createPaletteToolbox(title, {
+    iconPath = TOOLBOX_ICON_PATHS.themeImage,
+    open = false,
+    testid = '',
+} = {}) {
+    const toolbox = document.createElement('details');
+    toolbox.classList.add('dataset-cover-test-palette__group');
+    toolbox.open = open;
+    if (testid) toolbox.dataset.testid = testid;
+    const summary = document.createElement('summary');
+    summary.classList.add('dataset-cover-test-palette__group-title');
+    const chevron = createMaskIconSpan(
+        TOOLBOX_CHEVRON_PATH,
+        'dataset-cover-test-palette__group-chevron'
+    );
+    const icon = createMaskIconSpan(
+        iconPath,
+        'dataset-cover-test-palette__group-icon'
+    );
+    const label = document.createElement('span');
+    label.classList.add('dataset-cover-test-palette__group-label');
+    label.textContent = title;
+    summary.append(chevron, icon, label);
+    const content = document.createElement('div');
+    content.classList.add('dataset-cover-test-palette__group-content');
+    const controls = document.createElement('div');
+    controls.classList.add('dataset-cover-test-palette__controls');
+    content.appendChild(controls);
+    toolbox.append(summary, content);
+    return { toolbox, content, controls };
+}
+
 function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) {
     const copy = getCopy();
     let savedSettings = clone(initialSettings);
@@ -239,6 +358,9 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     notice.classList.add('dataset-cover-test-palette__notice');
     notice.textContent = copy.notice;
 
+    const panelBody = document.createElement('div');
+    panelBody.classList.add('dataset-cover-test-palette__body');
+
     const tabs = document.createElement('div');
     tabs.classList.add('dataset-cover-test-palette__tabs');
     tabs.setAttribute('role', 'tablist');
@@ -261,25 +383,26 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     maskInput.dataset.testid = 'dataset-cover-test-palette-mask-enabled';
     maskLabel.append(maskInput, document.createTextNode(copy.maskEnabled));
 
-    const themeGroup = document.createElement('section');
-    themeGroup.classList.add('dataset-cover-test-palette__group');
-    const themeGroupTitle = document.createElement('strong');
-    themeGroupTitle.classList.add('dataset-cover-test-palette__group-title');
-    themeGroupTitle.textContent = copy.themeGroup;
-    const themeGrid = document.createElement('div');
-    themeGrid.classList.add('dataset-cover-test-palette__controls');
-    themeGrid.dataset.testid = 'dataset-cover-test-palette-theme-controls';
-    themeGroup.append(themeGroupTitle, maskLabel, themeGrid);
-
-    const sharedGroup = document.createElement('section');
-    sharedGroup.classList.add('dataset-cover-test-palette__group');
-    const sharedGroupTitle = document.createElement('strong');
-    sharedGroupTitle.classList.add('dataset-cover-test-palette__group-title');
-    sharedGroupTitle.textContent = copy.sharedGroup;
-    const sharedGrid = document.createElement('div');
-    sharedGrid.classList.add('dataset-cover-test-palette__controls');
-    sharedGrid.dataset.testid = 'dataset-cover-test-palette-shared-controls';
-    sharedGroup.append(sharedGroupTitle, sharedGrid);
+    const themeToolboxes = document.createElement('section');
+    themeToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
+    themeToolboxes.dataset.testid = 'dataset-cover-test-palette-theme-controls';
+    const sharedToolboxes = document.createElement('section');
+    sharedToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
+    sharedToolboxes.dataset.testid = 'dataset-cover-test-palette-shared-controls';
+    const toolboxByGroup = new Map();
+    ['themeImage', 'ovalGeometry', 'ovalGradient', 'heroLayout', 'cardLayout', 'navigation']
+        .forEach((groupName, index) => {
+            const toolbox = createPaletteToolbox(copy[groupName], {
+                iconPath: TOOLBOX_ICON_PATHS[groupName],
+                open: index < 2,
+            });
+            toolboxByGroup.set(groupName, toolbox);
+            const parent = ['themeImage', 'ovalGeometry', 'ovalGradient'].includes(groupName)
+                ? themeToolboxes
+                : sharedToolboxes;
+            parent.appendChild(toolbox.toolbox);
+        });
+    toolboxByGroup.get('ovalGeometry').content.prepend(maskLabel);
     const rangeControls = RANGE_CONTROLS.map((control) => {
         const row = document.createElement('label');
         row.classList.add('dataset-cover-test-palette__range');
@@ -303,9 +426,24 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
         });
         row.append(labelText, output, input);
-        (control.shared ? sharedGrid : themeGrid).appendChild(row);
+        toolboxByGroup.get(control.group).controls.appendChild(row);
         return { ...control, input, output };
     });
+
+    const brandColorLabel = document.createElement('label');
+    brandColorLabel.classList.add('dataset-cover-test-palette__color');
+    const brandColorText = document.createElement('span');
+    brandColorText.textContent = copy.brandColor;
+    const brandColorInput = document.createElement('input');
+    brandColorInput.type = 'color';
+    brandColorInput.dataset.testid = 'dataset-cover-test-palette-brand-color';
+    brandColorInput.setAttribute('aria-label', copy.brandColor);
+    brandColorInput.addEventListener('input', () => {
+        draftSettings.dataset_cover_theme.shared.brand_color = brandColorInput.value;
+        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+    });
+    brandColorLabel.append(brandColorText, brandColorInput);
+    toolboxByGroup.get('navigation').content.appendChild(brandColorLabel);
 
     const actions = document.createElement('div');
     actions.classList.add('dataset-cover-test-palette__actions');
@@ -338,6 +476,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             control.input.value = String(source[control.key]);
             control.output.value = renderControlValue(control.input.value, control.unit);
         });
+        brandColorInput.value = draftSettings.dataset_cover_theme.shared.brand_color;
     }
 
     maskInput.addEventListener('change', () => {
@@ -400,7 +539,8 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     document.addEventListener('pointerdown', handleDocumentPointerDown);
     document.addEventListener('keydown', handleDocumentKeyDown);
 
-    panel.append(headingRow, notice, tabs, themeGroup, sharedGroup, actions);
+    panelBody.append(notice, tabs, themeToolboxes, sharedToolboxes, actions);
+    panel.append(headingRow, panelBody);
     hero.appendChild(button);
     document.body.appendChild(panel);
     syncControls();

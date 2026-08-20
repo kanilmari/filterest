@@ -257,6 +257,35 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/lang-key",
+      "match_type": "exact",
+      "handler_name": "lang.AdminLangKeyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/openai-api-key",
       "match_type": "exact",
       "handler_name": "router.saveOpenAIAPIKeyHandler",

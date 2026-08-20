@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	backend "easelect/backend/core_components"
@@ -93,8 +94,16 @@ type DatasetCoverThemeValues struct {
 
 // DatasetCoverSharedValues contains visual settings shared by light and dark themes.
 type DatasetCoverSharedValues struct {
-	HeroExtraHeight float64 `json:"hero_extra_height"`
-	ImageBlur       float64 `json:"image_blur"`
+	HeroExtraHeight        float64 `json:"hero_extra_height"`
+	HeroBottomFade         float64 `json:"hero_bottom_fade"`
+	ImageBlur              float64 `json:"image_blur"`
+	CardImageWidth         float64 `json:"card_image_width"`
+	ActiveTabFade          float64 `json:"active_tab_fade"`
+	ActiveTabMaxOpacity    float64 `json:"active_tab_max_opacity"`
+	ActiveTabGlowIntensity float64 `json:"active_tab_glow_intensity"`
+	ActiveTabGlowWidth     float64 `json:"active_tab_glow_width"`
+	ActiveTabGlowBlur      float64 `json:"active_tab_glow_blur"`
+	BrandColor             string  `json:"brand_color"`
 }
 
 // DatasetCoverThemeConfig groups light, dark, and shared cover settings.
@@ -196,7 +205,7 @@ func readSitePresentationSettingsFromDB() (SitePresentationSettingsResponse, err
 	}
 
 	if strings.TrimSpace(rawCover) != "" {
-		var stored DatasetCoverThemeConfig
+		stored := settings.DatasetCoverTheme
 		if json.Unmarshal([]byte(rawCover), &stored) == nil && validateDatasetCoverTheme(stored) == nil {
 			settings.DatasetCoverTheme = stored
 		}
@@ -248,7 +257,10 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 		}
 	}
 	if err := requireExactJSONKeys(themeParts["shared"], []string{
-		"hero_extra_height", "image_blur",
+		"hero_extra_height", "hero_bottom_fade", "image_blur",
+		"card_image_width", "active_tab_fade", "active_tab_max_opacity",
+		"active_tab_glow_intensity", "active_tab_glow_width", "active_tab_glow_blur",
+		"brand_color",
 	}); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -349,12 +361,46 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if err := validateRange("shared.hero_extra_height", config.Shared.HeroExtraHeight, 0, 240); err != nil {
 		return err
 	}
-	return validateRange("shared.image_blur", config.Shared.ImageBlur, 0, 24)
+	if err := validateRange("shared.hero_bottom_fade", config.Shared.HeroBottomFade, 0, 200); err != nil {
+		return err
+	}
+	if err := validateRange("shared.image_blur", config.Shared.ImageBlur, 0, 24); err != nil {
+		return err
+	}
+	if err := validateRange("shared.card_image_width", config.Shared.CardImageWidth, 30, 600); err != nil {
+		return err
+	}
+	if err := validateRange("shared.active_tab_fade", config.Shared.ActiveTabFade, 0, 100); err != nil {
+		return err
+	}
+	if err := validateRange("shared.active_tab_max_opacity", config.Shared.ActiveTabMaxOpacity, 0, 1); err != nil {
+		return err
+	}
+	if err := validateRange("shared.active_tab_glow_intensity", config.Shared.ActiveTabGlowIntensity, 0, 1); err != nil {
+		return err
+	}
+	if err := validateRange("shared.active_tab_glow_width", config.Shared.ActiveTabGlowWidth, 0, 8); err != nil {
+		return err
+	}
+	if err := validateRange("shared.active_tab_glow_blur", config.Shared.ActiveTabGlowBlur, 0, 12); err != nil {
+		return err
+	}
+	return validateHexColor("shared.brand_color", config.Shared.BrandColor)
 }
 
 func validateRange(name string, value, minimum, maximum float64) error {
 	if value < minimum || value > maximum {
 		return fmt.Errorf("%s must be between %g and %g", name, minimum, maximum)
+	}
+	return nil
+}
+
+func validateHexColor(name, value string) error {
+	if len(value) != 7 || value[0] != '#' {
+		return fmt.Errorf("%s must be a six-digit hexadecimal colour", name)
+	}
+	if _, err := strconv.ParseUint(value[1:], 16, 24); err != nil {
+		return fmt.Errorf("%s must be a six-digit hexadecimal colour", name)
 	}
 	return nil
 }
@@ -381,8 +427,16 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 			Light: light,
 			Dark:  dark,
 			Shared: DatasetCoverSharedValues{
-				HeroExtraHeight: 40,
-				ImageBlur:       1,
+				HeroExtraHeight:        40,
+				HeroBottomFade:         48,
+				ImageBlur:              1,
+				CardImageWidth:         300,
+				ActiveTabFade:          25,
+				ActiveTabMaxOpacity:    1,
+				ActiveTabGlowIntensity: 0.3,
+				ActiveTabGlowWidth:     1.5,
+				ActiveTabGlowBlur:      2,
+				BrandColor:             "#1a8fe6",
 			},
 		},
 		RowArticleTimestampDisplayMode: rowArticleTimestampDateTime,

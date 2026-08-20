@@ -79,16 +79,32 @@ export function shouldUseButtonTabsForView(viewKey) {
     return BUTTON_PRESENTATION_VIEW_KEYS.has(String(viewKey || "").trim());
 }
 
-export function buildTabPresentationState({ isNarrow, isNavbarOverlay, isActive, viewKey }) {
-    if (!isNarrow && !isNavbarOverlay && !shouldUseButtonTabsForView(viewKey)) {
+export function buildTabPresentationState({
+    forceRectangular = false,
+    isNarrow,
+    isNavbarOverlay,
+    isActive,
+    viewKey,
+}) {
+    if (
+        !forceRectangular
+        && !isNarrow
+        && !isNavbarOverlay
+        && !shouldUseButtonTabsForView(viewKey)
+    ) {
         return isActive ? "tab-active" : "tab-inactive";
     }
 
     return isActive ? "button-active" : "button-inactive";
 }
 
-export function buildNavTabsRightOffset({ isNarrow, isNavbarOverlay, viewKey }) {
-    if (isNarrow || isNavbarOverlay) {
+export function buildNavTabsRightOffset({
+    forceRectangular = false,
+    isNarrow,
+    isNavbarOverlay,
+    viewKey,
+}) {
+    if (forceRectangular || isNarrow || isNavbarOverlay) {
         return "0px";
     }
 
@@ -98,6 +114,7 @@ export function buildNavTabsRightOffset({ isNarrow, isNavbarOverlay, viewKey }) 
 }
 
 export function buildTabOutlinePresentation({
+    forceRectangular = false,
     isNarrow,
     isNavbarOverlay,
     isActive,
@@ -105,6 +122,7 @@ export function buildTabOutlinePresentation({
     viewKey,
 }) {
     const state = buildTabPresentationState({
+        forceRectangular,
         isNarrow,
         isNavbarOverlay,
         isActive,
