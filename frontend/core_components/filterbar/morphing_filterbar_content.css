@@ -119,6 +119,7 @@
 .filterbar-inline-hero--has-cover {
 	--dataset-cover-mask-oval-x: 68%;
 	--dataset-cover-mask-oval-y: 82%;
+	--dataset-cover-mask-position-y: 48%;
 	--dataset-cover-mask-center-opacity: 20%;
 	--dataset-cover-mask-mid-opacity: 45%;
 	--dataset-cover-mask-edge-opacity: 70%;
@@ -126,8 +127,18 @@
 	--dataset-cover-mask-mid-stop: 58%;
 	--dataset-cover-mask-edge-stop: 100%;
 	--dataset-cover-image-opacity: 1;
-	--dataset-cover-overlay-opacity: 1;
+	--dataset-cover-overlay-opacity: 0;
 	--dataset-cover-image-blur: 0px;
+	--dataset-cover-hero-extra-height: 40px;
+	padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height));
+}
+body.dark-mode .filterbar-inline-hero--has-cover {
+	--dataset-cover-mask-image: none;
+	--dataset-cover-image-opacity: 0.3;
+}
+body:not(.dark-mode) .filterbar-inline-hero--has-cover {
+	--dataset-cover-mask-image: initial;
+	--dataset-cover-image-opacity: 1;
 }
 .filterbar-inline-hero--has-cover::before,
 .filterbar-inline-hero--has-cover::after {
@@ -145,25 +156,18 @@
 	filter: blur(var(--dataset-cover-image-blur));
 	opacity: var(--dataset-cover-image-opacity);
 	mask-image: var(--dataset-cover-mask-image, radial-gradient(
-		ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% 48%,
+		ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y),
 		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) 0%,
 		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) var(--dataset-cover-mask-center-stop),
 		rgb(0 0 0 / var(--dataset-cover-mask-mid-opacity)) var(--dataset-cover-mask-mid-stop),
 		rgb(0 0 0 / var(--dataset-cover-mask-edge-opacity)) var(--dataset-cover-mask-edge-stop)
 	));
 }
-
 .filterbar-inline-hero--has-cover::after {
 	z-index: -1;
-	background: linear-gradient(
-		180deg,
-		color-mix(in srgb, var(--filter_panel_bg) 8%, transparent) 0%,
-		transparent 45%,
-		color-mix(in srgb, var(--filter_panel_bg) 18%, transparent) 100%
-	);
+	background: #000;
 	opacity: var(--dataset-cover-overlay-opacity);
 }
-
 .dataset-results-surface {
 	position: relative;
 	isolation: isolate;
@@ -172,7 +176,6 @@
 	width: 100%;
 	min-width: 0;
 }
-
 .dataset-results-surface--has-background::before {
 	position: absolute;
 	z-index: -1;
@@ -185,19 +188,16 @@
 	pointer-events: none;
 	mask-image: radial-gradient(ellipse at center, transparent 0%, transparent 42%, #000 100%);
 }
-
 /* ============================================
    WIDE STATE (scrolled to top)
    Full-width bar at top with centered content.
    ============================================ */
-
 .filterbar-panel--wide .filter-content-inner,
 .filterbar-inline-hero .filter-content-inner {
   max-width: var(--filterbar-hero-title-max-width, 1200px);
   width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-title-max-width, 1200px));
   margin: 12px auto 0;
 }
-
 .filterbar-panel--wide .filter-content-inner > :not(.morphing-header),
 .filterbar-inline-hero .filter-content-inner > :not(.morphing-header) {
   align-self: center;
