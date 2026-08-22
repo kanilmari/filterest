@@ -143,6 +143,8 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/ui-feature-flags", system_table_tools.GetAdminUIFeatureFlagsHandler, "system_table_tools.GetAdminUIFeatureFlagsHandler")
 	functionRegisterHandler("/api/site-presentation-settings", system_table_tools.GetSitePresentationSettingsHandler, "system_table_tools.GetSitePresentationSettingsHandler")
 	functionRegisterHandler("/api/admin/site-presentation-settings", system_table_tools.AdminSitePresentationSettingsHandler, "system_table_tools.AdminSitePresentationSettingsHandler")
+	functionRegisterHandler("/api/admin/row-groups", system_table_tools.AdminRowGroupsHandler, "system_table_tools.AdminRowGroupsHandler")
+	functionRegisterHandler("/api/admin/row-group-memberships", system_table_tools.AdminRowGroupMembershipsHandler, "system_table_tools.AdminRowGroupMembershipsHandler")
 
 	// DevTools-reitit (vain eksplisiittisessä kehitysympäristössä)
 	envType := os.Getenv("ENVIRONMENT_TYPE")

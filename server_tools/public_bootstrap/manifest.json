@@ -1,8 +1,8 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "8.37.1",
-  "db_version": "9.2.5",
+  "app_version": "8.38.0",
+  "db_version": "9.3.0",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -101,7 +101,7 @@
     "public.riskienhallinta_tiketit_relation": 1,
     "public.system_about": 1,
     "public.system_column_details": 47,
-    "public.system_config": 11,
+    "public.system_config": 12,
     "public.system_db_tables": 46,
     "public.system_db_version": 1,
     "public.system_foreign_key_relations_1_m": 4,
@@ -122,7 +122,7 @@
       "sha256": "cc52f26861b41645937b84b3a0833a424b61cd16beaf21a44034d2568b81d279"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "271cb85fd7932f5a5de26abf326d9fffce42d438bd36f9fcabce9fb72ff4d6a2"
+      "sha256": "6709f0374dd0b662bdbc1f541db8be2a0f9bf4930f38228e1125ce9c137c7e7c"
     }
   },
   "source_files": {

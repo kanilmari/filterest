@@ -6,13 +6,13 @@ not legal advice and still needs human/project approval before publication.
 
 ## Candidate
 
-- Filterest app version: `8.37.1`
-- Database version: `9.2.5`
+- Filterest app version: `8.38.0`
+- Database version: `9.3.0`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
 - Go modules listed: `96`
 - npm packages listed: `441`
-- bundled asset files listed: `137`
+- bundled asset files listed: `141`
 - dependency rows still requiring license review: `0`
 
 ## Review Notes
@@ -54,7 +54,7 @@ not legal advice and still needs human/project approval before publication.
 
 - `.ico`: 1
 - `.jpg`: 22
-- `.png`: 14
+- `.png`: 18
 - `.svg`: 100
 
 ## Go Modules
@@ -652,6 +652,10 @@ not legal advice and still needs human/project approval before publication.
 | `frontend/icons/navigation/theme-locked-dark-icon.svg` | `.svg` |
 | `frontend/icons/navigation/theme-locked-light-icon.svg` | `.svg` |
 | `frontend/icons/navigation/theme-system-icon.svg` | `.svg` |
+| `frontend/icons/site_favicons/site-initial-e-v1-16.png` | `.png` |
+| `frontend/icons/site_favicons/site-initial-es-v1-16.png` | `.png` |
+| `frontend/icons/site_favicons/site-initial-f-v1-16.png` | `.png` |
+| `frontend/icons/site_favicons/site-initial-s-v1-16.png` | `.png` |
 | `frontend/icons/symbols/alert-circle.svg` | `.svg` |
 | `frontend/icons/symbols/article.svg` | `.svg` |
 | `frontend/icons/symbols/attachment.svg` | `.svg` |

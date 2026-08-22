@@ -45,7 +45,7 @@
     <!-- First Runissa valittu käyttötarkoitus; ei muuta prosessin turvallisuustasoa. -->
     <meta name="installation-environment" content="{{.InstallationEnvironment}}">
 
-    <link rel="icon" href="/frontend/favicon4S.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{.FaviconPath}}">
     {{/* dev_error_forwarder is now loaded as ES module import in main.js */}}
     {{if .UseMinifiedAssets}}
     <link rel="stylesheet" id="imports-css" href="{{.ImportsCSSPath}}">

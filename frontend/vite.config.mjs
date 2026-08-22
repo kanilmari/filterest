@@ -131,6 +131,28 @@ const DEV_BACKEND_URL = resolveDevBackendURL();
 const DEV_CANONICAL_URL = `http://localhost:${VITE_DEV_PORT}`;
 const DEV_PAGE_TITLE = `${DEV_SITE_NAME} Dev`;
 
+function resolveDevSiteFaviconPath(siteName) {
+	const initials = String(siteName || '')
+		.trim()
+		.split(/\s+/u)
+		.map((word) => Array.from(word).find((value) => /[A-Za-z]/u.test(value))?.toLowerCase() || '')
+		.join('');
+	for (const candidate of [initials, initials.slice(0, 1)]) {
+		if (!candidate) continue;
+		const fileName = `site-initial-${candidate}-v1-16.png`;
+		try {
+			if (statSync(join(__dirname, 'icons', 'site_favicons', fileName)).isFile()) {
+				return `/frontend/icons/site_favicons/${fileName}`;
+			}
+		} catch {
+			// Try the shorter initial before using the stable Filterest fallback.
+		}
+	}
+	return '/frontend/icons/site_favicons/site-initial-f-v1-16.png';
+}
+
+const DEV_FAVICON_PATH = resolveDevSiteFaviconPath(DEV_SITE_NAME);
+
 function frontendDevAssetRewrite() {
   return {
     name: 'easelect-frontend-dev-asset-rewrite',
@@ -278,6 +300,7 @@ const KNOWN_DEFAULTS = {
   OGImage: '',
   OGLocale: 'fi_FI',
   ProjectLogoPath: DEV_PROJECT_LOGO_PATH,
+  FaviconPath: DEV_FAVICON_PATH,
   FormAction: '/api/register',
   ImportsCSSPath: '/frontend/styles/imports.css',
   MainBundlePath: '/frontend/main.js',

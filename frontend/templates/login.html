@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/frontend/reusable_components/modal/modals.css">
     <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
     {{end}}
-    <link rel="icon" href="/frontend/favicon4S.png" type="image/png">
+    <link rel="icon" href="{{.FaviconPath}}" type="image/png" sizes="16x16">
     <meta name="login-tour-screenshots-enabled" content="{{if .ShowTourScreenshots}}true{{else}}false{{end}}">
     {{if not .UseMinifiedAssets}}
     <script src="/frontend/core_components/auth/translation_prefetcher.js"></script>

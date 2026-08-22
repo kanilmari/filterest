@@ -41,7 +41,8 @@ INSERT INTO public.system_config (id, key, json_value, created, updated, creatio
   (3008, 'first_run', '{"value": true}'::jsonb, '2026-08-03 00:00:00', '2026-08-03 00:00:00', 'Controls the one-time browser form for creating the first login-ready administrator. It is closed atomically after successful account creation.', TRUE, 'true', NULL, 2),
   (3009, 'installation_environment', '{"value": ""}'::jsonb, '2026-08-04 00:00:00', '2026-08-04 00:00:00', 'User-facing installation purpose selected during First Run. Empty preserves the deployment-defined fallback until First Run saves an explicit choice.', NULL, '', NULL, 6),
   (3010, 'registration_enabled', '{"value": true}'::jsonb, '2026-08-19 00:00:00', '2026-08-19 00:00:00', 'Administrator-owned self-registration availability setting.', TRUE, 'true', NULL, 2),
-  (3011, 'view_admin_cover_image_test_palette', '{"value": true}'::jsonb, '2026-08-20 00:00:00', '2026-08-20 00:00:00', 'Temporary administrator-only dataset cover-image test palette switch.', TRUE, 'true', NULL, 2);
+  (3011, 'view_admin_cover_image_test_palette', '{"value": true}'::jsonb, '2026-08-20 00:00:00', '2026-08-20 00:00:00', 'Temporary administrator-only dataset cover-image test palette switch.', TRUE, 'true', NULL, 2),
+  (3012, 'favicon', '{"value": ""}'::jsonb, '2026-08-22 00:00:00', '2026-08-22 00:00:00', 'Optional favicon PNG filename from frontend/icons/site_favicons; empty uses site-name initials and then Filterest F.', NULL, '', NULL, 6);
 
 INSERT INTO public.system_functions (
   id, name, disabled, created, updated, "package", specific_table_related,
@@ -254,7 +255,7 @@ VALUES (
 );
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.2.5', 'Filterest generated public bootstrap');
+VALUES ('9.3.0', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 

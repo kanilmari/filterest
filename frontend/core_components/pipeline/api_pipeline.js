@@ -101,6 +101,8 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     adminUiFeatureFlags: 'system_table_tools.GetAdminUIFeatureFlagsHandler',
     sitePresentationSettings: 'system_table_tools.GetSitePresentationSettingsHandler',
     adminSitePresentationSettings: 'system_table_tools.AdminSitePresentationSettingsHandler',
+    adminRowGroups: 'system_table_tools.AdminRowGroupsHandler',
+    adminRowGroupMemberships: 'system_table_tools.AdminRowGroupMembershipsHandler',
     createTrigger: 'dtt_triggers.CreateTriggerHandler',
     updateRow: 'dtt_1_row_update.UpdateRowHandlerWrapper',
     getColumns: 'dtt_1_row_create.GetAddRowColumnsHandlerWrapper',
