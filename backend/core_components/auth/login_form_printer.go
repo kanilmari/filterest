@@ -30,6 +30,7 @@ var (
 	store                    *sessions.CookieStore
 	frontend_dir             string
 	configuredSiteNameReader = backend.ConfiguredSiteName
+	configuredFaviconReader  = backend.ConfiguredFaviconFile
 )
 
 // shouldShowLoginTourScreenshots reads the login tour screenshot toggle from env.
@@ -205,6 +206,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 		CSRFToken           string
 		UseMinifiedAssets   bool
 		SiteName            string
+		FaviconPath         string
 		StandalonePage      bool
 		ShowCloseButton     bool
 		ShowTourScreenshots bool
@@ -215,6 +217,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 		CSRFToken:           csrfToken,
 		UseMinifiedAssets:   useMinified,
 		SiteName:            siteName,
+		FaviconPath:         frontendassets.SiteFaviconPath(frontend_dir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
 		StandalonePage:      r.URL.Query().Get("fragment") != "1",
 		ShowCloseButton:     r.URL.Query().Get("fragment") == "1",
 		ShowTourScreenshots: shouldShowLoginTourScreenshots(siteName),

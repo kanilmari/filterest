@@ -136,6 +136,22 @@ describe('stable_api_inventory', () => {
             methodSource: 'explicit_stable_contract',
         });
 
+        expect(getStableCandidateRouteDescriptor('adminRowGroups')).toMatchObject({
+            handlerName: 'system_table_tools.AdminRowGroupsHandler',
+            backendPath: '/api/admin/row-groups',
+            accessProfile: 'admin',
+            methods: ['GET', 'POST'],
+            methodSource: 'explicit_stable_contract',
+        });
+
+        expect(getStableCandidateRouteDescriptor('adminRowGroupMemberships')).toMatchObject({
+            handlerName: 'system_table_tools.AdminRowGroupMembershipsHandler',
+            backendPath: '/api/admin/row-group-memberships',
+            accessProfile: 'admin',
+            methods: ['POST', 'DELETE'],
+            methodSource: 'explicit_stable_contract',
+        });
+
         expect(getStableCandidateRouteDescriptor('saveDatasetHeaderConfig')).toMatchObject({
             handlerName: 'system_table_tools.SaveDatasetHeaderConfigHandler',
             backendPath: '/api/dataset-header-config/save',

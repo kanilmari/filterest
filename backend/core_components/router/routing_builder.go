@@ -29,7 +29,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var configuredSiteNameReader = backend.ConfiguredSiteName
+var (
+	configuredSiteNameReader = backend.ConfiguredSiteName
+	configuredFaviconReader  = backend.ConfiguredFaviconFile
+)
 
 type indexTemplateData struct {
 	CSPNonce                string
@@ -39,6 +42,7 @@ type indexTemplateData struct {
 	SiteName                string
 	ProductName             string
 	ProjectLogoPath         string
+	FaviconPath             string
 	// SEO / Open Graph fields (populated by resolvePageMeta)
 	PageTitle       string
 	MetaDescription string
@@ -152,6 +156,7 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool) {
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: siteName,
 		ProductName:     getSiteName(),
 		ProjectLogoPath: getProjectLogoPath(),
+		FaviconPath:     frontendassets.SiteFaviconPath(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
 		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
 		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 		OGDescription: meta.OGDescription, OGType: meta.OGType,
@@ -193,6 +198,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
 		ProductName:     getSiteName(),
 		ProjectLogoPath: getProjectLogoPath(),
+		FaviconPath:     frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
 		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
 		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 		OGDescription: meta.OGDescription, OGType: meta.OGType,
@@ -452,6 +458,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
 			ProductName:     getSiteName(),
 			ProjectLogoPath: getProjectLogoPath(),
+			FaviconPath:     frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
 			PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
 			CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 			OGDescription: meta.OGDescription, OGType: meta.OGType,
@@ -547,6 +554,8 @@ func defaultSpecificTableRelated(handlerName string) bool {
 	case "dtt_foreign_keys.GetTableNamesHandler",
 		"dtt_crud_workflows.SimpleCreateTableHandler",
 		"dtt_crud_workflows.SimpleQueryTableHandler",
+		"system_table_tools.AdminRowGroupsHandler",
+		"system_table_tools.AdminRowGroupMembershipsHandler",
 		"system_table_tools.GetTaskTodoProgressHandler",
 		"dtt_1_row_read.CommentListHandler",
 		"dtt_1_row_read.CommentCreateHandler",

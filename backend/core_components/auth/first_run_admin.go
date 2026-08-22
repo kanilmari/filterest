@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
+	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -472,6 +473,10 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	if errs.SiteName != "" || errs.Username != "" || errs.Email != "" || errs.Password != "" || errs.General != "" {
 		initialSection = "credentials"
 	}
+	faviconSiteName := input.SiteName
+	if faviconSiteName == "" {
+		faviconSiteName = resolveLoginSiteName(r)
+	}
 	data := struct {
 		FirstRunSiteName   string
 		Username           string
@@ -480,6 +485,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		VerificationMethod string
 		TOTPSecret         string
 		InitialSection     string
+		FaviconPath        string
 		SiteNameErr        string
 		UsernameErr        string
 		EmailErr           string
@@ -493,6 +499,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		FirstRunSiteName: input.SiteName, Username: input.Username, Email: input.Email,
 		Environment: input.Environment, VerificationMethod: input.VerificationMethod,
 		TOTPSecret: totpSecret, InitialSection: initialSection,
+		FaviconPath: frontendassets.SiteFaviconPath(frontend_dir, faviconSiteName, configuredFaviconReader(r.Context(), backend.Db)),
 		SiteNameErr: errs.SiteName, UsernameErr: errs.Username, EmailErr: errs.Email,
 		PasswordErr: errs.Password, EnvironmentErr: errs.Environment,
 		VerificationErr: errs.Verification, FactorErr: errs.Factor, GeneralErr: errs.General,

@@ -48,6 +48,8 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"system_table_tools.GetAdminUIFeatureFlagsHandler":        {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetSitePresentationSettingsHandler":   {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.AdminSitePresentationSettingsHandler": {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.AdminRowGroupsHandler":                {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.AdminRowGroupMembershipsHandler":      {Methods: []string{http.MethodPost, http.MethodDelete}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetDatasetHeaderConfigHandler":        {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.SaveDatasetHeaderConfigHandler":       {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetChildTabConfigHandler":             {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},

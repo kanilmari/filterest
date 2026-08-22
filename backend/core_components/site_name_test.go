@@ -67,3 +67,23 @@ func TestConfiguredSiteNameReturnsEmptyWithoutDatabase(t *testing.T) {
 		t.Fatalf("ConfiguredSiteName(nil) = %q, want empty", got)
 	}
 }
+
+func TestConfiguredFaviconFileReturnsTrimmedSavedFilename(t *testing.T) {
+	driverName := fmt.Sprintf("favicon_%d", atomic.AddInt64(&siteNameDriverCounter, 1))
+	sql.Register(driverName, &siteNameTestDriver{value: "  site-initial-es-v1-16.png  "})
+	db, err := sql.Open(driverName, "")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if got := ConfiguredFaviconFile(context.Background(), db); got != "site-initial-es-v1-16.png" {
+		t.Fatalf("ConfiguredFaviconFile() = %q, want %q", got, "site-initial-es-v1-16.png")
+	}
+}
+
+func TestConfiguredFaviconFileReturnsEmptyWithoutDatabase(t *testing.T) {
+	if got := ConfiguredFaviconFile(context.Background(), nil); got != "" {
+		t.Fatalf("ConfiguredFaviconFile(nil) = %q, want empty", got)
+	}
+}
