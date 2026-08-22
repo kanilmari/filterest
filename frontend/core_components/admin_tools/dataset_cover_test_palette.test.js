@@ -52,7 +52,8 @@ describe('dataset cover presentation settings', () => {
         const settings = createSettings();
         settings.dataset_cover_theme.light.oval_width = 36;
         settings.dataset_cover_theme.dark.image_opacity = 0.35;
-        settings.dataset_cover_theme.shared.image_blur = 2;
+        settings.dataset_cover_theme.light.image_blur = 2;
+        settings.dataset_cover_theme.dark.image_blur = 0;
         settings.dataset_cover_theme.shared.card_image_width = 360;
         settings.dataset_cover_theme.shared.active_tab_fade = 32;
         settings.dataset_cover_theme.shared.active_tab_max_opacity = 0.85;
@@ -73,7 +74,10 @@ describe('dataset cover presentation settings', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-light-mask-image')).toBe('initial');
         expect(hero.style.getPropertyValue('--dataset-cover-dark-mask-image')).toBe('none');
         expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.35');
-        expect(hero.style.getPropertyValue('--dataset-cover-image-blur')).toBe('2px');
+        expect(hero.style.getPropertyValue('--dataset-cover-light-image-blur')).toBe('2px');
+        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('0px');
+        expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('2px');
+        expect(document.documentElement.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
         expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('360px');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-fade-width')).toBe('32px');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.85');
@@ -97,7 +101,28 @@ describe('dataset cover presentation settings', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-light-mask-position-y')).toBe('56%');
         expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.3');
         expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('40px');
-        expect(hero.style.getPropertyValue('--dataset-cover-image-blur')).toBe('1px');
+        expect(hero.style.getPropertyValue('--dataset-cover-light-image-blur')).toBe('1px');
+        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('1px');
+    });
+
+    test('applies background blur variables without exposing a cover palette when no cover exists', async () => {
+        const hero = document.createElement('section');
+        hero.classList.add('filterbar-inline-hero');
+        document.body.appendChild(hero);
+        const settings = createSettings();
+        settings.dataset_cover_theme.light.image_blur = 5;
+        settings.dataset_cover_theme.dark.image_blur = 0;
+        const flagRequest = vi.fn();
+
+        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
+            requestFn: flagRequest,
+            settingsRequestFn: vi.fn(async () => settings),
+        }))).resolves.toBeNull();
+
+        expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('5px');
+        expect(document.documentElement.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
+        expect(flagRequest).not.toHaveBeenCalled();
+        expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
     });
 
     test('keeps the palette admin-only and fails closed when its protected flag is absent', async () => {
@@ -124,10 +149,10 @@ describe('dataset cover presentation settings', () => {
 
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-theme-controls"] input[type="range"]'
-        )).toHaveLength(11);
+        )).toHaveLength(12);
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(9);
+        )).toHaveLength(8);
         const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
         expect(toolboxes).toHaveLength(6);
         expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(6);
@@ -153,7 +178,8 @@ describe('dataset cover presentation settings', () => {
         const blur = panel.querySelector('[data-testid="dataset-cover-test-palette-image-blur"]');
         blur.value = '3';
         blur.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(hero.style.getPropertyValue('--dataset-cover-image-blur')).toBe('3px');
+        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('3px');
+        expect(hero.style.getPropertyValue('--dataset-cover-light-image-blur')).toBe('1px');
         const cardWidth = panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-width"]');
         cardWidth.value = '420';
         cardWidth.dispatchEvent(new Event('input', { bubbles: true }));
@@ -183,7 +209,9 @@ describe('dataset cover presentation settings', () => {
         expect(payload.row_article_timestamp_display_mode).toBe('date_only');
         expect(payload.dataset_cover_theme.light.image_opacity).toBe(1);
         expect(payload.dataset_cover_theme.dark.image_opacity).toBe(0.5);
-        expect(payload.dataset_cover_theme.shared.image_blur).toBe(3);
+        expect(payload.dataset_cover_theme.light.image_blur).toBe(1);
+        expect(payload.dataset_cover_theme.dark.image_blur).toBe(3);
+        expect(payload.dataset_cover_theme.shared.image_blur).toBe(1);
         expect(payload.dataset_cover_theme.shared.card_image_width).toBe(420);
         expect(payload.dataset_cover_theme.shared.active_tab_glow_intensity).toBe(0.15);
         expect(payload.dataset_cover_theme.shared.active_tab_max_opacity).toBe(0.9);
@@ -217,6 +245,45 @@ describe('dataset cover presentation settings', () => {
             '[data-testid="dataset-cover-test-palette-status"]'
         ).textContent).toMatch(/failed|epäonnistui/i));
         expect(hero.style.getPropertyValue('--dataset-cover-light-image-opacity')).toBe('0.8');
+        control.destroy();
+    });
+
+    test('lets an admin hide a theme cover by persisting zero opacity and restore the preview', async () => {
+        const hero = createCoverHero();
+        const saveRequestFn = vi.fn(async (request) => request);
+        const control = await mountDatasetCoverTestPalette(
+            hero,
+            'demo',
+            createMountOptions({ saveRequestFn })
+        );
+        control.button.click();
+        const { panel } = control;
+        panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
+
+        const opacity = panel.querySelector(
+            '[data-testid="dataset-cover-test-palette-image-opacity"]'
+        );
+        const visible = panel.querySelector(
+            '[data-testid="dataset-cover-test-palette-cover-visible"]'
+        );
+        opacity.value = '0.55';
+        opacity.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(visible.checked).toBe(true);
+
+        visible.checked = false;
+        visible.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(opacity.value).toBe('0');
+        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0');
+
+        visible.checked = true;
+        visible.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(opacity.value).toBe('0.55');
+
+        visible.checked = false;
+        visible.dispatchEvent(new Event('change', { bubbles: true }));
+        panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
+        await vi.waitFor(() => expect(saveRequestFn).toHaveBeenCalledOnce());
+        expect(saveRequestFn.mock.calls[0][0].dataset_cover_theme.dark.image_opacity).toBe(0);
         control.destroy();
     });
 

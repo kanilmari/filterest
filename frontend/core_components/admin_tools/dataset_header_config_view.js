@@ -362,7 +362,7 @@ export async function generate_dataset_header_config_view(
 }
 
 /**
- * Keeps the active dataset surfaces and the shared table-spec cache in sync
+ * Keeps the active dataset content areas and the shared table-spec cache in sync
  * with a successful media save. The authoritative values still come from the
  * backend response; this only avoids making the administrator reload the page.
  */
@@ -395,12 +395,11 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
         );
     }
 
-    for (const surface of document.querySelectorAll('.dataset-results-surface')) {
-        const datasetContainer = surface.closest('.tab_parts_container');
-        if (datasetContainer?.dataset.tableName !== datasetName) continue;
+    for (const contentArea of document.querySelectorAll('.tab-content-area')) {
+        if (contentArea.dataset.tableName !== datasetName) continue;
         applyPresentationImage(
-            surface,
-            'dataset-results-surface--has-background',
+            contentArea,
+            'tab-content-area--has-dataset-background',
             '--dataset-background-image',
             backgroundImagePath
         );

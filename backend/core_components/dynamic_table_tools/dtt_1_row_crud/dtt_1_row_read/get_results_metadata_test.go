@@ -140,3 +140,16 @@ func TestResolveOwnerColumnFromMetadataKeepsLegacyFallbackOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeResultsViewKeyKeepsSafeViewDimensions(t *testing.T) {
+	for _, viewKey := range []string{"table", "card", "calendar", "product_card"} {
+		if got := normalizeResultsViewKey(viewKey); got != viewKey {
+			t.Fatalf("normalizeResultsViewKey(%q) = %q", viewKey, got)
+		}
+	}
+	for _, unsafe := range []string{"", "calendar/view", "x;drop"} {
+		if got := normalizeResultsViewKey(unsafe); got != "table" {
+			t.Fatalf("normalizeResultsViewKey(%q) = %q, want table fallback", unsafe, got)
+		}
+	}
+}

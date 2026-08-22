@@ -316,6 +316,7 @@ async function fetchMoreData(tableName, options = {}) {
             })`,
             row_count: isInfiniteScroll ? scrollSt.lastRowCount : null,
             include_card_support: currentView === "card",
+            view_key: currentView,
         });
         setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;

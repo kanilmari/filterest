@@ -90,12 +90,14 @@ type DatasetCoverThemeValues struct {
 	EdgeStop       float64 `json:"edge_stop"`
 	ImageOpacity   float64 `json:"image_opacity"`
 	OverlayOpacity float64 `json:"overlay_opacity"`
+	ImageBlur      float64 `json:"image_blur"`
 }
 
 // DatasetCoverSharedValues contains visual settings shared by light and dark themes.
 type DatasetCoverSharedValues struct {
-	HeroExtraHeight        float64 `json:"hero_extra_height"`
-	HeroBottomFade         float64 `json:"hero_bottom_fade"`
+	HeroExtraHeight float64 `json:"hero_extra_height"`
+	HeroBottomFade  float64 `json:"hero_bottom_fade"`
+	// ImageBlur remains as a rollback-safe fallback for older application builds.
 	ImageBlur              float64 `json:"image_blur"`
 	CardImageWidth         float64 `json:"card_image_width"`
 	ActiveTabFade          float64 `json:"active_tab_fade"`
@@ -206,8 +208,11 @@ func readSitePresentationSettingsFromDB() (SitePresentationSettingsResponse, err
 
 	if strings.TrimSpace(rawCover) != "" {
 		stored := settings.DatasetCoverTheme
-		if json.Unmarshal([]byte(rawCover), &stored) == nil && validateDatasetCoverTheme(stored) == nil {
-			settings.DatasetCoverTheme = stored
+		if json.Unmarshal([]byte(rawCover), &stored) == nil {
+			inheritLegacyImageBlur(rawCover, &stored)
+			if validateDatasetCoverTheme(stored) == nil {
+				settings.DatasetCoverTheme = stored
+			}
 		}
 	}
 	if rawTimestamp.Valid && validateTimestampDisplayMode(rawTimestamp.String) == nil {
@@ -249,7 +254,7 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 		"oval_enabled", "oval_width", "oval_height", "oval_position_y",
 		"center_opacity", "mid_opacity", "edge_opacity",
 		"center_stop", "mid_stop", "edge_stop",
-		"image_opacity", "overlay_opacity",
+		"image_opacity", "overlay_opacity", "image_blur",
 	}
 	for _, themeName := range []string{"light", "dark"} {
 		if err := requireExactJSONKeys(themeParts[themeName], themeKeys); err != nil {
@@ -342,6 +347,9 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 				return err
 			}
 		}
+		if err := validateRange(name+".image_blur", theme.ImageBlur, 0, 24); err != nil {
+			return err
+		}
 		for field, value := range map[string]float64{
 			"center_stop": theme.CenterStop,
 			"mid_stop":    theme.MidStop,
@@ -405,6 +413,27 @@ func validateHexColor(name, value string) error {
 	return nil
 }
 
+// inheritLegacyImageBlur keeps old system_config JSON valid after blur became
+// theme-specific. Explicit theme values, including zero, always win.
+func inheritLegacyImageBlur(raw string, config *DatasetCoverThemeConfig) {
+	if config == nil {
+		return
+	}
+	var keys struct {
+		Light map[string]json.RawMessage `json:"light"`
+		Dark  map[string]json.RawMessage `json:"dark"`
+	}
+	if json.Unmarshal([]byte(raw), &keys) != nil {
+		return
+	}
+	if _, exists := keys.Light["image_blur"]; !exists {
+		config.Light.ImageBlur = config.Shared.ImageBlur
+	}
+	if _, exists := keys.Dark["image_blur"]; !exists {
+		config.Dark.ImageBlur = config.Shared.ImageBlur
+	}
+}
+
 func validateTimestampDisplayMode(value string) error {
 	if value != rowArticleTimestampDateTime && value != rowArticleTimestampDateOnly {
 		return fmt.Errorf("timestamp display mode %q is not supported", value)
@@ -417,7 +446,7 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 		OvalEnabled: true, OvalWidth: 32, OvalHeight: 67, OvalPositionY: 56,
 		CenterOpacity: 0.4, MidOpacity: 0.7, EdgeOpacity: 1,
 		CenterStop: 39, MidStop: 55, EdgeStop: 80,
-		ImageOpacity: 1, OverlayOpacity: 0,
+		ImageOpacity: 1, OverlayOpacity: 0, ImageBlur: 1,
 	}
 	dark := light
 	dark.OvalEnabled = false

@@ -20,6 +20,7 @@ import (
 	dbutils "easelect/backend/core_components/dbutils"
 	ai_features "easelect/backend/core_components/dynamic_table_tools/ai_features"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
+	row_mutation_policy "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/event_bus"
@@ -87,6 +88,10 @@ func normalizeUpdateOperations(request updateRowRequest) ([]updateRowFieldUpdate
 func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request, tableName string) {
 	if request.Method != http.MethodPost {
 		httpresponse.RespondWithError(response_writer, http.StatusMethodNotAllowed, "Only POST requests are allowed")
+		return
+	}
+	if row_mutation_policy.RequiresDedicatedMutationAPI(tableName) {
+		httpresponse.RespondWithError(response_writer, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
 		return
 	}
 

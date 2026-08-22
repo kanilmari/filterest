@@ -286,52 +286,35 @@ describe('stable_endpoint_router', () => {
         });
     });
 
-    test('listColumnViewPresets loads candidate-route data with the manifest-backed GET default', async () => {
-        endpointRouterMock.mockResolvedValue([{ id: 7, preset_name: 'Compact', hidden_columns: { title: true } }]);
+    test('view field collection wrappers preserve view identity and personal/site route separation', async () => {
+        endpointRouterMock
+            .mockResolvedValueOnce({ view_key: 'card', visible_columns: ['title'] })
+            .mockResolvedValueOnce({ status: 'ok' })
+            .mockResolvedValueOnce({ status: 'ok' });
         const mod = await loadModule();
 
-        await expect(mod.listColumnViewPresets('orders')).resolves.toEqual([
-            { id: 7, preset_name: 'Compact', hidden_columns: { title: true } },
-        ]);
-        expect(endpointRouterMock).toHaveBeenCalledWith('listColumnViewPresets', {
+        await mod.getViewFieldSets('travel_info', 'card');
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(1, 'getViewFieldSets', {
             method: 'GET',
-            url_params: 'orders',
+            url_params: '?dataset=travel_info&view_key=card',
         });
-    });
 
-    test('saveColumnViewPreset posts the candidate save payload through the manifest-backed POST default', async () => {
-        endpointRouterMock.mockResolvedValue({ status: 'ok', message: 'Saved preset' });
-        const mod = await loadModule();
-
-        await expect(mod.saveColumnViewPreset({
-            table_name: 'orders',
-            preset_name: 'Compact',
-            hidden_columns: { title: true },
-        })).resolves.toEqual({
-            status: 'ok',
-            message: 'Saved preset',
-        });
-        expect(endpointRouterMock).toHaveBeenCalledWith('saveColumnViewPreset', {
+        const payload = {
+            dataset: 'travel_info',
+            view_key: 'card',
+            name: 'Compact',
+            visible_columns: ['title'],
+        };
+        await mod.savePersonalViewFieldSet(payload);
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(2, 'savePersonalViewFieldSet', {
             method: 'POST',
-            body_data: {
-                table_name: 'orders',
-                preset_name: 'Compact',
-                hidden_columns: { title: true },
-            },
+            body_data: payload,
         });
-    });
 
-    test('deleteColumnViewPreset posts the candidate delete payload through the manifest-backed POST default', async () => {
-        endpointRouterMock.mockResolvedValue({ status: 'ok', message: 'Deleted preset' });
-        const mod = await loadModule();
-
-        await expect(mod.deleteColumnViewPreset({ id: 7 })).resolves.toEqual({
-            status: 'ok',
-            message: 'Deleted preset',
-        });
-        expect(endpointRouterMock).toHaveBeenCalledWith('deleteColumnViewPreset', {
+        await mod.saveSiteViewFieldSet(payload);
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(3, 'saveSiteViewFieldSet', {
             method: 'POST',
-            body_data: { id: 7 },
+            body_data: payload,
         });
     });
 

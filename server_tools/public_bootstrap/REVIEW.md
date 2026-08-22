@@ -1,8 +1,8 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `49`
-- Seed tables: `28`
+- Schema tables: `50`
+- Seed tables: `30`
 - Example emails: `0`
 - Manifest format: `2`
 - Manifest source files: `10`
@@ -32,7 +32,8 @@ PASS
 - `public.system_child_tab_config`
 - `public.system_column_control`
 - `public.system_column_details`
-- `public.system_column_view_presets`
+- `public.system_column_field_set_members`
+- `public.system_column_field_sets`
 - `public.system_comments`
 - `public.system_config`
 - `public.system_dataset_media`
@@ -54,10 +55,10 @@ PASS
 - `public.system_table_row_view_counts`
 - `public.system_table_views`
 - `public.system_transaction_log`
-- `public.system_user_column_settings`
 - `public.system_user_group_memberships`
 - `public.system_user_groups`
 - `public.system_users`
+- `public.system_view_field_set_assignments`
 - `public.tiketit`
 - `public.tiketit_assets`
 - `restricted.otp_send_events`
@@ -85,10 +86,12 @@ PASS
 - `public.system_foreign_key_relations_1_m`
 - `public.system_functions`
 - `public.system_group_table_func_rights`
+- `public.system_lang_key_sources`
 - `public.system_lang_key_translations`
 - `public.system_lang_keys`
 - `public.system_languages`
 - `public.system_table_folders`
+- `public.system_table_views`
 - `public.system_user_group_memberships`
 - `public.system_user_groups`
 - `public.system_users`
@@ -111,15 +114,17 @@ PASS
 - `public.system_about`: 1
 - `public.system_column_details`: 47
 - `public.system_config`: 12
-- `public.system_db_tables`: 46
+- `public.system_db_tables`: 48
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
-- `public.system_functions`: 25
+- `public.system_functions`: 33
 - `public.system_group_table_func_rights`: 24
-- `public.system_lang_key_translations`: 55
+- `public.system_lang_key_sources`: 0
+- `public.system_lang_key_translations`: 105
 - `public.system_lang_keys`: 404
 - `public.system_languages`: 5
 - `public.system_table_folders`: 14
+- `public.system_table_views`: 12
 - `public.system_user_group_memberships`: 2
 - `public.system_user_groups`: 3
 - `public.system_users`: 2

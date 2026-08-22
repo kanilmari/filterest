@@ -61,18 +61,8 @@ func CleanupTableMetadata(q dbutils.Querier, tableUID int64, schemaName string) 
 		log.Printf("[CleanupTableMetadata]   - system_group_table_func_rights: deleted %d rows", n)
 	}
 
-	// 4. Poistetaan käyttäjäkohtaiset sarake-asetukset
-	res, err = q.Exec(`
-		DELETE FROM system_user_column_settings 
-		WHERE table_uid = $1`, tableUID)
-	if err != nil {
-		return fmt.Errorf("failed to delete user column settings: %w", err)
-	}
-	if n := rowsAffected(res); n > 0 {
-		log.Printf("[CleanupTableMetadata]   - system_user_column_settings: deleted %d rows", n)
-	}
-
-	// 5. Poistetaan rivinäyttölaskurit
+	// 4. Poistetaan rivinäyttölaskurit. Näkymäkohtaiset kenttäjoukot
+	// poistuvat system_db_tables-viitteen ON DELETE CASCADE -sopimuksella.
 	res, err = q.Exec(`
 		DELETE FROM system_table_row_view_counts 
 		WHERE table_uid = $1`, tableUID)
@@ -83,7 +73,7 @@ func CleanupTableMetadata(q dbutils.Querier, tableUID int64, schemaName string) 
 		log.Printf("[CleanupTableMetadata]   - system_table_row_view_counts: deleted %d rows", n)
 	}
 
-	// 6. Poistetaan sarakkeiden hallintadata
+	// 5. Poistetaan sarakkeiden hallintadata
 	res, err = q.Exec(`
 		DELETE FROM system_column_control 
 		WHERE table_uid = $1`, tableUID)

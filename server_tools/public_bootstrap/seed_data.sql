@@ -254,8 +254,230 @@ VALUES (
     TRUE
 );
 
+INSERT INTO public.system_table_views (name, view_key, status)
+VALUES
+    ('table', 'table', 'active'),
+    ('card', 'card', 'active'),
+    ('normal', 'normal', 'active'),
+    ('transposed', 'transposed', 'active'),
+    ('tree', 'tree', 'active'),
+    ('ticket', 'ticket', 'active'),
+    ('product_card', 'product_card', 'active'),
+    ('calendar', 'calendar', 'active'),
+    ('map', 'map', 'active'),
+    ('price_chart', 'price_chart', 'active'),
+    ('settings', 'settings', 'active'),
+    ('cloud_management', 'cloud_management', 'active')
+ON CONFLICT (view_key) DO NOTHING;
+
+WITH desired_tables (table_name, display_name, description, fk_display_column) AS (
+    VALUES
+        ('system_column_field_sets', 'Field Collections', 'Reusable personal and shared dataset field collections', 'name'),
+        ('system_column_field_set_members', 'Field Collection Members', 'Ordered columns belonging to reusable field collections', 'column_uid'),
+        ('system_view_field_set_assignments', 'View Field Assignments', 'Personal and site-default field collections selected for dataset views', 'id')
+)
+INSERT INTO public.system_db_tables (
+    table_name, description, cached_oid, folder_id, schema_name,
+    fk_display_column, filterbar_visible_by_default, is_removable,
+    display_name, sql_dump_policy
+)
+SELECT desired.table_name,
+       desired.description,
+       classes.oid::integer,
+       folders.id,
+       'public',
+       desired.fk_display_column,
+       FALSE,
+       FALSE,
+       desired.display_name,
+       'all'
+FROM desired_tables AS desired
+JOIN pg_class AS classes ON classes.relname = desired.table_name
+JOIN pg_namespace AS schemas ON schemas.oid = classes.relnamespace AND schemas.nspname = 'public'
+LEFT JOIN LATERAL (
+    SELECT id
+    FROM public.system_table_folders
+    WHERE folder_name = 'system'
+    ORDER BY id
+    LIMIT 1
+) AS folders ON TRUE
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.system_db_tables AS existing
+    WHERE existing.table_name = desired.table_name
+      AND COALESCE(NULLIF(existing.schema_name, ''), 'public') = 'public'
+);
+
+DO $$
+DECLARE
+    table_record RECORD;
+    registered_table_uid integer;
+BEGIN
+    FOR table_record IN
+        SELECT unnest(ARRAY[
+            'system_column_field_sets',
+            'system_column_field_set_members',
+            'system_view_field_set_assignments'
+        ]) AS table_name
+    LOOP
+        SELECT table_uid INTO registered_table_uid
+        FROM public.system_db_tables
+        WHERE table_name = table_record.table_name
+          AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
+        LIMIT 1;
+
+        INSERT INTO public.system_column_details (
+            table_uid, column_name, data_type, co_number, editable_in_ui, created, updated
+        )
+        SELECT registered_table_uid,
+               columns.column_name,
+               columns.data_type,
+               columns.ordinal_position,
+               FALSE,
+               now(),
+               now()
+        FROM information_schema.columns AS columns
+        WHERE registered_table_uid IS NOT NULL
+          AND columns.table_schema = 'public'
+          AND columns.table_name = table_record.table_name
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.system_column_details AS existing
+              WHERE existing.table_uid = registered_table_uid
+                AND existing.column_name = columns.column_name
+          )
+        ORDER BY columns.ordinal_position;
+    END LOOP;
+
+    SELECT table_uid INTO registered_table_uid
+    FROM public.system_db_tables
+    WHERE table_name = 'system_table_views'
+      AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
+    LIMIT 1;
+
+    INSERT INTO public.system_column_details (
+        table_uid, column_name, data_type, co_number, editable_in_ui, created, updated
+    )
+    SELECT registered_table_uid,
+           columns.column_name,
+           columns.data_type,
+           columns.ordinal_position,
+           FALSE,
+           now(),
+           now()
+    FROM information_schema.columns AS columns
+    WHERE registered_table_uid IS NOT NULL
+      AND columns.table_schema = 'public'
+      AND columns.table_name = 'system_table_views'
+      AND columns.column_name = 'view_key'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM public.system_column_details AS existing
+          WHERE existing.table_uid = registered_table_uid
+            AND existing.column_name = columns.column_name
+      );
+END $$;
+
+WITH desired_functions (name, route, creation_spec) AS (
+    VALUES
+        ('system_table_tools.GetViewFieldSetsHandler', '/api/view-field-sets', 'Lists effective and reusable field collections for one authenticated dataset view.'),
+        ('system_table_tools.SavePersonalViewFieldSetHandler', '/api/view-field-sets/personal/save', 'Saves and activates a field collection owned by the authenticated user.'),
+        ('system_table_tools.AssignPersonalViewFieldSetHandler', '/api/view-field-sets/personal/assign', 'Selects a personal or shared field collection for the authenticated user.'),
+        ('system_table_tools.ResetPersonalViewFieldSetHandler', '/api/view-field-sets/personal/reset', 'Removes a personal assignment so the site default is inherited.'),
+        ('system_table_tools.DeletePersonalViewFieldSetHandler', '/api/view-field-sets/personal/delete', 'Deletes a field collection owned by the authenticated user.'),
+        ('system_table_tools.SaveSiteViewFieldSetHandler', '/api/admin/view-field-sets/site/save', 'Saves and activates an administrator-managed site-default field collection.'),
+        ('system_table_tools.AssignSiteViewFieldSetHandler', '/api/admin/view-field-sets/site/assign', 'Selects a shared field collection as a site default.'),
+        ('system_table_tools.DeleteSharedViewFieldSetHandler', '/api/admin/view-field-sets/shared/delete', 'Deletes an administrator-managed shared field collection.')
+)
+INSERT INTO public.system_functions (
+    name, disabled, created, updated, package, specific_table_related,
+    creation_spec, rate_limit_amount, rate_limit_minutes, url_route_endpoint, ui_only
+)
+SELECT desired.name, FALSE, now(), now(), 'system_table_tools', FALSE,
+       desired.creation_spec, 200, 20, desired.route, FALSE
+FROM desired_functions AS desired
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.system_functions AS existing WHERE existing.name = desired.name
+);
+
+INSERT INTO public.system_group_table_func_rights (
+    user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT groups.id,
+       functions.id,
+       'public',
+       'Filterest public bootstrap administrator field collection API',
+       NULL
+FROM public.system_user_groups AS groups
+JOIN public.system_functions AS functions
+  ON functions.name IN (
+      'system_table_tools.SaveSiteViewFieldSetHandler',
+      'system_table_tools.AssignSiteViewFieldSetHandler',
+      'system_table_tools.DeleteSharedViewFieldSetHandler'
+  )
+WHERE groups.name = 'admins'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_group_table_func_rights AS existing
+      WHERE existing.user_group_id = groups.id
+        AND existing.function_id = functions.id
+        AND existing.target_table_uid IS NULL
+        AND COALESCE(NULLIF(existing.target_schema_name, ''), 'public') = 'public'
+  );
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'readeronly') THEN
+        GRANT SELECT ON TABLE public.system_table_views TO readeronly;
+        GRANT SELECT ON TABLE
+            public.system_column_field_sets,
+            public.system_column_field_set_members,
+            public.system_view_field_set_assignments
+        TO readeronly;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'admin_user') THEN
+        GRANT SELECT ON TABLE public.system_table_views TO admin_user;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+            public.system_column_field_sets,
+            public.system_column_field_set_members,
+            public.system_view_field_set_assignments
+        TO admin_user;
+        GRANT USAGE, SELECT ON SEQUENCE
+            public.system_column_field_sets_id_seq,
+            public.system_view_field_set_assignments_id_seq
+        TO admin_user;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'basic_user') THEN
+        GRANT SELECT ON TABLE public.system_table_views TO basic_user;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+            public.system_column_field_sets,
+            public.system_column_field_set_members,
+            public.system_view_field_set_assignments
+        TO basic_user;
+        GRANT USAGE, SELECT ON SEQUENCE
+            public.system_column_field_sets_id_seq,
+            public.system_view_field_set_assignments_id_seq
+        TO basic_user;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'guest_user') THEN
+        GRANT SELECT ON TABLE public.system_table_views TO guest_user;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+            public.system_column_field_sets,
+            public.system_column_field_set_members,
+            public.system_view_field_set_assignments
+        TO guest_user;
+        GRANT USAGE, SELECT ON SEQUENCE
+            public.system_column_field_sets_id_seq,
+            public.system_view_field_set_assignments_id_seq
+        TO guest_user;
+    END IF;
+END $$;
+
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.3.0', 'Filterest generated public bootstrap');
+VALUES ('9.6.0', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -346,7 +568,6 @@ VALUES
   (207, 'system_foreign_key_relations_m_m', 'Many-to-many relation metadata', 207, NULL, 8, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Foreign-key relations M:M', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'link'),
   (208, 'system_child_tab_config', 'Child-tab configuration', 208, NULL, 14, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Child tab configuration', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'settings'),
   (209, 'spatial_ref_sys', 'Spatial reference systems', 209, NULL, 14, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Spatial reference systems', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, 'srid', 'map'),
-  (210, 'system_user_column_settings', 'User column settings', 210, NULL, 13, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'User column settings', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'columns'),
   (211, 'system_audit_log', 'Audit log', 211, NULL, 14, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Audit log', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'history'),
   (212, 'system_user_groups', 'User groups', 212, NULL, 6, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'User groups', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, 'name', 'users'),
   (213, 'system_group_table_func_rights', 'Group function permissions', 213, NULL, 9, '2026-07-20 00:00:00', '2026-07-20 00:00:00', 'public fixture seed', NULL, 'public', 'Group table-function rights', FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, NULL, 'permissions'),
@@ -985,7 +1206,16 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('system_table_row_view_counts', 'Rivien näyttökerrat', 'Table row view counts', '表行查看次数', '資料列檢視次數', 'public fixture seed'),
   ('system_table_views', 'Taulunäkymät', 'Table views', '表格视图', '資料表檢視', 'public fixture seed'),
   ('system_transaction_log', 'Tapahtumaloki', 'Transaction log', '事务日志', '交易記錄', 'public fixture seed'),
-  ('system_user_column_settings', 'Käyttäjien sarakeasetukset', 'User column settings', '用户列设置', '用戶欄位設定', 'public fixture seed'),
+  ('system_column_field_sets', 'Kenttäkokoelmat', 'Field collections', '字段集合', '欄位集合', 'public fixture seed'),
+  ('system_column_field_set_members', 'Kenttäkokoelmien kentät', 'Field collection members', '字段集合成员', '欄位集合成員', 'public fixture seed'),
+  ('system_view_field_set_assignments', 'Näkymien kenttäkokoelmat', 'View field assignments', '视图字段分配', '檢視欄位指派', 'public fixture seed'),
+  ('edit_site_field_default', 'Muokkaa sivuston oletusta', 'Edit site default', '编辑站点默认字段', '編輯網站預設欄位', 'public fixture seed'),
+  ('edit_personal_field_selection', 'Palaa omaan valintaan', 'Return to personal selection', '返回个人字段选择', '返回個人欄位選擇', 'public fixture seed'),
+  ('return_to_site_default', 'Palaa sivuston oletukseen', 'Return to site default', '继承站点默认值', '使用網站預設值', 'public fixture seed'),
+  ('site_default_restored', 'Sivuston oletus palautettu', 'Site default restored', '已恢复站点默认值', '已恢復網站預設值', 'public fixture seed'),
+  ('shared', 'Jaettu', 'Shared', '共享', '共用', 'public fixture seed'),
+  ('field_set_fields_placeholder', 'Kentät kenttäjoukossa', 'Fields in collection', '字段集中的字段', '欄位集中的欄位', 'public fixture seed'),
+  ('fields_selected', 'kenttää valittu', 'fields selected', '个字段已选择', '個欄位已選取', 'public fixture seed'),
   ('system_user_group_memberships', 'Käyttäjäryhmien jäsenyydet', 'User group memberships', '用户组成员关系', '用戶群組成員關係', 'public fixture seed'),
   ('system_user_groups', 'Käyttäjäryhmät', 'User groups', '用户组', '用戶群組', 'public fixture seed'),
   ('system_users', 'Järjestelmän käyttäjät', 'System users', '系统用户', '系統用戶', 'public fixture seed'),
@@ -1499,6 +1729,56 @@ WITH authored_translations(lang_key, language_code, translation, review_status) 
         ('system_lang_key_translations', 'zh-CN', '语言键翻译', 'needs_review'),
         ('system_lang_key_translations', 'zh-TW', '語言鍵翻譯', 'needs_review'),
         ('system_lang_key_translations', 'zh-HK', '語言鍵翻譯', 'needs_review'),
+        ('system_column_field_sets', 'en', 'Field collections', 'approved'),
+        ('system_column_field_sets', 'fi', 'Kenttäkokoelmat', 'approved'),
+        ('system_column_field_sets', 'zh-CN', '字段集合', 'needs_review'),
+        ('system_column_field_sets', 'zh-TW', '欄位集合', 'needs_review'),
+        ('system_column_field_sets', 'zh-HK', '欄位集合', 'needs_review'),
+        ('system_column_field_set_members', 'en', 'Field collection members', 'approved'),
+        ('system_column_field_set_members', 'fi', 'Kenttäkokoelmien kentät', 'approved'),
+        ('system_column_field_set_members', 'zh-CN', '字段集合成员', 'needs_review'),
+        ('system_column_field_set_members', 'zh-TW', '欄位集合成員', 'needs_review'),
+        ('system_column_field_set_members', 'zh-HK', '欄位集合成員', 'needs_review'),
+        ('system_view_field_set_assignments', 'en', 'View field assignments', 'approved'),
+        ('system_view_field_set_assignments', 'fi', 'Näkymien kenttäkokoelmat', 'approved'),
+        ('system_view_field_set_assignments', 'zh-CN', '视图字段分配', 'needs_review'),
+        ('system_view_field_set_assignments', 'zh-TW', '檢視欄位指派', 'needs_review'),
+        ('system_view_field_set_assignments', 'zh-HK', '檢視欄位指派', 'needs_review'),
+        ('edit_site_field_default', 'en', 'Edit site default', 'approved'),
+        ('edit_site_field_default', 'fi', 'Muokkaa sivuston oletusta', 'approved'),
+        ('edit_site_field_default', 'zh-CN', '编辑站点默认字段', 'needs_review'),
+        ('edit_site_field_default', 'zh-TW', '編輯網站預設欄位', 'needs_review'),
+        ('edit_site_field_default', 'zh-HK', '編輯網站預設欄位', 'needs_review'),
+        ('edit_personal_field_selection', 'en', 'Return to personal selection', 'approved'),
+        ('edit_personal_field_selection', 'fi', 'Palaa omaan valintaan', 'approved'),
+        ('edit_personal_field_selection', 'zh-CN', '返回个人字段选择', 'needs_review'),
+        ('edit_personal_field_selection', 'zh-TW', '返回個人欄位選擇', 'needs_review'),
+        ('edit_personal_field_selection', 'zh-HK', '返回個人欄位選擇', 'needs_review'),
+        ('return_to_site_default', 'en', 'Return to site default', 'approved'),
+        ('return_to_site_default', 'fi', 'Palaa sivuston oletukseen', 'approved'),
+        ('return_to_site_default', 'zh-CN', '继承站点默认值', 'needs_review'),
+        ('return_to_site_default', 'zh-TW', '使用網站預設值', 'needs_review'),
+        ('return_to_site_default', 'zh-HK', '使用網站預設值', 'needs_review'),
+        ('site_default_restored', 'en', 'Site default restored', 'approved'),
+        ('site_default_restored', 'fi', 'Sivuston oletus palautettu', 'approved'),
+        ('site_default_restored', 'zh-CN', '已恢复站点默认值', 'needs_review'),
+        ('site_default_restored', 'zh-TW', '已恢復網站預設值', 'needs_review'),
+        ('site_default_restored', 'zh-HK', '已恢復網站預設值', 'needs_review'),
+        ('shared', 'en', 'Shared', 'approved'),
+        ('shared', 'fi', 'Jaettu', 'approved'),
+        ('shared', 'zh-CN', '共享', 'needs_review'),
+        ('shared', 'zh-TW', '共用', 'needs_review'),
+        ('shared', 'zh-HK', '共用', 'needs_review'),
+        ('field_set_fields_placeholder', 'en', 'Fields in collection', 'approved'),
+        ('field_set_fields_placeholder', 'fi', 'Kentät kenttäjoukossa', 'approved'),
+        ('field_set_fields_placeholder', 'zh-CN', '字段集中的字段', 'needs_review'),
+        ('field_set_fields_placeholder', 'zh-TW', '欄位集中的欄位', 'needs_review'),
+        ('field_set_fields_placeholder', 'zh-HK', '欄位集中的欄位', 'needs_review'),
+        ('fields_selected', 'en', 'fields selected', 'approved'),
+        ('fields_selected', 'fi', 'kenttää valittu', 'approved'),
+        ('fields_selected', 'zh-CN', '个字段已选择', 'needs_review'),
+        ('fields_selected', 'zh-TW', '個欄位已選取', 'needs_review'),
+        ('fields_selected', 'zh-HK', '個欄位已選取', 'needs_review'),
         ('filter_mode_exact_value', 'en', 'Exact value', 'approved'),
         ('filter_mode_exact_value', 'fi', 'Tarkka arvo', 'approved'),
         ('filter_mode_exact_value', 'zh-CN', '精确值', 'needs_review'),
@@ -1573,3 +1853,27 @@ SET translation = EXCLUDED.translation,
     source_kind = EXCLUDED.source_kind,
     review_status = EXCLUDED.review_status,
     updated = now();
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT keys.id,
+       'code',
+       'frontend/core_components/filterbar/filter_list/column_view_preset_builder.js',
+       '',
+       'Per-view personal and site-default field collection controls.',
+       CURRENT_DATE
+FROM public.system_lang_keys AS keys
+WHERE keys.lang_key IN (
+    'edit_site_field_default',
+    'edit_personal_field_selection',
+    'return_to_site_default',
+    'site_default_restored',
+    'shared',
+    'field_set_fields_placeholder',
+    'fields_selected'
+)
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
+SET source_low = EXCLUDED.source_low,
+    usage_explanation = EXCLUDED.usage_explanation,
+    last_seen = CURRENT_DATE;

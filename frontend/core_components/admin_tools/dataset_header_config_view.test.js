@@ -178,10 +178,10 @@ describe('dataset_header_config_view', () => {
         hero.dataset.filterbarInlineHeroFor = 'orders';
         const tabParts = document.createElement('div');
         tabParts.className = 'tab_parts_container';
-        tabParts.dataset.tableName = 'orders';
-        const resultsSurface = document.createElement('div');
-        resultsSurface.className = 'dataset-results-surface';
-        tabParts.appendChild(resultsSurface);
+        const contentArea = document.createElement('div');
+        contentArea.className = 'tab-content-area';
+        contentArea.dataset.tableName = 'orders';
+        tabParts.appendChild(contentArea);
         const tabButton = document.createElement('button');
         tabButton.className = 'navtablinks';
         tabButton.dataset.id = 'orders';
@@ -220,8 +220,8 @@ describe('dataset_header_config_view', () => {
         expect(tableSpecs.invoices).toEqual({ table_uid: 105 });
         expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
         expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('new-cover.webp');
-        expect(resultsSurface.classList.contains('dataset-results-surface--has-background')).toBe(true);
-        expect(resultsSurface.style.getPropertyValue('--dataset-background-image')).toContain('new-background.webp');
+        expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
+        expect(contentArea.style.getPropertyValue('--dataset-background-image')).toContain('new-background.webp');
         expect(tabButton.dataset.hasPresentationMedia).toBe('true');
     });
 });

@@ -5,23 +5,40 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   const response = await page.request.get('/api/admin/ui-feature-flags');
   expect(response.ok()).toBe(true);
   expect(await response.json()).toEqual({ view_admin_cover_image_test_palette: true });
+  const presentationResponse = await page.request.get('/api/site-presentation-settings');
+  expect(presentationResponse.ok()).toBe(true);
+  const presentation = await presentationResponse.json();
 
   const hero = page.locator('.filterbar-inline-hero--has-cover');
   await page.evaluate(() => {
     document.body.classList.remove('light-mode');
     document.body.classList.add('dark-mode');
   });
-  await expect.poll(async () => hero.evaluate((element) => ({
-    mask: getComputedStyle(element, '::before').maskImage,
-    opacity: getComputedStyle(element, '::before').opacity,
-  }))).toEqual({ mask: 'none', opacity: '0.3' });
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').opacity
+  ))).toBe(String(presentation.dataset_cover_theme.dark.image_opacity));
+  if (presentation.dataset_cover_theme.dark.oval_enabled) {
+    await expect.poll(async () => hero.evaluate((element) => (
+      getComputedStyle(element, '::before').maskImage
+    ))).not.toBe('none');
+  } else {
+    await expect.poll(async () => hero.evaluate((element) => (
+      getComputedStyle(element, '::before').maskImage
+    ))).toBe('none');
+  }
   await page.evaluate(() => {
     document.body.classList.remove('dark-mode');
     document.body.classList.add('light-mode');
   });
-  await expect.poll(async () => hero.evaluate((element) => (
-    getComputedStyle(element, '::before').maskImage
-  ))).not.toBe('none');
+  if (presentation.dataset_cover_theme.light.oval_enabled) {
+    await expect.poll(async () => hero.evaluate((element) => (
+      getComputedStyle(element, '::before').maskImage
+    ))).not.toBe('none');
+  } else {
+    await expect.poll(async () => hero.evaluate((element) => (
+      getComputedStyle(element, '::before').maskImage
+    ))).toBe('none');
+  }
 
   const button = page.locator('[data-testid="dataset-cover-test-palette-button"]');
   await expect(button).toBeVisible({ timeout: 10_000 });
@@ -37,6 +54,56 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   await expect(panel.locator('.dataset-cover-test-palette__heading')).toBeVisible();
   await expect(panel.locator('.dataset-cover-test-palette__group-icon')).toHaveCount(6);
   await expect(panel.locator('.dataset-cover-test-palette__group-chevron')).toHaveCount(6);
+
+  const coverVisible = panel.locator(
+    '[data-testid="dataset-cover-test-palette-cover-visible"]'
+  );
+  const imageOpacity = panel.locator('[data-testid="dataset-cover-test-palette-image-opacity"]');
+  await imageOpacity.evaluate((input: HTMLInputElement) => {
+    input.value = '1';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(coverVisible).toBeChecked();
+  await coverVisible.uncheck();
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').opacity
+  ))).toBe('0');
+  await coverVisible.check();
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').opacity
+  ))).toBe('1');
+
+  const imageBlur = panel.locator('[data-testid="dataset-cover-test-palette-image-blur"]');
+  await imageBlur.evaluate((input: HTMLInputElement) => {
+    input.value = '4';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').filter
+  ))).toBe('blur(4px)');
+
+  await panel.locator('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
+  await imageBlur.evaluate((input: HTMLInputElement) => {
+    input.value = '0';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.evaluate(() => {
+    document.body.classList.remove('light-mode');
+    document.body.classList.add('dark-mode');
+  });
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').filter
+  ))).toBe('blur(0px)');
+  await expect.poll(async () => page.evaluate(() => (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--dataset-background-dark-image-blur').trim()
+  ))).toBe('0px');
+
+  await panel.locator('[data-testid="dataset-cover-test-palette-tab-light"]').click();
+  await page.evaluate(() => {
+    document.body.classList.remove('dark-mode');
+    document.body.classList.add('light-mode');
+  });
 
   const defaultHeight = (await hero.boundingBox())!.height;
   const heroHeight = page.locator('[data-testid="dataset-cover-test-palette-hero-height"]');

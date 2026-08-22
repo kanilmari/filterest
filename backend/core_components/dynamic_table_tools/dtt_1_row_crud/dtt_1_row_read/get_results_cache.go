@@ -8,6 +8,7 @@ package dtt_1_row_read
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -131,8 +132,8 @@ func setCachedPermissions(userRole, tableName string, entry *permCacheEntry) {
 // User column settings cache
 // =============================================================
 
-func getCachedUserColumnSettings(userID int, tableName string) *ucsCacheEntry {
-	key := fmt.Sprintf("ucs|%d|%s", userID, tableName)
+func getCachedUserColumnSettings(userID int, tableName, viewKey string) *ucsCacheEntry {
+	key := fmt.Sprintf("ucs|%d|%s|%s", userID, tableName, viewKey)
 	ucsCacheMu.RLock()
 	entry, ok := ucsCache[key]
 	ucsCacheMu.RUnlock()
@@ -142,11 +143,28 @@ func getCachedUserColumnSettings(userID int, tableName string) *ucsCacheEntry {
 	return entry
 }
 
-func setCachedUserColumnSettings(userID int, tableName string, entry *ucsCacheEntry) {
-	key := fmt.Sprintf("ucs|%d|%s", userID, tableName)
+func setCachedUserColumnSettings(userID int, tableName, viewKey string, entry *ucsCacheEntry) {
+	key := fmt.Sprintf("ucs|%d|%s|%s", userID, tableName, viewKey)
 	ucsCacheMu.Lock()
 	ucsCache[key] = entry
 	ucsCacheMu.Unlock()
+}
+
+// InvalidateUserColumnSettingsCache clears field-visibility cache entries for a
+// dataset/view pair. Empty values clear all entries after collection deletion.
+func InvalidateUserColumnSettingsCache(tableName, viewKey string) {
+	ucsCacheMu.Lock()
+	defer ucsCacheMu.Unlock()
+	if tableName == "" || viewKey == "" {
+		ucsCache = make(map[string]*ucsCacheEntry)
+		return
+	}
+	suffix := "|" + tableName + "|" + viewKey
+	for key := range ucsCache {
+		if strings.HasSuffix(key, suffix) {
+			delete(ucsCache, key)
+		}
+	}
 }
 
 // =============================================================

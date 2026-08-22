@@ -28,11 +28,15 @@ func TestAgentToolsRequireExplicitActivation(t *testing.T) {
 	Register()
 	routes := collectRegisteredAgentToolRoutes()
 	want := map[string]string{
-		"/api/app/agent-tools/tasks":       "agent_tools.TasksHandler",
-		"/api/app/agent-tools/task-runs":   "agent_tools.TaskRunsHandler",
-		"/api/app/agent-tools/task-todos":  "agent_tools.TaskTodosHandler",
-		"/api/app/agent-tools/task-groups": "agent_tools.TaskGroupsHandler",
-		"/api/app/bee/messages":            "agent_tools.BeeMessagesHandler",
+		"/api/app/agent-tools/tasks":            "agent_tools.TasksHandler",
+		"/api/app/agent-tools/task-runs":        "agent_tools.TaskRunsHandler",
+		"/api/app/agent-tools/task-todos":       "agent_tools.TaskTodosHandler",
+		"/api/app/agent-tools/task-groups":      "agent_tools.TaskGroupsHandler",
+		"/api/app/agent-tools/worklines":        "agent_tools.WorklinesHandler",
+		"/api/app/agent-tools/workline-reports": "agent_tools.WorklineReportsHandler",
+		"/api/app/agent-tools/workline-tasks":   "agent_tools.WorklineTasksHandler",
+		"/api/app/agent-tools/handover-reports": "agent_tools.HandoverReportsHandler",
+		"/api/app/bee/messages":                 "agent_tools.BeeMessagesHandler",
 	}
 	if len(routes) != len(want) {
 		t.Fatalf("registered routes = %#v, want %#v", routes, want)
@@ -47,6 +51,10 @@ func TestAgentToolsRequireExplicitActivation(t *testing.T) {
 		"agent_tools.TasksHandler",
 		"agent_tools.TaskRunsHandler",
 		"agent_tools.TaskTodosHandler",
+		"agent_tools.WorklinesHandler",
+		"agent_tools.WorklineReportsHandler",
+		"agent_tools.WorklineTasksHandler",
+		"agent_tools.HandoverReportsHandler",
 		"agent_tools.BeeMessagesHandler",
 	} {
 		if got := pipeline.DescribeRouteProfile(handlerName).ProfileName; got != "login_only" {

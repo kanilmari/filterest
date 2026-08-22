@@ -273,11 +273,11 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	datasetHeaderSave := mustFindManifestRoute(t, manifest, "system_table_tools.SaveDatasetHeaderConfigHandler")
 	assertRouteMethods(t, datasetHeaderSave, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 
-	columnPresetList := mustFindManifestRoute(t, manifest, "system_table_tools.ListColumnViewPresetsHandler")
-	assertRouteMethods(t, columnPresetList, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	fieldSetList := mustFindManifestRoute(t, manifest, "system_table_tools.GetViewFieldSetsHandler")
+	assertRouteMethods(t, fieldSetList, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
 
-	columnPresetDelete := mustFindManifestRoute(t, manifest, "system_table_tools.DeleteColumnViewPresetHandler")
-	assertRouteMethods(t, columnPresetDelete, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
+	fieldSetReset := mustFindManifestRoute(t, manifest, "system_table_tools.ResetPersonalViewFieldSetHandler")
+	assertRouteMethods(t, fieldSetReset, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 
 	setCurrentProject := mustFindManifestRoute(t, manifest, "dtt_system_table_folders.HandleSetCurrentProjectFolder")
 	assertScenarioNames(t, setCurrentProject, []string{"production", "development", "api_language"})

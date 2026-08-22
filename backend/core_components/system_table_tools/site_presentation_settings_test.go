@@ -31,7 +31,10 @@ func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T)
 	if light.ImageOpacity != 1 || light.OverlayOpacity != 0 {
 		t.Fatalf("light image defaults = %#v", light)
 	}
-	if dark.OvalEnabled || dark.ImageOpacity != 0.3 || dark.OverlayOpacity != 0 {
+	if light.ImageBlur != 1 {
+		t.Fatalf("light blur default = %#v", light)
+	}
+	if dark.OvalEnabled || dark.ImageOpacity != 0.3 || dark.OverlayOpacity != 0 || dark.ImageBlur != 1 {
 		t.Fatalf("dark defaults = %#v", dark)
 	}
 	if shared.HeroExtraHeight != 40 || shared.HeroBottomFade != 48 || shared.ImageBlur != 1 {
@@ -45,6 +48,28 @@ func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T)
 	}
 	if settings.RowArticleTimestampDisplayMode != rowArticleTimestampDateTime {
 		t.Fatalf("timestamp mode = %q", settings.RowArticleTimestampDisplayMode)
+	}
+}
+
+func TestLegacySharedImageBlurFeedsMissingThemeValues(t *testing.T) {
+	config := defaultSitePresentationSettings().DatasetCoverTheme
+	config.Shared.ImageBlur = 4
+	raw := `{"light":{"image_opacity":1},"dark":{"image_opacity":0.3},"shared":{"image_blur":4}}`
+	inheritLegacyImageBlur(raw, &config)
+
+	if config.Light.ImageBlur != 4 || config.Dark.ImageBlur != 4 {
+		t.Fatalf("legacy blur inheritance = light %v, dark %v", config.Light.ImageBlur, config.Dark.ImageBlur)
+	}
+
+	raw = `{"light":{"image_blur":0},"dark":{"image_blur":2},"shared":{"image_blur":4}}`
+	config.Light.ImageBlur = 1
+	config.Dark.ImageBlur = 1
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		t.Fatal(err)
+	}
+	inheritLegacyImageBlur(raw, &config)
+	if config.Light.ImageBlur != 0 || config.Dark.ImageBlur != 2 {
+		t.Fatalf("explicit theme blur values must win = light %v, dark %v", config.Light.ImageBlur, config.Dark.ImageBlur)
 	}
 }
 
@@ -163,6 +188,7 @@ func TestAdminSitePresentationSettingsHandlerRejectsIncompleteUnknownAndInvalidV
 	invalidStop := strings.Replace(string(validBody), `"center_stop":39`, `"center_stop":90`, 1)
 	invalidMode := strings.Replace(string(validBody), `"date_time"`, `"relative"`, 1)
 	invalidCardWidth := strings.Replace(string(validBody), `"card_image_width":300`, `"card_image_width":601`, 1)
+	invalidThemeBlur := strings.Replace(string(validBody), `"image_blur":1`, `"image_blur":25`, 1)
 	invalidGlowIntensity := strings.Replace(
 		string(validBody),
 		`"active_tab_glow_intensity":0.3`,
@@ -183,6 +209,7 @@ func TestAdminSitePresentationSettingsHandlerRejectsIncompleteUnknownAndInvalidV
 		"invalid stops":        invalidStop,
 		"invalid mode":         invalidMode,
 		"invalid card width":   invalidCardWidth,
+		"invalid theme blur":   invalidThemeBlur,
 		"invalid glow":         invalidGlowIntensity,
 		"invalid tab opacity":  invalidTabMaxOpacity,
 		"invalid brand colour": invalidBrandColor,

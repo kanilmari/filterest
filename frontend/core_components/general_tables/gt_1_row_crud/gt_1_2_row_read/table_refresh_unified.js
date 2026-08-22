@@ -117,6 +117,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             callerName: 'refreshTableUnified',
             include_card_support: ["card", "product_card"].includes(currentView),
             include_map_support: currentView === "map",
+            view_key: currentView,
         });
         if (!result) {
             console.warn(`fetchDatasetData palautti tyhjän vastauksen taululle: ${tableName}`);
@@ -156,7 +157,8 @@ export async function refreshTableUnified(tableName, options = {}) {
             renderDataTypes,
             renderRowCount,
             result.has_geo,
-            result.table_meta
+			result.table_meta,
+			result.dataset_presentation
         );
         if (hasCachedSearchRenderResult) {
             disconnectInfiniteScroll(tableName);
@@ -207,6 +209,7 @@ export async function refreshTableUnified(tableName, options = {}) {
                         filters: { id: expandedId },
                         callerName: 'deep_link_big_card',
                         include_card_support: ["card", "product_card"].includes(currentView),
+                        view_key: currentView,
                     });
                     const singleData = singleResult?.data || singleResult?.rows || [];
                     if (singleData.length > 0) {

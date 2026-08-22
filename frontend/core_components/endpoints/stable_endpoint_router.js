@@ -47,12 +47,6 @@ import { createStableApiClient } from '../../generated/stable_api_client.js';
  * @property {string} [system_alias_policy_recommendation]
  */
 /**
- * @typedef {object} ColumnViewPresetRow
- * @property {number} id
- * @property {string} preset_name
- * @property {Record<string, boolean>} [hidden_columns]
- */
-/**
  * @typedef {object} DatasetHeaderConfigSaveResponse
  * @property {string} [status]
  * @property {string} [message]
@@ -79,12 +73,6 @@ import { createStableApiClient } from '../../generated/stable_api_client.js';
  * @typedef {object} SaveChildTabConfigResponse
  * @property {string} [status]
  * @property {string} [message]
- */
-/**
- * @typedef {object} SaveColumnViewPresetRequest
- * @property {string} table_name
- * @property {string} preset_name
- * @property {Record<string, boolean>} hidden_columns
  */
 
 /**
@@ -307,40 +295,47 @@ export async function saveChildTabConfig(request) {
     });
 }
 
-/**
- * listColumnViewPresets returns the shared preset list for one table.
- *
- * @param {string} tableName
- * @returns {Promise<ColumnViewPresetRow[] | { presets?: ColumnViewPresetRow[] }>}
- */
-export async function listColumnViewPresets(tableName) {
-    return stable_candidate_endpoint_router('listColumnViewPresets', {
-        url_params: tableName,
+/** Load effective and reusable field collections for one dataset view. */
+export async function getViewFieldSets(dataset, viewKey) {
+    const query = new URLSearchParams({ dataset, view_key: viewKey });
+    return stable_candidate_endpoint_router('getViewFieldSets', {
+        url_params: `?${query.toString()}`,
     });
 }
 
-/**
- * saveColumnViewPreset posts a named column-view preset.
- *
- * @param {SaveColumnViewPresetRequest} request
- * @returns {Promise<unknown>}
- */
-export async function saveColumnViewPreset(request) {
-    return stable_candidate_endpoint_router('saveColumnViewPreset', {
-        body_data: request,
-    });
+/** Save current visible fields as a named personal collection and activate it. */
+export async function savePersonalViewFieldSet(request) {
+    return stable_candidate_endpoint_router('savePersonalViewFieldSet', { body_data: request });
 }
 
-/**
- * deleteColumnViewPreset removes one named column-view preset.
- *
- * @param {{ id: number }} request
- * @returns {Promise<unknown>}
- */
-export async function deleteColumnViewPreset(request) {
-    return stable_candidate_endpoint_router('deleteColumnViewPreset', {
-        body_data: request,
-    });
+/** Activate an existing personal or shared collection for the current user. */
+export async function assignPersonalViewFieldSet(request) {
+    return stable_candidate_endpoint_router('assignPersonalViewFieldSet', { body_data: request });
+}
+
+/** Remove the current user's assignment so the site/default layer is inherited. */
+export async function resetPersonalViewFieldSet(request) {
+    return stable_candidate_endpoint_router('resetPersonalViewFieldSet', { body_data: request });
+}
+
+/** Delete one collection owned by the current user. */
+export async function deletePersonalViewFieldSet(request) {
+    return stable_candidate_endpoint_router('deletePersonalViewFieldSet', { body_data: request });
+}
+
+/** Save current fields as a shared collection and activate it as the site default. */
+export async function saveSiteViewFieldSet(request) {
+    return stable_candidate_endpoint_router('saveSiteViewFieldSet', { body_data: request });
+}
+
+/** Activate an existing shared collection as the administrator-managed site default. */
+export async function assignSiteViewFieldSet(request) {
+    return stable_candidate_endpoint_router('assignSiteViewFieldSet', { body_data: request });
+}
+
+/** Delete one shared collection through the administrator-only route. */
+export async function deleteSharedViewFieldSet(request) {
+    return stable_candidate_endpoint_router('deleteSharedViewFieldSet', { body_data: request });
 }
 
 /**

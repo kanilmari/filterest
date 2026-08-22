@@ -263,7 +263,6 @@ func TestDropManagedAssetChildTableDropsSchemaAndMetadataTogether(t *testing.T) 
 			{rowsAffected: 1},
 			{rowsAffected: 1},
 			{rowsAffected: 1},
-			{rowsAffected: 1},
 		},
 	)
 
@@ -275,14 +274,14 @@ func TestDropManagedAssetChildTableDropsSchemaAndMetadataTogether(t *testing.T) 
 	if err != nil {
 		t.Fatalf("dropManagedAssetChildTable returned error: %v", err)
 	}
-	if len(state.execCalls) != 9 {
-		t.Fatalf("exec call count = %d, want 9", len(state.execCalls))
+	if len(state.execCalls) != 8 {
+		t.Fatalf("exec call count = %d, want 8", len(state.execCalls))
 	}
 	if !strings.Contains(state.execCalls[0], "DROP TABLE articles_assets CASCADE") {
 		t.Fatalf("first exec must drop canonical child table:\n%s", state.execCalls[0])
 	}
-	if !strings.Contains(state.execCalls[8], "DELETE FROM system_db_tables") {
-		t.Fatalf("final exec must delete child catalog metadata:\n%s", state.execCalls[8])
+	if !strings.Contains(state.execCalls[7], "DELETE FROM system_db_tables") {
+		t.Fatalf("final exec must delete child catalog metadata:\n%s", state.execCalls[7])
 	}
 }
 
@@ -303,7 +302,6 @@ func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 			{rowsAffected: 1},
 			{rowsAffected: 1},
 			{rowsAffected: 1},
-			{rowsAffected: 1},
 		},
 	)
 
@@ -312,8 +310,8 @@ func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 		t.Fatalf("CleanupTableMetadata returned error: %v", err)
 	}
 
-	if len(state.execCalls) != 8 {
-		t.Fatalf("exec call count = %d, want 8", len(state.execCalls))
+	if len(state.execCalls) != 7 {
+		t.Fatalf("exec call count = %d, want 7", len(state.execCalls))
 	}
 	if len(state.queryCalls) != 1 {
 		t.Fatalf("query call count = %d, want 1", len(state.queryCalls))
@@ -324,8 +322,8 @@ func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 	if !strings.Contains(state.execCalls[0], "DELETE FROM system_foreign_key_relations_1_m") {
 		t.Fatalf("first exec missing 1:M cleanup:\n%s", state.execCalls[0])
 	}
-	if !strings.Contains(state.execCalls[7], "DELETE FROM system_db_tables") {
-		t.Fatalf("final exec missing system_db_tables cleanup:\n%s", state.execCalls[7])
+	if !strings.Contains(state.execCalls[6], "DELETE FROM system_db_tables") {
+		t.Fatalf("final exec missing system_db_tables cleanup:\n%s", state.execCalls[6])
 	}
 }
 
@@ -361,7 +359,6 @@ func TestCleanupTableMetadataPropagatesExecErrors(t *testing.T) {
 				},
 			},
 			execs: []queuedDeleteExec{
-				{rowsAffected: 1},
 				{rowsAffected: 1},
 				{rowsAffected: 1},
 				{rowsAffected: 1},
@@ -407,7 +404,6 @@ func TestCleanupTableMetadataTreatsLangCleanupFailureAsNonFatal(t *testing.T) {
 			{rowsAffected: 1},
 			{rowsAffected: 1},
 			{rowsAffected: 1},
-			{rowsAffected: 1},
 		},
 	)
 
@@ -419,13 +415,13 @@ func TestCleanupTableMetadataTreatsLangCleanupFailureAsNonFatal(t *testing.T) {
 	if len(state.queryCalls) != 2 {
 		t.Fatalf("query call count = %d, want 2", len(state.queryCalls))
 	}
-	if len(state.execCalls) != 8 {
-		t.Fatalf("exec call count = %d, want 8", len(state.execCalls))
+	if len(state.execCalls) != 7 {
+		t.Fatalf("exec call count = %d, want 7", len(state.execCalls))
 	}
 	if !strings.Contains(state.queryCalls[1], "SELECT DISTINCT lang_key_id") {
 		t.Fatalf("lang cleanup query missing:\n%s", state.queryCalls[1])
 	}
-	if !strings.Contains(state.execCalls[7], "DELETE FROM system_db_tables") {
-		t.Fatalf("final cleanup did not continue after lang cleanup failure:\n%s", state.execCalls[7])
+	if !strings.Contains(state.execCalls[6], "DELETE FROM system_db_tables") {
+		t.Fatalf("final cleanup did not continue after lang cleanup failure:\n%s", state.execCalls[6])
 	}
 }

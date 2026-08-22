@@ -569,17 +569,15 @@ function createInlineHeroContent(tableName, {
     inlineHeroHost.appendChild(heroInner);
     let paletteControl = null;
     let isDestroyed = false;
-    if (coverImagePath) {
-        void mountDatasetCoverTestPalette(inlineHeroHost, tableName)
-            .then((control) => {
-                if (isDestroyed) {
-                    control?.destroy?.();
-                    return;
-                }
-                paletteControl = control;
-            })
-            .catch(() => null);
-    }
+    void mountDatasetCoverTestPalette(inlineHeroHost, tableName)
+        .then((control) => {
+            if (isDestroyed) {
+                control?.destroy?.();
+                return;
+            }
+            paletteControl = control;
+        })
+        .catch(() => null);
     inlineHeroHost.destroy = () => {
         isDestroyed = true;
         paletteControl?.destroy?.();
@@ -734,7 +732,7 @@ export function createFilterBarContent(container, {
     }
 
     /* ---------- Column View Presets ----------------------------- */
-    const columnPresetRow = buildColumnViewPresetSelector(tableName, visibleColumns);
+    const columnPresetRow = buildColumnViewPresetSelector(tableName, visibleColumns, currentView);
     destroyCallbacks.push(() => columnPresetRow.destroy?.());
     container.appendChild(columnPresetRow);
 

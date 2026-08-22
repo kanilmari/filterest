@@ -939,6 +939,46 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
                 "model": "legacy_maintainer_export",
             },
         },
+        {
+            "app_version": "8.40.0",
+            "artifact_type": "runtime",
+            "build_id": "filterest-8.40.0-stable-runtime-503c409b1b8b",
+            "channel": "stable",
+            "created_at": "2026-08-22T23:49:33Z",
+            "database": {"min_version": "9.6.0", "target_version": "9.6.0"},
+            "maturity": "candidate",
+            "previous_record_sha256": (
+                "c9deed1e4ac5d8a213a3e331568f9a0f14d89124a439ac2d961f3a69cc8df670"
+            ),
+            "product": "filterest",
+            "record_id": "build:filterest-8.40.0-stable-runtime-503c409b1b8b",
+            "record_type": "build",
+            "schema_version": 1,
+            "source": {
+                "commit": "503c409b1b8bc8f7731c3ef9b3f9828b8e7f8e3e",
+                "model": "legacy_maintainer_export",
+            },
+        },
+        {
+            "app_version": "8.40.0",
+            "artifact_type": "runtime",
+            "build_id": "filterest-8.40.0-stable-runtime-2a36d319e5f9",
+            "channel": "stable",
+            "created_at": "2026-08-22T23:51:48Z",
+            "database": {"min_version": "9.6.0", "target_version": "9.6.0"},
+            "maturity": "candidate",
+            "previous_record_sha256": (
+                "0502c52ed957564b29a12ee97ed8f805017909a869e67ea891f3cc7e142c4a6e"
+            ),
+            "product": "filterest",
+            "record_id": "build:filterest-8.40.0-stable-runtime-2a36d319e5f9",
+            "record_type": "build",
+            "schema_version": 1,
+            "source": {
+                "commit": "2a36d319e5f9c427145b327e87b91e17cd154ac1",
+                "model": "legacy_maintainer_export",
+            },
+        },
     ]
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 

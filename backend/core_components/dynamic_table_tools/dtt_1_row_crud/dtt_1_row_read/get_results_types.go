@@ -11,7 +11,7 @@ import (
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
 
-// UserColumnSetting on pieni struct system_user_column_settings -riville
+// UserColumnSetting carries the effective per-view field order into query building.
 type UserColumnSetting struct {
 	ColumnName  string `json:"column_name"`
 	SortOrder   int    `json:"sort_order"`

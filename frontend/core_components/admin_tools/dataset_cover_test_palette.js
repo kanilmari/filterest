@@ -38,6 +38,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         edge_stop: 80,
         image_opacity: 1,
         overlay_opacity: 0,
+        image_blur: 1,
     }),
     dark: Object.freeze({
         oval_enabled: false,
@@ -52,6 +53,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         edge_stop: 80,
         image_opacity: 0.3,
         overlay_opacity: 0,
+        image_blur: 1,
     }),
     shared: Object.freeze({
         hero_extra_height: 40,
@@ -81,7 +83,7 @@ const RANGE_CONTROLS = Object.freeze([
     { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '', group: 'themeImage' },
     { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true, group: 'heroLayout' },
     { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'heroLayout' },
-    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', shared: true, group: 'heroLayout' },
+    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', group: 'themeImage' },
     { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
     { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', min: 0, max: 100, step: 1, unit: 'px', shared: true, group: 'navigation' },
     { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
@@ -94,7 +96,7 @@ const COPY = Object.freeze({
     en: Object.freeze({
         button: 'Open cover image palette', title: 'Cover image settings', close: 'Close cover image settings',
         notice: 'Changes preview immediately. Save stores both light and dark theme values.',
-        light: 'Light', dark: 'Dark', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
+        light: 'Light', dark: 'Dark', coverVisible: 'Show cover photo', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
         themeGroup: 'Selected theme', sharedGroup: 'Shared by both themes',
         themeImage: 'Image and overlay', ovalGeometry: 'Oval shape', ovalGradient: 'Oval gradient',
         heroLayout: 'Hero image and transition', cardLayout: 'Card layout', navigation: 'Dataset tabs',
@@ -103,7 +105,7 @@ const COPY = Object.freeze({
         centerOpacity: 'Centre opacity', midOpacity: 'Mid opacity', edgeOpacity: 'Edge opacity',
         centerStop: 'Centre stop', midStop: 'Mid stop', edgeStop: 'Edge stop',
         imageOpacity: 'Whole image opacity', heroHeight: 'Hero extra height', heroBottomFade: 'Bottom fade height',
-        overlayOpacity: 'Darkening overlay opacity', imageBlur: 'Whole image blur',
+        overlayOpacity: 'Darkening overlay opacity', imageBlur: 'Cover and background blur',
         cardImageWidth: 'Card image width', activeTabFade: 'Active tab fade width',
         activeTabMaxOpacity: 'Active tab edge opacity (reserved)',
         activeTabGlowIntensity: 'Active tab glow intensity', activeTabGlowWidth: 'Active tab glow width',
@@ -112,7 +114,7 @@ const COPY = Object.freeze({
     fi: Object.freeze({
         button: 'Avaa kansikuvan paletti', title: 'Kansikuvan asetukset', close: 'Sulje kansikuvan asetukset',
         notice: 'Muutokset näkyvät heti. Tallennus säilyttää vaalean ja tumman teeman arvot.',
-        light: 'Vaalea', dark: 'Tumma', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
+        light: 'Vaalea', dark: 'Tumma', coverVisible: 'Näytä kansikuva', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
         themeGroup: 'Valittu teema', sharedGroup: 'Molemmille teemoille yhteiset',
         themeImage: 'Kuva ja tummennus', ovalGeometry: 'Ovaalin muoto', ovalGradient: 'Ovaalin liukuväri',
         heroLayout: 'Herokuva ja häivytys', cardLayout: 'Korttien asettelu', navigation: 'Dataset-välilehdet',
@@ -121,7 +123,7 @@ const COPY = Object.freeze({
         centerOpacity: 'Keskustan opacity', midOpacity: 'Keskialueen opacity', edgeOpacity: 'Reunan opacity',
         centerStop: 'Keskustan stop-piste', midStop: 'Keskialueen stop-piste', edgeStop: 'Reunan stop-piste',
         imageOpacity: 'Koko kuvan opacity', heroHeight: 'Heron lisäkorkeus', heroBottomFade: 'Alahäivytyksen korkeus',
-        overlayOpacity: 'Tummentavan overlayn opacity', imageBlur: 'Koko kuvan blur',
+        overlayOpacity: 'Tummentavan overlayn opacity', imageBlur: 'Kansi- ja taustakuvan blur',
         cardImageWidth: 'Korttikuvan leveys', activeTabFade: 'Aktiivisen välilehden häivytysleveys',
         activeTabMaxOpacity: 'Aktiivisen välilehden reunaopacity (varattu)',
         activeTabGlowIntensity: 'Aktiivisen välilehden hohdon voimakkuus',
@@ -222,6 +224,14 @@ export function applyDatasetCoverThemeConfig(hero, config) {
         setThemeVariable(hero, 'shared', control, config.shared[control.key]);
     });
     const documentRoot = document.documentElement;
+    documentRoot.style.setProperty(
+        '--dataset-background-light-image-blur',
+        `${config.light.image_blur}px`
+    );
+    documentRoot.style.setProperty(
+        '--dataset-background-dark-image-blur',
+        `${config.dark.image_blur}px`
+    );
     documentRoot.style.setProperty('--card_image_large_width', `${config.shared.card_image_width}px`);
     documentRoot.style.setProperty('--navtab-active-fade-width', `${config.shared.active_tab_fade}px`);
     documentRoot.style.setProperty(
@@ -326,6 +336,14 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     let savedSettings = clone(initialSettings);
     let draftSettings = clone(initialSettings);
     let activeTheme = 'light';
+    const lastVisibleImageOpacity = {
+        light: Number(initialSettings.dataset_cover_theme.light.image_opacity) > 0
+            ? Number(initialSettings.dataset_cover_theme.light.image_opacity)
+            : DEFAULT_DATASET_COVER_THEME.light.image_opacity,
+        dark: Number(initialSettings.dataset_cover_theme.dark.image_opacity) > 0
+            ? Number(initialSettings.dataset_cover_theme.dark.image_opacity)
+            : DEFAULT_DATASET_COVER_THEME.dark.image_opacity,
+    };
     const button = document.createElement('button');
     button.type = 'button';
     button.classList.add('filterbar-inline-hero__cover-palette-button', 'fw-btn');
@@ -383,6 +401,16 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     maskInput.dataset.testid = 'dataset-cover-test-palette-mask-enabled';
     maskLabel.append(maskInput, document.createTextNode(copy.maskEnabled));
 
+    const coverVisibilityLabel = document.createElement('label');
+    coverVisibilityLabel.classList.add('dataset-cover-test-palette__toggle');
+    const coverVisibilityInput = document.createElement('input');
+    coverVisibilityInput.type = 'checkbox';
+    coverVisibilityInput.dataset.testid = 'dataset-cover-test-palette-cover-visible';
+    coverVisibilityLabel.append(
+        coverVisibilityInput,
+        document.createTextNode(copy.coverVisible)
+    );
+
     const themeToolboxes = document.createElement('section');
     themeToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
     themeToolboxes.dataset.testid = 'dataset-cover-test-palette-theme-controls';
@@ -403,6 +431,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             parent.appendChild(toolbox.toolbox);
         });
     toolboxByGroup.get('ovalGeometry').content.prepend(maskLabel);
+    toolboxByGroup.get('themeImage').content.prepend(coverVisibilityLabel);
     const rangeControls = RANGE_CONTROLS.map((control) => {
         const row = document.createElement('label');
         row.classList.add('dataset-cover-test-palette__range');
@@ -422,6 +451,12 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
                 ? draftSettings.dataset_cover_theme.shared
                 : draftSettings.dataset_cover_theme[activeTheme];
             target[control.key] = Number(input.value);
+            if (!control.shared && control.key === 'image_opacity') {
+                coverVisibilityInput.checked = target[control.key] > 0;
+                if (target[control.key] > 0) {
+                    lastVisibleImageOpacity[activeTheme] = target[control.key];
+                }
+            }
             output.value = renderControlValue(input.value, control.unit);
             applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
         });
@@ -466,6 +501,10 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     function syncControls() {
         const theme = draftSettings.dataset_cover_theme[activeTheme];
         maskInput.checked = theme.oval_enabled;
+        coverVisibilityInput.checked = Number(theme.image_opacity) > 0;
+        if (coverVisibilityInput.checked) {
+            lastVisibleImageOpacity[activeTheme] = Number(theme.image_opacity);
+        }
         tabButtons.forEach((tab) => {
             const selected = tab.dataset.theme === activeTheme;
             tab.setAttribute('aria-selected', String(selected));
@@ -482,6 +521,19 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     maskInput.addEventListener('change', () => {
         draftSettings.dataset_cover_theme[activeTheme].oval_enabled = maskInput.checked;
         applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+    });
+    coverVisibilityInput.addEventListener('change', () => {
+        const theme = draftSettings.dataset_cover_theme[activeTheme];
+        const currentOpacity = Number(theme.image_opacity);
+        if (!coverVisibilityInput.checked) {
+            if (currentOpacity > 0) lastVisibleImageOpacity[activeTheme] = currentOpacity;
+            theme.image_opacity = 0;
+        } else if (!(currentOpacity > 0)) {
+            theme.image_opacity = lastVisibleImageOpacity[activeTheme]
+                || DEFAULT_DATASET_COVER_THEME[activeTheme].image_opacity;
+        }
+        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        syncControls();
     });
     tabButtons.forEach((tab) => tab.addEventListener('click', () => {
         activeTheme = tab.dataset.theme;
@@ -504,6 +556,10 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         saveButton.disabled = true;
         status.textContent = copy.saving;
         try {
+            // Preserve a single light-theme fallback for rollback to builds that
+            // predate theme-specific blur while new builds use the theme values.
+            draftSettings.dataset_cover_theme.shared.image_blur =
+                draftSettings.dataset_cover_theme.light.image_blur;
             const response = await saveRequestFn(clone(draftSettings));
             savedSettings = normalizePresentationSettings(response);
             draftSettings = clone(savedSettings);
@@ -567,8 +623,7 @@ export async function mountDatasetCoverTestPalette(hero, datasetName, {
     permissionCheck = hasRoutePermission,
 } = {}) {
     const normalizedDatasetName = String(datasetName || '').trim();
-    if (!(hero instanceof HTMLElement) || !normalizedDatasetName
-        || !hero.classList.contains('filterbar-inline-hero--has-cover')) return null;
+    if (!(hero instanceof HTMLElement) || !normalizedDatasetName) return null;
 
     let settings = normalizePresentationSettings(null);
     try {
@@ -577,6 +632,10 @@ export async function mountDatasetCoverTestPalette(hero, datasetName, {
         // Canonical in-source defaults keep the public hero usable during a transient API failure.
     }
     applyDatasetCoverThemeConfig(hero, settings.dataset_cover_theme);
+
+    // Background-only datasets still need the public theme variables, but the
+    // cover-specific editing button stays hidden when no cover asset exists.
+    if (!hero.classList.contains('filterbar-inline-hero--has-cover')) return null;
 
     if (!permissionCheck(DATASET_HEADER_CONFIG_PERMISSION)) return null;
     if (hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')) return null;

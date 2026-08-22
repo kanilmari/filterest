@@ -13,24 +13,40 @@ import {
 export { _makeColumnClass as makeColumnClass };
 
 // ---------- 1) localStorage-aput ----------------------------------------------
-export function getHiddenColumns(tableName) {
-    const raw = localStorage.getItem(`${tableName}_hide_columns`);
+function resolveVisibilityViewKey(tableName, viewKey) {
+    const candidate = String(viewKey || localStorage.getItem(`${tableName}_view`) || "table")
+        .trim()
+        .toLowerCase();
+    return /^[a-z][a-z0-9_]{0,63}$/.test(candidate) ? candidate : "table";
+}
+
+export function getColumnVisibilityStorageKey(tableName, viewKey) {
+    return `${tableName}_${resolveVisibilityViewKey(tableName, viewKey)}_hide_columns`;
+}
+
+export function getHiddenColumns(tableName, viewKey) {
+    const scopedKey = getColumnVisibilityStorageKey(tableName, viewKey);
+    const raw = localStorage.getItem(scopedKey) ?? localStorage.getItem(`${tableName}_hide_columns`);
     return parseHiddenColumns(raw);
 }
 
-export function setColumnVisibility(tableName, columnName, shouldShow) {
-    const cur = getHiddenColumns(tableName);
+export function setColumnVisibility(tableName, columnName, shouldShow, viewKey) {
+    const resolvedViewKey = resolveVisibilityViewKey(tableName, viewKey);
+    const cur = getHiddenColumns(tableName, resolvedViewKey);
     if (shouldShow) delete cur[columnName];
     else cur[columnName] = true;
-    localStorage.setItem(`${tableName}_hide_columns`, JSON.stringify(cur));
+    localStorage.setItem(getColumnVisibilityStorageKey(tableName, resolvedViewKey), JSON.stringify(cur));
+    localStorage.removeItem(`${tableName}_hide_columns`);
 
     // 🔔 lähetä ilmoitus kaikille kiinnostuneille:
     window.dispatchEvent(
-        new CustomEvent("column_visibility_changed", { detail: { tableName } })
+        new CustomEvent("column_visibility_changed", {
+            detail: { tableName, viewKey: resolvedViewKey },
+        })
     );
 
     // Päivitä näkymä heti myös tässä kontekstissa
-    applyColumnVisibility(tableName);
+    applyColumnVisibility(tableName, resolvedViewKey);
 }
 
 /* ---------- 2) CSP-nonce-apu ------------------------------------------------- */
@@ -77,9 +93,9 @@ function ensureHiddenStylesElement(tableName) {
 }
 
 /* ---------- 4) NÄKYMÄN PÄIVITYS --------------------------------------------- */
-export function applyColumnVisibility(tableName) {
+export function applyColumnVisibility(tableName, viewKey) {
 
-    const hiddenMap      = getHiddenColumns(tableName);
+    const hiddenMap      = getHiddenColumns(tableName, viewKey);
     const cleanTableName = String(tableName ?? "").replace(/\s+/g, "");
 
     /* 0) Siivoa vanhat 'hidden-column'-luokat (legacy-tuki) ------------------ */
@@ -95,8 +111,8 @@ export function applyColumnVisibility(tableName) {
     styleEl.textContent = cssRules;
 }
 
-export function shouldShowColumn(tableName, columnName) {
-    const hidden = getHiddenColumns(tableName);
+export function shouldShowColumn(tableName, columnName, viewKey) {
+    const hidden = getHiddenColumns(tableName, viewKey);
     return isColumnVisible(hidden, columnName);
 }
 

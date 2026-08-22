@@ -5,12 +5,15 @@
 package dtt_1_row_read
 
 import (
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	auth "easelect/backend/core_components/auth"
@@ -18,6 +21,16 @@ import (
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	e_sessions "easelect/backend/core_components/sessions"
 )
+
+var resultsViewKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+func normalizeResultsViewKey(raw string) string {
+	viewKey := strings.ToLower(strings.TrimSpace(raw))
+	if resultsViewKeyPattern.MatchString(viewKey) {
+		return viewKey
+	}
+	return "table"
+}
 
 // GetResultsHandlerWrapper ...
 func GetResultsHandlerWrapper(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +48,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
+	viewKey := normalizeResultsViewKey(request.URL.Query().Get("view_key"))
 
 	// 1. Hae user_id sessiosta
 	userID, err := e_sessions.GetUserIDFromSession(request)
@@ -130,16 +144,16 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 
 	// 3. Haetaan käyttäjän sarakeasetukset (cached, 2 min TTL).
 	var userColumnSettings []UserColumnSetting
-	if cached := getCachedUserColumnSettings(userID, table_name); cached != nil {
+	if cached := getCachedUserColumnSettings(userID, table_name, viewKey); cached != nil {
 		userColumnSettings = cached.settings
 	} else {
-		userColumnSettings, err = fetchUserColumnSettingsOrDefaults(userID, table_name, currentDb)
+		userColumnSettings, err = fetchUserColumnSettingsOrDefaults(userID, table_name, viewKey, currentDb)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column settings")
 			return
 		}
-		setCachedUserColumnSettings(userID, table_name, &ucsCacheEntry{settings: userColumnSettings, cachedAt: time.Now()})
+		setCachedUserColumnSettings(userID, table_name, viewKey, &ucsCacheEntry{settings: userColumnSettings, cachedAt: time.Now()})
 	}
 
 	// 3b. Haetaan sarakkeet, joihin roolilla on SELECT-oikeus (cached, 30 s TTL).
@@ -327,18 +341,32 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 
 	column_data_types = enrichServiceCatalogModerationDataTypes(table_name, column_data_types)
 
+	// The row query above proves this actor may read the dataset. Resolve its
+	// presentation media through the backend registry connection so the client
+	// does not need access to the administrator-only navigation tree.
+	datasetPresentation := DatasetPresentationMedia{}
+	if backend.Db != nil {
+		datasetPresentation, err = fetchDatasetPresentationMedia(backend.Db, table_name)
+		if err != nil {
+			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching dataset presentation")
+			return
+		}
+	}
+
 	// Kootaan vastaus
 	response_data := map[string]interface{}{
-		"columns":            result_columns,
-		"data":               query_results,
-		"types":              column_data_types,
-		"table_meta":         tableMeta,
-		"resultsPerLoad":     results_per_load,
-		"userColumnSettings": userColumnSettings,
-		"row_count":          rowCount,
-		"has_geo":            hasGeo,
-		"geom_columns":       geomCols,
-		"geom_sources":       geomSrcs,
+		"columns":              result_columns,
+		"data":                 query_results,
+		"types":                column_data_types,
+		"table_meta":           tableMeta,
+		"resultsPerLoad":       results_per_load,
+		"userColumnSettings":   userColumnSettings,
+		"row_count":            rowCount,
+		"has_geo":              hasGeo,
+		"geom_columns":         geomCols,
+		"geom_sources":         geomSrcs,
+		"dataset_presentation": datasetPresentation,
 	}
 
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")

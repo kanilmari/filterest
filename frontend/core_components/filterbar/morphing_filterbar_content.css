@@ -117,23 +117,59 @@
 }
 .dataset-results-surface {
 	position: relative;
-	isolation: isolate;
 	display: flex;
 	flex-direction: column;
 	width: 100%;
 	min-width: 0;
 }
-.dataset-results-surface--has-background::before {
+.tab-content-area--has-dataset-background {
+	isolation: isolate;
+}
+.tab-content-area--has-dataset-background .filterbar-inline-hero {
+	background: transparent;
+}
+.tab-content-area--has-dataset-background .filterbar-inline-hero--has-cover::after {
+	opacity: var(--dataset-cover-image-opacity);
+}
+.tab-content-area--has-dataset-background::before {
 	position: absolute;
-	z-index: -1;
-	inset: 0;
+	z-index: 0;
+	inset: calc(0px - var(--dataset-background-image-blur, 0px));
 	background-image: var(--dataset-background-image);
 	background-position: center top;
-	background-size: cover;
+	background-repeat: no-repeat;
+	background-size: 100% auto;
+	clip-path: inset(var(--dataset-background-image-blur, 0));
 	content: '';
+	filter: blur(var(--dataset-background-image-blur, 0));
 	opacity: 0.2;
 	pointer-events: none;
-	mask-image: radial-gradient(ellipse at center, transparent 0%, transparent 42%, #000 100%);
+}
+.tab-content-area--has-dataset-background > .tab-content-body {
+	position: relative;
+	z-index: 1;
+}
+.tab-content-area--has-dataset-background .scrollable_content {
+	background-color: transparent;
+}
+.tab-content-area--has-dataset-background .table_from_db tbody td {
+	background-color: var(--bg_color_2);
+}
+.tab-content-area--has-dataset-background .table_from_db tbody tr.selected > td:not(.selected, .editing) {
+	background-color: color-mix(in srgb, rgb(255 0 0) 20%, var(--bg_color_2) 80%);
+}
+.tab-content-area--has-dataset-background .table_from_db tbody td.editing {
+	background-color: color-mix(in srgb, rgb(128 128 0) 50%, var(--bg_color_2) 50%);
+}
+.tab-content-area--has-dataset-background .tree-container .node-row {
+	background-color: var(--bg_color_2);
+}
+.tab-content-area--has-dataset-background .product-card-view-empty {
+	background: color-mix(in srgb, var(--bg_color_card_frame) 78%, var(--bg_color_2) 22%);
+}
+.tab-content-area--has-dataset-background .price-chart-view__status-item,
+.tab-content-area--has-dataset-background .price-chart-view__notice {
+	background: var(--price-chart-panel);
 }
 /* ============================================
    WIDE STATE (scrolled to top)

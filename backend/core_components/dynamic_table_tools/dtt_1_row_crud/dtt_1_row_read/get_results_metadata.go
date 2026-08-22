@@ -109,123 +109,99 @@ func normalizeCardStyleVariant(value string) string {
 	}
 }
 
-// fetchUserColumnSettingsOrDefaults hakee käyttäjän sarakeasetukset tai palauttaa oletukset (read-only)
-func fetchUserColumnSettingsOrDefaults(userID int, tableName string, db *sql.DB) ([]UserColumnSetting, error) {
+// fetchUserColumnSettingsOrDefaults resolves personal > site > metadata defaults
+// for one stable view key. GetResults still intersects these preferences with
+// real SELECT rights, so hiding a field is never treated as authorization.
+func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db *sql.DB) ([]UserColumnSetting, error) {
 	var tableUID int
 	if err := db.QueryRow(`SELECT table_uid FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&tableUID); err != nil {
 		return nil, err
 	}
-
-	hiddenCols := make(map[string]bool)
-	hideRows, err := db.Query(`SELECT column_name FROM system_column_details WHERE table_uid = $1 AND COALESCE(hide_everywhere, false) = true`, tableUID)
+	var assignedFieldSetID int64
+	err := db.QueryRow(`
+		SELECT assignments.field_set_id
+		FROM public.system_view_field_set_assignments AS assignments
+		JOIN public.system_table_views AS views ON views.id = assignments.view_id
+		WHERE assignments.table_uid = $1 AND views.view_key = $2
+		  AND (assignments.user_id = $3 OR assignments.user_id IS NULL)
+		ORDER BY (assignments.user_id IS NOT NULL) DESC
+		LIMIT 1`, tableUID, viewKey, userID).Scan(&assignedFieldSetID)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
 	if err == nil {
-		defer hideRows.Close()
-		for hideRows.Next() {
-			var col string
-			if err := hideRows.Scan(&col); err == nil {
-				hiddenCols[col] = true
-			}
+		rows, queryErr := db.Query(`
+			SELECT details.column_name, members.sort_order,
+			       COALESCE(members.column_width_px, 0), false
+			FROM public.system_column_field_set_members AS members
+			JOIN public.system_column_details AS details ON details.column_uid = members.column_uid
+			WHERE members.field_set_id = $1
+			  AND COALESCE(details.hide_everywhere, false) = false
+			ORDER BY members.sort_order`, assignedFieldSetID)
+		if queryErr != nil {
+			return nil, queryErr
 		}
+		defer rows.Close()
+		results := []UserColumnSetting{}
+		for rows.Next() {
+			var setting UserColumnSetting
+			if scanErr := rows.Scan(&setting.ColumnName, &setting.SortOrder, &setting.ColumnWidth, &setting.IsHidden); scanErr != nil {
+				return nil, scanErr
+			}
+			results = append(results, setting)
+		}
+		return results, rows.Err()
 	}
 
-	queryUserSettings := `
-        SELECT
-            column_name,
-            sort_order,
-            column_width_px,
-            is_hidden
-        FROM system_user_column_settings
-        WHERE user_id = $1
-          AND table_uid = $2
-        ORDER BY sort_order
-    `
-	rows, err := db.Query(queryUserSettings, userID, tableUID)
+	queryDefaults := `
+		SELECT details.column_name, COALESCE(details.co_number, details.column_uid), 0, false
+		FROM public.system_column_details AS details
+		WHERE details.table_uid = $1 AND COALESCE(details.hide_everywhere, false) = false`
+	if viewKey == "card" {
+		queryDefaults += ` AND COALESCE(details.hide_on_small_card, false) = false`
+	}
+	queryDefaults += ` ORDER BY details.co_number NULLS LAST, details.column_uid`
+	rows, err := db.Query(queryDefaults, tableUID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var results []UserColumnSetting
+	results := []UserColumnSetting{}
 	for rows.Next() {
-		var ucs UserColumnSetting
-		if err := rows.Scan(&ucs.ColumnName, &ucs.SortOrder, &ucs.ColumnWidth, &ucs.IsHidden); err != nil {
-			log.Printf("scan error system_user_column_settings: %v", err)
-			continue
+		var setting UserColumnSetting
+		if scanErr := rows.Scan(&setting.ColumnName, &setting.SortOrder, &setting.ColumnWidth, &setting.IsHidden); scanErr != nil {
+			return nil, scanErr
 		}
-		if hiddenCols[ucs.ColumnName] {
-			continue
-		}
-		results = append(results, ucs)
+		results = append(results, setting)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
-	if len(results) == 0 {
-		queryDefaults := `
-            SELECT
-                scd.column_name,
-                scd.co_number AS sort_order,
-                0 AS column_width_px,
-                false AS is_hidden
-            FROM system_db_tables sdt
-            JOIN system_column_details scd ON scd.table_uid = sdt.table_uid
-            WHERE sdt.table_name = $1
-              AND COALESCE(scd.hide_everywhere, false) = false
-            ORDER BY scd.co_number
-        `
-		rows, err := db.Query(queryDefaults, tableName)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var ucs UserColumnSetting
-			if err := rows.Scan(&ucs.ColumnName, &ucs.SortOrder, &ucs.ColumnWidth, &ucs.IsHidden); err != nil {
-				log.Printf("scan error system_column_details: %v", err)
-				continue
-			}
-			if hiddenCols[ucs.ColumnName] {
-				continue
-			}
-			results = append(results, ucs)
-		}
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-
-		// Jos edelleen ei tuloksia, kyseessä voi olla näkymä, jota ei
-		// löydy system_db_tables-taulusta. Tällöin käytetään
-		// information_schema.columns -tietoja oletuksina.
-		if len(results) == 0 {
-			viewRows, err := db.Query(
-				`SELECT column_name, ordinal_position AS sort_order, 0 AS column_width_px, false AS is_hidden
-                                FROM information_schema.columns
-                                WHERE table_schema = 'public' AND table_name = $1
-                                ORDER BY ordinal_position`,
-				tableName,
-			)
-			if err != nil {
-				return nil, err
-			}
-			defer viewRows.Close()
-
-			for viewRows.Next() {
-				var ucs UserColumnSetting
-				if err := viewRows.Scan(&ucs.ColumnName, &ucs.SortOrder, &ucs.ColumnWidth, &ucs.IsHidden); err != nil {
-					log.Printf("scan error information_schema: %v", err)
-					continue
-				}
-				results = append(results, ucs)
-			}
-			if err := viewRows.Err(); err != nil {
-				return nil, err
-			}
-		}
+	if len(results) > 0 {
+		return results, nil
 	}
+	return fetchInformationSchemaColumnDefaults(tableName, db)
+}
 
-	return results, nil
+func fetchInformationSchemaColumnDefaults(tableName string, db *sql.DB) ([]UserColumnSetting, error) {
+	rows, err := db.Query(`
+		SELECT column_name, ordinal_position, 0, false
+		FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = $1
+		ORDER BY ordinal_position`, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	results := []UserColumnSetting{}
+	for rows.Next() {
+		var setting UserColumnSetting
+		if err := rows.Scan(&setting.ColumnName, &setting.SortOrder, &setting.ColumnWidth, &setting.IsHidden); err != nil {
+			return nil, err
+		}
+		results = append(results, setting)
+	}
+	return results, rows.Err()
 }
 
 // getColumnDataTypesWithFK hakee sarakkeen data_type sekä FK-tiedot (jos niitä on).

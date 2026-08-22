@@ -1,8 +1,8 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "8.38.0",
-  "db_version": "9.3.0",
+  "app_version": "8.40.0",
+  "db_version": "9.6.0",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -25,7 +25,8 @@
     "public.system_child_tab_config",
     "public.system_column_control",
     "public.system_column_details",
-    "public.system_column_view_presets",
+    "public.system_column_field_set_members",
+    "public.system_column_field_sets",
     "public.system_comments",
     "public.system_config",
     "public.system_dataset_media",
@@ -47,10 +48,10 @@
     "public.system_table_row_view_counts",
     "public.system_table_views",
     "public.system_transaction_log",
-    "public.system_user_column_settings",
     "public.system_user_group_memberships",
     "public.system_user_groups",
     "public.system_users",
+    "public.system_view_field_set_assignments",
     "public.tiketit",
     "public.tiketit_assets",
     "restricted.otp_send_events",
@@ -77,10 +78,12 @@
     "public.system_foreign_key_relations_1_m",
     "public.system_functions",
     "public.system_group_table_func_rights",
+    "public.system_lang_key_sources",
     "public.system_lang_key_translations",
     "public.system_lang_keys",
     "public.system_languages",
     "public.system_table_folders",
+    "public.system_table_views",
     "public.system_user_group_memberships",
     "public.system_user_groups",
     "public.system_users",
@@ -102,15 +105,17 @@
     "public.system_about": 1,
     "public.system_column_details": 47,
     "public.system_config": 12,
-    "public.system_db_tables": 46,
+    "public.system_db_tables": 48,
     "public.system_db_version": 1,
     "public.system_foreign_key_relations_1_m": 4,
-    "public.system_functions": 25,
+    "public.system_functions": 33,
     "public.system_group_table_func_rights": 24,
-    "public.system_lang_key_translations": 55,
+    "public.system_lang_key_sources": 0,
+    "public.system_lang_key_translations": 105,
     "public.system_lang_keys": 404,
     "public.system_languages": 5,
     "public.system_table_folders": 14,
+    "public.system_table_views": 12,
     "public.system_user_group_memberships": 2,
     "public.system_user_groups": 3,
     "public.system_users": 2,
@@ -119,10 +124,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "cc52f26861b41645937b84b3a0833a424b61cd16beaf21a44034d2568b81d279"
+      "sha256": "ff7134a87668b5ceb0edb7daec19c965b8bdbc82702ec53368dd2095efa9d843"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "6709f0374dd0b662bdbc1f541db8be2a0f9bf4930f38228e1125ce9c137c7e7c"
+      "sha256": "578e2c42887c152043a1c35a12d6f7185178776d5028ab571ac926820d6d5d40"
     }
   },
   "source_files": {
@@ -133,19 +138,19 @@
       "sha256": "f91192e8fb91e56a7d069dad0dc4c333dc213cfb9607af5adde9dffe209dc51a"
     },
     "server_tools/public_slice_export/public_bootstrap/runtime.schema.sql": {
-      "sha256": "d33cf3d81eec780f59e15c98c39424a20bcf35995252ca2881fd3b98ddaa1858"
+      "sha256": "c2ffc40a033e08f63674cecfa7a1ce877af816b7e3c350854f64b550a6fe3113"
     },
     "server_tools/public_slice_export/public_bootstrap/runtime.seed.sql": {
-      "sha256": "76117887c4c8b95026fb604cdc7b88ab68dc492d32557c0dca1006eb0f27d904"
+      "sha256": "060734b8b58fafb0079cae0f6403d16092c53f7afc76bea2640658f7b0361420"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.schema.sql": {
       "sha256": "e7d93194c36e209253016c50c3a78b84a6a6ea17e438b4600981133514d4b47f"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.seed.sql": {
-      "sha256": "6a85fa699b7d12baba0e0c3f9585fa58c527e1fbb2c20d0f15b3cbfee896fb14"
+      "sha256": "caf76ae89a7f237cccc3ad5d55ee6de031413ff473a3c99278b2c7b188b118f1"
     },
     "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql": {
-      "sha256": "af42323b81b9db79ee8db83255f0e0ab1bd73c22d3c085a45d2b7232c2df0207"
+      "sha256": "eceae1e83cb82e0ba6f233b4b3fa872e2f852d36dc0cc02e52aab249964e837f"
     },
     "server_tools/public_slice_export/public_bootstrap/fixtures/docs/first-dataset.png": {
       "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"

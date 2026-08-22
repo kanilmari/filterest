@@ -43,6 +43,26 @@ func Register() {
 			"agent_tools.TaskGroupsHandler",
 		)
 		appregistry.RegisterRoute(
+			"/api/app/agent-tools/worklines",
+			WorklinesHandler,
+			"agent_tools.WorklinesHandler",
+		)
+		appregistry.RegisterRoute(
+			"/api/app/agent-tools/workline-reports",
+			WorklineReportsHandler,
+			"agent_tools.WorklineReportsHandler",
+		)
+		appregistry.RegisterRoute(
+			"/api/app/agent-tools/workline-tasks",
+			WorklineTasksHandler,
+			"agent_tools.WorklineTasksHandler",
+		)
+		appregistry.RegisterRoute(
+			"/api/app/agent-tools/handover-reports",
+			HandoverReportsHandler,
+			"agent_tools.HandoverReportsHandler",
+		)
+		appregistry.RegisterRoute(
 			"/api/app/bee/messages",
 			BeeMessagesHandler,
 			"agent_tools.BeeMessagesHandler",
@@ -52,6 +72,10 @@ func Register() {
 			"agent_tools.TasksHandler",
 			"agent_tools.TaskRunsHandler",
 			"agent_tools.TaskTodosHandler",
+			"agent_tools.WorklinesHandler",
+			"agent_tools.WorklineReportsHandler",
+			"agent_tools.WorklineTasksHandler",
+			"agent_tools.HandoverReportsHandler",
 			"agent_tools.BeeMessagesHandler",
 		}
 		for _, handlerName := range loginOnlyHandlers {

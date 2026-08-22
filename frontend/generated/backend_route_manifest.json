@@ -548,6 +548,93 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/view-field-sets/shared/delete",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.DeleteSharedViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/admin/view-field-sets/site/assign",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AssignSiteViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/admin/view-field-sets/site/save",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SaveSiteViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/app/ai-chat/capabilities",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAICapabilitiesHandler",
@@ -1368,93 +1455,6 @@
       "path_pattern": "/api/child-tab-config/save",
       "match_type": "exact",
       "handler_name": "system_table_tools.SaveChildTabConfigHandler",
-      "methods": [
-        "POST"
-      ],
-      "method_source": "explicit_stable_contract",
-      "scenarios": [
-        {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        }
-      ]
-    },
-    {
-      "path_pattern": "/api/column-view-presets/",
-      "match_type": "prefix",
-      "handler_name": "system_table_tools.ListColumnViewPresetsHandler",
-      "methods": [
-        "GET"
-      ],
-      "method_source": "explicit_stable_contract",
-      "scenarios": [
-        {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        }
-      ]
-    },
-    {
-      "path_pattern": "/api/column-view-presets/delete",
-      "match_type": "exact",
-      "handler_name": "system_table_tools.DeleteColumnViewPresetHandler",
-      "methods": [
-        "POST"
-      ],
-      "method_source": "explicit_stable_contract",
-      "scenarios": [
-        {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        }
-      ]
-    },
-    {
-      "path_pattern": "/api/column-view-presets/save",
-      "match_type": "exact",
-      "handler_name": "system_table_tools.SaveColumnViewPresetHandler",
       "methods": [
         "POST"
       ],
@@ -4565,6 +4565,196 @@
       "path_pattern": "/api/user-profile",
       "match_type": "exact",
       "handler_name": "auth.UserProfileFetchHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/view-field-sets",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetViewFieldSetsHandler",
+      "methods": [
+        "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/view-field-sets/personal/assign",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AssignPersonalViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/view-field-sets/personal/delete",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.DeletePersonalViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/view-field-sets/personal/reset",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.ResetPersonalViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/view-field-sets/personal/save",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SavePersonalViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
       "scenarios": [
         {
           "name": "production",

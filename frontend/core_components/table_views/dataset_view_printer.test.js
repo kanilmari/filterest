@@ -123,6 +123,32 @@ describe('generate_table', () => {
         datasetSupportsMapViewMock.mockReturnValue(true);
     });
 
+	test('uses presentation media returned with dataset results without admin tree metadata', async () => {
+		localStorage.setItem('demo_dataset_view', 'card');
+		getAllSpecsMock.mockReturnValue({});
+
+		const { generate_table } = await import('./dataset_view_printer.js');
+		await generate_table(
+			'demo_dataset',
+			['id'],
+			[{ id: 1 }],
+			{ id: 'INTEGER' },
+			1,
+			false,
+			null,
+			{
+				background_image_path: '/storage/104/dataset_media/background/original/background.webp',
+			}
+		);
+
+		const contentArea = document.querySelector('.tab-content-area');
+		expect(contentArea).not.toBeNull();
+		expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
+		expect(contentArea.style.getPropertyValue('--dataset-background-image'))
+			.toContain('/storage/104/dataset_media/background/original/background.webp');
+		expect(document.querySelector('.dataset-results-surface')).not.toBeNull();
+	});
+
     test('starts building the filterbar before an async card view finishes', async () => {
         const events = [];
         let resolveCardView;

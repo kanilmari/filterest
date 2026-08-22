@@ -53,7 +53,11 @@ export async function fetchFilterOptions({
  *     "row_count": number,
  *     "has_geo": boolean,
  *     "geom_columns": string[],
- *     "geom_sources": string[]
+ *     "geom_sources": string[],
+ *     "dataset_presentation": {
+ *       "cover_image_path": string,
+ *       "background_image_path": string
+ *     }
  *   }
  */
 export async function fetchDatasetData({
@@ -66,6 +70,7 @@ export async function fetchDatasetData({
     row_count = null,
     include_card_support = false,
     include_map_support = false,
+    view_key = null,
 }) {
     const chosenLang = getLanguageWithBrowserFallback();
     const url_params = buildDatasetQueryParams({
@@ -78,6 +83,7 @@ export async function fetchDatasetData({
         row_count,
         include_card_support,
         include_map_support,
+        view_key,
     });
     return await endpoint_router('getResults', { url_params });
 }

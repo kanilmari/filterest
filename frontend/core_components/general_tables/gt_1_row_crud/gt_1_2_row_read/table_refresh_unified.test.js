@@ -200,6 +200,9 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             row_count: 42,
             has_geo: false,
             table_meta: { card_style_variant: "standard" },
+			dataset_presentation: {
+				background_image_path: "/storage/104/dataset_media/background/original/background.webp",
+			},
         });
         generateTableMock.mockResolvedValue(document.createElement("div"));
 
@@ -214,7 +217,10 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             { title: "text", cached_image: "text", id: "integer" },
             1,
             false,
-            { card_style_variant: "standard" }
+			{ card_style_variant: "standard" },
+			{
+				background_image_path: "/storage/104/dataset_media/background/original/background.webp",
+			}
         );
         expect(updateOffsetMock).not.toHaveBeenCalled();
         expect(disconnectInfiniteScrollMock).toHaveBeenCalledTimes(2);
@@ -250,7 +256,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             { id: "integer", title: "text" },
             0,
             false,
-            undefined
+			undefined,
+			undefined
         );
         expect(updateOffsetMock).not.toHaveBeenCalled();
     });

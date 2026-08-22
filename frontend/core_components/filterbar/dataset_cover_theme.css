@@ -8,6 +8,15 @@
 	--navtab-active-glow-intensity: 0.3;
 	--navtab-active-glow-width: 1.5px;
 	--navtab-active-glow-blur: 2px;
+	--dataset-background-light-image-blur: 1px;
+	--dataset-background-dark-image-blur: 1px;
+}
+
+.tab-content-area--has-dataset-background {
+	--dataset-background-image-blur: var(--dataset-background-light-image-blur);
+}
+body.dark-mode .tab-content-area--has-dataset-background {
+	--dataset-background-image-blur: var(--dataset-background-dark-image-blur);
 }
 
 .filterbar-inline-hero--has-cover {
@@ -23,6 +32,7 @@
 	--dataset-cover-light-mask-edge-stop: 80%;
 	--dataset-cover-light-image-opacity: 1;
 	--dataset-cover-light-overlay-opacity: 0;
+	--dataset-cover-light-image-blur: 1px;
 	--dataset-cover-dark-mask-image: none;
 	--dataset-cover-dark-mask-oval-x: 32%;
 	--dataset-cover-dark-mask-oval-y: 67%;
@@ -35,7 +45,7 @@
 	--dataset-cover-dark-mask-edge-stop: 80%;
 	--dataset-cover-dark-image-opacity: 0.3;
 	--dataset-cover-dark-overlay-opacity: 0;
-	--dataset-cover-image-blur: 1px;
+	--dataset-cover-dark-image-blur: 1px;
 	--dataset-cover-hero-extra-height: 40px;
 	--dataset-cover-hero-bottom-fade: 48px;
 	padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height));
@@ -53,6 +63,7 @@ body:not(.dark-mode) .filterbar-inline-hero--has-cover {
 	--dataset-cover-mask-edge-stop: var(--dataset-cover-light-mask-edge-stop);
 	--dataset-cover-image-opacity: var(--dataset-cover-light-image-opacity);
 	--dataset-cover-overlay-opacity: var(--dataset-cover-light-overlay-opacity);
+	--dataset-cover-image-blur: var(--dataset-cover-light-image-blur);
 }
 body.dark-mode .filterbar-inline-hero--has-cover {
 	--dataset-cover-mask-image: var(--dataset-cover-dark-mask-image);
@@ -67,6 +78,7 @@ body.dark-mode .filterbar-inline-hero--has-cover {
 	--dataset-cover-mask-edge-stop: var(--dataset-cover-dark-mask-edge-stop);
 	--dataset-cover-image-opacity: var(--dataset-cover-dark-image-opacity);
 	--dataset-cover-overlay-opacity: var(--dataset-cover-dark-overlay-opacity);
+	--dataset-cover-image-blur: var(--dataset-cover-dark-image-blur);
 }
 .filterbar-inline-hero--has-cover::before,
 .filterbar-inline-hero--has-cover::after {

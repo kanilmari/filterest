@@ -106,19 +106,6 @@ const updateFieldViewColumnOrderQuery = `
 	  )
 `
 
-const updateUserFieldViewOrderQuery = `
-	UPDATE system_user_column_settings AS settings
-	SET sort_order = $1,
-	    updated = now()
-	WHERE settings.table_uid = (
-	      SELECT table_uid
-	      FROM system_db_tables
-	      WHERE table_name = $2
-	      LIMIT 1
-	  )
-	  AND settings.column_name = $3
-`
-
 func loadFieldViewColumnGuards(queryer dbutils.Querier, tableName string) ([]fieldViewColumnGuard, error) {
 	rows, err := queryer.Query(fieldViewColumnGuardQuery, tableName)
 	if err != nil {
@@ -477,16 +464,6 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil || rowsAffected != 1 {
 			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] order update count for column_uid %d: rows=%d err=%v\033[0m", col.ColumnUID, rowsAffected, err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "field order update did not match one field")
-			return
-		}
-		if _, err := tx.Exec(
-			updateUserFieldViewOrderQuery,
-			col.CoNumber,
-			req.TableName,
-			col.ColumnName,
-		); err != nil {
-			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] user order update for field %q: %v\033[0m", col.ColumnName, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error applying global field order")
 			return
 		}
 	}

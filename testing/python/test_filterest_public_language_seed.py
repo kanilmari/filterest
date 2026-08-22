@@ -41,8 +41,10 @@ REQUIRED_ARTICLE_RUNTIME_KEYS = frozenset(
     system_foreign_key_relations_1_m system_foreign_key_relations_m_m
     system_functions system_group_table_func_rights system_lang_keys
     system_lang_keys_archive system_lang_key_sources system_schema_migrations
+    system_column_field_sets system_column_field_set_members
+    system_view_field_set_assignments
     system_table_folders system_table_row_view_counts system_table_views
-    system_transaction_log system_user_column_settings
+    system_transaction_log
     system_user_group_memberships system_user_groups system_users views
     geography_columns geometry_columns palvelu_id open_in_new_tab palvelu_name
     dokumentaatio_id dokumentaatio_name kuva riski_id riski_name edit cancel
@@ -50,6 +52,8 @@ REQUIRED_ARTICLE_RUNTIME_KEYS = frozenset(
     search_for_palvelu_id search_for_dokumentaatio_id search_for_kuva
     search_for_created search_for_updated chat_for_table chat_welcome_message
     delete_history open showing_first_50 name comments write_comment send
+    edit_site_field_default edit_personal_field_selection return_to_site_default
+    site_default_restored shared field_set_fields_placeholder fields_selected
     """.split()
 ) | frozenset(
     {
@@ -165,7 +169,7 @@ def test_public_article_runtime_keys_have_complete_four_language_seed_rows() -> 
     rows = _seed_rows()
     rows_by_key = {row[0]: row for row in rows}
 
-    assert len(REQUIRED_ARTICLE_RUNTIME_KEYS) == 104
+    assert len(REQUIRED_ARTICLE_RUNTIME_KEYS) == 113
     assert REQUIRED_ARTICLE_RUNTIME_KEYS <= rows_by_key.keys()
     for lang_key in REQUIRED_ARTICLE_RUNTIME_KEYS:
         _, fi, en, ch, yue, creation_spec = rows_by_key[lang_key]

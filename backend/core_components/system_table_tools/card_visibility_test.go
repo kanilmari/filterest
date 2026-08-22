@@ -242,7 +242,7 @@ func TestFieldViewGuardQueryProtectsRuntimeAndRequiredInputs(t *testing.T) {
 	}
 }
 
-func TestFieldViewOrderQueriesStayDatasetScopedAndGlobal(t *testing.T) {
+func TestFieldViewOrderQueryStaysDatasetScopedWithoutReorderingSavedCollections(t *testing.T) {
 	for _, contract := range []string{
 		"details.column_uid = $2",
 		"WHERE table_name = $3",
@@ -251,14 +251,7 @@ func TestFieldViewOrderQueriesStayDatasetScopedAndGlobal(t *testing.T) {
 			t.Fatalf("field order query missing %q", contract)
 		}
 	}
-	for _, contract := range []string{
-		"UPDATE system_user_column_settings",
-		"SET sort_order = $1",
-		"WHERE table_name = $2",
-		"settings.column_name = $3",
-	} {
-		if !strings.Contains(updateUserFieldViewOrderQuery, contract) {
-			t.Fatalf("global user order query missing %q", contract)
-		}
+	if strings.Contains(updateFieldViewColumnOrderQuery, "system_column_field_set_members") {
+		t.Fatal("global metadata order must not overwrite a user's saved field collection order")
 	}
 }

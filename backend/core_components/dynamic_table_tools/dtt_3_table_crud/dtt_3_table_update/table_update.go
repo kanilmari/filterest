@@ -71,12 +71,6 @@ func UpdateOidsAndTableNames(
 			WHERE ge.table_uid IS NOT NULL
 				AND cd.table_uid = ge.table_uid
 			RETURNING cd.id
-		), removed_col_settings AS (
-			DELETE FROM system_user_column_settings ucs
-			USING ghost_entries ge
-			WHERE ge.table_uid IS NOT NULL
-				AND ucs.table_uid = ge.table_uid
-			RETURNING ucs.id
 		), removed_row_views AS (
 			DELETE FROM system_table_row_view_counts rv
 			USING ghost_entries ge

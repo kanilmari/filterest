@@ -297,6 +297,7 @@ function ensureContentArea(tabPartsContainer, tableName) {
     } else if (contentArea.parentElement !== tabPartsContainer) {
         tabPartsContainer.insertBefore(contentArea, tabPartsContainer.firstChild);
     }
+    contentArea.dataset.tableName = tableName;
 
     let contentBody = contentArea.querySelector(".tab-content-body");
     if (!contentBody) {
@@ -321,7 +322,8 @@ export async function generate_table(
     data_types,
     rowCount = null,
     hasGeo = false,
-    tableMeta = null
+    tableMeta = null,
+    datasetPresentation = null
 ) {
     try {
         const tableSpecs = getAllSpecs();
@@ -377,7 +379,7 @@ export async function generate_table(
              * search bar) forms the right side. */
         }
 
-        const { contentBody } = ensureContentArea(
+        const { contentArea, contentBody } = ensureContentArea(
             tab_parts_container,
             dataset_name
         );
@@ -483,15 +485,24 @@ export async function generate_table(
 		const resultsSurface = document.createElement("div");
 		resultsSurface.classList.add("dataset-results-surface");
 		const datasetSpec = getAllSpecs()[dataset_name] || {};
-		const backgroundImagePath = typeof datasetSpec.dataset_background_image_path === "string"
-			? datasetSpec.dataset_background_image_path.trim()
+		const authoritativeBackgroundPath = datasetPresentation?.background_image_path;
+		const configuredBackgroundPath = typeof authoritativeBackgroundPath === "string"
+			? authoritativeBackgroundPath
+			: datasetSpec.dataset_background_image_path;
+		const backgroundImagePath = typeof configuredBackgroundPath === "string"
+			? configuredBackgroundPath.trim()
 			: "";
+		contentArea.classList.toggle(
+			"tab-content-area--has-dataset-background",
+			Boolean(backgroundImagePath)
+		);
 		if (backgroundImagePath) {
-			resultsSurface.classList.add("dataset-results-surface--has-background");
-			resultsSurface.style.setProperty(
+			contentArea.style.setProperty(
 				"--dataset-background-image",
 				`url("${encodeURI(backgroundImagePath).replaceAll('"', '%22')}")`
 			);
+		} else {
+			contentArea.style.removeProperty("--dataset-background-image");
 		}
 		scrollableContainer.appendChild(resultsSurface);
         if (currentViewElementPromise) {

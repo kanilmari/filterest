@@ -75,7 +75,9 @@ describe('stable_api_inventory', () => {
             'adminSitePresentationSettings',
             'adminUserAuthentication',
             'adminLangKey',
-            'listColumnViewPresets',
+            'getViewFieldSets',
+            'savePersonalViewFieldSet',
+            'saveSiteViewFieldSet',
             'checkJsonColumns',
         ]));
 

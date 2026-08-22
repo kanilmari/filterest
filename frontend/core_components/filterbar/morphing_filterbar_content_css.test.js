@@ -1,6 +1,8 @@
 // @vitest-environment node
 // morphing_filterbar_content_css.test.js
-// Locks the dataset-cover fade that keeps hero copy readable over photography.
+// Verifies presentation-media CSS for dataset hero and content backgrounds.
+// Bridges source styles with durable readability and data-surface contracts.
+// Exists to prevent photography from obscuring controls or record fields.
 
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -39,7 +41,8 @@ describe('morphing filterbar content CSS', () => {
         expect(defaultsRule).toContain('--dataset-cover-light-mask-edge-stop: 80%');
         expect(defaultsRule).toContain('--dataset-cover-hero-extra-height: 40px');
         expect(defaultsRule).toContain('--dataset-cover-hero-bottom-fade: 48px');
-        expect(defaultsRule).toContain('--dataset-cover-image-blur: 1px');
+        expect(defaultsRule).toContain('--dataset-cover-light-image-blur: 1px');
+        expect(defaultsRule).toContain('--dataset-cover-dark-image-blur: 1px');
         expect(defaultsRule).toContain(
             'padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height))'
         );
@@ -52,8 +55,10 @@ describe('morphing filterbar content CSS', () => {
         expect(coverRule).toContain('filter: blur(var(--dataset-cover-image-blur))');
         expect(darkRule).toContain('--dataset-cover-mask-image: var(--dataset-cover-dark-mask-image)');
         expect(darkRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-dark-image-opacity)');
+        expect(darkRule).toContain('--dataset-cover-image-blur: var(--dataset-cover-dark-image-blur)');
         expect(lightRule).toContain('--dataset-cover-mask-image: var(--dataset-cover-light-mask-image)');
         expect(lightRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-light-image-opacity)');
+        expect(lightRule).toContain('--dataset-cover-image-blur: var(--dataset-cover-light-image-blur)');
         expect(overlayRule).toContain('rgb(0 0 0 / var(--dataset-cover-overlay-opacity))');
         expect(overlayRule).toContain('calc(100% - var(--dataset-cover-hero-bottom-fade))');
         expect(overlayRule).toContain('var(--bg_color) 100%');
@@ -70,6 +75,39 @@ describe('morphing filterbar content CSS', () => {
 
         expect(subtitleRule).toContain('color: var(--text_color)');
         expect(sortRule).toContain('border: 1px solid var(--border_color)');
+    });
+
+    test('keeps record-bearing fields opaque over the shared dataset background', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
+        const expectedOpaqueSelectors = [
+            '.tab-content-area--has-dataset-background .table_from_db tbody td',
+            '.tab-content-area--has-dataset-background .tree-container .node-row',
+            '.tab-content-area--has-dataset-background .product-card-view-empty',
+        ];
+
+        for (const selector of expectedOpaqueSelectors) {
+            expect(css).toContain(`${selector} {`);
+        }
+        expect(css).toContain('background-color: var(--bg_color_2)');
+        expect(css).toContain(
+            'background: color-mix(in srgb, var(--bg_color_card_frame) 78%, var(--bg_color_2) 22%)'
+        );
+        expect(css).toContain(
+            '.tab-content-area--has-dataset-background .price-chart-view__status-item,\n'
+            + '.tab-content-area--has-dataset-background .price-chart-view__notice {'
+        );
+        expect(css).toContain('background: var(--price-chart-panel)');
+        expect(css).toContain(
+            '.tab-content-area--has-dataset-background .scrollable_content {\n\tbackground-color: transparent;'
+        );
+        expect(css).toContain(
+            '.tab-content-area--has-dataset-background .filterbar-inline-hero {\n\tbackground: transparent;'
+        );
+        expect(css).toContain(
+            '.tab-content-area--has-dataset-background .filterbar-inline-hero--has-cover::after {\n\topacity: var(--dataset-cover-image-opacity);'
+        );
+        expect(css).toContain('filter: blur(var(--dataset-background-image-blur, 0px))');
+        expect(css).toContain('clip-path: inset(var(--dataset-background-image-blur, 0px))');
     });
 
     test('keeps the compact palette inside the visible area and scrollable', () => {

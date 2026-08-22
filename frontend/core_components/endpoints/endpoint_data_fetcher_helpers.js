@@ -54,11 +54,13 @@ export function buildDatasetQueryParams({
     row_count = null,
     include_card_support = false,
     include_map_support = false,
+    view_key = null,
 }) {
     const params = new URLSearchParams();
 
     params.append('dataset', dataset_name);
     params.append('offset', offset);
+    if (view_key) params.append('view_key', view_key);
 
     if (lang) {
         params.append('lang', lang);

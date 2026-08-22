@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"easelect/backend/core_components/dynamic_table_tools/ai_features"
+	row_mutation_policy "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
 
@@ -66,6 +67,10 @@ func AddRowMultipartHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 // Between: HTTP Request -> Database & Filesystem
 // Why: Main handler for adding a new row with potential child rows and file uploads.
 func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName string) {
+	if row_mutation_policy.RequiresDedicatedMutationAPI(tableName) {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
+		return
+	}
 	tx, ok := dbutils.GetTx(r.Context())
 	if !ok {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
