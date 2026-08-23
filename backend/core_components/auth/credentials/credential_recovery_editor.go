@@ -446,7 +446,6 @@ func deletePendingVerificationCodes(ctx context.Context, tx *sql.Tx, userID int6
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM restricted.verification_codes
 		WHERE user_id = $1
-		  AND used IS FALSE
 	`, userID); err != nil {
 		return fmt.Errorf("delete pending administrator verification codes: %w", err)
 	}

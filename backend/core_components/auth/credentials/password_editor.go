@@ -61,7 +61,6 @@ func ChangePassword(ctx context.Context, db *sql.DB, userID int, newPassword str
 	if _, err = tx.ExecContext(ctx, `
 		DELETE FROM restricted.verification_codes
 		WHERE user_id = $1
-		  AND used IS FALSE
 	`, userID); err != nil {
 		return 0, fmt.Errorf("invalidate pending verification codes: %w", err)
 	}

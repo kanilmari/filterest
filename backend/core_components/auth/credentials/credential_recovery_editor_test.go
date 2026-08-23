@@ -31,6 +31,7 @@ type recoveryDriverState struct {
 	failAudit     bool
 	updateArgs    []driver.NamedValue
 	cleanupArgs   []driver.NamedValue
+	cleanupQuery  string
 	auditArgs     []driver.NamedValue
 	newGeneration int64
 }
@@ -134,6 +135,7 @@ func (connection *recoveryConnection) ExecContext(
 			return nil, errors.New("verification-code cleanup failed")
 		}
 		connection.state.cleanupArgs = append([]driver.NamedValue(nil), args...)
+		connection.state.cleanupQuery = query
 		return driver.RowsAffected(2), nil
 	}
 	if !strings.Contains(query, "INSERT INTO system_audit_log") {
@@ -590,6 +592,9 @@ func TestChangePasswordCommitsGenerationAndPendingCodeInvalidationTogether(t *te
 	}
 	if len(state.cleanupArgs) != 1 || state.cleanupArgs[0].Value != int64(42) {
 		t.Fatalf("verification-code cleanup args = %#v", state.cleanupArgs)
+	}
+	if !strings.Contains(state.cleanupQuery, "WHERE user_id = $1") || strings.Contains(state.cleanupQuery, "used") {
+		t.Fatalf("verification-code cleanup query must target every remaining user challenge: %s", state.cleanupQuery)
 	}
 }
 

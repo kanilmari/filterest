@@ -71,7 +71,7 @@ PY
 }
 
 assert_durable_compose_image_patchable() {
-    python3 - "$COMPOSE_FILE" "$OLD_IMAGE" <<'PY'
+    python3 - "$COMPOSE_FILE" "$DURABLE_APP_IMAGE" <<'PY'
 from pathlib import Path
 import re
 import sys
