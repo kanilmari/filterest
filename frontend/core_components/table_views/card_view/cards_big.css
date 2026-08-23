@@ -50,11 +50,13 @@
     padding-inline: 1rem;
 }
 
-.card_image_content--clickable {
+.card_image_content--clickable,
+.big_card_image > [data-image-first-src] {
     cursor: pointer;
 }
 
-.card_image_content--clickable [role="button"]:focus-visible {
+.card_image_content--clickable [role="button"]:focus-visible,
+.big_card_image > [data-image-first-src]:focus-visible {
     outline: 2px solid var(--primary_color, hsl(207deg 70% 53%));
     outline-offset: -2px;
 }
@@ -354,7 +356,8 @@
     display: flex;
     justify-content: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem 0;
+    /* stylelint-disable-next-line shorthand-property-no-redundant-values -- The explicit top/right-bottom alignment mirrors the adjacent modal controls. */
+    padding: 0 1rem 0;
     background: var(--bg_color_extreme);
 }
 

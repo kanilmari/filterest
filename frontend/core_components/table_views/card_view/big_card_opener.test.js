@@ -281,6 +281,7 @@ describe("openRowArticleView", () => {
             "S",
             false,
             1,
+            { selectedCard },
         );
         expect(buildSlug).toHaveBeenCalledWith("Services");
         expect(document.body.textContent).not.toContain('{"en"');
@@ -387,6 +388,7 @@ describe("openRowArticleView", () => {
             expect.any(String),
             expect.any(Boolean),
             expect.any(Number),
+            { selectedCard },
         );
     });
 
@@ -422,6 +424,7 @@ describe("openRowArticleView", () => {
             expect.any(String),
             expect.any(Boolean),
             expect.any(Number),
+            { selectedCard },
         );
     });
 

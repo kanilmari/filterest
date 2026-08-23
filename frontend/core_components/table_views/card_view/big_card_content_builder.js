@@ -40,6 +40,7 @@ import { resolveRowArticleRelationDetailEntries } from "./relation_detail_helper
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
 import { resolveRowArticleTimestampDisplayOptions } from "./row_article_presentation_settings.js";
+import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 
 const DETAILS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
 
@@ -68,7 +69,8 @@ export async function buildRowArticleContent(
     creation_seed,
     header_first_letter,
     table_has_image_role,
-    current_user_id = null
+    current_user_id = null,
+    { selectedCard = null } = {},
 ) {
     const rowArticleContentElement = document.createElement("div");
     rowArticleContentElement.classList.add("big_card_content", "row_article_content");
@@ -311,6 +313,12 @@ export async function buildRowArticleContent(
                         preferred_image_alt_label,
                         CARD_IMAGE_RENDER_SLOTS.ROW_ARTICLE_INLINE
                     ),
+                });
+                bindImageFirstViewActivation(imageWrapper, {
+                    imageSrc: src,
+                    rowItem: row_item,
+                    tableName: table_name,
+                    selectedCard,
                 });
                 imgDiv.appendChild(imageWrapper);
                 rowArticleContentElement.appendChild(imgDiv);

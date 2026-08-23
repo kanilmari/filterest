@@ -12,6 +12,7 @@ const {
     createRowArticleKeyValueElementMock,
     createRowArticleNavigableElementMock,
     createTicketStatusBadgeMock,
+    bindImageFirstViewActivationMock,
     isTicketStatusFieldMock,
     resolveRowArticleTimestampDisplayOptionsMock,
     resolveRowArticleRelationDetailEntriesMock,
@@ -21,6 +22,7 @@ const {
     createRowArticleKeyValueElementMock: vi.fn(),
     createRowArticleNavigableElementMock: vi.fn(),
     createTicketStatusBadgeMock: vi.fn(),
+    bindImageFirstViewActivationMock: vi.fn(),
     isTicketStatusFieldMock: vi.fn(),
     resolveRowArticleTimestampDisplayOptionsMock: vi.fn(),
     resolveRowArticleRelationDetailEntriesMock: vi.fn((entries) => entries),
@@ -65,6 +67,10 @@ vi.mock('./card_element_builder.js', () => ({
 vi.mock('./card_avatar_builder.js', () => ({
     createImageElement: createImageElementMock,
     create_seeded_avatar: createSeededAvatarMock,
+}));
+
+vi.mock('./image_first_view_activation.js', () => ({
+    bindImageFirstViewActivation: bindImageFirstViewActivationMock,
 }));
 
 vi.mock('../../../ui_config.js', () => ({
@@ -116,6 +122,7 @@ describe('big_card_content_builder', () => {
         createRowArticleKeyValueElementMock.mockReset();
         createRowArticleNavigableElementMock.mockReset();
         createTicketStatusBadgeMock.mockReset();
+        bindImageFirstViewActivationMock.mockReset();
         createTicketStatusBadgeMock.mockImplementation(() => document.createElement('div'));
         isTicketStatusFieldMock.mockReset();
         isTicketStatusFieldMock.mockReturnValue(false);
@@ -394,6 +401,7 @@ describe('big_card_content_builder', () => {
         );
 
         const inlineImage = built.rowArticleContentElement.querySelector('.big_card_image');
+        const imageWrapper = inlineImage?.querySelector('.wrapper');
 
         expect(inlineImage?.dataset.rowArticleImageColumn).toBe('cached_image');
         expect(inlineImage?.dataset.rowArticleImageSlot).toBe(CARD_IMAGE_RENDER_SLOTS.ROW_ARTICLE_INLINE);
@@ -407,6 +415,15 @@ describe('big_card_content_builder', () => {
                 imageTypeId: 1,
                 imageMetadata: JSON.stringify({ logo_variant: 'firefox' }),
             })
+        );
+        expect(bindImageFirstViewActivationMock).toHaveBeenCalledWith(
+            imageWrapper,
+            expect.objectContaining({
+                imageSrc: imagePath,
+                rowItem: expect.objectContaining({ title: 'Firefox' }),
+                tableName: 'app_service_catalog',
+                selectedCard: null,
+            }),
         );
     });
 

@@ -147,7 +147,8 @@ export async function openRowArticleView(
             creation_seed,
             header_first_letter,
             table_has_image_role,
-            current_user_id
+            current_user_id,
+            { selectedCard },
         );
 
         const rowArticleLoadSession = createRowArticleLoadSession({

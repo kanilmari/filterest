@@ -31,7 +31,17 @@ vi.mock('./row_article_opener.js', () => ({
 }));
 
 vi.mock('./image_first_view_activation.js', () => ({
-    activateImageFirstView: openImageFirstViewMock,
+    bindImageFirstViewActivation: vi.fn((element, options) => {
+        element.tabIndex = 0;
+        element.setAttribute('role', 'button');
+        element.dataset.imageFirstSrc = options.imageSrc;
+        const open = () => openImageFirstViewMock(options);
+        element.addEventListener('click', open);
+        element.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') open();
+        });
+        return element;
+    }),
 }));
 
 vi.mock('../../../reusable_components/modal/modal_builder.js', () => ({
