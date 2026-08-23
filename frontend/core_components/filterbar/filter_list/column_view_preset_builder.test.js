@@ -47,6 +47,7 @@ beforeEach(() => {
         effective_scope: "personal",
         available_columns: ["title", "id"],
         visible_columns: ["title"],
+        can_edit_personal: true,
         can_edit_site_default: true,
         field_sets: [
             { id: 7, name: "Mine", scope: "personal", visible_columns: ["title"] },
@@ -75,6 +76,7 @@ test("keeps calendar as its own field-selection dimension", async () => {
         effective_scope: "personal",
         available_columns: ["title", "phone"],
         visible_columns: ["title"],
+        can_edit_personal: true,
         can_edit_site_default: false,
         field_sets: [{ id: 7, name: "Mine", scope: "personal", visible_columns: ["title"] }],
     });
@@ -113,4 +115,25 @@ test("administrator mode selects and updates the separate site default", async (
         dataset: "orders", view_key: "card", field_set_id: 8,
     }));
     expect(api.assignPersonalViewFieldSet).not.toHaveBeenCalled();
+});
+
+test("guest inherits the site default without personal collection actions", async () => {
+    api.getViewFieldSets.mockResolvedValue({
+        active_field_set_id: 8,
+        personal_field_set_id: null,
+        site_default_field_set_id: 8,
+        effective_scope: "site",
+        available_columns: ["title", "id"],
+        visible_columns: ["title"],
+        can_edit_personal: false,
+        can_edit_site_default: false,
+        field_sets: [{ id: 8, name: "Site", scope: "shared", visible_columns: ["title"] }],
+    });
+    const { buildColumnViewPresetSelector } = await import("./column_view_preset_builder.js");
+    const row = buildColumnViewPresetSelector("orders", ["title", "id"], "card");
+    await vi.waitFor(() => expect(api.getViewFieldSets).toHaveBeenCalledWith("orders", "card"));
+
+    expect(row.querySelector("select").hidden).toBe(true);
+    expect(row.querySelector(".column-preset-actions").hidden).toBe(true);
+    expect(localStorage.getItem("orders_card_hide_columns")).toBe('{"id":true}');
 });

@@ -7,11 +7,14 @@ package row_mutation_policy
 import "strings"
 
 var dedicatedMutationAPITables = map[string]struct{}{
-	"dev_agent_worklines":             {},
-	"dev_agent_workline_reports":      {},
-	"dev_agent_workline_tasks":        {},
-	"dev_agent_handover_reports":      {},
-	"dev_agent_handover_report_items": {},
+	"dev_agent_worklines":               {},
+	"dev_agent_workline_reports":        {},
+	"dev_agent_workline_tasks":          {},
+	"dev_agent_handover_reports":        {},
+	"dev_agent_handover_report_items":   {},
+	"system_column_field_sets":          {},
+	"system_column_field_set_members":   {},
+	"system_view_field_set_assignments": {},
 }
 
 // RequiresDedicatedMutationAPI reports whether generic row writes are forbidden.

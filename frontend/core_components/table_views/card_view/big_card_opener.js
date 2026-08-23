@@ -103,16 +103,15 @@ export async function openRowArticleView(
          * 3. AVATAR / KUVA PRE-CALC
          * -------------------------------------------------- */
         let header_first_letter = "";
+        let row_presentation_label = "";
         for (const col of sorted_columns) {
-            const { baseRoles } = parseRoleString(
-                data_types[col]?.card_element || ""
-            );
+            const { baseRoles } = parseRoleString(data_types[col]?.card_element || "");
             if (baseRoles.includes("header")) {
-                const txt = resolveDatasetDisplayValue(
-                    row_item[col],
-                    data_types?.[col] || null
-                ).trim();
-                if (txt) header_first_letter = txt[0];
+                const txt = resolveDatasetDisplayValue(row_item[col], data_types?.[col] || null).trim();
+                if (txt) {
+                    header_first_letter = txt[0];
+                    if (!row_presentation_label) row_presentation_label = txt;
+                }
             }
         }
 
@@ -247,6 +246,7 @@ export async function openRowArticleView(
                             rowItem: row_item,
                             tableName: table_name,
                             selectedCard,
+                            rowLabel: row_presentation_label,
                         },
                     };
                     return buildRowArticleImageGallery(

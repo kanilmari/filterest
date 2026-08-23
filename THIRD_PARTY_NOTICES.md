@@ -6,13 +6,13 @@ not legal advice and still needs human/project approval before publication.
 
 ## Candidate
 
-- Filterest app version: `8.40.0`
-- Database version: `9.6.0`
+- Filterest app version: `8.40.2`
+- Database version: `9.6.1`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
 - Go modules listed: `96`
 - npm packages listed: `441`
-- bundled asset files listed: `141`
+- bundled asset files listed: `143`
 - dependency rows still requiring license review: `0`
 
 ## Review Notes
@@ -55,7 +55,7 @@ not legal advice and still needs human/project approval before publication.
 - `.ico`: 1
 - `.jpg`: 22
 - `.png`: 18
-- `.svg`: 100
+- `.svg`: 102
 
 ## Go Modules
 
@@ -639,6 +639,8 @@ not legal advice and still needs human/project approval before publication.
 | `frontend/icons/general/filterbar-toggle-icon.svg` | `.svg` |
 | `frontend/icons/general/minimize-panel-icon.svg` | `.svg` |
 | `frontend/icons/general/modal-close-icon.svg` | `.svg` |
+| `frontend/icons/general/record-next-icon.svg` | `.svg` |
+| `frontend/icons/general/record-previous-icon.svg` | `.svg` |
 | `frontend/icons/general/table-tools-icon.svg` | `.svg` |
 | `frontend/icons/general/trash-icon.svg` | `.svg` |
 | `frontend/icons/general/user-person-icon.svg` | `.svg` |

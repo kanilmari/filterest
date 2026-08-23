@@ -11,6 +11,7 @@ import {
     getCurrentSiteName,
 } from "../state_stores/site_identity_reader.js";
 import { createSymbolMaskElement } from "../../reusable_components/symbol_asset_resolver.js";
+import { appendAdminUpdatePreview } from "./admin_update_preflight_view.js";
 
 export const ADMIN_VERSION_INFO_ROUTE = "/api/admin/version-info";
 
@@ -624,6 +625,7 @@ async function hydrateAdminVersionInfoIndicator(
             const panelTitle = getAdminSiteInfoTitle(language);
             panel.setAttribute("aria-label", panelTitle);
             renderAdminVersionInfoRows(panel, rows, panelTitle);
+            appendAdminUpdatePreview(panel, versionInfo, language, positionOpenPanel);
             positionOpenPanel();
         };
 

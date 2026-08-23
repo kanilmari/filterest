@@ -53,6 +53,12 @@ describe("row article presentation", () => {
             card.className = "card";
             card.dataset.id = String(id);
             card._row = { id };
+            const media = document.createElement("div");
+            media.className = "card_image";
+            const previewSource = document.createElement("div");
+            previewSource.dataset.imageFirstSrc = `/storage/row-${id}.svg`;
+            media.appendChild(previewSource);
+            card.appendChild(media);
             container.appendChild(card);
         });
         const onNavigate = vi.fn();
@@ -63,8 +69,32 @@ describe("row article presentation", () => {
         });
 
         expect(navigation.getAttribute("aria-label")).toBe("Article records");
-        navigation.querySelector("[data-testid='row-article-previous-row']").click();
-        navigation.querySelector("[data-testid='row-article-next-row']").click();
+        const previousButton = navigation.querySelector(
+            "[data-testid='row-article-previous-row']",
+        );
+        const nextButton = navigation.querySelector(
+            "[data-testid='row-article-next-row']",
+        );
+        expect(
+            previousButton.querySelector(".row_article_row_navigation_icon")
+                .style.maskImage,
+        ).toContain("record-previous-icon.svg");
+        expect(
+            nextButton.querySelector(".row_article_row_navigation_icon")
+                .style.maskImage,
+        ).toContain("record-next-icon.svg");
+        expect(
+            previousButton.querySelector(".row_article_row_navigation_preview").src,
+        ).toContain("/storage/row-1.svg");
+        expect(
+            nextButton.querySelector(".row_article_row_navigation_preview").src,
+        ).toContain("/storage/row-3.svg");
+        expect(previousButton.firstElementChild.classList)
+            .toContain("row_article_row_navigation_icon");
+        expect(nextButton.firstElementChild.classList)
+            .toContain("row_article_row_navigation_preview");
+        previousButton.click();
+        nextButton.click();
 
         expect(onNavigate.mock.calls.map(([row]) => row.id)).toEqual([1, 3]);
     });

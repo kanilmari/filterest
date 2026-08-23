@@ -45,7 +45,7 @@ vi.mock("../../lang/translation_handler.js", () => ({
 }));
 
 vi.mock("../../../ui_config.js", () => ({
-    enable_experimental_row_article_row_navigation: false,
+    enable_experimental_row_article_row_navigation: true,
     image_first_view_details_position: "after_description",
 }));
 
@@ -106,5 +106,35 @@ describe("openImageFirstView", () => {
         const closeView = openImageModalContentMock.mock.results[0].value.close;
         view.querySelector('[data-testid="row-article-image-first-stage"]').click();
         expect(closeView).toHaveBeenCalledOnce();
+    });
+
+    test("hands record navigation to the modal controls instead of the image shell", async () => {
+        const cardContainer = document.createElement("div");
+        cardContainer.className = "card_container";
+        const cards = [2, 3, 4].map((id) => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.dataset.id = String(id);
+            card._row = { id, title: `Row ${id}` };
+            cardContainer.appendChild(card);
+            return card;
+        });
+        document.body.appendChild(cardContainer);
+
+        await openImageFirstView({
+            imageSrc: "/storage/hero.png",
+            imageRows: [{ id: 11, asset_kind: "image", filename: "hero.png" }],
+            rowItem: { id: 3, title: "Example", description: "Body" },
+            tableName: "examples",
+            selectedCard: cards[1],
+        });
+
+        const modalOptions = openImageModalContentMock.mock.calls[0][0];
+        const navigation = modalOptions.topControlElements[0];
+        expect(navigation).toBeInstanceOf(HTMLElement);
+        expect(navigation.classList).toContain("row_article_row_navigation");
+        expect(modalOptions.contentElement.contains(navigation)).toBe(false);
+        expect(modalOptions.contentElement.firstElementChild.classList)
+            .toContain("row_article_image_first_stage");
     });
 });

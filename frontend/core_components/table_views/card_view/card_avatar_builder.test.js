@@ -23,6 +23,33 @@ describe('createImageElement', () => {
         expect(image?.style.borderRadius).toBe('6px');
     });
 
+    test('uses the shared framed mark-and-label presentation for ordinary SVG media', () => {
+        const wrapper = createImageElement('/storage/77/88/300/vendor.svg?rev=2', true, {
+            tableName: 'app_vendors',
+            rowLabel: 'Vendor name',
+            renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
+        });
+
+        expect(wrapper.dataset.imagePresentationKind).toBe('svg-logo');
+        expect(wrapper.classList.contains('record_svg_image_frame')).toBe(true);
+        expect(wrapper.querySelector('.record_svg_image_presentation__mark')?.getAttribute('src'))
+            .toContain('/storage/77/88/300/vendor.svg?rev=2');
+        expect(wrapper.querySelector('.record_svg_image_presentation__label')?.textContent)
+            .toBe('Vendor name');
+    });
+
+    test('keeps raster media on the existing plain image path', () => {
+        const wrapper = createImageElement('/storage/77/88/300/photo.webp', true, {
+            tableName: 'app_vendors',
+            rowLabel: 'Vendor name',
+        });
+
+        expect(wrapper.dataset.imagePresentationKind).toBe('raster');
+        expect(wrapper.querySelector('.record_svg_image_presentation')).toBeNull();
+        expect(wrapper.querySelector('img')?.getAttribute('src'))
+            .toBe('/storage/77/88/300/photo.webp');
+    });
+
     test.each([
         ['/storage/104/6005/300/104_6005_7005.svg', 'firefox', 'Firefox'],
         ['/storage/104/6007/300/104_6007_7007.svg', 'thunderbird', 'Thunderbird'],
@@ -52,11 +79,14 @@ describe('createImageElement', () => {
         expect(image?.classList.contains('service-catalog-css-logo__mark')).toBe(true);
         expect(image?.hidden).toBe(false);
         expect(cssLogo?.getAttribute('aria-label')).toBe(rowLabel);
+        expect(cssLogo?.classList.contains('record_image_logo_presentation')).toBe(true);
         expect(cssLogo?.classList.contains('service-catalog-css-logo--mark-title')).toBe(true);
         expect(cssLogo?.classList.contains(`service-catalog-css-logo--${expectedVariant}`)).toBe(true);
         expect(logoMark?.getAttribute('aria-hidden')).toBe('true');
+        expect(logoMark?.classList.contains('record_image_logo_presentation__mark')).toBe(true);
         expect(logoMark?.getAttribute('src')).toBe(imagePath);
         expect(logoTitle?.textContent).toBe(rowLabel);
+        expect(logoTitle?.classList.contains('record_image_logo_presentation__label')).toBe(true);
         expect(logoTitle?.style.getPropertyValue('--service-logo-title-length')).toBe(String(rowLabel.length));
     });
 
@@ -155,7 +185,7 @@ describe('createImageElement', () => {
         expect(logoTitle?.style.getPropertyValue('--service-logo-title-length')).toBe('7');
     });
 
-    test('renders typed service-catalog logo image as mark-only in small thumbnail slots', () => {
+    test('renders typed service-catalog logo image with its name in small thumbnail slots', () => {
         const wrapper = createImageElement('/storage/104/6005/300/104_6005_7005.svg', true, {
             tableName: 'app_service_catalog',
             rowLabel: 'Firefox',
@@ -166,13 +196,13 @@ describe('createImageElement', () => {
         const cssLogo = wrapper.querySelector('.service-catalog-css-logo');
         const logoMark = cssLogo?.querySelector('.service-catalog-css-logo__mark');
 
-        expect(wrapper.dataset.serviceCatalogLogoPresentation).toBe('mark-only');
-        expect(wrapper.dataset.serviceCatalogLogoShowLabel).toBe('false');
+        expect(wrapper.dataset.serviceCatalogLogoPresentation).toBe('mark-title');
+        expect(wrapper.dataset.serviceCatalogLogoShowLabel).toBe('true');
         expect(wrapper.querySelectorAll('img')).toHaveLength(1);
-        expect(cssLogo?.classList.contains('service-catalog-css-logo--mark-only')).toBe(true);
+        expect(cssLogo?.classList.contains('service-catalog-css-logo--mark-title')).toBe(true);
         expect(logoMark?.tagName).toBe('IMG');
         expect(logoMark?.getAttribute('src')).toBe('/storage/104/6005/300/104_6005_7005.svg');
-        expect(cssLogo?.querySelector('.service-catalog-css-logo__title')).toBeNull();
+        expect(cssLogo?.querySelector('.service-catalog-css-logo__title')?.textContent).toBe('Firefox');
     });
 
     test('renders typed service-catalog logo image with a label in row article media slots', () => {

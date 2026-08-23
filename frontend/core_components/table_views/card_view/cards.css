@@ -1542,12 +1542,19 @@ body.dark-mode .card--modern {
 }
 
 .card_small_image_inner.service_catalog_logo_frame .service-catalog-css-logo {
-    padding: 5px;
+    gap: 1px;
+    padding: 5px 4px 3px;
 }
 
 .card_small_image_inner.service_catalog_logo_frame .service-catalog-css-logo__mark {
-    width: 100%;
-    height: 100%;
+    width: 80%;
+    height: 80%;
+}
+
+.card_small_image_inner.service_catalog_logo_frame .service-catalog-css-logo__title {
+    --service-logo-title-min-size: 0.42rem;
+    --service-logo-title-max-size: 0.58rem;
+    --service-logo-title-offset-y: 0;
 }
 
 /* Ensure generated avatars scale within the small summary container */

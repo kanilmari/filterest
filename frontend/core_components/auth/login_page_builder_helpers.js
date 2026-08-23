@@ -1,6 +1,7 @@
-// login_page_builder_helpers.js
-// Pure helper functions extracted from login_page_builder.js for testability.
-// Zero DOM access — all functions are pure input→output.
+// Provides pure value builders and navigation guards for the login workflow.
+// Bridges pre-auth form state, redirect inputs, and browser location metadata.
+// Keeps DOM-free authentication decisions independently testable.
+// Exists so login routing and safety rules have one deterministic source.
 
 /**
  * Translate a backend error code into a Finnish user-facing message.
@@ -163,25 +164,51 @@ function normalizeSameOriginRedirect(candidate, currentOrigin) {
     }
 }
 
+const NON_PUBLIC_LOGIN_RETURN_PREFIXES = [
+    '/admin',
+    '/api',
+    '/first-run',
+    '/login',
+    '/register',
+    '/system',
+];
+
 /**
- * Compute the close-button redirect target.
- * Returns the referrer if it's same-origin and not the current page, otherwise '/'.
+ * Resolve a safe destination from the optional-browsing standalone login page.
+ * Between the login document referrer and public app routes, it permits an exact
+ * same-origin return while rejecting auth, admin, API, and recovery-loop paths.
+ * Why: a guest should be able to leave login without reopening a protected route.
  *
  * @param {string} referrer - document.referrer
  * @param {string} currentOrigin - window.location.origin
- * @param {string} currentPathname - window.location.pathname
- * @returns {string} target URL
+ * @param {string} loginSearch - window.location.search on the login page
+ * @returns {string} safe relative destination, defaulting to '/'
  */
-export function computeCloseTarget(referrer, currentOrigin, currentPathname) {
-    if (referrer && referrer.startsWith(currentOrigin)) {
-        try {
-            const refUrl = new URL(referrer);
-            if (refUrl.pathname !== currentPathname) {
-                return referrer;
-            }
-        } catch {
-            // invalid URL — fall through to default
-        }
+export function computeStandaloneLoginBackTarget(referrer, currentOrigin, loginSearch = '') {
+    const loginParams = new URLSearchParams(loginSearch || '');
+    if (loginParams.has('redirect') || loginParams.has('auth_notice')) {
+        return '/';
     }
-    return '/';
+
+    try {
+        const refUrl = new URL(referrer);
+        if (refUrl.origin !== currentOrigin || !isPublicLoginReturnPath(refUrl)) {
+            return '/';
+        }
+        return `${refUrl.pathname}${refUrl.search}${refUrl.hash}`;
+    } catch {
+        return '/';
+    }
+}
+
+function isPublicLoginReturnPath(refUrl) {
+    const normalizedPath = refUrl.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+    if (NON_PUBLIC_LOGIN_RETURN_PREFIXES.some((prefix) => (
+        normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`)
+    ))) {
+        return false;
+    }
+
+    return !refUrl.searchParams.has('login-entry')
+        && !refUrl.searchParams.has('register-entry');
 }

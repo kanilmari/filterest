@@ -1,4 +1,7 @@
-<!-- login.html -->
+<!-- Renders the standalone and fragment variants of the shared login form. -->
+<!-- Bridges backend template state with pre-auth controls and login JavaScript. -->
+<!-- Keeps modal-only and public standalone navigation controls explicitly separate. -->
+<!-- Exists to provide one multilingual authentication surface across entry modes. -->
 <!DOCTYPE html>
 <html lang="fi">
 
@@ -39,33 +42,62 @@
     <main class="auth-page-shell" data-testid="login-page-shell">
         <div class="auth-page-content-card">
             <div class="auth-page-header-row" data-testid="login-page-header-row">
-                <div class="auth-page-tablist" role="tablist" aria-label="Authentication sections" data-testid="login-page-tablist">
+                <div class="auth-page-header-leading">
+                {{if .ShowBackButton}}
                     <button
                         type="button"
-                        class="auth-page-tab is-active"
-                        role="tab"
-                        id="auth-tab-login"
-                        aria-selected="true"
-                        aria-controls="auth-panel-login"
-                        data-auth-tab-target="login"
-                        data-testid="login-page-tab-login"
-                        data-lang-key="login">Login</button>
-                    <button
-                        type="button"
-                        class="auth-page-tab"
-                        role="tab"
-                        id="auth-tab-tour"
-                        aria-selected="false"
-                        aria-controls="auth-panel-tour"
-                        data-auth-tab-target="tour"
-                        data-testid="login-page-tab-tour"
-                        data-lang-key="login_page_tab_tour">Tour</button>
+                        class="button auth-toolbar-button auth-page-return-button"
+                        title="Back"
+                        aria-label="Back"
+                        data-title-lang-key="back"
+                        data-aria-label-lang-key="back"
+                        data-auth-public-back
+                        data-testid="auth-page-back-button">
+                        <span class="auth-public-back-icon" aria-hidden="true"></span>
+                        <span data-lang-key="back">Back</span>
+                    </button>
+                {{end}}
                 </div>
                 <div
                     class="auth-top-controls"
                     data-auth-preference-controls
                     data-auth-controls-context="login"
                     data-testid="login-page-controls"></div>
+                {{if .ShowBackButton}}
+                <button
+                    type="button"
+                    class="button auth-toolbar-button auth-page-close-button"
+                    title="Close"
+                    aria-label="Close"
+                    data-title-lang-key="close"
+                    data-aria-label-lang-key="close"
+                    data-auth-public-back
+                    data-testid="auth-page-close-button">
+                    <span class="auth-public-close-icon" aria-hidden="true"></span>
+                </button>
+                {{end}}
+            </div>
+            <div class="auth-page-tablist" role="tablist" aria-label="Authentication sections" data-testid="login-page-tablist">
+                <button
+                    type="button"
+                    class="auth-page-tab is-active"
+                    role="tab"
+                    id="auth-tab-login"
+                    aria-selected="true"
+                    aria-controls="auth-panel-login"
+                    data-auth-tab-target="login"
+                    data-testid="login-page-tab-login"
+                    data-lang-key="login">Login</button>
+                <button
+                    type="button"
+                    class="auth-page-tab"
+                    role="tab"
+                    id="auth-tab-tour"
+                    aria-selected="false"
+                    aria-controls="auth-panel-tour"
+                    data-auth-tab-target="tour"
+                    data-testid="login-page-tab-tour"
+                    data-lang-key="login_page_tab_tour">Tour</button>
             </div>
             <section
                 class="auth-page-tab-panel auth-page-login-panel"
@@ -83,12 +115,16 @@
             </div>
         </div>
         <form method="POST" action="/api/login" class="auth-form form_with_border" data-testid="login-form">
-        {{if .ShowCloseButton}}
-            <button type="button" class="auth-form-close-button" aria-label="Close" data-testid="auth-form-close-button">
-                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
-            </button>
-        {{end}}
         <h2 data-lang-key="login"></h2>
+
+        <div
+            id="login-session-notice"
+            class="auth-session-notice"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            data-testid="login-session-notice"
+            hidden></div>
 
         <label for="username" data-lang-key="username_or_email"></label>
         <input type="text" id="username" name="username" required autocomplete="username" aria-label="Username" data-testid="login-username">
@@ -143,7 +179,21 @@
             </label>
         </div>
 
-        <div id="submit">
+        <div id="submit" class="auth-submit-actions{{if .ShowBackButton}} auth-submit-actions--with-back{{end}}">
+        {{if .ShowBackButton}}
+            <button
+                type="button"
+                class="auth-submit-back-button"
+                title="Back"
+                aria-label="Back"
+                data-title-lang-key="back"
+                data-aria-label-lang-key="back"
+                data-auth-public-back
+                data-testid="auth-submit-back-button">
+                <span class="auth-public-back-icon" aria-hidden="true"></span>
+                <span data-lang-key="back">Back</span>
+            </button>
+        {{end}}
             <input type="submit" class="saturate_on_hover" data-lang-key="login" value="Login" data-testid="login-submit">
         </div>
 

@@ -11,13 +11,16 @@ import {
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 const IMAGE_MODAL_CONTROL_IDLE_DELAY_MS = 1200;
+const IMAGE_MODAL_SCROLL_HINT_HIDE_THRESHOLD_PX = 70;
 const IMAGE_MODAL_TRANSIENT_CONTROL_SELECTOR = [
     ".modal_close_button",
     ".row_article_image_first_arrow",
     ".row_article_row_navigation_button",
+    ".row_article_image_first_scroll_hint",
 ].join(", ");
 const imageModalControlTimers = new WeakMap();
 const imageModalFocusHandlers = new WeakMap();
+const imageModalScrollHandlers = new WeakMap();
 
 function isTransientImageControl(target) {
     return target instanceof Element
@@ -79,6 +82,36 @@ function installTransientImageControls(modalOverlay) {
     const focusHandler = () => revealControls();
     modalOverlay.addEventListener("focusin", focusHandler);
     imageModalFocusHandlers.set(modalOverlay, focusHandler);
+
+    const previousScrollBinding = imageModalScrollHandlers.get(modalOverlay);
+    if (previousScrollBinding) {
+        previousScrollBinding.element.removeEventListener(
+            "scroll",
+            previousScrollBinding.handler,
+        );
+    }
+    const scrollContainer = modalOverlay.querySelector(
+        ".image_modal.image_first_view_modal .modal_body",
+    );
+    if (scrollContainer) {
+        const syncScrollHintVisibility = () => {
+            modalOverlay.classList.toggle(
+                "image-modal-content-scrolled",
+                scrollContainer.scrollTop > IMAGE_MODAL_SCROLL_HINT_HIDE_THRESHOLD_PX,
+            );
+        };
+        scrollContainer.addEventListener("scroll", syncScrollHintVisibility, {
+            passive: true,
+        });
+        imageModalScrollHandlers.set(modalOverlay, {
+            element: scrollContainer,
+            handler: syncScrollHintVisibility,
+        });
+        syncScrollHintVisibility();
+    } else {
+        modalOverlay.classList.remove("image-modal-content-scrolled");
+        imageModalScrollHandlers.delete(modalOverlay);
+    }
     revealControls();
 }
 
@@ -91,6 +124,7 @@ export function openImageModalContent({
     contentElement,
     classNames = [],
     ariaLabel = "Image preview",
+    topControlElements = [],
 } = {}) {
     if (!(contentElement instanceof HTMLElement)) {
         return null;
@@ -111,6 +145,18 @@ export function openImageModalContent({
     modal._imageModalClassNames = [...classNames];
     modal.classList.add("image_modal", ...classNames);
     modal.setAttribute("aria-label", ariaLabel);
+    const modalHeader = modal.querySelector(":scope > .modal_header");
+    const closeButton = modalHeader?.querySelector(":scope > .modal_close_button");
+    if (modalHeader && closeButton) {
+        const topControls = document.createElement("div");
+        topControls.classList.add("image_modal_top_controls");
+        topControls.dataset.testid = "image-modal-top-controls";
+        const validTopControls = Array.isArray(topControlElements)
+            ? topControlElements.filter((element) => element instanceof HTMLElement)
+            : [];
+        topControls.append(...validTopControls, closeButton);
+        modalHeader.appendChild(topControls);
+    }
     modal_overlay.classList.add("modal_overlay_blur");
     installTransientImageControls(modal_overlay);
     showModal();

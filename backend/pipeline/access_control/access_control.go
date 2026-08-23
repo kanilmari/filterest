@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -41,6 +42,181 @@ func jsonScalarToString(raw json.RawMessage) string {
 	}
 
 	return ""
+}
+
+func singleConsistentIdentifier(kind string, candidates ...string) (string, error) {
+	resolved := ""
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if resolved == "" {
+			resolved = candidate
+			continue
+		}
+		if candidate != resolved {
+			return "", fmt.Errorf("conflicting %s identifiers", kind)
+		}
+	}
+	return resolved, nil
+}
+
+func extractRouteTableTarget(r *http.Request, urlRoute string) (string, string, error) {
+	queryName, err := singleConsistentIdentifier(
+		"dataset name",
+		r.URL.Query().Get("dataset"),
+		r.URL.Query().Get("table"),
+	)
+	if err != nil {
+		return "", "", err
+	}
+	queryUID, err := singleConsistentIdentifier(
+		"dataset UID",
+		r.URL.Query().Get("dataset_uid"),
+		r.URL.Query().Get("table_uid"),
+	)
+	if err != nil {
+		return "", "", err
+	}
+
+	bodyName := ""
+	bodyUID := ""
+	referencingName := ""
+	if r.Method != http.MethodGet && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		bodyBytes, bodyErr := io.ReadAll(r.Body)
+		if bodyErr != nil {
+			return "", "", fmt.Errorf("read request body: %w", bodyErr)
+		}
+		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+		var body struct {
+			DatasetName        string          `json:"dataset_name"`
+			TableName          string          `json:"table_name"`
+			DatasetUID         json.RawMessage `json:"dataset_uid"`
+			TableUID           json.RawMessage `json:"table_uid"`
+			ReferencingDataset string          `json:"referencing_dataset"`
+			ReferencingTable   string          `json:"referencing_table"`
+			Dataset            string          `json:"dataset"`
+			Table              string          `json:"table"`
+		}
+		if jsonErr := json.Unmarshal(bodyBytes, &body); jsonErr == nil {
+			bodyName, err = singleConsistentIdentifier(
+				"request-body dataset name",
+				body.DatasetName,
+				body.TableName,
+				body.Dataset,
+				body.Table,
+			)
+			if err != nil {
+				return "", "", err
+			}
+			bodyUID, err = singleConsistentIdentifier(
+				"request-body dataset UID",
+				jsonScalarToString(body.DatasetUID),
+				jsonScalarToString(body.TableUID),
+			)
+			if err != nil {
+				return "", "", err
+			}
+			referencingName, err = singleConsistentIdentifier(
+				"referencing dataset name",
+				body.ReferencingDataset,
+				body.ReferencingTable,
+			)
+			if err != nil {
+				return "", "", err
+			}
+		}
+	}
+
+	tableName, err := singleConsistentIdentifier("dataset name", queryName, bodyName)
+	if err != nil {
+		return "", "", err
+	}
+	tableUID, err := singleConsistentIdentifier("dataset UID", queryUID, bodyUID)
+	if err != nil {
+		return "", "", err
+	}
+	if tableName == "" {
+		tableName = referencingName
+	}
+	if tableUID == "" && tableName == "" && strings.HasPrefix(r.URL.Path, urlRoute) {
+		tableName = strings.Trim(strings.TrimPrefix(r.URL.Path, urlRoute), "/")
+	}
+	return tableName, tableUID, nil
+}
+
+func routeTableIdentifiersMatch(tableName, tableUID string) (bool, error) {
+	tableName = strings.TrimSpace(tableName)
+	tableUID = strings.TrimSpace(tableUID)
+	if tableName == "" || tableUID == "" {
+		return true, nil
+	}
+
+	var matches bool
+	err := backend.Db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1
+			FROM public.system_db_tables
+			WHERE table_name = $1
+			  AND table_uid::text = $2
+			  AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
+		)`, tableName, tableUID).Scan(&matches)
+	return matches, err
+}
+
+const sessionEndedLoginNotice = "session-ended"
+
+func isBrowserDocumentNavigation(r *http.Request) bool {
+	if r.Method != http.MethodGet || strings.HasPrefix(r.URL.Path, "/api/") {
+		return false
+	}
+	if !strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/html") {
+		return false
+	}
+	fetchMode := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Mode")))
+	if fetchMode != "" && fetchMode != "navigate" {
+		return false
+	}
+	return true
+}
+
+// redirectBrowserDocumentToLogin turns an unauthenticated page navigation into
+// a recoverable browser flow while leaving API behavior unchanged. The fixed
+// notice code is rendered as localized copy by the login page and removed from
+// the address bar after it has been consumed.
+func redirectBrowserDocumentToLogin(w http.ResponseWriter, r *http.Request, session *sessions.Session) bool {
+	if !isBrowserDocumentNavigation(r) {
+		return false
+	}
+
+	returnPath := r.URL.RequestURI()
+	if returnPath == "" || strings.HasPrefix(returnPath, "/login") {
+		returnPath = "/"
+	}
+	session.Values["redirect_after_login"] = returnPath
+	if err := session.Save(r, w); err != nil {
+		log.Printf("\033[31m[WithAccessControl] browser-login redirect session save failed: %v\033[0m", err)
+	}
+	query := url.Values{}
+	query.Set("auth_notice", sessionEndedLoginNotice)
+	query.Set("redirect", returnPath)
+	http.Redirect(w, r, "/login?"+query.Encode(), http.StatusSeeOther)
+	return true
+}
+
+// redirectGuestDocumentToLogin scopes the shared browser redirect to a denied
+// guest shell. Authenticated authorization denials must remain ordinary 403s.
+func redirectGuestDocumentToLogin(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int) bool {
+	return userID == 1 && redirectBrowserDocumentToLogin(w, r, session)
+}
+
+func denyRouteAccess(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, message string) {
+	if redirectGuestDocumentToLogin(w, r, session, userID) {
+		return
+	}
+	httpresponse.RespondWithError(w, http.StatusForbidden, message)
 }
 
 func userIsAdmin(userID int) bool {
@@ -179,6 +355,9 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 		if !ok {
 			if loginToBrowse {
 				log.Printf("\033[31m[WithAccessControl][%s] Anonymous user -> redirecting to login page\033[0m", handlerName)
+				if redirectBrowserDocumentToLogin(w, r, session) {
+					return
+				}
 				session.Values["redirect_after_login"] = r.URL.RequestURI()
 				if errSave := session.Save(r, w); errSave != nil {
 					log.Printf("\033[31m[WithAccessControl][%s] session save failed: %v\033[0m", handlerName, errSave)
@@ -204,6 +383,9 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 			delete(session.Values, "user_id")
 			delete(session.Values, "username")
 			delete(session.Values, "user_role")
+			if redirectBrowserDocumentToLogin(w, r, session) {
+				return
+			}
 			session.Values["redirect_after_login"] = r.URL.RequestURI()
 			if errSave := session.Save(r, w); errSave != nil {
 				log.Printf("\033[31m[WithAccessControl][%s] guest-session clear failed: %v\033[0m", handlerName, errSave)
@@ -233,7 +415,7 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 
 		if !specificTableRelated {
 			if !userHasFunctionPermissionOnTable(userID, urlRoute, "", "") {
-				httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (function-level)")
+				denyRouteAccess(w, r, session, userID, "403 - Forbidden (function-level)")
 				return
 			}
 			originalHandler(w, r)
@@ -253,8 +435,18 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 			return exists
 		}
 
+		tableName, tableUID, targetErr := extractRouteTableTarget(r, urlRoute)
+		if targetErr != nil {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, "conflicting dataset identifiers")
+			return
+		}
+
 		datasetsParam := r.URL.Query().Get("datasets")
 		if datasetsParam != "" {
+			if tableName != "" || tableUID != "" {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "plural and singular dataset identifiers cannot be combined")
+				return
+			}
 			// Usean datasetin pyyntö: ?datasets=table1,table2
 			tableList := strings.Split(datasetsParam, ",")
 			for i := range tableList {
@@ -271,91 +463,46 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 			if len(validTables) > 0 {
 				for _, tbl := range validTables {
 					if !userHasFunctionPermissionOnTable(userID, urlRoute, tbl, "") {
-						httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (multiple datasets)")
+						denyRouteAccess(w, r, session, userID, "403 - Forbidden (multiple datasets)")
 						return
 					}
 				}
 			} else {
 				if !userHasFunctionPermissionOnTable(userID, urlRoute, "", "") {
-					httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (no valid datasets)")
+					denyRouteAccess(w, r, session, userID, "403 - Forbidden (no valid datasets)")
 					return
 				}
 			}
 
 		} else {
-			// Yhden datasetin pyyntö ?dataset=...
-			tableName := r.URL.Query().Get("dataset")
-			if tableName == "" {
-				tableName = r.URL.Query().Get("table")
+			if tableName != "" && !backend.ShouldExposeCloudManagementDatasetName(tableName) {
+				httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
+				return
 			}
-			tableUID := r.URL.Query().Get("dataset_uid")
-			if tableUID == "" {
-				tableUID = r.URL.Query().Get("table_uid")
+			identifiersMatch, matchErr := routeTableIdentifiersMatch(tableName, tableUID)
+			if matchErr != nil {
+				log.Printf("\033[31m[WithAccessControl][%s] dataset identifier validation failed: %v\033[0m", handlerName, matchErr)
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "dataset identity check failed")
+				return
 			}
-			if tableUID == "" && tableName == "" && strings.HasPrefix(r.URL.Path, urlRoute) {
-				tableName = strings.Trim(strings.TrimPrefix(r.URL.Path, urlRoute), "/")
-			}
-
-			if tableUID == "" && tableName == "" && r.Method != http.MethodGet && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-				bodyBytes, bodyErr := io.ReadAll(r.Body)
-				if bodyErr == nil {
-					var body struct {
-						DatasetName        string          `json:"dataset_name"`
-						TableName          string          `json:"table_name"`
-						DatasetUID         json.RawMessage `json:"dataset_uid"`
-						TableUID           json.RawMessage `json:"table_uid"`
-						ReferencingDataset string          `json:"referencing_dataset"`
-						ReferencingTable   string          `json:"referencing_table"`
-						Dataset            string          `json:"dataset"`
-						Table              string          `json:"table"`
-					}
-					if jsonErr := json.Unmarshal(bodyBytes, &body); jsonErr == nil {
-						if tableUID == "" {
-							if datasetUID := jsonScalarToString(body.DatasetUID); datasetUID != "" {
-								tableUID = datasetUID
-							} else if bodyTableUID := jsonScalarToString(body.TableUID); bodyTableUID != "" {
-								tableUID = bodyTableUID
-							}
-						}
-						if tableName == "" {
-							if body.DatasetName != "" {
-								tableName = body.DatasetName
-							} else if body.TableName != "" {
-								tableName = body.TableName
-							} else if body.ReferencingDataset != "" {
-								tableName = body.ReferencingDataset
-							} else if body.ReferencingTable != "" {
-								tableName = body.ReferencingTable
-							} else if body.Dataset != "" {
-								tableName = body.Dataset
-							} else if body.Table != "" {
-								tableName = body.Table
-							}
-						}
-					}
-					r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-				} else {
-					r.Body = io.NopCloser(bytes.NewBuffer([]byte{}))
-				}
+			if !identifiersMatch {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "dataset identifiers do not match")
+				return
 			}
 
 			// Jos taulunimi on annettu, tarkistetaan oikeus sille
 			if tableUID != "" {
 				if !userHasFunctionPermissionOnTable(userID, urlRoute, "", tableUID) {
-					httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (single table)")
+					denyRouteAccess(w, r, session, userID, "403 - Forbidden (single table)")
 					return
 				}
 			} else if tableName != "" {
-				if !backend.ShouldExposeCloudManagementDatasetName(tableName) {
-					httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
-					return
-				}
 				// log.Printf("[WithAccessControl][%s] Tarkistetaan käyttäjän %s (id=%d) oikeus funktiolle='%s' tauluun='%s'",
 				// 	handlerName, username, userID, handlerName, tableName)
 
 				if !userHasFunctionPermissionOnTable(userID, urlRoute, tableName, "") {
 					// log.Printf("\033[31m[WithAccessControl][%s] EI oikeutta -> 403\033[0m", handlerName)
-					httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (single table)")
+					denyRouteAccess(w, r, session, userID, "403 - Forbidden (single table)")
 					return
 				}
 			} else {
@@ -365,7 +512,7 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 
 				if !userHasFunctionPermissionOnTable(userID, urlRoute, "", "") {
 					// log.Printf("\033[31m[WithAccessControl][%s] EI oikeutta (tauluton) -> 403\033[0m", handlerName)
-					httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (function-level)")
+					denyRouteAccess(w, r, session, userID, "403 - Forbidden (function-level)")
 					return
 				}
 			}

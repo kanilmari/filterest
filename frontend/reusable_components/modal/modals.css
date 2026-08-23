@@ -235,16 +235,26 @@
 }
 
 .image_modal_wrapper > img,
-.image_modal .row_article_image_first_media {
+.image_modal .row_article_image_first_media:not(.wrapper) {
     display: block;
     min-width: 200px;
     min-height: 200px;
 }
 
-.image_modal .modal_close_button {
+.image_modal_top_controls {
     position: fixed;
-    top: 15px;
-    right: 20px;
+    inset-block-start: 15px;
+    inset-inline-end: 20px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.image_modal .image_modal_top_controls .modal_close_button {
+    position: static;
+    flex: 0 0 auto;
     border: 1px solid var(--image-modal-control-color);
     color: var(--image-modal-control-color) !important;
     background: var(--image-modal-control-bg);
@@ -254,7 +264,8 @@
     .modal_close_button,
     .row_article_image_first_arrow,
     .row_article_image_first_position,
-    .row_article_row_navigation_button
+    .row_article_row_navigation_button,
+    .row_article_image_first_scroll_hint
 ) {
     opacity: 0;
     pointer-events: none;
@@ -267,11 +278,46 @@
     .modal_close_button,
     .row_article_image_first_arrow,
     .row_article_image_first_position,
-    .row_article_row_navigation_button
+    .row_article_row_navigation_button,
+    .row_article_image_first_scroll_hint
 ),
-.image_modal :is(.modal_close_button, .row_article_image_first_arrow):focus-visible {
+.image_modal :is(
+    .modal_close_button,
+    .row_article_image_first_arrow,
+    .row_article_row_navigation_button,
+    .row_article_image_first_scroll_hint
+):focus-visible {
     opacity: 1;
     pointer-events: auto;
+}
+
+.modal_overlay_blur.image-modal-content-scrolled
+    .image_modal .row_article_image_first_scroll_hint {
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (hover: none), (pointer: coarse) {
+    .modal_overlay_blur .image_modal :is(
+        .modal_close_button,
+        .row_article_image_first_arrow,
+        .row_article_row_navigation_button,
+        .row_article_image_first_scroll_hint
+    ) {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .modal_overlay_blur .image_modal .row_article_image_first_position {
+        opacity: 1;
+        pointer-events: none;
+    }
+
+    .modal_overlay_blur.image-modal-content-scrolled
+        .image_modal .row_article_image_first_scroll_hint {
+        opacity: 0;
+        pointer-events: none;
+    }
 }
 
 .image_modal_wrapper {

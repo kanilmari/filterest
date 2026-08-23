@@ -1,3 +1,7 @@
+// Verifies the pure value builders and navigation guards used by the login page.
+// Bridges representative auth inputs with the helper module's normalized outputs.
+// Covers redirect boundaries without requiring a browser or live authentication.
+// Exists to prevent unsafe return targets and auth-loop regressions.
 import { describe, test, expect } from 'vitest';
 import {
     translateError,
@@ -9,7 +13,7 @@ import {
     buildPasswordResetBody,
     formatOtpError,
     resolvePostLoginTarget,
-    computeCloseTarget,
+    computeStandaloneLoginBackTarget,
 } from './login_page_builder_helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -226,38 +230,54 @@ describe('resolvePostLoginTarget', () => {
 });
 
 // ---------------------------------------------------------------------------
-// computeCloseTarget
+// computeStandaloneLoginBackTarget
 // ---------------------------------------------------------------------------
-describe('computeCloseTarget', () => {
-    test('returns referrer if same origin and different path', () => {
-        expect(computeCloseTarget(
-            'https://example.com/dashboard',
+describe('computeStandaloneLoginBackTarget', () => {
+    test('returns an exact same-origin public referrer as a relative URL', () => {
+        expect(computeStandaloneLoginBackTarget(
+            'https://example.com/service_catalog?view=card#results',
             'https://example.com',
-            '/login'
-        )).toBe('https://example.com/dashboard');
+            ''
+        )).toBe('/service_catalog?view=card#results');
     });
 
-    test('returns / if referrer is same page', () => {
-        expect(computeCloseTarget(
-            'https://example.com/login',
+    test.each([
+        '/admin/site_languages',
+        '/api/get-results',
+        '/first-run',
+        '/login',
+        '/register',
+        '/system/ready',
+        '/?login-entry=1',
+        '/?register-entry=1',
+    ])('falls back home for a non-public referrer: %s', (path) => {
+        expect(computeStandaloneLoginBackTarget(
+            `https://example.com${path}`,
             'https://example.com',
-            '/login'
+            ''
         )).toBe('/');
     });
 
-    test('returns / if referrer is different origin', () => {
-        expect(computeCloseTarget(
-            'https://other.com/page',
+    test('rejects an external referrer including an origin-prefix lookalike', () => {
+        expect(computeStandaloneLoginBackTarget(
+            'https://example.com.evil.test/service_catalog',
             'https://example.com',
-            '/login'
+            ''
         )).toBe('/');
     });
 
-    test('returns / if referrer is empty', () => {
-        expect(computeCloseTarget('', 'https://example.com', '/login')).toBe('/');
+    test.each([
+        '?redirect=%2Fadmin%2Fsite_languages',
+        '?auth_notice=session-ended',
+    ])('falls back home when login was entered from an auth redirect: %s', (search) => {
+        expect(computeStandaloneLoginBackTarget(
+            'https://example.com/service_catalog',
+            'https://example.com',
+            search
+        )).toBe('/');
     });
 
-    test('returns / if referrer is null', () => {
-        expect(computeCloseTarget(null, 'https://example.com', '/login')).toBe('/');
+    test('falls back home without a valid referrer', () => {
+        expect(computeStandaloneLoginBackTarget('', 'https://example.com', '')).toBe('/');
     });
 });

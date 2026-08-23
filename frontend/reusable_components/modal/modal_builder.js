@@ -103,6 +103,34 @@ function restoreFocusAfterModalClose() {
     }, 0);
 }
 
+// Clears presentation state owned by a previous feature before the singleton
+// modal is reused. Image viewers deliberately add full-screen classes and
+// inline size limits after createModal returns; those must never leak into the
+// next ordinary dialog, such as the session-expired recovery prompt.
+function resetModalPresentationState(modalOverlay, modal) {
+    const trackedImageClasses = Array.isArray(modal?._imageModalClassNames)
+        ? modal._imageModalClassNames
+        : [];
+
+    modal?.classList.remove(
+        "image_modal",
+        "auth-tour-image-modal",
+        ...trackedImageClasses,
+    );
+    if (modal) {
+        modal._imageModalClassNames = [];
+        modal.style.removeProperty("width");
+        modal.style.removeProperty("max-width");
+        modal.style.removeProperty("max-height");
+    }
+
+    modalOverlay?.classList.remove(
+        "modal_overlay_blur",
+        "image-modal-controls-active",
+        "image-modal-content-scrolled",
+    );
+}
+
 function handleModalKeyboardEvent(event) {
     const modal_overlay = document.getElementById("custom_modal_overlay");
     if (!modal_overlay || modal_overlay.style.display === "none") {
@@ -201,8 +229,7 @@ export function createModal({
     modal.removeAttribute('aria-labelledby');
     modal.removeAttribute('aria-label');
     modal.removeAttribute('aria-describedby');
-    modal.classList.remove('auth-tour-image-modal');
-    modal_overlay.classList.remove('modal_overlay_blur');
+    resetModalPresentationState(modal_overlay, modal);
 
     // Tyhjennä modalin sisältö
     modal.replaceChildren();
@@ -331,7 +358,11 @@ export function hideModal() {
     const modal_overlay = document.getElementById('custom_modal_overlay');
     if (modal_overlay) {
         modal_overlay.style.display = 'none';
-        modal_overlay.classList.remove('modal_overlay_blur');
+        modal_overlay.classList.remove(
+            'modal_overlay_blur',
+            'image-modal-controls-active',
+            'image-modal-content-scrolled',
+        );
         modal_overlay.setAttribute('aria-hidden', 'true');
         restoreFocusAfterModalClose();
     }

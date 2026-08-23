@@ -179,7 +179,9 @@ const TRANSLATABLE_ATTRIBUTE_FILTER = [
     'data-html-lang-key',
     'data-html-lang-variable-key',
     'data-title-lang-key',
+    'data-title-lang-context',
     'data-aria-label-lang-key',
+    'data-aria-label-lang-context',
 ];
 
 
@@ -608,7 +610,6 @@ function translateAttributeFromLangKey(one_element, attributeName, keyAttributeN
         missing_keys,
         variableOverride
     );
-
     const baseKeyForSource = translationKey?.split('+')[0];
     if (baseKeyForSource && missing_keys?.includes(baseKeyForSource) && !globalMissingKeySources[baseKeyForSource]) {
         globalMissingKeySources[baseKeyForSource] = _extractElementSourceContext(one_element);
@@ -630,6 +631,12 @@ function translateAttributeFromLangKey(one_element, attributeName, keyAttributeN
         if (fallbackTranslation !== fallbackKey) {
             translatedValue = fallbackTranslation;
         }
+    }
+
+    const contextAttributeName = keyAttributeName.replace('-lang-key', '-lang-context');
+    const literalContext = one_element.getAttribute(contextAttributeName)?.trim();
+    if (literalContext) {
+        translatedValue = `${translatedValue}: ${literalContext}`;
     }
 
     one_element.setAttribute(attributeName, translatedValue);

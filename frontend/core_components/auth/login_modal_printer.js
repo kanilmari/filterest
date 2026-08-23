@@ -110,10 +110,6 @@ export async function showLoginModal(redirectTarget) {
             return;
         }
 
-        // Remove the close button (modal has its own)
-        const closeBtn = form.querySelector(".auth-form-close-button");
-        if (closeBtn) closeBtn.remove();
-
         const shell = document.createElement("div");
         shell.classList.add("auth-modal-shell");
         if (hero) {

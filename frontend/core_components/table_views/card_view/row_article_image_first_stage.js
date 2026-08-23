@@ -4,6 +4,8 @@
 // Exists to keep the ordinary thumbnail gallery unchanged for standard articles.
 
 import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { createImageElement } from "./card_avatar_builder.js";
+import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 
 const SWIPE_NAVIGATION_THRESHOLD_PX = 44;
 
@@ -74,6 +76,8 @@ export function buildRowArticleImageFirstStage({
     onBackdropActivate = null,
     resolvePath,
     resolveAlt,
+    tableName = "",
+    rowLabel = "",
 }) {
     if (!Array.isArray(imageEntries) || imageEntries.length === 0) {
         return null;
@@ -88,9 +92,7 @@ export function buildRowArticleImageFirstStage({
     stage.dataset.ariaLabelLangKey = "images";
     stage.setAttribute("aria-label", getTranslationForKey("images") || "Images");
 
-    const image = document.createElement("img");
-    image.classList.add("row_article_image_first_media");
-    image.dataset.testid = "row-article-image-first-media";
+    let mediaElement = null;
 
     const previousButton = buildImageArrow("previous", () => activateRelative(-1));
     const nextButton = buildImageArrow("next", () => activateRelative(1));
@@ -134,8 +136,34 @@ export function buildRowArticleImageFirstStage({
             return;
         }
         const imagePath = resolvePath(row.filename);
-        image.src = imagePath;
-        image.alt = resolveAlt(row);
+        const nextMediaElement = createImageElement(imagePath, true, {
+            tableName,
+            rowLabel,
+            renderSlot: CARD_IMAGE_RENDER_SLOTS.IMAGE_FIRST,
+            imageTypeId: row?.type_id,
+            imageMetadata: row?.metadata_json,
+            imageTitle: row?.title,
+            imageOriginalName: row?.original_name,
+            imageMimeType: row?.mime_type,
+        });
+        nextMediaElement.classList.add("row_article_image_first_media");
+        nextMediaElement.setAttribute("aria-label", resolveAlt(row) || rowLabel || "Image");
+        const primaryImage = nextMediaElement.querySelector("img");
+        if (primaryImage) {
+            primaryImage.dataset.testid = "row-article-image-first-media";
+        } else {
+            nextMediaElement.dataset.testid = "row-article-image-first-media";
+        }
+        const visibleImage = nextMediaElement.querySelector("img:not([aria-hidden='true'])");
+        if (visibleImage) {
+            visibleImage.alt = resolveAlt(row);
+        }
+        if (mediaElement) {
+            mediaElement.replaceWith(nextMediaElement);
+        } else {
+            stage.insertBefore(nextMediaElement, previousButton);
+        }
+        mediaElement = nextMediaElement;
         stage.style.setProperty(
             "--row-article-image-first-backdrop",
             resolveBackdropImageValue(imagePath),
@@ -188,7 +216,7 @@ export function buildRowArticleImageFirstStage({
         activateRelative(deltaX > 0 ? -1 : 1);
     }, { passive: true });
 
-    stage.append(image, previousButton, nextButton, position, scrollHint);
+    stage.append(previousButton, nextButton, position, scrollHint);
     sync();
     return { element: stage, sync };
 }

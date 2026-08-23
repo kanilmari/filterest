@@ -247,6 +247,11 @@ describe('card language refresh', () => {
             locale: 'fi',
         });
         localStorage.setItem(`${tableName}_dataTypes`, JSON.stringify({
+            title: {
+                card_element: 'header',
+                show_key_on_card: false,
+                show_value_on_card: true,
+            },
             created: {
                 card_element: 'details',
                 data_type: 'timestamp without time zone',
@@ -262,9 +267,10 @@ describe('card language refresh', () => {
         }));
 
         const view = await create_card_view(
-            ['created', 'updated'],
+            ['title', 'created', 'updated'],
             [{
                 id: 14,
+                title: 'Revontulet Lapissa',
                 created: '2026-08-20T00:24:42.000000',
                 updated: '2026-08-20T08:55:25.000000',
             }],
@@ -281,6 +287,13 @@ describe('card language refresh', () => {
 
         const sidebarDate = view.querySelector('.small_card_date');
         expect(sidebarDate?.textContent).toBe('20.8.2026');
-        expect(sidebarDate?.title).toBe('2026-08-20 00:24:42');
+        expect(sidebarDate?.dataset.titleLangKey).toBe('created');
+        expect(sidebarDate?.dataset.titleLangContext).toBe('2026-08-20 00:24:42');
+        expect(sidebarDate?.title).toBe('created: 2026-08-20 00:24:42');
+
+        const sidebarTitle = view.querySelector('.small_card_name_text');
+        expect(sidebarTitle?.dataset.titleLangKey).toBe('title');
+        expect(sidebarTitle?.dataset.titleLangContext).toBe('Revontulet Lapissa');
+        expect(sidebarTitle?.title).toBe('title: Revontulet Lapissa');
     });
 });

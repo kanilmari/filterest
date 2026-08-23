@@ -118,6 +118,7 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 		return nil, err
 	}
 	var assignedFieldSetID int64
+	preferenceUser := personalFieldSetAssignmentUser(userID)
 	err := db.QueryRow(`
 		SELECT assignments.field_set_id
 		FROM public.system_view_field_set_assignments AS assignments
@@ -125,7 +126,7 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 		WHERE assignments.table_uid = $1 AND views.view_key = $2
 		  AND (assignments.user_id = $3 OR assignments.user_id IS NULL)
 		ORDER BY (assignments.user_id IS NOT NULL) DESC
-		LIMIT 1`, tableUID, viewKey, userID).Scan(&assignedFieldSetID)
+		LIMIT 1`, tableUID, viewKey, preferenceUser).Scan(&assignedFieldSetID)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -181,6 +182,13 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 		return results, nil
 	}
 	return fetchInformationSchemaColumnDefaults(tableName, db)
+}
+
+func personalFieldSetAssignmentUser(userID int) sql.NullInt64 {
+	if userID <= 1 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(userID), Valid: true}
 }
 
 func fetchInformationSchemaColumnDefaults(tableName string, db *sql.DB) ([]UserColumnSetting, error) {

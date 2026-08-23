@@ -255,16 +255,16 @@ func guestCanReadDataset(name string, guestUserID int) bool {
 	return allowed
 }
 
-func redirectGuestDatasetRequestToLoginEntry(w http.ResponseWriter, r *http.Request) {
+func redirectProtectedDatasetRequestToLogin(w http.ResponseWriter, r *http.Request) {
 	redirectTarget := r.URL.RequestURI()
 	if redirectTarget == "" {
 		redirectTarget = "/"
 	}
 
 	query := url.Values{}
-	query.Set("login-entry", "1")
+	query.Set("auth_notice", "session-ended")
 	query.Set("redirect", redirectTarget)
-	http.Redirect(w, r, "/?"+query.Encode(), http.StatusSeeOther)
+	http.Redirect(w, r, "/login?"+query.Encode(), http.StatusSeeOther)
 }
 
 func shouldRedirectGuestDeepLinkToLogin(r *http.Request, firstSeg string, statErr error, firstSegIsDataset bool, guestUserID int) bool {
@@ -374,6 +374,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if !onkoKayttaja {
 		// ei user_id:tä
 		if loginToBrowse && !authShellEntry {
+			if r.URL.Path != "/" {
+				redirectProtectedDatasetRequestToLogin(w, r)
+				return
+			}
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -487,7 +491,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		if !loginToBrowse && isGuestUserID(userIDVal) {
 			guestUserID, _ := userIDVal.(int)
 			if shouldRedirectGuestDeepLinkToLogin(r, firstSeg, statErr, firstSegIsDataset, guestUserID) {
-				redirectGuestDatasetRequestToLoginEntry(w, r)
+				redirectProtectedDatasetRequestToLogin(w, r)
 				return
 			}
 		}

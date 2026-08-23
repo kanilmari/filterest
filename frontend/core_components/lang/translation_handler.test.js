@@ -43,12 +43,14 @@ describe('translatePage', () => {
                 exclude: 'Exclude',
                 exclude_filter_option: 'Exclude this value from results',
                 chat_for_table: 'Chat - $table_name',
+                created: 'Created',
                 system_users: 'Users',
             }),
             fi: Promise.resolve({
                 exclude: 'Sulje pois',
                 exclude_filter_option: 'Sulje tämä arvo pois tuloksista',
                 chat_for_table: 'Keskustelu – $table_name',
+                created: 'Luotu',
                 system_users: 'Käyttäjät',
             }),
             yue: Promise.resolve({}),
@@ -100,6 +102,21 @@ describe('translatePage', () => {
         expect(refreshLocalizedDatasetValues).toHaveBeenNthCalledWith(1, 'fi');
         expect(refreshLocalizedDatasetValues).toHaveBeenNthCalledWith(2, 'en');
         expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
+    test('keeps literal tooltip context after the translated field label', async () => {
+        const createdAt = document.createElement('time');
+        createdAt.dataset.titleLangKey = 'created';
+        createdAt.dataset.titleLangContext = '2026-08-20 00:24:42';
+        document.body.appendChild(createdAt);
+
+        const { translatePage } = await import('./translation_handler.js');
+
+        await translatePage('fi');
+        expect(createdAt.title).toBe('Luotu: 2026-08-20 00:24:42');
+
+        await translatePage('en');
+        expect(createdAt.title).toBe('Created: 2026-08-20 00:24:42');
     });
 
     test('uses local fallbacks for view-selector keys before database translations exist', async () => {

@@ -200,6 +200,12 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 
 	siteName := resolveLoginSiteName(r)
 	assetPaths := frontendassets.Resolve(frontend_dir, useMinified)
+	standalonePage := r.URL.Query().Get("fragment") != "1"
+	loginToBrowse, loginToBrowseErr := middlewares.CheckLoginToBrowse()
+	if loginToBrowseErr != nil {
+		log.Printf("[showLoginForm] login_to_browse check failed; public return button stays hidden: %v", loginToBrowseErr)
+		loginToBrowse = true
+	}
 
 	data := struct {
 		ErrorMsg            string
@@ -208,7 +214,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 		SiteName            string
 		FaviconPath         string
 		StandalonePage      bool
-		ShowCloseButton     bool
+		ShowBackButton      bool
 		ShowTourScreenshots bool
 		ImportsCSSPath      string
 		LoginBundlePath     string
@@ -218,8 +224,8 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 		UseMinifiedAssets:   useMinified,
 		SiteName:            siteName,
 		FaviconPath:         frontendassets.SiteFaviconPath(frontend_dir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
-		StandalonePage:      r.URL.Query().Get("fragment") != "1",
-		ShowCloseButton:     r.URL.Query().Get("fragment") == "1",
+		StandalonePage:      standalonePage,
+		ShowBackButton:      standalonePage && !loginToBrowse,
 		ShowTourScreenshots: shouldShowLoginTourScreenshots(siteName),
 		ImportsCSSPath:      assetPaths.ImportsCSSPath,
 		LoginBundlePath:     assetPaths.LoginBundlePath,

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -281,6 +282,35 @@ func TestRootHandlerRedirectsAnonymousRootWhenLoginRequired(t *testing.T) {
 	}
 }
 
+func TestRootHandlerRedirectsAnonymousDatasetWithSessionNoticeWhenLoginRequired(t *testing.T) {
+	setupRootHandlerMockDB(t, true)
+	setupRootHandlerSessionStore(t)
+	setupRootHandlerFrontend(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/service_catalog?view=card", nil)
+	rr := httptest.NewRecorder()
+
+	rootHandler(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
+	}
+	loc := rr.Header().Get("Location")
+	parsed, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("url.Parse(%q) error = %v", loc, err)
+	}
+	if parsed.Path != "/login" {
+		t.Fatalf("redirect path = %q, want /login", parsed.Path)
+	}
+	if got := parsed.Query().Get("auth_notice"); got != "session-ended" {
+		t.Fatalf("auth_notice = %q, want session-ended", got)
+	}
+	if got := parsed.Query().Get("redirect"); got != "/service_catalog?view=card" {
+		t.Fatalf("redirect = %q, want dataset return path", got)
+	}
+}
+
 func TestRootHandlerRedirectsFreshInstallToFirstRunSetup(t *testing.T) {
 	setupRootHandlerMockDB(t, false)
 	setupRootHandlerSessionStore(t)
@@ -389,7 +419,7 @@ func TestRootHandlerAllowsAliasedDatasetShell(t *testing.T) {
 	}
 }
 
-func TestRootHandlerRedirectsAnonymousProtectedDatasetToLoginEntry(t *testing.T) {
+func TestRootHandlerRedirectsAnonymousProtectedDatasetToExplainedLogin(t *testing.T) {
 	t.Setenv("CLOUD_MANAGEMENT_UI_ENABLED", "1")
 	setupRootHandlerMockDB(t, false)
 	setupRootHandlerSessionStore(t)
@@ -407,23 +437,23 @@ func TestRootHandlerRedirectsAnonymousProtectedDatasetToLoginEntry(t *testing.T)
 	if loc == "" {
 		t.Fatal("expected redirect Location")
 	}
-	if !strings.HasPrefix(loc, "/?") {
-		t.Fatalf("Location = %q, want login-entry shell redirect", loc)
+	if !strings.HasPrefix(loc, "/login?") {
+		t.Fatalf("Location = %q, want standalone login redirect", loc)
 	}
 	reqURL, err := http.NewRequest(http.MethodGet, loc, nil)
 	if err != nil {
 		t.Fatalf("parse redirect Location %q: %v", loc, err)
 	}
 	query := reqURL.URL.Query()
-	if query.Get("login-entry") != "1" {
-		t.Fatalf("login-entry = %q, want 1 in Location %q", query.Get("login-entry"), loc)
+	if query.Get("auth_notice") != "session-ended" {
+		t.Fatalf("auth_notice = %q, want session-ended in Location %q", query.Get("auth_notice"), loc)
 	}
 	if query.Get("redirect") != "/app_cloud_services" {
 		t.Fatalf("redirect = %q, want /app_cloud_services in Location %q", query.Get("redirect"), loc)
 	}
 }
 
-func TestRootHandlerRedirectsAnonymousUnknownSpaDeepLinkToLoginEntry(t *testing.T) {
+func TestRootHandlerRedirectsAnonymousUnknownSpaDeepLinkToExplainedLogin(t *testing.T) {
 	setupRootHandlerMockDB(t, false)
 	setupRootHandlerSessionStore(t)
 	setupRootHandlerFrontend(t)
@@ -437,8 +467,8 @@ func TestRootHandlerRedirectsAnonymousUnknownSpaDeepLinkToLoginEntry(t *testing.
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
 	}
 	loc := rr.Header().Get("Location")
-	if !strings.Contains(loc, "login-entry=1") {
-		t.Fatalf("Location = %q, want login-entry redirect", loc)
+	if !strings.HasPrefix(loc, "/login?") {
+		t.Fatalf("Location = %q, want standalone login redirect", loc)
 	}
 	reqURL, err := http.NewRequest(http.MethodGet, loc, nil)
 	if err != nil {
@@ -447,9 +477,12 @@ func TestRootHandlerRedirectsAnonymousUnknownSpaDeepLinkToLoginEntry(t *testing.
 	if got := reqURL.URL.Query().Get("redirect"); got != "/unknown_private_or_missing" {
 		t.Fatalf("redirect = %q, want /unknown_private_or_missing", got)
 	}
+	if got := reqURL.URL.Query().Get("auth_notice"); got != "session-ended" {
+		t.Fatalf("auth_notice = %q, want session-ended", got)
+	}
 }
 
-func TestRootHandlerRedirectsExistingGuestSessionProtectedDatasetToLoginEntry(t *testing.T) {
+func TestRootHandlerRedirectsExistingGuestSessionProtectedDatasetToExplainedLogin(t *testing.T) {
 	t.Setenv("CLOUD_MANAGEMENT_UI_ENABLED", "1")
 	setupRootHandlerMockDBWithRole(t, false, backend.EaselectInstanceRoleManagement)
 	setupRootHandlerSessionStore(t)
@@ -464,8 +497,8 @@ func TestRootHandlerRedirectsExistingGuestSessionProtectedDatasetToLoginEntry(t 
 	if rr.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
 	}
-	if loc := rr.Header().Get("Location"); !strings.Contains(loc, "login-entry=1") {
-		t.Fatalf("Location = %q, want login-entry redirect", loc)
+	if loc := rr.Header().Get("Location"); !strings.Contains(loc, "auth_notice=session-ended") {
+		t.Fatalf("Location = %q, want explained login redirect", loc)
 	}
 }
 

@@ -489,6 +489,7 @@ async function createSingleCard(
     const creation_seed =
         String(row_item.id ?? "x") + "_" + creation_date_small;
     let header_text_small = "";
+    let header_column_small = "";
     let username_text_small = "";
     let image_value_small = "";
     let image_column_small = "cached_image";
@@ -736,7 +737,10 @@ async function createSingleCard(
 
             /* --- HEADER --------------------------------------- */
             if (role === "header") {
-                if (!header_text_small) header_text_small = val_str;
+                if (!header_text_small) {
+                    header_text_small = val_str;
+                    header_column_small = column;
+                }
                 headerElement = addHeaderElement(
                     val_str,
                     col_label,
@@ -1072,6 +1076,9 @@ async function createSingleCard(
         const nameText = document.createElement("span");
         nameText.classList.add("small_card_name_text");
         nameText.textContent = header_text_small;
+        nameText.dataset.titleLangKey = header_column_small;
+        nameText.dataset.titleLangContext = header_text_small;
+        nameText.title = `${format_column_name(header_column_small)}: ${header_text_small}`;
         nameEl.appendChild(nameText);
         textWrap.appendChild(nameEl);
     }
@@ -1086,7 +1093,9 @@ async function createSingleCard(
         dateEl.textContent = timestampDisplay?.displayText
             ?? String(creation_date_small);
         if (timestampDisplay?.titleText) {
-            dateEl.title = timestampDisplay.titleText;
+            dateEl.dataset.titleLangKey = creationDateColumn;
+            dateEl.dataset.titleLangContext = timestampDisplay.titleText;
+            dateEl.title = `${format_column_name(creationDateColumn)}: ${timestampDisplay.titleText}`;
         }
         textWrap.appendChild(dateEl);
     }

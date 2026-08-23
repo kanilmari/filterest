@@ -12,7 +12,7 @@ vi.mock("../../lang/translation_handler.js", () => ({
 
 import { buildRowArticleImageFirstStage } from "./row_article_image_first_stage.js";
 
-function createStage(rows) {
+function createStage(rows, options = {}) {
     let activeRow = rows[0];
     const selected = [];
     const onBackdropActivate = vi.fn();
@@ -26,6 +26,8 @@ function createStage(rows) {
         resolvePath: (filename) => `/storage/${filename}`,
         resolveAlt: (row) => row.alt,
         onBackdropActivate,
+        tableName: options.tableName || "",
+        rowLabel: options.rowLabel || "",
     });
     return { ...result, onBackdropActivate, selected };
 }
@@ -95,5 +97,19 @@ describe("row article image-first stage", () => {
             behavior: "smooth",
             block: "start",
         });
+    });
+
+    test("uses the shared SVG mark-and-label presentation in the full-height viewer", () => {
+        const { element } = createStage(
+            [{ id: 1, filename: "firefox.svg", alt: "Firefox logo" }],
+            { tableName: "app_service_catalog", rowLabel: "Firefox" },
+        );
+
+        const mediaHost = element.querySelector(".row_article_image_first_media");
+        expect(mediaHost?.dataset.imagePresentationKind).toBe("svg-logo");
+        expect(mediaHost?.querySelector(".record_svg_image_presentation__label")?.textContent)
+            .toBe("Firefox");
+        expect(mediaHost?.querySelector("img")?.getAttribute("src"))
+            .toBe("/storage/firefox.svg");
     });
 });

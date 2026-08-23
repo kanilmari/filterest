@@ -15,6 +15,7 @@ const handleLoginShellEntryMock = vi.fn().mockResolvedValue(undefined);
 const runPostAuthBootstrapMock = vi.fn().mockResolvedValue(undefined);
 const hideModalMock = vi.fn();
 const isCrossTabLoginSyncEnabledMock = vi.fn().mockResolvedValue(true);
+const requestSessionAccessPromptMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -43,6 +44,9 @@ async function loadModule() {
     vi.doMock("../config_fetcher.js", () => ({
         isCrossTabLoginSyncEnabled: isCrossTabLoginSyncEnabledMock,
     }));
+    vi.doMock('./session_access_prompt.js', () => ({
+        requestSessionAccessPrompt: requestSessionAccessPromptMock,
+    }));
     return import("./auth_broadcast_sync.js");
 }
 
@@ -57,6 +61,7 @@ describe("auth_broadcast_sync", () => {
         runPostAuthBootstrapMock.mockReset().mockResolvedValue(undefined);
         hideModalMock.mockReset();
         isCrossTabLoginSyncEnabledMock.mockReset().mockResolvedValue(true);
+        requestSessionAccessPromptMock.mockReset();
         vi.restoreAllMocks();
         history.replaceState({}, "", "/?login-entry=1&redirect=%2Freports&register-entry=1");
     });
@@ -82,16 +87,19 @@ describe("auth_broadcast_sync", () => {
         mod.startAuthBroadcastSync();
         await handler({
             type: "logout",
-            detail: { postLogoutPath: "/?login-entry=1" },
+            detail: { reason: 'logout', postLogoutPath: '/' },
         });
 
         expect(applyLoggedOutShellResetMock).toHaveBeenCalledWith({
-            postLogoutPath: "/?login-entry=1",
+            postLogoutPath: "/",
         });
-        expect(navigateToPostLogoutPathMock).toHaveBeenCalledWith(undefined);
+        expect(navigateToPostLogoutPathMock).not.toHaveBeenCalled();
         expect(setAuthModesMock).toHaveBeenCalledTimes(1);
         expect(initTabsMock).toHaveBeenCalledWith({ dataAlreadyLoaded: false });
         expect(handleLoginShellEntryMock).toHaveBeenCalledTimes(1);
+        expect(requestSessionAccessPromptMock).toHaveBeenCalledWith({
+            reason: 'logged-out-another-tab',
+        });
     });
 
     test("remote logout follows the server post-logout target instead of rebuilding the shell", async () => {
@@ -100,20 +108,49 @@ describe("auth_broadcast_sync", () => {
             handler = incomingHandler;
             return () => {};
         });
-        applyLoggedOutShellResetMock.mockResolvedValue({ postLogoutPath: "/login" });
+        applyLoggedOutShellResetMock.mockResolvedValue({
+            postLogoutPath: '/login?auth_notice=logged-out-another-tab',
+        });
         navigateToPostLogoutPathMock.mockReturnValue(true);
         const mod = await loadModule();
 
         mod.startAuthBroadcastSync();
         await handler({
             type: "logout",
-            detail: { postLogoutPath: "/login" },
+            detail: { reason: 'logout', postLogoutPath: "/login" },
         });
 
-        expect(navigateToPostLogoutPathMock).toHaveBeenCalledWith("/login");
+        expect(applyLoggedOutShellResetMock).toHaveBeenCalledWith({
+            postLogoutPath: '/login?auth_notice=logged-out-another-tab',
+        });
+        expect(navigateToPostLogoutPathMock).toHaveBeenCalledWith(
+            '/login?auth_notice=logged-out-another-tab'
+        );
         expect(setAuthModesMock).not.toHaveBeenCalled();
         expect(initTabsMock).not.toHaveBeenCalled();
         expect(handleLoginShellEntryMock).not.toHaveBeenCalled();
+    });
+
+    test('preserves a security session reset without mislabelling it as an explicit logout', async () => {
+        let handler;
+        subscribeToAuthBroadcastMock.mockImplementation((incomingHandler) => {
+            handler = incomingHandler;
+            return () => {};
+        });
+        applyLoggedOutShellResetMock.mockResolvedValue({ postLogoutPath: '/?login-entry=1' });
+        navigateToPostLogoutPathMock.mockReturnValue(true);
+        const mod = await loadModule();
+
+        mod.startAuthBroadcastSync();
+        await handler({
+            type: 'logout',
+            detail: { reason: 'session_reset', postLogoutPath: '/?login-entry=1' },
+        });
+
+        expect(applyLoggedOutShellResetMock).toHaveBeenCalledWith({
+            postLogoutPath: '/?login-entry=1',
+        });
+        expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
     });
 
     test("deduplicates overlapping remote logout events", async () => {

@@ -143,6 +143,29 @@ describe("product_card_view_printer", () => {
         expect(view.querySelector(".product-card-view-detail")?.dataset.column).toBe("seller");
     });
 
+    test("uses the shared SVG logo presentation while keeping the product title", () => {
+        const view = create_product_card_view(
+            "catalog",
+            ["id", "display_name", "hero_asset"],
+            [{
+                id: 12,
+                display_name: "Firefox",
+                hero_asset: "/storage/firefox.svg?rev=3",
+            }],
+            {
+                display_name: { card_element: "header", data_type: "text" },
+                hero_asset: { card_element: "image", data_type: "text" },
+            },
+        );
+
+        const presentation = view.querySelector(".product-card-view-image-presentation");
+        expect(presentation?.dataset.imagePresentationKind).toBe("svg-logo");
+        expect(presentation?.querySelector(".record_svg_image_presentation__label")?.textContent)
+            .toBe("Firefox");
+        expect(presentation?.querySelector("img")?.getAttribute("src"))
+            .toBe("/storage/firefox.svg?rev=3");
+    });
+
     test("switches to the normal card article view on click and keyboard activation", async () => {
         const row = {
             id: 5,

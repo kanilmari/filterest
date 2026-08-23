@@ -1,6 +1,9 @@
 package dtt_1_row_read
 
-import "testing"
+import (
+	"database/sql"
+	"testing"
+)
 
 func TestNormalizeCardDetailsLayout(t *testing.T) {
 	tests := []struct {
@@ -151,5 +154,23 @@ func TestNormalizeResultsViewKeyKeepsSafeViewDimensions(t *testing.T) {
 		if got := normalizeResultsViewKey(unsafe); got != "table" {
 			t.Fatalf("normalizeResultsViewKey(%q) = %q, want table fallback", unsafe, got)
 		}
+	}
+}
+
+func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		userID int
+		want   sql.NullInt64
+	}{
+		{name: "guest", userID: 1, want: sql.NullInt64{}},
+		{name: "authenticated user", userID: 42, want: sql.NullInt64{Int64: 42, Valid: true}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := personalFieldSetAssignmentUser(test.userID); got != test.want {
+				t.Fatalf("assignment user = %#v, want %#v", got, test.want)
+			}
+		})
 	}
 }

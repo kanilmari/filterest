@@ -11,6 +11,11 @@ import {
     bindDatasetLanguageRenderer,
     refreshLocalizedDatasetValues,
 } from "../dataset_value_localizer.js";
+import { appendImageWithSvgPresentation } from "../card_view/svg_image_presentation.js";
+import {
+    buildCardImageRenderOptions,
+    CARD_IMAGE_RENDER_SLOTS,
+} from "../card_view/card_image_render_options.js";
 
 const TITLE_FALLBACK_LANG_KEY = "untitled";
 const EMPTY_STATE_LANG_KEY = "no_rows";
@@ -129,7 +134,12 @@ function createProductCard({
         card.dataset.id = String(rowItem.id);
     }
 
-    card.appendChild(createMediaElement(image, title.text));
+    card.appendChild(createMediaElement(
+        image,
+        title.text,
+        rowItem,
+        tableName,
+    ));
     card.appendChild(createBodyElement(title, detailEntries));
     attachRowOpenBehavior(card, rowItem, tableName);
 
@@ -143,7 +153,7 @@ function createProductCard({
  * @param {string} titleText
  * @returns {HTMLElement}
  */
-function createMediaElement(image, titleText) {
+function createMediaElement(image, titleText, rowItem = null, tableName = "") {
     const media = document.createElement("div");
     media.classList.add("product-card-view-media");
 
@@ -154,7 +164,21 @@ function createMediaElement(image, titleText) {
         img.alt = titleText;
         img.loading = "lazy";
         img.decoding = "async";
-        media.appendChild(img);
+        const presentationHost = document.createElement("div");
+        presentationHost.classList.add("product-card-view-image-presentation");
+        const result = appendImageWithSvgPresentation(presentationHost, img, {
+            imageSrc: image.src,
+            rowLabel: titleText,
+            renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
+            ...buildCardImageRenderOptions(
+                rowItem,
+                image.column || "cached_image",
+                tableName,
+                titleText,
+                CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
+            ),
+        });
+        media.appendChild(result.isSvg ? presentationHost : img);
         return media;
     }
 

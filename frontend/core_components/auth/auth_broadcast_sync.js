@@ -11,6 +11,11 @@ import { handleLoginShellEntry } from "./login_shell_entry.js";
 import { runPostAuthBootstrap } from "./post_auth_bootstrap.js";
 import { hideModal } from "../../reusable_components/modal/modal_builder.js";
 import { isCrossTabLoginSyncEnabled } from "../config_fetcher.js";
+import { requestSessionAccessPrompt } from './session_access_prompt.js';
+import {
+    OTHER_TAB_LOGOUT_NOTICE,
+    buildLoginPathWithAuthNotice,
+} from './auth_session_notice_handler.js';
 
 let syncStarted = false;
 let inFlightLogoutSync = null;
@@ -51,10 +56,18 @@ export async function handleAuthBroadcastEvent(event) {
         }
 
         inFlightLogoutSync = (async () => {
+            const explicitLogout = event.detail?.reason === 'logout';
+            const noticedLoginPath = explicitLogout
+                ? buildLoginPathWithAuthNotice(
+                    event.detail?.postLogoutPath,
+                    OTHER_TAB_LOGOUT_NOTICE
+                )
+                : '';
             const resetResult = await applyLoggedOutShellReset({
-                postLogoutPath: event.detail?.postLogoutPath,
+                postLogoutPath: noticedLoginPath || event.detail?.postLogoutPath,
             });
-            if (navigateToPostLogoutPath(resetResult?.postLogoutPath)) {
+            if ((noticedLoginPath || !explicitLogout)
+                && navigateToPostLogoutPath(resetResult?.postLogoutPath)) {
                 return;
             }
 
@@ -66,6 +79,9 @@ export async function handleAuthBroadcastEvent(event) {
 
             await initTabs({ dataAlreadyLoaded: false });
             await handleLoginShellEntry();
+            if (explicitLogout) {
+                requestSessionAccessPrompt({ reason: OTHER_TAB_LOGOUT_NOTICE });
+            }
         })().finally(() => {
             inFlightLogoutSync = null;
         });

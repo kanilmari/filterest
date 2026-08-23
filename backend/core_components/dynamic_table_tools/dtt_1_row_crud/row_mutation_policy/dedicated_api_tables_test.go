@@ -13,6 +13,9 @@ func TestRequiresDedicatedMutationAPI(t *testing.T) {
 		"dev_agent_workline_tasks",
 		"dev_agent_handover_reports",
 		"dev_agent_handover_report_items",
+		"system_column_field_sets",
+		"system_column_field_set_members",
+		"system_view_field_set_assignments",
 	} {
 		if !RequiresDedicatedMutationAPI(tableName) {
 			t.Fatalf("%s must reject generic mutations", tableName)
@@ -20,5 +23,8 @@ func TestRequiresDedicatedMutationAPI(t *testing.T) {
 	}
 	if RequiresDedicatedMutationAPI("customer_records") {
 		t.Fatal("ordinary application datasets must retain generic CRUD")
+	}
+	if !RequiresDedicatedMutationAPI("  SYSTEM_COLUMN_FIELD_SETS  ") {
+		t.Fatal("protected-table matching must ignore case and surrounding whitespace")
 	}
 }

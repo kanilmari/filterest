@@ -63,6 +63,9 @@
   min-width: 250px;
   max-width: min(360px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   box-sizing: border-box;
   border-collapse: separate;
   border-spacing: 0 2px;
@@ -108,6 +111,61 @@
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.filterbar-clock-bar__update-preview-footer td {
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border_color);
+}
+
+.filterbar-clock-bar__update-preview-open,
+.filterbar-clock-bar__update-preview-close {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--fw-color-primary, var(--border_color));
+  border-radius: var(--border_radius_small);
+  color: var(--text_color);
+  background: var(--bg_color);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filterbar-clock-bar__update-preview-open:hover,
+.filterbar-clock-bar__update-preview-open:focus-visible,
+.filterbar-clock-bar__update-preview-close:hover,
+.filterbar-clock-bar__update-preview-close:focus-visible {
+  outline: 2px solid var(--fw-color-primary, currentcolor);
+  outline-offset: 2px;
+}
+
+.filterbar-clock-bar__update-preview h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.filterbar-clock-bar__update-preview p {
+  margin: 6px 0;
+}
+
+.filterbar-clock-bar__update-preview-notice {
+  font-weight: 600;
+}
+
+.filterbar-clock-bar__update-preview-fact {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0;
+}
+
+.filterbar-clock-bar__update-preview code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 4px 0 8px;
+  padding: 5px 6px;
+  border-radius: var(--border_radius_small);
+  background: var(--bg_color);
+  user-select: all;
 }
 
 .filterbar-clock-bar__version-info-shell[hidden],

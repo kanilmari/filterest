@@ -77,6 +77,56 @@ func buildReq(t *testing.T, store *gorillaSessions.CookieStore, method, target s
 	return req
 }
 
+func TestExtractRouteTableTargetRejectsConflictingAliases(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		body   string
+	}{
+		{name: "query names", target: "/api/add-row?dataset=orders&table=customers"},
+		{name: "query UIDs", target: "/api/add-row?dataset_uid=77&table_uid=88"},
+		{name: "query and body names", target: "/api/add-row?dataset=orders", body: `{"table_name":"customers"}`},
+		{name: "body names", target: "/api/add-row", body: `{"dataset_name":"orders","table_name":"customers"}`},
+		{name: "body UIDs", target: "/api/add-row", body: `{"dataset_uid":77,"table_uid":88}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, test.target, strings.NewReader(test.body))
+			if test.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			if _, _, err := extractRouteTableTarget(request, "/api/add-row"); err == nil {
+				t.Fatal("conflicting aliases must be rejected")
+			}
+		})
+	}
+}
+
+func TestExtractRouteTableTargetAcceptsMatchingAliasesAndRestoresBody(t *testing.T) {
+	body := `{"dataset_name":"orders","table":"orders","dataset_uid":77,"table_uid":"77","canary":"kept"}`
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/add-row?dataset=orders&table=orders&dataset_uid=77&table_uid=77",
+		strings.NewReader(body),
+	)
+	request.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	tableName, tableUID, err := extractRouteTableTarget(request, "/api/add-row")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tableName != "orders" || tableUID != "77" {
+		t.Fatalf("target = %q/%q, want orders/77", tableName, tableUID)
+	}
+	restoredBody, err := io.ReadAll(request.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(restoredBody) != body {
+		t.Fatalf("restored body = %q, want %q", restoredBody, body)
+	}
+}
+
 // noopHandler records whether it was called and writes 200 OK.
 func noopHandler(called *bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -90,13 +140,14 @@ func noopHandler(called *bool) http.HandlerFunc {
 // acMockConfig controls what the scripted DB driver returns for each query type
 // encountered inside WithAccessControl and its callees.
 type acMockConfig struct {
-	loginToBrowse     bool // returned for system_config/login_to_browse query
-	loginToBrowseErr  bool // simulate DB error for login_to_browse
-	instanceRole      string
-	specificRelated   bool // returned for system_functions/specific_table_related
-	isAdmin           bool // whether admin membership row exists (group_id=1)
-	permissionGranted bool // whether permission row exists in system_group_table_func_rights
-	tableExists       bool // returned for information_schema.tables EXISTS check
+	loginToBrowse        bool // returned for system_config/login_to_browse query
+	loginToBrowseErr     bool // simulate DB error for login_to_browse
+	instanceRole         string
+	specificRelated      bool // returned for system_functions/specific_table_related
+	isAdmin              bool // whether admin membership row exists (group_id=1)
+	permissionGranted    bool // whether permission row exists in system_group_table_func_rights
+	tableExists          bool // returned for information_schema.tables EXISTS check
+	tableIdentityMatches bool // whether a supplied table name and UID resolve to one registry row
 }
 
 type acMockDriver struct{ cfg acMockConfig }
@@ -204,6 +255,9 @@ func (c *acMockConn) QueryContext(_ context.Context, query string, args []driver
 	case strings.Contains(query, "information_schema.tables"):
 		// Table existence check in the ?datasets= multi-table path.
 		return mockBoolRow("exists", c.cfg.tableExists), nil
+
+	case strings.Contains(query, "table_uid::text") && strings.Contains(query, "FROM public.system_db_tables"):
+		return mockBoolRow("exists", c.cfg.tableIdentityMatches), nil
 
 	default:
 		return nil, fmt.Errorf("acMockConn: unexpected query: %s", query)
@@ -319,6 +373,28 @@ func TestWithAccessControl_AnonymousUser_LoginRequired(t *testing.T) {
 	}
 	if loc := rr.Header().Get("Location"); loc != "/login" {
 		t.Errorf("Location: got %q, want /login", loc)
+	}
+}
+
+func TestWithAccessControl_AnonymousDocument_LoginRequiredExplainsSessionEnd(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{loginToBrowse: true})
+	req := buildReq(t, store, http.MethodGet, "/admin/site_languages?tab=active", nil, nil, "")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/admin/", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Error("handler must not be called for an anonymous protected document")
+	}
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusSeeOther)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/login?auth_notice=session-ended&redirect=%2Fadmin%2Fsite_languages%3Ftab%3Dactive" {
+		t.Fatalf("Location: got %q", loc)
 	}
 }
 
@@ -461,6 +537,62 @@ func TestWithAccessControl_NonSpecificTable_Denied(t *testing.T) {
 	}
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("status: got %d, want 403", rr.Code)
+	}
+}
+
+func TestWithAccessControl_GuestDocumentDenialRedirectsToLoginWithReturnPath(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		loginToBrowse:     false,
+		specificRelated:   false,
+		permissionGranted: false,
+		isAdmin:           false,
+	})
+	req := buildReq(t, store, http.MethodGet, "/admin/site_languages?tab=active", int(1), nil, "")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/admin/", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Error("handler must not be called when guest page access is denied")
+	}
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusSeeOther)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/login?auth_notice=session-ended&redirect=%2Fadmin%2Fsite_languages%3Ftab%3Dactive" {
+		t.Fatalf("Location: got %q", loc)
+	}
+	if contentType := rr.Header().Get("Content-Type"); strings.Contains(contentType, "application/json") {
+		t.Fatalf("document redirect must not expose a JSON error, got %q", contentType)
+	}
+}
+
+func TestWithAccessControl_GuestAPIDenialRemainsJSONForbidden(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		loginToBrowse:     false,
+		specificRelated:   false,
+		permissionGranted: false,
+		isAdmin:           false,
+	})
+	req := buildReq(t, store, http.MethodGet, "/api/list", int(1), nil, "")
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/api/list", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Error("handler must not be called when guest API access is denied")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusForbidden)
+	}
+	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
+		t.Fatalf("API denial must remain JSON, got %q", contentType)
 	}
 }
 
@@ -609,6 +741,71 @@ func TestWithAccessControl_SpecificTable_QueryParam_TableUID(t *testing.T) {
 	}
 }
 
+func TestWithAccessControl_RejectsMismatchedDatasetNameAndTableUID(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		specificRelated:      true,
+		permissionGranted:    true,
+		tableIdentityMatches: false,
+	})
+	req := buildReq(t, store, http.MethodPost,
+		"/api/add-row-multipart?dataset=system_column_field_sets&table_uid=343",
+		int(1), nil, "multipart/form-data; boundary=test")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/api/add-row-multipart", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Fatal("handler must not be called for mismatched dataset identifiers")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWithAccessControl_AllowsMatchingDatasetNameAndTableUID(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		specificRelated:      true,
+		permissionGranted:    true,
+		tableIdentityMatches: true,
+	})
+	req := buildReq(t, store, http.MethodPost,
+		"/api/add-row-multipart?dataset=orders&table_uid=77",
+		int(42), nil, "multipart/form-data; boundary=test")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/api/add-row-multipart", "test", noopHandler(&called))(rr, req)
+
+	if !called {
+		t.Fatal("handler must be called when dataset identifiers match and permission is granted")
+	}
+}
+
+func TestWithAccessControl_RejectsPluralAndSingularDatasetTargets(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		specificRelated:   true,
+		permissionGranted: true,
+	})
+	req := buildReq(t, store, http.MethodGet,
+		"/api/get-results?datasets=orders,customers&dataset=orders",
+		int(42), nil, "")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/api/get-results", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Fatal("handler must not be called when plural and singular targets are combined")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
 // TestWithAccessControl_SpecificTable_URLPath extracts the table name from the
 // URL path suffix when no query parameters are present.
 // Route /api/get-results + URL /api/get-results/mytable → tableName = "mytable".
@@ -703,9 +900,10 @@ func TestWithAccessControl_SpecificTable_JSONBody_TableUID(t *testing.T) {
 func TestWithAccessControl_SpecificTable_JSONBody_NumericDatasetUID(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, acMockConfig{
-		specificRelated:   true,
-		permissionGranted: true,
-		isAdmin:           false,
+		specificRelated:      true,
+		permissionGranted:    true,
+		isAdmin:              false,
+		tableIdentityMatches: true,
 	})
 	body := []byte(`{"item_id":4,"item_type":"table","dataset_uid":77,"dataset_name":"users","new_folder_id":10}`)
 	req := buildReq(t, store, http.MethodPost, "/api/update-table-folder", int(42),

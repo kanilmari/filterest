@@ -159,6 +159,38 @@ describe('buildImageGallery', () => {
         expect(gallery.querySelector('.big_card_thumbnail_row')).not.toBeNull();
     });
 
+    test('uses the shared SVG presentation and parent-row label in image-section thumbnails', () => {
+        const gallery = buildImageGallery(
+            'app_service_catalog',
+            1,
+            {
+                dataset: 'system_assets',
+                column: 'record_id',
+                rows: [{
+                    id: 11,
+                    asset_kind: 'image',
+                    filename: 'firefox.svg',
+                    mime_type: 'image/svg+xml',
+                }],
+            },
+            () => {},
+            {
+                canUpload: false,
+                imageFirstContext: {
+                    tableName: 'app_service_catalog',
+                    rowItem: { id: 1, name: 'Firefox' },
+                    rowLabel: 'Firefox',
+                },
+            },
+        );
+
+        const thumbnail = gallery.querySelector('[data-testid="big-card-image-thumb-0"]');
+        expect(thumbnail?.dataset.imagePresentationKind).toBe('svg-logo');
+        expect(thumbnail?.querySelector('.record_svg_image_presentation__label')?.textContent)
+            .toBe('Firefox');
+        expect(thumbnail?.querySelector('img')?.getAttribute('src')).toBe('/storage/firefox.svg');
+    });
+
     test.each([true, false])(
         'renders a lone parent-row image thumbnail whether primary is %s',
         (isPrimary) => {

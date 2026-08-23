@@ -18,6 +18,7 @@ import (
 )
 
 func listAccessibleViewFieldSets(q dbutils.Querier, tableUID int, userID int64) ([]viewFieldSet, error) {
+	preferenceOwner := personalViewFieldSetOwner(userID)
 	rows, err := q.Query(`
 		SELECT sets.id, sets.name,
 		       CASE WHEN sets.owner_user_id IS NULL THEN 'shared' ELSE 'personal' END,
@@ -29,7 +30,7 @@ func listAccessibleViewFieldSets(q dbutils.Querier, tableUID int, userID int64) 
 		 AND COALESCE(details.hide_everywhere, false) = false
 		WHERE sets.table_uid = $1
 		  AND (sets.owner_user_id = $2 OR sets.owner_user_id IS NULL)
-		ORDER BY (sets.owner_user_id IS NULL), lower(sets.name), members.sort_order`, tableUID, userID)
+		ORDER BY (sets.owner_user_id IS NULL), lower(sets.name), members.sort_order`, tableUID, preferenceOwner)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +58,7 @@ func listAccessibleViewFieldSets(q dbutils.Querier, tableUID int, userID int64) 
 }
 
 func resolveEffectiveViewFieldSet(q dbutils.Querier, tableUID, viewID int, userID int64, viewKey string) (*int64, string, []string, error) {
+	preferenceOwner := personalViewFieldSetOwner(userID)
 	var fieldSetID int64
 	var scope string
 	err := q.QueryRow(`
@@ -66,7 +68,7 @@ func resolveEffectiveViewFieldSet(q dbutils.Querier, tableUID, viewID int, userI
 		WHERE assignments.table_uid = $1 AND assignments.view_id = $2
 		  AND (assignments.user_id = $3 OR assignments.user_id IS NULL)
 		ORDER BY (assignments.user_id IS NOT NULL) DESC
-		LIMIT 1`, tableUID, viewID, userID).Scan(&fieldSetID, &scope)
+		LIMIT 1`, tableUID, viewID, preferenceOwner).Scan(&fieldSetID, &scope)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, "", nil, err
 	}
@@ -243,11 +245,12 @@ func orderedSelectableViewFieldSetColumns(
 }
 
 func resolveViewFieldSetAssignments(q dbutils.Querier, tableUID, viewID int, userID int64) (*int64, *int64, error) {
+	preferenceOwner := personalViewFieldSetOwner(userID)
 	rows, err := q.Query(`
 		SELECT user_id, field_set_id
 		FROM public.system_view_field_set_assignments
 		WHERE table_uid = $1 AND view_id = $2
-		  AND (user_id = $3 OR user_id IS NULL)`, tableUID, viewID, userID)
+		  AND (user_id = $3 OR user_id IS NULL)`, tableUID, viewID, preferenceOwner)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -267,4 +270,13 @@ func resolveViewFieldSetAssignments(q dbutils.Querier, tableUID, viewID int, use
 		}
 	}
 	return personalID, siteID, rows.Err()
+}
+
+// The built-in guest identity (user 1) authorizes public dataset reads but is
+// not a person who may own or receive a personal presentation preference.
+func personalViewFieldSetOwner(userID int64) sql.NullInt64 {
+	if userID <= 1 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: userID, Valid: true}
 }

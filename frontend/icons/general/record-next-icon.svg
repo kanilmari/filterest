@@ -1,0 +1,7 @@
+<!-- record-next-icon.svg
+     Draws the next-record control as a bar followed by a right-pointing triangle.
+     Bridges row navigation buttons with the shared CSS-mask icon renderer.
+     Exists to distinguish record navigation from image arrows and fast forward. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M5 5h2v14H5V5Zm4 0 9 7-9 7V5Z"/>
+</svg>

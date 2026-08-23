@@ -26,17 +26,19 @@ import {
     buildPasswordResetBody,
     formatOtpError,
     resolvePostLoginTarget,
-    computeCloseTarget,
+    computeStandaloneLoginBackTarget,
 } from "./login_page_builder_helpers.js";
 import { publishAuthLogin } from "./auth_broadcast.js";
 import { isCrossTabLoginSyncEnabled } from "../config_fetcher.js";
 import { initializeStandaloneLoginShell } from "./login_page_shell_builder.js";
+import { initializeAuthSessionNotice } from './auth_session_notice_handler.js';
 import "./auth_preference_controls.js";
 
 // 2-step AJAX login: Phase 1 (credentials) → Phase 2 (OTP verification)
 document.addEventListener("DOMContentLoaded", async () => {
     await ensurePasswordVisibilityIconsLoaded();
     initializeStandaloneLoginShell();
+    initializeAuthSessionNotice();
     initializeTourGalleryModals();
 
     const loginForm = document.querySelector("form");
@@ -443,17 +445,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    const closeBtn = document.querySelector(".auth-form-close-button");
-    if (closeBtn) {
-        closeBtn.addEventListener("click", (e) => {
+    document.querySelectorAll("[data-auth-public-back]").forEach((returnButton) => {
+        returnButton.addEventListener("click", (e) => {
             e.preventDefault();
-            window.location.href = computeCloseTarget(
+            window.location.replace(computeStandaloneLoginBackTarget(
                 document.referrer,
                 window.location.origin,
-                window.location.pathname
-            );
+                window.location.search
+            ));
         });
-    }
+    });
 
     const togglePasswordBtn = document.getElementById("toggle-password");
     const passwordInput = document.getElementById("password");

@@ -5,12 +5,14 @@
 
 import { createPipeline, createStage } from './frontend_pipeline.js';
 import { requestLoginRedirect } from '../auth/login_redirect_handler.js';
+import { requestSessionAccessPrompt } from '../auth/session_access_prompt.js';
 import { showErrorToast, showWarningToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import {
     isMutatingMethod,
     resolveEndpointUrl,
     buildFetchOptions,
     isAuthFailure403,
+    isGuestFunctionAccessDenied403,
     isCsrfFailureResponse,
     createAuthError,
     createRateLimitError,
@@ -407,16 +409,26 @@ async function authRedirectStage(ctx) {
         console.warn('[api_pipeline] authRedirectStage: failed to inspect 403 response body:', err);
     }
 
-    if (!isAuthFailure403(bodyText)) {
+    if (isAuthFailure403(bodyText)) {
+        if (!ctx.suppressAuthRedirect) {
+            requestLoginRedirect();
+        }
+        return {
+            abort: true,
+            reason: 'auth_redirect',
+            error: createAuthError(status, ctx.routeName),
+        };
+    }
+
+    const isGuestShell = localStorage.getItem('button_state') !== 'logout';
+    if (!isGuestShell || !isGuestFunctionAccessDenied403(bodyText)) {
         return;
     }
 
-    if (!ctx.suppressAuthRedirect) {
-        requestLoginRedirect();
-    }
+    requestSessionAccessPrompt();
     return {
         abort: true,
-        reason: 'auth_redirect',
+        reason: 'session_access_prompt',
         error: createAuthError(status, ctx.routeName),
     };
 }

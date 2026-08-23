@@ -11,12 +11,16 @@ import (
 )
 
 func TestDeleteRowsRejectsDedicatedAPIReportTableBeforeBodyAccess(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/api/delete-rows", nil)
-	recorder := httptest.NewRecorder()
+	for _, tableName := range []string{"dev_agent_handover_report_items", "system_view_field_set_assignments"} {
+		t.Run(tableName, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/delete-rows", nil)
+			recorder := httptest.NewRecorder()
 
-	DeleteRowsHandler(recorder, request, "dev_agent_handover_report_items")
+			DeleteRowsHandler(recorder, request, tableName)
 
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+			if recorder.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+			}
+		})
 	}
 }

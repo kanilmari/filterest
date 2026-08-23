@@ -29,6 +29,8 @@ export const CARD_IMAGE_RENDER_SLOTS = Object.freeze({
     CARD_MEDIA: "card_media",
     SMALL_THUMBNAIL: "small_thumbnail",
     ROW_ARTICLE_INLINE: "row_article_inline",
+    ROW_ARTICLE_GALLERY_THUMBNAIL: "row_article_gallery_thumbnail",
+    IMAGE_FIRST: "image_first",
     STANDALONE: "standalone",
 });
 
@@ -49,5 +51,6 @@ export function buildCardImageRenderOptions(
         imageMetadata: readCompanionValue(rowItem, safeColumnName, "metadata_json"),
         imageTitle: readCompanionValue(rowItem, safeColumnName, "title"),
         imageOriginalName: readCompanionValue(rowItem, safeColumnName, "original_name"),
+        imageMimeType: readCompanionValue(rowItem, safeColumnName, "mime_type"),
     };
 }

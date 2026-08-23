@@ -11,12 +11,16 @@ import (
 )
 
 func TestUpdateRowRejectsDedicatedAPIReportTableBeforeSessionAccess(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/api/update-row", nil)
-	recorder := httptest.NewRecorder()
+	for _, tableName := range []string{"dev_agent_handover_reports", "system_column_field_set_members"} {
+		t.Run(tableName, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/update-row", nil)
+			recorder := httptest.NewRecorder()
 
-	UpdateRowHandler(recorder, request, "dev_agent_handover_reports")
+			UpdateRowHandler(recorder, request, tableName)
 
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+			if recorder.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+			}
+		})
 	}
 }

@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const requestLoginRedirectMock = vi.fn();
+const requestSessionAccessPromptMock = vi.fn();
 const showErrorToastMock = vi.fn();
 const showWarningToastMock = vi.fn();
 
@@ -14,6 +15,9 @@ async function loadModule() {
     vi.resetModules();
     vi.doMock('../auth/login_redirect_handler.js', () => ({
         requestLoginRedirect: requestLoginRedirectMock,
+    }));
+    vi.doMock('../auth/session_access_prompt.js', () => ({
+        requestSessionAccessPrompt: requestSessionAccessPromptMock,
     }));
     vi.doMock('../../reusable_components/notifications/toast_notification_printer.js', () => ({
         showErrorToast: showErrorToastMock,
@@ -44,6 +48,7 @@ function buildResponse(body, { ok = true, status = 200, statusText = 'OK', conte
 describe('api_pipeline', () => {
     beforeEach(() => {
         requestLoginRedirectMock.mockReset();
+        requestSessionAccessPromptMock.mockReset();
         showErrorToastMock.mockReset();
         showWarningToastMock.mockReset();
         vi.restoreAllMocks();
@@ -139,5 +144,21 @@ describe('api_pipeline', () => {
             }],
         ]);
         expect(showErrorToastMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('replaces a guest function-level 403 toast with one session prompt', async () => {
+        localStorage.setItem('button_state', 'login');
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(
+            { error: '403 - Forbidden (function-level)', code: 403 },
+            { ok: false, status: 403, statusText: 'Forbidden' }
+        )));
+        const mod = await loadModule();
+
+        const result = await mod.runApiPipeline({ routeName: 'datasetNames' });
+
+        expect(result.abort).toBe(true);
+        expect(result.reason).toBe('session_access_prompt');
+        expect(requestSessionAccessPromptMock).toHaveBeenCalledTimes(1);
+        expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 });

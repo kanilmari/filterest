@@ -128,6 +128,11 @@ describe("admin version info indicator", () => {
             .toBe("Ajotapa");
         expect(panel.querySelector('[data-version-info-value="runtime"]')?.textContent)
             .toBe("Docker");
+        const updateButton = panel.querySelector(
+            '[data-testid="filterbar-admin-update-preview-open"]'
+        );
+        expect(updateButton?.textContent).toBe("Päivitä…");
+        expect(updateButton?.getAttribute("aria-expanded")).toBe("false");
         expect(panel.hidden).toBe(true);
 
         indicator.click();
@@ -135,6 +140,12 @@ describe("admin version info indicator", () => {
         expect(panel.hidden).toBe(false);
         expect(indicator.hasAttribute("title")).toBe(false);
         panel.click();
+        expect(panel.hidden).toBe(false);
+
+        updateButton.click();
+        expect(updateButton.getAttribute("aria-expanded")).toBe("true");
+        expect(panel.querySelector('[data-testid="filterbar-admin-update-preview"]')?.textContent)
+            .toContain("Tästä näkymästä ei asenneta eikä muuteta mitään.");
         expect(panel.hidden).toBe(false);
 
         indicator.click();
@@ -208,6 +219,8 @@ describe("admin version info indicator", () => {
         expect(indicator.hasAttribute("title")).toBe(false);
         expect(indicator.dataset.closedTooltip).toContain("Database v. 8.0.55 (compatible)");
         expect(indicator.dataset.closedTooltip).toContain("Runtime Native");
+        expect(panel.querySelector('[data-testid="filterbar-admin-update-preview-open"]'))
+            .toBeNull();
 
         document.documentElement.setAttribute("lang", "zh-CN");
         await vi.waitFor(() => {

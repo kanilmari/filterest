@@ -31,6 +31,7 @@ import {
     enable_experimental_row_article_row_navigation,
     image_first_view_details_position,
 } from "../../../ui_config.js";
+import { resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
 
 function resolveImageAltText(row = {}) {
     return [row?.original_name, row?.title, row?.filename]
@@ -66,6 +67,23 @@ function resolveHeaderInitial(rowItem, sortedColumns, dataTypes) {
         const value = String(rowItem?.[column] ?? "").trim();
         if (value) {
             return value[0];
+        }
+    }
+    return "";
+}
+
+function resolveRowPresentationLabel(rowItem, sortedColumns, dataTypes) {
+    for (const column of sortedColumns) {
+        const { baseRoles } = parseRoleString(dataTypes[column]?.card_element || "");
+        if (!baseRoles.includes("header")) {
+            continue;
+        }
+        const value = resolveDatasetDisplayValue(
+            rowItem?.[column],
+            dataTypes?.[column] || null,
+        ).trim();
+        if (value) {
+            return value;
         }
     }
     return "";
@@ -171,6 +189,11 @@ export async function openImageFirstView({
         activeImageRow,
     );
     const imageEntries = resolvedRows.map((row, index) => ({ row, index }));
+    const rowPresentationLabel = resolveRowPresentationLabel(
+        rowItem,
+        sortedColumns,
+        dataTypes,
+    );
     let closeImageFirstView = null;
     const stage = buildRowArticleImageFirstStage({
         imageEntries,
@@ -180,6 +203,8 @@ export async function openImageFirstView({
         },
         resolvePath: resolveImagePath,
         resolveAlt: resolveImageAltText,
+        tableName,
+        rowLabel: rowPresentationLabel,
         onBackdropActivate: () => closeImageFirstView?.(),
     });
     if (!stage) {
@@ -206,9 +231,10 @@ export async function openImageFirstView({
     shell.classList.add("image_first_view");
     shell.dataset.testid = "image-first-view";
 
+    let rowNavigation = null;
     if (enable_experimental_row_article_row_navigation) {
         const cardContainer = selectedCard?.closest?.(".card_container");
-        const rowNavigation = buildRowArticleRowNavigation({
+        rowNavigation = buildRowArticleRowNavigation({
             cardContainer,
             currentRowId: rowItem.id,
             onNavigate: (targetRow, targetCard) => {
@@ -220,9 +246,6 @@ export async function openImageFirstView({
                 });
             },
         });
-        if (rowNavigation) {
-            shell.appendChild(rowNavigation);
-        }
     }
 
     shell.append(stage.element, rowArticleContentElement);
@@ -231,6 +254,7 @@ export async function openImageFirstView({
         contentElement: shell,
         classNames: ["image_first_view_modal"],
         ariaLabel,
+        topControlElements: rowNavigation ? [rowNavigation] : [],
     });
     closeImageFirstView = modalResult?.close || null;
     stage.sync();

@@ -1,0 +1,7 @@
+<!-- record-previous-icon.svg
+     Draws the previous-record control as a left-pointing triangle followed by a bar.
+     Bridges row navigation buttons with the shared CSS-mask icon renderer.
+     Exists to distinguish record navigation from image arrows and fast rewind. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M15 5v14l-9-7 9-7Zm2 0h2v14h-2V5Z"/>
+</svg>

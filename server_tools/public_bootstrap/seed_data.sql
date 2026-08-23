@@ -464,20 +464,16 @@ BEGIN
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'guest_user') THEN
         GRANT SELECT ON TABLE public.system_table_views TO guest_user;
-        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+        GRANT SELECT ON TABLE
             public.system_column_field_sets,
             public.system_column_field_set_members,
             public.system_view_field_set_assignments
-        TO guest_user;
-        GRANT USAGE, SELECT ON SEQUENCE
-            public.system_column_field_sets_id_seq,
-            public.system_view_field_set_assignments_id_seq
         TO guest_user;
     END IF;
 END $$;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.6.0', 'Filterest generated public bootstrap');
+VALUES ('9.6.1', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 

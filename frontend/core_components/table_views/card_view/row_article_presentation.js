@@ -4,6 +4,7 @@
 // Exists to keep the standalone image-first view independent from the ordinary article opener.
 
 import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { createMaskIconSpan } from "../../../icons/icon_mask_builder.js";
 import {
     normalizeRowArticleDetailsPosition,
     ROW_ARTICLE_DETAILS_POSITIONS,
@@ -13,6 +14,11 @@ export {
     normalizeRowArticleDetailsPosition,
     ROW_ARTICLE_DETAILS_POSITIONS,
 } from "./row_article_presentation_options.js";
+
+const ROW_NAVIGATION_ICON_PATHS = {
+    previous: "/frontend/icons/general/record-previous-icon.svg",
+    next: "/frontend/icons/general/record-next-icon.svg",
+};
 
 /**
  * Places the details disclosure immediately before or after the description.
@@ -49,7 +55,21 @@ export function placeRowArticleDetails(contentElement, requestedPosition) {
     }
 }
 
-function createRowNavigationButton({ direction, disabled, onActivate }) {
+function resolveRowNavigationPreview(targetCard) {
+    const media = targetCard?.querySelector?.(
+        ".card_image [data-image-first-src], .card_image img",
+    );
+    return media?.dataset?.imageFirstSrc
+        || media?.getAttribute?.("src")
+        || "";
+}
+
+function createRowNavigationButton({
+    direction,
+    disabled,
+    onActivate,
+    targetCard = null,
+}) {
     const isPrevious = direction === "previous";
     const langKey = isPrevious ? "previous_row" : "next_row";
     const fallback = isPrevious ? "Previous record" : "Next record";
@@ -63,7 +83,26 @@ function createRowNavigationButton({ direction, disabled, onActivate }) {
     button.dataset.testid = `row-article-${direction}-row`;
     button.dataset.titleLangKey = langKey;
     button.dataset.ariaLabelLangKey = langKey;
-    button.textContent = isPrevious ? "«" : "»";
+    const icon = createMaskIconSpan(
+        ROW_NAVIGATION_ICON_PATHS[direction],
+        ["row_article_row_navigation_icon"],
+    );
+    const previewSrc = resolveRowNavigationPreview(targetCard);
+    const preview = document.createElement("img");
+    preview.classList.add("row_article_row_navigation_preview");
+    preview.alt = "";
+    preview.setAttribute("aria-hidden", "true");
+    preview.decoding = "async";
+    if (previewSrc) {
+        preview.src = previewSrc;
+    } else {
+        preview.hidden = true;
+    }
+    if (isPrevious) {
+        button.append(icon, preview);
+    } else {
+        button.append(preview, icon);
+    }
     button.title = getTranslationForKey(langKey) || fallback;
     button.setAttribute("aria-label", button.title);
     button.disabled = disabled;
@@ -108,16 +147,21 @@ export function buildRowArticleRowNavigation({
         onNavigate(targetCard._row, targetCard);
     };
 
+    const previousCard = resultCards[currentIndex - 1] || null;
+    const nextCard = resultCards[currentIndex + 1] || null;
+
     navigation.append(
         createRowNavigationButton({
             direction: "previous",
             disabled: currentIndex === 0,
             onActivate: () => navigateToIndex(currentIndex - 1),
+            targetCard: previousCard,
         }),
         createRowNavigationButton({
             direction: "next",
             disabled: currentIndex === resultCards.length - 1,
             onActivate: () => navigateToIndex(currentIndex + 1),
+            targetCard: nextCard,
         }),
     );
     return navigation;

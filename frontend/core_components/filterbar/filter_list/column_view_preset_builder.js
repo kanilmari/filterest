@@ -37,6 +37,7 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
     let activeFieldSetID = null;
     let personalFieldSetID = null;
     let siteDefaultFieldSetID = null;
+    let canEditPersonal = false;
     let canEditSiteDefault = false;
     let serverCollectionsAvailable = false;
     let picker = null;
@@ -168,8 +169,8 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
     function render() {
         if (destroyed) return;
         modeButton.hidden = !serverCollectionsAvailable || !canEditSiteDefault;
-        select.hidden = !serverCollectionsAvailable;
-        actions.hidden = !serverCollectionsAvailable;
+        select.hidden = !serverCollectionsAvailable || !canEditPersonal;
+        actions.hidden = !serverCollectionsAvailable || (!canEditPersonal && !editingSiteDefault);
         modeButton.textContent = editingSiteDefault
             ? t("edit_personal_field_selection", "Palaa omaan valintaan")
             : t("edit_site_field_default", "Muokkaa sivuston oletusta");
@@ -210,6 +211,7 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
         activeFieldSetID = response?.active_field_set_id ?? null;
         personalFieldSetID = response?.personal_field_set_id ?? null;
         siteDefaultFieldSetID = response?.site_default_field_set_id ?? null;
+        canEditPersonal = response?.can_edit_personal === true;
         canEditSiteDefault = response?.can_edit_site_default === true;
         const availableColumns = Array.isArray(response?.available_columns)
             ? response.available_columns

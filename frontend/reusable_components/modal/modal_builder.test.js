@@ -97,6 +97,42 @@ describe("modal_builder accessibility", () => {
         expect(bodyButton.classList.contains("saturate_on_hover")).toBe(true);
     });
 
+    test("resets full-screen image presentation before reusing the modal as a dialog", () => {
+        const imageContent = document.createElement("div");
+        const first = createModal({
+            skipModalTitle: true,
+            contentElements: [imageContent],
+            width: "auto",
+            maxWidth: "100vw",
+            maxHeight: "100vh",
+        });
+        first.modal.classList.add("image_modal", "image_first_view_modal");
+        first.modal._imageModalClassNames = ["image_first_view_modal"];
+        first.modal_overlay.classList.add(
+            "modal_overlay_blur",
+            "image-modal-controls-active",
+            "image-modal-content-scrolled",
+        );
+
+        const message = document.createElement("p");
+        const second = createModal({
+            titlePlainText: "Sign-in required",
+            contentElements: [message],
+            width: "520px",
+            maxWidth: "calc(100vw - 32px)",
+        });
+
+        expect(second.modal.classList.contains("image_modal")).toBe(false);
+        expect(second.modal.classList.contains("image_first_view_modal")).toBe(false);
+        expect(second.modal._imageModalClassNames).toEqual([]);
+        expect(second.modal.style.width).toBe("520px");
+        expect(second.modal.style.maxWidth).toBe("calc(100vw - 32px)");
+        expect(second.modal.style.maxHeight).toBe("");
+        expect(second.modal_overlay.classList.contains("modal_overlay_blur")).toBe(false);
+        expect(second.modal_overlay.classList.contains("image-modal-controls-active")).toBe(false);
+        expect(second.modal_overlay.classList.contains("image-modal-content-scrolled")).toBe(false);
+    });
+
     test("cycles Tab and Shift+Tab inside the open modal", () => {
         const firstButton = document.createElement("button");
         firstButton.type = "button";

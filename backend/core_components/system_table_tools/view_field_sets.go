@@ -40,6 +40,7 @@ type viewFieldSetsResponse struct {
 	AvailableColumns   []string       `json:"available_columns"`
 	VisibleColumns     []string       `json:"visible_columns"`
 	FieldSets          []viewFieldSet `json:"field_sets"`
+	CanEditPersonal    bool           `json:"can_edit_personal"`
 	CanEditSiteDefault bool           `json:"can_edit_site_default"`
 }
 
@@ -65,14 +66,14 @@ type deleteViewFieldSetRequest struct {
 	FieldSetID int64 `json:"field_set_id"`
 }
 
-// GetViewFieldSetsHandler resolves personal > site > metadata defaults and lists
-// the current user's own and shared reusable collections.
+// GetViewFieldSetsHandler resolves personal > site > metadata defaults. Guest
+// readers receive the site/default layer without any personal collection data.
 func GetViewFieldSetsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userID, err := authenticatedViewFieldSetUserID(r)
+	userID, err := readableViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())
 		return
@@ -130,7 +131,7 @@ func GetViewFieldSetsHandler(w http.ResponseWriter, r *http.Request) {
 		Dataset: dataset, ViewKey: viewKey, EffectiveScope: scope,
 		ActiveFieldSetID: activeID, PersonalFieldSetID: personalID,
 		SiteFieldSetID: siteID, AvailableColumns: availableColumns, VisibleColumns: visibleColumns,
-		FieldSets: sets, CanEditSiteDefault: canEditSite,
+		FieldSets: sets, CanEditPersonal: userID > 1, CanEditSiteDefault: canEditSite,
 	})
 }
 
@@ -435,6 +436,14 @@ func authenticatedViewFieldSetUserID(r *http.Request) (int, error) {
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 1 {
 		return 0, fmt.Errorf("authenticated user required")
+	}
+	return userID, nil
+}
+
+func readableViewFieldSetUserID(r *http.Request) (int, error) {
+	userID, err := e_sessions.GetUserIDFromSession(r)
+	if err != nil || userID < 1 {
+		return 0, fmt.Errorf("active user session required")
 	}
 	return userID, nil
 }

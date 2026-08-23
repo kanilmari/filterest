@@ -476,6 +476,8 @@ CREATE TABLE IF NOT EXISTS public.system_column_field_sets (
     created_by bigint REFERENCES public.system_users(id) ON DELETE SET NULL,
     created timestamp with time zone NOT NULL DEFAULT now(),
     updated timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT chk_system_column_field_sets_no_guest_owner
+        CHECK (owner_user_id IS NULL OR owner_user_id <> 1),
     CONSTRAINT uq_system_column_field_sets_owner_name
         UNIQUE NULLS NOT DISTINCT (table_uid, owner_user_id, name),
     CONSTRAINT uq_system_column_field_sets_id_table UNIQUE (id, table_uid)
@@ -509,6 +511,8 @@ CREATE TABLE IF NOT EXISTS public.system_view_field_set_assignments (
     created_by bigint REFERENCES public.system_users(id) ON DELETE SET NULL,
     created timestamp with time zone NOT NULL DEFAULT now(),
     updated timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT chk_system_view_field_set_assignments_no_guest_user
+        CHECK (user_id IS NULL OR user_id <> 1),
     CONSTRAINT uq_system_view_field_set_assignment
         UNIQUE NULLS NOT DISTINCT (user_id, table_uid, view_id),
     CONSTRAINT fk_system_view_field_set_assignment_set

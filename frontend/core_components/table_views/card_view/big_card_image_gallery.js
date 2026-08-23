@@ -7,6 +7,8 @@ import { createImageUploadPlaceholder } from "./big_card_image_upload.js";
 import { activateImageFirstView } from "./image_first_view_activation.js";
 import { resolveImagePath } from "./row_article_content_builder_helpers.js";
 import { resolveRowArticleImageRows as resolveCanonicalImageRows } from "./row_article_image_rows.js";
+import { createImageElement } from "./card_avatar_builder.js";
+import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { showConfirmModal } from "../../../reusable_components/modal/confirm_modal_builder.js";
@@ -336,13 +338,24 @@ export function buildImageGallery(parentTableName, parentRowId, childTableData, 
         thumbItem.classList.add("big_card_thumbnail_item");
         thumbItem.dataset.testid = `big-card-image-item-${idx}`;
 
-        const thumb = document.createElement("img");
-        thumb.src = resolveImagePath(row.filename);
-        thumb.alt = resolveImageAltText(row);
+        const imagePath = resolveImagePath(row.filename);
+        const rowLabel = String(options.imageFirstContext?.rowLabel || "").trim();
+        const thumb = createImageElement(imagePath, false, {
+            tableName: options.imageFirstContext?.tableName || parentTableName,
+            rowLabel,
+            renderSlot: CARD_IMAGE_RENDER_SLOTS.ROW_ARTICLE_GALLERY_THUMBNAIL,
+            imageTypeId: row?.type_id,
+            imageMetadata: row?.metadata_json,
+            imageTitle: row?.title,
+            imageOriginalName: row?.original_name,
+            imageMimeType: row?.mime_type,
+        });
         thumb.classList.add("big_card_thumbnail", "saturate_on_hover");
         thumb.dataset.testid = `big-card-image-thumb-${idx}`;
         thumb.dataset.imageIndex = String(idx);
         thumb.tabIndex = 0;
+        thumb.setAttribute("role", "button");
+        thumb.setAttribute("aria-label", resolveImageAltText(row) || rowLabel || "Image");
         if (imageRowsMatch(row, activeImageRow)) {
             thumb.classList.add("active_thumb");
         }
@@ -354,7 +367,7 @@ export function buildImageGallery(parentTableName, parentRowId, childTableData, 
         const openThumbnailPreview = () => {
             selectThumbnail();
             void activateImageFirstView({
-                imageSrc: resolveImagePath(row.filename),
+                imageSrc: imagePath,
                 imageRows: rows,
                 activeImageRow: row,
                 rowItem: options.imageFirstContext?.rowItem || null,

@@ -4,6 +4,7 @@
 package system_table_tools
 
 import (
+	"database/sql"
 	"reflect"
 	"testing"
 )
@@ -48,5 +49,23 @@ func TestFilterViewFieldSetsByPermissionRemovesForbiddenColumnNames(t *testing.T
 	want := []string{"title"}
 	if len(filtered) != 1 || !reflect.DeepEqual(filtered[0].VisibleColumns, want) {
 		t.Fatalf("filtered field sets = %#v, want only title", filtered)
+	}
+}
+
+func TestPersonalViewFieldSetOwnerExcludesGuestIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		userID int64
+		want   sql.NullInt64
+	}{
+		{name: "guest", userID: 1, want: sql.NullInt64{}},
+		{name: "authenticated user", userID: 42, want: sql.NullInt64{Int64: 42, Valid: true}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := personalViewFieldSetOwner(test.userID); got != test.want {
+				t.Fatalf("personal owner = %#v, want %#v", got, test.want)
+			}
+		})
 	}
 }

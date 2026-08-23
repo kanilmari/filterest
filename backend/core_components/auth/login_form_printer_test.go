@@ -173,7 +173,7 @@ func setupLoginHandlerFrontend(t *testing.T) {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 
-	loginTemplate := `{{if .StandalonePage}}standalone{{else}}fragment{{end}}|{{if .ShowCloseButton}}close{{else}}noclose{{end}}|{{if .ShowTourScreenshots}}tourshots{{else}}notourshots{{end}}|{{.SiteName}}`
+	loginTemplate := `{{if .StandalonePage}}standalone{{else}}fragment{{end}}|{{if .ShowBackButton}}back{{else}}noback{{end}}|{{if .ShowTourScreenshots}}tourshots{{else}}notourshots{{end}}|{{.SiteName}}`
 	if err := os.WriteFile(filepath.Join(templateDir, "login.html"), []byte(loginTemplate), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -200,8 +200,8 @@ func TestLoginHandlerRendersStandalonePageWhenBrowsingIsOptional(t *testing.T) {
 	if loc := rr.Header().Get("Location"); loc != "" {
 		t.Fatalf("unexpected redirect Location = %q", loc)
 	}
-	if got := rr.Body.String(); got != "standalone|noclose|tourshots|localhost" {
-		t.Fatalf("body = %q, want %q", got, "standalone|noclose|tourshots|localhost")
+	if got := rr.Body.String(); got != "standalone|back|tourshots|localhost" {
+		t.Fatalf("body = %q, want %q", got, "standalone|back|tourshots|localhost")
 	}
 }
 
@@ -221,8 +221,8 @@ func TestLoginHandlerRendersStandalonePageWithRedirectParamWhenBrowsingIsOptiona
 	if loc := rr.Header().Get("Location"); loc != "" {
 		t.Fatalf("unexpected redirect Location = %q", loc)
 	}
-	if got := rr.Body.String(); got != "standalone|noclose|tourshots|localhost" {
-		t.Fatalf("body = %q, want %q", got, "standalone|noclose|tourshots|localhost")
+	if got := rr.Body.String(); got != "standalone|back|tourshots|localhost" {
+		t.Fatalf("body = %q, want %q", got, "standalone|back|tourshots|localhost")
 	}
 }
 
@@ -244,8 +244,8 @@ func TestLoginHandlerRendersStandalonePageWithRequestHostSiteName(t *testing.T) 
 	if loc := rr.Header().Get("Location"); loc != "" {
 		t.Fatalf("unexpected redirect Location = %q", loc)
 	}
-	if got := rr.Body.String(); got != "standalone|noclose|notourshots|filterest.com" {
-		t.Fatalf("body = %q, want %q", got, "standalone|noclose|notourshots|filterest.com")
+	if got := rr.Body.String(); got != "standalone|noback|notourshots|filterest.com" {
+		t.Fatalf("body = %q, want %q", got, "standalone|noback|notourshots|filterest.com")
 	}
 }
 
@@ -264,8 +264,26 @@ func TestLoginHandlerRendersFragmentTemplateWithRequestHostSiteName(t *testing.T
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if got := rr.Body.String(); got != "fragment|close|notourshots|filterest.com" {
-		t.Fatalf("body = %q, want %q", got, "fragment|close|notourshots|filterest.com")
+	if got := rr.Body.String(); got != "fragment|noback|notourshots|filterest.com" {
+		t.Fatalf("body = %q, want %q", got, "fragment|noback|notourshots|filterest.com")
+	}
+}
+
+func TestLoginHandlerKeepsPublicReturnButtonOutOfFragment(t *testing.T) {
+	prepareLoginHandlerSessionStore(t)
+	setupLoginHandlerMockDB(t, false)
+	setupLoginHandlerFrontend(t)
+
+	req := httptest.NewRequest(http.MethodGet, "https://localhost/login?fragment=1", nil)
+	rr := httptest.NewRecorder()
+
+	LoginHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Body.String(); got != "fragment|noback|tourshots|localhost" {
+		t.Fatalf("body = %q, want %q", got, "fragment|noback|tourshots|localhost")
 	}
 }
 
@@ -284,8 +302,8 @@ func TestLoginHandlerKeepsFilterestTourScreenshotsHiddenWhenEnvEnablesThem(t *te
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if got := rr.Body.String(); got != "standalone|noclose|notourshots|filterest.com" {
-		t.Fatalf("body = %q, want %q", got, "standalone|noclose|notourshots|filterest.com")
+	if got := rr.Body.String(); got != "standalone|noback|notourshots|filterest.com" {
+		t.Fatalf("body = %q, want %q", got, "standalone|noback|notourshots|filterest.com")
 	}
 }
 
@@ -305,8 +323,8 @@ func TestLoginHandlerCanDisableStandaloneTourScreenshotsViaEnv(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if got := rr.Body.String(); got != "standalone|noclose|notourshots|easelect.com" {
-		t.Fatalf("body = %q, want %q", got, "standalone|noclose|notourshots|easelect.com")
+	if got := rr.Body.String(); got != "standalone|noback|notourshots|easelect.com" {
+		t.Fatalf("body = %q, want %q", got, "standalone|noback|notourshots|easelect.com")
 	}
 }
 

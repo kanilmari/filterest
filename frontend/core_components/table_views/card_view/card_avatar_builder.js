@@ -10,6 +10,7 @@ import {
 } from "./card_avatar_builder_helpers.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { isCardStackViewport } from "../../../ui_config.js";
+import { appendImageWithSvgPresentation } from "./svg_image_presentation.js";
 
 const SERVICE_CATALOG_TABLE_NAME = "app_service_catalog";
 const SERVICE_CATALOG_ROUTE_ALIAS = "service_catalog";
@@ -38,6 +39,10 @@ const SERVICE_CATALOG_STANDALONE_LOGO_EXTENSIONS = new Set([
 ]);
 const SERVICE_CATALOG_IMAGE_ONLY_LOGO_VARIANTS = new Set([
     "matrix",
+]);
+const EXTERNALLY_SIZED_RENDER_SLOTS = new Set([
+    CARD_IMAGE_RENDER_SLOTS.ROW_ARTICLE_GALLERY_THUMBNAIL,
+    CARD_IMAGE_RENDER_SLOTS.IMAGE_FIRST,
 ]);
 
 // The service catalog has three high-level logo presentation styles:
@@ -107,6 +112,9 @@ export function createImageElement(
         renderSlot = CARD_IMAGE_RENDER_SLOTS.STANDALONE,
         imageTypeId = undefined,
         imageMetadata = undefined,
+        imageTitle = "",
+        imageOriginalName = "",
+        imageMimeType = "",
     } = {}
 ) {
     const wrapper = document.createElement('div');
@@ -120,7 +128,11 @@ export function createImageElement(
     const useServiceCatalogCssLogo = Boolean(serviceCatalogLogoPlan?.variant);
     const cssOnlyServiceCatalogLogo = serviceCatalogLogoPlan?.cssOnly === true;
     const useServiceCatalogLogoFrame = isServiceCatalogTableName(tableName) && useLargeSize;
-    if (useLargeSize) {
+    const usesExternalSizing = EXTERNALLY_SIZED_RENDER_SLOTS.has(renderSlot);
+    wrapper.dataset.cardImageRenderSlot = renderSlot;
+    if (usesExternalSizing) {
+        wrapper.classList.add("record_image_presentation_host--externally-sized");
+    } else if (useLargeSize) {
         if (isCardStackViewport()) {
             wrapper.style.width = '100%';
             wrapper.style.maxWidth = '1000px';
@@ -151,7 +163,7 @@ export function createImageElement(
     }
 
     const foregroundImg = document.createElement('img');
-    if (!isPngImage(image_src)) {
+    if (!usesExternalSizing && !isPngImage(image_src)) {
         // Muille kuin PNG-kuville lisätään pyöristys, varjo ja (halutessa) blur-tausta
         wrapper.style.background = 'var(--bg_color_2)';
         // wrapper.style.border = '1px solid var(--border_color)';
@@ -182,7 +194,16 @@ export function createImageElement(
     foregroundImg.style.borderRadius = '6px';
 
     if (!cssOnlyServiceCatalogLogo && !useServiceCatalogCssLogo) {
-        wrapper.appendChild(foregroundImg);
+        appendImageWithSvgPresentation(wrapper, foregroundImg, {
+            imageSrc: image_src,
+            imageMimeType,
+            imageOriginalName,
+            imageTitle,
+            imageMetadata,
+            rowLabel,
+            altText: foregroundImg.alt,
+            renderSlot,
+        });
     }
     maybeAppendServiceCatalogCssLogo(wrapper, null, image_src, {
         tableName,
@@ -241,27 +262,33 @@ function maybeAppendServiceCatalogCssLogo(
     }
 
     const cssLogo = document.createElement("div");
-    cssLogo.className = "service-catalog-css-logo";
+    cssLogo.className = "service-catalog-css-logo record_image_logo_presentation";
     cssLogo.classList.add(`service-catalog-css-logo--${resolvedLogoPlan.variant}`);
     cssLogo.setAttribute("role", "img");
     cssLogo.setAttribute("aria-label", label);
 
-    const showTitle = shouldShowServiceCatalogLogoTitle(renderSlot, resolvedLogoPlan);
+    const showTitle = shouldShowServiceCatalogLogoTitle(resolvedLogoPlan);
     const logoMark = buildServiceCatalogLogoMark(imageSrc, resolvedLogoPlan, {
         forceTextMark: resolvedLogoPlan.useImageMark === false,
     });
+    logoMark.classList.add("record_image_logo_presentation__mark");
     const presentation = showTitle ? "mark-title" : "mark-only";
     wrapper.dataset.serviceCatalogLogoPresentation = presentation;
     wrapper.dataset.serviceCatalogLogoShowLabel = showTitle ? "true" : "false";
     cssLogo.classList.add(`service-catalog-css-logo--${presentation}`);
+    cssLogo.classList.add(`record_image_logo_presentation--${presentation}`);
 
     cssLogo.appendChild(logoMark);
     if (showTitle) {
         const logoTitle = document.createElement("span");
-        logoTitle.className = "service-catalog-css-logo__title";
+        logoTitle.className = "service-catalog-css-logo__title record_image_logo_presentation__label";
         logoTitle.textContent = label;
         logoTitle.style.setProperty(
             "--service-logo-title-length",
+            String(resolveServiceCatalogLogoTitleLength(label))
+        );
+        logoTitle.style.setProperty(
+            "--record-image-logo-label-length",
             String(resolveServiceCatalogLogoTitleLength(label))
         );
         cssLogo.appendChild(logoTitle);
@@ -480,13 +507,7 @@ function isServiceCatalogImageOnlyLogoVariant(variant = "") {
     );
 }
 
-function shouldShowServiceCatalogLogoTitle(
-    renderSlot = CARD_IMAGE_RENDER_SLOTS.STANDALONE,
-    logoPlan = null
-) {
-    if (renderSlot === CARD_IMAGE_RENDER_SLOTS.SMALL_THUMBNAIL) {
-        return false;
-    }
+function shouldShowServiceCatalogLogoTitle(logoPlan = null) {
     if (logoPlan?.showLabel === false) {
         return false;
     }

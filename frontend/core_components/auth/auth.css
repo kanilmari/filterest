@@ -1,4 +1,7 @@
-/* auth.css - Login page styles with theme support */
+/* Styles the shared standalone, modal, and First Run authentication surfaces. */
+/* Bridges auth templates with responsive layout, themes, and control states. */
+/* Keeps authentication presentation consistent without coupling it to app views. */
+/* Exists so pre-session pages remain usable across supported screen sizes. */
 @import url("../lang/lang_panel.css");
 
 body.login-page {
@@ -71,12 +74,60 @@ body.login-page {
 .auth-page-header-row {
     width: min(760px, 100%);
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 18px;
 }
 
+.auth-page-header-leading {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.auth-page-header-row .auth-top-controls {
+    justify-self: end;
+}
+
+.auth-page-return-button,
+.auth-page-close-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 42px;
+    padding: 8px 13px;
+    color: var(--text_color);
+    cursor: pointer;
+}
+
+.auth-page-close-button {
+    width: 42px;
+    padding-inline: 0;
+}
+
+.auth-public-back-icon,
+.auth-public-close-icon {
+    display: block;
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    background-color: currentcolor;
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+}
+
+.auth-public-back-icon {
+    mask-image: url("/frontend/icons/navigation/nav-history-back-icon.svg");
+}
+
+.auth-public-close-icon {
+    mask-image: url("/frontend/icons/general/modal-close-icon.svg");
+}
+
 .auth-page-tablist {
+    width: min(760px, 100%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -382,35 +433,6 @@ h1.site_name {
     backdrop-filter: none;
 }
 
-.auth-form-close-button {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text_color);
-    opacity: 0.5;
-    cursor: pointer;
-    transition: opacity 0.2s ease, background-color 0.2s ease;
-}
-
-.auth-form-close-button:hover {
-    opacity: 1;
-    background: var(--bg_color_blended, rgb(128 128 128 / 0.15));
-}
-
-.auth-form-close-button:active {
-    opacity: 0.8;
-    transform: scale(0.95);
-}
-
 @keyframes auth-form-slide-up {
     from {
         opacity: 0;
@@ -428,6 +450,23 @@ h1.site_name {
     text-align: center;
     margin-bottom: 8px;
     color: var(--text_color);
+}
+
+.auth-session-notice {
+    width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--auth-focus-color, var(--border_color)) 55%, transparent);
+    border-left-width: 4px;
+    border-radius: 10px;
+    background: var(--auth-notice-bg, var(--bg_color_2));
+    color: var(--text_color);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.auth-session-notice[hidden] {
+    display: none;
 }
 
 .password-wrapper {
@@ -526,6 +565,58 @@ h1.site_name {
 
 #submit {
     margin-top: 12px;
+}
+
+.auth-submit-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+}
+
+.auth-submit-actions--with-back {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-submit-back-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: 1px solid var(--auth-input-border, var(--border_color));
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text_color);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.auth-submit-back-button:hover {
+    border-color: var(--auth-focus-color, var(--border_color));
+    background: var(--bg_color_blended, rgb(128 128 128 / 0.12));
+}
+
+.auth-submit-back-button:active {
+    transform: scale(0.98);
+}
+
+.modal:has(.auth-modal-shell) .modal_close_button {
+    top: 16px;
+    right: 16px;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--auth-card-border, var(--border_color));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--auth-card-bg, var(--bg_color_extreme)) 88%, transparent);
+    box-shadow: 0 8px 24px var(--auth-card-shadow-sm, rgb(0 0 0 / 0.08));
+    backdrop-filter: blur(10px);
+    opacity: 1;
 }
 
 .first-run-admin-shell {

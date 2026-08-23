@@ -87,6 +87,27 @@ export function isAuthFailure403(bodyText) {
 }
 
 /**
+ * Detects the legacy function-permission denial returned to a guest shell.
+ * Between access-control JSON responses and the session-access prompt.
+ * Exists so an expired/cleared login produces one useful choice dialog instead
+ * of exposing internal endpoint names and permission implementation details.
+ *
+ * @param {string} bodyText - Raw response body text
+ * @returns {boolean}
+ */
+export function isGuestFunctionAccessDenied403(bodyText) {
+    const trimmedBody = (bodyText || '').trim();
+    if (!trimmedBody) return false;
+
+    try {
+        const parsed = /** @type {ErrorBody | null} */ (JSON.parse(trimmedBody));
+        return String(parsed?.error || '').trim() === '403 - Forbidden (function-level)';
+    } catch {
+        return trimmedBody === '403 - Forbidden (function-level)';
+    }
+}
+
+/**
  * Checks if a 403 response body indicates a CSRF-token mismatch or missing token.
  * Used to decide when the frontend may safely fetch a fresh token and retry once.
  *
