@@ -1,8 +1,8 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "8.40.3",
-  "db_version": "9.6.1",
+  "app_version": "8.40.4",
+  "db_version": "9.6.2",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -124,10 +124,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "24d6aab36990d649d9ab626216881ce9bc6827ad440ffdb81bfed59c1dc48feb"
+      "sha256": "9842887abf9ddcd2300688913b6dbeff6917e632a9c38fb5f341d9e0fd9025df"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "3d8ef61776f589ecff2136fb02d4ab18d8b9a04c045228ce0a1cf476b8205a6a"
+      "sha256": "5b696937e445668466fdc8b4342d4809a7fa10eff077d6467e5955c32128963f"
     }
   },
   "source_files": {
@@ -138,7 +138,7 @@
       "sha256": "f91192e8fb91e56a7d069dad0dc4c333dc213cfb9607af5adde9dffe209dc51a"
     },
     "server_tools/public_slice_export/public_bootstrap/runtime.schema.sql": {
-      "sha256": "8ea2ef786907d5161d028e910c16ae12e9409494386208f47a7e7ecf9b4bd165"
+      "sha256": "e219d91d542ea25b52dcefb2ec187110b14c142445d906ac357732e116f0c080"
     },
     "server_tools/public_slice_export/public_bootstrap/runtime.seed.sql": {
       "sha256": "7374202d6dfaa267261db75c5e528593b1063c76d76cc474e32dab377f42ecc9"

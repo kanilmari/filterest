@@ -14,9 +14,12 @@ import (
 	"testing"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/dbutils"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	e_sessions "easelect/backend/core_components/sessions"
+
+	"github.com/gorilla/sessions"
 )
 
 func TestParseProtectedStoragePathRejectsNonCanonicalShapes(t *testing.T) {
@@ -92,10 +95,15 @@ func setupStorageHandlerTest(t *testing.T) *sql.DB {
 	savedAuthorizer := storageAuthorizeRead
 	savedDatasetMediaAuthorizer := storageAuthorizeDatasetMediaRead
 	savedLoginCheck := storageCheckLoginToBrowse
+	savedGenerationCheck := storageAuthenticationGenerationMatches
+	storageAuthenticationGenerationMatches = func(context.Context, auth_generation.Querier, *sessions.Session, int) (bool, error) {
+		return true, nil
+	}
 	t.Cleanup(func() {
 		storageAuthorizeRead = savedAuthorizer
 		storageAuthorizeDatasetMediaRead = savedDatasetMediaAuthorizer
 		storageCheckLoginToBrowse = savedLoginCheck
+		storageAuthenticationGenerationMatches = savedGenerationCheck
 		localStorageDir = savedStorageDir
 		backend.Db, backend.DbAdmin = savedDB, savedAdmin
 		backend.DbBasic, backend.DbGuest = savedBasic, savedGuest

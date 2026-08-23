@@ -32,6 +32,7 @@ type credentialMockConfig struct {
 	verificationMethod string
 	fixedPINHash       string
 	totpSecret         string
+	authGeneration     int64
 }
 
 type credentialMockDriver struct{ cfg credentialMockConfig }
@@ -81,19 +82,31 @@ func (c *credentialMockConn) QueryContext(_ context.Context, query string, _ []d
 			return &credentialMockRows{cols: []string{"id"}, done: true}, nil
 		}
 		return &credentialMockRows{cols: []string{"id"}, vals: []driver.Value{int64(c.cfg.userID)}}, nil
-	case strings.Contains(query, "SELECT password FROM restricted.users_restricted"):
-		if c.cfg.hashedPassword == "" {
-			return &credentialMockRows{cols: []string{"password"}, done: true}, nil
+	case strings.Contains(query, "SELECT password") && strings.Contains(query, "login_verification_method"):
+		passwordHash := c.cfg.hashedPassword
+		if passwordHash == "" {
+			passwordHash = "unused-by-factor-verification"
 		}
-		return &credentialMockRows{cols: []string{"password"}, vals: []driver.Value{c.cfg.hashedPassword}}, nil
-	case strings.Contains(query, "SELECT login_verification_method"):
 		method := c.cfg.verificationMethod
 		if method == "" {
 			method = string(verificationNone)
 		}
+		generation := c.cfg.authGeneration
+		if generation == 0 {
+			generation = 1
+		}
 		return &credentialMockRows{
-			cols: []string{"login_verification_method", "fixed_pin_hash", "totp_secret", "email"},
-			vals: []driver.Value{method, c.cfg.fixedPINHash, c.cfg.totpSecret, ""},
+			cols: []string{"password", "login_verification_method", "fixed_pin_hash", "totp_secret", "email", "authentication_generation"},
+			vals: []driver.Value{passwordHash, method, c.cfg.fixedPINHash, c.cfg.totpSecret, "", generation},
+		}, nil
+	case strings.Contains(query, "SELECT ur.authentication_generation"):
+		generation := c.cfg.authGeneration
+		if generation == 0 {
+			generation = 1
+		}
+		return &credentialMockRows{
+			cols: []string{"authentication_generation"},
+			vals: []driver.Value{generation},
 		}, nil
 	case strings.Contains(query, "FROM system_user_group_memberships"):
 		if !c.cfg.adminGroupMember {
@@ -431,7 +444,7 @@ func TestHandleLoginOTPVerify_MalformedStoredPINHashDoesNotConsumeFailure(t *tes
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1357"})
@@ -517,7 +530,7 @@ func TestHandleLoginOTPVerify_WrongFixedPINRecordsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1357"})
@@ -554,7 +567,7 @@ func TestHandleLoginOTPVerify_WrongTOTPRecordsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "not-a-code"})
@@ -601,7 +614,7 @@ func TestHandleLoginOTPVerify_CorrectFixedPINClearsFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint")
+	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "2468"})

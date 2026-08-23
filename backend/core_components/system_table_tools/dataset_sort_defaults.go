@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/security"
@@ -37,6 +38,8 @@ type saveDatasetSortDefaultRequest struct {
 	Scope   string `json:"scope"`
 }
 
+var datasetSortAuthenticationGenerationMatches = auth_generation.Matches
+
 // GetDatasetSortDefaultHandler returns the current user's override when one exists,
 // otherwise the site-wide default. Anonymous visitors receive only the site default.
 func GetDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,8 +55,26 @@ func GetDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := -1
-	if sessionUserID, sessionErr := e_sessions.GetUserIDFromSession(r); sessionErr == nil {
-		userID = sessionUserID
+	session, sessionErr := e_sessions.GetOrCreateSession(w, r)
+	if sessionErr == nil {
+		if sessionUserID, ok := session.Values["user_id"].(int); ok {
+			userID = sessionUserID
+			if userID > 1 {
+				matches, matchErr := datasetSortAuthenticationGenerationMatches(r.Context(), backend.DbConfidential, session, userID)
+				if matchErr != nil {
+					httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "authentication state unavailable")
+					return
+				}
+				if !matches {
+					auth_generation.ClearIdentity(session)
+					if saveErr := session.Save(r, w); saveErr != nil {
+						httpresponse.RespondWithError(w, http.StatusInternalServerError, "session save failed")
+						return
+					}
+					userID = -1
+				}
+			}
+		}
 	}
 
 	var sortColumn, sortDirection, scope string

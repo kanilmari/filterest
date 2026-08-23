@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/dbutils"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	filevalidation "easelect/backend/core_components/filevalidation"
@@ -46,6 +47,7 @@ var protectedStorageVariants = map[string]struct{}{
 var storageAuthorizeRead = dtt_1_row_read.AuthorizeStorageRead
 var storageAuthorizeDatasetMediaRead = dtt_1_row_read.AuthorizeDatasetMediaStorageRead
 var storageCheckLoginToBrowse = middlewares.CheckLoginToBrowse
+var storageAuthenticationGenerationMatches = auth_generation.Matches
 
 type storageAuthorizationDecision uint8
 
@@ -132,7 +134,19 @@ func storageRequestActor(w http.ResponseWriter, r *http.Request) (dbutils.Reques
 		return dbutils.RequestActorContext{}, storageAuthorizationInternalError
 	}
 	if userID, ok := session.Values["user_id"].(int); ok && userID > 1 {
-		return storageActorFromSession(session, userID), storageAuthorizationAllowed
+		generationMatches, generationErr := storageAuthenticationGenerationMatches(r.Context(), backend.DbConfidential, session, userID)
+		if generationErr != nil {
+			log.Printf("\033[31m[ServeStorage] authentication state unavailable for user_id=%d: %v\033[0m", userID, generationErr)
+			return dbutils.RequestActorContext{}, storageAuthorizationInternalError
+		}
+		if generationMatches {
+			return storageActorFromSession(session, userID), storageAuthorizationAllowed
+		}
+		auth_generation.ClearIdentity(session)
+		if saveErr := session.Save(r, w); saveErr != nil {
+			log.Printf("\033[31m[ServeStorage] stale session clear failed: %v\033[0m", saveErr)
+			return dbutils.RequestActorContext{}, storageAuthorizationInternalError
+		}
 	}
 
 	loginToBrowse, err := storageCheckLoginToBrowse()

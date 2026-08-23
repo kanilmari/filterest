@@ -21,6 +21,7 @@ import (
 	"time"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	e_sessions "easelect/backend/core_components/sessions"
 
 	gorillaSessions "github.com/gorilla/sessions"
@@ -247,6 +248,16 @@ func attachRootHandlerSessionUser(t *testing.T, req *http.Request, userID int) {
 	}
 }
 
+func withRootAuthenticationGenerationMatch(
+	t *testing.T,
+	matcher func(context.Context, auth_generation.Querier, *gorillaSessions.Session, int) (bool, error),
+) {
+	t.Helper()
+	original := rootAuthenticationGenerationMatches
+	rootAuthenticationGenerationMatches = matcher
+	t.Cleanup(func() { rootAuthenticationGenerationMatches = original })
+}
+
 func assertAuthShellNoStoreHeaders(t *testing.T, rr *httptest.ResponseRecorder) {
 	t.Helper()
 
@@ -279,6 +290,50 @@ func TestRootHandlerRedirectsAnonymousRootWhenLoginRequired(t *testing.T) {
 	}
 	if got := rr.Header().Get("Location"); got != "/login" {
 		t.Fatalf("Location = %q, want /login", got)
+	}
+}
+
+func TestRootHandlerClearsStaleAuthenticatedSessionBeforeRendering(t *testing.T) {
+	setupRootHandlerMockDB(t, true)
+	setupRootHandlerSessionStore(t)
+	setupRootHandlerFrontend(t)
+	withRootAuthenticationGenerationMatch(t, func(
+		context.Context,
+		auth_generation.Querier,
+		*gorillaSessions.Session,
+		int,
+	) (bool, error) {
+		return false, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	attachRootHandlerSessionUser(t, req, 10000)
+	rr := httptest.NewRecorder()
+
+	rootHandler(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
+	}
+	if got := rr.Header().Get("Location"); got != "/login" {
+		t.Fatalf("Location = %q, want /login", got)
+	}
+	responseCookies := rr.Result().Cookies()
+	if len(responseCookies) == 0 {
+		t.Fatal("expected cleared session cookie")
+	}
+	readRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, cookie := range responseCookies {
+		readRequest.AddCookie(cookie)
+	}
+	clearedSession, err := e_sessions.Store.Get(readRequest, e_sessions.SessionName)
+	if err != nil {
+		t.Fatalf("Store.Get() cleared session error = %v", err)
+	}
+	for _, key := range []string{"authenticated", "user_id", "username", "user_role", auth_generation.SessionKey} {
+		if _, exists := clearedSession.Values[key]; exists {
+			t.Fatalf("stale identity key %q remains in session", key)
+		}
 	}
 }
 

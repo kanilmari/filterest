@@ -18,6 +18,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth"
+	"easelect/backend/core_components/auth_generation"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
@@ -30,8 +31,9 @@ import (
 )
 
 var (
-	configuredSiteNameReader = backend.ConfiguredSiteName
-	configuredFaviconReader  = backend.ConfiguredFaviconFile
+	configuredSiteNameReader            = backend.ConfiguredSiteName
+	configuredFaviconReader             = backend.ConfiguredFaviconFile
+	rootAuthenticationGenerationMatches = auth_generation.Matches
 )
 
 type indexTemplateData struct {
@@ -371,6 +373,31 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 
 	authShellEntry := isAuthShellEntryRequest(r)
 	userIDVal, onkoKayttaja := session.Values["user_id"]
+	if onkoKayttaja {
+		if userID, castOK := userIDVal.(int); castOK && userID > 1 {
+			generationMatches, generationErr := rootAuthenticationGenerationMatches(
+				r.Context(),
+				backend.DbConfidential,
+				session,
+				userID,
+			)
+			if generationErr != nil {
+				log.Printf("[rootHandler] authentication state unavailable for user %d: %v", userID, generationErr)
+				httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "authentication state unavailable")
+				return
+			}
+			if !generationMatches {
+				auth_generation.ClearIdentity(session)
+				if saveErr := session.Save(r, w); saveErr != nil {
+					log.Printf("[rootHandler] stale session clear failed: %v", saveErr)
+					httpresponse.RespondWithError(w, http.StatusInternalServerError, "session save failed")
+					return
+				}
+				userIDVal = nil
+				onkoKayttaja = false
+			}
+		}
+	}
 	if !onkoKayttaja {
 		// ei user_id:tä
 		if loginToBrowse && !authShellEntry {

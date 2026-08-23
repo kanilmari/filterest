@@ -40,3 +40,30 @@ exists and the project owner has enabled that workflow.
 - Keep public seed data synthetic or intentionally public.
 - Treat the public repository as redistributable: every file should be safe to
   clone, fork, archive, and inspect.
+
+## Existing Administrator Recovery
+
+Filterest 8.40.4 and later include an interactive recovery command for an
+existing active administrator. It is an operator-only container command, not a
+public web endpoint and not a direct database-editing workflow.
+
+Before changing credentials, take and verify a deployment backup that covers
+the database and both active and deleted media. Then inspect the exact target
+container without changing credentials:
+
+```bash
+docker exec -it <app-container> /app/filterest-admin-recovery --dry-run
+```
+
+The preflight prints the database, site, current project, eligible existing
+administrators, their current verification methods, and their authentication
+generations. When those values identify the intended deployment, run the same
+command without `--dry-run`. The command accepts a new password and optional
+fixed PIN only through the protected terminal, lets the operator explicitly
+choose the post-recovery verification method, and requires the printed target
+identity to be typed back exactly.
+
+Recovery does not create users, grant administrator access, change group
+memberships, reset application tables, or remove media. A successful recovery
+atomically records a secret-free audit entry, removes pending verification
+challenges, and invalidates earlier sessions for that administrator.

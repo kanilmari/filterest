@@ -248,7 +248,8 @@ func applyAdminUserAuthenticationProvisioning(
 		UPDATE restricted.users_restricted
 		SET login_verification_method = $1,
 		    fixed_pin_hash = $2,
-		    totp_secret = NULL
+		    totp_secret = NULL,
+		    authentication_generation = authentication_generation + 1
 		WHERE id = $3
 	`, string(method), fixedPINValue, userID)
 	if err != nil {
@@ -259,6 +260,13 @@ func applyAdminUserAuthenticationProvisioning(
 			return record, rowsErr
 		}
 		return record, errAdminAuthenticationUserNotFound
+	}
+	if _, err = tx.Exec(`
+		DELETE FROM restricted.verification_codes
+		WHERE user_id = $1
+		  AND used IS FALSE
+	`, userID); err != nil {
+		return record, err
 	}
 
 	record.Enabled = true

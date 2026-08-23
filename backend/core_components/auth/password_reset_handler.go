@@ -8,10 +8,13 @@ package auth
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth/credentials"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
@@ -19,7 +22,6 @@ import (
 	e_sessions "easelect/backend/core_components/sessions"
 
 	"github.com/gorilla/sessions"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const passwordResetPurpose = "password_reset"
@@ -35,12 +37,14 @@ type passwordResetConfirmRequest struct {
 	CSRFToken   string `json:"csrf_token"`
 }
 
-func setPendingPasswordResetState(session *sessions.Session, userID int) {
+func setPendingPasswordResetState(session *sessions.Session, userID int, authenticationGeneration int64) {
 	session.Values["password_reset_pending_user_id"] = userID
+	session.Values["password_reset_pending_authentication_generation"] = authenticationGeneration
 }
 
 func clearPendingPasswordResetState(session *sessions.Session) {
 	delete(session.Values, "password_reset_pending_user_id")
+	delete(session.Values, "password_reset_pending_authentication_generation")
 }
 
 func RequestPasswordResetOTPHandler(w http.ResponseWriter, r *http.Request) {
@@ -95,8 +99,10 @@ func RequestPasswordResetOTPHandler(w http.ResponseWriter, r *http.Request) {
 				if revokeErr := otp.RevokeOTP(userID, otp.ProfilePasswordReset, code); revokeErr != nil {
 					logging.Errorf("[RequestPasswordResetOTPHandler] failed to revoke undelivered OTP: %v", revokeErr)
 				}
+			} else if generation, generationErr := auth_generation.Current(r.Context(), backend.DbConfidential, userID); generationErr != nil {
+				logging.Errorf("[RequestPasswordResetOTPHandler] generation lookup failed: %v", generationErr)
 			} else {
-				setPendingPasswordResetState(session, userID)
+				setPendingPasswordResetState(session, userID, generation)
 			}
 		}
 	}
@@ -140,6 +146,13 @@ func ResetPasswordWithOTPHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "no_pending_password_reset")
 		return
 	}
+	expectedGeneration, generationOK := session.Values["password_reset_pending_authentication_generation"].(int64)
+	if !generationOK || expectedGeneration < 1 {
+		clearPendingPasswordResetState(session)
+		_ = saveSession(w, r, session)
+		httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
+		return
+	}
 	if strings.TrimSpace(req.NewPassword) == "" {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "new_password_required")
 		return
@@ -156,17 +169,18 @@ func ResetPasswordWithOTPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "password_hash_error")
-		return
-	}
-
-	if _, err = backend.DbConfidential.Exec(
-		`UPDATE restricted.users_restricted SET password = $1 WHERE id = $2`,
-		string(newHash), userID,
-	); err != nil {
+	if _, err = credentials.ChangePassword(r.Context(), backend.DbConfidential, userID, req.NewPassword, expectedGeneration); err != nil {
 		logging.Errorf("[ResetPasswordWithOTPHandler] password update failed: %v", err)
+		if errors.Is(err, credentials.ErrCredentialStateChanged) {
+			clearPendingPasswordResetState(session)
+			_ = saveSession(w, r, session)
+			httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
+			return
+		}
+		if errors.Is(err, credentials.ErrInvalidPassword) {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, "new_password_invalid")
+			return
+		}
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
 		return
 	}

@@ -7,12 +7,15 @@ package auth
 import (
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth/credentials"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/otp"
 	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -216,11 +219,30 @@ func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = backend.DbConfidential.Exec(`UPDATE restricted.users_restricted SET email = $1 WHERE id = $2`, req.Email, userID)
+		var updatedMethod string
+		var updatedGeneration int64
+		err = backend.DbConfidential.QueryRow(`
+			UPDATE restricted.users_restricted
+			SET email = $1,
+			    authentication_generation = authentication_generation +
+			        CASE WHEN login_verification_method = 'email' THEN 1 ELSE 0 END
+			WHERE id = $2
+			RETURNING login_verification_method, authentication_generation
+		`, req.Email, userID).Scan(&updatedMethod, &updatedGeneration)
 		if err != nil {
 			logging.Errorf("[UserProfileUpdateHandler] failed to update email for user %d: %v", userID, err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
 			return
+		}
+		if updatedMethod == string(verificationEmail) {
+			if setErr := auth_generation.Set(session, updatedGeneration); setErr != nil {
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
+				return
+			}
+			if saveErr := saveSession(w, r, session); saveErr != nil {
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
+				return
+			}
 		}
 		logging.Infof("[UserProfileUpdateHandler] email updated for user %d", userID)
 	}
@@ -261,17 +283,31 @@ func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-		if err != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to hash new password for user %d: %v", userID, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "password_hash_error")
+		expectedGeneration, generationOK := auth_generation.SessionValue(session)
+		if !generationOK {
+			httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
 			return
 		}
-
-		_, err = backend.DbConfidential.Exec(`UPDATE restricted.users_restricted SET password = $1 WHERE id = $2`, string(newHash), userID)
+		newGeneration, err := credentials.ChangePassword(r.Context(), backend.DbConfidential, userID, req.NewPassword, expectedGeneration)
 		if err != nil {
 			logging.Errorf("[UserProfileUpdateHandler] failed to update password for user %d: %v", userID, err)
+			if errors.Is(err, credentials.ErrCredentialStateChanged) {
+				httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
+				return
+			}
+			if errors.Is(err, credentials.ErrInvalidPassword) {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "new_password_invalid")
+				return
+			}
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
+			return
+		}
+		if setErr := auth_generation.Set(session, newGeneration); setErr != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
+			return
+		}
+		if saveErr := saveSession(w, r, session); saveErr != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 			return
 		}
 		logging.Infof("[UserProfileUpdateHandler] password updated for user %d", userID)

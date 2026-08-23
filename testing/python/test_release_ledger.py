@@ -1079,6 +1079,26 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
                 "model": "legacy_maintainer_export",
             },
         },
+        {
+            "app_version": "8.40.4",
+            "artifact_type": "runtime",
+            "build_id": "filterest-8.40.4-stable-runtime-c93a8fee2ce5",
+            "channel": "stable",
+            "created_at": "2026-08-23T22:38:15Z",
+            "database": {"min_version": "9.6.2", "target_version": "9.6.2"},
+            "maturity": "candidate",
+            "previous_record_sha256": (
+                "d54867d58165eea2da5d23f8c456414927d37704f919f9313175d3a6c6be6951"
+            ),
+            "product": "filterest",
+            "record_id": "build:filterest-8.40.4-stable-runtime-c93a8fee2ce5",
+            "record_type": "build",
+            "schema_version": 1,
+            "source": {
+                "commit": "c93a8fee2ce5c0567d7e9950bdc450e6845ac9b0",
+                "model": "legacy_maintainer_export",
+            },
+        },
     ]
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 

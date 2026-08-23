@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"easelect/backend/core_components/context_keys"
 	"easelect/backend/core_components/httpresponse"
-	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
 	"log"
 	"net"
@@ -204,16 +203,6 @@ func WithFunctionRateLimiting(db *sql.DB, funcName string, next http.HandlerFunc
 		if os.Getenv("ENVIRONMENT_TYPE") == "dev" && r.Header.Get("X-Bypass-Ratelimit") == "test-mode" {
 			next.ServeHTTP(w, r)
 			return
-		}
-
-		// Admin users are exempt from per-route rate limits — they manage the system
-		// and batch operations (e.g. bulk table drops during test cleanup) must not
-		// be throttled.  Regular and guest users remain limited.
-		if session, err := e_sessions.GetOrCreateSession(nil, r); err == nil {
-			if role, _ := session.Values["user_role"].(string); role == "admin" {
-				next.ServeHTTP(w, r)
-				return
-			}
 		}
 
 		// Haetaan välimuistista tai tietokannasta rajoitukset:

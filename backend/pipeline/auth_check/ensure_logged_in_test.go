@@ -55,6 +55,9 @@ func buildReq(t *testing.T, store *gorillaSessions.CookieStore, method, target s
 	}
 	if userID != nil {
 		sess.Values["user_id"] = userID
+		if numericUserID, ok := userID.(int); ok && numericUserID > 1 {
+			sess.Values["authentication_generation"] = int64(1)
+		}
 	}
 	if saveErr := sess.Save(cookieR, cookieW); saveErr != nil {
 		t.Fatalf("setup: sess.Save: %v", saveErr)
@@ -87,8 +90,10 @@ func noopHandler(called *bool) http.HandlerFunc {
 }
 
 type mockConfig struct {
-	loginToBrowse    bool
-	loginToBrowseErr bool
+	loginToBrowse     bool
+	loginToBrowseErr  bool
+	authGeneration    int64
+	authGenerationErr bool
 }
 
 type mockDriver struct{ cfg mockConfig }
@@ -142,6 +147,16 @@ func (c *mockConn) QueryContext(_ context.Context, query string, _ []driver.Name
 		}
 		return mockBoolRow("boolean_value", c.cfg.loginToBrowse), nil
 	}
+	if strings.Contains(query, "authentication_generation") {
+		if c.cfg.authGenerationErr {
+			return nil, fmt.Errorf("simulated authentication generation error")
+		}
+		generation := c.cfg.authGeneration
+		if generation == 0 {
+			generation = 1
+		}
+		return &mockRows{cols: []string{"authentication_generation"}, vals: []driver.Value{generation}}, nil
+	}
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
@@ -150,6 +165,7 @@ var mockDriverCounter int64
 func setupMockDB(t *testing.T, cfg mockConfig) {
 	t.Helper()
 	orig := backend.Db
+	origConfidential := backend.DbConfidential
 	d := &mockDriver{cfg: cfg}
 	name := fmt.Sprintf("ensure_logged_in_%d_%d", time.Now().UnixNano(), atomic.AddInt64(&mockDriverCounter, 1))
 	sql.Register(name, d)
@@ -158,9 +174,11 @@ func setupMockDB(t *testing.T, cfg mockConfig) {
 		t.Fatalf("sql.Open mock: %v", err)
 	}
 	backend.Db = db
+	backend.DbConfidential = db
 	t.Cleanup(func() {
 		_ = db.Close()
 		backend.Db = orig
+		backend.DbConfidential = origConfidential
 	})
 }
 
@@ -278,6 +296,7 @@ func TestEnsureLoggedIn_WrongTypeUserID(t *testing.T) {
 
 func TestEnsureLoggedIn_AuthenticatedUser(t *testing.T) {
 	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{authGeneration: 1})
 	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)
 	rr := httptest.NewRecorder()
 	called := false
@@ -289,5 +308,37 @@ func TestEnsureLoggedIn_AuthenticatedUser(t *testing.T) {
 	}
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestEnsureLoggedIn_StaleAuthenticatedSessionIsCleared(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{loginToBrowse: true, authGeneration: 2})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)
+	rr := httptest.NewRecorder()
+	called := false
+
+	EnsureLoggedIn(noopHandler(&called))(rr, req)
+
+	if called || rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" {
+		t.Fatalf("stale session result: called=%v status=%d location=%q", called, rr.Code, rr.Header().Get("Location"))
+	}
+	session := savedSessionFromResponse(t, store, "/api/get-results", rr)
+	if _, exists := session.Values["user_id"]; exists {
+		t.Fatal("stale authenticated identity was not cleared")
+	}
+}
+
+func TestEnsureLoggedIn_AuthenticationGenerationDatabaseErrorFailsClosed(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{authGenerationErr: true})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)
+	rr := httptest.NewRecorder()
+	called := false
+
+	EnsureLoggedIn(noopHandler(&called))(rr, req)
+
+	if called || rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("database failure result: called=%v status=%d", called, rr.Code)
 	}
 }

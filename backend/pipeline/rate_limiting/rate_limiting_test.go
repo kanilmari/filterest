@@ -138,6 +138,38 @@ func TestExceedRateLimitReturns429(t *testing.T) {
 	}
 }
 
+func TestUnverifiedAdminCookieDoesNotBypassRateLimit(t *testing.T) {
+	const fn, ip = "test.UnverifiedAdminCookie", "1.2.3.7"
+	injectCache(fn, 1, 1)
+	t.Cleanup(func() { purgeTestState(fn) })
+
+	request := reqWithIP(ip)
+	response := httptest.NewRecorder()
+	session, err := e_sessions.Store.Get(request, e_sessions.SessionName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.Values["user_id"] = 42
+	session.Values["user_role"] = "admin"
+	if err = session.Save(request, response); err != nil {
+		t.Fatal(err)
+	}
+	for _, cookie := range response.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+
+	called := 0
+	next := counter(&called)
+	first := httptest.NewRecorder()
+	WithFunctionRateLimiting(nil, fn, next)(first, request)
+	second := httptest.NewRecorder()
+	WithFunctionRateLimiting(nil, fn, next)(second, request)
+
+	if first.Code != http.StatusOK || second.Code != http.StatusTooManyRequests || called != 1 {
+		t.Fatalf("unverified admin cookie result: first=%d second=%d called=%d", first.Code, second.Code, called)
+	}
+}
+
 func TestDifferentIPsAreIndependent(t *testing.T) {
 	const fn = "test.IPIndep"
 	const ipA, ipB = "10.0.0.1", "10.0.0.2"

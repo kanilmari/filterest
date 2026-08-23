@@ -186,7 +186,7 @@ func handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	log.Println("session regenerated after authentication ✅")
 
 	// --- Sessioarvot ---
-	if err = setAuthenticatedSessionIdentity(session, userID, username); err != nil {
+	if err = setAuthenticatedSessionIdentityAtGeneration(session, userID, username, verification.AuthenticationGeneration); err != nil {
 		fmt.Printf("\033[31merror: session identity setup failed: %s\033[0m\n", err.Error())
 		showLoginForm(w, r, "Istuntovirhe. Yritä uudelleen.")
 		return

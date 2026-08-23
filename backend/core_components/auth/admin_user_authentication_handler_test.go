@@ -185,6 +185,8 @@ func (connection *adminAuthenticationMockConn) ExecContext(
 		}
 		connection.state.storedTOTPWasNil = true
 		return driver.RowsAffected(1), nil
+	case strings.Contains(normalized, "DELETE FROM restricted.verification_codes"):
+		return driver.RowsAffected(0), nil
 	default:
 		return nil, fmt.Errorf("unexpected exec: %s", normalized)
 	}

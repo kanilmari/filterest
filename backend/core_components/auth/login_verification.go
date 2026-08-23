@@ -38,10 +38,12 @@ const (
 var errUnsupportedVerificationMethod = errors.New("unsupported login verification method")
 
 type loginVerificationRecord struct {
-	Method     loginVerificationMethod
-	PINHash    string
-	TOTPSecret string
-	Email      string
+	Method                   loginVerificationMethod
+	PasswordHash             string
+	PINHash                  string
+	TOTPSecret               string
+	Email                    string
+	AuthenticationGeneration int64
 }
 
 func parseLoginVerificationMethod(value string) (loginVerificationMethod, error) {
@@ -58,15 +60,27 @@ func loadLoginVerificationRecord(userID int) (loginVerificationRecord, error) {
 	var record loginVerificationRecord
 	var rawMethod string
 	err := backend.DbConfidential.QueryRow(`
-		SELECT login_verification_method,
+		SELECT password,
+		       login_verification_method,
 		       COALESCE(fixed_pin_hash, ''),
 		       COALESCE(totp_secret, ''),
-		       email
+		       email,
+		       authentication_generation
 		FROM restricted.users_restricted
 		WHERE id = $1
-	`, userID).Scan(&rawMethod, &record.PINHash, &record.TOTPSecret, &record.Email)
+	`, userID).Scan(
+		&record.PasswordHash,
+		&rawMethod,
+		&record.PINHash,
+		&record.TOTPSecret,
+		&record.Email,
+		&record.AuthenticationGeneration,
+	)
 	if err != nil {
 		return record, err
+	}
+	if record.AuthenticationGeneration < 1 {
+		return record, errors.New("invalid authentication generation")
 	}
 	method, err := parseLoginVerificationMethod(rawMethod)
 	if err != nil {

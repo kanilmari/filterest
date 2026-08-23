@@ -7,6 +7,7 @@ package auth
 import (
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -65,16 +66,18 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 	if userID == 1 {
 		buttonState = "login"
 	} else {
-		userExists, existsErr := authenticatedUserExists(userID)
+		session, sessionErr := e_sessions.GetOrCreateSession(response_writer, request)
+		if sessionErr != nil {
+			log.Printf("\033[31mvirhe: %s\033[0m\n", sessionErr.Error())
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "session lookup failed")
+			return
+		}
+		userExists, existsErr := auth_generation.Matches(request.Context(), backend.DbConfidential, session, userID)
 		if existsErr != nil {
-			log.Printf("\033[31mvirhe: user existence check failed for user %d: %s\033[0m\n", userID, existsErr.Error())
+			log.Printf("\033[31mvirhe: authentication generation check failed for user %d: %s\033[0m\n", userID, existsErr.Error())
+			httpresponse.RespondWithError(response_writer, http.StatusServiceUnavailable, "authentication state unavailable")
+			return
 		} else if !userExists {
-			session, sessionErr := e_sessions.GetOrCreateSession(response_writer, request)
-			if sessionErr != nil {
-				log.Printf("\033[31mvirhe: %s\033[0m\n", sessionErr.Error())
-				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "session lookup failed")
-				return
-			}
 			clearAuthSessionValues(session)
 			if saveErr := session.Save(request, response_writer); saveErr != nil {
 				log.Printf("\033[31mvirhe: %s\033[0m\n", saveErr.Error())
@@ -202,8 +205,5 @@ func authenticatedUserExists(userID int) (bool, error) {
 // browser cookie and the next auth bootstrap response.
 // It exists so every stale-session path clears the same session fields.
 func clearAuthSessionValues(session *gorillaSessions.Session) {
-	delete(session.Values, "authenticated")
-	delete(session.Values, "user_id")
-	delete(session.Values, "username")
-	delete(session.Values, "user_role")
+	auth_generation.ClearIdentity(session)
 }

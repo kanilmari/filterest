@@ -14,8 +14,14 @@ import (
 
 func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	origGuest := backend.DbGuest
-	backend.DbGuest = openCredentialMockDB(t, credentialMockConfig{adminGroupMember: true})
-	t.Cleanup(func() { backend.DbGuest = origGuest })
+	origConfidential := backend.DbConfidential
+	database := openCredentialMockDB(t, credentialMockConfig{adminGroupMember: true, authGeneration: 7})
+	backend.DbGuest = database
+	backend.DbConfidential = database
+	t.Cleanup(func() {
+		backend.DbGuest = origGuest
+		backend.DbConfidential = origConfidential
+	})
 
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
 	if err := setAuthenticatedSessionIdentity(session, 42, "alice"); err != nil {
@@ -34,12 +40,15 @@ func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	if got := session.Values["user_role"]; got != "admin" {
 		t.Fatalf("user_role = %#v, want admin", got)
 	}
+	if got := session.Values["authentication_generation"]; got != int64(7) {
+		t.Fatalf("authentication_generation = %#v, want 7", got)
+	}
 }
 
 func TestLocalLoginFactorAttemptsAreEnvironmentIndependent(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
-	setPendingLoginState(session, 42, "alice", "fingerprint")
+	setPendingLoginState(session, 42, "alice", "fingerprint", 1)
 
 	for expected := 4; expected >= 0; expected-- {
 		if got := localLoginFactorAttemptsRemaining(session, false); got != expected {

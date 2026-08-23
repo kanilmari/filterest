@@ -48,10 +48,12 @@ RUN go mod download
 # are included when present, while exported builds with only main.go still work.
 COPY *.go ./
 COPY backend/ ./backend/
+COPY server_tools/admin_credential_recovery/ ./server_tools/admin_credential_recovery/
 
 # Build the application with production flag baked in
 # Security: This binary can NEVER run in dev mode, even if ENVIRONMENT_TYPE=dev is set
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.buildEnv=prod" -o easelect .
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o filterest-admin-recovery ./server_tools/admin_credential_recovery
 
 # ------------------------------------------------------------------------------
 # Stage 3: Production Runtime
@@ -94,6 +96,7 @@ RUN case "${EASELECT_RUNTIME_UID}:${EASELECT_RUNTIME_GID}" in \
 
 # Copy binary from backend builder
 COPY --from=backend-builder /app/easelect .
+COPY --from=backend-builder /app/filterest-admin-recovery .
 
 # Copy frontend source for development mode (unbuilt assets)
 COPY frontend/ ./frontend/

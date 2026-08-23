@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 
+	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -27,6 +29,26 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 		}
 
 		user_id_val, ok := session.Values["user_id"]
+		if ok {
+			if userID, isInteger := user_id_val.(int); isInteger && userID > 1 {
+				generationMatches, generationErr := auth_generation.Matches(r.Context(), backend.DbConfidential, session, userID)
+				if generationErr != nil {
+					log.Printf("\033[31m[EnsureLoggedIn] authentication state unavailable for user %d: %v\033[0m", userID, generationErr)
+					httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "authentication state unavailable")
+					return
+				}
+				if !generationMatches {
+					auth_generation.ClearIdentity(session)
+					if saveErr := session.Save(r, w); saveErr != nil {
+						log.Printf("\033[31m[EnsureLoggedIn] stale session clear failed: %v\033[0m", saveErr)
+						httpresponse.RespondWithError(w, http.StatusInternalServerError, "session save failed")
+						return
+					}
+					user_id_val = nil
+					ok = false
+				}
+			}
+		}
 		if !ok {
 			// No user_id in session — check if guests are allowed to browse
 			loginToBrowse, ltbErr := middlewares.CheckLoginToBrowse()
@@ -67,10 +89,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 				loginToBrowse = true
 			}
 			if loginToBrowse {
-				delete(session.Values, "authenticated")
-				delete(session.Values, "user_id")
-				delete(session.Values, "username")
-				delete(session.Values, "user_role")
+				auth_generation.ClearIdentity(session)
 				if saveErr := session.Save(r, w); saveErr != nil {
 					log.Printf("\033[31m[EnsureLoggedIn] guest-session clear failed: %v\033[0m", saveErr)
 				}
