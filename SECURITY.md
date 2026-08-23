@@ -57,11 +57,18 @@ docker exec -it <app-container> /app/filterest-admin-recovery --dry-run
 
 The preflight prints the database, site, current project, eligible existing
 administrators, their current verification methods, and their authentication
-generations. When those values identify the intended deployment, run the same
-command without `--dry-run`. The command accepts a new password and optional
+generations. The canonical domain is read from the container's protected
+`BASE_URL`, printed separately, and used as the first part of the final target
+confirmation; it is never inferred from the site's display name. Recovery
+fails closed when that public-origin setting is missing or ambiguous. When
+those values identify the intended deployment, run the same command without
+`--dry-run`. The command accepts a new password and optional
 fixed PIN only through the protected terminal, lets the operator explicitly
 choose the post-recovery verification method, and requires the printed target
-identity to be typed back exactly.
+identity to be typed back exactly. That identity is a safety phrase, not a
+filesystem path or password; for example,
+`filterest.com/Filterest/filterest/filterest:filterest_admin` names the domain,
+site, current project, database, and administrator account in that order.
 
 Recovery does not create users, grant administrator access, change group
 memberships, reset application tables, or remove media. A successful recovery

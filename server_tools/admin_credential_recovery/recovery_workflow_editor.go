@@ -28,14 +28,18 @@ func executeRecoveryWorkflow(
 	ctx context.Context,
 	terminal operatorTerminal,
 	operations recoveryOperations,
+	siteDomain string,
 	dryRun bool,
 	emailDeliveryConfigured bool,
 ) error {
+	if strings.TrimSpace(siteDomain) == "" {
+		return errors.New("site domain is required for administrator recovery target confirmation")
+	}
 	identity, err := operations.ReadInstanceIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	printTargetIdentity(terminal, identity)
+	printTargetIdentity(terminal, siteDomain, identity)
 	if !credentials.DatabaseVersionAtLeast(identity.DatabaseVersion, credentials.MinimumRecoveryDatabaseVersion) {
 		return credentials.ErrRecoveryDatabaseVersionUnsupported
 	}
@@ -92,8 +96,9 @@ func executeRecoveryWorkflow(
 		return err
 	}
 
-	confirmation := identityConfirmationToken(identity) + ":" + administrator.Username
+	confirmation := identityConfirmationToken(siteDomain, identity) + ":" + administrator.Username
 	terminal.Printf("Final target confirmation: %s\n", confirmation)
+	terminal.Printf("This is not a filesystem path or password; it identifies the exact domain, site, project, database, and administrator account being recovered.\n")
 	typedConfirmation, err := terminal.ReadLine("Type the final target confirmation exactly: ")
 	if err != nil {
 		return err
@@ -115,8 +120,9 @@ func executeRecoveryWorkflow(
 	return nil
 }
 
-func printTargetIdentity(terminal operatorTerminal, identity credentials.InstanceIdentity) {
+func printTargetIdentity(terminal operatorTerminal, siteDomain string, identity credentials.InstanceIdentity) {
 	terminal.Printf("Database identity readback:\n")
+	terminal.Printf("  Site domain: %s\n", displayIdentityValue(siteDomain))
 	terminal.Printf("  Database: %s\n", displayIdentityValue(identity.DatabaseName))
 	terminal.Printf("  Database version: %s\n", displayIdentityValue(identity.DatabaseVersion))
 	terminal.Printf("  Site: %s\n", displayIdentityValue(identity.SiteName))
@@ -132,8 +138,11 @@ func displayIdentityValue(value string) string {
 	return value
 }
 
-func identityConfirmationToken(identity credentials.InstanceIdentity) string {
-	components := make([]string, 0, 3)
+func identityConfirmationToken(siteDomain string, identity credentials.InstanceIdentity) string {
+	components := make([]string, 0, 4)
+	if cleanDomain := strings.TrimSpace(siteDomain); cleanDomain != "" {
+		components = append(components, cleanDomain)
+	}
 	for _, value := range []string{identity.SiteName, identity.CurrentProject, identity.DatabaseName} {
 		if cleanValue := strings.TrimSpace(value); cleanValue != "" {
 			components = append(components, cleanValue)

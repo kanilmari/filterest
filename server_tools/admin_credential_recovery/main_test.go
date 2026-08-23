@@ -76,8 +76,8 @@ func testWorkflowOperations(method credentials.VerificationMethod) *fakeRecovery
 		identity: credentials.InstanceIdentity{
 			DatabaseName:    "filterest",
 			DatabaseVersion: "9.6.2",
-			SiteName:        "filterest.com",
-			CurrentProject:  "Filterest",
+			SiteName:        "Filterest",
+			CurrentProject:  "filterest",
 			InstanceKind:    "filterest_domain",
 			InstanceRole:    "application",
 		},
@@ -101,7 +101,7 @@ func TestDryRunPrintsIdentityAndEligibleAdministratorsWithoutSecretPrompts(t *te
 	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
 	terminal := &fakeOperatorTerminal{}
 
-	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, true, false); err != nil {
+	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", true, false); err != nil {
 		t.Fatalf("executeRecoveryWorkflow(dry-run) error = %v", err)
 	}
 	if operations.receivedInput != nil {
@@ -111,10 +111,11 @@ func TestDryRunPrintsIdentityAndEligibleAdministratorsWithoutSecretPrompts(t *te
 		t.Fatalf("dry-run workflow secret prompts = %#v", terminal.secretPrompts)
 	}
 	for _, expected := range []string{
+		"Site domain: filterest.com",
 		"Database: filterest",
 		"Database version: 9.6.2",
-		"Site: filterest.com",
-		"Current project: Filterest",
+		"Site: Filterest",
+		"Current project: filterest",
 		"admin_filterest (current verification: fixed_pin, authentication generation: 6)",
 		"Dry run complete. No credential data was changed.",
 	} {
@@ -129,7 +130,7 @@ func TestWorkflowRefusesDatabaseBeforeAuthenticationGenerationRelease(t *testing
 	operations.identity.DatabaseVersion = "9.6.1"
 	terminal := &fakeOperatorTerminal{}
 
-	err := executeRecoveryWorkflow(context.Background(), terminal, operations, true, false)
+	err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", true, false)
 	if !errors.Is(err, credentials.ErrRecoveryDatabaseVersionUnsupported) {
 		t.Fatalf("executeRecoveryWorkflow() error = %v, want unsupported database version", err)
 	}
@@ -144,12 +145,12 @@ func TestWorkflowPreservesCurrentTOTPWithoutRequestingPIN(t *testing.T) {
 		lines: []string{
 			"1",
 			"1",
-			"filterest.com/Filterest/filterest:admin_filterest",
+			"filterest.com/Filterest/filterest/filterest:admin_filterest",
 		},
 		secrets: []string{"correct horse battery staple", "correct horse battery staple"},
 	}
 
-	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, false, false); err != nil {
+	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false); err != nil {
 		t.Fatalf("executeRecoveryWorkflow() error = %v", err)
 	}
 	if operations.receivedInput == nil || !operations.receivedInput.PreserveCurrentVerification {
@@ -172,6 +173,12 @@ func TestWorkflowPreservesCurrentTOTPWithoutRequestingPIN(t *testing.T) {
 	if strings.Contains(terminal.output.String(), "correct horse battery staple") {
 		t.Fatal("password leaked into terminal output")
 	}
+	if !strings.Contains(terminal.output.String(), "Final target confirmation: filterest.com/Filterest/filterest/filterest:admin_filterest") {
+		t.Fatalf("domain-qualified final target confirmation missing:\n%s", terminal.output.String())
+	}
+	if !strings.Contains(terminal.output.String(), "not a filesystem path or password") {
+		t.Fatalf("target confirmation explanation missing:\n%s", terminal.output.String())
+	}
 }
 
 func TestWorkflowRequestsNewFixedPINTwiceOnlyWhenSelected(t *testing.T) {
@@ -181,7 +188,7 @@ func TestWorkflowRequestsNewFixedPINTwiceOnlyWhenSelected(t *testing.T) {
 		lines: []string{
 			"1",
 			"2",
-			"filterest.com/Filterest/filterest:admin_filterest",
+			"filterest.com/Filterest/filterest/filterest:admin_filterest",
 		},
 		secrets: []string{
 			"456789", "456789",
@@ -189,7 +196,7 @@ func TestWorkflowRequestsNewFixedPINTwiceOnlyWhenSelected(t *testing.T) {
 		},
 	}
 
-	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, false, true); err != nil {
+	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, true); err != nil {
 		t.Fatalf("executeRecoveryWorkflow() error = %v", err)
 	}
 	if operations.receivedInput == nil || operations.receivedInput.FixedPIN != "456789" {
@@ -212,7 +219,7 @@ func TestWorkflowRefusesUnavailableEmailVerification(t *testing.T) {
 	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
 	terminal := &fakeOperatorTerminal{lines: []string{"1", "3"}}
 
-	err := executeRecoveryWorkflow(context.Background(), terminal, operations, false, false)
+	err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false)
 	if !errors.Is(err, credentials.ErrEmailVerificationUnavailable) {
 		t.Fatalf("executeRecoveryWorkflow() error = %v, want email unavailable", err)
 	}
@@ -228,7 +235,7 @@ func TestWorkflowRequiresAdditionalPasswordOnlyConfirmation(t *testing.T) {
 	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
 	terminal := &fakeOperatorTerminal{lines: []string{"1", "4", "not confirmed"}}
 
-	err := executeRecoveryWorkflow(context.Background(), terminal, operations, false, false)
+	err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false)
 	if !errors.Is(err, credentials.ErrPasswordOnlyConfirmationRequired) {
 		t.Fatalf("executeRecoveryWorkflow() error = %v, want explicit password-only confirmation", err)
 	}
@@ -244,7 +251,7 @@ func TestWorkflowPreserveStillEnforcesEmailAndPasswordOnlyGates(t *testing.T) {
 	t.Run("email", func(t *testing.T) {
 		operations := testWorkflowOperations(credentials.VerificationEmail)
 		terminal := &fakeOperatorTerminal{lines: []string{"1", "1"}}
-		err := executeRecoveryWorkflow(context.Background(), terminal, operations, false, false)
+		err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false)
 		if !errors.Is(err, credentials.ErrEmailVerificationUnavailable) {
 			t.Fatalf("preserve email error = %v", err)
 		}
@@ -256,7 +263,7 @@ func TestWorkflowPreserveStillEnforcesEmailAndPasswordOnlyGates(t *testing.T) {
 	t.Run("password only", func(t *testing.T) {
 		operations := testWorkflowOperations(credentials.VerificationNone)
 		terminal := &fakeOperatorTerminal{lines: []string{"1", "1", "not confirmed"}}
-		err := executeRecoveryWorkflow(context.Background(), terminal, operations, false, false)
+		err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false)
 		if !errors.Is(err, credentials.ErrPasswordOnlyConfirmationRequired) {
 			t.Fatalf("preserve password-only error = %v", err)
 		}
@@ -282,6 +289,63 @@ func TestParseCommandConfigRejectsCredentialPositionalsAndDoesNotReadDatabasePas
 	for _, key := range requestedKeys {
 		if key == "DB_PASSWORD" || key == "DB_ADMIN_PASSWORD" || key == "PGPASSWORD" {
 			t.Fatalf("parseCommandConfig read secret environment key %s", key)
+		}
+	}
+}
+
+func TestParseCommandConfigDerivesCanonicalDomainFromProtectedBaseURL(t *testing.T) {
+	values := map[string]string{
+		"BASE_URL":  "https://FILTEREST.com/",
+		"SITE_NAME": "must-not-be-used.example",
+	}
+	config, err := parseCommandConfig(nil, func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatalf("parseCommandConfig() error = %v", err)
+	}
+	if config.siteDomain != "filterest.com" {
+		t.Fatalf("site domain = %q, want canonical BASE_URL hostname", config.siteDomain)
+	}
+
+	_, err = parseCommandConfig(nil, func(key string) string {
+		if key == "SITE_NAME" {
+			return "filterest.com"
+		}
+		return ""
+	})
+	if err == nil || !strings.Contains(err.Error(), "BASE_URL") {
+		t.Fatalf("missing BASE_URL with populated SITE_NAME error = %v, want fail-closed BASE_URL error", err)
+	}
+}
+
+func TestProtectedBaseURLDomainValidationFailsClosed(t *testing.T) {
+	testCases := []struct {
+		name    string
+		baseURL string
+	}{
+		{name: "missing", baseURL: ""},
+		{name: "remote HTTP", baseURL: "http://filterest.com"},
+		{name: "credentials", baseURL: "https://operator@filterest.com"},
+		{name: "path", baseURL: "https://filterest.com/admin"},
+		{name: "query", baseURL: "https://filterest.com/?target=other"},
+		{name: "empty query marker", baseURL: "https://filterest.com?"},
+		{name: "fragment", baseURL: "https://filterest.com/#target"},
+		{name: "invalid hostname", baseURL: "https://filterest_com"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := siteDomainFromProtectedBaseURL(testCase.baseURL); err == nil {
+				t.Fatalf("siteDomainFromProtectedBaseURL(%q) unexpectedly succeeded", testCase.baseURL)
+			}
+		})
+	}
+
+	for _, baseURL := range []string{"https://localhost:8082", "http://127.0.0.1:8082"} {
+		domain, err := siteDomainFromProtectedBaseURL(baseURL)
+		if err != nil {
+			t.Fatalf("siteDomainFromProtectedBaseURL(%q) error = %v", baseURL, err)
+		}
+		if domain == "" {
+			t.Fatalf("siteDomainFromProtectedBaseURL(%q) returned an empty domain", baseURL)
 		}
 	}
 }

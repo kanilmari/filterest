@@ -24,12 +24,13 @@ import (
 const databaseConnectionTimeout = 10 * time.Second
 
 type commandConfig struct {
-	host    string
-	port    string
-	dbName  string
-	dbUser  string
-	sslMode string
-	dryRun  bool
+	host       string
+	port       string
+	dbName     string
+	dbUser     string
+	sslMode    string
+	siteDomain string
+	dryRun     bool
 }
 
 type commandDependencies struct {
@@ -107,7 +108,7 @@ func run(ctx context.Context, args []string, dependencies commandDependencies) e
 		firstConfiguredValue(dependencies.lookupEnv, "POSTMARK_API_KEY", "POSTMARK_SERVER_TOKEN"),
 		firstConfiguredValue(dependencies.lookupEnv, "EMAIL_FROM_ADDRESS", "POSTMARK_FROM_ADDRESS"),
 	)
-	return executeRecoveryWorkflow(ctx, terminal, editor, config.dryRun, emailDeliveryReady)
+	return executeRecoveryWorkflow(ctx, terminal, editor, config.siteDomain, config.dryRun, emailDeliveryReady)
 }
 
 // resolveRuntimeDatabasePassword uses an existing protected runtime admin credential only for its matching role.
@@ -147,7 +148,66 @@ func parseCommandConfig(args []string, lookupEnv func(string) string) (commandCo
 			return config, fmt.Errorf("%s must not be empty", fieldName)
 		}
 	}
+	siteDomain, err := siteDomainFromProtectedBaseURL(lookupEnv("BASE_URL"))
+	if err != nil {
+		return config, err
+	}
+	config.siteDomain = siteDomain
 	return config, nil
+}
+
+// siteDomainFromProtectedBaseURL extracts one canonical hostname from the container's protected public origin.
+// It rejects ambiguous URLs so the final confirmation cannot silently derive a domain from display metadata.
+func siteDomainFromProtectedBaseURL(value string) (string, error) {
+	rawBaseURL := strings.TrimSpace(value)
+	if rawBaseURL == "" {
+		return "", errors.New("protected BASE_URL is required for administrator recovery target confirmation")
+	}
+	parsedBaseURL, err := url.Parse(rawBaseURL)
+	if err != nil || !parsedBaseURL.IsAbs() || parsedBaseURL.Hostname() == "" {
+		return "", errors.New("protected BASE_URL must be an absolute site URL")
+	}
+	if parsedBaseURL.Scheme != "https" && !(parsedBaseURL.Scheme == "http" && isLoopbackSiteHostname(parsedBaseURL.Hostname())) {
+		return "", errors.New("protected BASE_URL must use HTTPS except for a loopback development host")
+	}
+	if parsedBaseURL.User != nil || (parsedBaseURL.Path != "" && parsedBaseURL.Path != "/") ||
+		parsedBaseURL.ForceQuery || parsedBaseURL.RawQuery != "" || parsedBaseURL.Fragment != "" {
+		return "", errors.New("protected BASE_URL must not contain credentials, a path, query parameters, or a fragment")
+	}
+	domain := strings.ToLower(strings.TrimSpace(parsedBaseURL.Hostname()))
+	domain = strings.TrimSuffix(domain, ".")
+	if domain == "" {
+		return "", errors.New("protected BASE_URL hostname must not be empty")
+	}
+	if len(domain) > 253 {
+		return "", errors.New("protected BASE_URL hostname is longer than 253 characters")
+	}
+	if strings.ContainsAny(domain, "/\\:@ \t\r\n") {
+		return "", errors.New("protected BASE_URL hostname contains ambiguous delimiters or whitespace")
+	}
+	for _, label := range strings.Split(domain, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return "", errors.New("protected BASE_URL hostname contains an invalid DNS label")
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') &&
+				(character < '0' || character > '9') && character != '-' {
+				return "", errors.New("protected BASE_URL hostname contains characters outside ASCII DNS hostname syntax")
+			}
+		}
+	}
+	return domain, nil
+}
+
+// isLoopbackSiteHostname limits the only non-HTTPS BASE_URL exception to local development addresses.
+// It prevents a remote plaintext origin from becoming trusted recovery confirmation metadata.
+func isLoopbackSiteHostname(hostname string) bool {
+	canonicalHostname := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(hostname), "."))
+	if canonicalHostname == "localhost" || strings.HasSuffix(canonicalHostname, ".localhost") {
+		return true
+	}
+	address := net.ParseIP(canonicalHostname)
+	return address != nil && address.IsLoopback()
 }
 
 // connectionString URL-escapes the in-memory database credential for lib/pq without logging it.

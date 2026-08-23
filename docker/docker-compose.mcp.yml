@@ -37,6 +37,7 @@ services:
       - DB_BASIC_PASSWORD=${DB_PASSWORD}
       - DB_GUEST_USER=${DB_ADMIN_USER}
       - DB_GUEST_PASSWORD=${DB_PASSWORD}
+      - BASE_URL=${BASE_URL:-}
       - ENVIRONMENT_TYPE=production
       # API keys
       - MML_API_KEY=${MML_API_KEY}

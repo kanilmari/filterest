@@ -30,6 +30,7 @@ services:
       - DB_USER=${DB_ADMIN_USER}
       - DB_PASSWORD=${DB_ADMIN_PASSWORD}
       - DB_NAME=${DB_NAME}
+      - BASE_URL=${BASE_URL:-}
       - ENVIRONMENT_TYPE=dev
       - FILTEREST_PROJECTS_HOME=${FILTEREST_PROJECTS_HOME}
       - TLS_CERT_FILE=/run/easelect-private/localhost_certificate.crt
