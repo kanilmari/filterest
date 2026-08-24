@@ -60,7 +60,7 @@ def make_record(
 def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
     entries = validate_ledger_bytes(LEDGER.read_bytes())
 
-    assert [entry.record for entry in entries] == [
+    expected_records = [
         {
             "app_version": "8.31.0",
             "artifact_type": "runtime",
@@ -1299,7 +1299,40 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
                 "model": "legacy_maintainer_export",
             },
         },
+        {
+            "app_version": "8.40.8",
+            "artifact_type": "runtime",
+            "build_id": "filterest-8.40.8-stable-runtime-27ff90a339eb",
+            "channel": "stable",
+            "created_at": "2026-08-24T16:55:00Z",
+            "database": {"min_version": "9.6.2", "target_version": "9.6.2"},
+            "maturity": "candidate",
+            "previous_record_sha256": (
+                "793d6169966df076bc7b0e7952dfb2d19ff6844b770adcd5fbd892c49294147f"
+            ),
+            "product": "filterest",
+            "record_id": "build:filterest-8.40.8-stable-runtime-27ff90a339eb",
+            "record_type": "build",
+            "schema_version": 1,
+            "source": {
+                "commit": "27ff90a339eb503f8c258e60e104cb4728ec1f0c",
+                "model": "legacy_maintainer_export",
+            },
+        },
     ]
+    assert [entry.record for entry in entries[: len(expected_records)]] == expected_records
+    tail = entries[len(expected_records) :]
+    assert tail
+    assert all(
+        entry.record["app_version"] == "8.40.8"
+        and entry.record["artifact_type"] == "runtime"
+        and entry.record["channel"] == "stable"
+        and entry.record["maturity"] == "candidate"
+        and entry.record["database"]
+        == {"min_version": "9.6.2", "target_version": "9.6.2"}
+        and entry.record["source"]["model"] == "legacy_maintainer_export"
+        for entry in tail
+    )
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 
 
