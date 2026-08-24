@@ -304,7 +304,7 @@ def validate_ledger_bytes(data: bytes, *, label: str = "release ledger") -> list
     entries: list[LedgerEntry] = []
     record_ids: set[str] = set()
     build_ids: set[str] = set()
-    published_stable_versions: set[str] = set()
+    latest_stable_maturity_by_version: dict[str, str] = {}
     previous_line: bytes | None = None
 
     for index, line_bytes in enumerate(data.splitlines(keepends=True), start=1):
@@ -341,11 +341,13 @@ def validate_ledger_bytes(data: bytes, *, label: str = "release ledger") -> list
 
         if record["channel"] == "stable" and record["maturity"] == "published":
             version = record["app_version"]
-            if version in published_stable_versions:
+            if latest_stable_maturity_by_version.get(version) == "published":
                 raise ReleaseContractError(
                     f"{line_label} duplicates published stable app_version {version!r}"
                 )
-            published_stable_versions.add(version)
+            latest_stable_maturity_by_version[version] = "published"
+        elif record["channel"] == "stable" and record["maturity"] == "candidate":
+            latest_stable_maturity_by_version[record["app_version"]] = "candidate"
 
         record_ids.add(record["record_id"])
         build_ids.add(record["build_id"])

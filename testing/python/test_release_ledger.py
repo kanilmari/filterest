@@ -1259,6 +1259,46 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
                 "model": "legacy_maintainer_export",
             },
         },
+        {
+            "app_version": "8.40.8",
+            "artifact_type": "runtime",
+            "build_id": "filterest-8.40.8-stable-runtime-8a0bb9d872e0",
+            "channel": "stable",
+            "created_at": "2026-08-24T12:42:04Z",
+            "database": {"min_version": "9.6.2", "target_version": "9.6.2"},
+            "maturity": "published",
+            "previous_record_sha256": (
+                "e2e05b743fdc7b2475763991cb96963b34ef1939bedf8d41b2044be966dc80d3"
+            ),
+            "product": "filterest",
+            "record_id": "build:filterest-8.40.8-stable-runtime-8a0bb9d872e0",
+            "record_type": "build",
+            "schema_version": 1,
+            "source": {
+                "commit": "8a0bb9d872e08b7b90c39ebab26ac278afe916ad",
+                "model": "legacy_maintainer_export",
+            },
+        },
+        {
+            "app_version": "8.40.8",
+            "artifact_type": "runtime",
+            "build_id": "filterest-8.40.8-stable-runtime-6a62e9bdcd46",
+            "channel": "stable",
+            "created_at": "2026-08-24T13:10:00Z",
+            "database": {"min_version": "9.6.2", "target_version": "9.6.2"},
+            "maturity": "candidate",
+            "previous_record_sha256": (
+                "7a2de69067450bf2ef1473c649132abe04a958a944acded73340d35ff4a48f6c"
+            ),
+            "product": "filterest",
+            "record_id": "build:filterest-8.40.8-stable-runtime-6a62e9bdcd46",
+            "record_type": "build",
+            "schema_version": 1,
+            "source": {
+                "commit": "6a62e9bdcd46ee63b6518b946ecc863a6a3ba583",
+                "model": "legacy_maintainer_export",
+            },
+        },
     ]
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 
@@ -1382,6 +1422,26 @@ def test_second_published_stable_version_is_rejected() -> None:
 
     with pytest.raises(ReleaseContractError, match="published stable app_version"):
         validate_ledger_bytes(first_line + second_line)
+
+
+def test_published_stable_version_can_be_republished_after_new_candidate() -> None:
+    first = make_record(maturity="published")
+    first_line = canonical_json_line(first)
+    candidate = make_record(
+        commit="2" * 40,
+        maturity="candidate",
+        previous_line=first_line,
+        created_at="2026-08-24T12:00:00Z",
+    )
+    candidate_line = canonical_json_line(candidate)
+    published = make_record(
+        commit="3" * 40,
+        maturity="published",
+        previous_line=candidate_line,
+        created_at="2026-08-24T13:00:00Z",
+    )
+
+    validate_ledger_bytes(first_line + candidate_line + canonical_json_line(published))
 
 
 @pytest.mark.parametrize("channel", ["nightly", "preview"])
