@@ -101,6 +101,35 @@ func TestDetectValidatedStableCandidateBuildIdentity(t *testing.T) {
 	}
 }
 
+func TestStableMaturityTransitionRequiresCandidateBetweenPublishedRows(t *testing.T) {
+	published := releaseLedgerRecordV1{
+		AppVersion: "8.40.8",
+		Channel:    ReleaseChannelStable,
+		Maturity:   ReleaseMaturityPublished,
+	}
+	candidate := published
+	candidate.Maturity = ReleaseMaturityCandidate
+
+	latest := map[string]ReleaseMaturity{}
+	if err := validateStableMaturityTransition(latest, published); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateStableMaturityTransition(latest, published); err == nil {
+		t.Fatal("direct published-to-published transition was accepted")
+	}
+
+	latest = map[string]ReleaseMaturity{}
+	if err := validateStableMaturityTransition(latest, published); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateStableMaturityTransition(latest, candidate); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateStableMaturityTransition(latest, published); err != nil {
+		t.Fatalf("published row after a new candidate was rejected: %v", err)
+	}
+}
+
 func TestDetectValidatedPublishedRuntimeMapsLegacyPurposeNarrowly(t *testing.T) {
 	root := t.TempDir()
 	writeBuildIdentityFixture(

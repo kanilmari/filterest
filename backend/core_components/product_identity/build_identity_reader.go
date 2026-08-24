@@ -349,7 +349,7 @@ func validateReleaseLedgerBinding(root string, identity buildIdentityV1) error {
 
 	recordIDs := map[string]struct{}{}
 	buildIDs := map[string]struct{}{}
-	publishedStableVersions := map[string]struct{}{}
+	latestStableMaturityByVersion := map[string]ReleaseMaturity{}
 	previousDigest := ""
 	matchingRecords := 0
 
@@ -382,11 +382,8 @@ func validateReleaseLedgerBinding(root string, identity buildIdentityV1) error {
 		if _, exists := buildIDs[record.BuildID]; exists {
 			return fmt.Errorf("release ledger has a duplicate build ID")
 		}
-		if record.Channel == ReleaseChannelStable && record.Maturity == ReleaseMaturityPublished {
-			if _, exists := publishedStableVersions[record.AppVersion]; exists {
-				return fmt.Errorf("release ledger has a duplicate published stable version")
-			}
-			publishedStableVersions[record.AppVersion] = struct{}{}
+		if err := validateStableMaturityTransition(latestStableMaturityByVersion, record); err != nil {
+			return err
 		}
 
 		digestBytes := sha256.Sum256(line)
@@ -403,6 +400,21 @@ func validateReleaseLedgerBinding(root string, identity buildIdentityV1) error {
 	}
 	if matchingRecords != 1 {
 		return fmt.Errorf("build identity ledger record is missing or duplicated")
+	}
+	return nil
+}
+
+func validateStableMaturityTransition(
+	latest map[string]ReleaseMaturity,
+	record releaseLedgerRecordV1,
+) error {
+	if record.Channel == ReleaseChannelStable && record.Maturity == ReleaseMaturityPublished {
+		if latest[record.AppVersion] == ReleaseMaturityPublished {
+			return fmt.Errorf("release ledger has a duplicate published stable version")
+		}
+		latest[record.AppVersion] = ReleaseMaturityPublished
+	} else if record.Channel == ReleaseChannelStable && record.Maturity == ReleaseMaturityCandidate {
+		latest[record.AppVersion] = ReleaseMaturityCandidate
 	}
 	return nil
 }
