@@ -160,7 +160,7 @@ func main() {
 	//     kaadu kesken käynnistyksen puuttuviin confidential-grantteihin.
 	//-----------------------------------------------------------------
 	if err := backend.EnsureConfidentialRolePermissions(backend.Db); err != nil {
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
+		log.Fatalf("[CONFIDENTIAL ROLE PERMISSIONS] startup reconcile failed: %v", err)
 	}
 
 	//-----------------------------------------------------------------

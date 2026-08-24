@@ -8,17 +8,20 @@ remote publication.
 ## Current Verdict
 
 `filterest` is approved as the active generation and repository target.
-Owner-policy rows are decided, and the exact-release evidence rows below record
-the completed proof for the current Filterest commit. The local
-release-readiness gate may proceed using those exact commit and artifact links.
+Owner-policy rows are decided. The repeatable exact-release evidence rows below
+remain `manual-final`: their volatile commit IDs and artifact paths live in the
+non-public ticket #834 latest exact-candidate addendum, not in this generated
+file. The local release-readiness gate may proceed only after that addendum and
+the current generated candidate have been compared directly.
 Generated deterministic evidence is summarized in
-[`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md), and current runtime and
-Computer Use artifacts are attached to non-public maintainer ticket #834.
+[`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md). Current runtime and
+Computer Use artifacts must be attached to non-public maintainer ticket #834
+before the manual-final review passes.
 
 Earlier Filterest runtime and Computer Use artifacts are historical. They must
 not be described as evidence for the current release. Create fresh structured
-runtime, browser, and Computer Use artifacts for the exact Filterest commit
-before changing the blocked rows below to `done`.
+runtime, browser, and Computer Use artifacts for the exact Filterest candidate
+before completing the `manual-final` evidence review.
 
 This checklist governs the current `filterest` release. Filterest is generated
 from a clean non-public maintainer release-source commit into its own GitHub
@@ -50,16 +53,16 @@ and generated artifact commit.
 | P0 | Notice and trademark wording | done | Human/project owner | Owner directed on 2026-08-03 that the accepted Filterest Oy ownership, distinct-name, and allowed-use wording be consolidated in `NOTICE`; reopen after material wording changes. |
 | P0 | Third-party notices | done | Release agent + human/project owner | Owner accepted the current `THIRD_PARTY_NOTICES.md`; the generated `THIRD_PARTY_NOTICE_REVIEW.md` is authoritative for current Go, npm, and asset totals plus review-required rows and findings. Reopen if the notice bytes or inventory changes. |
 | P0 | First-ever admin credential path | done | Release agent + Human/project owner | Fresh installs expose the one-time environment, sign-in verification, site identity, username, email address, and password flow only while the server-owned `first_run` setting is true and no login-ready admin exists. Site identity, account data including the hashed password, protected verification data, admin membership, and flag closure share one database transaction and fail closed. |
-| P0 | Public bootstrap content review | done | Release agent + Human/project owner | [`server_tools/public_bootstrap/REVIEW.md`](../../server_tools/public_bootstrap/REVIEW.md) passes for 47 schema tables, 28 seed tables, and 593 counted fixture rows; the reviewed public scope includes the complete First Run environment, verification, identity, credential, and four-dataset image-upload flow. |
+| P0 | Public bootstrap content review | done | Release agent + Human/project owner | [`server_tools/public_bootstrap/REVIEW.md`](../../server_tools/public_bootstrap/REVIEW.md) is authoritative for the current schema-table, seed-table, fixture-row, and demo-asset counts; the reviewed public scope includes the complete First Run environment, verification, identity, credential, and four-dataset image-upload flow. |
 | P0 | Private source boundary | done | Release agent | The clean candidate and tracked-tree audit pass; [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md) records the exact current release-source commit. |
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
-| P0 | Fresh-clone public build/test | done | Release agent | Exact stable proof: clean clone of `8326ea4849a76e35353b7dda367b62bc66f0f055` at `/tmp/filterest-fresh-clone-8.33.0-final-mGXj3c/repo` completed `npm ci` with 0 vulnerabilities and `npm run qa` with all public checks passing on 2026-08-18. |
-| P0 | Browser review uses Filterest runtime | done | Release agent + browser audit | Exact stable proof: generated Filterest commit `8326ea4849a76e35353b7dda367b62bc66f0f055` ran from its own checkout and isolated `filterest_local_preview` database on port 8100. The structured verifier passed all 37 checks in `agent_tasks/_artifacts/human_qa/public_release_834_filterest_runtime_20260818T192959Z`, and the browser audit in `../filterest/agent_tasks/_artifacts/browser_audits/2026-08-18--22-32-09--localhost` reported accessibility 100/100, best practices 100/100, and zero P1 findings. |
-| P0 | Current browser release-readiness acceptance | done | Human release owner | Exact stable proof: after directing the corrected 8.33.0 version to Fintravel production, the release owner confirmed on 2026-08-18 that only this corrected version should be delivered. The exact fresh-clone and runtime evidence above now satisfies the technical acceptance inputs for that direction. |
+| P0 | Fresh-clone public build/test | manual-final | Release agent | Exact stable proof: the #834 latest exact-candidate addendum must name the current Filterest 8.40.8 candidate HEAD, clean disposable clone, dependency audit, full public QA, and focused security/operations suites. Earlier addenda cannot satisfy this row. |
+| P0 | Browser review uses Filterest runtime | manual-final | Release agent + browser audit | Exact stable proof: the #834 latest exact-candidate addendum must bind the current Filterest 8.40.8 candidate HEAD to its isolated port-8100 runtime, structured verifier report, screenshot, and browser audit. Earlier runtime artifacts cannot satisfy this row. |
+| P0 | Current browser release-readiness acceptance | manual-final | Human release owner | Exact stable proof: the #834 latest exact-candidate addendum must record the current owner direction and final Computer Use verdict for Filterest 8.40.8. Historical acceptance cannot satisfy this row. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 9-file public docs wording audit passes with no pre-release or private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
-| P1 | Public CI and local-preview posture | done | Release agent | Exact stable proof: Filterest commit `8326ea4849a76e35353b7dda367b62bc66f0f055` passed its own port-8100 local preview and browser checks; the 2026-08-18 account-wide audit confirmed Actions disabled for every `kanilmari` repository except the approved `kanilmari/try_it_html` exception. |
+| P1 | Public CI and local-preview posture | manual-final | Release agent | Exact stable proof: the #834 latest exact-candidate addendum must bind Filterest 8.40.8 to its current port-8100 preview proof and a fresh account-wide Actions policy audit. Historical preview or policy evidence cannot satisfy this row. |
 | P2 | Local release evidence review | manual-final | Human release owner | Review this checklist, ticket evidence, generated commit, and approved remote state before authorizing a push. |
 | P2 | GitHub repository target | done | Human release owner | Owner selected `kanilmari/filterest` on `main`. Only the approved `origin` and `main` upstream are allowed. |
 | P2 | Remote push | gated-authorized | Release agent under standing owner authorization | Push a reviewed clean commit only to `filterest` after every required local gate and the manual-final evidence review pass. Do not request a second publication confirmation. The approved publish command also pushes the matching `v<VERSION_APP>` tag, which builds checksum-verified Linux admin binaries. |
@@ -86,7 +89,13 @@ maintainer may use `./filterest_release fast-patch`. The command requires the
 clone-local audited-candidate marker to match the clean candidate commit,
 identity, evidence source, and `frontend/dist` tree. It creates one local
 published-identity commit and refreshes final third-party notice evidence, but
-does not publish and does not replace the final `publish --yes` full gate.
+does not publish and does not replace the final `publish --yes` full gate. A
+successful Fast Patch also writes clone-local final-assembly proof. After the
+final runtime, browser, Actions-policy, Computer Use, and dependency-notice
+review, use `render-final-addendum` to create the canonical one-line #834
+comment and `attest-final` to bind its API readback plus exact evidence hashes
+to final HEAD. Publication fails closed when either marker or any bound byte is
+missing, stale, moved, or changed.
 
 Run the command from the non-public maintainer release source. During iterative local
 testing, use repo-local ignored staging targets rather than overwriting the

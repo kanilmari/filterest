@@ -149,9 +149,9 @@ func EnsureAdminTablePermissions(db *sql.DB) error {
 }
 
 // EnsureConfidentialRolePermissions grants the configured confidential DB role
-// the restricted-schema access required by login, profile, and OTP helpers.
-// This is a startup reconciliation hook so Docker/local instances do not drift
-// into "wrong_credentials" failures when role grants were created incompletely.
+// its restricted-schema access plus only the public identity columns required
+// for session-generation checks. This startup reconciliation prevents restored
+// Docker/local databases from drifting into unusable authentication state.
 func EnsureConfidentialRolePermissions(db *sql.DB) error {
 	confidentialUser := strings.TrimSpace(os.Getenv("DB_CONFIDENTIAL_USER"))
 	if confidentialUser == "" {
@@ -171,6 +171,9 @@ func EnsureConfidentialRolePermissions(db *sql.DB) error {
 			IF role_name IS NULL OR btrim(role_name) = '' THEN
 				RETURN;
 			END IF;
+
+			EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', role_name);
+			EXECUTE format('GRANT SELECT (id, enabled) ON TABLE public.system_users TO %I', role_name);
 
 			IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'restricted') THEN
 				EXECUTE format('GRANT USAGE ON SCHEMA restricted TO %I', role_name);

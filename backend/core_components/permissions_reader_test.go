@@ -85,6 +85,16 @@ func TestEnsureConfidentialRolePermissionsExecutesGrantQuery(t *testing.T) {
 	if !strings.Contains(calls[0], "GRANT USAGE ON SCHEMA restricted") {
 		t.Fatalf("exec[0] = %q, want restricted schema grant", calls[0])
 	}
+	if !strings.Contains(calls[0], "GRANT USAGE ON SCHEMA public") {
+		t.Fatalf("exec[0] = %q, want public schema usage grant", calls[0])
+	}
+	if !strings.Contains(calls[0], "GRANT SELECT (id, enabled) ON TABLE public.system_users") {
+		t.Fatalf("exec[0] = %q, want least-privilege public user-column grant", calls[0])
+	}
+	if strings.Contains(calls[0], "GRANT SELECT ON ALL TABLES IN SCHEMA public") ||
+		strings.Contains(calls[0], "GRANT SELECT ON TABLE public.system_users") {
+		t.Fatalf("exec[0] grants broader public-table access than authentication generation requires: %q", calls[0])
+	}
 	if !strings.Contains(calls[0], "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA restricted") {
 		t.Fatalf("exec[0] = %q, want restricted table grant", calls[0])
 	}
@@ -103,6 +113,21 @@ func TestEnsureConfidentialRolePermissionsNoopsWithoutRole(t *testing.T) {
 	calls := snapshotPermissionExecCalls()
 	if len(calls) != 0 {
 		t.Fatalf("exec calls = %d, want 0", len(calls))
+	}
+}
+
+func TestEnsureConfidentialRolePermissionsRejectsUnsafeRoleWithoutExecuting(t *testing.T) {
+	db := newPermissionExecTestDB(t)
+	defer db.Close()
+
+	t.Setenv("DB_CONFIDENTIAL_USER", "limited_user; DROP ROLE admin_user")
+
+	err := EnsureConfidentialRolePermissions(db)
+	if err == nil || !strings.Contains(err.Error(), "EnsureConfidentialRolePermissions") {
+		t.Fatalf("err = %v, want wrapped unsafe-role error", err)
+	}
+	if calls := snapshotPermissionExecCalls(); len(calls) != 0 {
+		t.Fatalf("unsafe role executed %d grant statement(s), want 0", len(calls))
 	}
 }
 
