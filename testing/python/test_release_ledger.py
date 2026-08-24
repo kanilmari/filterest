@@ -1327,11 +1327,18 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         entry.record["app_version"] == "8.40.8"
         and entry.record["artifact_type"] == "runtime"
         and entry.record["channel"] == "stable"
-        and entry.record["maturity"] == "candidate"
+        and entry.record["maturity"] in {"candidate", "published"}
         and entry.record["database"]
         == {"min_version": "9.6.2", "target_version": "9.6.2"}
         and entry.record["source"]["model"] == "legacy_maintainer_export"
         for entry in tail
+    )
+    maturities = [entry.record["maturity"] for entry in tail]
+    assert maturities[-1] == "candidate"
+    assert all(
+        maturity != "published"
+        or index > 0 and maturities[index - 1] == "candidate"
+        for index, maturity in enumerate(maturities)
     )
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 
