@@ -16,7 +16,7 @@ PUBLIC_RUNTIME_SCHEMA_CANDIDATES = (
     / "public_slice_export"
     / "public_bootstrap"
     / "runtime.schema.sql",
-    PROJECT_ROOT / "server_tools" / "public_bootstrap" / "runtime.schema.sql",
+    PROJECT_ROOT / "server_tools" / "public_bootstrap" / "schema.sql",
 )
 
 
