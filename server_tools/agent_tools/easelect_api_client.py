@@ -24,6 +24,8 @@ from server_tools.lib.easelect_private_paths import resolve_easelect_private_pat
 
 
 DEFAULT_BASE_URL = "https://localhost:8082"
+INSECURE_TLS_ENV = "EASELECT_API_ALLOW_INSECURE_TLS"
+LOCAL_NATIVE_PORT = 8082
 
 
 class EaselectAPIError(RuntimeError):
@@ -95,15 +97,41 @@ class EaselectAPIClient:
         self._csrf_token = None
         self._opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.cookie_jar),
-            urllib.request.HTTPSHandler(context=self._ssl_context()),
+            urllib.request.HTTPSHandler(context=self._ssl_context(self.base_url)),
         )
 
     @staticmethod
-    def _ssl_context():
+    def _ssl_context(base_url, environment=None):
+        """Verify remote TLS while allowing the native self-signed dev origin."""
         context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
+        resolved_environment = os.environ if environment is None else environment
+        if (
+            EaselectAPIClient._is_local_native_base_url(base_url)
+            or resolved_environment.get(INSECURE_TLS_ENV) == "1"
+        ):
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
         return context
+
+    @staticmethod
+    def _is_local_native_base_url(base_url):
+        """Recognize only the exact native loopback origin used for development."""
+        try:
+            parsed = urllib.parse.urlsplit(base_url)
+            port = parsed.port
+        except (TypeError, ValueError):
+            return False
+
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname in {"localhost", "127.0.0.1"}
+            and port == LOCAL_NATIVE_PORT
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.path in {"", "/"}
+            and not parsed.query
+            and not parsed.fragment
+        )
 
     def _url(self, path, query=None):
         if not path.startswith("/"):

@@ -10,6 +10,7 @@ import (
 
 func setRequiredConfigEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", "")
 	t.Setenv("SESSION_COOKIE_MODE", "isolated")
 	t.Setenv("SESSION_COOKIE_NAME", "")
 	t.Setenv("INSTANCE_NAME", "config-test")
@@ -23,6 +24,23 @@ func setRequiredConfigEnv(t *testing.T) {
 	}
 	for _, key := range required {
 		t.Setenv(key, "test-value")
+	}
+}
+
+func TestValidateConfigAcceptsExactTrustedProxyPeerIPs(t *testing.T) {
+	setRequiredConfigEnv(t)
+	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", " 172.25.0.1, fd00::1,172.25.0.1 ")
+	if err := ValidateConfig(); err != nil {
+		t.Fatalf("ValidateConfig() rejected exact proxy peers: %v", err)
+	}
+}
+
+func TestValidateConfigRejectsTrustedProxyNetworkBeforeMutableStartup(t *testing.T) {
+	setRequiredConfigEnv(t)
+	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", "172.25.0.0/16")
+	err := ValidateConfig()
+	if err == nil || !strings.Contains(err.Error(), "trusted reverse-proxy") {
+		t.Fatalf("ValidateConfig() error = %v, want trusted proxy failure", err)
 	}
 }
 

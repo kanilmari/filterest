@@ -5,12 +5,10 @@
 package auth
 
 import (
-	"context"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -44,29 +42,15 @@ var loginIPGates = struct {
 	entries map[string]*loginIPGate
 }{entries: make(map[string]*loginIPGate)}
 
-type loginReverseDNSEntry struct {
-	hostname  string
-	expiresAt time.Time
-}
-
-var loginReverseDNSCache = struct {
-	sync.RWMutex
-	entries map[string]loginReverseDNSEntry
-}{entries: make(map[string]loginReverseDNSEntry)}
-
-var resolveLoginHostname = lookupHostname
-
 type loginAttempt struct {
 	count       int
 	windowStart time.Time
 }
 
 const (
-	loginRateLimitWindow      = 15 * time.Minute
-	loginRateLimitMax         = 10 // max login attempts per IP per window
-	loginRateLimitHeader      = "X-Dev-RateLimit-Would-Exceed"
-	loginReverseDNSCacheTTL   = 10 * time.Minute
-	loginReverseDNSLookupWait = 500 * time.Millisecond
+	loginRateLimitWindow = 15 * time.Minute
+	loginRateLimitMax    = 10 // max login attempts per IP per window
+	loginRateLimitHeader = "X-Dev-RateLimit-Would-Exceed"
 )
 
 const loginRateLimitErrorMessage = "Too many login attempts. Please try again later."
@@ -223,60 +207,9 @@ func getClientIP(r *http.Request) string {
 	return host
 }
 
-// getCachedLoginHostname returns the cached reverse-DNS result for login logging.
-// It bridges the login request path and the background resolver cache.
-// It exists so login handlers can log hostnames without blocking on DNS.
-func getCachedLoginHostname(ip string) (string, bool) {
-	loginReverseDNSCache.RLock()
-	entry, ok := loginReverseDNSCache.entries[ip]
-	loginReverseDNSCache.RUnlock()
-	if !ok || time.Now().After(entry.expiresAt) {
-		return "", false
-	}
-	return entry.hostname, true
-}
-
-// cacheLoginHostname refreshes the login reverse-DNS cache in the background.
-// It bridges IP logging and the bounded resolver lookup used outside request flow.
-// It exists to keep legacy login diagnostics useful without request-path DNS waits.
-func cacheLoginHostname(ip string) {
-	hostname := resolveLoginHostname(ip)
-
-	loginReverseDNSCache.Lock()
-	loginReverseDNSCache.entries[ip] = loginReverseDNSEntry{
-		hostname:  hostname,
-		expiresAt: time.Now().Add(loginReverseDNSCacheTTL),
-	}
-	loginReverseDNSCache.Unlock()
-}
-
-// logLoginAttemptDomain logs the current login IP and starts reverse DNS asynchronously on cache miss.
-// It bridges legacy login handling and reverse-DNS diagnostics.
-// It exists to avoid synchronous DNS latency while preserving domain information when cached.
-func logLoginAttemptDomain(ip string) {
-	if hostname, ok := getCachedLoginHostname(ip); ok {
-		if hostname != "" {
-			log.Printf("login attempt IP=%s, domain=%s 🌐", ip, hostname)
-			return
-		}
-		log.Printf("login attempt IP=%s (domain not found) 🌐", ip)
-		return
-	}
-
-	log.Printf("login attempt IP=%s (domain lookup pending) 🌐", ip)
-	go cacheLoginHostname(ip)
-}
-
-// lookupHostname performs a bounded reverse DNS lookup for background cache refresh.
-// It bridges the asynchronous login resolver worker and net.DefaultResolver.
-// It exists to keep the only DNS wait outside the HTTP request path.
-func lookupHostname(ip string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), loginReverseDNSLookupWait)
-	defer cancel()
-
-	names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-	if err == nil && len(names) > 0 {
-		return strings.TrimSuffix(names[0], ".")
-	}
-	return ""
+// logLoginAttemptIP records only the firewall-verified numeric client identity.
+// Avoiding reverse DNS keeps high-cardinality public traffic off request and
+// background resolver paths and prevents an unbounded hostname cache.
+func logLoginAttemptIP(ip string) {
+	log.Printf("login attempt IP=%s", ip)
 }

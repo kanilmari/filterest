@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"context"
+	"easelect/backend/core_components/context_keys"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,22 +65,22 @@ func TestExtractIP(t *testing.T) {
 		want       string
 	}{
 		{
-			name:       "x forwarded for first wins",
+			name:       "raw x forwarded for is ignored",
 			remoteAddr: "10.0.0.1:1234",
 			headers:    map[string]string{"X-Forwarded-For": "203.0.113.1, 198.51.100.2"},
-			want:       "203.0.113.1",
+			want:       "10.0.0.1",
 		},
 		{
-			name:       "single x forwarded for",
+			name:       "single raw x forwarded for is ignored",
 			remoteAddr: "10.0.0.1:1234",
 			headers:    map[string]string{"X-Forwarded-For": "203.0.113.8"},
-			want:       "203.0.113.8",
+			want:       "10.0.0.1",
 		},
 		{
-			name:       "x real ip fallback",
+			name:       "raw x real ip is ignored",
 			remoteAddr: "10.0.0.1:1234",
 			headers:    map[string]string{"X-Real-IP": "198.51.100.7"},
-			want:       "198.51.100.7",
+			want:       "10.0.0.1",
 		},
 		{
 			name:       "remote addr host part",
@@ -103,6 +105,18 @@ func TestExtractIP(t *testing.T) {
 				t.Fatalf("extractIP() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestExtractIPUsesFirewallVerifiedContextBeforeSocketAndSpoofedHeaders(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.RemoteAddr = "172.25.0.1:54321"
+	req.Header.Set("CF-Connecting-IP", "192.0.2.11")
+	req.Header.Set("X-Real-IP", "192.0.2.12")
+	req.Header.Set("X-Forwarded-For", "192.0.2.13")
+	ctx := context.WithValue(req.Context(), context_keys.ClientIPKey{}, " 203.0.113.44 ")
+	if got := extractIP(req.WithContext(ctx)); got != "203.0.113.44" {
+		t.Fatalf("extractIP() = %q, want firewall-verified context identity", got)
 	}
 }
 

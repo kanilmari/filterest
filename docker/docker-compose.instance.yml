@@ -17,6 +17,7 @@
 #   SESSION_COOKIE_MODE - "isolated" by default; use "replica-pool" only for
 #                         true load-balanced replicas serving the same database
 #   SESSION_COOKIE_NAME - Required shared cookie name only in replica-pool mode
+#   EASELECT_TRUSTED_PROXY_PEER_IPS - Optional comma-separated exact proxy IPs.
 #
 # To enable email webhooks via ngrok:
 #   1. Set NGROK_AUTHTOKEN in your instance .env file
@@ -86,6 +87,7 @@ services:
       - PAYMENT_CALLBACK_SECRET=${PAYMENT_CALLBACK_SECRET:-}
       - SITE_NAME=${SITE_NAME:-Filterest}
       - ENVIRONMENT_TYPE=${ENVIRONMENT_TYPE:-prod}
+      - EASELECT_TRUSTED_PROXY_PEER_IPS=${EASELECT_TRUSTED_PROXY_PEER_IPS:-}
       - INSTANCE_NAME=${INSTANCE:-default}
       # SQL migrations: enable to auto-create schema on fresh DB
       - ENABLE_SQL_MIGRATIONS=${ENABLE_SQL_MIGRATIONS:-false}

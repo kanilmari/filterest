@@ -5,6 +5,7 @@
 package backend
 
 import (
+	"easelect/backend/core_components/middlewares/firewall"
 	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
 	"log"
@@ -82,6 +83,9 @@ func ValidateConfig() error {
 	}
 	if err := e_sessions.ValidateAuthCookieEnvironment(); err != nil {
 		return fmt.Errorf("invalid authentication-cookie configuration: %w", err)
+	}
+	if err := firewall.ValidateTrustedProxyConfiguration(); err != nil {
+		return fmt.Errorf("invalid trusted reverse-proxy configuration: %w", err)
 	}
 
 	return nil

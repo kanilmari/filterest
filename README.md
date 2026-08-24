@@ -168,6 +168,28 @@ The bundled public seed contains synthetic multilingual example datasets and
 media only. See `server_tools/public_bootstrap/README.md` for the seed and
 first-administrator boundaries.
 
+### Reverse-proxy client identity
+
+When Filterest runs behind a host reverse proxy, client-IP headers are trusted
+only from built-in Cloudflare ranges, loopback, and operator-configured exact
+proxy peer addresses. Do not configure the protected trusted-proxy peer setting
+until the edge overwrites forwarded client identity instead of appending or
+passing through request-supplied headers.
+
+The generated repository ships the two canonical nginx boundaries:
+
+- `server_tools/nginx/filterest_cloudflare_real_ip.conf` accepts
+  `CF-Connecting-IP` only from official Cloudflare source networks.
+- `server_tools/nginx/filterest_sanitized_proxy_headers.conf` clears incoming
+  client-identity headers and sends one verified address in `X-Real-IP` and
+  `X-Forwarded-For`.
+
+Install the Cloudflare source snippet in the nginx HTTP or server context and
+the sanitized-header snippet in the application `location` before setting
+`EASELECT_TRUSTED_PROXY_PEER_IPS` to nginx's one exact Docker-gateway or host
+address. The setting accepts IP literals only, never a subnet or CIDR. Keep it
+blank when no additional proxy peer has been proven.
+
 The Git-ignored `filterest.paths.local` accepts arbitrary safe relative or
 absolute `projects_home` and `keys_home` values. Relative values start at the
 checkout root. Existing installations without an explicit `keys_home` retain

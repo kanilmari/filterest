@@ -1,5 +1,5 @@
 // login_helpers_test.go
-// Table-driven unit tests for checkLoginRateLimit, getClientIP, login DNS logging, and respondJSON.
+// Table-driven unit tests for checkLoginRateLimit, verified client IPs, and respondJSON.
 // Between login_rate_checker.go and login_credential_handler.go helper functions.
 // Exists to verify auth helper logic without DB or network dependencies.
 package auth
@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"easelect/backend/core_components/middlewares/firewall"
 )
 
 // resetRateLimiter clears the global authRateLimiter map between tests.
@@ -47,13 +49,6 @@ func loginFailureCount(ip string) int {
 		return 0
 	}
 	return entry.count
-}
-
-// resetLoginReverseDNSCache clears cached login hostname lookups between tests.
-func resetLoginReverseDNSCache() {
-	loginReverseDNSCache.Lock()
-	loginReverseDNSCache.entries = make(map[string]loginReverseDNSEntry)
-	loginReverseDNSCache.Unlock()
 }
 
 // ── checkLoginRateLimit ───────────────────────────────────────────────────────
@@ -209,6 +204,53 @@ func TestShouldBlockLoginAttempt(t *testing.T) {
 			t.Fatalf("warning header = %q, want empty", got)
 		}
 	})
+}
+
+func TestFirewallIdentitySeparatesLoginLimiterBuckets(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", "172.25.0.1")
+
+	loginGate := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldBlockLoginAttempt(w, r) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	invoke := func(handler http.Handler, peer, client string) int {
+		request := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+		request.RemoteAddr = peer + ":54321"
+		request.Header.Set("X-Real-IP", client)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder.Code
+	}
+
+	resetRateLimiter()
+	trustedHandler := firewall.FirewallHandler(loginGate)
+	for attempt := 1; attempt <= loginRateLimitMax; attempt++ {
+		if got := invoke(trustedHandler, "172.25.0.1", "203.0.113.10"); got != http.StatusOK {
+			t.Fatalf("client A attempt %d = %d, want 200", attempt, got)
+		}
+	}
+	if got := invoke(trustedHandler, "172.25.0.1", "203.0.113.10"); got != http.StatusTooManyRequests {
+		t.Fatalf("client A over-limit attempt = %d, want 429", got)
+	}
+	if got := invoke(trustedHandler, "172.25.0.1", "198.51.100.20"); got != http.StatusOK {
+		t.Fatalf("client B was merged into client A login bucket: status %d", got)
+	}
+
+	resetRateLimiter()
+	untrustedHandler := firewall.FirewallHandler(loginGate)
+	for attempt := 1; attempt <= loginRateLimitMax; attempt++ {
+		spoofedClient := fmt.Sprintf("198.51.100.%d", attempt)
+		if got := invoke(untrustedHandler, "172.25.0.2", spoofedClient); got != http.StatusOK {
+			t.Fatalf("untrusted peer attempt %d = %d, want 200", attempt, got)
+		}
+	}
+	if got := invoke(untrustedHandler, "172.25.0.2", "203.0.113.99"); got != http.StatusTooManyRequests {
+		t.Fatalf("spoofed headers split the untrusted peer login bucket: status %d", got)
+	}
 }
 
 func TestFailedLoginRateLimit(t *testing.T) {
@@ -389,53 +431,6 @@ func TestGetClientIP(t *testing.T) {
 				t.Errorf("getClientIP() = %q, want %q", got, tc.want)
 			}
 		})
-	}
-}
-
-func TestLogLoginAttemptDomainDoesNotWaitForReverseDNS(t *testing.T) {
-	resetLoginReverseDNSCache()
-	ip := "203.0.113.10"
-
-	started := make(chan struct{})
-	release := make(chan struct{})
-	originalResolver := resolveLoginHostname
-	resolveLoginHostname = func(gotIP string) string {
-		if gotIP != ip {
-			t.Errorf("resolver ip = %q, want %q", gotIP, ip)
-		}
-		close(started)
-		<-release
-		return "login.example.test"
-	}
-	defer func() {
-		resolveLoginHostname = originalResolver
-	}()
-
-	start := time.Now()
-	logLoginAttemptDomain(ip)
-	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
-		close(release)
-		t.Fatalf("logLoginAttemptDomain waited %s for reverse DNS", elapsed)
-	}
-
-	select {
-	case <-started:
-	case <-time.After(250 * time.Millisecond):
-		close(release)
-		t.Fatal("reverse DNS lookup was not started asynchronously")
-	}
-
-	close(release)
-	deadline := time.Now().Add(time.Second)
-	for {
-		hostname, ok := getCachedLoginHostname(ip)
-		if ok && hostname == "login.example.test" {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("cached hostname not refreshed; got %q cached=%v", hostname, ok)
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 

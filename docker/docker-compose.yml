@@ -56,6 +56,7 @@ services:
       - REVOLUT_WEBHOOK_SECRET=${REVOLUT_WEBHOOK_SECRET:-}
       - PAYMENT_CALLBACK_SECRET=${PAYMENT_CALLBACK_SECRET:-}
       - ENVIRONMENT_TYPE=${ENVIRONMENT_TYPE:-production}
+      - EASELECT_TRUSTED_PROXY_PEER_IPS=${EASELECT_TRUSTED_PROXY_PEER_IPS:-}
     depends_on:
       db:
         condition: service_healthy

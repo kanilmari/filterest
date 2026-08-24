@@ -327,6 +327,27 @@ is_placeholder_secret() {
     esac
 }
 
+validate_trusted_proxy_peer_ips() {
+    python3 - "$1" <<'PY'
+import ipaddress
+import sys
+
+raw = sys.argv[1].strip()
+if not raw:
+    raise SystemExit(0)
+for entry in raw.split(","):
+    value = entry.strip()
+    if not value or "%" in value:
+        raise SystemExit(1)
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        raise SystemExit(1)
+    if address.is_unspecified or address.is_multicast:
+        raise SystemExit(1)
+PY
+}
+
 # Validates only the local values required to start and bootstrap Filterest.
 # Optional provider, email, payment, and service-integration values may stay blank.
 # Error output names invalid keys but never prints their values.
@@ -383,6 +404,8 @@ validate_filterest_core_environment_file() {
     [[ "$(env_value "$file" PORT)" == "$(env_value "$file" APP_PORT)" ]] || invalid_keys+=("APP_PORT")
     [[ "$(env_value "$file" SESSION_COOKIE_MODE)" == "isolated" ]] || invalid_keys+=("SESSION_COOKIE_MODE")
     [[ -z "$(env_value "$file" SESSION_COOKIE_NAME)" ]] || invalid_keys+=("SESSION_COOKIE_NAME")
+    value="$(env_value "$file" EASELECT_TRUSTED_PROXY_PEER_IPS)"
+    validate_trusted_proxy_peer_ips "$value" || invalid_keys+=("EASELECT_TRUSTED_PROXY_PEER_IPS")
 
     for key in SESSION_SECRET_KEY SESSION_KEY; do
         value="$(env_value "$file" "$key")"

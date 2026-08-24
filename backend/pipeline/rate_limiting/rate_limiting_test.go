@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"easelect/backend/core_components/context_keys"
+	"easelect/backend/core_components/middlewares/firewall"
 	e_sessions "easelect/backend/core_components/sessions"
 	gorillaSessions "github.com/gorilla/sessions"
 )
@@ -77,6 +78,55 @@ func counter(n *int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		*n++
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func invokeThroughProxy(handler http.Handler, peer, client string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, "/test", nil)
+	request.RemoteAddr = peer + ":54321"
+	request.Header.Set("X-Real-IP", client)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestTrustedProxyIdentitySeparatesClientsAndUntrustedSpoofCannotSplitBucket(t *testing.T) {
+	const trustedFunction = "test.TrustedProxyBuckets"
+	const spoofFunction = "test.UntrustedProxySpoof"
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", "172.25.0.1")
+	injectCache(trustedFunction, 1, 1)
+	injectCache(spoofFunction, 1, 1)
+	t.Cleanup(func() {
+		purgeTestState(trustedFunction)
+		purgeTestState(spoofFunction)
+	})
+
+	trustedHandler := firewall.FirewallHandler(
+		WithFunctionRateLimiting(nil, trustedFunction, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+	)
+	if got := invokeThroughProxy(trustedHandler, "172.25.0.1", "203.0.113.10").Code; got != http.StatusOK {
+		t.Fatalf("client A first request = %d, want 200", got)
+	}
+	if got := invokeThroughProxy(trustedHandler, "172.25.0.1", "203.0.113.10").Code; got != http.StatusTooManyRequests {
+		t.Fatalf("client A over-limit request = %d, want 429", got)
+	}
+	if got := invokeThroughProxy(trustedHandler, "172.25.0.1", "198.51.100.20").Code; got != http.StatusOK {
+		t.Fatalf("client B was merged into client A bucket: status %d", got)
+	}
+
+	untrustedHandler := firewall.FirewallHandler(
+		WithFunctionRateLimiting(nil, spoofFunction, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+	)
+	if got := invokeThroughProxy(untrustedHandler, "172.25.0.2", "203.0.113.10").Code; got != http.StatusOK {
+		t.Fatalf("untrusted peer first request = %d, want 200", got)
+	}
+	if got := invokeThroughProxy(untrustedHandler, "172.25.0.2", "198.51.100.20").Code; got != http.StatusTooManyRequests {
+		t.Fatalf("spoofed header split the untrusted peer bucket: status %d", got)
 	}
 }
 

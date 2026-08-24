@@ -16,71 +16,9 @@ import (
 	"time"
 )
 
-// ───────────────────────────────────────────────────
-// Luotettujen välipalvelimien verkot (CIDR) – MUOKKAA!
-//
-//	✅  Lisää tänne omat Nginx-/Cloudflare-/Kubernetes-load-balancer-
-//	   verkot.  Cloudflaren ajantasaiset IP-blokit voit hakea esim.
-//	   https://www.cloudflare.com/ips-v4  ja  ips-v6.
-//
-// ───────────────────────────────────────────────────
-var trustedProxyNets []*net.IPNet
-
-func init() {
-	cidrs := []string{
-		// 🔻 Cloudflare v4 – esimerkinomaisesti muutama
-		"173.245.48.0/20",
-		"103.21.244.0/22",
-		"103.22.200.0/22",
-		"103.31.4.0/22",
-		"141.101.64.0/18",
-		"108.162.192.0/18",
-		"190.93.240.0/20",
-		"188.114.96.0/20",
-		"197.234.240.0/22",
-		"198.41.128.0/17",
-		"162.158.0.0/15",
-		"104.16.0.0/13",
-		"104.24.0.0/14",
-		"172.64.0.0/13",
-		"131.0.72.0/22",
-
-		// 🔻 Cloudflare v6 – esimerkinomaisesti
-		"2400:cb00::/32",
-		"2606:4700::/32",
-		"2803:f800::/32",
-		"2405:b500::/32",
-		"2405:8100::/32",
-		"2a06:98c0::/29",
-		"2c0f:f248::/32",
-
-		// 🔻 Paikallinen reverse-proxy (esim. Nginx samassa kontissa)
-		"127.0.0.1/32",
-		"::1/128",
-	}
-
-	for _, c := range cidrs {
-		if _, n, err := net.ParseCIDR(c); err == nil {
-			trustedProxyNets = append(trustedProxyNets, n)
-		} else {
-			// virhe käynnistyksessä → punaisella
-			fmt.Printf("\033[31merror: proxy CIDR %s invalid: %v\033[0m\n", c, err)
-		}
-	}
-}
-
 // onTrustedProxy kertoo, tuleeko yhteys joltakin tunnetulta välityspalvelimelta.
 func onTrustedProxy(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		return false
-	}
-	for _, n := range trustedProxyNets {
-		if n.Contains(ip) {
-			return true
-		}
-	}
-	return false
+	return defaultTrustedProxyResolver.isTrusted(ipStr)
 }
 
 // ───────────────────────────────────────────────────
@@ -95,6 +33,10 @@ func onTrustedProxy(ipStr string) bool {
 //
 // ───────────────────────────────────────────────────
 func getClientIP(r *http.Request) string {
+	return defaultTrustedProxyResolver.clientIP(r)
+}
+
+func (resolver *trustedProxyResolver) clientIP(r *http.Request) string {
 
 	// 0) Poimi todellinen lähde-IP socketista
 	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -103,17 +45,17 @@ func getClientIP(r *http.Request) string {
 	}
 
 	// Jos pyyntö EI tule luotetulta välipalvelimelta → ota se sellaisenaan
-	if !onTrustedProxy(remoteHost) {
+	if !resolver.isTrusted(remoteHost) {
 		return remoteHost
 	}
 
 	// 1) CF-Connecting-IP
-	if ip := net.ParseIP(r.Header.Get("CF-Connecting-IP")); ip != nil {
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); ip != nil {
 		return ip.String()
 	}
 
 	// 2) X-Real-IP
-	if ip := net.ParseIP(r.Header.Get("X-Real-IP")); ip != nil {
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
 		return ip.String()
 	}
 
@@ -150,57 +92,6 @@ var specialMethodRL = struct {
 	m map[string]*rlEntry
 }{m: make(map[string]*rlEntry)}
 
-// ───────────────────────────────────────────────────
-// Käänteinen DNS -välimuisti (vain lokitusta varten)
-//
-// Asynkroninen haku, max 500 ms timeout.
-// Tulokset välimuistitetaan IP-kohtaisesti 10 minuutiksi.
-// Ei koskaan estä pyyntöjen käsittelyä.
-// ───────────────────────────────────────────────────
-type reverseDNSEntry struct {
-	hostname  string
-	expiresAt time.Time
-}
-
-var reverseDNSCache = struct {
-	sync.RWMutex
-	m map[string]reverseDNSEntry
-}{m: make(map[string]reverseDNSEntry)}
-
-// cachedReverseDNS performs a reverse DNS lookup with a short timeout and caching.
-// Always returns immediately — never blocks the request.
-func cachedReverseDNS(ip string) string {
-	// 1) Check cache
-	reverseDNSCache.RLock()
-	if entry, ok := reverseDNSCache.m[ip]; ok && time.Now().Before(entry.expiresAt) {
-		reverseDNSCache.RUnlock()
-		return entry.hostname
-	}
-	reverseDNSCache.RUnlock()
-
-	// 2) Lookup with a 500ms deadline context so the goroutine is cancelled on timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	var hostname string
-	names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-	if err == nil && len(names) > 0 {
-		hostname = strings.TrimSuffix(names[0], ".")
-	} else {
-		hostname = ip // timeout or error — use IP as fallback
-	}
-
-	// 3) Tallenna välimuistiin
-	reverseDNSCache.Lock()
-	reverseDNSCache.m[ip] = reverseDNSEntry{
-		hostname:  hostname,
-		expiresAt: time.Now().Add(10 * time.Minute),
-	}
-	reverseDNSCache.Unlock()
-
-	return hostname
-}
-
 func incrementSpecial(ip string) bool {
 	specialMethodRL.Lock()
 	defer specialMethodRL.Unlock()
@@ -229,13 +120,21 @@ func incrementSpecial(ip string) bool {
 //
 // ───────────────────────────────────────────────────
 func FirewallHandler(next http.Handler) http.Handler {
+	// Load after backend.LoadEnvironmentVariables has populated the protected
+	// runtime environment. Central config validation has already checked it;
+	// this defensive repeat still refuses drift before HTTP starts.
+	resolver, err := trustedProxyResolverFromEnvironment()
+	if err != nil {
+		panic(err)
+	}
+	return firewallHandlerWithResolver(next, resolver)
+}
+
+func firewallHandlerWithResolver(next http.Handler, resolver *trustedProxyResolver) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// ► Poimitaan oikea IP välityspalvelin-otsikoista
-		remoteIP := getClientIP(r)
-
-		// Käänteinen DNS (vain lokitukseen, välimuistitettu, max 500 ms)
-		reverseDNS := cachedReverseDNS(remoteIP)
+		remoteIP := resolver.clientIP(r)
 
 		// 1) Rate-limit placeholder
 		// 2) Geo IP placeholder
@@ -250,8 +149,8 @@ func FirewallHandler(next http.Handler) http.Handler {
 			}
 		}
 		if total > maxHeaderSize {
-			fmt.Printf("\033[31merror: oversized header (%d bytes) - ip: %s (%s)\033[0m\n",
-				total, remoteIP, reverseDNS)
+			fmt.Printf("\033[31merror: oversized header (%d bytes) - ip: %s\033[0m\n",
+				total, remoteIP)
 			httpresponse.RespondWithError(w, http.StatusRequestEntityTooLarge, "413 - Payload Too Large (headers)")
 			return
 		}
@@ -266,15 +165,15 @@ func FirewallHandler(next http.Handler) http.Handler {
 
 			// a) Rate-limit erikoismetodeille
 			if !incrementSpecial(remoteIP) {
-				fmt.Printf("\033[31merror: %s method rate limit exceeded - ip: %s (%s)\033[0m\n",
-					r.Method, remoteIP, reverseDNS)
+				fmt.Printf("\033[31merror: %s method rate limit exceeded - ip: %s\033[0m\n",
+					r.Method, remoteIP)
 				httpresponse.RespondWithError(w, http.StatusTooManyRequests, "429 - Too Many Requests (special methods)")
 				return
 			}
 
 			// b) Blokataan itse metodi
-			fmt.Printf("\033[31merror: %s method blocked by firewall - ip: %s (%s)\033[0m\n",
-				r.Method, remoteIP, reverseDNS)
+			fmt.Printf("\033[31merror: %s method blocked by firewall - ip: %s\033[0m\n",
+				r.Method, remoteIP)
 			httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (Only GET/POST/HEAD allowed)")
 			return
 		}

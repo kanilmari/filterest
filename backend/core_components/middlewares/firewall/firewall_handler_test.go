@@ -1,16 +1,93 @@
 // firewall_handler_test.go
 // White-box unit tests for the firewall package.
-// Covers onTrustedProxy, getClientIP, incrementSpecial, FirewallHandler, and cachedReverseDNS.
+// Covers trusted proxy resolution, getClientIP, incrementSpecial, and FirewallHandler.
 package firewall
 
 import (
 	"easelect/backend/core_components/context_keys"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+func trustedProxyConfigForTest(t *testing.T, configured string) *trustedProxyResolver {
+	t.Helper()
+	networks, err := parseTrustedProxyNetworks(configured)
+	if err != nil {
+		t.Fatalf("parse trusted proxy config: %v", err)
+	}
+	return &trustedProxyResolver{networks: networks}
+}
+
+func containsNetwork(networks []*net.IPNet, expected string) bool {
+	for _, network := range networks {
+		if network.String() == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func TestParseTrustedProxyNetworks_WhitespaceDuplicatesIPv4AndIPv6(t *testing.T) {
+	networks, err := parseTrustedProxyNetworks(" 172.18.0.1, 2001:db8::1,172.18.0.1 ")
+	if err != nil {
+		t.Fatalf("parse trusted proxy config: %v", err)
+	}
+	if !containsNetwork(networks, "172.18.0.1/32") {
+		t.Fatal("exact Docker IPv4 gateway was not included")
+	}
+	if !containsNetwork(networks, "2001:db8::1/128") {
+		t.Fatal("exact IPv6 proxy was not included")
+	}
+	wanted := len(defaultTrustedProxyCIDRs) + 2
+	if len(networks) != wanted {
+		t.Fatalf("duplicate was not removed: got %d networks, want %d", len(networks), wanted)
+	}
+}
+
+func TestParseTrustedProxyNetworks_MalformedOrNetworkValuesFailClosed(t *testing.T) {
+	for _, configured := range []string{
+		"172.18.0.1/32",
+		"172.18.0.0/16",
+		"10.0.0.0/8",
+		"fd00::/64",
+		"0.0.0.0/0",
+		"0.0.0.0",
+		"::",
+		"224.0.0.1",
+		"fe80::1%eth0",
+		"172.18.0.1,",
+		"not-a-cidr",
+	} {
+		t.Run(configured, func(t *testing.T) {
+			if _, err := parseTrustedProxyNetworks(configured); err == nil {
+				t.Fatalf("expected %q to fail closed", configured)
+			}
+		})
+	}
+}
+
+func TestMustTrustedProxyNetworks_PanicsOnMalformedProtectedConfig(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("malformed protected proxy config did not stop startup")
+		}
+	}()
+	mustTrustedProxyNetworks("172.18.0.1/32")
+}
+
+func TestFirewallHandler_MalformedProtectedConfigStopsHandlerStartup(t *testing.T) {
+	t.Setenv(trustedProxyPeerIPsEnv, "172.18.0.1/32")
+	defer func() {
+		if recover() == nil {
+			t.Fatal("malformed protected proxy config did not stop handler startup")
+		}
+	}()
+	FirewallHandler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+}
 
 // ─────────────────────────────────────────────────────────────
 // onTrustedProxy
@@ -171,6 +248,52 @@ func TestGetClientIP_RemoteAddrWithoutPort(t *testing.T) {
 	// RemoteAddr string is returned.
 	if got != "9.9.9.9" {
 		t.Errorf("expected 9.9.9.9, got %s", got)
+	}
+}
+
+func TestGetClientIP_ExactDockerGatewayAcceptsSupportedProxyHeaders(t *testing.T) {
+	resolver := trustedProxyConfigForTest(t, "172.18.0.1")
+	tests := []struct {
+		name   string
+		header string
+		value  string
+		want   string
+	}{
+		{name: "Cloudflare", header: "CF-Connecting-IP", value: " 203.0.113.10 ", want: "203.0.113.10"},
+		{name: "X-Real-IP", header: "X-Real-IP", value: " 198.51.100.20 ", want: "198.51.100.20"},
+		{name: "X-Forwarded-For", header: "X-Forwarded-For", value: " 192.0.2.30, 172.18.0.1 ", want: "192.0.2.30"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			request.RemoteAddr = "172.18.0.1:54321"
+			request.Header.Set(test.header, test.value)
+			if got := resolver.clientIP(request); got != test.want {
+				t.Fatalf("got %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestGetClientIP_UntrustedDockerPeerCannotSpoofHeaders(t *testing.T) {
+	resolver := trustedProxyConfigForTest(t, "172.18.0.1")
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.RemoteAddr = "172.18.0.2:54321"
+	request.Header.Set("CF-Connecting-IP", "203.0.113.10")
+	request.Header.Set("X-Real-IP", "198.51.100.20")
+	request.Header.Set("X-Forwarded-For", "192.0.2.30")
+	if got := resolver.clientIP(request); got != "172.18.0.2" {
+		t.Fatalf("spoofed proxy headers changed client identity to %q", got)
+	}
+}
+
+func TestGetClientIP_ExactPrivateIPv6Proxy(t *testing.T) {
+	resolver := trustedProxyConfigForTest(t, "fd00::1")
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.RemoteAddr = "[fd00::1]:54321"
+	request.Header.Set("X-Real-IP", "2001:db8::44")
+	if got := resolver.clientIP(request); got != "2001:db8::44" {
+		t.Fatalf("got %q, want exact IPv6 client", got)
 	}
 }
 
@@ -408,69 +531,5 @@ func TestFirewallHandler_TrustedProxy_ClientIPFromCFHeader(t *testing.T) {
 
 	if capturedIP != "203.0.113.55" {
 		t.Errorf("expected ClientIPKey to be 203.0.113.55, got %q", capturedIP)
-	}
-}
-
-// ─────────────────────────────────────────────────────────────
-// cachedReverseDNS
-// ─────────────────────────────────────────────────────────────
-
-func TestCachedReverseDNS_ReturnsCachedValue(t *testing.T) {
-	// Pre-populate the cache with a known entry
-	ip := "192.0.2.50"
-	reverseDNSCache.Lock()
-	reverseDNSCache.m[ip] = reverseDNSEntry{
-		hostname:  "test.example.com",
-		expiresAt: time.Now().Add(10 * time.Minute),
-	}
-	reverseDNSCache.Unlock()
-
-	// First call should return cached value
-	got1 := cachedReverseDNS(ip)
-	if got1 != "test.example.com" {
-		t.Errorf("expected cached hostname, got %q", got1)
-	}
-
-	// Second call must also return the cached value (not re-lookup)
-	got2 := cachedReverseDNS(ip)
-	if got2 != "test.example.com" {
-		t.Errorf("expected cached hostname on second call, got %q", got2)
-	}
-}
-
-func TestCachedReverseDNS_ReturnsIPWhenLookupFails(t *testing.T) {
-	// Use an IP that won't resolve in test environments (documentation range).
-	ip := "192.0.2.99"
-	// Clear any existing cache entry
-	reverseDNSCache.Lock()
-	delete(reverseDNSCache.m, ip)
-	reverseDNSCache.Unlock()
-
-	got := cachedReverseDNS(ip)
-	// When lookup fails, the function returns the IP itself as a fallback.
-	if got != ip {
-		// Also acceptable if the IP somehow resolves — just check it's not empty.
-		if got == "" {
-			t.Errorf("expected non-empty result, got empty string")
-		}
-		t.Logf("Note: %s resolved to %q (unexpected but not an error)", ip, got)
-	}
-}
-
-func TestCachedReverseDNS_ExpiredCacheEntryIsRefreshed(t *testing.T) {
-	ip := "192.0.2.51"
-	// Pre-populate cache with an expired entry
-	reverseDNSCache.Lock()
-	reverseDNSCache.m[ip] = reverseDNSEntry{
-		hostname:  "stale.example.com",
-		expiresAt: time.Now().Add(-1 * time.Second), // already expired
-	}
-	reverseDNSCache.Unlock()
-
-	got := cachedReverseDNS(ip)
-	// The stale entry should be ignored and replaced with a fresh lookup.
-	// For an unresolvable IP, the fresh result is the IP itself.
-	if got == "" {
-		t.Error("expected non-empty result after expired cache refresh")
 	}
 }

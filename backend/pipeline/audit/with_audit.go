@@ -18,6 +18,7 @@ import (
 	"time"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/context_keys"
 	"easelect/backend/core_components/logging"
 	e_sessions "easelect/backend/core_components/sessions"
 )
@@ -306,21 +307,16 @@ func extractTableName(r *http.Request) string {
 // IP address extraction
 // ──────────────────────────────────────────────────────────
 
-// extractIP returns the client IP address from the request.
+// extractIP uses only the firewall-verified identity. Raw forwarding headers
+// are untrusted at this layer and must never rewrite audit attribution.
 func extractIP(r *http.Request) string {
-	// Check common proxy headers first
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first (client) IP
-		if idx := strings.Index(xff, ","); idx > 0 {
-			return strings.TrimSpace(xff[:idx])
+	if verifiedIP, ok := r.Context().Value(context_keys.ClientIPKey{}).(string); ok {
+		if verifiedIP = strings.TrimSpace(verifiedIP); verifiedIP != "" {
+			return verifiedIP
 		}
-		return strings.TrimSpace(xff)
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
 	}
 
-	// Fall back to RemoteAddr (host:port)
+	// Requests outside the normal middleware chain use their socket peer only.
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

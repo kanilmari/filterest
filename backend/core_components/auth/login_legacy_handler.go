@@ -68,8 +68,8 @@ func handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		log.Println("⚠️  honeypot field filled – possible bot")
 	}
 
-	// --- IP & domain ---
-	logLoginAttemptDomain(clientIP)
+	// --- Verified numeric client identity ---
+	logLoginAttemptIP(clientIP)
 
 	// --- CSRF-tarkistus ---
 	session, err := e_sessions.GetOrCreateSession(w, r)
