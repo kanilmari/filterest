@@ -105,7 +105,6 @@ describe('card_element_builder image-first activation', () => {
         const card = document.createElement('article');
         card.classList.add('card');
         const imageContainer = document.createElement('div');
-        card.appendChild(imageContainer);
         const rowItem = { id: 7, title: 'Example', image: '7_7_1.png' };
 
         await addImageOrAvatar(
@@ -118,7 +117,12 @@ describe('card_element_builder image-first activation', () => {
             'Example',
             {},
             rowItem,
+            card,
         );
+
+        // The real card builder wires image-first before attaching this image
+        // container to the card, so navigation must use the explicit card.
+        expect(imageContainer.closest('.card')).toBeNull();
 
         const imageActivator = imageContainer.querySelector('[role="button"]');
         const image = imageActivator.querySelector('img');

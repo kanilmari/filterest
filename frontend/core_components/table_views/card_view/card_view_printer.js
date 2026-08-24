@@ -729,7 +729,8 @@ async function createSingleCard(
                         preferred_image_alt_label,
                         CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA
                     ),
-                    row_item
+                    row_item,
+                    card
                 );
                 card_image_content.lastElementChild?.classList.add(columnClass);
                 continue;
@@ -853,7 +854,8 @@ async function createSingleCard(
                 preferred_image_alt_label,
                 CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA
             ),
-            row_item
+            row_item,
+            card
         );
     }
 

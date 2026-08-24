@@ -109,7 +109,8 @@ async function addImageOrAvatar(
     table_name = "",
     row_label = "",
     image_render_options = {},
-    row_item = null
+    row_item = null,
+    selectedCard = null
 ) {
     let foundImage = false;
     const elem_div = document.createElement("div");
@@ -134,7 +135,7 @@ async function addImageOrAvatar(
             imageSrc: original_src,
             rowItem: row_item,
             tableName: table_name,
-            selectedCard: imageContainer.closest(".card"),
+            selectedCard,
         });
 
         elem_div.appendChild(blurredImageElement);
