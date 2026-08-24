@@ -44,7 +44,7 @@ For candidate-to-published promotion, the normal sequence is:
 ./filterest_release fast-patch
 # Run final runtime, browser, Actions-policy, and Computer Use proof.
 ./filterest_release render-final-addendum <exact-evidence-options>
-# Add that exact one-line output to ticket #834 and note the returned comment ID.
+# Add that exact one-line output to stable checklist #868 and note the returned comment ID.
 ./filterest_release attest-final --ticket-comment-id <id> <same-exact-evidence-options>
 ./filterest_release publish --yes
 ```
@@ -57,7 +57,7 @@ third-party notices and review from the complete final file set, performs
 focused identity/root/notice checks, and creates one local published-export
 commit. It performs no push. Any drift requires another full `generate`, and
 successful Fast Patch records an owner-only candidate-to-final assembly marker.
-`attest-final` then API-reads the canonical one-line #834 addendum, requires the
+`attest-final` then API-reads the canonical one-line #868 addendum, requires the
 exact accepted `THIRD_PARTY_NOTICES.md` SHA-256, hashes every named final proof,
 and writes a second owner-only readiness marker. `publish --yes` always reruns
 the full publication gate and revalidates those bytes before each remote
