@@ -3,10 +3,8 @@
 // Starts the sandboxed OpenAI Computer Use browser tester or dry-run wiring check.
 // Exists as the live visual-AI alternative to structured ai-test and human QA.
 
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { execFileSync } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
 import { runComputerUseAcceptance } from "./computer_use_acceptance_runner.mjs";
 import { addTargetHostToAllowedHosts, authStatePathForTarget } from "./local_easelect_target.mjs";
@@ -316,33 +314,6 @@ function slugify(value) {
         .slice(0, 80) || "item";
 }
 
-// Returns the current git HEAD without blocking non-git smoke tests.
-function gitHead() {
-    try {
-        return execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
-    } catch (_error) {
-        return "unknown";
-    }
-}
-
-// Writes the run identity used for evidence inspection.
-function writeRunIdentity(options, outputDir) {
-    const head = gitHead();
-    const fingerprint = crypto.createHash("sha256").update(JSON.stringify({
-        head,
-        target: options.target,
-        profile: options.promptProfile,
-        checks: options.checks,
-        goals: options.goals,
-    })).digest("hex").slice(0, 20);
-    fs.writeFileSync(path.join(outputDir, "run_identity.json"), JSON.stringify({
-        head,
-        target: options.target,
-        profile: options.promptProfile,
-        fingerprint,
-    }, null, 2) + "\n", "utf8");
-}
-
 // Prints a compact CLI result.
 function printSummary(result) {
     console.log(`Computer Use acceptance verdict: ${result.verdict}`);
@@ -379,7 +350,6 @@ async function main() {
         throw new Error("missing target; pass --url or --file");
     }
     const outputDir = resolveOutputDir(options);
-    writeRunIdentity(options, outputDir);
     const result = await runComputerUseAcceptance(options, outputDir, repoRoot);
     printSummary(result);
     process.exitCode = exitCodeForResult(result);

@@ -4,6 +4,8 @@
 // Exists to keep the Computer Use action loop reusable and below file limits.
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
+import { execFileSync } from "child_process";
 import { chromium } from "@playwright/test";
 import { renderComputerUseReport } from "./computer_use_acceptance_reporter.mjs";
 import { isLocalEaselectUrl } from "./local_easelect_target.mjs";
@@ -13,6 +15,12 @@ const defaultAllowedHosts = ["localhost:8082", "127.0.0.1:8082", "[::1]:8082"];
 // Runs the browser and optional Computer Use API loop.
 export async function runComputerUseAcceptance(options, outputDir, repoRoot) {
     const evidence = { console: [], pageErrors: [], blockedRequests: [], actions: [], responses: [] };
+    const runIdentity = createComputerUseRunIdentity(options, gitHead(repoRoot));
+    fs.writeFileSync(
+        path.join(outputDir, "run_identity.json"),
+        `${JSON.stringify(runIdentity, null, 2)}\n`,
+        "utf8",
+    );
     const browser = await chromium.launch({
         headless: !options.headed,
         args: [`--window-size=${options.viewport.width},${options.viewport.height}`],
@@ -25,7 +33,7 @@ export async function runComputerUseAcceptance(options, outputDir, repoRoot) {
             ? dryRunOutcome()
             : await runOpenAIComputerLoop(session.page, options, outputDir, evidence, initialScreenshot);
         const finalScreenshot = await captureScreenshot(session.page, outputDir, "final");
-        const result = buildResult({
+        const result = buildComputerUseResult({
             options,
             outputDir,
             auth: session.auth,
@@ -35,11 +43,46 @@ export async function runComputerUseAcceptance(options, outputDir, repoRoot) {
             startedAt,
             finalUrl: session.page.url(),
             repoRoot,
+            runIdentity,
         });
         writeArtifacts(result, evidence, outputDir);
         return result;
     } finally {
         await browser.close();
+    }
+}
+
+// Creates the immutable source identity shared by the sidecar and result JSON.
+// Bridges the current source HEAD and exact Computer Use scope to both evidence files.
+// Why: Final readiness must verify one source binding without trusting two calculations.
+export function createComputerUseRunIdentity(options, head) {
+    const normalizedHead = String(head || "unknown").trim() || "unknown";
+    const fingerprint = crypto.createHash("sha256").update(JSON.stringify({
+        head: normalizedHead,
+        target: options.target,
+        profile: options.promptProfile,
+        checks: options.checks,
+        goals: options.goals,
+    })).digest("hex").slice(0, 20);
+    return Object.freeze({
+        head: normalizedHead,
+        target: options.target,
+        profile: options.promptProfile,
+        fingerprint,
+    });
+}
+
+// Reads the current source commit for fail-closed Computer Use evidence binding.
+// Bridges the repository used by the runner to the final-readiness validator.
+// Why: A missing Git identity must remain visibly invalid instead of reusing stale proof.
+function gitHead(repoRoot) {
+    try {
+        return execFileSync("git", ["rev-parse", "HEAD"], {
+            cwd: repoRoot,
+            encoding: "utf8",
+        }).trim();
+    } catch (_error) {
+        return "unknown";
     }
 }
 
@@ -552,8 +595,8 @@ function redactResponse(response) {
 }
 
 // Builds the machine-readable result object.
-function buildResult(details) {
-    const { options, outputDir, auth, evidence, modelOutcome, finalScreenshot, startedAt, finalUrl, repoRoot } = details;
+export function buildComputerUseResult(details) {
+    const { options, outputDir, auth, evidence, modelOutcome, finalScreenshot, startedAt, finalUrl, repoRoot, runIdentity } = details;
     const forcedInconclusive = modelOutcome.stoppedReason && !["model_finished", "dry_run"].includes(modelOutcome.stoppedReason);
     const verdict = forcedInconclusive ? "inconclusive" : modelOutcome.decision.verdict;
     return {
@@ -568,6 +611,10 @@ function buildResult(details) {
         viewport: options.viewport,
         createdAt: startedAt,
         finishedAt: new Date().toISOString(),
+        cache: {
+            head: runIdentity.head,
+            fingerprint: runIdentity.fingerprint,
+        },
         dryRun: options.dryRun,
         stoppedReason: modelOutcome.stoppedReason,
         auth,
