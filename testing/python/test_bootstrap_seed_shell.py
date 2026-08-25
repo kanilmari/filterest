@@ -118,12 +118,6 @@ class BootstrapSeedShellTests(unittest.TestCase):
         setup_script = (
             PROJECT_ROOT / "server_tools" / "setup_local_dev_environment.sh"
         ).read_text(encoding="utf-8")
-        preview_script = (
-            PROJECT_ROOT
-            / "server_tools"
-            / "public_slice_export"
-            / "preview_filterest_local.sh"
-        ).read_text(encoding="utf-8")
 
         self.assertIn(
             '${FILTEREST_AUTOMATED_PREVIEW_INITIAL_ADMIN:-}" != "1"',
@@ -134,41 +128,9 @@ class BootstrapSeedShellTests(unittest.TestCase):
             setup_script,
         )
         self.assertIn(
-            "export FILTEREST_AUTOMATED_PREVIEW_INITIAL_ADMIN=1",
-            preview_script,
-        )
-        self.assertIn(
             'LOGIN_OTP_CODE="$LOGIN_OTP_CODE"',
             setup_script,
         )
-        self.assertIn(
-            "unset EASELECT_RUNTIME_ENV_FILE EASELECT_DEV_ENV_FILE",
-            preview_script,
-        )
-        self.assertIn(
-            'if [[ "$target_runtime_env_file" == "$target_dir/.env" ]]; then',
-            preview_script,
-        )
-        self.assertNotIn(
-            '[[ "$target_runtime_env_file" != "$target_dir/.env" ]] || return',
-            preview_script,
-        )
-
-    def test_db_release_artifacts_use_configured_admin_without_sudo(self) -> None:
-        release_script = (
-            PROJECT_ROOT
-            / "server_tools"
-            / "scripts"
-            / "build_db_release_artifacts.sh"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("DB_ADMIN_USER", release_script)
-        self.assertIn("DB_ADMIN_PASSWORD", release_script)
-        self.assertIn('PGPASSWORD="$db_admin_password" pg_dump', release_script)
-        self.assertIn("build_bootstrap_seed.py", release_script)
-        self.assertIn("--audit-only", release_script)
-        self.assertNotIn("sudo -u", release_script)
-        self.assertNotIn("sudo -n", release_script)
 
     def test_local_database_setup_never_requests_sudo_or_installs_os_packages(self) -> None:
         setup_script = (

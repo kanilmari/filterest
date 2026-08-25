@@ -10,11 +10,15 @@ MIGRATION = (
     / "migrations"
     / "20260817000004_default_card_field_labels_off.sql"
 )
-PUBLIC_GENERATOR = (
+PRIVATE_GENERATOR = (
     REPO_ROOT
     / "server_tools"
     / "public_slice_export"
     / "generate_filterest_public_repo.sh"
+)
+GENERATED_PUBLIC_SCHEMA = REPO_ROOT / "server_tools/public_bootstrap/schema.sql"
+PUBLIC_SCHEMA_SOURCE = (
+    PRIVATE_GENERATOR if PRIVATE_GENERATOR.is_file() else GENERATED_PUBLIC_SCHEMA
 )
 
 
@@ -26,7 +30,7 @@ def test_native_migration_changes_only_the_default():
 
 
 def test_public_first_run_schema_uses_the_same_default():
-    source = PUBLIC_GENERATOR.read_text(encoding="utf-8")
+    source = PUBLIC_SCHEMA_SOURCE.read_text(encoding="utf-8")
 
     assert "show_key_on_card boolean DEFAULT false" in source
     assert "show_key_on_card boolean DEFAULT true" not in source

@@ -492,13 +492,3 @@ def test_cli_diagnostics_append_runtime_and_target_apps_without_reordering_legac
         str(root / "filterest_operations"),
         "0",
     ]
-
-
-def test_private_deploy_packages_panel_from_operations_home() -> None:
-    deploy = (
-        Path(__file__).resolve().parents[2] / "server_tools/deploy_to_production.sh"
-    ).read_text(encoding="utf-8")
-
-    assert 'INSTANCE_CONTROL_PANEL_SOURCE="${FILTEREST_OPERATIONS_HOME}/instance_control_panel"' in deploy
-    assert '"${INSTANCE_CONTROL_PANEL_SOURCE}/"' in deploy
-    assert '"${PROJECT_ROOT}/apps/instance_control_panel/"' not in deploy

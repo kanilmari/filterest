@@ -15,21 +15,34 @@ MIGRATION = (
     PROJECT_ROOT
     / "server_tools/migrations/20260817000002_normalize_ui_languages.sql"
 )
-SITE_SETTINGS_DOC = (
-    PROJECT_ROOT
-    / "docs/instructions_and_documentation/Filterest_Use_Cases_And_Site_Settings.md"
-)
-PUBLIC_RUNTIME_SCHEMA = (
+PRIVATE_GENERATOR_RUNTIME_SCHEMA = (
     PROJECT_ROOT
     / "server_tools/public_slice_export/public_bootstrap/runtime.schema.sql"
 )
-PUBLIC_APP_SEED = (
+PRIVATE_GENERATOR_APP_SEED = (
     PROJECT_ROOT
     / "server_tools/public_slice_export/public_bootstrap/app_tables.seed.sql"
 )
-PUBLIC_LANGUAGE_SEED = (
+PRIVATE_GENERATOR_LANGUAGE_SEED = (
     PROJECT_ROOT
     / "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql"
+)
+GENERATED_PUBLIC_SCHEMA = PROJECT_ROOT / "server_tools/public_bootstrap/schema.sql"
+GENERATED_PUBLIC_SEED = PROJECT_ROOT / "server_tools/public_bootstrap/seed_data.sql"
+PUBLIC_RUNTIME_SCHEMA = (
+    PRIVATE_GENERATOR_RUNTIME_SCHEMA
+    if PRIVATE_GENERATOR_RUNTIME_SCHEMA.is_file()
+    else GENERATED_PUBLIC_SCHEMA
+)
+PUBLIC_APP_SEED = (
+    PRIVATE_GENERATOR_APP_SEED
+    if PRIVATE_GENERATOR_APP_SEED.is_file()
+    else GENERATED_PUBLIC_SEED
+)
+PUBLIC_LANGUAGE_SEED = (
+    PRIVATE_GENERATOR_LANGUAGE_SEED
+    if PRIVATE_GENERATOR_LANGUAGE_SEED.is_file()
+    else GENERATED_PUBLIC_SEED
 )
 SITE_LANGUAGE_SETTINGS_MIGRATION = (
     PROJECT_ROOT
@@ -139,22 +152,6 @@ def test_migration_is_idempotent_and_stays_in_the_current_release_batch() -> Non
     ) in sql
     assert sql.count("NOT EXISTS (") >= 6
     assert "INSERT INTO public.system_db_version" not in sql
-
-
-def test_site_settings_document_defines_the_language_admin_contract() -> None:
-    text = SITE_SETTINGS_DOC.read_text(encoding="utf-8")
-
-    assert "### Admin Language Settings Contract" in text
-    assert "Admin → Site settings →\nLanguages" in text
-    for code in ("`en`", "`fi`", "`zh-CN`", "`zh-TW`", "`zh-HK`"):
-        assert code in text
-    assert "Exactly one enabled language is the default" in text
-    assert "No fallback (root)" in text
-    assert "fallback cycles are rejected" in text
-    assert "absent from the public language selector" in text
-    assert "coverage is complete" in text
-    assert "review state is approved" in text
-    assert "automatic `yue` → `zh-HK` mapping" in text
 
 
 def test_fresh_public_bootstrap_matches_the_normalized_language_contract() -> None:

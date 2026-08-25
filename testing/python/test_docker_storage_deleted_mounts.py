@@ -39,29 +39,6 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         self.assertIn("{storage,storage_deleted,backups}", create_source)
         self.assertIn("for storage_name in storage storage_deleted", helper_source)
 
-    def test_vps_deploy_preserves_and_backs_up_recoverable_media(self) -> None:
-        deploy_source = (
-            PROJECT_ROOT / "server_tools/deploy_docker_vps.sh"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn('"--filter=P instances/*/storage_deleted/"', deploy_source)
-        self.assertIn('"--filter=- instances/*/storage_deleted/"', deploy_source)
-        self.assertIn(
-            'storage_deleted_dir="instances/\\${instance}/storage_deleted"',
-            deploy_source,
-        )
-        self.assertIn(
-            "storage_deleted_pre_upgrade_\\${backup_ts}.tar.gz",
-            deploy_source,
-        )
-        self.assertIn(
-            'mkdir -p "\\${backup_dir}" "\\${storage_dir}" "\\${storage_deleted_dir}"',
-            deploy_source,
-        )
-        self.assertIn(".easelect-host-write-probe", deploy_source)
-        self.assertIn(".easelect-container-write-probe", deploy_source)
-        self.assertIn("Docker storage ownership does not match runtime", deploy_source)
-
     def test_container_runtime_identity_matches_host_storage_owner(self) -> None:
         for dockerfile_name in (
             "docker/Dockerfile",
@@ -279,17 +256,15 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         )
 
     def test_docker_database_initializers_use_the_canonical_postgis_schema(self) -> None:
-        for relative_path in (
-            "server_tools/db_init/01_init_extensions.sh",
-            "server_tools/shared_dev_db/stack/db_init/01_init_extensions.sh",
-        ):
-            with self.subTest(initializer=relative_path):
-                initializer = (PROJECT_ROOT / relative_path).read_text(encoding="utf-8")
-                self.assertIn("CREATE SCHEMA IF NOT EXISTS postgis", initializer)
-                self.assertIn(
-                    "CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA postgis",
-                    initializer,
-                )
+        initializer = (
+            PROJECT_ROOT / "server_tools/db_init/01_init_extensions.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CREATE SCHEMA IF NOT EXISTS postgis", initializer)
+        self.assertIn(
+            "CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA postgis",
+            initializer,
+        )
 
     def test_healthcheck_and_default_database_binding_are_safe(self) -> None:
         for dockerfile_name in ("docker/Dockerfile", "docker/Dockerfile.mcp"):

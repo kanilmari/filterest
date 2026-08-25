@@ -13,9 +13,17 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LANGUAGE_SEED = (
+PRIVATE_GENERATOR_LANGUAGE_SEED = (
     REPO_ROOT
     / "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql"
+)
+GENERATED_PUBLIC_LANGUAGE_SEED = (
+    REPO_ROOT / "server_tools/public_bootstrap/seed_data.sql"
+)
+LANGUAGE_SEED = (
+    PRIVATE_GENERATOR_LANGUAGE_SEED
+    if PRIVATE_GENERATOR_LANGUAGE_SEED.is_file()
+    else GENERATED_PUBLIC_LANGUAGE_SEED
 )
 LANGUAGE_MIGRATION = (
     REPO_ROOT

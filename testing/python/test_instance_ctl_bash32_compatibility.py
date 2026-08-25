@@ -149,18 +149,6 @@ class InstanceCtlBash32CompatibilityTests(unittest.TestCase):
 
         self.assertEqual(result.stdout, "go1.26.5|ok\n")
 
-    def test_machine_migration_generates_private_payment_callback_secret(self) -> None:
-        migration_source = (
-            PROJECT_ROOT / "server_tools" / "migrate_to_new_machine.sh"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("payment_callback_secret=$(openssl rand -hex 32)", migration_source)
-        self.assertIn("PAYMENT_CALLBACK_SECRET=${payment_callback_secret}", migration_source)
-        self.assertNotRegex(
-            migration_source,
-            re.compile(r"(?:echo|printf)[^\n]*payment_callback_secret"),
-        )
-
     def test_instance_backup_policy_preserves_defaults_without_duplicates(self) -> None:
         result = run_system_bash(
             'BLUE=""; YELLOW=""; NC=""\n'

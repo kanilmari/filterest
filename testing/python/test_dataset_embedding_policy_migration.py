@@ -18,17 +18,34 @@ POLICY_SOURCE = (
     / "ai_features"
     / "embedding_source_policy.go"
 )
-PUBLIC_RUNTIME_SCHEMA = (
+PRIVATE_GENERATOR_RUNTIME_SCHEMA = (
     REPO_ROOT
     / "server_tools/public_slice_export/public_bootstrap/runtime.schema.sql"
 )
-PUBLIC_APP_SEED = (
+PRIVATE_GENERATOR_APP_SEED = (
     REPO_ROOT
     / "server_tools/public_slice_export/public_bootstrap/app_tables.seed.sql"
 )
-PUBLIC_LANGUAGE_SEED = (
+PRIVATE_GENERATOR_LANGUAGE_SEED = (
     REPO_ROOT
     / "server_tools/public_slice_export/public_bootstrap/app_tables.lang_keys.sql"
+)
+GENERATED_PUBLIC_SCHEMA = REPO_ROOT / "server_tools/public_bootstrap/schema.sql"
+GENERATED_PUBLIC_SEED = REPO_ROOT / "server_tools/public_bootstrap/seed_data.sql"
+PUBLIC_RUNTIME_SCHEMA = (
+    PRIVATE_GENERATOR_RUNTIME_SCHEMA
+    if PRIVATE_GENERATOR_RUNTIME_SCHEMA.is_file()
+    else GENERATED_PUBLIC_SCHEMA
+)
+PUBLIC_APP_SEED = (
+    PRIVATE_GENERATOR_APP_SEED
+    if PRIVATE_GENERATOR_APP_SEED.is_file()
+    else GENERATED_PUBLIC_SEED
+)
+PUBLIC_LANGUAGE_SEED = (
+    PRIVATE_GENERATOR_LANGUAGE_SEED
+    if PRIVATE_GENERATOR_LANGUAGE_SEED.is_file()
+    else GENERATED_PUBLIC_SEED
 )
 
 

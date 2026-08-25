@@ -22,18 +22,3 @@ def test_first_run_migrations_do_not_require_private_value_type_catalog() -> Non
         )
         assert "system_config_value_data_types" not in executable_sql, filename
         assert "value_type" not in executable_sql, filename
-
-
-def test_public_generator_embeds_release_identity_in_runtime_images() -> None:
-    generator = (
-        REPO_ROOT
-        / "server_tools"
-        / "public_slice_export"
-        / "generate_filterest_public_repo.sh"
-    ).read_text(encoding="utf-8")
-
-    assert "COPY BUILD_IDENTITY.json ./BUILD_IDENTITY.json" in generator
-    assert (
-        "COPY server_tools/versioning/release_ledger.v1.jsonl "
-        "./server_tools/versioning/release_ledger.v1.jsonl"
-    ) in generator
