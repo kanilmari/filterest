@@ -1,3 +1,8 @@
+// api_pipeline_helpers.test.js
+// Verifies the pure request-routing, response-classification, and typed-error helpers.
+// Bridges shared pipeline contracts with focused unit-level regression coverage.
+// Exists so cross-cutting HTTP behavior can change without requiring browser integration tests.
+
 import { describe, test, expect } from 'vitest';
 import {
     isMutatingMethod,
@@ -8,10 +13,27 @@ import {
     isCsrfFailureResponse,
     createAuthError,
     createRateLimitError,
+    createServiceUnavailableError,
+    isServiceUnavailableError,
     stripAnsiCodes,
     truncateErrorText,
     shouldThrottleRateLimitToast,
 } from './api_pipeline_helpers.js';
+
+describe('service-unavailable errors', () => {
+    test('creates and recognizes the stable retryable 503 contract', () => {
+        const error = createServiceUnavailableError('updateRow');
+
+        expect(error).toMatchObject({
+            status: 503,
+            isServiceUnavailable: true,
+            isRetryable: true,
+        });
+        expect(isServiceUnavailableError(error)).toBe(true);
+        expect(isServiceUnavailableError({ status: 503 })).toBe(true);
+        expect(isServiceUnavailableError({ status: 500 })).toBe(false);
+    });
+});
 
 // ---------------------------------------------------------------------------
 // isMutatingMethod

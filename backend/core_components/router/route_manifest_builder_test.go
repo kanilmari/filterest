@@ -92,6 +92,26 @@ func TestRegisterRoutesKeepsAPIFirstAIChatRoutesAndDropsLegacySSE(t *testing.T) 
 	}
 }
 
+func TestUpdateNoticeRoutesExposeManagerAndAdminNoTransactionContracts(t *testing.T) {
+	manifest, err := router.BuildDefaultRouteManifest()
+	if err != nil {
+		t.Fatalf("BuildDefaultRouteManifest returned error: %v", err)
+	}
+
+	manager := mustFindManifestRoute(t, manifest, "router.systemUpdateNoticeHandler")
+	assertRouteMethods(t, manager, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
+	if manager.PathPattern != "/system/update-notice" || mustFindScenarioProfile(t, manager, "production").ProfileName != "public" {
+		t.Fatalf("manager route = %+v, want guarded public-profile /system/update-notice", manager)
+	}
+
+	stream := mustFindManifestRoute(t, manifest, "router.adminUpdateNoticeStreamHandler")
+	assertRouteMethods(t, stream, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	profile := mustFindScenarioProfile(t, stream, "production")
+	if stream.PathPattern != "/api/admin/update-notice/stream" || profile.ProfileName != "admin_no_tx" || !profile.AdminOnly {
+		t.Fatalf("admin notice stream = %+v/%+v, want admin_no_tx GET route", stream, profile)
+	}
+}
+
 func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	manifest, err := router.BuildDefaultRouteManifest()
 	if err != nil {

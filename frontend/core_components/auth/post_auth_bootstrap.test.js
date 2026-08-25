@@ -16,6 +16,7 @@ const enableTabDragAndDropMock = vi.fn();
 const initializeTreeCallAdminMock = vi.fn();
 const refreshDatasetAliasRegistryMock = vi.fn();
 const clearPermissionCacheMock = vi.fn();
+const syncAdminUpdateNoticeSubscriberMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -44,6 +45,9 @@ async function loadModule() {
     }));
     vi.doMock("../route_permission_checker.js", () => ({
         clearPermissionCache: clearPermissionCacheMock,
+    }));
+    vi.doMock("../admin_tools/admin_update_notice_subscriber.js", () => ({
+        syncAdminUpdateNoticeSubscriber: syncAdminUpdateNoticeSubscriberMock,
     }));
     return import("./post_auth_bootstrap.js");
 }
@@ -82,6 +86,7 @@ describe("runPostAuthBootstrap", () => {
         expect(loadTablesMock).toHaveBeenCalledTimes(2);
         expect(refreshDatasetAliasRegistryMock).toHaveBeenCalledTimes(2);
         expect(clearPermissionCacheMock).toHaveBeenCalledTimes(2);
+        expect(syncAdminUpdateNoticeSubscriberMock).toHaveBeenCalledTimes(2);
         expect(initTabsMock).toHaveBeenNthCalledWith(1, { dataAlreadyLoaded: true });
         expect(initTabsMock).toHaveBeenNthCalledWith(2, { dataAlreadyLoaded: true });
         expect(enableTabDragAndDropMock).toHaveBeenCalledTimes(2);

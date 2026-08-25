@@ -14,7 +14,6 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth/credentials"
-	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
@@ -99,7 +98,7 @@ func RequestPasswordResetOTPHandler(w http.ResponseWriter, r *http.Request) {
 				if revokeErr := otp.RevokeOTP(userID, otp.ProfilePasswordReset, code); revokeErr != nil {
 					logging.Errorf("[RequestPasswordResetOTPHandler] failed to revoke undelivered OTP: %v", revokeErr)
 				}
-			} else if generation, generationErr := auth_generation.Current(r.Context(), backend.DbConfidential, userID); generationErr != nil {
+			} else if generation, generationErr := currentEnabledAuthenticationGeneration(r.Context(), userID); generationErr != nil {
 				logging.Errorf("[RequestPasswordResetOTPHandler] generation lookup failed: %v", generationErr)
 			} else {
 				setPendingPasswordResetState(session, userID, generation)

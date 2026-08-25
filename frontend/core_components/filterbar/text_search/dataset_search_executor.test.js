@@ -10,6 +10,7 @@ const {
     appendDataToCardViewMock,
     appendDataToTableMock,
     appendDataToViewMock,
+    clearRowGroupFacetsMock,
     disconnectInfiniteScrollMock,
     endpointRouterMock,
     getActiveFiltersSnapshotMock,
@@ -21,6 +22,7 @@ const {
     appendDataToCardViewMock: vi.fn(),
     appendDataToTableMock: vi.fn(),
     appendDataToViewMock: vi.fn(),
+    clearRowGroupFacetsMock: vi.fn(),
     disconnectInfiniteScrollMock: vi.fn(),
     endpointRouterMock: vi.fn(),
     getActiveFiltersSnapshotMock: vi.fn(() => ({})),
@@ -55,6 +57,11 @@ vi.mock("../../../reusable_components/results_count/results_count_printer.js", (
 
 vi.mock("./dataset_search_state_reader.js", () => ({
     getActiveFiltersSnapshot: getActiveFiltersSnapshotMock,
+}));
+
+vi.mock("../filter_list/row_group_facet_printer.js", () => ({
+    clearRowGroupFacets: clearRowGroupFacetsMock,
+    ROW_GROUP_FILTER_KEY: "row_group",
 }));
 
 vi.mock("../../state_stores/table_state_store.js", () => ({
@@ -112,6 +119,7 @@ describe("do_intelligent_search", () => {
         localStorage.clear();
         document.body.innerHTML = "";
         document.documentElement.lang = "fi";
+        getActiveFiltersSnapshotMock.mockReturnValue({});
         getUnifiedTableStateMock.mockReturnValue({
             cardView: { collapsed: false, expandedId: null },
         });
@@ -140,6 +148,7 @@ describe("do_intelligent_search", () => {
 
         await do_intelligent_search("dev_agent_tasks", "cloud");
 
+        expect(clearRowGroupFacetsMock).toHaveBeenCalledWith("dev_agent_tasks");
         expect(
             document.querySelector('.search-stage-notice[data-lang-key="text_search_no_results"]')
         ).toBeNull();
@@ -176,6 +185,99 @@ describe("do_intelligent_search", () => {
         );
     });
 
+    test("sends row-group metadata to the backend without filtering streamed row objects", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({ row_group: "security" });
+        endpointRouterMock.mockResolvedValue(
+            createNdjsonStreamResponse([
+                {
+                    stage: "text",
+                    columns: ["header", "id"],
+                    data: [{ header: "Authorized group result", id: 14 }],
+                    types: {},
+                },
+            ])
+        );
+
+        const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "cloud");
+
+        expect(endpointRouterMock).toHaveBeenCalledWith(
+            "getIntelligentResultsStream",
+            expect.objectContaining({
+                url_params: expect.stringContaining("row_group=security"),
+            })
+        );
+        expect(ongoingSearchResults.dev_agent_tasks.filters).toEqual({});
+        expect(ongoingSearchResults.dev_agent_tasks.data).toEqual([
+            { header: "Authorized group result", id: 14 },
+        ]);
+    });
+
+    test("cancels an older stream when a newer search replaces its cache while read is pending", async () => {
+        let releaseOldRead;
+        const oldReader = {
+            read: vi.fn(() => new Promise((resolve) => { releaseOldRead = resolve; })),
+            cancel: vi.fn().mockResolvedValue(undefined),
+        };
+        const newReader = {
+            read: vi.fn().mockResolvedValue({ value: undefined, done: true }),
+            cancel: vi.fn().mockResolvedValue(undefined),
+        };
+        endpointRouterMock
+            .mockResolvedValueOnce({ body: { getReader: () => oldReader } })
+            .mockResolvedValueOnce({ body: { getReader: () => newReader } });
+
+        const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
+        const oldSearch = do_intelligent_search("dev_agent_tasks", "old");
+        await vi.waitFor(() => expect(oldReader.read).toHaveBeenCalled());
+        await do_intelligent_search("dev_agent_tasks", "new");
+        const newestCache = ongoingSearchResults.dev_agent_tasks;
+        releaseOldRead({
+            value: new TextEncoder().encode('{"stage":"text","columns":["id"],"data":[{"id":1}]}\n'),
+            done: false,
+        });
+        await oldSearch;
+
+        expect(oldReader.cancel).toHaveBeenCalledOnce();
+        expect(ongoingSearchResults.dev_agent_tasks).toBe(newestCache);
+        expect(newestCache.data).toEqual([]);
+    });
+
+    test("does not commit cards built by a search replaced during asynchronous rendering", async () => {
+        createCardViewDom("app_service_catalog");
+        let releaseOldCardRender;
+        appendDataToCardViewMock.mockImplementationOnce(async (host) => {
+            await new Promise((resolve) => { releaseOldCardRender = resolve; });
+            const staleCard = document.createElement("article");
+            staleCard.className = "card";
+            staleCard.dataset.id = "7";
+            host.appendChild(staleCard);
+        });
+        endpointRouterMock
+            .mockResolvedValueOnce(
+                createNdjsonStreamResponse([
+                    {
+                        stage: "text",
+                        columns: ["id", "title"],
+                        data: [{ id: 7, title: "Old result" }],
+                        types: {},
+                    },
+                ])
+            )
+            .mockResolvedValueOnce(createNdjsonStreamResponse([]));
+
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        const oldSearch = do_intelligent_search("app_service_catalog", "old");
+        await vi.waitFor(() => expect(releaseOldCardRender).toBeTypeOf("function"));
+        await do_intelligent_search("app_service_catalog", "new");
+        releaseOldCardRender();
+        await oldSearch;
+
+        expect(
+            document.querySelector("#app_service_catalog_card_view_container .card")
+        ).toBeNull();
+    });
+
     test("exposes cached search rows as one renderable dataset result", async () => {
         getActiveFiltersSnapshotMock.mockReturnValue({});
         const {
@@ -200,6 +302,35 @@ describe("do_intelligent_search", () => {
             types: { id: "integer", title: "text" },
             row_count: 2,
         });
+    });
+
+    test("rerenders cached rows with the dataset name in the filter contract", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({
+            dev_agent_tasks_status: "open",
+        });
+        const {
+            ongoingSearchResults,
+            rerenderCachedSearchResults,
+        } = await import("./dataset_search_executor.js");
+        ongoingSearchResults.dev_agent_tasks = {
+            columns: ["id", "status"],
+            data: [
+                { id: 1, status: "open" },
+                { id: 2, status: "closed" },
+            ],
+            aiData: [],
+            types: { id: "integer", status: "text" },
+            filters: {},
+            renderedOnce: true,
+        };
+
+        await rerenderCachedSearchResults("dev_agent_tasks");
+
+        expect(appendDataToViewMock).toHaveBeenCalledWith(
+            "dev_agent_tasks",
+            [{ id: 1, status: "open" }],
+            false
+        );
     });
 
     test("opens the first streamed search row when article view is waiting for it", async () => {

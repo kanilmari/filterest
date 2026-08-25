@@ -19,11 +19,18 @@ func setAuthenticatedSessionIdentity(session *sessions.Session, userID int, user
 		return fmt.Errorf("session is nil")
 	}
 
-	authenticationGeneration, err := auth_generation.Current(context.Background(), backend.DbConfidential, userID)
+	authenticationGeneration, err := currentEnabledAuthenticationGeneration(context.Background(), userID)
 	if err != nil {
 		return fmt.Errorf("resolve authentication generation: %w", err)
 	}
 	return setAuthenticatedSessionIdentityAtGeneration(session, userID, username, authenticationGeneration)
+}
+
+// currentEnabledAuthenticationGeneration reads the cross-schema session revocation state
+// through the confidential pool. Startup grants that role only the public user columns
+// needed by this check, keeping login and recovery callers off the shared admin pool.
+func currentEnabledAuthenticationGeneration(ctx context.Context, userID int) (int64, error) {
+	return auth_generation.Current(ctx, backend.DbConfidential, userID)
 }
 
 func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, userID int, username string, authenticationGeneration int64) error {

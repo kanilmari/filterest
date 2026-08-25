@@ -14,12 +14,15 @@ import (
 
 func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	origGuest := backend.DbGuest
+	origAdmin := backend.DbAdmin
 	origConfidential := backend.DbConfidential
 	database := openCredentialMockDB(t, credentialMockConfig{adminGroupMember: true, authGeneration: 7})
 	backend.DbGuest = database
+	backend.DbAdmin = nil
 	backend.DbConfidential = database
 	t.Cleanup(func() {
 		backend.DbGuest = origGuest
+		backend.DbAdmin = origAdmin
 		backend.DbConfidential = origConfidential
 	})
 

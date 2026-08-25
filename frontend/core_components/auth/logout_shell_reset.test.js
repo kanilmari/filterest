@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const endpointRouterMock = vi.fn();
 const destroyChatMock = vi.fn();
 const publishAuthLogoutMock = vi.fn();
+const stopAdminUpdateNoticeSubscriberMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -20,6 +21,9 @@ async function loadModule() {
     }));
     vi.doMock("./auth_broadcast.js", () => ({
         publishAuthLogout: publishAuthLogoutMock,
+    }));
+    vi.doMock("../admin_tools/admin_update_notice_subscriber.js", () => ({
+        stopAdminUpdateNoticeSubscriber: stopAdminUpdateNoticeSubscriberMock,
     }));
     return import("./logout_shell_reset.js");
 }
@@ -104,6 +108,7 @@ describe("performSpaLogoutReset", () => {
             reason: "logout",
             postLogoutPath: "/login",
         });
+        expect(stopAdminUpdateNoticeSubscriberMock).toHaveBeenCalledTimes(1);
     });
 
     test("follows the server root post-logout redirect when anonymous browsing is allowed", async () => {

@@ -19,6 +19,8 @@ import (
 	gorillaSessions "github.com/gorilla/sessions"
 )
 
+var authModesAuthenticationGenerationMatches = auth_generation.Matches
+
 // AuthModesResponse keeps the public auth bootstrap payload stable for typed frontend callers.
 type AuthModesResponse struct {
 	NeedsButton            string `json:"needs_button"`
@@ -72,7 +74,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "session lookup failed")
 			return
 		}
-		userExists, existsErr := auth_generation.Matches(request.Context(), backend.DbConfidential, session, userID)
+		userExists, existsErr := authModesAuthenticationGenerationMatches(request.Context(), backend.DbConfidential, session, userID)
 		if existsErr != nil {
 			log.Printf("\033[31mvirhe: authentication generation check failed for user %d: %s\033[0m\n", userID, existsErr.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusServiceUnavailable, "authentication state unavailable")

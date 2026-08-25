@@ -1,8 +1,8 @@
 # Filterest Third-Party Notice Review
 
 - Target: `generated Filterest export tree`
-- Filterest app version: `8.40.8`
-- Database version: `9.6.2`
+- Filterest app version: `8.41.0`
+- Database version: `9.6.4`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
 - Go modules matched: `96`

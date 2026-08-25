@@ -30,6 +30,12 @@ func SSESubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing datasets query parameter", http.StatusBadRequest)
 		return
 	}
+	for _, dataset := range datasets {
+		if IsReservedInternalTopic(dataset) {
+			http.Error(w, "reserved dataset subscription", http.StatusBadRequest)
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

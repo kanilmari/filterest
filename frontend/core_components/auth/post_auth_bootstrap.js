@@ -19,6 +19,7 @@ import {
     NAVBAR_ADMIN_TOOLS_SECTION_ID,
     ensureNavbarAdminToolsSection,
 } from "../navigation/database_tree/navbar_admin_tools_section.js";
+import { syncAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
 
 /**
  * Ensures post-login nav containers exist exactly once before admin nav builders run.
@@ -119,6 +120,10 @@ export async function runPostAuthBootstrap({ refreshAuthModes = true } = {}) {
     const shouldLoadPublicBrowseData = !isLoggedIn
         && canBrowseWithoutLoginFromAuthMode()
         && !isExplicitAuthEntryRoute();
+
+    // The route permission cache has now been verified by setAuthModes. The
+    // subscriber itself also rejects guest/non-admin bootstrap states.
+    syncAdminUpdateNoticeSubscriber();
 
     if (isLoggedIn) {
         clearPermissionCache();

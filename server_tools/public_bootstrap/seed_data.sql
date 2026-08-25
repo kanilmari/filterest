@@ -254,6 +254,23 @@ VALUES (
     TRUE
 );
 
+INSERT INTO public.system_config (key, json_value, creation_spec)
+SELECT
+    'production_update_notice',
+    '{
+      "schema_version": 1,
+      "notice_id": "",
+      "state": "cleared",
+      "announced_at": "",
+      "starts_at": "",
+      "expires_at": "",
+      "updated_at": ""
+    }'::jsonb,
+    'Manager-controlled fixed-schema administrator production-update notice; no operator-authored display text.'
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.system_config WHERE key = 'production_update_notice'
+);
+
 INSERT INTO public.system_table_views (name, view_key, status)
 VALUES
     ('table', 'table', 'active'),
@@ -272,6 +289,8 @@ ON CONFLICT (view_key) DO NOTHING;
 
 WITH desired_tables (table_name, display_name, description, fk_display_column) AS (
     VALUES
+        ('system_row_groups', 'Row Groups', 'Reusable multilingual row classification groups', 'slug'),
+        ('system_row_group_memberships', 'Row Group Memberships', 'Generic assignments from dataset rows to reusable groups', 'id'),
         ('system_column_field_sets', 'Field Collections', 'Reusable personal and shared dataset field collections', 'name'),
         ('system_column_field_set_members', 'Field Collection Members', 'Ordered columns belonging to reusable field collections', 'column_uid'),
         ('system_view_field_set_assignments', 'View Field Assignments', 'Personal and site-default field collections selected for dataset views', 'id')
@@ -315,6 +334,8 @@ DECLARE
 BEGIN
     FOR table_record IN
         SELECT unnest(ARRAY[
+            'system_row_groups',
+            'system_row_group_memberships',
             'system_column_field_sets',
             'system_column_field_set_members',
             'system_view_field_set_assignments'
@@ -349,6 +370,22 @@ BEGIN
         ORDER BY columns.ordinal_position;
     END LOOP;
 
+    UPDATE public.system_column_details AS details
+    SET is_multilingual = TRUE,
+        editable_in_ui = FALSE,
+        updated = now()
+    FROM public.system_db_tables AS tables
+    WHERE tables.table_uid = details.table_uid
+      AND tables.table_name = 'system_row_groups'
+      AND details.column_name IN ('title', 'description');
+
+    UPDATE public.system_column_details AS details
+    SET editable_in_ui = FALSE,
+        updated = now()
+    FROM public.system_db_tables AS tables
+    WHERE tables.table_uid = details.table_uid
+      AND tables.table_name IN ('system_row_groups', 'system_row_group_memberships');
+
     SELECT table_uid INTO registered_table_uid
     FROM public.system_db_tables
     WHERE table_name = 'system_table_views'
@@ -380,6 +417,8 @@ END $$;
 
 WITH desired_functions (name, route, creation_spec) AS (
     VALUES
+        ('system_table_tools.AdminRowGroupsHandler', '/api/admin/row-groups', 'Admin list/create API for reusable row groups.'),
+        ('system_table_tools.AdminRowGroupMembershipsHandler', '/api/admin/row-group-memberships', 'Admin assignment API for generic row group memberships.'),
         ('system_table_tools.GetViewFieldSetsHandler', '/api/view-field-sets', 'Lists effective and reusable field collections for one authenticated dataset view.'),
         ('system_table_tools.SavePersonalViewFieldSetHandler', '/api/view-field-sets/personal/save', 'Saves and activates a field collection owned by the authenticated user.'),
         ('system_table_tools.AssignPersonalViewFieldSetHandler', '/api/view-field-sets/personal/assign', 'Selects a personal or shared field collection for the authenticated user.'),
@@ -399,6 +438,67 @@ FROM desired_functions AS desired
 WHERE NOT EXISTS (
     SELECT 1 FROM public.system_functions AS existing WHERE existing.name = desired.name
 );
+
+WITH desired_functions (name, route, creation_spec) AS (
+    VALUES
+        ('router.systemUpdateNoticeHandler', '/system/update-notice', 'Manager-authenticated production-update notice state transition.'),
+        ('router.adminUpdateNoticeStreamHandler', '/api/admin/update-notice/stream', 'Administrator-only bounded production-update notice stream.')
+)
+INSERT INTO public.system_functions (
+    name, disabled, created, updated, package, specific_table_related,
+    creation_spec, rate_limit_amount, rate_limit_minutes, url_route_endpoint, ui_only
+)
+SELECT desired.name, FALSE, now(), now(), 'router', FALSE,
+       desired.creation_spec, 200, 20, desired.route, FALSE
+FROM desired_functions AS desired
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.system_functions AS existing WHERE existing.name = desired.name
+);
+
+INSERT INTO public.system_group_table_func_rights (
+    user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT groups.id,
+       functions.id,
+       'public',
+       'Filterest public bootstrap administrator row-group API',
+       NULL
+FROM public.system_user_groups AS groups
+JOIN public.system_functions AS functions
+  ON functions.name IN (
+      'system_table_tools.AdminRowGroupsHandler',
+      'system_table_tools.AdminRowGroupMembershipsHandler'
+  )
+WHERE groups.name = 'admins'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_group_table_func_rights AS existing
+      WHERE existing.user_group_id = groups.id
+        AND existing.function_id = functions.id
+        AND existing.target_table_uid IS NULL
+        AND COALESCE(NULLIF(existing.target_schema_name, ''), 'public') = 'public'
+  );
+
+INSERT INTO public.system_group_table_func_rights (
+    user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT groups.id,
+       functions.id,
+       'public',
+       'Filterest public bootstrap administrator production-update notice stream',
+       NULL
+FROM public.system_user_groups AS groups
+JOIN public.system_functions AS functions
+  ON functions.name = 'router.adminUpdateNoticeStreamHandler'
+WHERE groups.name = 'admins'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_group_table_func_rights AS existing
+      WHERE existing.user_group_id = groups.id
+        AND existing.function_id = functions.id
+        AND existing.target_table_uid IS NULL
+        AND COALESCE(NULLIF(existing.target_schema_name, ''), 'public') = 'public'
+  );
 
 INSERT INTO public.system_group_table_func_rights (
     user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
@@ -428,7 +528,12 @@ WHERE groups.name = 'admins'
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'readeronly') THEN
+        GRANT USAGE ON SCHEMA public TO readeronly;
         GRANT SELECT ON TABLE public.system_table_views TO readeronly;
+        GRANT SELECT ON TABLE
+            public.system_row_groups,
+            public.system_row_group_memberships
+        TO readeronly;
         GRANT SELECT ON TABLE
             public.system_column_field_sets,
             public.system_column_field_set_members,
@@ -450,7 +555,12 @@ BEGIN
     END IF;
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'basic_user') THEN
+        GRANT USAGE ON SCHEMA public TO basic_user;
         GRANT SELECT ON TABLE public.system_table_views TO basic_user;
+        GRANT SELECT ON TABLE
+            public.system_row_groups,
+            public.system_row_group_memberships
+        TO basic_user;
         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
             public.system_column_field_sets,
             public.system_column_field_set_members,
@@ -463,7 +573,12 @@ BEGIN
     END IF;
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'guest_user') THEN
+        GRANT USAGE ON SCHEMA public TO guest_user;
         GRANT SELECT ON TABLE public.system_table_views TO guest_user;
+        GRANT SELECT ON TABLE
+            public.system_row_groups,
+            public.system_row_group_memberships
+        TO guest_user;
         GRANT SELECT ON TABLE
             public.system_column_field_sets,
             public.system_column_field_set_members,
@@ -473,7 +588,7 @@ BEGIN
 END $$;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.6.2', 'Filterest generated public bootstrap');
+VALUES ('9.6.4', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 

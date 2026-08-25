@@ -35,12 +35,38 @@ function clearImageModalControlTimer(modalOverlay) {
     }
 }
 
+function teardownTransientImageControls(modalOverlay) {
+    clearImageModalControlTimer(modalOverlay);
+    modalOverlay.onpointermove = null;
+    modalOverlay.onpointerover = null;
+    modalOverlay.onpointerout = null;
+    modalOverlay.onpointerleave = null;
+
+    const focusHandler = imageModalFocusHandlers.get(modalOverlay);
+    if (focusHandler) {
+        modalOverlay.removeEventListener("focusin", focusHandler);
+        imageModalFocusHandlers.delete(modalOverlay);
+    }
+
+    const scrollBinding = imageModalScrollHandlers.get(modalOverlay);
+    if (scrollBinding) {
+        scrollBinding.element.removeEventListener("scroll", scrollBinding.handler);
+        imageModalScrollHandlers.delete(modalOverlay);
+    }
+
+    modalOverlay.classList.remove(
+        "image-modal-controls-active",
+        "image-modal-content-scrolled",
+    );
+}
+
 /**
  * Shows image controls after pointer or focus activity and pauses their idle
  * timer while the pointer remains over an actionable control. This bridges the
  * shared modal overlay with image-first controls so hovered actions stay usable.
  */
 function installTransientImageControls(modalOverlay) {
+    teardownTransientImageControls(modalOverlay);
     const hideControls = () => {
         clearImageModalControlTimer(modalOverlay);
         modalOverlay.classList.remove("image-modal-controls-active");
@@ -113,6 +139,7 @@ function installTransientImageControls(modalOverlay) {
         imageModalScrollHandlers.delete(modalOverlay);
     }
     revealControls();
+    return () => teardownTransientImageControls(modalOverlay);
 }
 
 /**
@@ -123,6 +150,7 @@ function installTransientImageControls(modalOverlay) {
 export function openImageModalContent({
     contentElement,
     classNames = [],
+    overlayClassNames = [],
     ariaLabel = "Image preview",
     topControlElements = [],
 } = {}) {
@@ -130,20 +158,28 @@ export function openImageModalContent({
         return null;
     }
 
+    let imageModalCleanup = () => {};
     const { modal_overlay, modal } = createModal({
         skipModalTitle: true,
         contentElements: [contentElement],
         width: "auto",
         maxWidth: "100vw",
         maxHeight: "100vh",
+        cleanupCallback: () => imageModalCleanup(),
     });
 
+    const validModalClassNames = Array.isArray(classNames)
+        ? classNames.filter((className) => typeof className === "string" && className)
+        : [];
+    const validOverlayClassNames = Array.isArray(overlayClassNames)
+        ? overlayClassNames.filter((className) => typeof className === "string" && className)
+        : [];
     const previousClassNames = Array.isArray(modal._imageModalClassNames)
         ? modal._imageModalClassNames
         : [];
     modal.classList.remove(...previousClassNames);
-    modal._imageModalClassNames = [...classNames];
-    modal.classList.add("image_modal", ...classNames);
+    modal._imageModalClassNames = [...validModalClassNames];
+    modal.classList.add("image_modal", ...validModalClassNames);
     modal.setAttribute("aria-label", ariaLabel);
     const modalHeader = modal.querySelector(":scope > .modal_header");
     const closeButton = modalHeader?.querySelector(":scope > .modal_close_button");
@@ -157,8 +193,19 @@ export function openImageModalContent({
         topControls.append(...validTopControls, closeButton);
         modalHeader.appendChild(topControls);
     }
-    modal_overlay.classList.add("modal_overlay_blur");
-    installTransientImageControls(modal_overlay);
+    modal_overlay.classList.add("modal_overlay_blur", ...validOverlayClassNames);
+    modal_overlay._imageModalOverlayClassNames = [...validOverlayClassNames];
+    const teardownControls = installTransientImageControls(modal_overlay);
+    imageModalCleanup = () => {
+        teardownControls();
+        modal.classList.remove("image_modal", ...validModalClassNames);
+        modal._imageModalClassNames = [];
+        modal_overlay.classList.remove(
+            "modal_overlay_blur",
+            ...validOverlayClassNames,
+        );
+        modal_overlay._imageModalOverlayClassNames = [];
+    };
     showModal();
     return { modalOverlay: modal_overlay, modal, close: hideModal };
 }

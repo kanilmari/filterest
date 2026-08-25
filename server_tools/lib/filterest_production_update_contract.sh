@@ -84,7 +84,9 @@ assert_owned_private_tree() {
 
 acquire_site_operation_lock() {
     if [[ -z "${SITE_LOCK_FD:-}" ]]; then
-        exec {SITE_LOCK_FD}<"$UPDATE_STATE_ROOT" || die "site operation lock cannot be opened"
+        # Lock the allowlisted site root itself so update, maintenance-page, and
+        # future per-site operator adapters all share one kernel lock object.
+        exec {SITE_LOCK_FD}<"$SITE_ROOT" || die "site operation lock cannot be opened"
         flock -n "$SITE_LOCK_FD" || die "another update operation already owns this site"
     fi
 }

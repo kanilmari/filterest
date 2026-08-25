@@ -110,9 +110,11 @@ describe("modal_builder accessibility", () => {
         first.modal._imageModalClassNames = ["image_first_view_modal"];
         first.modal_overlay.classList.add(
             "modal_overlay_blur",
+            "image_first_view_overlay",
             "image-modal-controls-active",
             "image-modal-content-scrolled",
         );
+        first.modal_overlay._imageModalOverlayClassNames = ["image_first_view_overlay"];
 
         const message = document.createElement("p");
         const second = createModal({
@@ -129,8 +131,36 @@ describe("modal_builder accessibility", () => {
         expect(second.modal.style.maxWidth).toBe("calc(100vw - 32px)");
         expect(second.modal.style.maxHeight).toBe("");
         expect(second.modal_overlay.classList.contains("modal_overlay_blur")).toBe(false);
+        expect(second.modal_overlay.classList.contains("image_first_view_overlay")).toBe(false);
+        expect(second.modal_overlay._imageModalOverlayClassNames).toEqual([]);
         expect(second.modal_overlay.classList.contains("image-modal-controls-active")).toBe(false);
         expect(second.modal_overlay.classList.contains("image-modal-content-scrolled")).toBe(false);
+    });
+
+    test("runs exactly one current feature cleanup on hide or singleton reuse", () => {
+        const firstCleanup = vi.fn();
+        createModal({
+            titlePlainText: "First",
+            contentElements: [document.createElement("div")],
+            cleanupCallback: firstCleanup,
+        });
+
+        createModal({
+            titlePlainText: "Second",
+            contentElements: [document.createElement("div")],
+        });
+        expect(firstCleanup).toHaveBeenCalledOnce();
+
+        const secondCleanup = vi.fn();
+        createModal({
+            titlePlainText: "Third",
+            contentElements: [document.createElement("div")],
+            cleanupCallback: secondCleanup,
+        });
+        hideModal();
+        hideModal();
+
+        expect(secondCleanup).toHaveBeenCalledOnce();
     });
 
     test("cycles Tab and Shift+Tab inside the open modal", () => {

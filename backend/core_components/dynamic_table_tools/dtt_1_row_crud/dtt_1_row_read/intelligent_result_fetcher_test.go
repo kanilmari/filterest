@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	pgvector "github.com/pgvector/pgvector-go"
 )
 
 type intelligentFetcherTestState struct {
@@ -47,7 +49,7 @@ func TestFetchFullTextRowsUsesComputedFallbackWhenStoredVectorIsMissingPerRow(t 
 	})
 	defer db.Close()
 
-	results, err := fetchFullTextRows(db, "app_service_catalog", "Firefox")
+	results, err := fetchFullTextRows(db, "app_service_catalog", "Firefox", intelligentSearchAuthorization{})
 	if err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
 	}
@@ -77,7 +79,7 @@ func TestFetchFullTextRowsKeepsILikeFallbackWhenVectorColumnIsMissing(t *testing
 	})
 	defer db.Close()
 
-	results, err := fetchFullTextRows(db, "app_service_catalog", "Firefox")
+	results, err := fetchFullTextRows(db, "app_service_catalog", "Firefox", intelligentSearchAuthorization{})
 	if err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
 	}
@@ -104,7 +106,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryUsesStoredVector(t *testing.
 	})
 	defer db.Close()
 
-	results, err := fetchFullTextRows(db, "app_service_catalog", "161")
+	results, err := fetchFullTextRows(db, "app_service_catalog", "161", intelligentSearchAuthorization{})
 	if err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
 	}
@@ -131,7 +133,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryUsesILikeFallback(t *testing
 	})
 	defer db.Close()
 
-	results, err := fetchFullTextRows(db, "app_service_catalog", "161")
+	results, err := fetchFullTextRows(db, "app_service_catalog", "161", intelligentSearchAuthorization{})
 	if err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
 	}
@@ -158,7 +160,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryHasNoQueryableColumns(t *tes
 	})
 	defer db.Close()
 
-	results, err := fetchFullTextRows(db, "app_service_catalog", "161")
+	results, err := fetchFullTextRows(db, "app_service_catalog", "161", intelligentSearchAuthorization{})
 	if err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
 	}
@@ -168,11 +170,97 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryHasNoQueryableColumns(t *tes
 	if strings.Contains(state.finalQuery, "ILIKE $1") {
 		t.Fatalf("final query = %q, did not expect text predicate", state.finalQuery)
 	}
-	if !strings.Contains(state.finalQuery, `"app_service_catalog"."id" = $2`) {
+	if !strings.Contains(state.finalQuery, `"app_service_catalog"."id" = $1`) {
 		t.Fatalf("final query = %q, want exact id predicate", state.finalQuery)
 	}
-	if len(state.finalArgs) != 2 || state.finalArgs[0].Value != "%161%" || fmt.Sprint(state.finalArgs[1].Value) != "161" {
-		t.Fatalf("final args = %#v, want stable placeholders with numeric id", state.finalArgs)
+	if len(state.finalArgs) != 1 || fmt.Sprint(state.finalArgs[0].Value) != "161" {
+		t.Fatalf("final args = %#v, want one used numeric-id placeholder", state.finalArgs)
+	}
+}
+
+func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *testing.T) {
+	db, state := openIntelligentFetcherTestDB(t, intelligentFetcherTestState{
+		headerExists:     true,
+		vectorExists:     true,
+		queryableColumns: []string{"header", "published"},
+		finalRows:        [][]driver.Value{{int64(161), "Firefox", float64(0.42)}},
+	})
+	defer db.Close()
+
+	authorization := intelligentSearchAuthorization{
+		userRole: "basic",
+		userID:   8,
+		readPolicy: ReadRowPolicy{
+			Name:        rowPolicyAllFlagsTrueUnlessOwner,
+			FlagColumns: []string{"published"},
+			OwnerColumn: "user_id",
+		},
+		tableUID:     104,
+		rowGroupSlug: "security",
+	}
+	if _, err := fetchFullTextRows(db, "travel_info", "Firefox", authorization); err != nil {
+		t.Fatalf("fetchFullTextRows returned error: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`("src"."published" = TRUE OR "src"."user_id" = $2)`,
+		`search_row_group_membership.table_uid = $3`,
+		`search_row_group_membership.row_id = "src"."id"`,
+		`search_row_group.slug = $4`,
+		`search_row_group.enabled = TRUE`,
+	} {
+		if !strings.Contains(state.finalQuery, fragment) {
+			t.Fatalf("candidate query lacks %q: %s", fragment, state.finalQuery)
+		}
+	}
+	if strings.Index(state.finalQuery, "search_row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
+		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
+	}
+	if len(state.finalArgs) != 4 ||
+		state.finalArgs[0].Value != "firefox:*" ||
+		fmt.Sprint(state.finalArgs[1].Value) != "8" ||
+		fmt.Sprint(state.finalArgs[2].Value) != "104" ||
+		state.finalArgs[3].Value != "security" {
+		t.Fatalf("unexpected authorized candidate args: %#v", state.finalArgs)
+	}
+}
+
+func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
+	db, state := openIntelligentFetcherTestDB(t, intelligentFetcherTestState{
+		headerExists: true,
+		finalRows:    [][]driver.Value{{int64(161), "Firefox", float64(0.12)}},
+	})
+	defer db.Close()
+
+	authorization := intelligentSearchAuthorization{
+		userRole: "guest",
+		userID:   1,
+		readPolicy: ReadRowPolicy{
+			Name:        rowPolicyAllFlagsTrueUnlessOwner,
+			FlagColumns: []string{"published"},
+		},
+		tableUID:     104,
+		rowGroupSlug: "security",
+	}
+	if _, err := fetchSimilarRows(db, "travel_info", "", pgvector.NewVector([]float32{0.1}), authorization); err != nil {
+		t.Fatalf("fetchSimilarRows returned error: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`"travel_info"."published" = TRUE`,
+		`search_row_group_membership.table_uid = $2`,
+		`search_row_group_membership.row_id = "travel_info"."id"`,
+		`search_row_group.slug = $3`,
+	} {
+		if !strings.Contains(state.finalQuery, fragment) {
+			t.Fatalf("vector candidate query lacks %q: %s", fragment, state.finalQuery)
+		}
+	}
+	if strings.Index(state.finalQuery, "search_row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
+		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
+	}
+	if len(state.finalArgs) != 3 || fmt.Sprint(state.finalArgs[1].Value) != "104" || state.finalArgs[2].Value != "security" {
+		t.Fatalf("unexpected vector candidate args: %#v", state.finalArgs)
 	}
 }
 

@@ -51,6 +51,7 @@ export async function fetchFilterOptions({
  *     "types": {...},
  *     "resultsPerLoad": number,
  *     "row_count": number,
+ *     "row_group_facets": [{ "id": number, "slug": string, "title": object, "row_count": number }],
  *     "has_geo": boolean,
  *     "geom_columns": string[],
  *     "geom_sources": string[],

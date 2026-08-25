@@ -179,4 +179,49 @@ describe("initializeInfiniteScroll", () => {
 
         disconnectInfiniteScroll("task_cards");
     });
+
+    test("keeps first-page facet controls while later pages append rows", async () => {
+        createWideTableView("grouped_orders", {
+            container: 520,
+            table: 900,
+        });
+        document.body.insertAdjacentHTML(
+            "afterbegin",
+            `<div id="grouped_orders_row_group_facets">Security 8</div>`
+        );
+        getUnifiedTableStateMock.mockReturnValue({
+            offset: 20,
+            filters: { row_group: "security" },
+            sort: { column: "created", direction: "DESC" },
+        });
+        fetchDatasetDataMock.mockResolvedValue({
+            data: [{ id: 21 }],
+            row_count: 31,
+            // A later page must not replace the first-page metadata even if a
+            // future backend happens to include this field.
+            row_group_facets: [],
+        });
+
+        const {
+            disconnectInfiniteScroll,
+            initializeInfiniteScroll,
+            seedInfiniteScrollRowCount,
+        } = await import("./infinite_scroll_handler.js");
+        seedInfiniteScrollRowCount("grouped_orders", 31);
+        initializeInfiniteScroll("grouped_orders");
+
+        intersectionObservers[0].callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1));
+
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
+            dataset_name: "grouped_orders",
+            offset: 20,
+            filters: { row_group: "security" },
+            row_count: 31,
+        }));
+        expect(document.getElementById("grouped_orders_row_group_facets")?.textContent)
+            .toBe("Security 8");
+
+        disconnectInfiniteScroll("grouped_orders");
+    });
 });

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	e_sessions "easelect/backend/core_components/sessions"
 
 	gorillaSessions "github.com/gorilla/sessions"
@@ -180,6 +182,8 @@ var authModesDriverCounter int64
 func setupAuthModesMockDB(t *testing.T, cfg authModesMockConfig) {
 	t.Helper()
 	orig := backend.Db
+	origAdmin := backend.DbAdmin
+	origConfidential := backend.DbConfidential
 	d := &authModesMockDriver{cfg: cfg}
 	name := fmt.Sprintf("auth_modes_%d_%d", time.Now().UnixNano(), atomic.AddInt64(&authModesDriverCounter, 1))
 	sql.Register(name, d)
@@ -188,10 +192,47 @@ func setupAuthModesMockDB(t *testing.T, cfg authModesMockConfig) {
 		t.Fatalf("sql.Open mock: %v", err)
 	}
 	backend.Db = db
+	backend.DbAdmin = nil
+	backend.DbConfidential = db
 	t.Cleanup(func() {
 		_ = db.Close()
 		backend.Db = orig
+		backend.DbAdmin = origAdmin
+		backend.DbConfidential = origConfidential
 	})
+}
+
+func TestGetAuthModesHandler_AuthenticationGenerationUsesConfidentialPoolAndFailsClosed(t *testing.T) {
+	store := setupAuthModesTestStore(t)
+	setupAuthModesMockDB(t, authModesMockConfig{loginToBrowse: false})
+
+	originalMatcher := authModesAuthenticationGenerationMatches
+	usedConfidentialPool := false
+	authModesAuthenticationGenerationMatches = func(
+		_ context.Context,
+		database auth_generation.Querier,
+		_ *gorillaSessions.Session,
+		_ int,
+	) (bool, error) {
+		usedConfidentialPool = database == backend.DbConfidential
+		return false, errors.New("simulated generation read failure")
+	}
+	t.Cleanup(func() { authModesAuthenticationGenerationMatches = originalMatcher })
+
+	req := buildAuthModesReq(t, store, "/api/auth-modes", map[interface{}]interface{}{
+		"user_id":                   42,
+		"authentication_generation": int64(1),
+	})
+	rr := httptest.NewRecorder()
+
+	GetAuthModesHandler(rr, req)
+
+	if !usedConfidentialPool {
+		t.Fatal("authentication generation check did not use the confidential pool")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
 }
 
 func TestGetAuthModesHandler_LoginRequiredDoesNotCreateGuestSession(t *testing.T) {

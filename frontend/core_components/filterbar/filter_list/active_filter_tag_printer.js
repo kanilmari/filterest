@@ -8,8 +8,10 @@ import { getParams, setParams, updateURL } from "../../navigation/nav_engine/que
 import {
     ongoingSearchResults,
     getDatasetSearchInputs,
+    do_intelligent_search,
     rerenderCachedSearchResults,
 } from "../text_search/create_text_search_panel.js";
+import { ROW_GROUP_FILTER_KEY } from "./row_group_facet_printer.js";
 import {
     groupFilters,
     buildFilterLabel,
@@ -260,8 +262,12 @@ async function removeFilter(tableName, keys) {
 
     const searchCache = ongoingSearchResults[tableName];
     if (params.search && searchCache) {
-        searchCache.filters = { ...(state.filters || {}) };
-        await rerenderCachedSearchResults(tableName);
+        if (keys.includes(ROW_GROUP_FILTER_KEY)) {
+            await do_intelligent_search(tableName, String(params.search));
+        } else {
+            searchCache.filters = { ...(state.filters || {}) };
+            await rerenderCachedSearchResults(tableName);
+        }
         renderActiveFilters(tableName);
     } else {
         // Välitön UI-päivitys ennen async-refreshiä — tunnisteet päivittyvät heti

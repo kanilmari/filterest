@@ -7,120 +7,78 @@ import { appendDataToView, disconnectInfiniteScroll } from "../../infinite_scrol
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
-import { setResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
-import { getActiveFiltersSnapshot } from "./dataset_search_state_reader.js";
 import {
-    countVisibleRows,
+    clearRowGroupFacets,
+    ROW_GROUP_FILTER_KEY,
+} from "../filter_list/row_group_facet_printer.js";
+import {
     deduplicateRows,
     filterRows,
     initSearchCache,
     sortRows,
 } from "./dataset_search_executor_helpers.js";
+import {
+    getCurrentSearchView,
+    getPrimaryCardContainer,
+    getSearchAiHostId,
+    getSearchFilterContext,
+    getSearchStageContainer,
+    getSearchViewContainer,
+    getVisibleSearchCounts,
+    isCurrentSearchCache,
+    ongoingSearchResultsStore,
+    removeSearchNotice,
+    syncSearchResultsCount,
+} from "./dataset_search_runtime_state.js";
 
-export const _ongoingSearchResults = {};
-const SEARCH_BREAKDOWN_MODE = "search-breakdown";
+export const _ongoingSearchResults = ongoingSearchResultsStore;
 
-function getCurrentSearchView(tableName) {
-    return localStorage.getItem(`${tableName}_view`) || "table";
-}
-
-function getSearchViewContainer(tableName, currentView = getCurrentSearchView(tableName)) {
-    return document.getElementById(`${tableName}_${currentView}_view_container`);
-}
-
-function getSearchStageContainer(tableName, currentView = getCurrentSearchView(tableName)) {
-    if (currentView === "card") {
-        return document.querySelector(
-            `#${tableName}_card_view_container .card_sidebar_panel`
-        );
+async function renderRowsIntoTarget(
+    tableName,
+    targetHost,
+    rows,
+    columns,
+    dataTypes,
+    expectedCache = null
+) {
+    if (!isCurrentSearchCache(tableName, expectedCache)) {
+        return false;
     }
-
-    return getSearchViewContainer(tableName, currentView);
-}
-
-function getPrimaryCardContainer(tableName) {
-    return (
-        document.querySelector(
-            `#${tableName}_card_view_container .card_sidebar_panel > .card_container`
-        ) ||
-        document.querySelector(`#${tableName}_card_view_container .card_container`)
-    );
-}
-
-function getSearchAiHostId(tableName, currentView = getCurrentSearchView(tableName)) {
-    if (currentView === "card") {
-        return `${tableName}_search_ai_cards`;
-    }
-
-    if (currentView === "table") {
-        return `${tableName}_search_ai_table`;
-    }
-
-    return `${tableName}_search_ai_host`;
-}
-
-function removeNotice(tableName, langKey) {
-    const currentView = getCurrentSearchView(tableName);
-    const stageContainer = getSearchStageContainer(tableName, currentView);
-    if (!stageContainer) return;
-
-    const existing = stageContainer.querySelectorAll(
-        `.search-stage-notice[data-lang-key="${langKey}"]`
-    );
-    existing.forEach((el) => {
-        if (el.closest("tr")) {
-            el.closest("tr").remove();
-        } else {
-            el.remove();
-        }
-    });
-}
-
-function getVisibleSearchCounts(tableName, cache = _ongoingSearchResults[tableName]) {
-    const searchCache = cache || initSearchCache();
-
-    return {
-        textCount: countVisibleRows(
-            searchCache.data,
-            searchCache.filters,
-            tableName,
-            searchCache.types
-        ),
-        aiCount: countVisibleRows(
-            searchCache.aiData,
-            searchCache.filters,
-            tableName,
-            searchCache.types
-        ),
-    };
-}
-
-function buildSearchResultsCountPayload(tableName, cache = _ongoingSearchResults[tableName]) {
-    return {
-        mode: SEARCH_BREAKDOWN_MODE,
-        ...getVisibleSearchCounts(tableName, cache),
-    };
-}
-
-function syncSearchResultsCount(tableName, cache = _ongoingSearchResults[tableName]) {
-    setResultsCount(tableName, buildSearchResultsCountPayload(tableName, cache));
-}
-
-async function renderRowsIntoTarget(tableName, targetHost, rows, columns, dataTypes) {
     if (!targetHost) {
         appendDataToView(tableName, rows, true);
-        return;
+        return true;
     }
 
     if (
         targetHost.classList?.contains("card_container") ||
         targetHost.classList?.contains("search-ai-results-card-container")
     ) {
-        await appendDataToCardView(targetHost, columns, rows, tableName);
-        return;
+        if (!expectedCache) {
+            await appendDataToCardView(targetHost, columns, rows, tableName);
+            return true;
+        }
+
+        // Card construction awaits metadata and image work. Build into a
+        // detached host so a replaced search cannot append its old rows after
+        // the newer search has already cleared and repopulated the live view.
+        const stagingHost = document.createElement("div");
+        stagingHost.className = targetHost.className;
+        await appendDataToCardView(stagingHost, columns, rows, tableName);
+        if (!isCurrentSearchCache(tableName, expectedCache)) {
+            return false;
+        }
+
+        const fragment = document.createDocumentFragment();
+        fragment.append(...Array.from(stagingHost.childNodes));
+        const sentinel = targetHost.querySelector(
+            `#${tableName}_infinite_scroll_sentinel`
+        );
+        targetHost.insertBefore(fragment, sentinel || null);
+        return true;
     }
 
     appendDataToTable(targetHost, rows, columns, dataTypes, tableName);
+    return true;
 }
 
 function findRenderedCardForRow(tableName, row) {
@@ -134,7 +92,14 @@ function findRenderedCardForRow(tableName, row) {
     ).find((card) => String(card.dataset.id) === String(rowId)) || null;
 }
 
-async function openFirstPendingSearchArticle(tableName, rowsToRender) {
+async function openFirstPendingSearchArticle(
+    tableName,
+    rowsToRender,
+    expectedCache = null
+) {
+    if (!isCurrentSearchCache(tableName, expectedCache)) {
+        return;
+    }
     if (getCurrentSearchView(tableName) !== "card") {
         return;
     }
@@ -145,6 +110,9 @@ async function openFirstPendingSearchArticle(tableName, rowsToRender) {
     const { getUnifiedTableState, setUnifiedTableState } = await import(
         "../../state_stores/table_state_store.js"
     );
+    if (!isCurrentSearchCache(tableName, expectedCache)) {
+        return;
+    }
     const state = getUnifiedTableState(tableName);
     const cardState = state?.cardView || {};
     if (
@@ -160,6 +128,13 @@ async function openFirstPendingSearchArticle(tableName, rowsToRender) {
         return;
     }
 
+    const { openRowArticleView } = await import(
+        "../../table_views/card_view/row_article_opener.js"
+    );
+    if (!isCurrentSearchCache(tableName, expectedCache)) {
+        return;
+    }
+
     setUnifiedTableState(tableName, {
         cardView: {
             ...cardState,
@@ -169,23 +144,23 @@ async function openFirstPendingSearchArticle(tableName, rowsToRender) {
         },
     });
     const selectedCard = findRenderedCardForRow(tableName, firstRow);
-    const { openRowArticleView } = await import(
-        "../../table_views/card_view/row_article_opener.js"
-    );
     await openRowArticleView(firstRow, tableName, selectedCard);
 }
 
-export async function update_table_ui(tableName, incoming, targetTable) {
+export async function update_table_ui(tableName, incoming, targetTable, expectedCache = null) {
     const inColumns = Array.isArray(incoming?.columns) ? incoming.columns : [];
     const inData = Array.isArray(incoming?.data) ? incoming.data : [];
     const incomingTypes = incoming?.types || {};
     let cache = _ongoingSearchResults[tableName];
+    if (expectedCache && cache !== expectedCache) {
+        return 0;
+    }
     if (!cache) {
         cache = initSearchCache();
         _ongoingSearchResults[tableName] = cache;
     }
 
-    cache.filters = getActiveFiltersSnapshot(tableName);
+    cache.filters = getSearchFilterContext(tableName).clientFilters;
     cache.types = { ...(cache.types || {}), ...incomingTypes };
     if (inColumns.length) cache.columns = inColumns;
 
@@ -214,21 +189,38 @@ export async function update_table_ui(tableName, incoming, targetTable) {
         // Render directly into the specified secondary results host (AI results).
         const columns = cache.columns;
         const dataTypes = cache.types;
-        await renderRowsIntoTarget(
+        const committed = await renderRowsIntoTarget(
             tableName,
             targetTable,
             rowsToRender,
             columns,
-            dataTypes
+            dataTypes,
+            expectedCache
         );
+        if (!committed) return 0;
     } else {
         // Default: render into the primary table via appendDataToView
         const isFirstRender = cache.renderedOnce !== true;
-        appendDataToView(tableName, rowsToRender, !isFirstRender ? true : false);
+        if (getCurrentSearchView(tableName) === "card") {
+            const committed = await renderRowsIntoTarget(
+                tableName,
+                getPrimaryCardContainer(tableName),
+                rowsToRender,
+                cache.columns,
+                cache.types,
+                expectedCache
+            );
+            if (!committed) return 0;
+        } else {
+            if (!isCurrentSearchCache(tableName, expectedCache)) return 0;
+            appendDataToView(tableName, rowsToRender, !isFirstRender ? true : false);
+        }
         cache.renderedOnce = true;
     }
 
-    await openFirstPendingSearchArticle(tableName, rowsToRender);
+    if (!isCurrentSearchCache(tableName, expectedCache)) return 0;
+    await openFirstPendingSearchArticle(tableName, rowsToRender, expectedCache);
+    if (!isCurrentSearchCache(tableName, expectedCache)) return 0;
     syncSearchResultsCount(tableName, cache);
     return rowsToRender.length;
 }
@@ -244,7 +236,7 @@ export function insertNotice(tableName, langKey, fallbackText) {
     if (!stageContainer) return;
 
     // Remove any previous notice with the same langKey to prevent duplicates.
-    removeNotice(tableName, langKey);
+    removeSearchNotice(tableName, langKey);
 
     const notice = document.createElement("div");
     notice.classList.add("search-stage-notice");
@@ -429,7 +421,7 @@ export async function rerenderCachedSearchResults(tableName) {
     const cache = _ongoingSearchResults[tableName];
     if (!cache) return;
 
-    cache.filters = getActiveFiltersSnapshot(tableName);
+    cache.filters = getSearchFilterContext(tableName).clientFilters;
     cleanupSearchArtifacts(tableName);
 
     const visibleTextRows = filterRows(
@@ -488,7 +480,7 @@ export function getCachedSearchResultForRender(tableName) {
         return null;
     }
 
-    const filters = getActiveFiltersSnapshot(tableName);
+    const filters = getSearchFilterContext(tableName).clientFilters;
     cache.filters = filters;
     const visibleTextRows = filterRows(
         cache.data,
@@ -544,19 +536,27 @@ export async function sortCachedSearchResults(
 export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     if (!userQuery.trim()) return;
     const { useLocation = false, gps = null } = opts;
+    // Facet counts describe the ordinary authorized result query, not the separate
+    // streamed text/AI cache. Remove them before the cached universe takes over.
+    clearRowGroupFacets(tableName);
     // Stop infinite scroll to prevent normal data fetches from racing
     // with streamed search results (causes table flickering on F5).
     disconnectInfiniteScroll(tableName);
     // Clean up artifacts from any previous search
     cleanupSearchArtifacts(tableName);
-    _ongoingSearchResults[tableName] = initSearchCache();
-    _ongoingSearchResults[tableName].filters = getActiveFiltersSnapshot(tableName);
-    syncSearchResultsCount(tableName, _ongoingSearchResults[tableName]);
+    const searchFilterContext = getSearchFilterContext(tableName);
+    const searchCache = initSearchCache();
+    searchCache.filters = searchFilterContext.clientFilters;
+    _ongoingSearchResults[tableName] = searchCache;
+    syncSearchResultsCount(tableName, searchCache);
     // Use endpoint_router with stream: true
     const currentView = getCurrentSearchView(tableName);
     let url_params =
         `&dataset=${encodeURIComponent(tableName)}` +
         `&query=${encodeURIComponent(userQuery)}`;
+    if (searchFilterContext.rowGroupSlug) {
+        url_params += `&${ROW_GROUP_FILTER_KEY}=${encodeURIComponent(searchFilterContext.rowGroupSlug)}`;
+    }
     if (["card", "product_card"].includes(currentView)) {
         url_params += "&include_card_support=1";
     }
@@ -590,7 +590,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
         const syncTextNoResultsNotice = () => {
             const { textCount } = getVisibleSearchCounts(tableName);
             if (textCount > 0) {
-                removeNotice(tableName, "text_search_no_results");
+                removeSearchNotice(tableName, "text_search_no_results");
                 noTextNoticeInserted = false;
                 return textCount;
             }
@@ -599,7 +599,15 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
         };
 
         while (true) {
+            if (_ongoingSearchResults[tableName] !== searchCache) {
+                await reader.cancel();
+                return;
+            }
             const { value, done } = await reader.read();
+            if (_ongoingSearchResults[tableName] !== searchCache) {
+                await reader.cancel();
+                return;
+            }
             if (done) break;
             partialBuffer += textDecoder.decode(value, { stream: true });
             const lines = partialBuffer.split("\n");
@@ -618,7 +626,11 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
                     if (!aiHost) {
                         aiHost = createSecondSearchResultsHost(tableName);
                     }
-                    const appendedCount = await update_table_ui(tableName, parsed, aiHost);
+                    const appendedCount = await update_table_ui(tableName, parsed, aiHost, searchCache);
+                    if (_ongoingSearchResults[tableName] !== searchCache) {
+                        await reader.cancel();
+                        return;
+                    }
                     const visibleTextCount = syncTextNoResultsNotice();
                     if (appendedCount > 0) {
                         if (aiHost && visibleTextCount === 0 && !noTextNoticeInserted) {
@@ -640,10 +652,17 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
                     }
                 } else {
                     // Text results go into the primary table
-                    await update_table_ui(tableName, parsed, null);
+                    await update_table_ui(tableName, parsed, null, searchCache);
+                    if (_ongoingSearchResults[tableName] !== searchCache) {
+                        await reader.cancel();
+                        return;
+                    }
                     syncTextNoResultsNotice();
                 }
             }
+        }
+        if (_ongoingSearchResults[tableName] !== searchCache) {
+            return;
         }
         const visibleTextCount = syncTextNoResultsNotice();
         if (visibleTextCount === 0 && !noTextNoticeInserted) {

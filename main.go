@@ -162,6 +162,12 @@ func main() {
 	if err := backend.EnsureConfidentialRolePermissions(backend.Db); err != nil {
 		log.Fatalf("[CONFIDENTIAL ROLE PERMISSIONS] startup reconcile failed: %v", err)
 	}
+	if err := backend.EnsureRowGroupRuntimeRolePermissions(backend.Db); err != nil {
+		// Facets and row-group-aware search run through the basic/guest pools.
+		// Do not advertise a healthy runtime when those required SELECT grants
+		// could not be reconciled safely.
+		log.Fatalf("[ROW GROUP PERMISSIONS] startup reconcile failed: %v", err)
+	}
 
 	//-----------------------------------------------------------------
 	// 3c) Täsmäytetään varatut testi-käyttäjät ennen liikenteen avaamista
@@ -286,6 +292,7 @@ func main() {
 	securityWrappedHandler := middlewares.WithSecurityHeaders(firewallWrappedHandler)
 	wrappedHandler := middlewares.WithCSP(securityWrappedHandler)
 	wrappedHandler = router.WithSystemActiveRequestTracking(wrappedHandler)
+	wrappedHandler = router.WithSystemAPIDrainGate(wrappedHandler)
 
 	//-----------------------------------------------------------------
 	// 7) Lisätään panic recovery koko handlerin ympärille

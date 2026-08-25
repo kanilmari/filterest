@@ -152,6 +152,16 @@ func TestDescribeRouteProfileNamesAccessControlNoTxProfile(t *testing.T) {
 	containsAll(t, descriptor.SkipStages, []string{"admin_check", "transaction"})
 }
 
+func TestAdminUpdateNoticeStreamKeepsAdminSecurityAndSkipsTransaction(t *testing.T) {
+	descriptor := pipeline.DescribeRouteProfile("router.adminUpdateNoticeStreamHandler")
+	if descriptor.ProfileName != "admin_no_tx" || !descriptor.AdminOnly {
+		t.Fatalf("update notice stream profile = %+v, want admin_no_tx admin-only", descriptor)
+	}
+	stages := pipeline.DescribePipeline(emptyCtx, pipeline.GetProfile("router.adminUpdateNoticeStreamHandler"))
+	containsAll(t, stages, []string{"auth", "csrf", "fingerprint", "device_id", "access_control", "admin_check"})
+	containsNone(t, stages, []string{"transaction"})
+}
+
 // ── GetProfile ───────────────────────────────────────────────────────────────
 
 // Test 7: Known handler returns its registered profile (PublicProfile).

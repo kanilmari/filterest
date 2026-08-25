@@ -102,6 +102,7 @@ describe("openImageFirstView", () => {
             .toBe(article.querySelector(".row_article_details_section"));
         expect(openImageModalContentMock).toHaveBeenCalledWith(expect.objectContaining({
             classNames: ["image_first_view_modal"],
+            overlayClassNames: ["image_first_view_overlay"],
         }));
         const closeView = openImageModalContentMock.mock.results[0].value.close;
         view.querySelector('[data-testid="row-article-image-first-stage"]').click();

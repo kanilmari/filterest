@@ -4,9 +4,11 @@
 // Exists to be the single orchestration point for launching, populating, and managing the row article view.
 
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
+import { rebaseSavedCardDraftFields } from "./card_edit_reconciler.js";
 import {
     parseRoleString,
     cancelEditing,
+    collectCardUpdates,
     disableEditing,
     enableEditing,
     sendCardUpdates,
@@ -410,7 +412,6 @@ export async function openRowArticleView(
          * -------------------------------------------------- */
         const actionBar = document.createElement("div");
         actionBar.classList.add("big_card_action_bar");
-
         if (canUpdateRow) {
             let edit = false;
             const editButton = document.createElement("button");
@@ -426,7 +427,6 @@ export async function openRowArticleView(
             cancelButton.dataset.testid = 'big-card-cancel-button';
             cancelButton.hidden = true;
             cancelButton.style.display = 'none';
-
             const syncEditUi = (isEditing) => {
                 edit = isEditing;
                 editButton.dataset.langKey = isEditing ? 'save' : 'edit';
@@ -434,33 +434,36 @@ export async function openRowArticleView(
                 cancelButton.hidden = !isEditing;
                 cancelButton.style.display = isEditing ? '' : 'none';
             };
-
             editButton.addEventListener("click", async () => {
                 if (!edit) {
                     enableEditing(rowArticleContentElement, table_name);
                     syncEditUi(true);
                     return;
                 }
-
                 editButton.disabled = true;
                 cancelButton.disabled = true;
                 try {
-                    const upd = disableEditing(rowArticleContentElement);
-                    syncEditUi(false);
-                    if (row_item.id !== undefined) {
-                        try {
-                            await sendCardUpdates(table_name, row_item.id, upd);
-                            await refreshMediaSections();
-                        } catch (err) {
-                            console.warn("virhe: %s", err.message);
-                        }
+                    const updates = collectCardUpdates(rowArticleContentElement);
+                    if (Object.keys(updates).length > 0 && row_item.id === undefined) {
+                        console.warn('article save skipped because the row has no stable identifier');
+                        return;
                     }
+                    if (row_item.id !== undefined) {
+                        await sendCardUpdates(table_name, row_item.id, updates);
+                    }
+                    disableEditing(rowArticleContentElement);
+                    syncEditUi(false);
+                    await refreshMediaSections();
+                } catch (err) {
+                    rebaseSavedCardDraftFields(rowArticleContentElement, err?.successfulFields);
+                    console.warn(edit
+                        ? 'article save failed; edit mode and draft were preserved'
+                        : 'article fields were saved, but refreshed media could not be loaded', err);
                 } finally {
                     editButton.disabled = false;
                     cancelButton.disabled = false;
                 }
             });
-
             cancelButton.addEventListener("click", () => {
                 if (!edit) {
                     return;
@@ -468,13 +471,10 @@ export async function openRowArticleView(
                 cancelEditing(rowArticleContentElement);
                 syncEditUi(false);
             });
-
             actionBar.append(editButton, cancelButton);
         }
-        // Store ref so delete handler can read selectedCard at click-time
         let _selectedCard = null;
 
-        /* -- Delete button -- */
         const closeOpenedRowArticle = () => {
             closeRowArticle(
                 wrapper,

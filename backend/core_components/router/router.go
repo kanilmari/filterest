@@ -78,7 +78,30 @@ const (
 	// within defaultRateLimitMinutes when a new function is registered.
 	defaultRateLimitAmount  = 200
 	defaultRateLimitMinutes = 20
+
+	// Storage reads arrive in browser bursts: one result page can legitimately
+	// request hundreds of thumbnails and detail variants. Keep a bounded,
+	// per-client window, but do not reuse the low generic API-route default.
+	storageRateLimitAmount  = 5000
+	storageRateLimitMinutes = 20
 )
+
+func defaultRateLimitForHandler(handlerName string) (int, int) {
+	if handlerName == "router.ServeStorage" {
+		return storageRateLimitAmount, storageRateLimitMinutes
+	}
+	return defaultRateLimitAmount, defaultRateLimitMinutes
+}
+
+// reconcileExistingRateLimit upgrades only the untouched legacy default.
+// Explicit operator choices, including a disabled zero limit, remain intact.
+func reconcileExistingRateLimit(handlerName string, amount, minutes int) (int, int) {
+	desiredAmount, desiredMinutes := defaultRateLimitForHandler(handlerName)
+	if amount == defaultRateLimitAmount && minutes == defaultRateLimitMinutes {
+		return desiredAmount, desiredMinutes
+	}
+	return amount, minutes
+}
 
 // RegisterRoutes tallentaa reittien määritykset
 func RegisterRoutes(frontendDir string, storagePath string) {
@@ -108,7 +131,9 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/system/ready", systemReadyHandler, "router.systemReadyHandler")
 	functionRegisterHandler("/system/instance-status", systemInstanceStatusHandler, "router.systemInstanceStatusHandler")
 	functionRegisterHandler("/system/drain", systemDrainHandler, "router.systemDrainHandler")
+	functionRegisterHandler("/system/update-notice", systemUpdateNoticeHandler, "router.systemUpdateNoticeHandler")
 	functionRegisterHandler("/api/admin/version-info", adminVersionInfoHandler, "router.adminVersionInfoHandler")
+	functionRegisterHandler("/api/admin/update-notice/stream", adminUpdateNoticeStreamHandler, "router.adminUpdateNoticeStreamHandler")
 	functionRegisterHandler("/api/admin/openai-api-key", saveOpenAIAPIKeyHandler, "router.saveOpenAIAPIKeyHandler")
 	functionRegisterHandler("/sitemap.xml", sitemapHandler, "router.sitemapHandler")
 	functionRegisterHandler("/datasets/", datasetsRedirectHandler, "router.datasetsRedirectHandler")

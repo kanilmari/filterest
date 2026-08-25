@@ -6,6 +6,21 @@
 import { setElementSvgContent } from "../../icons/icon_loader.js";
 
 let modal_previous_focus_element = null;
+let modal_current_cleanup_callback = null;
+
+function runCurrentModalCleanup() {
+    const cleanupCallback = modal_current_cleanup_callback;
+    modal_current_cleanup_callback = null;
+    if (typeof cleanupCallback !== "function") {
+        return;
+    }
+
+    try {
+        cleanupCallback();
+    } catch (error) {
+        console.warn("modal cleanup failed", error);
+    }
+}
 
 function applyVisuallyHiddenStyles(element) {
     Object.assign(element.style, {
@@ -111,6 +126,11 @@ function resetModalPresentationState(modalOverlay, modal) {
     const trackedImageClasses = Array.isArray(modal?._imageModalClassNames)
         ? modal._imageModalClassNames
         : [];
+    const trackedImageOverlayClasses = Array.isArray(
+        modalOverlay?._imageModalOverlayClassNames,
+    )
+        ? modalOverlay._imageModalOverlayClassNames
+        : [];
 
     modal?.classList.remove(
         "image_modal",
@@ -128,7 +148,11 @@ function resetModalPresentationState(modalOverlay, modal) {
         "modal_overlay_blur",
         "image-modal-controls-active",
         "image-modal-content-scrolled",
+        ...trackedImageOverlayClasses,
     );
+    if (modalOverlay) {
+        modalOverlay._imageModalOverlayClassNames = [];
+    }
 }
 
 function handleModalKeyboardEvent(event) {
@@ -193,7 +217,12 @@ export function createModal({
     maxWidth = null,
     maxHeight = null,
     skipModalTitle = false,
+    cleanupCallback = null,
 }) {
+    // The modal is a singleton. Tear down the previous feature before its DOM
+    // and presentation state are reused by the next dialog.
+    runCurrentModalCleanup();
+
     // Luo modalin taustalla oleva overlay-elementti
     let modal_overlay = document.getElementById('custom_modal_overlay');
     if (!modal_overlay) {
@@ -335,6 +364,10 @@ export function createModal({
         modal.style.maxHeight = maxHeight;
     }
 
+    modal_current_cleanup_callback = typeof cleanupCallback === "function"
+        ? cleanupCallback
+        : null;
+
     return { modal_overlay, modal };
 }
 
@@ -357,6 +390,7 @@ export function showModal() {
 export function hideModal() {
     const modal_overlay = document.getElementById('custom_modal_overlay');
     if (modal_overlay) {
+        runCurrentModalCleanup();
         modal_overlay.style.display = 'none';
         modal_overlay.classList.remove(
             'modal_overlay_blur',

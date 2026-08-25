@@ -64,23 +64,25 @@ func tableHasColumn(db rowQueryer, table, column string) (bool, error) {
 // Käyttää buildJoinsWith1MRelations() FK-näyttösarakkeille (_name (ln)),
 // jotta tekstihakutulokset näyttävät samat FK-arvot kuin normaalit tulokset.
 // FK-sarakkeen valinta: dtt_utils.ResolveFKDisplayColumn() — ks. dtt_utils/utils.go.
-func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, userRole string, userID int, readPolicy ReadRowPolicy) ([]map[string]interface{}, []string, error) {
+func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorization intelligentSearchAuthorization) ([]map[string]interface{}, []string, error) {
 	if len(rowIDs) == 0 {
 		return nil, nil, nil
 	}
 
 	extraCond := ""
 	queryArgs := []interface{}{pq.Array(rowIDs)}
-	readPolicyCond, readPolicyArgs := buildReadRowPolicyCondition(
+	authorizationCond, authorizedArgs, err := appendIntelligentSearchAuthorizationCondition(
 		table,
-		userRole,
-		userID,
-		readPolicy,
-		2,
+		table,
+		authorization,
+		queryArgs,
 	)
-	if readPolicyCond != "" {
-		queryArgs = append(queryArgs, readPolicyArgs...)
-		extraCond = " AND " + readPolicyCond
+	if err != nil {
+		return nil, nil, err
+	}
+	queryArgs = authorizedArgs
+	if authorizationCond != "" {
+		extraCond = " AND " + authorizationCond
 	}
 
 	// --- Build SELECT + JOINs using the same FK-display logic as normal results ---
@@ -175,10 +177,10 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, userRole s
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
-	if err := enrichServiceCatalogModerationRows(db, table, data, userRole, userID); err != nil {
+	if err := enrichServiceCatalogModerationRows(db, table, data, authorization.userRole, authorization.userID); err != nil {
 		return nil, nil, err
 	}
-	cols = appendServiceCatalogModerationColumns(table, cols, data, userRole)
+	cols = appendServiceCatalogModerationColumns(table, cols, data, authorization.userRole)
 	return data, cols, nil
 }
 
@@ -239,7 +241,7 @@ func parseNumericIDSearch(input string) (int, bool) {
 // fetchFullTextRows hakee 10 parasta täyden tekstin osumaa
 // käyttäen SIMPLE-konfiguraatiota. Jos search_vector_simple puuttuu,
 // vektori lasketaan lennossa ilman taulumuutoksia.
-func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]rowTextRank, error) {
+func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string, authorization intelligentSearchAuthorization) ([]rowTextRank, error) {
 	const limitResults = 10
 
 	trimmed := strings.TrimSpace(searchString)
@@ -290,6 +292,25 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]ro
 			idOrderExpr = fmt.Sprintf("(%s = $2) DESC, ", idExpr)
 		}
 
+		args = []interface{}{tsQuery}
+		if hasNumericID {
+			args = append(args, numericID)
+		}
+		authorizationCond, scopedArgs, err := appendIntelligentSearchAuthorizationCondition(
+			mainTable,
+			"src",
+			authorization,
+			args,
+		)
+		if err != nil {
+			return nil, err
+		}
+		args = scopedArgs
+		authorizationWhere := ""
+		if authorizationCond != "" {
+			authorizationWhere = " AND " + authorizationCond
+		}
+
 		query = fmt.Sprintf(`
 	               WITH q AS (
 	                       SELECT to_tsquery('simple', $1) AS query
@@ -302,7 +323,7 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]ro
 	               CROSS JOIN LATERAL (
 	                       SELECT %[5]s AS search_vector
 	               ) AS search_doc
-	               WHERE search_doc.search_vector @@ q.query%[7]s
+	               WHERE (search_doc.search_vector @@ q.query%[7]s)%[9]s
 	               ORDER BY %[8]srank DESC
 	               LIMIT %[3]d`,
 			pq.QuoteIdentifier(mainTable),
@@ -313,11 +334,8 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]ro
 			rankExpr,
 			idWhereExpr,
 			idOrderExpr,
+			authorizationWhere,
 		)
-		args = []interface{}{tsQuery}
-		if hasNumericID {
-			args = append(args, numericID)
-		}
 	} else {
 		cols, err := dbutils.GetQueryableColumns(mainTable, db, false)
 		if err != nil {
@@ -326,20 +344,38 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]ro
 		if len(cols) == 0 && !hasNumericID {
 			return nil, nil
 		}
-		var parts []string
-		for _, c := range cols {
-			parts = append(parts, fmt.Sprintf("coalesce(%s::text,'') ILIKE $1", pq.QuoteIdentifier(c)))
-		}
-		whereClause := strings.Join(parts, " OR ")
 		idExpr := fmt.Sprintf("%s.%s", pq.QuoteIdentifier(mainTable), pq.QuoteIdentifier("id"))
 		orderByClause := idExpr
-		if hasNumericID {
-			if whereClause == "" {
-				whereClause = fmt.Sprintf("%s = $2", idExpr)
-			} else {
-				whereClause = fmt.Sprintf("(%s OR %s = $2)", whereClause, idExpr)
+		whereClause := ""
+		if len(cols) == 0 {
+			whereClause = fmt.Sprintf("%s = $1", idExpr)
+			orderByClause = fmt.Sprintf("(%s = $1) DESC, %s", idExpr, idExpr)
+			args = []interface{}{numericID}
+		} else {
+			parts := make([]string, 0, len(cols))
+			for _, c := range cols {
+				parts = append(parts, fmt.Sprintf("coalesce(%s::text,'') ILIKE $1", pq.QuoteIdentifier(c)))
 			}
-			orderByClause = fmt.Sprintf("(%s = $2) DESC, %s", idExpr, idExpr)
+			whereClause = strings.Join(parts, " OR ")
+			args = []interface{}{"%" + trimmed + "%"}
+			if hasNumericID {
+				whereClause = fmt.Sprintf("(%s OR %s = $2)", whereClause, idExpr)
+				orderByClause = fmt.Sprintf("(%s = $2) DESC, %s", idExpr, idExpr)
+				args = append(args, numericID)
+			}
+		}
+		authorizationCond, scopedArgs, err := appendIntelligentSearchAuthorizationCondition(
+			mainTable,
+			mainTable,
+			authorization,
+			args,
+		)
+		if err != nil {
+			return nil, err
+		}
+		args = scopedArgs
+		if authorizationCond != "" {
+			whereClause = fmt.Sprintf("(%s) AND %s", whereClause, authorizationCond)
 		}
 		query = fmt.Sprintf(`
                SELECT %[1]s.id,
@@ -355,10 +391,6 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]ro
 			limitResults,
 			orderByClause,
 		)
-		args = []interface{}{"%" + trimmed + "%"}
-		if hasNumericID {
-			args = append(args, numericID)
-		}
 	}
 
 	rows, err := db.Query(query, args...)
@@ -383,7 +415,7 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string) ([]ro
 }
 
 // fetchSimilarRows hakee 10 merkitykseltään lähintä palvelua.
-func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pgvector.Vector) ([]rowSemanticScore, error) {
+func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pgvector.Vector, authorization intelligentSearchAuthorization) ([]rowSemanticScore, error) {
 	const limitResults = 10
 
 	rowName := "header"
@@ -405,6 +437,20 @@ func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pg
 	if useLang {
 		quotedTable := pq.QuoteIdentifier(mainTable)
 		quotedEmbeddingsTable := quoteDerivedTableName(mainTable, "_lang_embeddings")
+		queryArgs := []interface{}{queryVector, lang}
+		authorizationCond, scopedArgs, scopeErr := appendIntelligentSearchAuthorizationCondition(
+			mainTable,
+			mainTable,
+			authorization,
+			queryArgs,
+		)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		whereClause := ""
+		if authorizationCond != "" {
+			whereClause = " WHERE " + authorizationCond
+		}
 		query := fmt.Sprintf(`
                         SELECT %[1]s.id,
                                %[1]s.%[2]s,
@@ -416,28 +462,45 @@ func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pg
                                 WHERE language_code = $2
                                 ORDER BY host_row_id, updated DESC
                         ) AS le ON le.host_row_id = %[1]s.id
+			%[5]s
                         ORDER BY distance_score ASC
                         LIMIT %[3]d`,
 			quotedTable,
 			pq.QuoteIdentifier(rowName),
 			limitResults,
 			quotedEmbeddingsTable,
+			whereClause,
 		)
-		rows, err = db.Query(query, queryVector, lang)
+		rows, err = db.Query(query, scopedArgs...)
 	} else {
+		queryArgs := []interface{}{queryVector}
+		authorizationCond, scopedArgs, scopeErr := appendIntelligentSearchAuthorizationCondition(
+			mainTable,
+			mainTable,
+			authorization,
+			queryArgs,
+		)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		whereClause := fmt.Sprintf("%s.embedding_vector IS NOT NULL", pq.QuoteIdentifier(mainTable))
+		if authorizationCond != "" {
+			whereClause += " AND " + authorizationCond
+		}
 		query := fmt.Sprintf(`
                         SELECT %[1]s.id,
                                %[1]s.%[2]s,
                                %[1]s.embedding_vector <-> $1 AS distance_score
                         FROM %[1]s
-                        WHERE %[1]s.embedding_vector IS NOT NULL
+			WHERE %[4]s
                         ORDER BY distance_score ASC
                         LIMIT %[3]d`,
 			pq.QuoteIdentifier(mainTable),
 			pq.QuoteIdentifier(rowName),
 			limitResults,
+			whereClause,
 		)
-		rows, err = db.Query(query, queryVector)
+		rows, err = db.Query(query, scopedArgs...)
 	}
 	if err != nil {
 		return nil, err

@@ -14,6 +14,7 @@ const seedInfiniteScrollRowCountMock = vi.fn();
 const createFilterBarMock = vi.fn();
 const setResultsCountMock = vi.fn();
 const renderActiveFiltersMock = vi.fn();
+const renderRowGroupFacetsMock = vi.fn();
 const createTreeViewMock = vi.fn(async () => document.createElement('div'));
 const applyViewStylingMock = vi.fn();
 const hasRoutePermissionMock = vi.fn(() => true);
@@ -51,6 +52,10 @@ vi.mock('../../reusable_components/results_count/results_count_printer.js', () =
 
 vi.mock('../filterbar/filter_list/active_filter_tag_printer.js', () => ({
     renderActiveFilters: renderActiveFiltersMock,
+}));
+
+vi.mock('../filterbar/filter_list/row_group_facet_printer.js', () => ({
+    renderRowGroupFacets: renderRowGroupFacetsMock,
 }));
 
 vi.mock('./tree_view/tree_view_printer.js', () => ({
@@ -218,6 +223,31 @@ describe('generate_table', () => {
 
         expect(events).toEqual(['create-count-mirror', 'fill-count']);
         expect(setResultsCountMock).toHaveBeenCalledWith('demo_dataset', 1);
+    });
+
+    test('renders first-page row-group metadata in the controls shared by all views', async () => {
+        localStorage.setItem('demo_dataset_view', 'table');
+        const facets = [
+            { id: 4, slug: 'security', title: { en: 'Security' }, row_count: 3 },
+        ];
+
+        const { generate_table } = await import('./dataset_view_printer.js');
+        await generate_table(
+            'demo_dataset',
+            ['id'],
+            [{ id: 1 }],
+            { id: 'INTEGER' },
+            1,
+            false,
+            null,
+            null,
+            facets
+        );
+
+        expect(renderRowGroupFacetsMock).toHaveBeenCalledWith('demo_dataset', facets);
+        expect(setResultsCountMock.mock.invocationCallOrder[0]).toBeLessThan(
+            renderRowGroupFacetsMock.mock.invocationCallOrder[0]
+        );
     });
 
     test('falls back from map view when the dataset has no map-capable fields', async () => {

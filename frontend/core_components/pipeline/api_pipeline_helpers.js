@@ -1,6 +1,7 @@
 // api_pipeline_helpers.js
 // Pure helper functions extracted from api_pipeline.js for testability.
-// Zero DOM access — all functions are pure input→output.
+// Bridges raw request/response values with stable pipeline decisions and typed errors.
+// Exists to keep cross-cutting HTTP behavior deterministic and free from DOM access.
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -151,6 +152,37 @@ export function createRateLimitError(routeName) {
     error.status = 429;
     error.isRateLimited = true;
     return error;
+}
+
+/**
+ * Creates the typed retryable error used when an app is draining or under maintenance.
+ * Between the shared response pipeline and editors that must preserve unsaved drafts.
+ * Exists so a 503 never has to be inferred from a raw backend or reverse-proxy message.
+ *
+ * @param {string} routeName - Logical route name for the failed request
+ * @returns {Error} Error with stable service-unavailable markers
+ */
+export function createServiceUnavailableError(routeName) {
+    const error = new Error(`Service temporarily unavailable for route: ${routeName}`);
+    error.status = 503;
+    error.isServiceUnavailable = true;
+    error.isRetryable = true;
+    return error;
+}
+
+/**
+ * Recognizes the shared 503 error without depending on one concrete Error class.
+ * Between pipeline callers, aggregate save errors, and editor recovery behavior.
+ * Exists so tests and compatibility callers can retain drafts from either stable marker.
+ *
+ * @param {unknown} error - Rejected request value
+ * @returns {boolean}
+ */
+export function isServiceUnavailableError(error) {
+    return Boolean(
+        error
+        && (error.isServiceUnavailable === true || Number(error.status) === 503)
+    );
 }
 
 /**

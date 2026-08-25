@@ -161,4 +161,26 @@ describe('api_pipeline', () => {
         expect(requestSessionAccessPromptMock).toHaveBeenCalledTimes(1);
         expect(showErrorToastMock).not.toHaveBeenCalled();
     });
+
+    test('turns a 503 into a retryable typed error without exposing the raw response', async () => {
+        document.documentElement.lang = 'en';
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(
+            'upstream filterest-com-app-2 failed: private runtime detail',
+            { ok: false, status: 503, statusText: 'Service Unavailable', contentType: 'text/plain' }
+        )));
+        const mod = await loadModule();
+
+        await expect(mod.runApiPipeline({ routeName: 'datasetNames' })).rejects.toMatchObject({
+            status: 503,
+            isServiceUnavailable: true,
+            isRetryable: true,
+        });
+
+        expect(showWarningToastMock).toHaveBeenCalledWith(
+            'The service is temporarily under maintenance. Please retry shortly.',
+            7000
+        );
+        expect(showWarningToastMock.mock.calls.flat().join(' ')).not.toContain('private runtime detail');
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+    });
 });

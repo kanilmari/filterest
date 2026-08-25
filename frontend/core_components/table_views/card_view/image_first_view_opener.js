@@ -253,6 +253,7 @@ export async function openImageFirstView({
     const modalResult = openImageModalContent({
         contentElement: shell,
         classNames: ["image_first_view_modal"],
+        overlayClassNames: ["image_first_view_overlay"],
         ariaLabel,
         topControlElements: rowNavigation ? [rowNavigation] : [],
     });

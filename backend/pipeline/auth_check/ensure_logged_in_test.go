@@ -165,6 +165,7 @@ var mockDriverCounter int64
 func setupMockDB(t *testing.T, cfg mockConfig) {
 	t.Helper()
 	orig := backend.Db
+	origAdmin := backend.DbAdmin
 	origConfidential := backend.DbConfidential
 	d := &mockDriver{cfg: cfg}
 	name := fmt.Sprintf("ensure_logged_in_%d_%d", time.Now().UnixNano(), atomic.AddInt64(&mockDriverCounter, 1))
@@ -174,10 +175,12 @@ func setupMockDB(t *testing.T, cfg mockConfig) {
 		t.Fatalf("sql.Open mock: %v", err)
 	}
 	backend.Db = db
+	backend.DbAdmin = nil
 	backend.DbConfidential = db
 	t.Cleanup(func() {
 		_ = db.Close()
 		backend.Db = orig
+		backend.DbAdmin = origAdmin
 		backend.DbConfidential = origConfidential
 	})
 }
@@ -294,7 +297,7 @@ func TestEnsureLoggedIn_WrongTypeUserID(t *testing.T) {
 	}
 }
 
-func TestEnsureLoggedIn_AuthenticatedUser(t *testing.T) {
+func TestEnsureLoggedIn_AuthenticatedUserUsesConfidentialGenerationRead(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, mockConfig{authGeneration: 1})
 	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)

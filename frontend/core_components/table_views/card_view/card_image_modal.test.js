@@ -82,9 +82,11 @@ describe("card image modal", () => {
         openImageModalContent({
             contentElement: content,
             classNames: ["image_first_view_modal"],
+            overlayClassNames: ["image_first_view_overlay"],
         });
 
         const overlay = document.querySelector("#custom_modal_overlay");
+        expect(overlay.classList.contains("image_first_view_overlay")).toBe(true);
         const scrollContainer = document.querySelector(
             ".image_modal.image_first_view_modal .modal_body",
         );
@@ -102,6 +104,50 @@ describe("card image modal", () => {
         scrollContainer.scrollTop = 70;
         scrollContainer.dispatchEvent(new Event("scroll"));
         expect(overlay.classList.contains("image-modal-content-scrolled")).toBe(false);
+    });
+
+    test("tears down image listeners, timers, and classes before an ordinary modal", async () => {
+        const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
+        const { openImageModalContent } = await import("./card_image_modal.js");
+        const { createModal } = await import(
+            "../../../reusable_components/modal/modal_builder.js"
+        );
+        const content = document.createElement("div");
+        content.className = "image_first_view";
+
+        const imageModal = openImageModalContent({
+            contentElement: content,
+            classNames: ["image_first_view_modal"],
+            overlayClassNames: ["image_first_view_overlay"],
+        });
+        const overlay = imageModal.modalOverlay;
+        const oldScrollContainer = imageModal.modal.querySelector(".modal_body");
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+        imageModal.close();
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+        expect(overlay.onpointermove).toBeNull();
+        expect(overlay.onpointerover).toBeNull();
+        expect(overlay.onpointerout).toBeNull();
+        expect(overlay.onpointerleave).toBeNull();
+        expect(overlay.classList.contains("image_first_view_overlay")).toBe(false);
+
+        overlay.dispatchEvent(new PointerEvent("pointermove"));
+        oldScrollContainer.scrollTop = 100;
+        oldScrollContainer.dispatchEvent(new Event("scroll"));
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
+        expect(overlay.classList.contains("image-modal-content-scrolled")).toBe(false);
+        vi.runAllTimers();
+        expect(overlay.classList.contains("image-modal-controls-active")).toBe(false);
+
+        const ordinary = createModal({
+            titlePlainText: "Ordinary dialog",
+            contentElements: [document.createElement("p")],
+        });
+        expect(ordinary.modal.classList.contains("image_modal")).toBe(false);
+        expect(ordinary.modal.classList.contains("image_first_view_modal")).toBe(false);
+        expect(ordinary.modal_overlay.classList.contains("modal_overlay_blur")).toBe(false);
+        clearTimeoutSpy.mockRestore();
     });
 
     test("places record navigation beside Close outside the scrolling image content", async () => {

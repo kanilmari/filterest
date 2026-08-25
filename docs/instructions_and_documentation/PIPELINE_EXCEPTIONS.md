@@ -28,6 +28,7 @@ Add this header comment to every intentional exception file so it is grep-able:
 | 8 | `frontend/core_components/admin_tools/queen_chat_view.js` | `new EventSource(get_endpoint_url('queenTranscriptStream'))`, `new EventSource(get_endpoint_url('queenSessionStream'))` | Queen transcript/session following streams incremental events; the finite management calls in the same file still use `endpoint_router`. | 2026-05-04 |
 | 9 | `frontend/core_components/user_tools/register_tab_printer.js` | `fetch(REGISTER_FRAGMENT_PATH)`, `fetch(form.action)` | Register tab loads and submits server-rendered pre-auth HTML form fragments with hidden CSRF fields, not JSON API calls. | 2026-05-05 |
 | 10 | `frontend/icons/icon_loader.js` | `fetch(iconPath)` | Static same-origin SVG asset loading. `endpoint_router` is API-only and cannot load arbitrary icon asset paths; the loader validates `image/svg+xml` content before injecting markup. | 2026-05-09 |
+| 11 | `frontend/core_components/admin_tools/admin_update_notice_subscriber.js` | `new EventSource('/api/admin/update-notice/stream')` | Administrator production-update notices use a bounded SSE stream with persistent database snapshots and an explicit browser reconnect lifecycle. | 2026-08-24 |
 
 ## Pipeline Infrastructure (NOT exceptions)
 

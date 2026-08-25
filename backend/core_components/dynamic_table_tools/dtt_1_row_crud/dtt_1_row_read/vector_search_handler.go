@@ -34,6 +34,11 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
+	rowGroupSlug, err := normalizeRowGroupFilterSlug(request.URL.Query().Get(rowGroupFilterQueryKey))
+	if err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	//------------------------------------------------
 	// 1. Haetaan user_role sessiosta ja valitaan DB
@@ -141,6 +146,28 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		log.Printf("\033[31merror building WHERE clause: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building WHERE clause")
 		return
+	}
+	if rowGroupSlug != "" {
+		tableUIDText, uidErr := getTableUID(table_name, currentDb)
+		tableUID, parseErr := strconv.ParseInt(tableUIDText, 10, 64)
+		if uidErr != nil || parseErr != nil || tableUID <= 0 {
+			log.Printf("\033[31merror resolving row-group dataset identity: uid=%q query_error=%v parse_error=%v\033[0m\n", tableUIDText, uidErr, parseErr)
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error resolving dataset identity")
+			return
+		}
+		where_clause, query_args, err = appendRowGroupFilterToWhereClause(
+			request.URL.Query(),
+			table_name,
+			tableUID,
+			columns_by_name,
+			where_clause,
+			query_args,
+		)
+		if err != nil {
+			log.Printf("\033[31merror building row-group filter: %s\033[0m\n", err.Error())
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building row-group filter")
+			return
+		}
 	}
 	readPolicy, err := getLegacyMustTrueReadPolicy(currentDb, table_name)
 	if err != nil {

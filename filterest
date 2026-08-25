@@ -18,6 +18,8 @@ Everyday commands:
   update [options]              Back up and install a published stable release
   start [arguments]             Start with the installed profile (prebuilt or development)
   status [arguments]            Show application and database compatibility
+  manager-key generate          Create the protected maintenance control key
+  manager-key generate --rotate Replace an existing maintenance control key
   data [arguments]              Maintain datasets through the application API
   language [arguments]          Maintain translations through the application API
   maintenance logs [arguments]  Preview or prune application logs through the API
@@ -189,6 +191,23 @@ case "$command_name" in
     status)
         resolve_environment
         exec python3 "$PROJECT_ROOT/server_tools/agent_tools/dev_status.py" "$@"
+        ;;
+    manager-key)
+        manager_key_action="${1:-}"
+        [[ "$#" -eq 0 ]] || shift
+        case "$manager_key_action" in
+            generate)
+                resolve_environment
+                exec python3 "$PROJECT_ROOT/server_tools/rotate_credentials.py" \
+                    manager-key generate \
+                    --env-file "$EASELECT_RUNTIME_ENV_FILE" \
+                    "$@"
+                ;;
+            *)
+                printf 'error: manager-key requires generate\n' >&2
+                exit 2
+                ;;
+        esac
         ;;
     data)
         resolve_environment

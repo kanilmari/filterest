@@ -1,0 +1,106 @@
+/* admin_update_notice.css
+ * Styles the persistent administrator warning shown before production updates.
+ * Bridges fixed localized notice copy with light/dark application themes.
+ * Exists so the save-work warning remains visible without blocking normal editing.
+ */
+
+.admin-update-notice {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: calc(var(--z-modal, 101000) - 20);
+  width: min(720px, calc(100vw - 24px));
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid hsl(35deg 75% 42%);
+  border-radius: var(--border_radius, 8px);
+  color: var(--text_color);
+  background: color-mix(in srgb, var(--bg_color_extreme) 94%, hsl(35deg 90% 50%));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+}
+
+.admin-update-notice[data-state="draining"] {
+  border-color: hsl(15deg 78% 48%);
+  background: color-mix(in srgb, var(--bg_color_extreme) 90%, hsl(15deg 88% 52%));
+}
+
+.admin-update-notice__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 7px 10px;
+}
+
+.admin-update-notice__marker {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: hsl(0deg 0% 10%);
+  background: hsl(35deg 90% 62%);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-update-notice[data-state="draining"] .admin-update-notice__marker {
+  color: hsl(0deg 0% 100%);
+  background: hsl(15deg 78% 44%);
+}
+
+.admin-update-notice__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-update-notice__countdown {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-update-notice__details-toggle {
+  min-height: 30px;
+  padding: 3px 9px;
+  border: 1px solid var(--border_color);
+  border-radius: var(--border_radius_small, 6px);
+  color: var(--text_color);
+  background: var(--bg_color);
+  cursor: pointer;
+}
+
+.admin-update-notice__details-toggle:focus-visible,
+.admin-update-notice__details-toggle:hover {
+  outline: 2px solid var(--fw-color-primary, currentcolor);
+  outline-offset: 2px;
+}
+
+.admin-update-notice__details {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border_color);
+  background: color-mix(in srgb, var(--bg_color_extreme) 96%, transparent);
+  font-size: 13px;
+}
+
+.admin-update-notice__details p {
+  margin: 3px 0;
+}
+
+.admin-update-notice__details[hidden] {
+  display: none;
+}
+
+@media (width <= 640px) {
+  .admin-update-notice__main {
+    flex-wrap: wrap;
+  }
+
+  .admin-update-notice__title {
+    flex: 1 1 calc(100% - 130px);
+  }
+
+  .admin-update-notice__countdown {
+    margin-left: 0;
+  }
+}

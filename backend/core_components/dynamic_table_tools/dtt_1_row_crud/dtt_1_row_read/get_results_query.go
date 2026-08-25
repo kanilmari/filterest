@@ -56,7 +56,7 @@ func buildWhereClause(
 
 	for param, values := range queryParams {
 		// ohitetaan metaparametrit
-		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "lang" {
+		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "lang" || param == rowGroupFilterQueryKey {
 			continue
 		}
 		if len(values) == 0 {
@@ -449,7 +449,16 @@ func buildConditionForTokens(
 
 // BuildSelectQuery constructs the full SQL query including SELECT, JOIN, WHERE, ORDER BY, LIMIT, and OFFSET.
 // It also executes a count query to get the total number of rows matching the filters.
-func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, error) {
+func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []RowGroupFacet, error) {
+	joinMetadata, err := loadJoinMetadata(ctx.DB, ctx.TableName)
+	if err != nil {
+		return "", nil, 0, nil, fmt.Errorf("error loading dataset identity: %w", err)
+	}
+	tableUID, err := strconv.ParseInt(joinMetadata.tableUID, 10, 64)
+	if err != nil || tableUID <= 0 {
+		return "", nil, 0, nil, fmt.Errorf("invalid registered dataset identity %q", joinMetadata.tableUID)
+	}
+
 	// 1. Build SELECT and JOIN parts
 	selectColumns, joinClauses, columnExpressions, err := buildJoinsWith1MRelations(
 		ctx.DB,
@@ -458,30 +467,42 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, erro
 		ctx.VisibleColUIDs,
 	)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("error building joins: %w", err)
+		return "", nil, 0, nil, fmt.Errorf("error building joins: %w", err)
 	}
+	columnsByName := buildColumnsByName(ctx.ColumnsMap)
 
 	// 2. Build WHERE clause
 	where_clause, query_args, err := buildWhereClause(
 		ctx.QueryParams,
 		ctx.TableName,
-		buildColumnsByName(ctx.ColumnsMap),
+		columnsByName,
 		columnExpressions,
 		ctx.ColumnDataTypes,
 	)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("error building where clause: %w", err)
+		return "", nil, 0, nil, fmt.Errorf("error building where clause: %w", err)
+	}
+	where_clause, query_args, err = appendRowGroupFilterToWhereClause(
+		ctx.QueryParams,
+		ctx.TableName,
+		tableUID,
+		columnsByName,
+		where_clause,
+		query_args,
+	)
+	if err != nil {
+		return "", nil, 0, nil, err
 	}
 
 	// 3. Build ORDER BY clause
 	order_by_clause, err := buildOrderByClause(
 		ctx.QueryParams,
 		ctx.TableName,
-		buildColumnsByName(ctx.ColumnsMap),
+		columnsByName,
 		columnExpressions,
 	)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("error building order by clause: %w", err)
+		return "", nil, 0, nil, fmt.Errorf("error building order by clause: %w", err)
 	}
 
 	// 4. Handle row visibility policy columns.
@@ -501,7 +522,23 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, erro
 	} else {
 		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s %s%s", pq.QuoteIdentifier(ctx.TableName), joinClauses, where_clause)
 		if err := ctx.DB.QueryRow(countQuery, query_args...).Scan(&rowCount); err != nil {
-			return "", nil, 0, fmt.Errorf("error counting rows: %w", err)
+			return "", nil, 0, nil, fmt.Errorf("error counting rows: %w", err)
+		}
+	}
+
+	rowGroupFacets := make([]RowGroupFacet, 0)
+	_, hasIDColumn := columnsByName["id"]
+	if ctx.Offset == 0 && hasIDColumn {
+		rowGroupFacets, err = fetchRowGroupFacets(
+			ctx.DB,
+			ctx.TableName,
+			tableUID,
+			joinClauses,
+			where_clause,
+			query_args,
+		)
+		if err != nil {
+			return "", nil, 0, nil, err
 		}
 	}
 
@@ -517,5 +554,5 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, erro
 		ctx.Offset,
 	)
 
-	return query, query_args, rowCount, nil
+	return query, query_args, rowCount, rowGroupFacets, nil
 }

@@ -44,12 +44,14 @@
 @import url("../core_components/filterbar/filterbar_layout.css");
 @import url("../core_components/filterbar/shared_topbar.css");
 @import url("../core_components/admin_tools/admin_version_info_indicator.css");
+@import url("../core_components/admin_tools/admin_update_notice.css");
 @import url("../core_components/filterbar/text_search/text_search.css");
 @import url("../core_components/filterbar/morphing_filterbar_content.css");
 @import url("../core_components/filterbar/dataset_cover_theme.css");
 @import url("../core_components/admin_tools/dataset_cover_test_palette.css");
 @import url("../core_components/filterbar/filter_list/favefox_style_filters_container/favefox_style_filter_bar.css");
 @import url("../core_components/filterbar/filter_list/active_filter_tags.css");
+@import url("../core_components/filterbar/filter_list/row_group_facets.css");
 
 /* --- Chat --- */
 @import url("../reusable_components/ai_features/table_chat/chat.css");

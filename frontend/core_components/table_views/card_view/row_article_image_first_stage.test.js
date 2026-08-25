@@ -73,7 +73,7 @@ describe("row article image-first stage", () => {
             .getAttribute("aria-label")).toBe("Previous image");
     });
 
-    test("shows the article cue, paints a blurred-image source, and closes only from backdrop", () => {
+    test("shows the article cue and treats raster letterbox space as the backdrop", () => {
         const { element, onBackdropActivate } = createStage([
             { id: 1, filename: "one.jpg", alt: "One" },
         ]);
@@ -87,8 +87,11 @@ describe("row article image-first stage", () => {
         image.click();
         expect(onBackdropActivate).not.toHaveBeenCalled();
 
-        element.click();
+        element.querySelector(".row_article_image_first_media").click();
         expect(onBackdropActivate).toHaveBeenCalledOnce();
+
+        element.click();
+        expect(onBackdropActivate).toHaveBeenCalledTimes(2);
 
         const scrollHint = element.querySelector("[data-testid='row-article-image-scroll-hint']");
         expect(scrollHint.textContent).toContain("Show article");
@@ -100,7 +103,7 @@ describe("row article image-first stage", () => {
     });
 
     test("uses the shared SVG mark-and-label presentation in the full-height viewer", () => {
-        const { element } = createStage(
+        const { element, onBackdropActivate } = createStage(
             [{ id: 1, filename: "firefox.svg", alt: "Firefox logo" }],
             { tableName: "app_service_catalog", rowLabel: "Firefox" },
         );
@@ -111,5 +114,7 @@ describe("row article image-first stage", () => {
             .toBe("Firefox");
         expect(mediaHost?.querySelector("img")?.getAttribute("src"))
             .toBe("/storage/firefox.svg");
+        mediaHost.click();
+        expect(onBackdropActivate).not.toHaveBeenCalled();
     });
 });

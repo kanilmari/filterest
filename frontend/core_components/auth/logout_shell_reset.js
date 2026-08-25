@@ -8,6 +8,7 @@ import { clearPermissionCache } from "../route_permission_checker.js";
 import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { destroy_chat } from "../ai_features/table_chat/table_chat_printer.js";
 import { publishAuthLogout } from "./auth_broadcast.js";
+import { stopAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
 
 // These settings describe the browser/device, not the authenticated user or
 // the datasets they were allowed to inspect. Everything else remains subject
@@ -72,6 +73,7 @@ function teardownRenderedShell() {
 }
 
 export async function clearClientAuthArtifacts() {
+    stopAdminUpdateNoticeSubscriber();
     const logoutSafePreferences = new Map();
     for (const storageKey of LOGOUT_SAFE_LOCAL_STORAGE_KEYS) {
         const storedValue = localStorage.getItem(storageKey);

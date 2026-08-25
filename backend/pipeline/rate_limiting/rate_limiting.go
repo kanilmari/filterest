@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,23 @@ var (
 	functionRequests = make(map[string][]time.Time)
 	functionReqMu    sync.Mutex
 )
+
+const (
+	loginPageFunctionName     = "auth.LoginHandler"
+	loginPageBucketSuffix     = "login-page-navigation"
+	loginPageRateLimitAmount  = 100
+	loginPageRateLimitMinutes = 30
+)
+
+// fixedRequestRateLimit separates harmless login-page navigation from credential attempts.
+// Between the public GET/HEAD login route and the generic function limiter it provides the
+// owner-approved 100 loads per 30 minutes ceiling without weakening POST authentication limits.
+func fixedRequestRateLimit(funcName, method string) (amount, minutes int, ok bool) {
+	if funcName == loginPageFunctionName && (method == http.MethodGet || method == http.MethodHead) {
+		return loginPageRateLimitAmount, loginPageRateLimitMinutes, true
+	}
+	return 0, 0, false
+}
 
 // Periodic cleanup of old request tracking entries
 func cleanupOldRequests() {
@@ -205,16 +223,26 @@ func WithFunctionRateLimiting(db *sql.DB, funcName string, next http.HandlerFunc
 			return
 		}
 
-		// Haetaan välimuistista tai tietokannasta rajoitukset:
-		rateLimitAmount, rateLimitMinutes, err := getCachedRateLimit(db, funcName)
-		if err != nil {
-			// Jos ei riviä (sql.ErrNoRows) tai virhe => ohitetaan rate-limitti
-			if err.Error() != "sql: no rows in result set" {
-				// Lokitetaan mahdollinen virhe
-				log.Printf("\033[31merror: rate limit fetch for function='%s': %v\033[0m\n", funcName, err)
+		// Login-page navigation has its own protocol limit. Other routes retain
+		// their database-backed system_functions configuration.
+		rateLimitAmount, rateLimitMinutes, fixedLimit := fixedRequestRateLimit(funcName, r.Method)
+		requestBucketName := funcName
+		if !fixedLimit {
+			var err error
+			rateLimitAmount, rateLimitMinutes, err = getCachedRateLimit(db, funcName)
+			if err != nil {
+				// Jos ei riviä (sql.ErrNoRows) tai virhe => ohitetaan rate-limitti
+				if err.Error() != "sql: no rows in result set" {
+					// Lokitetaan mahdollinen virhe
+					log.Printf("\033[31merror: rate limit fetch for function='%s': %v\033[0m\n", funcName, err)
+				}
+				next.ServeHTTP(w, r)
+				return
 			}
-			next.ServeHTTP(w, r)
-			return
+		} else {
+			// GET and HEAD share one navigation bucket, but never consume the
+			// credential-submission bucket used by POST.
+			requestBucketName = funcName + "#" + loginPageBucketSuffix
 		}
 
 		// Jos taulussa on nolla-arvoja, ohitetaan rajoitus
@@ -236,7 +264,7 @@ func WithFunctionRateLimiting(db *sql.DB, funcName string, next http.HandlerFunc
 			}
 		}
 
-		key := fmt.Sprintf("%s|%s", funcName, clientIP)
+		key := fmt.Sprintf("%s|%s", requestBucketName, clientIP)
 
 		now := time.Now()
 		limitDuration := time.Duration(rateLimitMinutes) * time.Minute
@@ -270,7 +298,7 @@ func WithFunctionRateLimiting(db *sql.DB, funcName string, next http.HandlerFunc
 			// instead of raw JSON. Follows the maintenance_mode.go pattern.
 			if strings.Contains(r.Header.Get("Accept"), "text/html") {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.Header().Set("Retry-After", "60")
+				w.Header().Set("Retry-After", strconv.Itoa(rateLimitMinutes*60))
 				w.WriteHeader(http.StatusTooManyRequests)
 				w.Write([]byte(rateLimitHTML))
 				return

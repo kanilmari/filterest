@@ -49,9 +49,8 @@ func purgeTestState(funcName string) {
 	rateLimitCacheMu.Unlock()
 
 	functionReqMu.Lock()
-	prefix := funcName + "|"
 	for k := range functionRequests {
-		if strings.HasPrefix(k, prefix) {
+		if strings.HasPrefix(k, funcName+"|") || strings.HasPrefix(k, funcName+"#") {
 			delete(functionRequests, k)
 		}
 	}
@@ -245,6 +244,96 @@ func TestDifferentIPsAreIndependent(t *testing.T) {
 	rrB := invoke(fn, ipB, counter(&calledB)) // B at 2/2
 	if rrB.Code != http.StatusOK {
 		t.Errorf("IP B within limit: got %d, want 200", rrB.Code)
+	}
+}
+
+func TestLoginPageNavigationUsesDedicated100Per30MinuteLimit(t *testing.T) {
+	const ip = "203.0.113.70"
+	const fn = loginPageFunctionName
+	t.Cleanup(func() { purgeTestState(fn) })
+
+	called := 0
+	next := counter(&called)
+	for requestNumber := 1; requestNumber <= loginPageRateLimitAmount; requestNumber++ {
+		recorder := invoke(fn, ip, next)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("login page request %d = %d, want 200", requestNumber, recorder.Code)
+		}
+	}
+
+	overLimitRequest := reqWithIP(ip)
+	overLimitRequest.Header.Set("Accept", "text/html")
+	recorder := httptest.NewRecorder()
+	WithFunctionRateLimiting(nil, fn, next)(recorder, overLimitRequest)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("login page over-limit request = %d, want 429", recorder.Code)
+	}
+	if retryAfter := recorder.Header().Get("Retry-After"); retryAfter != "1800" {
+		t.Fatalf("Retry-After = %q, want 1800", retryAfter)
+	}
+	if called != loginPageRateLimitAmount {
+		t.Fatalf("login page handler calls = %d, want %d", called, loginPageRateLimitAmount)
+	}
+}
+
+func TestLoginPagePostRetainsDatabaseBackedCredentialCeiling(t *testing.T) {
+	const ip = "203.0.113.71"
+	const fn = loginPageFunctionName
+	injectCache(fn, 1, 20)
+	t.Cleanup(func() { purgeTestState(fn) })
+
+	next := counter(new(int))
+	for requestNumber := 1; requestNumber <= loginPageRateLimitAmount; requestNumber++ {
+		if recorder := invoke(fn, ip, next); recorder.Code != http.StatusOK {
+			t.Fatalf("navigation request %d = %d, want 200", requestNumber, recorder.Code)
+		}
+	}
+
+	request := reqWithIP(ip)
+	request.Method = http.MethodPost
+	first := httptest.NewRecorder()
+	WithFunctionRateLimiting(nil, fn, next)(first, request)
+	second := httptest.NewRecorder()
+	WithFunctionRateLimiting(nil, fn, next)(second, request)
+
+	if first.Code != http.StatusOK || second.Code != http.StatusTooManyRequests {
+		t.Fatalf("login POST statuses = %d, %d; want 200, 429", first.Code, second.Code)
+	}
+}
+
+func TestStorageBurstAllowsImageRichPageWithoutWeakeningPerIPIsolation(t *testing.T) {
+	const fn = "router.ServeStorage"
+	const ipA, ipB = "203.0.113.40", "198.51.100.41"
+	const productionLimit = 5000
+	const imageRichPageBurst = 600
+	injectCache(fn, productionLimit, 20)
+	t.Cleanup(func() { purgeTestState(fn) })
+
+	called := 0
+	for requestNumber := 1; requestNumber <= imageRichPageBurst; requestNumber++ {
+		recorder := invoke(fn, ipA, counter(&called))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("image request %d/%d = %d, want 200", requestNumber, imageRichPageBurst, recorder.Code)
+		}
+	}
+	if called != imageRichPageBurst {
+		t.Fatalf("served image requests = %d, want %d", called, imageRichPageBurst)
+	}
+
+	functionReqMu.Lock()
+	key := fn + "|" + ipA
+	remaining := productionLimit - len(functionRequests[key])
+	functionRequests[key] = append(functionRequests[key], make([]time.Time, remaining)...)
+	for index := range functionRequests[key] {
+		functionRequests[key][index] = time.Now()
+	}
+	functionReqMu.Unlock()
+
+	if recorder := invoke(fn, ipA, counter(&called)); recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("client A over-limit image request = %d, want 429", recorder.Code)
+	}
+	if recorder := invoke(fn, ipB, counter(&called)); recorder.Code != http.StatusOK {
+		t.Fatalf("client B image request shared client A bucket: status %d", recorder.Code)
 	}
 }
 

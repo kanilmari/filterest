@@ -1323,22 +1323,53 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
     assert [entry.record for entry in entries[: len(expected_records)]] == expected_records
     tail = entries[len(expected_records) :]
     assert tail
+    expected_databases = {
+        "8.40.8": {"min_version": "9.6.2", "target_version": "9.6.2"},
+        "8.41.0": {"min_version": "9.6.4", "target_version": "9.6.4"},
+    }
+    version_order = {"8.40.8": 0, "8.41.0": 1}
     assert all(
-        entry.record["app_version"] == "8.40.8"
+        entry.record["app_version"] in expected_databases
         and entry.record["artifact_type"] == "runtime"
         and entry.record["channel"] == "stable"
         and entry.record["maturity"] in {"candidate", "published"}
         and entry.record["database"]
-        == {"min_version": "9.6.2", "target_version": "9.6.2"}
+        == expected_databases[entry.record["app_version"]]
         and entry.record["source"]["model"] == "legacy_maintainer_export"
         for entry in tail
     )
-    maturities = [entry.record["maturity"] for entry in tail]
-    assert maturities[-1] == "candidate"
-    assert all(
-        maturity != "published"
-        or index > 0 and maturities[index - 1] == "candidate"
-        for index, maturity in enumerate(maturities)
+    assert [version_order[entry.record["app_version"]] for entry in tail] == sorted(
+        version_order[entry.record["app_version"]] for entry in tail
+    )
+
+    for version in expected_databases:
+        version_maturities = [
+            entry.record["maturity"]
+            for entry in tail
+            if entry.record["app_version"] == version
+        ]
+        assert version_maturities
+        assert version_maturities[0] == "candidate"
+        assert all(
+            maturity != "published"
+            or index > 0 and version_maturities[index - 1] == "candidate"
+            for index, maturity in enumerate(version_maturities)
+        )
+
+    current_version_records = [
+        entry.record for entry in tail if entry.record["app_version"] == "8.41.0"
+    ]
+    assert current_version_records[0]["record_id"] == (
+        "build:filterest-8.41.0-stable-runtime-29cee0e5afed"
+    )
+    assert current_version_records[0]["source"]["commit"] == (
+        "29cee0e5afedc45f34d044785077d23e343173b3"
+    )
+    assert current_version_records[-1]["record_id"] == (
+        "build:filterest-8.41.0-stable-runtime-3af2d425db9f"
+    )
+    assert current_version_records[-1]["source"]["commit"] == (
+        "3af2d425db9f16a72e539972231c5bc296942499"
     )
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 

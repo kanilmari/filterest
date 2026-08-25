@@ -39,6 +39,12 @@ var accessControlNoTxSkips = map[string]bool{
 	"transaction": true,
 }
 
+// adminNoTxSkips retains the full browser/admin security chain while avoiding
+// a transaction around a bounded long-lived stream.
+var adminNoTxSkips = map[string]bool{
+	"transaction": true,
+}
+
 // PublicProfile is for routes that need no authentication at all.
 var PublicProfile = RouteProfile{
 	SkipStages: publicSkips,
@@ -58,6 +64,13 @@ var LoginOnlyProfile = RouteProfile{
 // AccessControlNoTxProfile keeps access_control enabled but avoids long-lived request transactions.
 var AccessControlNoTxProfile = RouteProfile{
 	SkipStages: accessControlNoTxSkips,
+}
+
+// AdminNoTxProfile requires auth, fingerprint, device, route access, and the
+// admin flag, but deliberately omits a request-long database transaction.
+var AdminNoTxProfile = RouteProfile{
+	SkipStages: adminNoTxSkips,
+	AdminOnly:  true,
 }
 
 // AdminProfile requires full access control PLUS admin_access_allowed flag.
@@ -86,6 +99,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.systemReadyHandler":          PublicProfile,
 	"router.systemInstanceStatusHandler": PublicProfile,
 	"router.systemDrainHandler":          PublicProfile,
+	"router.systemUpdateNoticeHandler":   PublicProfile,
 	"router.sitemapHandler":              PublicProfile,
 	"router.rootHandler":                 PublicProfile,
 	"router.handleFrontend":              PublicProfile,
@@ -144,6 +158,7 @@ var RouteProfiles = map[string]RouteProfile{
 	// Tab ordering
 	"system_table_tools.UpdateTabOrderHandler": AdminProfile,
 	"router.adminVersionInfoHandler":           AdminProfile,
+	"router.adminUpdateNoticeStreamHandler":    AdminNoTxProfile,
 	"router.saveOpenAIAPIKeyHandler":           AdminProfile,
 
 	// DEV-only local AI tooling
@@ -447,6 +462,8 @@ func profileName(profile RouteProfile) string {
 		return "admin"
 	case routeProfilesEqual(profile, AccessControlNoTxProfile):
 		return "access_control_no_tx"
+	case routeProfilesEqual(profile, AdminNoTxProfile):
+		return "admin_no_tx"
 	case routeProfilesEqual(profile, DefaultProfile):
 		return "default"
 	default:

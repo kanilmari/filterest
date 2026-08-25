@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # ==============================================================================
 # server_tools/rotate_credentials.py
-# Interactive credential rotation tool for Easelect.
-# Scans the native external key root plus runtime-owned local .env files.
-# Lets the user update passwords/keys without echoing credential material.
-# Run: python3 server_tools/rotate_credentials.py
+# Credential creation and rotation tool for Easelect and Filterest.
+# Bridges protected runtime env files with interactive and focused command paths.
+# Creates or updates secrets without echoing credential material.
+# Run interactively or through `./filterest manager-key generate`.
 # ==============================================================================
 
+import argparse
 import getpass
 import os
 import re
 import secrets
+import stat
 import string
 import sys
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -24,12 +27,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from server_tools.lib.easelect_private_paths import resolve_easelect_private_paths
-from server_tools.public_slice_export.publication_channel_reader import load_publication_channel
 
 
 PRIVATE_PATHS = resolve_easelect_private_paths(ROOT)
-PUBLICATION_CHANNEL = load_publication_channel()
-FILTEREST_TARGET = (ROOT / PUBLICATION_CHANNEL.target_relative).resolve()
+if (ROOT / "VERSION_EASELECT").is_file():
+    from server_tools.public_slice_export.publication_channel_reader import (
+        load_publication_channel,
+    )
+
+    PUBLICATION_CHANNEL = load_publication_channel()
+    FILTEREST_TARGET = (ROOT / PUBLICATION_CHANNEL.target_relative).resolve()
+else:
+    FILTEREST_TARGET = ROOT
 SEED_FILES = [PRIVATE_PATHS.runtime_env_file, PRIVATE_PATHS.development_env_file]
 
 ADDITIONAL_SECRET_SCOPES = [
@@ -61,6 +70,7 @@ AUTO_KEYS = {
     "DB_GUEST_PASSWORD",
     "SESSION_KEY",
     "SESSION_SECRET_KEY",
+    "EASELECT_SYSTEM_MANAGER_TOKEN",
     "MCP_SERVICE_TOKEN",
     "REGFETCH_WORKER_SERVICE_TOKEN",
     "PAYMENT_CALLBACK_SECRET",
@@ -91,6 +101,8 @@ STRICT_PERMISSION_FILENAMES = {
     "environment_type.env",
 }
 STRICT_PERMISSION_MODE = 0o600
+SYSTEM_MANAGER_TOKEN_KEY = "EASELECT_SYSTEM_MANAGER_TOKEN"
+SYSTEM_MANAGER_TOKEN_MINIMUM_LENGTH = 32
 
 # Mapping from env key → PostgreSQL role name for SQL ALTER hints.
 # Role names come from the _USER counterpart variables in .env.
@@ -149,6 +161,126 @@ def read_file(path: Path) -> str:
 def write_file(path: Path, content: str) -> None:
     """Write one credential-bearing environment file."""
     path.write_text(content, encoding="utf-8")
+
+
+class CredentialFileError(ValueError):
+    """Reject an ambiguous or unsafe credential-file update."""
+
+
+def _read_regular_file_without_following_symlinks(path: Path) -> str:
+    """Read one existing regular file without following its final path component."""
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError as error:
+        raise CredentialFileError(
+            f"protected runtime environment file does not exist: {path}; run setup first"
+        ) from error
+    except OSError as error:
+        raise CredentialFileError(
+            f"cannot safely open protected runtime environment file: {path}: {error}"
+        ) from error
+
+    try:
+        file_status = os.fstat(descriptor)
+        if not stat.S_ISREG(file_status.st_mode):
+            raise CredentialFileError(
+                f"protected runtime environment path is not a regular file: {path}"
+            )
+        with os.fdopen(descriptor, "r", encoding="utf-8", newline="") as env_stream:
+            descriptor = -1
+            return env_stream.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _write_owner_only_atomic_file(path: Path, content: str) -> None:
+    """Replace one secret file atomically, then persist its file and directory entries."""
+
+    parent = path.parent
+    temp_descriptor = -1
+    temp_path: Path | None = None
+    try:
+        temp_descriptor, raw_temp_path = tempfile.mkstemp(
+            prefix=f".{path.name}.manager-key-",
+            dir=parent,
+        )
+        temp_path = Path(raw_temp_path)
+        os.fchmod(temp_descriptor, STRICT_PERMISSION_MODE)
+        with os.fdopen(
+            temp_descriptor,
+            "w",
+            encoding="utf-8",
+            newline="",
+        ) as temp_stream:
+            temp_descriptor = -1
+            temp_stream.write(content)
+            temp_stream.flush()
+            os.fsync(temp_stream.fileno())
+        os.replace(temp_path, path)
+        temp_path = None
+        directory_flags = os.O_RDONLY
+        if hasattr(os, "O_DIRECTORY"):
+            directory_flags |= os.O_DIRECTORY
+        directory_descriptor = os.open(parent, directory_flags)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    finally:
+        if temp_descriptor >= 0:
+            os.close(temp_descriptor)
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _system_manager_token_is_usable(value: str) -> bool:
+    """Match the server's minimum length and the generated token's header-safe shape."""
+
+    return (
+        len(value) >= SYSTEM_MANAGER_TOKEN_MINIMUM_LENGTH
+        and re.fullmatch(r"[A-Za-z0-9_-]+", value) is not None
+    )
+
+
+def create_system_manager_token(env_file: Path, *, rotate: bool = False) -> str:
+    """Create or explicitly rotate the runtime's private maintenance control token."""
+
+    env_file = Path(env_file)
+    content = _read_regular_file_without_following_symlinks(env_file)
+    pattern = re.compile(rf"^{re.escape(SYSTEM_MANAGER_TOKEN_KEY)}=(.*)$", re.MULTILINE)
+    matches = list(pattern.finditer(content))
+    if len(matches) > 1:
+        raise CredentialFileError(
+            f"multiple active {SYSTEM_MANAGER_TOKEN_KEY} entries found in {env_file}"
+        )
+
+    current_value = matches[0].group(1).strip() if matches else ""
+    if _system_manager_token_is_usable(current_value) and not rotate:
+        current_mode = stat.S_IMODE(env_file.stat(follow_symlinks=False).st_mode)
+        if current_mode != STRICT_PERMISSION_MODE:
+            _write_owner_only_atomic_file(env_file, content)
+            return "secured"
+        return "unchanged"
+
+    generated_value = generate_session_key()
+    replacement = f"{SYSTEM_MANAGER_TOKEN_KEY}={generated_value}"
+    if matches:
+        updated_content = pattern.sub(lambda _match: replacement, content, count=1)
+        result = "rotated" if current_value else "created"
+    else:
+        line_ending = "\r\n" if "\r\n" in content else "\n"
+        separator = "" if not content or content.endswith(("\n", "\r")) else line_ending
+        updated_content = f"{content}{separator}{replacement}{line_ending}"
+        result = "created"
+
+    _write_owner_only_atomic_file(env_file, updated_content)
+    return result
+
 
 def requires_strict_permissions(path: Path) -> bool:
     """Whether this env-like file should use chmod 600."""
@@ -393,7 +525,45 @@ def build_scope_menu(
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-def main() -> None:
+def run_system_manager_token_command(arguments: list[str]) -> int:
+    """Run the non-interactive maintenance-key command used by `./filterest`."""
+
+    parser = argparse.ArgumentParser(prog="filterest manager-key")
+    parser.add_argument("action", choices=("generate",))
+    parser.add_argument("--env-file", required=True, type=Path, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--rotate",
+        action="store_true",
+        help="replace an existing usable key",
+    )
+    parsed = parser.parse_args(arguments)
+    try:
+        result = create_system_manager_token(parsed.env_file, rotate=parsed.rotate)
+    except CredentialFileError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+    if result == "unchanged":
+        print("Maintenance control key is already configured; nothing changed.")
+    elif result == "secured":
+        print("Maintenance control key was kept and its file permissions were secured.")
+    elif result == "rotated":
+        print("Maintenance control key was replaced in the protected runtime settings.")
+        print("Restart Filterest before using the new key.")
+    else:
+        print("Maintenance control key was created in the protected runtime settings.")
+        print("Restart Filterest before using the new key.")
+    return 0
+
+
+def main(arguments: Optional[list[str]] = None) -> int:
+    arguments = list(sys.argv[1:] if arguments is None else arguments)
+    if arguments:
+        if arguments[0] == "manager-key":
+            return run_system_manager_token_command(arguments[1:])
+        print(f"error: unknown credential command: {arguments[0]}", file=sys.stderr)
+        return 2
+
     print(c("header", """
 ╔══════════════════════════════════════════════════════════════╗
 ║          Easelect Credential Rotation Tool                   ║
@@ -416,7 +586,7 @@ def main() -> None:
         selected = [int(raw) - 1]
     else:
         print(c("err", "Invalid choice. Exiting."))
-        sys.exit(1)
+        return 1
 
     for idx in selected:
         label, files = menu[idx]
@@ -444,6 +614,7 @@ def main() -> None:
 
     ./server_tools/check_edge_tls_readiness.sh --domain example.com
 """)
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

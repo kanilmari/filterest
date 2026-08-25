@@ -8,6 +8,46 @@ import (
 	"testing"
 )
 
+func TestStorageRouteUsesBrowserBurstRateLimit(t *testing.T) {
+	amount, minutes := defaultRateLimitForHandler("router.ServeStorage")
+	if amount != storageRateLimitAmount || minutes != storageRateLimitMinutes {
+		t.Fatalf("storage defaults = %d/%d, want %d/%d", amount, minutes, storageRateLimitAmount, storageRateLimitMinutes)
+	}
+	if amount <= defaultRateLimitAmount {
+		t.Fatalf("storage burst amount = %d, must exceed generic route amount %d", amount, defaultRateLimitAmount)
+	}
+}
+
+func TestStorageRateLimitReconciliationUpgradesOnlyLegacyDefault(t *testing.T) {
+	amount, minutes := reconcileExistingRateLimit(
+		"router.ServeStorage",
+		defaultRateLimitAmount,
+		defaultRateLimitMinutes,
+	)
+	if amount != storageRateLimitAmount || minutes != storageRateLimitMinutes {
+		t.Fatalf("legacy storage limit = %d/%d, want %d/%d", amount, minutes, storageRateLimitAmount, storageRateLimitMinutes)
+	}
+
+	amount, minutes = reconcileExistingRateLimit("router.ServeStorage", 900, 7)
+	if amount != 900 || minutes != 7 {
+		t.Fatalf("custom storage limit changed to %d/%d", amount, minutes)
+	}
+
+	amount, minutes = reconcileExistingRateLimit("router.ServeStorage", 0, 0)
+	if amount != 0 || minutes != 0 {
+		t.Fatalf("disabled storage limit changed to %d/%d", amount, minutes)
+	}
+
+	amount, minutes = reconcileExistingRateLimit(
+		"example.GenericHandler",
+		defaultRateLimitAmount,
+		defaultRateLimitMinutes,
+	)
+	if amount != defaultRateLimitAmount || minutes != defaultRateLimitMinutes {
+		t.Fatalf("generic route limit changed to %d/%d", amount, minutes)
+	}
+}
+
 func TestGetProjectLogoPathReturnsStoragePathWhenLogoExists(t *testing.T) {
 	tempDir := t.TempDir()
 	logoFile := filepath.Join(tempDir, "project_logo.png")

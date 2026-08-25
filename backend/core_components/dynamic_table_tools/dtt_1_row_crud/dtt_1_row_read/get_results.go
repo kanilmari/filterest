@@ -48,6 +48,10 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
+	if _, err := normalizeRowGroupFilterSlug(request.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
+		return
+	}
 	viewKey := normalizeResultsViewKey(request.URL.Query().Get("view_key"))
 
 	// 1. Hae user_id sessiosta
@@ -288,7 +292,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		ClientRowCount:  clientRowCount,
 	}
 
-	query, query_args, rowCount, err := BuildSelectQuery(ctx)
+	query, query_args, rowCount, rowGroupFacets, err := BuildSelectQuery(ctx)
 	if err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building query")
@@ -367,6 +371,11 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		"geom_columns":         geomCols,
 		"geom_sources":         geomSrcs,
 		"dataset_presentation": datasetPresentation,
+	}
+	// Facets describe the complete first-page query universe. Later infinite-scroll
+	// batches omit the field so clients retain the authoritative first-page metadata.
+	if offset_value == 0 {
+		response_data["row_group_facets"] = rowGroupFacets
 	}
 
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")

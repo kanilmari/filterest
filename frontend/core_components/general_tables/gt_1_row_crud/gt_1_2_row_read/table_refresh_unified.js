@@ -158,7 +158,8 @@ export async function refreshTableUnified(tableName, options = {}) {
             renderRowCount,
             result.has_geo,
 			result.table_meta,
-			result.dataset_presentation
+			result.dataset_presentation,
+            hasCachedSearchRenderResult ? null : result.row_group_facets
         );
         if (hasCachedSearchRenderResult) {
             disconnectInfiniteScroll(tableName);

@@ -9,9 +9,7 @@ package router
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -26,18 +24,9 @@ import (
 )
 
 var (
-	systemProcessStartedAt         = time.Now()
-	systemReadinessProbe           = buildSystemReadinessResponse
-	systemActiveRequests           int64
-	systemDesiredStateRuntimeValue atomic.Value
-)
-
-const (
-	systemDesiredStateActive      = "active"
-	systemDesiredStateStandby     = "standby"
-	systemDesiredStateDraining    = "draining"
-	systemDesiredStateInactive    = "inactive"
-	systemDesiredStateMaintenance = "maintenance"
+	systemProcessStartedAt = time.Now()
+	systemReadinessProbe   = buildSystemReadinessResponse
+	systemActiveRequests   int64
 )
 
 type systemHealthResponse struct {
@@ -70,6 +59,9 @@ type systemReadyResponse struct {
 	ActiveRequests          int      `json:"active_requests"`
 	ActiveLongJobs          int      `json:"active_long_jobs"`
 	DrainSupported          bool     `json:"drain_supported"`
+	APIDrainSupported       bool     `json:"api_drain_supported"`
+	AcceptingAPIRequests    bool     `json:"accepting_api_requests"`
+	ActiveAPIRequests       int      `json:"active_api_requests"`
 }
 
 type systemInstanceStatusResponse struct {
@@ -101,22 +93,11 @@ type systemInstanceStatusResponse struct {
 	DatabasePoolHeadroom    backend.DatabasePoolHeadroomStatus  `json:"database_pool_headroom"`
 	DrainSupported          bool                                `json:"drain_supported"`
 	DrainState              string                              `json:"drain_state"`
+	APIDrainSupported       bool                                `json:"api_drain_supported"`
+	AcceptingAPIRequests    bool                                `json:"accepting_api_requests"`
+	ActiveAPIRequests       int                                 `json:"active_api_requests"`
 	ProcessUptimeSeconds    int64                               `json:"process_uptime_seconds"`
 	Time                    string                              `json:"time"`
-}
-
-type systemDrainRequest struct {
-	DesiredState string `json:"desired_state"`
-	Draining     *bool  `json:"draining,omitempty"`
-}
-
-type systemDrainResponse struct {
-	DesiredStateSeenByApp string `json:"desired_state_seen_by_app"`
-	AcceptingNewWork      bool   `json:"accepting_new_work"`
-	ActiveRequests        int    `json:"active_requests"`
-	DrainSupported        bool   `json:"drain_supported"`
-	DrainState            string `json:"drain_state"`
-	Time                  string `json:"time"`
 }
 
 // WithSystemActiveRequestTracking records live application requests for manager
@@ -240,45 +221,12 @@ func systemInstanceStatusHandler(w http.ResponseWriter, r *http.Request) {
 		DatabasePoolHeadroom:    databasePoolHeadroom,
 		DrainSupported:          readiness.DrainSupported,
 		DrainState:              drainState,
+		APIDrainSupported:       true,
+		AcceptingAPIRequests:    systemDesiredStateAcceptsNewWork(currentSystemDesiredState()),
+		ActiveAPIRequests:       currentSystemActiveAPIRequests(),
 		ProcessUptimeSeconds:    int64(now.Sub(systemProcessStartedAt).Seconds()),
 		Time:                    now.Format(time.RFC3339),
 	})
-}
-
-// systemDrainHandler lets a local/private manager toggle app-side drain state.
-func systemDrainHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-	if rejectDisallowedSystemManagerRequest(w, r) {
-		return
-	}
-
-	desiredState := systemDesiredStateDraining
-	if r.Body != nil && r.Body != http.NoBody {
-		decodedRequest := systemDrainRequest{}
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&decodedRequest); err != nil && !errors.Is(err, io.EOF) {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "Invalid drain request")
-			return
-		}
-
-		if strings.TrimSpace(decodedRequest.DesiredState) != "" {
-			desiredState = decodedRequest.DesiredState
-		} else if decodedRequest.Draining != nil && !*decodedRequest.Draining {
-			desiredState = systemDesiredStateActive
-		}
-	}
-
-	normalizedState, ok := normalizeSystemDesiredState(desiredState)
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "Invalid desired_state")
-		return
-	}
-	setSystemDesiredState(normalizedState)
-	httpresponse.RespondWithJSON(w, http.StatusOK, buildSystemDrainResponse(time.Now().UTC()))
 }
 
 func buildSystemReadinessResponse() systemReadyResponse {
@@ -294,6 +242,9 @@ func buildSystemReadinessResponse() systemReadyResponse {
 		ActiveRequests:          currentSystemActiveRequests(),
 		ActiveLongJobs:          0,
 		DrainSupported:          true,
+		APIDrainSupported:       true,
+		AcceptingAPIRequests:    acceptingNewWork,
+		ActiveAPIRequests:       currentSystemActiveAPIRequests(),
 	}
 	if !acceptingNewWork {
 		response.addNotReadyReason(systemNotReadyReasonForDesiredState(desiredState))
@@ -438,89 +389,6 @@ func currentSystemActiveRequests() int {
 		return 0
 	}
 	return int(active)
-}
-
-func currentSystemDesiredState() string {
-	if runtimeState, ok := systemDesiredStateRuntimeValue.Load().(string); ok {
-		if normalizedState, valid := normalizeSystemDesiredState(runtimeState); valid {
-			return normalizedState
-		}
-	}
-	if desiredState := strings.TrimSpace(os.Getenv("EASELECT_DESIRED_STATE")); desiredState != "" {
-		if normalizedState, valid := normalizeSystemDesiredState(desiredState); valid {
-			return normalizedState
-		}
-	}
-	return systemDesiredStateActive
-}
-
-// currentSystemDrainState maps the app desired state into the manager contract.
-func currentSystemDrainState() string {
-	desiredState := currentSystemDesiredState()
-	if desiredState == systemDesiredStateDraining {
-		return systemDesiredStateDraining
-	}
-	return systemDesiredStateActive
-}
-
-// setSystemDesiredState stores the runtime app-side desired state for probes.
-func setSystemDesiredState(desiredState string) {
-	systemDesiredStateRuntimeValue.Store(desiredState)
-}
-
-// normalizeSystemDesiredState keeps manager state strings stable and bounded.
-func normalizeSystemDesiredState(desiredState string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(desiredState)) {
-	case systemDesiredStateActive:
-		return systemDesiredStateActive, true
-	case systemDesiredStateStandby:
-		return systemDesiredStateStandby, true
-	case systemDesiredStateDraining:
-		return systemDesiredStateDraining, true
-	case systemDesiredStateInactive:
-		return systemDesiredStateInactive, true
-	case systemDesiredStateMaintenance:
-		return systemDesiredStateMaintenance, true
-	default:
-		return "", false
-	}
-}
-
-// systemDesiredStateAcceptsNewWork decides whether readiness may stay true.
-func systemDesiredStateAcceptsNewWork(desiredState string) bool {
-	switch desiredState {
-	case systemDesiredStateDraining, systemDesiredStateInactive, systemDesiredStateMaintenance:
-		return false
-	default:
-		return true
-	}
-}
-
-// systemNotReadyReasonForDesiredState converts manager state into probe reasons.
-func systemNotReadyReasonForDesiredState(desiredState string) string {
-	switch desiredState {
-	case systemDesiredStateDraining:
-		return "draining"
-	case systemDesiredStateInactive:
-		return "instance_inactive"
-	case systemDesiredStateMaintenance:
-		return "maintenance"
-	default:
-		return "not_accepting_new_work"
-	}
-}
-
-// buildSystemDrainResponse returns the drain command result snapshot.
-func buildSystemDrainResponse(now time.Time) systemDrainResponse {
-	desiredState := currentSystemDesiredState()
-	return systemDrainResponse{
-		DesiredStateSeenByApp: desiredState,
-		AcceptingNewWork:      systemDesiredStateAcceptsNewWork(desiredState),
-		ActiveRequests:        currentSystemActiveRequests(),
-		DrainSupported:        true,
-		DrainState:            currentSystemDrainState(),
-		Time:                  now.Format(time.RFC3339),
-	}
 }
 
 // rejectDisallowedSystemManagerRequest blocks public access to manager endpoints.

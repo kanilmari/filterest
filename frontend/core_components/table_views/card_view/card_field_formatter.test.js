@@ -25,9 +25,11 @@ vi.mock('../../state_stores/lang_preference_reader.js', () => ({
 
 import {
     cancelEditing,
+    collectCardUpdates,
     createKeyValueElement,
     disableEditing,
     enableEditing,
+    sendCardUpdates,
 } from './card_field_formatter.js';
 
 function displayDateTime(dateText, timeText) {
@@ -488,5 +490,80 @@ describe('card_field_formatter multilingual editing', () => {
 
         expect(disableEditing(container)).toEqual({});
         expect(field.getAttribute('data-raw-value')).toBe('2026-06-14 09:30:45');
+    });
+
+    test('collects card drafts without leaving edit mode or replacing live inputs', () => {
+        const container = buildMultilangContainer();
+        enableEditing(container, 'demo_dataset');
+        const titleInput = container.querySelector('[data-column="title"] input');
+        titleInput.value = 'Luonnos';
+
+        const updates = collectCardUpdates(container);
+
+        expect(JSON.parse(updates.title)).toEqual({ fi: 'Luonnos', en: 'Hello' });
+        expect(container.querySelector('[data-column="title"] input')).toBe(titleInput);
+        expect(titleInput.value).toBe('Luonnos');
+        expect(container.querySelector('.multilang-selector')).not.toBeNull();
+    });
+
+    test('throws a structured partial-failure result instead of swallowing a field error', async () => {
+        endpointRouterMock
+            .mockResolvedValueOnce({ ok: true })
+            .mockRejectedValueOnce(new Error('validation failed'))
+            .mockResolvedValueOnce({ ok: true });
+
+        let caughtError;
+        try {
+            await sendCardUpdates('demo_dataset', 17, {
+                title: 'Saved title',
+                summary: 'Rejected summary',
+                status: 'Saved status',
+            });
+        } catch (error) {
+            caughtError = error;
+        }
+
+        expect(caughtError).toMatchObject({
+            name: 'CardUpdateError',
+            isCardUpdateFailure: true,
+            successfulFields: ['title', 'status'],
+        });
+        expect(caughtError.failedFields).toEqual([
+            expect.objectContaining({ column: 'summary', attempted: true }),
+        ]);
+        expect(endpointRouterMock).toHaveBeenCalledTimes(3);
+    });
+
+    test('stops after a typed 503 and reports untouched fields for safe retry', async () => {
+        const unavailableError = Object.assign(new Error('maintenance'), {
+            status: 503,
+            isServiceUnavailable: true,
+        });
+        endpointRouterMock
+            .mockResolvedValueOnce({ ok: true })
+            .mockRejectedValueOnce(unavailableError);
+
+        let caughtError;
+        try {
+            await sendCardUpdates('demo_dataset', 17, {
+                title: 'Saved title',
+                summary: 'Draft summary',
+                status: 'Draft status',
+            });
+        } catch (error) {
+            caughtError = error;
+        }
+
+        expect(caughtError).toMatchObject({
+            status: 503,
+            isServiceUnavailable: true,
+            isRetryable: true,
+            successfulFields: ['title'],
+        });
+        expect(caughtError.failedFields).toEqual([
+            expect.objectContaining({ column: 'summary', attempted: true }),
+            expect.objectContaining({ column: 'status', attempted: false }),
+        ]);
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
     });
 });

@@ -88,6 +88,10 @@ function createRowNavigationButton({
         ["row_article_row_navigation_icon"],
     );
     const previewSrc = resolveRowNavigationPreview(targetCard);
+    const previewSlot = document.createElement("span");
+    previewSlot.classList.add("row_article_row_navigation_preview_slot");
+    previewSlot.dataset.testid = `row-article-${direction}-preview-slot`;
+    previewSlot.setAttribute("aria-hidden", "true");
     const preview = document.createElement("img");
     preview.classList.add("row_article_row_navigation_preview");
     preview.alt = "";
@@ -97,11 +101,13 @@ function createRowNavigationButton({
         preview.src = previewSrc;
     } else {
         preview.hidden = true;
+        previewSlot.classList.add("row_article_row_navigation_preview_slot--empty");
     }
+    previewSlot.appendChild(preview);
     if (isPrevious) {
-        button.append(icon, preview);
+        button.append(icon, previewSlot);
     } else {
-        button.append(preview, icon);
+        button.append(previewSlot, icon);
     }
     button.title = getTranslationForKey(langKey) || fallback;
     button.setAttribute("aria-label", button.title);

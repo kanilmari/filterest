@@ -9,14 +9,14 @@ remote publication.
 
 `filterest` is approved as the active generation and repository target.
 Owner-policy rows are decided. The repeatable exact-release evidence rows below
-remain `manual-final`: their volatile commit IDs and artifact paths live in the
-non-public stable checklist #868 latest exact-candidate addendum, not in this generated
-file. The local release-readiness gate may proceed only after that addendum and
-the current generated candidate have been compared directly.
+remain `manual-final`: their volatile commit IDs, hashes, and artifact paths live
+in the owner-only local Phase 6 final-readiness manifest, not in this generated
+file or in a ticket. The local release-readiness gate may proceed only after the
+manifest and the current final commit have been compared directly.
 Generated deterministic evidence is summarized in
 [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md). Current runtime and
-Computer Use artifacts must be attached to non-public stable checklist #868
-before the manual-final review passes.
+Computer Use artifacts must be hashed into the local Phase 6 final-readiness
+manifest before the manual-final review passes.
 
 Earlier Filterest runtime and Computer Use artifacts are historical. They must
 not be described as evidence for the current release. Create fresh structured
@@ -35,7 +35,7 @@ and generated artifact commit.
 
 ## Status Legend
 
-- `done`: completed, with evidence linked in this file or in the release ticket.
+- `done`: completed, with evidence linked in this file or its named local Phase 6 proof.
 - `blocked-human`: waiting for a named human/project owner decision.
 - `blocked-evidence`: waiting for a repeatable scan, build, review, or artifact.
 - `deferred-approved`: intentionally deferred with the approving owner named.
@@ -56,14 +56,14 @@ and generated artifact commit.
 | P0 | Public bootstrap content review | done | Release agent + Human/project owner | [`server_tools/public_bootstrap/REVIEW.md`](../../server_tools/public_bootstrap/REVIEW.md) is authoritative for the current schema-table, seed-table, fixture-row, and demo-asset counts; the reviewed public scope includes the complete First Run environment, verification, identity, credential, and four-dataset image-upload flow. |
 | P0 | Private source boundary | done | Release agent | The clean candidate and tracked-tree audit pass; [`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md) records the exact current release-source commit. |
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
-| P0 | Fresh-clone public build/test | manual-final | Release agent | Exact stable proof: the #868 latest exact-candidate addendum must name the current Filterest 8.40.8 candidate HEAD, clean disposable clone, dependency audit, full public QA, and focused security/operations suites. Earlier addenda cannot satisfy this row. |
-| P0 | Browser review uses Filterest runtime | manual-final | Release agent + browser audit | Exact stable proof: the #868 latest exact-candidate addendum must bind the current Filterest 8.40.8 candidate HEAD to its isolated port-8100 runtime, structured verifier report, screenshot, and browser audit. Earlier runtime artifacts cannot satisfy this row. |
-| P0 | Current browser release-readiness acceptance | manual-final | Human release owner | Exact stable proof: the #868 latest exact-candidate addendum must record the current owner direction and final Computer Use verdict for Filterest 8.40.8. Historical acceptance cannot satisfy this row. |
+| P0 | Fresh-clone public build/test | manual-final | Release agent | Exact stable proof: the Phase 6 final-readiness manifest must bind Filterest 8.41.0 final HEAD to the clean disposable-clone, dependency-audit, full public-QA, and focused security/operations evidence hashes. Historical evidence cannot satisfy this row. |
+| P0 | Browser review uses Filterest runtime | manual-final | Release agent + browser audit | Exact stable proof: the Phase 6 final-readiness manifest must bind Filterest 8.41.0 final HEAD to its isolated port-8100 runtime, structured verifier report, screenshot, and browser-audit evidence hashes. Historical runtime artifacts cannot satisfy this row. |
+| P0 | Current browser release-readiness acceptance | manual-final | Human release owner | Exact stable proof: the Phase 6 final-readiness manifest must bind the current owner direction, accepted dependency-notice hash, and final Computer Use PASS to Filterest 8.41.0 final HEAD. Historical acceptance cannot satisfy this row. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 9-file public docs wording audit passes with no pre-release or private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
-| P1 | Public CI and local-preview posture | manual-final | Release agent | Exact stable proof: the #868 latest exact-candidate addendum must bind Filterest 8.40.8 to its current port-8100 preview proof and a fresh account-wide Actions policy audit. Historical preview or policy evidence cannot satisfy this row. |
-| P2 | Local release evidence review | manual-final | Human release owner | Review this checklist, ticket evidence, generated commit, and approved remote state before authorizing a push. |
+| P1 | Public CI and local-preview posture | manual-final | Release agent | Exact stable proof: the Phase 6 final-readiness manifest must bind Filterest 8.41.0 final HEAD to its current port-8100 preview proof and a fresh account-wide Actions policy-audit hash. Historical preview or policy evidence cannot satisfy this row. |
+| P2 | Local release evidence review | manual-final | Human release owner | Review this checklist, the local Phase 6 final-readiness manifest, generated commit, and approved remote state before authorizing a push. |
 | P2 | GitHub repository target | done | Human release owner | Owner selected `kanilmari/filterest` on `main`. Only the approved `origin` and `main` upstream are allowed. |
 | P2 | Remote push | gated-authorized | Release agent under standing owner authorization | Push a reviewed clean commit only to `filterest` after every required local gate and the manual-final evidence review pass. Do not request a second publication confirmation. The approved publish command also pushes the matching `v<VERSION_APP>` tag, which builds checksum-verified Linux admin binaries. |
 
@@ -92,10 +92,10 @@ published-identity commit and refreshes final third-party notice evidence, but
 does not publish and does not replace the final `publish --yes` full gate. A
 successful Fast Patch also writes clone-local final-assembly proof. After the
 final runtime, browser, Actions-policy, Computer Use, and dependency-notice
-review, use `render-final-addendum` to create the canonical one-line #868
-comment and `attest-final` to bind its API readback plus exact evidence hashes
-to final HEAD. Publication fails closed when either marker or any bound byte is
-missing, stale, moved, or changed.
+review, use `attest-final` to bind their exact paths and hashes directly to
+final HEAD in the owner-only local Phase 6 final-readiness manifest. Publication
+fails closed when either marker or any bound byte is missing, stale, moved, or
+changed.
 
 Run the command from the non-public maintainer release source. During iterative local
 testing, use repo-local ignored staging targets rather than overwriting the

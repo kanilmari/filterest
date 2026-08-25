@@ -75,18 +75,19 @@ if [ "$(echo "$COVERAGE < $COVERAGE_FLOOR" | bc -l)" = "1" ]; then
 fi
 echo "  ✅ Coverage check passed."
 
-# 13. Go Workspace Tests
-echo "🧪 Running full Go test suite..."
+# 13. Additional Go Workspace Tests
+# Backend packages already ran above with coverage, so do not run them twice.
+echo "🧪 Running additional Go workspace tests..."
 GO_TEST_PACKAGES=()
 while IFS= read -r package; do
     [[ -n "$package" ]] || continue
     GO_TEST_PACKAGES[${#GO_TEST_PACKAGES[@]}]="$package"
-done < <(go list ./... | grep -Ev '/(dist-public|public-slice|open-source-export)(/|$)')
+done < <(go list ./... | grep -Ev '/(backend|node_modules|dist-public|public-slice|open-source-export)(/|$)')
 if [ "${#GO_TEST_PACKAGES[@]}" -eq 0 ]; then
-    echo "  ❌ No Go packages found for workspace test suite."
-    exit 1
+    echo "  ℹ️  No additional non-backend Go packages found."
+else
+    go test "${GO_TEST_PACKAGES[@]}" -count=1
 fi
-go test "${GO_TEST_PACKAGES[@]}" -count=1
 
 # 14. Vite build (catches broken imports that static checks miss)
 echo "🏗️  Building frontend..."

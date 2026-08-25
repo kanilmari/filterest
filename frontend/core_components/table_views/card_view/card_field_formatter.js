@@ -6,6 +6,7 @@
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
+import { isServiceUnavailableError } from '../../pipeline/api_pipeline_helpers.js';
 import { renderAllowedHtml, containsAllowedHtml } from '../../../reusable_components/dom_container_builder.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
 import { readCachedUserPermissions, canEditServiceCatalogColumn } from '../../service_catalog/service_catalog_moderation.js';
@@ -265,6 +266,27 @@ export function disableEditing(container) {
 }
 
 /**
+ * Collects article-editor changes without changing the visible editing state.
+ * Between live form controls and the sequential card-update request workflow.
+ * Exists so read mode begins only after every requested field save has succeeded.
+ */
+export function collectCardUpdates(container) {
+    const snapshot = container.cloneNode(true);
+    const liveControls = container.querySelectorAll('input, textarea, select');
+    const snapshotControls = snapshot.querySelectorAll('input, textarea, select');
+
+    liveControls.forEach((liveControl, index) => {
+        const snapshotControl = snapshotControls[index];
+        if (!snapshotControl) return;
+        snapshotControl.value = liveControl.value;
+        if ('checked' in liveControl) snapshotControl.checked = liveControl.checked;
+        if ('selectedIndex' in liveControl) snapshotControl.selectedIndex = liveControl.selectedIndex;
+    });
+
+    return disableEditing(snapshot);
+}
+
+/**
  * Peru editointi ilman tallennusta ja palauta kenttien alkuperäinen lukunäkymä.
  */
 export function cancelEditing(container) {
@@ -307,7 +329,12 @@ export function format_column_name(column) {
 export async function sendCardUpdates(table_name, rowId, updatedData) {
     if (IS_DEV_MODE) console.log(`[${table_name}] Lähetetään kortin uudet arvot, rowId=${rowId}`, updatedData);
 
-    for (const [column, value] of Object.entries(updatedData)) {
+    const entries = Object.entries(updatedData);
+    const successfulFields = [];
+    const failedFields = [];
+
+    for (let index = 0; index < entries.length; index += 1) {
+        const [column, value] = entries[index];
         const normalizedValue = isTicketStatusField(table_name, column)
             ? normalizeTicketStatusForDb(value)
             : value;
@@ -318,17 +345,41 @@ export async function sendCardUpdates(table_name, rowId, updatedData) {
         };
 
         try {
-            const result = await endpoint_router('updateRow', {
+            await endpoint_router('updateRow', {
                 method: 'POST',
                 url_params: `?dataset=${table_name}`,
                 body_data: payload,
             });
-            if (IS_DEV_MODE) console.log(`[${table_name}] OK, sarake=${column} päivitetty, vastaus:`, result);
-
+            successfulFields.push(column);
         } catch (err) {
-            console.warn("virhe: " + err.message);
+            failedFields.push({ column, error: err, attempted: true });
+            if (isServiceUnavailableError(err)) {
+                entries.slice(index + 1).forEach(([pendingColumn]) => {
+                    failedFields.push({ column: pendingColumn, error: err, attempted: false });
+                });
+                break;
+            }
         }
     }
+
+    const result = { successfulFields, failedFields };
+    if (failedFields.length === 0) {
+        return result;
+    }
+
+    const error = new Error('One or more article fields could not be saved.');
+    error.name = 'CardUpdateError';
+    error.isCardUpdateFailure = true;
+    error.successfulFields = successfulFields;
+    error.failedFields = failedFields;
+    error.isServiceUnavailable = failedFields.some(({ error: fieldError }) => (
+        isServiceUnavailableError(fieldError)
+    ));
+    if (error.isServiceUnavailable) {
+        error.status = 503;
+        error.isRetryable = true;
+    }
+    throw error;
 }
 
 /**

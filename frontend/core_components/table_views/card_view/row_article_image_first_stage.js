@@ -41,6 +41,22 @@ function rowsMatch(left, right) {
     return String(left.filename || "") === String(right.filename || "");
 }
 
+function isBackdropActivationTarget(target, stage, mediaElement) {
+    if (target === stage) {
+        return true;
+    }
+    if (target !== mediaElement) {
+        return false;
+    }
+
+    // Raster wrappers span the stage so their unused letterbox area can show
+    // the blurred backdrop. A framed SVG/logo wrapper is itself the complete
+    // presentation surface, including its intentional padding and label.
+    return !mediaElement?.matches?.(
+        ".record_svg_image_frame, .service_catalog_logo_frame",
+    );
+}
+
 function buildImageArrow(direction, activate) {
     const isPrevious = direction === "previous";
     const langKey = isPrevious ? "previous_image" : "next_image";
@@ -193,7 +209,8 @@ export function buildRowArticleImageFirstStage({
     });
 
     stage.addEventListener("click", (event) => {
-        if (event.target === stage && typeof onBackdropActivate === "function") {
+        if (isBackdropActivationTarget(event.target, stage, mediaElement)
+            && typeof onBackdropActivate === "function") {
             onBackdropActivate();
         }
     });

@@ -147,6 +147,8 @@ func setupRootHandlerMockDBWithRole(t *testing.T, loginToBrowse bool, instanceRo
 	t.Helper()
 
 	orig := backend.Db
+	origAdmin := backend.DbAdmin
+	origConfidential := backend.DbConfidential
 	name := fmt.Sprintf(
 		"root_handler_%d_%d",
 		time.Now().UnixNano(),
@@ -162,11 +164,15 @@ func setupRootHandlerMockDBWithRole(t *testing.T, loginToBrowse bool, instanceRo
 		t.Fatalf("sql.Open() error = %v", err)
 	}
 	backend.Db = db
+	backend.DbAdmin = nil
+	backend.DbConfidential = db
 	backend.ResetEaselectInstanceRoleCache()
 
 	t.Cleanup(func() {
 		_ = db.Close()
 		backend.Db = orig
+		backend.DbAdmin = origAdmin
+		backend.DbConfidential = origConfidential
 		backend.ResetEaselectInstanceRoleCache()
 	})
 }
@@ -298,11 +304,14 @@ func TestRootHandlerClearsStaleAuthenticatedSessionBeforeRendering(t *testing.T)
 	setupRootHandlerSessionStore(t)
 	setupRootHandlerFrontend(t)
 	withRootAuthenticationGenerationMatch(t, func(
-		context.Context,
-		auth_generation.Querier,
-		*gorillaSessions.Session,
-		int,
+		_ context.Context,
+		database auth_generation.Querier,
+		_ *gorillaSessions.Session,
+		_ int,
 	) (bool, error) {
+		if database != backend.DbConfidential {
+			t.Fatal("root authentication generation check did not use the confidential pool")
+		}
 		return false, nil
 	})
 
@@ -363,6 +372,28 @@ func TestRootHandlerRedirectsAnonymousDatasetWithSessionNoticeWhenLoginRequired(
 	}
 	if got := parsed.Query().Get("redirect"); got != "/service_catalog?view=card" {
 		t.Fatalf("redirect = %q, want dataset return path", got)
+	}
+}
+
+func TestRootHandlerReturns404ForAnonymousFileProbeWhenLoginRequired(t *testing.T) {
+	setupRootHandlerMockDB(t, true)
+	setupRootHandlerSessionStore(t)
+	setupRootHandlerFrontend(t)
+
+	for _, path := range []string{"/wp-content/plugins/file-manager.php", "/favicon.ico"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rr := httptest.NewRecorder()
+
+			rootHandler(rr, req)
+
+			if rr.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
+			}
+			if location := rr.Header().Get("Location"); location != "" {
+				t.Fatalf("unexpected login redirect for file probe: %q", location)
+			}
+		})
 	}
 }
 

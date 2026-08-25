@@ -25,6 +25,24 @@
     backdrop-filter: blur(4px);
 }
 
+/* Image-first deliberately leaves the real application recognizable below
+   its softly blurred media backdrop. Ordinary modal overlays retain the
+   stronger shared opacity above. */
+.modal_overlay_blur.image_first_view_overlay {
+    background: rgb(128 128 128 / 10%);
+    backdrop-filter: blur(6px);
+}
+
+body.light-mode .modal_overlay_blur.image_first_view_overlay {
+    background: rgb(255 255 255 / 8%);
+    backdrop-filter: blur(7px);
+}
+
+body.dark-mode .modal_overlay_blur.image_first_view_overlay {
+    background: rgb(0 0 0 / 12%);
+    backdrop-filter: blur(5px);
+}
+
 /* Modaalin sisältö */
 .modal {
     /* Use auth-card variables for a fancier look, falling back to standard variables */
@@ -318,6 +336,16 @@
         opacity: 0;
         pointer-events: none;
     }
+}
+
+.modal_overlay_blur.image-modal-controls-active .image_modal :is(
+    .row_article_image_first_arrow,
+    .row_article_row_navigation_button
+):disabled {
+    opacity: 0.16;
+    pointer-events: none;
+    cursor: default;
+    filter: saturate(0.35);
 }
 
 .image_modal_wrapper {

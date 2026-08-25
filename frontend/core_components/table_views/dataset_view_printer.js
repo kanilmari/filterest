@@ -16,6 +16,7 @@ import {
 
 import { setResultsCount } from "../../reusable_components/results_count/results_count_printer.js";
 import { renderActiveFilters } from "../filterbar/filter_list/active_filter_tag_printer.js";
+import { renderRowGroupFacets } from "../filterbar/filter_list/row_group_facet_printer.js";
 import { create_tree_view } from "./tree_view/tree_view_printer.js";
 import { TableComponent } from "./table_component_builder.js";
 import { applyViewStyling } from "./view_selector_printer.js";
@@ -323,7 +324,8 @@ export async function generate_table(
     rowCount = null,
     hasGeo = false,
     tableMeta = null,
-    datasetPresentation = null
+    datasetPresentation = null,
+    rowGroupFacets = null
 ) {
     try {
         const tableSpecs = getAllSpecs();
@@ -552,6 +554,7 @@ export async function generate_table(
         // until infinite scroll happened to update it later.
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
+        renderRowGroupFacets(dataset_name, rowGroupFacets);
         seedInfiniteScrollRowCount(dataset_name, rowCount);
         syncFilterBarVisibilityState(dataset_name);
         initializeInfiniteScroll(

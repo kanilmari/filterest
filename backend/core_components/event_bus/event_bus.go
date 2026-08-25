@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+// InternalUpdateNoticeTopic wakes local administrator update-notice streams.
+// It is reserved for server-owned lifecycle state and cannot be requested from
+// the generic dataset SSE endpoint.
+const InternalUpdateNoticeTopic = "__system.production_update_notice"
+
+// IsReservedInternalTopic keeps process-internal wakeups out of the ordinary
+// dataset subscription surface.
+func IsReservedInternalTopic(topic string) bool {
+	return strings.TrimSpace(topic) == InternalUpdateNoticeTopic
+}
+
 // Event carries metadata about one row-level table mutation.
 type Event struct {
 	Table         string    `json:"table"`

@@ -87,11 +87,26 @@ func buildLegacyReadMustTrueCondition(tableName, userRole string, userID int, mu
 // buildReadRowPolicyCondition constructs the SQL fragment for the active read-row policy.
 // It exists so normal reads, counts, and intelligent-result hydration share one policy predicate builder.
 func buildReadRowPolicyCondition(tableName, userRole string, userID int, policy ReadRowPolicy, argStart int) (string, []interface{}) {
+	return buildReadRowPolicyConditionForReference(
+		tableName,
+		tableName,
+		userRole,
+		userID,
+		policy,
+		argStart,
+	)
+}
+
+// buildReadRowPolicyConditionForReference applies a dataset's policy while
+// allowing SQL builders to refer to that dataset through an explicit alias.
+// Intelligent-search candidate queries use aliases, but policy applicability
+// must still be decided from the canonical dataset name (not the alias).
+func buildReadRowPolicyConditionForReference(tableName, tableReference, userRole string, userID int, policy ReadRowPolicy, argStart int) (string, []interface{}) {
 	if policy.Name != rowPolicyAllFlagsTrueUnlessOwner || !shouldApplyReadRowPolicy(tableName, userRole, policy) {
 		return "", nil
 	}
 
-	quotedTable := pq.QuoteIdentifier(tableName)
+	quotedTable := pq.QuoteIdentifier(tableReference)
 	args := make([]interface{}, 0, 1)
 	ownerArgRef := ""
 

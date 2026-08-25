@@ -1,0 +1,77 @@
+/* row_group_facets.css
+ * Styles result-universe row-group filters across every dataset view.
+ * Bridges compact facet controls with the active light or dark application theme.
+ * Exists so group discovery stays centered, readable, and distinct from result cards.
+ */
+
+.row-group-facets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 1450px;
+    margin: 0.25rem auto 0.75rem;
+}
+
+.row-group-facet-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.65rem 0.35rem 0.8rem;
+    border: 1px solid var(--button_active_border_color);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--button_bg_color) 88%, transparent);
+    color: var(--button_text_color);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.row-group-facet-chip:hover,
+.row-group-facet-chip:focus-visible {
+    border-color: var(--primary_color);
+    background: var(--button_hover_bg_color);
+}
+
+.row-group-facet-chip:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary_color) 55%, transparent);
+    outline-offset: 2px;
+}
+
+.row-group-facet-chip:active {
+    transform: scale(var(--button_pressed_scale));
+}
+
+.row-group-facet-chip--active {
+    border-color: var(--primary_color);
+    background: var(--primary_color);
+    color: var(--primary_text_color);
+}
+
+.row-group-facet-chip__label {
+    max-width: min(18rem, 60vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.row-group-facet-chip__count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+    padding-inline: 0.35rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentcolor 12%, transparent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.row-group-facets[aria-busy="true"] .row-group-facet-chip {
+    pointer-events: none;
+    opacity: 0.65;
+}

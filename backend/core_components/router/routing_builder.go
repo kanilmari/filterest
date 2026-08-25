@@ -402,6 +402,13 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		// ei user_id:tä
 		if loginToBrowse && !authShellEntry {
 			if r.URL.Path != "/" {
+				// File-like unknown paths are not SPA destinations. Returning 404 here
+				// prevents internet exploit scans (for example *.php probes) from being
+				// amplified into login-page loads that consume authentication capacity.
+				if !isSpaDeepLinkPath(r.URL.Path) {
+					httpresponse.RespondWithError(w, http.StatusNotFound, "not found")
+					return
+				}
 				redirectProtectedDatasetRequestToLogin(w, r)
 				return
 			}
@@ -626,13 +633,28 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 	for _, rd := range routeDefinitions {
 		handlerName := rd.HandlerName
 		packageName := getPackageNameFromHandler(handlerName)
+		newRateLimitAmount, newRateLimitMinutes := defaultRateLimitForHandler(handlerName)
 
 		var (
 			existingID               int
 			existingSpecificTableRel bool
+			existingRateLimitAmount  int
+			existingRateLimitMinutes int
 		)
-		err := db.QueryRow(`SELECT id, COALESCE(specific_table_related, true) FROM system_functions WHERE name = $1`, handlerName).
-			Scan(&existingID, &existingSpecificTableRel)
+		err := db.QueryRow(`
+			SELECT id,
+			       COALESCE(specific_table_related, true),
+			       COALESCE(rate_limit_amount, $2),
+			       COALESCE(rate_limit_minutes, $3)
+			  FROM system_functions
+			 WHERE name = $1
+		`, handlerName, defaultRateLimitAmount, defaultRateLimitMinutes).
+			Scan(
+				&existingID,
+				&existingSpecificTableRel,
+				&existingRateLimitAmount,
+				&existingRateLimitMinutes,
+			)
 		switch {
 		case err == sql.ErrNoRows:
 			specificTableRelated := defaultSpecificTableRelated(handlerName)
@@ -655,8 +677,8 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 				packageName,
 				specificTableRelated,
 				rd.UrlPattern,
-				defaultRateLimitAmount,
-				defaultRateLimitMinutes,
+				newRateLimitAmount,
+				newRateLimitMinutes,
 				false,
 			).Scan(&existingID)
 			if err != nil {
@@ -665,6 +687,11 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 		case err != nil:
 			log.Printf("error fetching function %s: %v", handlerName, err)
 		default:
+			existingRateLimitAmount, existingRateLimitMinutes = reconcileExistingRateLimit(
+				handlerName,
+				existingRateLimitAmount,
+				existingRateLimitMinutes,
+			)
 			if handlerName == "dtt_crud_workflows.SimpleCreateTableHandler" || handlerName == "dtt_crud_workflows.SimpleQueryTableHandler" {
 				_, err = db.Exec(`
 					UPDATE system_functions
@@ -672,18 +699,22 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 					    "package" = $2,
 					    url_route_endpoint = $3,
 					    ui_only = $4,
-					    specific_table_related = false
+					    specific_table_related = false,
+					    rate_limit_amount = $5,
+					    rate_limit_minutes = $6
 					WHERE id = $1
-				`, existingID, packageName, rd.UrlPattern, false)
+				`, existingID, packageName, rd.UrlPattern, false, existingRateLimitAmount, existingRateLimitMinutes)
 			} else {
 				_, err = db.Exec(`
 					UPDATE system_functions
 					SET disabled = false,
 					    "package" = $2,
 					    url_route_endpoint = $3,
-					    ui_only = $4
+					    ui_only = $4,
+					    rate_limit_amount = $5,
+					    rate_limit_minutes = $6
 					WHERE id = $1
-				`, existingID, packageName, rd.UrlPattern, false)
+				`, existingID, packageName, rd.UrlPattern, false, existingRateLimitAmount, existingRateLimitMinutes)
 			}
 			if err != nil {
 				log.Printf("error updating function %s: %v", handlerName, err)

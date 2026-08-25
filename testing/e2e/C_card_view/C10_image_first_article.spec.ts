@@ -249,6 +249,12 @@ test.describe('C10 — Standalone Image-first View', () => {
       await expect(stage.locator('[data-testid="row-article-image-previous"]')).toBeDisabled();
       await expect(stage.locator('[data-testid="row-article-image-next"]')).toBeDisabled();
       await expect(stage.locator('[data-testid="row-article-image-scroll-hint"]')).toBeVisible();
+      const rowNavigation = page.locator('[data-testid="row-article-row-navigation"]');
+      await expect(rowNavigation.locator('[data-testid="row-article-previous-row"]'))
+        .toBeDisabled();
+      await expect(rowNavigation.locator('[data-testid="row-article-next-row"]'))
+        .toBeDisabled();
+      await expect(rowNavigation.locator('[data-testid$="-preview-slot"]')).toHaveCount(2);
       await expect.poll(
         () => stage.evaluate(
           (stageElement) => Math.abs(
@@ -310,7 +316,8 @@ test.describe('C10 — Standalone Image-first View', () => {
         const stageStyle = window.getComputedStyle(stageElement);
         const backdropStyle = window.getComputedStyle(stageElement, '::before');
         const imageFirstView = stageElement.closest<HTMLElement>('.image_first_view');
-        const rowNavigation = imageFirstView?.querySelector<HTMLElement>(
+        const imageFirstModal = stageElement.closest<HTMLElement>('.image_first_view_modal');
+        const rowNavigation = imageFirstModal?.querySelector<HTMLElement>(
           '[data-testid="row-article-row-navigation"]',
         );
         const rowNavigationButton = rowNavigation?.querySelector<HTMLElement>(
@@ -327,6 +334,12 @@ test.describe('C10 — Standalone Image-first View', () => {
             : '',
           backdropImage: backdropStyle.backgroundImage,
           backdropFilter: backdropStyle.filter,
+          backdropOpacity: Number.parseFloat(backdropStyle.opacity),
+          overlayBackground: imageFirstModal?.closest<HTMLElement>('.modal_overlay')
+            ? window.getComputedStyle(
+              imageFirstModal.closest<HTMLElement>('.modal_overlay')!,
+            ).backgroundColor
+            : '',
           imageHeight: media?.getBoundingClientRect().height || 0,
           imageWidth: media?.getBoundingClientRect().width || 0,
           rowNavigationBackground: rowNavigation
@@ -346,18 +359,25 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(visualContract.animationDuration).toBe('0.5s');
       expect(visualContract.backdropImage).not.toBe('none');
       expect(visualContract.backdropFilter).toContain('blur(');
+      expect(visualContract.backdropOpacity).toBeGreaterThan(0);
+      expect(visualContract.backdropOpacity).toBeLessThan(0.5);
+      expect(visualContract.overlayBackground).not.toBe('rgba(0, 0, 0, 0.8)');
       expect(Math.abs(visualContract.imageHeight - layout.viewportHeight)).toBeLessThanOrEqual(1);
       expect(visualContract.imageWidth).toBeLessThan(visualContract.stageWidth);
       expect(visualContract.rowNavigationBackground).toBe('rgba(0, 0, 0, 0)');
       expect(visualContract.rowNavigationPointerEvents).toBe('none');
-      expect(visualContract.rowNavigationButtonPointerEvents).toBe('auto');
-      expect(visualContract.stageBackground).not.toBe('rgba(0, 0, 0, 0)');
+      expect(visualContract.rowNavigationButtonPointerEvents).toBe('none');
+      expect(visualContract.stageBackground).toBe('rgba(0, 0, 0, 0)');
       const closeButton = page.locator(
         '.image_modal.image_first_view_modal [data-testid="modal-close-button"]',
       );
       await closeButton.hover();
       await page.waitForTimeout(1_500);
       await expect(closeButton).toHaveCSS('opacity', '1');
+      await expect(rowNavigation.locator('[data-testid="row-article-previous-row"]'))
+        .toHaveCSS('opacity', '0.16');
+      await expect(rowNavigation.locator('[data-testid="row-article-next-row"]'))
+        .toHaveCSS('opacity', '0.16');
       const modalScrollSurface = page.locator('.image_modal.image_first_view_modal .modal_body');
       const initialScrollTop = await modalScrollSurface.evaluate((element) => element.scrollTop);
       await stage.hover();
@@ -372,7 +392,33 @@ test.describe('C10 — Standalone Image-first View', () => {
         'Article details proof',
       );
       await modalScrollSurface.evaluate((element) => element.scrollTo({ top: 0 }));
-      await stage.click({ position: { x: 6, y: 6 } });
+      const clickPoints = await stage.evaluate((stageElement) => {
+        const visibleImage = stageElement.querySelector<HTMLElement>(
+          '[data-testid="row-article-image-first-media"]',
+        );
+        if (!visibleImage) {
+          throw new Error('Image-first stage is missing its visible image.');
+        }
+        const stageRect = stageElement.getBoundingClientRect();
+        const imageRect = visibleImage.getBoundingClientRect();
+        const leftGap = imageRect.left - stageRect.left;
+        if (leftGap < 4) {
+          throw new Error('Image-first proof image did not leave a clickable side backdrop.');
+        }
+        return {
+          foreground: {
+            x: imageRect.left + (imageRect.width / 2),
+            y: imageRect.top + (imageRect.height / 2),
+          },
+          backdrop: {
+            x: stageRect.left + (leftGap / 2),
+            y: stageRect.top + (stageRect.height / 2),
+          },
+        };
+      });
+      await page.mouse.click(clickPoints.foreground.x, clickPoints.foreground.y);
+      await expect(imageFirstView).toBeVisible();
+      await page.mouse.click(clickPoints.backdrop.x, clickPoints.backdrop.y);
       await expect(imageFirstView).toBeHidden();
     } finally {
       if (!page.isClosed()) {

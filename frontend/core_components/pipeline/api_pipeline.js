@@ -16,6 +16,7 @@ import {
     isCsrfFailureResponse,
     createAuthError,
     createRateLimitError,
+    createServiceUnavailableError,
     stripAnsiCodes,
     truncateErrorText,
     shouldThrottleRateLimitToast,
@@ -457,6 +458,32 @@ async function rateLimitHandlerStage(ctx) {
 }
 
 /**
+ * serviceUnavailableHandlerStage — converts maintenance/drain responses into one
+ * typed retryable error and a bounded, non-technical warning for the user.
+ */
+let _serviceUnavailableLastToastTime = 0;
+const _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS = 5000;
+
+async function serviceUnavailableHandlerStage(ctx) {
+    if (ctx.response.status !== 503) return;
+
+    const now = Date.now();
+    if (shouldThrottleRateLimitToast(
+        _serviceUnavailableLastToastTime,
+        _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS,
+        now
+    )) {
+        _serviceUnavailableLastToastTime = now;
+        const isFinnish = document.documentElement.lang?.toLowerCase().startsWith('fi');
+        showWarningToast(isFinnish
+            ? 'Palvelu on hetkellisesti huoltotilassa. Yritä pian uudelleen.'
+            : 'The service is temporarily under maintenance. Please retry shortly.', 7000);
+    }
+
+    throw createServiceUnavailableError(ctx.routeName);
+}
+
+/**
  * errorHandlerStage — throws for all non-ok responses not handled by prior stages.
  * Shows an error toast automatically so callers don't need to handle display.
  * Strips ANSI color codes from error messages for browser console readability.
@@ -503,6 +530,7 @@ const apiRequestStages = [
     createStage('csrfRecovery',        csrfRecoveryStage,        true),
     createStage('authRedirect',        authRedirectStage,        true),
     createStage('rateLimitHandler',    rateLimitHandlerStage,    false),
+    createStage('serviceUnavailable',  serviceUnavailableHandlerStage, true),
     createStage('errorHandler',        errorHandlerStage,        true),
     createStage('responseParse',       responseParseStage,       true),
 ];

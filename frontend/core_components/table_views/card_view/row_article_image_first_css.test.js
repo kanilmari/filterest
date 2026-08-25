@@ -33,7 +33,14 @@ describe("image-first article CSS contract", () => {
         expect(galleryCss).toMatch(/\.image_first_view\s*\{[^}]*animation:\s*image-first-view-grow-reveal[^;]*var\(--transition-time/s);
         expect(galleryCss).toMatch(/@keyframes image-first-view-grow-reveal\s*\{[\s\S]*opacity:\s*0\.12;[\s\S]*clip-path:\s*inset\([\s\S]*50dvh[\s\S]*opacity:\s*1;[\s\S]*clip-path:\s*inset\(0\)/s);
         expect(galleryCss).toMatch(/\.row_article_image_first_stage::before\s*\{[^}]*filter:\s*blur\(/s);
-        expect(galleryCss).toMatch(/\.row_article_image_first_stage::before\s*\{[^}]*filter:\s*blur\(42px\)[^}]*opacity:\s*0\.5;/s);
+        expect(galleryCss).toMatch(/\.row_article_image_first_stage::before\s*\{[^}]*filter:\s*blur\(var\(--image-first-backdrop-blur\)\)[^}]*opacity:\s*var\(--image-first-backdrop-opacity\);/s);
+        expect(galleryCss).toMatch(/body\.light-mode \.image_first_view_modal\s*\{[^}]*--image-first-backdrop-opacity:\s*0\.[0-4]\d*;/s);
+        expect(galleryCss).toMatch(/body\.dark-mode \.image_first_view_modal\s*\{[^}]*--image-first-backdrop-opacity:\s*0\.[0-4]\d*;/s);
+        expect(galleryCss).toMatch(/\.row_article_image_first_stage\s*\{[^}]*background:\s*transparent;/s);
+        expect(galleryCss).toMatch(/\.image_first_view\s*\{[^}]*background:\s*transparent;/s);
+        expect(modalCss).toMatch(/\.modal_overlay_blur\.image_first_view_overlay\s*\{[^}]*background:\s*rgb\([^)]*\/\s*10%\);[^}]*backdrop-filter:\s*blur\(/s);
+        expect(modalCss).toMatch(/body\.light-mode \.modal_overlay_blur\.image_first_view_overlay\s*\{/s);
+        expect(modalCss).toMatch(/body\.dark-mode \.modal_overlay_blur\.image_first_view_overlay\s*\{/s);
         expect(galleryCss).toMatch(/\.row_article_image_first_media\s*\{[^}]*z-index:\s*1;/s);
         expect(galleryCss).toMatch(/\.row_article_image_first_scroll_hint\s*\{/s);
         expect(galleryCss).toMatch(/\.row_article_image_first_arrow\s*\{[^}]*top:\s*50%;/s);
@@ -58,10 +65,12 @@ describe("image-first article CSS contract", () => {
         expect(galleryCss).toMatch(/\.image_modal_top_controls > \.row_article_row_navigation\s*\{[^}]*display:\s*flex;[^}]*background:\s*transparent;[^}]*pointer-events:\s*none;/s);
         expect(galleryCss).not.toMatch(/\.image_first_view > \.row_article_row_navigation/);
         expect(galleryCss).toMatch(/\.row_article_image_first_arrow\s*\{[^}]*position:\s*absolute;[^}]*top:\s*50%;/s);
+        expect(galleryCss).toMatch(/\.row_article_row_navigation_preview_slot\s*\{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*display:\s*grid;/s);
         expect(galleryCss).toMatch(/\.row_article_row_navigation_preview\s*\{[^}]*object-fit:\s*contain;/s);
         expect(modalCss).toMatch(/\.image_modal :is\([^)]*\.row_article_image_first_scroll_hint[^)]*\)\s*\{[^}]*opacity:\s*0;/s);
         expect(modalCss).toMatch(/\.image-modal-content-scrolled[\s\S]*\.row_article_image_first_scroll_hint\s*\{[^}]*opacity:\s*0;/s);
         expect(modalCss).toMatch(/@media \(hover:\s*none\), \(pointer:\s*coarse\)[\s\S]*\.row_article_row_navigation_button[\s\S]*opacity:\s*1;[\s\S]*pointer-events:\s*auto;/s);
+        expect(modalCss).toMatch(/\.image-modal-controls-active[\s\S]*\.row_article_row_navigation_button[\s\S]*:disabled\s*\{[^}]*opacity:\s*0\.[0-2]\d*;[^}]*pointer-events:\s*none;/s);
         expect(galleryCss).toMatch(/\.image_first_view_article_content > \.big_card_header\s*\{[^}]*max-width:\s*1200px !important;/s);
         const bigCardCss = fs.readFileSync(
             path.join(directory, "cards_big.css"),

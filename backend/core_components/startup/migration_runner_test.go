@@ -53,3 +53,29 @@ func TestMainFailsClosedOnConfidentialRolePermissionsBeforeTraffic(t *testing.T)
 		t.Fatalf("confidential-role permission failure must terminate startup before traffic")
 	}
 }
+
+func TestMainFailsClosedOnRowGroupRuntimePermissionsBeforeTraffic(t *testing.T) {
+	mainPath := filepath.Join("..", "..", "..", "main.go")
+	mainSource, err := os.ReadFile(mainPath)
+	if err != nil {
+		t.Fatalf("read main startup source: %v", err)
+	}
+
+	source := string(mainSource)
+	migrationIndex := strings.Index(source, "startup.RunEnabledMigrations")
+	confidentialIndex := strings.Index(source, "backend.EnsureConfidentialRolePermissions")
+	rowGroupIndex := strings.Index(source, "backend.EnsureRowGroupRuntimeRolePermissions")
+	reconcileIndex := strings.Index(source, "startup.ReconcileReservedTestUsers")
+	trafficIndex := strings.Index(source, "StartApps(port, envType)")
+	if migrationIndex < 0 || confidentialIndex < 0 || rowGroupIndex < 0 || reconcileIndex < 0 || trafficIndex < 0 {
+		t.Fatalf("startup source is missing a required row-group readiness stage")
+	}
+	if !(migrationIndex < confidentialIndex && confidentialIndex < rowGroupIndex && rowGroupIndex < reconcileIndex && reconcileIndex < trafficIndex) {
+		t.Fatalf("row-group permissions must reconcile after migrations and before authentication consumers or traffic")
+	}
+
+	rowGroupBlock := source[rowGroupIndex:reconcileIndex]
+	if !strings.Contains(rowGroupBlock, `log.Fatalf("[ROW GROUP PERMISSIONS] startup reconcile failed: %v", err)`) {
+		t.Fatalf("row-group permission failure must terminate startup before traffic")
+	}
+}

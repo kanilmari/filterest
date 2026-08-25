@@ -84,9 +84,11 @@ func setupStorageHandlerTest(t *testing.T) *sql.DB {
 
 	testDB := openRouterAliasTestDB(t)
 	savedDB, savedAdmin := backend.Db, backend.DbAdmin
+	savedConfidential := backend.DbConfidential
 	savedBasic, savedGuest := backend.DbBasic, backend.DbGuest
 	backend.Db = testDB
-	backend.DbAdmin = testDB
+	backend.DbAdmin = nil
+	backend.DbConfidential = testDB
 	backend.DbBasic = testDB
 	backend.DbGuest = testDB
 
@@ -96,7 +98,10 @@ func setupStorageHandlerTest(t *testing.T) *sql.DB {
 	savedDatasetMediaAuthorizer := storageAuthorizeDatasetMediaRead
 	savedLoginCheck := storageCheckLoginToBrowse
 	savedGenerationCheck := storageAuthenticationGenerationMatches
-	storageAuthenticationGenerationMatches = func(context.Context, auth_generation.Querier, *sessions.Session, int) (bool, error) {
+	storageAuthenticationGenerationMatches = func(_ context.Context, database auth_generation.Querier, _ *sessions.Session, _ int) (bool, error) {
+		if database != backend.DbConfidential {
+			t.Fatal("storage authentication generation check did not use the confidential pool")
+		}
 		return true, nil
 	}
 	t.Cleanup(func() {
@@ -106,6 +111,7 @@ func setupStorageHandlerTest(t *testing.T) *sql.DB {
 		storageAuthenticationGenerationMatches = savedGenerationCheck
 		localStorageDir = savedStorageDir
 		backend.Db, backend.DbAdmin = savedDB, savedAdmin
+		backend.DbConfidential = savedConfidential
 		backend.DbBasic, backend.DbGuest = savedBasic, savedGuest
 		_ = testDB.Close()
 	})

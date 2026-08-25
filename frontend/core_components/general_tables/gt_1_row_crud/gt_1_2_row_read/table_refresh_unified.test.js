@@ -132,6 +132,9 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             types: {},
             row_count: 1,
             has_geo: false,
+            row_group_facets: [
+                { id: 4, slug: "security", title: { en: "Security" }, row_count: 1 },
+            ],
         });
         generateTableMock.mockResolvedValue(document.createElement("div"));
 
@@ -153,6 +156,17 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         ]);
         expect(updateOffsetMock).toHaveBeenCalledWith("dev_agent_tasks", 1);
         expect(generateTableMock).toHaveBeenCalledTimes(1);
+        expect(generateTableMock).toHaveBeenCalledWith(
+            "dev_agent_tasks",
+            expect.any(Array),
+            expect.any(Array),
+            expect.any(Object),
+            1,
+            false,
+            undefined,
+            undefined,
+            [{ id: 4, slug: "security", title: { en: "Security" }, row_count: 1 }]
+        );
         expect(applyColumnVisibilityMock).toHaveBeenCalledWith("dev_agent_tasks");
         expect(updateOffsetMock.mock.invocationCallOrder[0]).toBeLessThan(
             generateTableMock.mock.invocationCallOrder[0]
@@ -199,6 +213,9 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             types: { id: "integer", title: "text" },
             row_count: 42,
             has_geo: false,
+            row_group_facets: [
+                { id: 4, slug: "security", title: { en: "Security" }, row_count: 17 },
+            ],
             table_meta: { card_style_variant: "standard" },
 			dataset_presentation: {
 				background_image_path: "/storage/104/dataset_media/background/original/background.webp",
@@ -220,7 +237,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 			{ card_style_variant: "standard" },
 			{
 				background_image_path: "/storage/104/dataset_media/background/original/background.webp",
-			}
+			},
+            null
         );
         expect(updateOffsetMock).not.toHaveBeenCalled();
         expect(disconnectInfiniteScrollMock).toHaveBeenCalledTimes(2);
@@ -242,6 +260,9 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             types: { id: "integer", title: "text" },
             row_count: 42,
             has_geo: false,
+            row_group_facets: [
+                { id: 4, slug: "security", title: { en: "Security" }, row_count: 17 },
+            ],
         });
         generateTableMock.mockResolvedValue(document.createElement("div"));
 
@@ -257,7 +278,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             0,
             false,
 			undefined,
-			undefined
+			undefined,
+            null
         );
         expect(updateOffsetMock).not.toHaveBeenCalled();
     });

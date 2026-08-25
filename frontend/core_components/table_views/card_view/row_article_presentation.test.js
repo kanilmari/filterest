@@ -92,10 +92,57 @@ describe("row article presentation", () => {
         expect(previousButton.firstElementChild.classList)
             .toContain("row_article_row_navigation_icon");
         expect(nextButton.firstElementChild.classList)
-            .toContain("row_article_row_navigation_preview");
+            .toContain("row_article_row_navigation_preview_slot");
         previousButton.click();
         nextButton.click();
 
         expect(onNavigate.mock.calls.map(([row]) => row.id)).toEqual([1, 3]);
+    });
+
+    test("keeps image preview slots stable at result boundaries", () => {
+        const container = document.createElement("div");
+        [1, 2].forEach((id) => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.dataset.id = String(id);
+            card._row = { id };
+            if (id === 2) {
+                const media = document.createElement("div");
+                media.className = "card_image";
+                const image = document.createElement("img");
+                image.src = `/storage/row-${id}.png`;
+                media.appendChild(image);
+                card.appendChild(media);
+            }
+            container.appendChild(card);
+        });
+
+        const navigation = buildRowArticleRowNavigation({
+            cardContainer: container,
+            currentRowId: 1,
+            onNavigate: vi.fn(),
+        });
+        const previousButton = navigation.querySelector(
+            "[data-testid='row-article-previous-row']",
+        );
+        const nextButton = navigation.querySelector(
+            "[data-testid='row-article-next-row']",
+        );
+        const previousSlot = previousButton.querySelector(
+            "[data-testid='row-article-previous-preview-slot']",
+        );
+        const nextSlot = nextButton.querySelector(
+            "[data-testid='row-article-next-preview-slot']",
+        );
+
+        expect(previousButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(false);
+        expect(previousSlot).not.toBeNull();
+        expect(nextSlot).not.toBeNull();
+        expect(previousSlot.classList).toContain(
+            "row_article_row_navigation_preview_slot--empty",
+        );
+        expect(previousSlot.querySelector("img").hidden).toBe(true);
+        expect(nextSlot.querySelector("img").src).toContain("/storage/row-2.png");
     });
 });

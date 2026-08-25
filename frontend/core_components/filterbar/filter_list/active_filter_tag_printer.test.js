@@ -14,6 +14,18 @@ const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
 const appendDataToViewMock = vi.fn();
 const setResultsCountMock = vi.fn();
+const doIntelligentSearchMock = vi.fn();
+const rerenderCachedSearchResultsMock = vi.fn();
+const ongoingSearchResultsMock = {};
+const groupFiltersMock = vi.fn(() => ({
+    status: {
+        baseKey: "status",
+        keys: ["status"],
+        value: "done",
+        exclude: false,
+        type: "single",
+    },
+}));
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
     getUnifiedTableState: getUnifiedTableStateMock,
@@ -36,9 +48,10 @@ vi.mock("../../../reusable_components/results_count/results_count_printer.js", (
 }));
 
 vi.mock("../text_search/create_text_search_panel.js", () => ({
-    ongoingSearchResults: {},
+    ongoingSearchResults: ongoingSearchResultsMock,
     getDatasetSearchInputs: () => [],
-    rerenderCachedSearchResults: vi.fn(),
+    do_intelligent_search: doIntelligentSearchMock,
+    rerenderCachedSearchResults: rerenderCachedSearchResultsMock,
 }));
 
 vi.mock("./row_filter_checker.js", () => ({
@@ -46,15 +59,7 @@ vi.mock("./row_filter_checker.js", () => ({
 }));
 
 vi.mock("./active_filter_tag_printer_helpers.js", () => ({
-    groupFilters: vi.fn(() => ({
-        status: {
-            baseKey: "status",
-            keys: ["status"],
-            value: "done",
-            exclude: false,
-            type: "single",
-        },
-    })),
+    groupFilters: groupFiltersMock,
     buildFilterLabel: vi.fn((baseKey) => baseKey),
     buildDisplayValue: vi.fn(() => "done"),
     buildDedupeKey: vi.fn((label, value) => `${label}::${value}`),
@@ -66,6 +71,16 @@ describe("renderActiveFilters", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
         vi.clearAllMocks();
+        Object.keys(ongoingSearchResultsMock).forEach((key) => delete ongoingSearchResultsMock[key]);
+        groupFiltersMock.mockImplementation(() => ({
+            status: {
+                baseKey: "status",
+                keys: ["status"],
+                value: "done",
+                exclude: false,
+                type: "single",
+            },
+        }));
 
         getParamsMock.mockReturnValue({ search: "urgent" });
         getUnifiedTableStateMock.mockReturnValue({
@@ -116,5 +131,35 @@ describe("renderActiveFilters", () => {
         expect(sidebarFiltersHost.style.display).not.toBe("none");
         expect(topControls.querySelector(".active_filters")).toBeNull();
         expect(topControls.querySelector(".active_filters_results_count")).toBeNull();
+    });
+
+    test("reruns backend search when the row-group tag is removed", async () => {
+        document.body.innerHTML = `
+            <div id="tasks_card_top_controls"></div>
+            <div id="tasks_results_count"></div>
+        `;
+        getParamsMock.mockReturnValue({ search: "urgent", row_group: "security" });
+        getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: "security" } });
+        groupFiltersMock.mockReturnValue({
+            row_group: {
+                baseKey: "row_group",
+                keys: ["row_group"],
+                value: "security",
+                exclude: false,
+                type: "single",
+            },
+        });
+        ongoingSearchResultsMock.tasks = { filters: { row_group: "security" } };
+
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+        renderActiveFilters("tasks");
+        const filterItems = document.querySelectorAll(".active-filter-item");
+        filterItems[filterItems.length - 1].querySelector(".remove-active-filter").click();
+
+        await vi.waitFor(() => {
+            expect(doIntelligentSearchMock).toHaveBeenCalledWith("tasks", "urgent");
+        });
+        expect(rerenderCachedSearchResultsMock).not.toHaveBeenCalled();
+        expect(setUnifiedTableStateMock).toHaveBeenCalledWith("tasks", { filters: {} });
     });
 });

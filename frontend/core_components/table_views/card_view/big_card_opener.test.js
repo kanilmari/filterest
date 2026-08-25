@@ -26,6 +26,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
 
 vi.mock("./card_field_formatter.js", () => ({
     cancelEditing: vi.fn(),
+    collectCardUpdates: vi.fn(() => ({})),
     disableEditing: vi.fn(() => ({})),
     enableEditing: vi.fn(),
     parseRoleString: vi.fn(() => ({ baseRoles: [] })),
@@ -140,7 +141,13 @@ vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
 }));
 
 import { openRowArticleView } from "./big_card_opener.js";
-import { parseRoleString } from "./card_field_formatter.js";
+import {
+    collectCardUpdates,
+    disableEditing,
+    parseRoleString,
+    sendCardUpdates,
+} from "./card_field_formatter.js";
+import { hasDatasetPermission } from "../../route_permission_checker.js";
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
 import { buildRowArticleImageGallery } from "./row_article_image_gallery.js";
 import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js";
@@ -175,6 +182,13 @@ describe("openRowArticleView", () => {
         vi.mocked(buildRowArticleRelatedTabs).mockReset();
         vi.mocked(buildRowArticleImageGallery).mockReset();
         vi.mocked(parseRoleString).mockReset();
+        vi.mocked(collectCardUpdates).mockReset();
+        vi.mocked(disableEditing).mockReset();
+        vi.mocked(sendCardUpdates).mockReset();
+        vi.mocked(collectCardUpdates).mockReturnValue({});
+        vi.mocked(disableEditing).mockReturnValue({});
+        vi.mocked(sendCardUpdates).mockResolvedValue({ successfulFields: [], failedFields: [] });
+        vi.mocked(hasDatasetPermission).mockResolvedValue(false);
         vi.mocked(buildRowArticleAttachmentList).mockReset();
         vi.mocked(resolveRowArticleAttachmentListChild).mockReset();
         vi.mocked(resolveRowArticleDynamicAssetChildren).mockReset();
@@ -216,7 +230,7 @@ describe("openRowArticleView", () => {
         expect(closeRowArticleMock).not.toHaveBeenCalled();
     });
 
-    test("uses a selected card wrapper from the normal card shell", async () => {
+    test("uses the selected card wrapper and preserves editing after a failed save", async () => {
         document.body.innerHTML = `
             <div id="events_card_view_container">
                 <div class="card_view_wrapper">
@@ -227,6 +241,14 @@ describe("openRowArticleView", () => {
                 </div>
             </div>
         `;
+        vi.mocked(hasDatasetPermission).mockImplementation((route) => (
+            Promise.resolve(route === "/api/update-row")
+        ));
+        vi.mocked(collectCardUpdates).mockReturnValue({ title: "Unsaved draft" });
+        vi.mocked(sendCardUpdates).mockRejectedValue(Object.assign(
+            new Error("One or more article fields could not be saved."),
+            { status: 503, isServiceUnavailable: true },
+        ));
         const selectedCard = document.querySelector(".card[data-id='42']");
 
         await openRowArticleView(
@@ -241,6 +263,19 @@ describe("openRowArticleView", () => {
         expect(article).not.toBeNull();
         expect(document.querySelector(".card_container .small-card")).toBe(selectedCard);
         expect(dispatchCardArticleToggleMock).toHaveBeenCalledWith("events", true);
+
+        const editButton = document.querySelector('[data-testid="big-card-edit-button"]');
+        const cancelButton = document.querySelector('[data-testid="big-card-cancel-button"]');
+        editButton.click();
+        expect(editButton.dataset.langKey).toBe("save");
+
+        editButton.click();
+        await vi.waitFor(() => expect(sendCardUpdates).toHaveBeenCalledTimes(1));
+
+        expect(disableEditing).not.toHaveBeenCalled();
+        expect(editButton.dataset.langKey).toBe("save");
+        expect(editButton.disabled).toBe(false);
+        expect(cancelButton.hidden).toBe(false);
 
         article?.querySelector(".big_card_close")?.click();
 

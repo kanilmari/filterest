@@ -65,6 +65,10 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET accepted")
 		return
 	}
+	if _, err := normalizeRowGroupFilterSlug(r.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// 🔄 UUSI: jos stream‑parametri, käytä virtaavaa vastausta
 	if r.URL.Query().Get("stream") == "1" {
@@ -113,8 +117,18 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return fmt.Errorf("pilot read transaction init: %w", err)
 	}
+	authorization, err := resolveIntelligentSearchAuthorization(
+		currentDb,
+		tableName,
+		userRole,
+		userID,
+		r.URL.Query().Get(rowGroupFilterQueryKey),
+	)
+	if err != nil {
+		return err
+	}
 
-	textHits, err := fetchFullTextRows(readQuerier, tableName, userQuery)
+	textHits, err := fetchFullTextRows(readQuerier, tableName, userQuery, authorization)
 	if err != nil {
 		return fmt.Errorf("full‑text search failed: %w", err)
 	}
@@ -125,12 +139,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 		textHitIDs[h.RowID] = true
 	}
 	order = prioritizeNumericIDResultFirst(order, numericID, hasNumericID)
-	readPolicy, err := getLegacyMustTrueReadPolicy(currentDb, tableName)
-	if err != nil {
-		return fmt.Errorf("row policy metadata fetch: %w", err)
-	}
-
-	textRows, textCols, err := fetchRowsInOrder(readQuerier, tableName, order, userRole, userID, readPolicy)
+	textRows, textCols, err := fetchRowsInOrder(readQuerier, tableName, order, authorization)
 	if err != nil {
 		return fmt.Errorf("fetchRowsInOrder(text): %w", err)
 	}
@@ -176,7 +185,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 		if vErr != nil {
 			fmt.Printf("\033[31membedding vector error: %s\033[0m\n", vErr.Error())
 		} else {
-			semanticHits, sErr := fetchSimilarRows(readQuerier, tableName, lang, vec)
+			semanticHits, sErr := fetchSimilarRows(readQuerier, tableName, lang, vec, authorization)
 			if sErr != nil {
 				fmt.Printf("\033[31membedding search error: %s\033[0m\n", sErr.Error())
 			} else {
@@ -189,7 +198,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 					}
 				}
 				if len(aiOrder) > 0 {
-					aiRows, aiCols, aErr := fetchRowsInOrder(readQuerier, tableName, aiOrder, userRole, userID, readPolicy)
+					aiRows, aiCols, aErr := fetchRowsInOrder(readQuerier, tableName, aiOrder, authorization)
 					if aErr != nil {
 						fmt.Printf("\033[31mfetchRowsInOrder(ai): %s\033[0m\n", aErr.Error())
 					} else {
@@ -286,6 +295,16 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("pilot read transaction init: %w", err)
 	}
+	authorization, err := resolveIntelligentSearchAuthorization(
+		currentDb,
+		tableName,
+		userRole,
+		userID,
+		r.URL.Query().Get(rowGroupFilterQueryKey),
+	)
+	if err != nil {
+		return err
+	}
 
 	//------------------------------------------------
 	// 2. Tarkista löytyykö embeddings-sarake
@@ -316,7 +335,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	candidates := make(map[int]*candidate)
 
 	/* A) Täysi teksti --------------------------------------------------*/
-	textHits, textErr := fetchFullTextRows(readQuerier, tableName, userQuery)
+	textHits, textErr := fetchFullTextRows(readQuerier, tableName, userQuery, authorization)
 	if textErr != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", textErr.Error())
 	}
@@ -338,7 +357,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		if vErr != nil {
 			fmt.Printf("\033[31merror: %s\033[0m\n", vErr.Error())
 		} else {
-			semanticHits, err = fetchSimilarRows(readQuerier, tableName, lang, vec)
+			semanticHits, err = fetchSimilarRows(readQuerier, tableName, lang, vec, authorization)
 			if err != nil {
 				fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			} else {
@@ -394,12 +413,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	}
 	columnDataTypes = enrichServiceCatalogModerationDataTypes(tableName, columnDataTypes)
 
-	readPolicy, err := getLegacyMustTrueReadPolicy(currentDb, tableName)
-	if err != nil {
-		return fmt.Errorf("row policy metadata fetch: %w", err)
-	}
-
-	rowsJSON, resultColumns, err := fetchRowsInOrder(readQuerier, tableName, rowOrder, userRole, userID, readPolicy)
+	rowsJSON, resultColumns, err := fetchRowsInOrder(readQuerier, tableName, rowOrder, authorization)
 	if err != nil {
 		return fmt.Errorf("fetchRowsInOrder: %w", err)
 	}

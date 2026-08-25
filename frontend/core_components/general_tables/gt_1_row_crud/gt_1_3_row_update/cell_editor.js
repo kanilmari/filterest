@@ -35,6 +35,7 @@ import {
     setLocalizedDatasetText,
 } from '../../../table_views/dataset_value_localizer.js';
 import { resolveCellEditorLayout } from './cell_editor_layout_resolver.js';
+import { isServiceUnavailableError } from '../../../pipeline/api_pipeline_helpers.js';
 
 export async function editCell(cell, columns, data, dataTypes, table_name) {
     let originalContent = cell.textContent;
@@ -171,39 +172,31 @@ async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_nam
         });
     }
 
-    // Funktio valinnan käsittelyyn
+    let foreignKeyUpdateInFlight = false;
     async function selectOption(newValue, displayValue) {
-        document.removeEventListener('click', handleDocumentClick);
-        if (isNameColumn) {
-            setCellDisplayText(cell, displayValue);
-        } else {
-            setCellDisplayText(cell, newValue);
-            cell.title = displayValue;
-        }
-        cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
-
+        if (foreignKeyUpdateInFlight) return;
         const foreignKeyValue = rowData[foreignKeyColumnName];
-
         if (newValue == foreignKeyValue) {
+            document.removeEventListener('click', handleDocumentClick);
+            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
+            setCellDisplayText(cell, originalContent);
             selectCell(cell);
             return;
         }
-
-        const id = rowData['id'];
-
         const updateData = {
-            id: id,
+            id: rowData['id'],
             column: foreignKeyColumnName,
             value: newValue
         };
-
+        foreignKeyUpdateInFlight = true;
+        dropdownContainer.dataset.pendingValue = String(newValue);
+        searchInput.value = displayValue;
+        cell.dataset.inlineSaveState = 'saving';
         try {
             await sendUpdateRequest(table_name, updateData);
-
             data[rowIndex][foreignKeyColumnName] = newValue;
             data[rowIndex][foreignKeyColumnName + '_name'] = displayValue;
             data[rowIndex][columnName] = isNameColumn ? displayValue : newValue;
-
             const rowCells = cell.parentElement?.cells;
             if (rowCells) {
                 for (let i = 0; i < columns.length; i++) {
@@ -218,23 +211,33 @@ async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_nam
                     }
                 }
             }
-
-        } catch (error) {
-            console.warn('Error updating cell:', error);
-            setCellDisplayText(cell, originalContent);
-        } finally {
+            document.removeEventListener('click', handleDocumentClick);
+            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
+            setCellDisplayText(cell, isNameColumn ? displayValue : newValue);
+            if (!isNameColumn) cell.title = displayValue;
+            delete cell.dataset.inlineSaveState;
             selectCell(cell);
+        } catch (error) {
+            if (isServiceUnavailableError(error)) {
+                cell.dataset.inlineSaveState = 'retry';
+                return;
+            }
+            document.removeEventListener('click', handleDocumentClick);
+            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
+            setCellDisplayText(cell, originalContent);
+            delete cell.dataset.inlineSaveState;
+            selectCell(cell);
+        } finally {
+            foreignKeyUpdateInFlight = false;
         }
     }
 
-    // Hakukentän tapahtuma
     searchInput.addEventListener('input', () => {
         const filterText = searchInput.value;
         renderOptions(filterText);
     });
-
-    // Blur-tapahtuma
     function handleBlur(event) {
+        if (foreignKeyUpdateInFlight) return;
         if (!dropdownContainer.contains(event.relatedTarget)) {
             document.removeEventListener('click', handleDocumentClick);
             cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
@@ -242,36 +245,23 @@ async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_nam
             selectCell(cell);
         }
     }
-
-    // Käsitellään klikkaukset dropdownin ulkopuolella
     function handleDocumentClick(event) {
+        if (foreignKeyUpdateInFlight) return;
         if (!dropdownContainer.contains(event.target)) {
             handleBlur({ relatedTarget: null });
         }
     }
-
-    // Lisätään elementit kontaineriin
     dropdownContainer.appendChild(searchInput);
     dropdownContainer.appendChild(optionsList);
-
-    // Lisätään kontaineri soluun
     cell.appendChild(dropdownContainer);
     searchInput.focus();
-
-    // Alustetaan valinnat
     renderOptions();
-
-    // Lisätään tapahtumankuuntelijat
     searchInput.addEventListener('blur', handleBlur);
     optionsList.addEventListener('blur', handleBlur);
     document.addEventListener('click', handleDocumentClick);
-
-    // Estetään solun fokuksen menetys
     dropdownContainer.addEventListener('mousedown', (event) => {
         event.preventDefault();
     });
-
-    // Näppäimistönavigaatio
     searchInput.addEventListener('keydown', (event) => {
         const items = optionsList.querySelectorAll('.dropdown-option-item');
         const selectedItem = optionsList.querySelector('.dropdown-option-item.highlighted');
@@ -401,17 +391,10 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
     const originalEditorValue = inputType === 'checkbox' ? input.checked : input.value;
     input.focus();
 
+    let updateInFlight = false;
     input.addEventListener('blur', async () => {
-        let newValue;
-        if (input.type === 'checkbox') {
-            newValue = input.checked;
-            setCellDisplayText(cell, newValue ? 'true' : 'false');
-        } else {
-            newValue = input.value;
-            setCellDisplayText(cell, newValue);
-        }
-        cell.classList.remove('editing');
-
+        if (updateInFlight) return;
+        const newValue = input.type === 'checkbox' ? input.checked : input.value;
         const temporalKind = getTemporalValueKind(dataType);
         const comparisonValue = multilingualValue
             ? originalEditorValue
@@ -427,7 +410,10 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
         if (!valueChanged) {
             if (multilingualValue) {
                 setLocalizedTableCellDisplay(cell, originalValue, dataTypeInfo);
+            } else {
+                setCellDisplayText(cell, originalContent);
             }
+            cell.classList.remove('editing');
             selectCell(cell);
             return;
         }
@@ -439,6 +425,7 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             : newValue;
         if (temporalKind && serializedValue === null) {
             setCellDisplayText(cell, originalContent);
+            cell.classList.remove('editing');
             selectCell(cell);
             return;
         }
@@ -451,6 +438,7 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             );
             if (reconstructedValue === null) {
                 setCellDisplayText(cell, originalContent);
+                cell.classList.remove('editing');
                 selectCell(cell);
                 return;
             }
@@ -463,23 +451,34 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             value: serializedValue
         };
 
+        let retainDraftForRetry = false;
+        updateInFlight = true;
+        cell.dataset.inlineSaveState = 'saving';
         try {
             await sendUpdateRequest(table_name, updateData);
-
             data[rowIndex][columnName] = serializedValue;
             if (multilingualValue) {
                 setLocalizedTableCellDisplay(cell, serializedValue, dataTypeInfo);
+            } else {
+                setCellDisplayText(cell, input.type === 'checkbox' ? String(newValue) : newValue);
             }
-
+            cell.classList.remove('editing');
         } catch (error) {
-            console.warn('Error updating cell:', error);
-            if (multilingualValue) {
+            retainDraftForRetry = isServiceUnavailableError(error);
+            if (retainDraftForRetry) {
+                cell.dataset.inlineSaveState = 'retry';
+            } else if (multilingualValue) {
                 setLocalizedTableCellDisplay(cell, originalValue, dataTypeInfo);
             } else {
                 setCellDisplayText(cell, originalContent);
             }
+            if (!retainDraftForRetry) cell.classList.remove('editing');
         } finally {
-            selectCell(cell);
+            updateInFlight = false;
+            if (!retainDraftForRetry) {
+                delete cell.dataset.inlineSaveState;
+                selectCell(cell);
+            }
         }
     });
 
@@ -532,6 +531,7 @@ async function handleOptionEditing({
     select.value = normalizedOriginalValue;
 
     let completed = false;
+    let commitInFlight = false;
 
     function cleanupEditingListeners() {
         document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
@@ -547,54 +547,64 @@ async function handleOptionEditing({
     }
 
     async function commitSelection() {
-        if (completed) return;
-        completed = true;
-        cleanupEditingListeners();
-
+        if (completed || commitInFlight) return;
         const newValue = normalizeInlineEditOptionValue({
             tableName,
             columnName,
             value: select.value,
         });
-
-        cell.classList.remove('editing');
-        setCellDisplayText(cell, newValue);
-
         const originalComparableValue = normalizeInlineEditOptionValue({
             tableName,
             columnName,
             value: originalValue,
         });
-
         if (!hasValueChanged(originalComparableValue, newValue, 'text')) {
+            completed = true;
+            cleanupEditingListeners();
+            cell.classList.remove('editing');
+            setCellDisplayText(cell, originalContent);
             selectCell(cell);
             return;
         }
-
         const updateData = {
             id: rowData['id'],
             column: columnName,
             value: newValue
         };
-
+        commitInFlight = true;
+        cell.dataset.inlineSaveState = 'saving';
         try {
             await sendUpdateRequest(tableName, updateData);
-
+            completed = true;
+            cleanupEditingListeners();
             data[rowIndex][columnName] = newValue;
             getInlineEditCacheInvalidationKeys({
                 tableName,
                 columnName,
                 rowData,
             }).forEach((cacheKey) => localStorage.removeItem(cacheKey));
-        } catch (error) {
-            console.warn('Error updating cell:', error);
-            setCellDisplayText(cell, originalContent);
-        } finally {
+            cell.classList.remove('editing');
+            setCellDisplayText(cell, newValue);
+            delete cell.dataset.inlineSaveState;
             selectCell(cell);
+        } catch (error) {
+            if (isServiceUnavailableError(error)) {
+                cell.dataset.inlineSaveState = 'retry';
+                return;
+            }
+            completed = true;
+            cleanupEditingListeners();
+            cell.classList.remove('editing');
+            setCellDisplayText(cell, originalContent);
+            delete cell.dataset.inlineSaveState;
+            selectCell(cell);
+        } finally {
+            commitInFlight = false;
         }
     }
 
     function handleDocumentPointerDown(event) {
+        if (commitInFlight) return;
         if (!cell.contains(event.target)) {
             restoreOriginalSelection();
         }
