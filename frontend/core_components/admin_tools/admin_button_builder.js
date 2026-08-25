@@ -382,8 +382,6 @@ export function appendChatUIIfAllowed(table_name, filter_bar = null, options = {
 
     const header = document.createElement("div");
     header.classList.add("filterbar-chat-dock__header", "filterbar-section-heading");
-    header.setAttribute("role", "button");
-    header.tabIndex = 0;
 
     const titleGroup = document.createElement("span");
     titleGroup.classList.add("filterbar-chat-dock__title-group");
@@ -435,14 +433,6 @@ export function appendChatUIIfAllowed(table_name, filter_bar = null, options = {
     };
 
     header.addEventListener("click", () => {
-        toggleChatDockMaximized(section, contentShell, toggleButton);
-    });
-
-    header.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") {
-            return;
-        }
-        event.preventDefault();
         toggleChatDockMaximized(section, contentShell, toggleButton);
     });
 

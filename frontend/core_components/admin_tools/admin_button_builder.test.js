@@ -225,6 +225,9 @@ describe("appendChatUIIfAllowed", () => {
         expect(section?.dataset.chatMode).toBe("api_tools");
         expect(section?.dataset.chatState).toBe("collapsed");
         expect(heading?.classList.contains("filterbar-section-heading")).toBe(true);
+        expect(heading?.hasAttribute("role")).toBe(false);
+        expect(heading?.hasAttribute("tabindex")).toBe(false);
+        expect(toggle?.tagName).toBe("BUTTON");
         expect(toggle?.getAttribute("aria-expanded")).toBe("false");
         expect(content?.getAttribute("aria-hidden")).toBe("true");
         const title = heading?.querySelector(".filterbar-chat-dock__title");

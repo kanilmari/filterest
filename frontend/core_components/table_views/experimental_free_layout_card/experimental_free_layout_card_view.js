@@ -502,6 +502,12 @@ export async function createExperimentalFreeLayoutCard({
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.classList.add("card_checkbox");
+        checkbox.dataset.ariaLabelLangKey = "select";
+        checkbox.dataset.ariaLabelLangContext = String(rowItem.id ?? "");
+        checkbox.setAttribute(
+            "aria-label",
+            rowItem.id == null ? "Select row" : `Select row: ${rowItem.id}`
+        );
         checkbox.addEventListener("change", () => {
             update_card_selection(card);
             onSelectionChange?.();

@@ -6,8 +6,9 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { resolveSiteTimestampDisplayOptionsMock } = vi.hoisted(() => ({
+const { resolveSiteTimestampDisplayOptionsMock, hasDatasetPermissionMock } = vi.hoisted(() => ({
     resolveSiteTimestampDisplayOptionsMock: vi.fn(),
+    hasDatasetPermissionMock: vi.fn(),
 }));
 
 vi.mock('../table_view/row_selection_handler.js', () => ({
@@ -93,7 +94,7 @@ vi.mock('../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 }));
 
 vi.mock('../../route_permission_checker.js', () => ({
-    hasDatasetPermission: vi.fn(async () => false),
+    hasDatasetPermission: hasDatasetPermissionMock,
 }));
 
 vi.mock('../../../ui_config.js', () => ({
@@ -170,10 +171,27 @@ describe('card language refresh', () => {
         vi.clearAllMocks();
         document.body.innerHTML = '';
         localStorage.clear();
+        hasDatasetPermissionMock.mockReset();
+        hasDatasetPermissionMock.mockResolvedValue(false);
         resolveSiteTimestampDisplayOptionsMock.mockResolvedValue({
             displayMode: 'date_time',
             locale: 'en',
         });
+    });
+
+    test('gives administrator card-selection checkboxes a translatable accessible name', async () => {
+        hasDatasetPermissionMock.mockResolvedValue(true);
+
+        const view = await create_card_view(
+            ['title'],
+            [{ id: 42, title: 'Accessible selection' }],
+            'documents',
+        );
+
+        const checkbox = view.querySelector('[data-testid="card-select-checkbox"]');
+        expect(checkbox?.getAttribute('aria-label')).toBe('Select row: 42');
+        expect(checkbox?.dataset.ariaLabelLangKey).toBe('select');
+        expect(checkbox?.dataset.ariaLabelLangContext).toBe('42');
     });
 
     test('rebuilds a numeric FK card from its multilingual alias using the requested language', async () => {

@@ -441,6 +441,12 @@ async function createSingleCard(
             const checkboxId = `${table_name}_card_checkbox_${row_item.id}`;
             cb.id = checkboxId;
         }
+        cb.dataset.ariaLabelLangKey = "select";
+        cb.dataset.ariaLabelLangContext = String(row_item.id ?? "");
+        cb.setAttribute(
+            "aria-label",
+            row_item.id == null ? "Select row" : `Select row: ${row_item.id}`
+        );
 
         cb.addEventListener("change", () => {
             update_card_selection(card);

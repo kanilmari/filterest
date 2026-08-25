@@ -42,7 +42,8 @@ For candidate-to-published promotion, the normal sequence is:
 ./filterest_release promote
 # Commit and push the promotion-only source-ledger change and its exact test update.
 ./filterest_release fast-patch
-# Run final runtime, browser, Actions-policy, and Computer Use proof.
+# Run final runtime, browser, and Actions-policy proof, then record the human
+# release owner's named UI checks in a human-acceptance JSON artifact.
 ./filterest_release attest-final <exact-evidence-options>
 ./filterest_release publish --yes
 ```
@@ -56,8 +57,10 @@ focused identity/root/notice checks, and creates one local published-export
 commit. It performs no push. Any drift requires another full `generate`, and
 successful Fast Patch records an owner-only candidate-to-final assembly marker.
 `attest-final` then requires the exact accepted `THIRD_PARTY_NOTICES.md`
-SHA-256, hashes every named final proof, and writes a second owner-only local
-Phase 6 readiness marker. A ticket is not part of this runtime contract.
+SHA-256 and a structured human UI-acceptance record bound to the candidate
+source and final frontend tree, hashes every named final proof, and writes a
+second owner-only local Phase 6 readiness marker. A ticket and Computer Use are
+not part of this runtime contract.
 `publish --yes` always reruns the full publication gate and revalidates those
 bytes before each remote mutation.
 

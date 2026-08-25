@@ -14,14 +14,16 @@ in the owner-only local Phase 6 final-readiness manifest, not in this generated
 file or in a ticket. The local release-readiness gate may proceed only after the
 manifest and the current final commit have been compared directly.
 Generated deterministic evidence is summarized in
-[`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md). Current runtime and
-Computer Use artifacts must be hashed into the local Phase 6 final-readiness
-manifest before the manual-final review passes.
+[`PUBLICATION_EVIDENCE.md`](PUBLICATION_EVIDENCE.md). Current runtime,
+browser-audit, and explicit human UI-acceptance artifacts must be hashed into
+the local Phase 6 final-readiness manifest before the manual-final review
+passes.
 
-Earlier Filterest runtime and Computer Use artifacts are historical. They must
-not be described as evidence for the current release. Create fresh structured
-runtime, browser, and Computer Use artifacts for the exact Filterest candidate
-before completing the `manual-final` evidence review.
+Earlier Filterest runtime, browser, and human UI-acceptance artifacts are
+historical. They must not be described as evidence for the current release.
+Create fresh structured runtime and browser artifacts, then record the human
+release owner's named UI checks for the exact candidate before completing the
+`manual-final` evidence review.
 
 This checklist governs the current `filterest` release. Filterest is generated
 from a clean non-public maintainer release-source commit into its own GitHub
@@ -58,7 +60,7 @@ and generated artifact commit.
 | P0 | Secret/private-material scan | done | Release agent | Current tracked-file and candidate scans pass with no private app/tool rows, secrets, or non-public release-source runtime files in the generated repository. |
 | P0 | Fresh-clone public build/test | manual-final | Release agent | Exact stable proof: the Phase 6 final-readiness manifest must bind Filterest 8.41.0 final HEAD to the clean disposable-clone, dependency-audit, full public-QA, and focused security/operations evidence hashes. Historical evidence cannot satisfy this row. |
 | P0 | Browser review uses Filterest runtime | manual-final | Release agent + browser audit | Exact stable proof: the Phase 6 final-readiness manifest must bind Filterest 8.41.0 final HEAD to its isolated port-8100 runtime, structured verifier report, screenshot, and browser-audit evidence hashes. Historical runtime artifacts cannot satisfy this row. |
-| P0 | Current browser release-readiness acceptance | manual-final | Human release owner | Exact stable proof: the Phase 6 final-readiness manifest must bind the current owner direction, accepted dependency-notice hash, and final Computer Use PASS to Filterest 8.41.0 final HEAD. Historical acceptance cannot satisfy this row. |
+| P0 | Current browser release-readiness acceptance | manual-final | Human release owner | Exact stable proof: the Phase 6 final-readiness manifest must bind the current owner approval, named UI checks, accepted dependency-notice hash, candidate source commit, and final frontend tree to Filterest 8.41.0 final HEAD. Historical acceptance cannot satisfy this row. |
 | P1 | Draft/private-maintainer wording cleanup | done | Release agent | The current 9-file public docs wording audit passes with no pre-release or private-maintainer launch blockers. |
 | P1 | Recovery and rollback wording | done | Release agent | Public docs do not claim supported row, table, or full-database rollback. Whole-table or whole-database recovery is manual from backups, and single-row rollback is unsupported until row history exists. |
 | P1 | Public screenshots/demo data | done | Release agent | [`server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md`](../../server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md) passes for 5 auth-tour JPEGs and 21 fixture storage assets; the current runtime also renders reviewed fixture images. |
@@ -91,11 +93,11 @@ identity, evidence source, and `frontend/dist` tree. It creates one local
 published-identity commit and refreshes final third-party notice evidence, but
 does not publish and does not replace the final `publish --yes` full gate. A
 successful Fast Patch also writes clone-local final-assembly proof. After the
-final runtime, browser, Actions-policy, Computer Use, and dependency-notice
-review, use `attest-final` to bind their exact paths and hashes directly to
-final HEAD in the owner-only local Phase 6 final-readiness manifest. Publication
-fails closed when either marker or any bound byte is missing, stale, moved, or
-changed.
+final runtime, browser, Actions-policy, human UI-acceptance, and
+dependency-notice review, use `attest-final` to bind their exact paths and
+hashes directly to final HEAD in the owner-only local Phase 6 final-readiness
+manifest. Publication fails closed when either marker or any bound byte is
+missing, stale, moved, or changed.
 
 Run the command from the non-public maintainer release source. During iterative local
 testing, use repo-local ignored staging targets rather than overwriting the
