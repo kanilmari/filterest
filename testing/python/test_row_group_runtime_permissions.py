@@ -23,10 +23,16 @@ def test_row_group_runtime_permission_migration_is_select_only_and_version_owner
 
 
 def test_row_group_runtime_permission_repair_ships_and_runs_after_migrations() -> None:
-    allowlist = ALLOWLIST.read_text(encoding="utf-8")
     startup = STARTUP.read_text(encoding="utf-8")
 
-    assert "20260824000002_repair_row_group_runtime_permissions.sql" in allowlist
+    # The private generator allowlist proves export ownership in Easelect. It is
+    # intentionally absent from the generated public repository, where the
+    # migration's presence is the equivalent self-contained contract.
+    if ALLOWLIST.is_file():
+        allowlist = ALLOWLIST.read_text(encoding="utf-8")
+        assert "20260824000002_repair_row_group_runtime_permissions.sql" in allowlist
+    else:
+        assert MIGRATION.is_file()
     assert "EnsureRowGroupRuntimeRolePermissions" in startup
     assert startup.index("startup.RunEnabledMigrations") < startup.index(
         "backend.EnsureRowGroupRuntimeRolePermissions"

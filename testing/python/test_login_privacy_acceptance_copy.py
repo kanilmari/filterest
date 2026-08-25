@@ -5,12 +5,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOGIN_TEMPLATE = REPO_ROOT / "frontend" / "templates" / "login.html"
-PUBLIC_LANG_SEED = (
+PRIVATE_GENERATOR_LANG_SEED = (
     REPO_ROOT
     / "server_tools"
     / "public_slice_export"
     / "public_bootstrap"
     / "app_tables.lang_keys.sql"
+)
+GENERATED_PUBLIC_LANG_SEED = (
+    REPO_ROOT / "server_tools" / "public_bootstrap" / "seed_data.sql"
+)
+PUBLIC_LANG_SEED = (
+    PRIVATE_GENERATOR_LANG_SEED
+    if PRIVATE_GENERATOR_LANG_SEED.is_file()
+    else GENERATED_PUBLIC_LANG_SEED
 )
 FULL_SENTENCE_MIGRATION = (
     REPO_ROOT

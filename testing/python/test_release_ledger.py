@@ -1365,11 +1365,17 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
     assert current_version_records[0]["source"]["commit"] == (
         "29cee0e5afedc45f34d044785077d23e343173b3"
     )
-    assert current_version_records[-1]["record_id"] == (
+    assert current_version_records[-2]["record_id"] == (
         "build:filterest-8.41.0-stable-runtime-3af2d425db9f"
     )
-    assert current_version_records[-1]["source"]["commit"] == (
+    assert current_version_records[-2]["source"]["commit"] == (
         "3af2d425db9f16a72e539972231c5bc296942499"
+    )
+    assert current_version_records[-1]["record_id"] == (
+        "build:filterest-8.41.0-stable-runtime-3ea774533219"
+    )
+    assert current_version_records[-1]["source"]["commit"] == (
+        "3ea774533219c566556fb0903f67b4a27528a7ac"
     )
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)
 
