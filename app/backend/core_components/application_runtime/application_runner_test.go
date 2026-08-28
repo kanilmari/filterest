@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	productidentity "easelect/backend/core_components/product_identity"
 )
 
 func TestEffectiveEnvironmentType(t *testing.T) {
@@ -97,6 +99,77 @@ func TestUseInstallationRuntimeLayoutRequiresExplicitNestedRoot(t *testing.T) {
 				t.Fatalf("useInstallationRuntimeLayout() = %t, want %t", got, test.want)
 			}
 		})
+	}
+}
+
+func TestResolveProductRootUsesImmutableAppForStandaloneFilterest(t *testing.T) {
+	applicationRoot := filepath.Join(t.TempDir(), "app")
+
+	if got := resolveProductRoot("", t.TempDir(), applicationRoot); got != applicationRoot {
+		t.Fatalf("resolveProductRoot() = %q, want application root %q", got, applicationRoot)
+	}
+}
+
+func TestResolveProductRootUsesOuterPrivateCompositionRoot(t *testing.T) {
+	privateRoot := t.TempDir()
+	applicationRoot := filepath.Join(privateRoot, "filterest", "app")
+
+	got := resolveProductRoot(".", privateRoot, applicationRoot)
+	want, err := filepath.Abs(privateRoot)
+	if err != nil {
+		t.Fatalf("filepath.Abs() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolveProductRoot() = %q, want private composition root %q", got, want)
+	}
+}
+
+func TestResolvedProductRootSelectsPrivateOuterIdentity(t *testing.T) {
+	privateRoot := t.TempDir()
+	applicationRoot := filepath.Join(privateRoot, "filterest", "app")
+	if err := os.MkdirAll(applicationRoot, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(privateRoot, "VERSION_EASELECT"),
+		[]byte("9.0.0\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("os.WriteFile(VERSION_EASELECT) error = %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(applicationRoot, "VERSION_APP"),
+		[]byte("9.0.0\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("os.WriteFile(VERSION_APP) error = %v", err)
+	}
+
+	identityRoot := resolveProductRoot(".", privateRoot, applicationRoot)
+	identity := productidentity.Detect(identityRoot)
+	if identity.Kind != productidentity.KindEaselectPrivate || !identity.PrivateUpstream {
+		t.Fatalf("private identity = %#v, want Easelect private composition", identity)
+	}
+}
+
+func TestResolvedProductRootKeepsStandaloneIdentityInApp(t *testing.T) {
+	installationRoot := t.TempDir()
+	applicationRoot := filepath.Join(installationRoot, "app")
+	if err := os.MkdirAll(applicationRoot, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(applicationRoot, "VERSION_APP"),
+		[]byte("9.0.0\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("os.WriteFile(VERSION_APP) error = %v", err)
+	}
+
+	identityRoot := resolveProductRoot("", installationRoot, applicationRoot)
+	identity := productidentity.Detect(identityRoot)
+	if identity.Kind != productidentity.KindFilterestPublic || !identity.PublicDistribution {
+		t.Fatalf("standalone identity = %#v, want public Filterest", identity)
 	}
 }
 

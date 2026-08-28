@@ -51,6 +51,71 @@ func TestCurrentSystemStorageRootUsesConfiguredRuntimePath(t *testing.T) {
 	}
 }
 
+func TestReadRequiredDBVersionUsesNestedApplicationRoot(t *testing.T) {
+	originalPaths := runtimepaths.Current()
+	t.Cleanup(func() { _ = runtimepaths.Configure(originalPaths) })
+
+	installationRoot := t.TempDir()
+	applicationRoot := filepath.Join(installationRoot, "app")
+	if err := os.MkdirAll(applicationRoot, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll(app) error = %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(applicationRoot, "VERSION_DB"),
+		[]byte("9.6.7\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("os.WriteFile(app/VERSION_DB) error = %v", err)
+	}
+	paths, err := runtimepaths.Resolve(applicationRoot, installationRoot, true)
+	if err != nil {
+		t.Fatalf("runtimepaths.Resolve() error = %v", err)
+	}
+	if err := runtimepaths.Configure(paths); err != nil {
+		t.Fatalf("runtimepaths.Configure() error = %v", err)
+	}
+
+	got, err := readRequiredDBVersion()
+	if err != nil {
+		t.Fatalf("readRequiredDBVersion() error = %v", err)
+	}
+	if got != "9.6.7" {
+		t.Fatalf("readRequiredDBVersion() = %q, want 9.6.7", got)
+	}
+	if _, err := os.Stat(filepath.Join(installationRoot, "VERSION_DB")); !os.IsNotExist(err) {
+		t.Fatalf("standalone installation root unexpectedly contains VERSION_DB: %v", err)
+	}
+}
+
+func TestReadRequiredDBVersionKeepsLegacyOuterRoot(t *testing.T) {
+	originalPaths := runtimepaths.Current()
+	t.Cleanup(func() { _ = runtimepaths.Configure(originalPaths) })
+
+	privateRoot := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(privateRoot, "VERSION_DB"),
+		[]byte("9.6.7\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("os.WriteFile(VERSION_DB) error = %v", err)
+	}
+	paths, err := runtimepaths.Resolve(privateRoot, privateRoot, false)
+	if err != nil {
+		t.Fatalf("runtimepaths.Resolve() error = %v", err)
+	}
+	if err := runtimepaths.Configure(paths); err != nil {
+		t.Fatalf("runtimepaths.Configure() error = %v", err)
+	}
+
+	got, err := readRequiredDBVersion()
+	if err != nil {
+		t.Fatalf("readRequiredDBVersion() error = %v", err)
+	}
+	if got != "9.6.7" {
+		t.Fatalf("readRequiredDBVersion() = %q, want 9.6.7", got)
+	}
+}
+
 func TestHealthHandlerReturnsOKJSON(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	recorder := httptest.NewRecorder()

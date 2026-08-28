@@ -35,8 +35,9 @@ import (
 // Options describes the executable-owned values needed by the shared runtime.
 // BuildEnvironment preserves the compile-time production lock. InstallationRoot
 // identifies mutable operator-owned state, while ApplicationRoot identifies the
-// immutable public app. ProductRoot remains the private composition's version
-// and migration root during the staged transition.
+// immutable public app. ProductRoot remains the private composition's version,
+// identity, and migration root during the staged transition. Relative product
+// roots are anchored to InstallationRoot rather than the process working directory.
 // AppDBCompatibilityManifest and MigrationDirectories let a private outer
 // composition declare its release metadata and merge its migrations explicitly,
 // while FrontendExtensions serves disjoint browser modules without placing them
@@ -97,20 +98,15 @@ func runDeferredMetadataMaintenance() {
 	log.Println("[STARTUP] Metadata maintenance completed.")
 }
 
-func resolveProductRoot(rootHint string) string {
+func resolveProductRoot(rootHint string, installationRoot string, applicationRoot string) string {
 	if rootHint != "" {
-		absoluteRoot, err := filepath.Abs(rootHint)
+		absoluteRoot, err := normalizeRuntimeRoot(rootHint, installationRoot)
 		if err != nil {
 			log.Fatalf("Filterest product root resolution failed: %v", err)
 		}
 		return absoluteRoot
 	}
-
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Filterest working directory resolution failed: %v", err)
-	}
-	return currentDirectory
+	return applicationRoot
 }
 
 func resolveFrontendDirectory(
@@ -207,13 +203,13 @@ func Run(options Options) {
 	if err := runtimepaths.Configure(runtimePaths); err != nil {
 		log.Fatalf("Filterest runtime path configuration failed: %v", err)
 	}
-	if err := productidentity.ConfigureApplicationRoot(roots.applicationRoot); err != nil {
+	productRoot := resolveProductRoot(
+		options.ProductRoot,
+		roots.installationRoot,
+		roots.applicationRoot,
+	)
+	if err := productidentity.ConfigureApplicationRoot(productRoot); err != nil {
 		log.Fatalf("Filterest product identity root configuration failed: %v", err)
-	}
-
-	productRoot := roots.applicationRoot
-	if options.ProductRoot != "" {
-		productRoot = resolveProductRoot(options.ProductRoot)
 	}
 	startup.LogApplicationVersion(productRoot)
 

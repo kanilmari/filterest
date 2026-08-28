@@ -301,12 +301,8 @@ func (response *systemReadyResponse) addNotReadyReason(reason string) {
 }
 
 func readRequiredDBVersion() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	content, err := os.ReadFile(filepath.Join(cwd, "VERSION_DB"))
+	applicationRoot := runtimepaths.Current().ApplicationRoot
+	content, err := os.ReadFile(filepath.Join(applicationRoot, "VERSION_DB"))
 	if err != nil {
 		return "", err
 	}
