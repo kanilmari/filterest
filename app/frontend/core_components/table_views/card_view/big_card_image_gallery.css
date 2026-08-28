@@ -1,0 +1,589 @@
+/*
+ * big_card_image_gallery.css
+ *
+ * Image gallery and upload placeholders inside the big card view.
+ * Bridges the gallery component and the theme variable system.
+ * Exists to keep article-view image actions visually aligned with shared media controls.
+ */
+
+.big_card_image_gallery {
+    --big-card-thumbnail-gap: 8px;
+    --big-card-thumbnail-slot-count: 6;
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0;
+    position: relative;
+}
+
+.big_card_image_gallery.is-uploading {
+    opacity: 0.85;
+}
+
+/* ── Standalone image-first article ────────────── */
+.image_first_view_modal {
+    --image-first-backdrop-blur: 48px;
+    --image-first-backdrop-opacity: 0.78;
+    --image-first-theme-scrim: color-mix(
+        in srgb,
+        var(--bg_color_extreme) 78%,
+        transparent
+    );
+
+    width: 100vw !important;
+    height: 100dvh;
+    max-width: none !important;
+    max-height: 100dvh !important;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+/* A light source image must not overpower an explicitly or system-resolved
+   dark application theme. Light mode keeps the balanced shared value above. */
+body.dark-mode .image_first_view_modal {
+    --image-first-theme-scrim: color-mix(
+        in srgb,
+        var(--bg_color_extreme) 90%,
+        transparent
+    );
+}
+
+.image_first_view {
+    width: 100%;
+    min-height: 100%;
+    background: transparent;
+    opacity: 1;
+    clip-path: inset(0);
+    animation: none;
+}
+
+/* The foreground image and its temporary article title grow as one group. The
+   title sits immediately below the media box, so scaling the parent preserves
+   both their size ratio and their relative distance. At the final frame the
+   title has moved below the viewport and is hidden; the real article remains
+   in normal document flow underneath the full-height image stage. */
+.row_article_image_first_reveal_cluster {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: fit-content;
+    max-width: 100%;
+    height: fit-content;
+    max-height: 100dvh;
+    backface-visibility: hidden;
+    transform-origin: center;
+    will-change: transform;
+    animation: image-first-foreground-grow
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+.row_article_image_first_reveal_title {
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline-start: 50%;
+    box-sizing: border-box;
+    width: min(90vw, 800px);
+    margin-block-start: clamp(10px, 2vh, 24px);
+    transform: translateX(-50%);
+    color: var(--text_color);
+    font-size: clamp(1rem, 2.5vw, 2rem);
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    text-shadow: 0 2px 8px color-mix(in srgb, var(--bg_color_extreme) 82%, transparent);
+    pointer-events: none;
+    animation: image-first-reveal-title
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+@keyframes image-first-foreground-grow {
+    from {
+        transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
+    }
+
+    to {
+        transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+    }
+}
+
+@keyframes image-first-reveal-title {
+    0%, 82% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes image-first-view-shrink-conceal {
+    from {
+        clip-path: inset(0);
+    }
+
+    to {
+        clip-path: inset(
+            calc(50dvh - 0.5px)
+            calc(50% - 0.5px)
+            calc(100% - 50dvh - 0.5px)
+        );
+    }
+}
+
+@keyframes image-first-foreground-shrink {
+    from {
+        transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+    }
+
+    to {
+        transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
+    }
+}
+
+.image_first_view_overlay.image-first-view-closing .image_first_view {
+    animation: image-first-view-shrink-conceal
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+.image_first_view_overlay.image-first-view-closing
+    .row_article_image_first_reveal_cluster {
+    animation: image-first-foreground-shrink
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+/* Record navigation keeps the already-open modal and its single backdrop
+   alive. Only the outgoing and incoming record media exchange places, so the
+   handoff cannot flash the underlying application between records. */
+.image-first-record-transitioning
+    .image_first_view_modal
+    .modal_body {
+    position: relative;
+    min-height: 100dvh;
+    overflow: hidden;
+}
+
+.image-first-record-transitioning
+    :is(.image_first_view--outgoing, .image_first_view--incoming) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: 100dvh;
+    overflow: hidden;
+    clip-path: inset(0);
+    pointer-events: none;
+    animation: none;
+}
+
+.image-first-record-transitioning .image_first_view--outgoing {
+    z-index: 1;
+}
+
+.image-first-record-transitioning .image_first_view--incoming {
+    z-index: 2;
+}
+
+.image-first-record-transitioning
+    .image_first_view--incoming
+    .row_article_image_first_stage::before {
+    content: none;
+    animation: none;
+}
+
+.image-first-record-transitioning
+    .image_first_view--outgoing
+    .row_article_image_first_reveal_cluster {
+    transform-origin: center;
+    animation: image-first-record-media-shrink
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+.image-first-record-transitioning
+    .image_first_view--incoming
+    .row_article_image_first_reveal_cluster {
+    transform-origin: center;
+    animation: image-first-record-media-grow
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+@keyframes image-first-record-media-shrink {
+    from {
+        transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+    }
+
+    to {
+        transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
+    }
+}
+
+@keyframes image-first-record-media-grow {
+    from {
+        transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
+    }
+
+    to {
+        transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+    }
+}
+
+/* Removing the incoming marker must not replay the ordinary first-open
+   reveal. The settled record starts at the final frame instead. */
+.image_first_view.image_first_view--settled {
+    clip-path: inset(0);
+    animation: none;
+}
+
+.image_first_view--settled .row_article_image_first_stage::before {
+    opacity: var(--image-first-backdrop-opacity);
+    animation: none;
+}
+
+.image_first_view--settled .row_article_image_first_reveal_cluster {
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+    animation: none;
+}
+
+.image_first_view--settled .row_article_image_first_reveal_title {
+    opacity: 0;
+    animation: none;
+}
+
+.image_first_view_article_content {
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    width: min(100%, 800px);
+    max-width: 800px !important;
+    min-height: auto;
+    margin-inline: auto;
+    padding-block: 1rem;
+    overflow: visible;
+    background: var(--bg_color_extreme);
+}
+
+.image_modal_top_controls > .row_article_row_navigation {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    pointer-events: none;
+}
+
+.row_article_image_first_stage {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    /* The modal body clips the viewport. The stage itself must not clip its
+       fixed pseudo-element when the article scrolls past this first section. */
+    overflow: visible;
+    background: transparent;
+    touch-action: pan-y;
+}
+
+/* The stage's only pseudo-element is the visible image-first backdrop: a
+   theme-dominant scrim and the current blurred image in one paint surface.
+   The transparent outer overlay applies application blur below the whole
+   modal so this surface never dims or blurs foreground article content. */
+.row_article_image_first_stage::before {
+    content: "";
+    position: fixed;
+    z-index: 0;
+    inset: -32px;
+    background-image:
+        linear-gradient(
+            var(--image-first-theme-scrim),
+            var(--image-first-theme-scrim)
+        ),
+        var(--row-article-image-first-backdrop, none);
+    background-position: center, center;
+    background-size: cover, cover;
+    background-repeat: no-repeat;
+    backface-visibility: hidden;
+    filter: blur(var(--image-first-backdrop-blur)) saturate(0.72);
+    opacity: var(--image-first-backdrop-opacity);
+    pointer-events: none;
+    transform: translate3d(0, 0, 0);
+    will-change: opacity;
+    animation: image-first-backdrop-reveal var(--image-first-reveal-duration, 300ms)
+        linear both;
+}
+
+@keyframes image-first-backdrop-reveal {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: var(--image-first-backdrop-opacity);
+    }
+}
+
+@keyframes image-first-backdrop-conceal {
+    from {
+        opacity: var(--image-first-backdrop-opacity);
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+.image_first_view_overlay.image-first-view-closing
+    .row_article_image_first_stage::before {
+    animation: image-first-backdrop-conceal
+        var(--image-first-reveal-duration, 300ms) linear both;
+}
+
+.row_article_image_first_media {
+    position: relative;
+    z-index: 1;
+    width: auto;
+    height: 100dvh;
+    max-width: 100%;
+    max-height: none;
+    object-fit: contain;
+}
+
+.row_article_image_first_arrow {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: 48px;
+    min-width: 48px;
+    height: 72px;
+    padding: 0;
+    transform: translateY(-50%);
+    justify-content: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg_color_extreme) 78%, transparent 22%);
+    color: var(--text_color);
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.image_first_view_modal :is(
+    .row_article_image_first_arrow,
+    .row_article_row_navigation_button
+) {
+    box-sizing: border-box;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--text_color) 52%, transparent 48%);
+    background: color-mix(in srgb, var(--bg_color_extreme) 78%, transparent 22%);
+    color: var(--text_color);
+    line-height: 1;
+}
+
+.image_first_view_modal .row_article_image_first_arrow {
+    width: 48px;
+    min-width: 48px;
+    height: 72px;
+    min-height: 72px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 2rem;
+}
+
+.image_first_view_modal .row_article_row_navigation_button {
+    display: inline-flex;
+    width: auto;
+    min-width: 48px;
+    height: 44px;
+    min-height: 44px;
+    gap: 5px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    pointer-events: auto;
+}
+
+.row_article_row_navigation_preview_slot {
+    box-sizing: border-box;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--text_color) 20%, transparent 80%);
+    background: color-mix(in srgb, var(--bg_color_extreme) 76%, transparent 24%);
+}
+
+.row_article_row_navigation_preview_slot--empty::before {
+    content: "";
+    width: 42%;
+    height: 42%;
+    border-radius: 50%;
+    background: color-mix(in srgb, currentcolor 16%, transparent 84%);
+}
+
+.row_article_row_navigation_preview {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    padding: 2px;
+    object-fit: contain;
+}
+
+.row_article_row_navigation_icon {
+    width: 1.6rem;
+    height: 1.6rem;
+    background: currentcolor;
+}
+
+.image_first_view_modal .row_article_image_first_arrow:active {
+    transform: translateY(-50%);
+}
+
+.image_first_view_modal .row_article_row_navigation_button:active {
+    transform: none;
+}
+
+.row_article_image_first_arrow--previous {
+    left: clamp(8px, 2vw, 28px);
+}
+
+.row_article_image_first_arrow--next {
+    right: clamp(8px, 2vw, 28px);
+}
+
+.row_article_image_first_arrow:disabled {
+    opacity: 0.28;
+}
+
+.row_article_image_first_position {
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg_color_extreme) 78%, transparent 22%);
+    color: var(--text_color);
+    font-size: 0.82rem;
+}
+
+.row_article_image_first_scroll_hint {
+    position: absolute;
+    z-index: 3;
+    inset-block-end: 14px;
+    inset-inline-start: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    padding: 0.35rem 0.7rem;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg_color_extreme) 82%, transparent 18%);
+    color: var(--text_color);
+    line-height: 1;
+    animation: image-first-scroll-hint-pulse
+        calc(var(--transition-time, 0.5s) * 3) ease-in-out infinite;
+}
+
+.row_article_image_first_scroll_hint > span {
+    font-size: 1.25rem;
+    line-height: 0.65;
+}
+
+@keyframes image-first-scroll-hint-pulse {
+    0%, 100% {
+        transform: translate(-50%, 0);
+    }
+
+    50% {
+        transform: translate(-50%, 5px);
+    }
+}
+
+/* ── Upload placeholder ───────────────────────── */
+.image_upload_placeholder {
+    border: 2px dashed var(--border_color, #ccc);
+    background: color-mix(in srgb, var(--bg_color_extreme, #f5f5f5) 95%, #888 5%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--border_radius, 4px);
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.image_upload_placeholder:hover {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+}
+
+.image_upload_placeholder.large {
+    width: 100%;
+    min-height: 200px;
+}
+
+.image_upload_placeholder.small {
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    min-width: 0;
+}
+
+.image_upload_placeholder.drag_over {
+    border-color: var(--accent_color, hsl(207deg 70% 53%));
+    background: color-mix(in srgb, var(--accent_color, hsl(207deg 70% 53%)) 10%, var(--bg_color_extreme, #f5f5f5) 90%);
+}
+
+.upload_icon {
+    color: var(--text_color_secondary, #999);
+    font-size: 1.5rem;
+    user-select: none;
+    pointer-events: none;
+}
+
+@media (width <= 720px) {
+    .image_first_view_modal .row_article_image_first_arrow {
+        width: 42px;
+        min-width: 42px;
+        height: 58px;
+        min-height: 58px;
+    }
+
+    .image_modal_top_controls > .row_article_row_navigation {
+        gap: 5px;
+    }
+
+    .image_first_view_modal .row_article_row_navigation_button {
+        min-width: 42px;
+        height: 40px;
+        min-height: 40px;
+        padding: 2px 4px;
+    }
+
+    .row_article_row_navigation_preview_slot {
+        width: 32px;
+        height: 32px;
+        flex-basis: 32px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .image_first_view,
+    .row_article_image_first_stage::before,
+    .row_article_image_first_reveal_cluster,
+    .row_article_image_first_reveal_title,
+    .row_article_image_first_arrow,
+    .row_article_image_first_scroll_hint {
+        animation: none;
+        transition: none;
+    }
+
+    .row_article_image_first_reveal_title {
+        opacity: 0;
+    }
+}
+
+.image_upload_placeholder.large .upload_icon {
+    font-size: 2.5rem;
+}

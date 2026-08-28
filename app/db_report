@@ -1,0 +1,11 @@
+#!/bin/bash
+# db_report
+# Runs the authenticated workline-report command line tool through the application API.
+# Bridges portable repository-root usage with server_tools/agent_tools/db_report.py.
+# Exists so canonical development history is never written with direct SQL.
+
+set -euo pipefail
+
+FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$FILTEREST_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m server_tools.agent_tools.db_report "$@"

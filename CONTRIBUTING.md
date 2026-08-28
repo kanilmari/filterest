@@ -41,12 +41,11 @@ disclosure process named in `SECURITY.md`.
   translation instead of being hardcoded in one language.
 - Run the relevant checks listed in `README.md` before requesting review.
 
-## Public Slice Boundary
+## Public Source Boundary
 
-The non-public maintainer release source remains the source for non-exported
-product work, private apps, deployments, experiments, and release preparation.
-The public Filterest repository should stay clean and focused on the
-redistributable application platform.
+The canonical Filterest subtree owns the complete redistributable application
+platform. Non-public product work, private apps, deployments, experiments, and
+release preparation remain outside that subtree and outside the public mirror.
 
 If you believe a missing feature belongs in public, open an issue describing the
 use case. Maintainers will decide whether to export or reimplement it in a

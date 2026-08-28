@@ -1,0 +1,158 @@
+# Defines the complete standalone Filterest application and database stack.
+# Connects the immutable application image to installation-owned bind mounts.
+# Makes a local folder copy operate without any embedding-product dependencies.
+# Root compose.yml exposes this detailed contract through Docker's default command.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        FILTEREST_APP_VERSION: ${FILTEREST_APP_VERSION:-local}
+        FILTEREST_DB_VERSION: ${FILTEREST_DB_VERSION:-local}
+        FILTEREST_GIT_COMMIT: ${FILTEREST_GIT_COMMIT:-source-copy}
+        FILTEREST_RUNTIME_UID: ${FILTEREST_RUNTIME_UID:-1000}
+        FILTEREST_RUNTIME_GID: ${FILTEREST_RUNTIME_GID:-1000}
+    image: filterest-app:${FILTEREST_APP_VERSION:-local}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND_HOST:-127.0.0.1}:${APP_PORT:-8100}:8082"
+    environment:
+      SITE_NAME: ${SITE_NAME:-Filterest}
+      SITE_SLUG: ${SITE_SLUG:-filterest}
+      ENVIRONMENT_TYPE: prod
+      FILTEREST_LOCAL_TLS: ${FILTEREST_LOCAL_TLS:-true}
+      BASE_URL: ${BASE_URL:-https://localhost:8100}
+      PORT: "8082"
+      EASELECT_PORT: "8082"
+      APP_PORT: ${APP_PORT:-8100}
+      FILTEREST_ROOT: /filterest
+      FILTEREST_APPLICATION_ROOT: /filterest/app
+      TLS_CERT_FILE: /filterest/keys/tls/localhost.crt
+      TLS_KEY_FILE: /filterest/keys/tls/localhost.key
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+      DB_NAME: ${DB_NAME:-filterest}
+      DB_USER: ${DB_ADMIN_USER:-filterest_admin}
+      DB_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in keys/docker.env}
+      DB_ADMIN_USER: ${DB_ADMIN_USER:-filterest_admin}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in keys/docker.env}
+      DB_READONLY_USER: ${DB_READONLY_USER:-filterest_readonly}
+      DB_READONLY_PASSWORD: ${DB_READONLY_PASSWORD:?Set DB_READONLY_PASSWORD in keys/docker.env}
+      DB_CONFIDENTIAL_USER: ${DB_CONFIDENTIAL_USER:-filterest_confidential}
+      DB_CONFIDENTIAL_PASSWORD: ${DB_CONFIDENTIAL_PASSWORD:?Set DB_CONFIDENTIAL_PASSWORD in keys/docker.env}
+      DB_BASIC_USER: ${DB_BASIC_USER:-filterest_basic}
+      DB_BASIC_PASSWORD: ${DB_BASIC_PASSWORD:?Set DB_BASIC_PASSWORD in keys/docker.env}
+      DB_GUEST_USER: ${DB_GUEST_USER:-filterest_guest}
+      DB_GUEST_PASSWORD: ${DB_GUEST_PASSWORD:?Set DB_GUEST_PASSWORD in keys/docker.env}
+      INSTANCE_NAME: ${INSTANCE_NAME:-filterest-local}
+      SESSION_KEY: ${SESSION_KEY:?Set SESSION_KEY in keys/docker.env}
+      SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:?Set SESSION_SECRET_KEY in keys/docker.env}
+      SESSION_COOKIE_MODE: isolated
+      SESSION_COOKIE_NAME: ""
+      ENABLE_SQL_MIGRATIONS: ${ENABLE_SQL_MIGRATIONS:-false}
+      ENABLE_API_LANGUAGE: ${ENABLE_API_LANGUAGE:-false}
+      EASELECT_TRUSTED_PROXY_PEER_IPS: ${EASELECT_TRUSTED_PROXY_PEER_IPS:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_MODEL: ${OPENAI_API_MODEL:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      USE_ANTHROPIC: ${USE_ANTHROPIC:-}
+      HERE_API_KEY: ${HERE_API_KEY:-}
+      POSTMARK_API_KEY: ${POSTMARK_API_KEY:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
+    volumes:
+      - type: bind
+        source: ../../config
+        target: /filterest/config
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../keys/tls
+        target: /filterest/keys/tls
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../projects
+        target: /filterest/projects
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../data/storage
+        target: /filterest/data/storage
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../data/storage_deleted
+        target: /filterest/data/storage_deleted
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../data/runtime
+        target: /filterest/data/runtime
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../backups
+        target: /filterest/backups
+        read_only: true
+        bind:
+          create_host_path: false
+
+  db:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.db
+    image: filterest-postgres:pg16-postgis-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_ADMIN_USER:-filterest_admin}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in keys/docker.env}
+      POSTGRES_DB: ${DB_NAME:-filterest}
+      DB_READONLY_USER: ${DB_READONLY_USER:-filterest_readonly}
+      DB_READONLY_PASSWORD: ${DB_READONLY_PASSWORD:?Set DB_READONLY_PASSWORD in keys/docker.env}
+      DB_CONFIDENTIAL_USER: ${DB_CONFIDENTIAL_USER:-filterest_confidential}
+      DB_CONFIDENTIAL_PASSWORD: ${DB_CONFIDENTIAL_PASSWORD:?Set DB_CONFIDENTIAL_PASSWORD in keys/docker.env}
+      DB_BASIC_USER: ${DB_BASIC_USER:-filterest_basic}
+      DB_BASIC_PASSWORD: ${DB_BASIC_PASSWORD:?Set DB_BASIC_PASSWORD in keys/docker.env}
+      DB_GUEST_USER: ${DB_GUEST_USER:-filterest_guest}
+      DB_GUEST_PASSWORD: ${DB_GUEST_PASSWORD:?Set DB_GUEST_PASSWORD in keys/docker.env}
+    volumes:
+      - type: bind
+        source: ../../data/postgres
+        target: /var/lib/postgresql/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../server_tools/db_init
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../server_tools/public_bootstrap
+        target: /filterest-public-bootstrap
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "${DB_BIND_HOST:-127.0.0.1}:${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_ADMIN_USER:-filterest_admin} -d ${DB_NAME:-filterest}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s

@@ -1,0 +1,507 @@
+/* workline_observatory_view.css
+ * Styles the private six-slot workline timeline and selected release context.
+ * Bridges the management-view shell with a responsive, non-color-only phase board.
+ * Exists so phase position remains readable on desktop and horizontally scrollable on mobile.
+ */
+
+.workline-observatory {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.workline-observatory__header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.workline-observatory__header h2,
+.workline-observatory__header p {
+    margin: 0 0 .4rem;
+}
+
+.workline-observatory__status-toolbar {
+    position: sticky;
+    top: -1.25rem;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: minmax(16rem, .85fr) minmax(59rem, 2.8fr) minmax(17rem, .9fr);
+    align-items: center;
+    gap: 0;
+    min-width: 94rem;
+    padding: .75rem;
+    border: 1px solid var(--border_color);
+    border-radius: .75rem;
+    background: color-mix(in srgb, var(--bg_color_extreme) 96%, transparent);
+    box-shadow: 0 .35rem 1rem rgb(0 0 0 / 18%);
+    isolation: isolate;
+    transition: padding 180ms ease, border-radius 180ms ease, box-shadow 180ms ease;
+}
+
+.workline-observatory__toolbar-sentinel {
+    display: block;
+    height: 0;
+    margin-bottom: -1rem;
+    pointer-events: none;
+}
+
+.workline-observatory__status-toolbar[data-compact="true"] {
+    padding-block: .12rem;
+    border-radius: 0 0 .4rem .4rem;
+    box-shadow: 0 .5rem 1.35rem rgb(0 0 0 / 36%);
+}
+
+.workline-observatory__status-toolbar[data-compact="true"] .workline-observatory__selection-count,
+.workline-observatory__status-toolbar[data-compact="true"] .workline-observatory__action-guidance {
+    visibility: hidden;
+}
+
+.workline-observatory__status-toolbar[data-compact="true"] .workline-observatory__action-guidance {
+    min-height: 0;
+    height: 0;
+    padding: 0;
+    border: 0;
+}
+
+.workline-observatory__selection-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: .6rem;
+    min-width: 0;
+}
+
+.workline-observatory__selection-count {
+    min-width: 0;
+}
+
+.workline-observatory__selection-toggle {
+    width: 1.2rem;
+    height: 1.2rem;
+    margin: 0;
+    accent-color: var(--accent-color, var(--primary_color));
+    cursor: pointer;
+}
+
+.workline-observatory__status-toolbar[data-compact="true"] .workline-observatory__selection-toggle {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+.workline-observatory__selection-links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .1rem;
+}
+
+.workline-observatory__selection-link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    color: var(--accent-color, var(--primary_color));
+    background: transparent;
+    font: inherit;
+    line-height: 1.15;
+    text-decoration: underline;
+    text-underline-offset: .12em;
+    cursor: pointer;
+}
+
+.workline-observatory__selection-link:hover:not(:disabled) {
+    color: var(--primary_color_hover, var(--primary_color));
+}
+
+.workline-observatory__selection-link:focus-visible {
+    outline: 2px solid var(--interaction-focus-ring, var(--primary_color));
+    outline-offset: 2px;
+}
+
+.workline-observatory__selection-link:disabled {
+    opacity: .52;
+    cursor: not-allowed;
+}
+
+.workline-observatory__status-actions {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 1.35rem;
+    min-width: 0;
+}
+
+.workline-observatory__status-actions::after {
+    content: '';
+    position: absolute;
+    top: -.25rem;
+    bottom: -.25rem;
+    left: 50%;
+    border-left: 1px solid color-mix(in srgb, currentcolor 42%, transparent);
+    pointer-events: none;
+}
+
+.workline-observatory__status-action-group {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: .55rem;
+}
+
+.workline-observatory__status-action-group--before-now {
+    justify-self: end;
+}
+
+.workline-observatory__status-action-group--after-now {
+    justify-self: start;
+}
+
+.workline-observatory__status-action,
+.workline-observatory__context-action {
+    min-height: 2.75rem;
+    padding-inline: 1rem;
+    transition: min-height 180ms ease, padding 180ms ease;
+}
+
+.workline-observatory__status-toolbar[data-compact="true"] .workline-observatory__status-action {
+    height: 2rem;
+    min-height: 2rem;
+    padding: .08rem .72rem;
+    line-height: 1;
+}
+
+.workline-observatory__action-guidance,
+.workline-observatory__context-guidance {
+    display: block;
+    min-height: 2.75rem;
+    padding: .65rem .8rem;
+    border: 1px solid var(--border_color);
+    border-radius: .5rem;
+    color: inherit;
+    background: var(--bg_color_extreme);
+}
+
+.workline-observatory__action-guidance:empty {
+    visibility: hidden;
+}
+
+.workline-observatory__board {
+    display: block;
+    min-width: 94rem;
+    border: 1px solid var(--border_color);
+    border-radius: .75rem;
+    overflow: clip;
+    background: var(--bg_color_extreme);
+}
+
+.workline-observatory__detail {
+    display: grid;
+    grid-template-columns: minmax(18rem, .8fr) minmax(24rem, 2fr);
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border_color);
+    border-radius: .75rem;
+    background: var(--bg_color_extreme);
+    overflow-wrap: anywhere;
+}
+
+.workline-observatory__board-heading,
+.workline-observatory__workline-row {
+    display: grid;
+    grid-template-columns: minmax(16rem, .85fr) minmax(59rem, 2.8fr) minmax(17rem, .9fr);
+    gap: 1rem;
+}
+
+.workline-observatory__board-heading {
+    align-items: center;
+    min-height: 2.75rem;
+}
+
+.workline-observatory__workline-row {
+    position: relative;
+    align-items: stretch;
+    min-height: 4.75rem;
+    border-top: 1px solid var(--border_color);
+    background: transparent;
+    cursor: pointer;
+    transition: background-color var(--interaction-duration-fast, 140ms) ease;
+}
+
+.workline-observatory__workline-row:hover {
+    background: var(--interaction-selection-hover-bg, color-mix(in srgb, var(--primary_color) 7%, transparent));
+}
+
+.workline-observatory__workline-row[data-selected="true"] {
+    background: var(--interaction-selection-active-bg, color-mix(in srgb, var(--primary_color) 13%, transparent));
+}
+
+.workline-observatory__workline-row[data-reconciliation-needed="true"]::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 4;
+    border-top: .16rem dashed color-mix(in srgb, currentcolor 70%, transparent);
+    pointer-events: none;
+}
+
+.workline-observatory__workline-button {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.25rem;
+    align-items: center;
+    gap: .75rem;
+    min-height: 100%;
+    padding: .75rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.workline-observatory__workline-title {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.workline-observatory__workline-checkbox {
+    width: 2rem;
+    height: 2rem;
+    margin: 0;
+    accent-color: var(--accent-color, var(--primary_color));
+    cursor: pointer;
+}
+
+.workline-observatory__workline-title:focus-visible,
+.workline-observatory__workline-checkbox:focus-visible {
+    outline: .2rem solid var(--accent-color, currentcolor);
+    outline-offset: .12rem;
+}
+
+.workline-observatory__now {
+    position: relative;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+}
+
+.workline-observatory__now::after {
+    content: '';
+    position: absolute;
+    top: calc(50% + .8rem);
+    left: 50%;
+    bottom: -.65rem;
+    border-left: 2px solid currentcolor;
+    opacity: .55;
+}
+
+.workline-observatory__track {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(13, 4.375rem);
+    justify-content: center;
+    align-items: center;
+    min-height: 4.75rem;
+}
+
+.workline-observatory__now-axis {
+    position: absolute;
+    top: -.65rem;
+    bottom: -.65rem;
+    left: 50%;
+    z-index: 0;
+    border-left: 2px solid currentcolor;
+    opacity: .55;
+    pointer-events: none;
+}
+
+.workline-observatory__track::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 50%;
+    width: calc(var(--history-links, 0) * 4.375rem);
+    border-top: .3rem solid currentcolor;
+    opacity: .75;
+}
+
+.workline-observatory__track::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(var(--future-links, 0) * 4.375rem);
+    border-top: .16rem dashed currentcolor;
+    opacity: .35;
+}
+
+.workline-observatory__phase-node {
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border: 2px solid currentcolor;
+    border-radius: 50%;
+    font-weight: 800;
+    z-index: 1;
+    justify-self: center;
+    background: var(--bg_color_extreme);
+}
+
+.workline-observatory__phase-node[data-state="completed"] {
+    color: var(--accent-color, var(--primary_color, currentcolor));
+    box-shadow: inset 0 0 0 .48rem currentcolor;
+}
+
+.workline-observatory__phase-node[data-state="current"] {
+    color: var(--accent-color, var(--primary_color, currentcolor));
+    box-shadow: inset 0 0 0 .48rem currentcolor, 0 0 0 .18rem var(--content-bg, var(--background-color, var(--bg_color_extreme, transparent))), 0 0 0 .34rem currentcolor;
+}
+
+.workline-observatory__phase-node[data-state="future"] {
+    border-style: dashed;
+    opacity: .58;
+}
+
+.workline-observatory__phase-node[data-state="not-started"] {
+    border-style: double;
+}
+
+.workline-observatory__targets-heading {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 .75rem;
+}
+
+.workline-observatory__target-row {
+    display: flex;
+    align-items: center;
+    min-height: 100%;
+    padding: .75rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+}
+
+.workline-observatory__reconciliation-notice {
+    padding: .65rem .75rem;
+    border: 2px dashed var(--accent-color, currentcolor);
+    border-radius: .5rem;
+    font-weight: 700;
+}
+
+.workline-observatory__context-menu {
+    position: fixed;
+    z-index: 10000;
+    display: grid;
+    gap: .45rem;
+    width: min(22rem, calc(100vw - 1rem));
+    padding: .65rem;
+    border: 1px solid var(--border_color);
+    border-radius: .7rem;
+    color: var(--text_color, var(--fw-color-text, CanvasText));
+    background: var(--bg_color_2, var(--fw-color-surface, Canvas));
+    box-shadow: 0 .8rem 2.4rem rgb(0 0 0 / 42%);
+}
+
+.workline-observatory__context-action {
+    width: 100%;
+    text-align: left;
+}
+
+.workline-observatory__context-guidance {
+    display: block;
+    min-height: 0;
+    padding: .15rem .2rem 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text_color, var(--fw-color-text, CanvasText));
+    font-size: .9rem;
+}
+
+.workline-observatory__detail h3,
+.workline-observatory__detail h4 {
+    margin: .4rem 0;
+}
+
+.workline-observatory__goal,
+.workline-observatory__selected-workline,
+.workline-observatory__contract,
+.workline-observatory__chat {
+    padding: .75rem;
+    margin-bottom: .85rem;
+    border: 1px solid var(--border_color);
+    border-radius: .6rem;
+}
+
+.workline-observatory__goal-creator {
+    display: grid;
+    gap: .5rem;
+    margin-top: 1rem;
+}
+
+.workline-observatory__goal-creator label {
+    display: grid;
+    gap: .2rem;
+}
+
+.workline-observatory__goal-creator input {
+    width: 100%;
+}
+
+.workline-observatory__detail-line {
+    margin-bottom: .7rem;
+}
+
+.workline-observatory__detail-line p {
+    margin: .2rem 0;
+    white-space: pre-wrap;
+}
+
+.workline-observatory__contract {
+    display: grid;
+    gap: .5rem;
+}
+
+.workline-observatory__contract input,
+.workline-observatory__contract select,
+.workline-observatory__chat textarea {
+    width: 100%;
+}
+
+.workline-observatory__chat {
+    display: grid;
+    gap: .5rem;
+}
+
+.workline-observatory-view {
+    overflow-x: auto;
+}
+
+@media (width <= 900px) {
+    .workline-observatory {
+        padding: .5rem;
+    }
+
+    .workline-observatory__detail {
+        grid-template-columns: 1fr;
+    }
+
+    .workline-observatory__status-toolbar {
+        grid-template-columns: minmax(14rem, .85fr) minmax(42rem, 2.8fr) minmax(14rem, .9fr);
+        min-width: 70rem;
+    }
+}

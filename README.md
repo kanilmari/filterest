@@ -1,3 +1,8 @@
+<!-- README.md: product README for the canonical Filterest source and its public mirror. -->
+<!-- It connects users and developers with the platform, setup path, and public project boundaries. -->
+<!-- It travels unchanged with copied source folders and generated public releases. -->
+<!-- Keep claims limited to capabilities and workflows that Filterest currently ships. -->
+
 # Filterest
 
 Filterest is a multilingual application platform built around a robust,
@@ -10,9 +15,9 @@ applications or purpose-built custom applications.
 ### Quick Start
 
 ```bash
-./filterest start  # First start
-./ctl              # Start again later
-./ctl --stop       # Stop
+./filterest docker start   # First start and later starts
+./filterest docker status  # Show application and database status
+./filterest docker stop    # Stop while preserving data
 ```
 
 Every dataset can become a usable application without a separate frontend:
@@ -32,7 +37,7 @@ permissions, routing, dataset APIs, translations, and file handling. The
 current Filterest release does not yet provide a drop-in runtime plug-in loader.
 
 ```text
-filterest_projects/
+projects/
 └── my_project/
     └── project-owned files
 ```
@@ -106,11 +111,61 @@ This repository contains the Filterest application platform. Releases remain
 subject to the compatibility and upgrade policy documented in this repository;
 review release notes and backups before upgrading important installations.
 
-This repository is the canonical public Filterest release source. Its history
-starts with a reviewed Filterest release artifact and excludes non-public
-maintainer-source history.
+This repository is the deterministic public mirror of the canonical maintained
+`filterest/app/` source tree and its portable installation shell. Its
+public-safe history starts with a reviewed Filterest release and excludes
+non-public maintainer history.
 
-## Installation Profiles
+## One Portable Filterest Folder
+
+A Filterest installation is one directory that can be moved or copied as a
+unit. Maintained application source stays under `app/`; the installation root
+provides stable launchers and the Compose bridge. Exactly five sibling
+directories belong to the operator and remain outside maintained application
+source:
+
+```text
+filterest/
+├── app/        maintained application source, versions, migrations, and tests
+├── config/     installation path contracts and non-secret configuration
+├── keys/       protected settings, credentials, and local TLS identity
+├── projects/   project-owned files
+├── data/       database, uploaded files, runtime output, caches, and test output
+├── backups/    installation-owned backups
+├── filterest   primary root launcher
+├── ctl         compatibility control launcher
+└── compose.yml root bridge to app/docker/docker-compose.yml
+```
+
+Run commands from the outer `filterest/` directory. The root launchers validate
+`app/`, pass the absolute installation root to the runtime, and then delegate to
+the maintained tools inside `app/`. No sibling repository or parent-directory
+helper is required.
+
+The complete folder works without `.git`: copying it preserves the same root
+commands, native installation, and Docker installation. Do not copy an existing
+operator's `keys/`, `data/`, or `backups/` into a different security boundary
+unless that transfer is intentional and protected. Git metadata is required
+only for the automated fast-forward update command described below.
+
+## Installation Options
+
+The recommended portable path uses Docker. It works the same from a GitHub
+checkout or a same-version folder copied without Git. The first start creates
+the five operator directories, generates protected settings in
+`keys/docker.env`, creates the local TLS identity under `keys/tls/`, builds the
+application and PostgreSQL images, and waits until both are healthy. Generated
+secrets are never printed.
+
+The current Docker stack uses installation-owned bind mounts, not named
+volumes. It mounts `config/`, `keys/tls/`, `projects/`, `data/storage/`,
+`data/storage_deleted/`, `data/runtime/`, `data/postgres/`, and `backups/` into
+the appropriate application or database container paths. The application image
+and its `/filterest/app` source are read-only at runtime. Docker Compose reads
+secrets from `keys/docker.env`; the old root `.env` location is only a guarded
+one-time migration input, not the current settings contract.
+
+Native Linux setup remains available through two profiles:
 
 The setup command asks which kind of installation you need:
 
@@ -133,22 +188,25 @@ require `sudo`.
 git clone https://github.com/kanilmari/filterest.git
 cd filterest
 
-# Optional but recommended: keep projects and keys below this one checkout.
-cp filterest.paths.example filterest.paths.local
-
-# Start Filterest. On a fresh download this automatically opens the guided
-# setup first, creates protected settings, initializes the example database,
-# and then starts the application.
-./filterest start
+# This same command is used after copying the filterest folder without Git.
+./filterest docker start
 ```
 
-Both profiles open at `https://localhost:8100/first-run`. The local certificate
-is self-signed, so the browser may ask you to accept it once. The admin binary
-retains production-only routes while using direct local TLS for secure browser
-sessions. Use the explicit setup commands
+Open `https://localhost:8100/first-run`. The local certificate is self-signed,
+so the browser may ask you to accept it once. `./filterest docker stop` preserves
+the database, uploaded files, runtime state, and backups in their bind-mounted
+directories inside the same outer `filterest/` folder.
+
+For native installation on a supported APT-based Linux system, start with
+`./filterest start` and choose a profile, or use the explicit setup commands
 `./filterest setup --profile admin --yes` or
 `./filterest setup --profile development --yes` for an explicit unattended
-profile choice.
+profile choice. Both native profiles use the same browser address. The admin
+binary retains production-only routes while using direct local TLS for secure
+browser sessions. Its verified binary, setup markers, and logs live under
+`data/runtime/`; protected native environment and TLS files live under
+`keys/filterest_runtime/`. Source, templates, versions, and database bootstrap
+inputs continue to come from `app/`.
 
 On first browser access, Filterest opens a two-section form. First choose the
 visible development, testing, quality-assurance, or production purpose and the first
@@ -165,7 +223,7 @@ visible label but cannot downgrade the security boundary of the production-
 locked admin binary.
 
 The bundled public seed contains synthetic multilingual example datasets and
-media only. See `server_tools/public_bootstrap/README.md` for the seed and
+media only. See `app/server_tools/public_bootstrap/README.md` for the seed and
 first-administrator boundaries.
 
 ### Reverse-proxy client identity
@@ -178,9 +236,9 @@ passing through request-supplied headers.
 
 The generated repository ships the two canonical nginx boundaries:
 
-- `server_tools/nginx/filterest_cloudflare_real_ip.conf` accepts
+- `app/server_tools/nginx/filterest_cloudflare_real_ip.conf` accepts
   `CF-Connecting-IP` only from official Cloudflare source networks.
-- `server_tools/nginx/filterest_sanitized_proxy_headers.conf` clears incoming
+- `app/server_tools/nginx/filterest_sanitized_proxy_headers.conf` clears incoming
   client-identity headers and sends one verified address in `X-Real-IP` and
   `X-Forwarded-For`.
 
@@ -190,29 +248,68 @@ the sanitized-header snippet in the application `location` before setting
 address. The setting accepts IP literals only, never a subnet or CIDR. Keep it
 blank when no additional proxy peer has been proven.
 
-The Git-ignored `filterest.paths.local` accepts arbitrary safe relative or
-absolute `projects_home` and `keys_home` values. Relative values start at the
-checkout root. Existing installations without an explicit `keys_home` retain
-their root-local `.env`, `dev_env.txt`, and TLS paths for compatibility.
+For native installation, `config/filterest.paths` records the portable relative
+homes for projects, protected keys, and runtime data. Relative paths start at
+the outer installation root. The standard standalone contract keeps them in
+the five operator-owned sibling directories shown above.
+
+## Updating A Git Checkout
+
+```bash
+./filterest update --dry-run  # verify the published target without changing files
+./filterest update            # back up, fast-forward, reinstall, and restart
+```
+
+The automated updater accepts only a published stable release with matching
+Filterest build identity, required `app/` markers, a clean tracked checkout,
+and a target commit that is a fast-forward from the installed revision. Before
+the fast-forward it backs up the database and file storage under `backups/`.
+It rejects any release commit that tracks content below `config/`, `keys/`,
+`projects/`, `data/`, or `backups/`, so the application update cannot silently
+claim operator-owned state. The tracked `app/` source and root bridges advance
+together while those five mutable sibling directories remain in place.
+
+A Gitless copy can be installed and run normally, but it cannot use this
+Git-verified updater. Upgrade it from a complete reviewed release folder and
+carry forward only the five operator-owned directories after taking a backup.
 
 ## Development
 
 ```bash
 ./filterest setup --profile development  # one-time toolchain and database setup
 ./filterest start     # build and run the local application
-npm test              # run frontend unit tests
-go test ./...         # run Go tests
-npm run build         # build frontend assets
-npm run qa            # run the broader project QA suite
+npm --prefix app test          # run frontend unit tests
+(cd app && go test ./...)      # run Go tests
+npm --prefix app run build     # build frontend assets
+npm --prefix app run qa        # run the broader project QA suite
+./queen status        # inspect the built-in persistent agent runtime
+./db_report workline board  # inspect the canonical workline observatory state
+./db_task list        # inspect database-backed development tasks
+./worker_agent --help # inspect the optional local AI-worker command
+./filterest asset-linking status  # inspect shared media-linking readiness
 ```
+
+The development profile installs Node dependencies under
+`data/runtime/node/node_modules`. It creates one Git-ignored compatibility link,
+`app/node_modules -> ../data/runtime/node/node_modules`, so standard npm, Vite,
+Vitest, and Playwright resolution continues to work from the maintained package
+root. The link contains no maintained source and is not created by the browser-
+administration profile or used by production-style runtime deployment.
+
+Queen, database-backed tasks, and the browser Workline Observatory are part of
+Filterest's development and administration surface. Their durable records stay
+in the installation database. Queen sessions and worker output use ignored
+local runtime directories; copying the source does not copy another
+installation's workline data or credentials. The worker command requires a
+separately installed and authenticated supported AI command-line client.
 
 Keep user-facing features multilingual. Use the existing translation and
 language-key workflows instead of hardcoding one-language UI text.
 
 The repository-specific setup and governance guides live at the repository
 root. A deliberately limited set of technical documents shared byte-for-byte
-with the non-public development source lives under `docs/`; see
-`docs/README.md` for the naming and support boundary.
+with the non-public development source lives under `app/docs/`; see
+`app/docs/README.md` for the naming and support boundary.
 
 ## Project And Contribution Model
 
@@ -234,5 +331,5 @@ private vulnerability-reporting channel.
 
 Filterest is licensed under the GNU General Public License version 2
 (`GPL-2.0-only`). See `LICENSE` and
-`docs/publication/PUBLICATION_CHECKLIST.md`. The source license does not grant
+`app/docs/publication/PUBLICATION_CHECKLIST.md`. The source license does not grant
 trademark rights in the `FILTEREST` name or logo.

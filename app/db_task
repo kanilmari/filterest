@@ -1,0 +1,14 @@
+#!/bin/bash
+# ==============================================================================
+# db_task: Database-backed task manager for Filterest
+#
+# Portable wrapper that calls server_tools/agent_tools/db_task.py
+# Source of truth: dev_agent_tasks table via HTTP API
+# Backup: auto-dumps to agent_tasks/_db_dump/ on write operations
+# ==============================================================================
+
+set -euo pipefail
+
+FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$FILTEREST_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m server_tools.agent_tools.db_task "$@"

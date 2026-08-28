@@ -1,0 +1,219 @@
+/* admin_version_info_indicator.css
+ * Positions the admin-only Material info icon and its click-disclosed details panel.
+ * Bridges the filterbar clock footer with a semantic key/value information table.
+ * Exists so translated runtime details align without shifting the footer clock.
+ */
+
+.filterbar-clock-bar__version-info-shell {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+}
+
+.filterbar-clock-bar__version-info {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  color: var(--text_color);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 120ms ease;
+  appearance: none;
+}
+
+.filterbar-clock-bar__version-info--update-available::after {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--bg_color_extreme);
+  border-radius: 50%;
+  background: hsl(35deg 90% 50%);
+  content: "";
+}
+
+.filterbar-clock-bar__version-info-icon,
+.filterbar-clock-bar__version-info-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.filterbar-clock-bar__version-info-icon {
+  pointer-events: none;
+}
+
+.filterbar-clock-bar__version-info-icon svg {
+  fill: currentcolor;
+}
+
+.filterbar-clock-bar__version-info-panel {
+  position: fixed;
+  z-index: calc(var(--z-modal, 101000) + 10);
+  width: max-content;
+  min-width: 250px;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border_color);
+  border-radius: var(--border_radius_small);
+  color: var(--text_color);
+  background: var(--bg_color_extreme);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 22%);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.filterbar-clock-bar__version-info-panel--portaled {
+  isolation: isolate;
+}
+
+.filterbar-clock-bar__version-info-key {
+  padding: 0 19px 0 0;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.filterbar-clock-bar__version-info-title {
+  padding: 0 0 8px;
+  color: var(--text_color);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.filterbar-clock-bar__version-info-value {
+  min-width: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.filterbar-clock-bar__version-info-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.filterbar-clock-bar__version-info-message {
+  padding: 2px 0;
+}
+
+.filterbar-clock-bar__version-refresh-row td {
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border_color);
+}
+
+.filterbar-clock-bar__version-refresh-button {
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid var(--border_color);
+  border-radius: var(--border_radius_small);
+  color: var(--text_color);
+  background: var(--bg_color);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filterbar-clock-bar__version-refresh-button:hover,
+.filterbar-clock-bar__version-refresh-button:focus-visible {
+  outline: 2px solid var(--fw-color-primary, currentcolor);
+  outline-offset: 2px;
+}
+
+.filterbar-clock-bar__version-refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.filterbar-clock-bar__version-refresh-error {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--danger_color, var(--text_color));
+}
+
+.filterbar-clock-bar__update-preview-footer td {
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border_color);
+}
+
+.filterbar-clock-bar__update-preview-open,
+.filterbar-clock-bar__update-preview-close {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--fw-color-primary, var(--border_color));
+  border-radius: var(--border_radius_small);
+  color: var(--text_color);
+  background: var(--bg_color);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filterbar-clock-bar__update-preview-open:hover,
+.filterbar-clock-bar__update-preview-open:focus-visible,
+.filterbar-clock-bar__update-preview-close:hover,
+.filterbar-clock-bar__update-preview-close:focus-visible {
+  outline: 2px solid var(--fw-color-primary, currentcolor);
+  outline-offset: 2px;
+}
+
+.filterbar-clock-bar__update-preview h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.filterbar-clock-bar__update-preview p {
+  margin: 6px 0;
+}
+
+.filterbar-clock-bar__update-preview-notice {
+  font-weight: 600;
+}
+
+.filterbar-clock-bar__update-preview-fact {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0;
+}
+
+.filterbar-clock-bar__update-preview code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 4px 0 8px;
+  padding: 5px 6px;
+  border-radius: var(--border_radius_small);
+  background: var(--bg_color);
+  user-select: all;
+}
+
+.filterbar-clock-bar__version-info-shell[hidden],
+.filterbar-clock-bar__version-info-panel[hidden] {
+  display: none;
+}
+
+.filterbar-clock-bar__version-info:hover,
+.filterbar-clock-bar__version-info:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--fw-color-primary, currentcolor);
+  outline-offset: 2px;
+}

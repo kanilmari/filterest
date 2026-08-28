@@ -6,13 +6,13 @@ not legal advice and still needs human/project approval before publication.
 
 ## Candidate
 
-- Filterest app version: `8.41.0`
-- Database version: `9.6.4`
+- Filterest app version: `9.0.0`
+- Database version: `9.6.7`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
-- Go modules listed: `96`
+- Go modules listed: `95`
 - npm packages listed: `441`
-- bundled asset files listed: `143`
+- bundled asset files listed: `137`
 - dependency rows still requiring license review: `0`
 
 ## Review Notes
@@ -30,7 +30,7 @@ not legal advice and still needs human/project approval before publication.
 ### Go Modules
 
 - `Apache-2.0`: 37
-- `BSD-style`: 32
+- `BSD-style`: 31
 - `ISC`: 1
 - `MIT`: 25
 - `MPL-2.0`: 1
@@ -54,7 +54,7 @@ not legal advice and still needs human/project approval before publication.
 
 - `.ico`: 1
 - `.jpg`: 22
-- `.png`: 18
+- `.png`: 12
 - `.svg`: 102
 
 ## Go Modules
@@ -139,7 +139,7 @@ not legal advice and still needs human/project approval before publication.
 | go.opentelemetry.io/otel/trace | v1.24.0 | Apache-2.0 | LICENSE |
 | golang.org/x/crypto | v0.40.0 | BSD-style | LICENSE |
 | golang.org/x/image | v0.43.0 | BSD-style | LICENSE |
-| golang.org/x/mod | v0.36.0 | BSD-style | LICENSE |
+| golang.org/x/mod | v0.17.0 | BSD-style | LICENSE |
 | golang.org/x/net | v0.41.0 | BSD-style | LICENSE |
 | golang.org/x/oauth2 | v0.30.0 | BSD-style | LICENSE |
 | golang.org/x/sync | v0.21.0 | BSD-style | LICENSE |
@@ -147,7 +147,6 @@ not legal advice and still needs human/project approval before publication.
 | golang.org/x/term | v0.33.0 | BSD-style | LICENSE |
 | golang.org/x/text | v0.38.0 | BSD-style | LICENSE |
 | golang.org/x/time | v0.5.0 | BSD-style | LICENSE |
-| golang.org/x/tools | v0.45.0 | BSD-style | LICENSE |
 | golang.org/x/xerrors | v0.0.0-20200804184101-5ec99f83aff1 | BSD-style | LICENSE |
 | google.golang.org/api | v0.189.0 | BSD-style | LICENSE |
 | google.golang.org/genproto/googleapis/rpc | v0.0.0-20240722135656-d784300faade | Apache-2.0 | LICENSE |
@@ -608,146 +607,140 @@ not legal advice and still needs human/project approval before publication.
 
 | Path | Type |
 | --- | --- |
-| `frontend/dist/auth-tour/platform-card-view.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-filterbar.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-full-shell.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-navbar.jpg` | `.jpg` |
-| `frontend/dist/auth-tour/platform-table-view.jpg` | `.jpg` |
-| `frontend/favicon.ico` | `.ico` |
-| `frontend/favicon4E.png` | `.png` |
-| `frontend/favicon4ER.png` | `.png` |
-| `frontend/favicon4S.png` | `.png` |
-| `frontend/favicon4SL.png` | `.png` |
-| `frontend/icons/admin/card-visibility-checkbox-unchecked-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-checkbox-ambiguous-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-checkbox-checked-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-checkbox-unchecked-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-edit-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-global-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-table-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-ui-icon.svg` | `.svg` |
-| `frontend/icons/admin/permission-user-icon.svg` | `.svg` |
-| `frontend/icons/auth/login-icon.svg` | `.svg` |
-| `frontend/icons/auth/logout-icon.svg` | `.svg` |
-| `frontend/icons/auth/password-visibility-off-icon.svg` | `.svg` |
-| `frontend/icons/auth/password-visibility-on-icon.svg` | `.svg` |
-| `frontend/icons/general/chat-message-icon.svg` | `.svg` |
-| `frontend/icons/general/chevron-down-icon.svg` | `.svg` |
-| `frontend/icons/general/dataset-search-icon.svg` | `.svg` |
-| `frontend/icons/general/filter-list-icon.svg` | `.svg` |
-| `frontend/icons/general/filterbar-hide-icon.svg` | `.svg` |
-| `frontend/icons/general/filterbar-toggle-icon.svg` | `.svg` |
-| `frontend/icons/general/minimize-panel-icon.svg` | `.svg` |
-| `frontend/icons/general/modal-close-icon.svg` | `.svg` |
-| `frontend/icons/general/record-next-icon.svg` | `.svg` |
-| `frontend/icons/general/record-previous-icon.svg` | `.svg` |
-| `frontend/icons/general/table-tools-icon.svg` | `.svg` |
-| `frontend/icons/general/trash-icon.svg` | `.svg` |
-| `frontend/icons/general/user-person-icon.svg` | `.svg` |
-| `frontend/icons/general/view-palette-icon.svg` | `.svg` |
-| `frontend/icons/general/visible-fields-icon.svg` | `.svg` |
-| `frontend/icons/navigation/language-globe-icon.svg` | `.svg` |
-| `frontend/icons/navigation/nav-history-back-icon.svg` | `.svg` |
-| `frontend/icons/navigation/nav-history-forward-icon.svg` | `.svg` |
-| `frontend/icons/navigation/theme-dark-icon.svg` | `.svg` |
-| `frontend/icons/navigation/theme-light-icon.svg` | `.svg` |
-| `frontend/icons/navigation/theme-locked-dark-icon.svg` | `.svg` |
-| `frontend/icons/navigation/theme-locked-light-icon.svg` | `.svg` |
-| `frontend/icons/navigation/theme-system-icon.svg` | `.svg` |
-| `frontend/icons/site_favicons/site-initial-e-v1-16.png` | `.png` |
-| `frontend/icons/site_favicons/site-initial-es-v1-16.png` | `.png` |
-| `frontend/icons/site_favicons/site-initial-f-v1-16.png` | `.png` |
-| `frontend/icons/site_favicons/site-initial-s-v1-16.png` | `.png` |
-| `frontend/icons/symbols/alert-circle.svg` | `.svg` |
-| `frontend/icons/symbols/article.svg` | `.svg` |
-| `frontend/icons/symbols/attachment.svg` | `.svg` |
-| `frontend/icons/symbols/bolt-pattern.svg` | `.svg` |
-| `frontend/icons/symbols/bookmark.svg` | `.svg` |
-| `frontend/icons/symbols/build.svg` | `.svg` |
-| `frontend/icons/symbols/building.svg` | `.svg` |
-| `frontend/icons/symbols/calendar-clock.svg` | `.svg` |
-| `frontend/icons/symbols/calendar.svg` | `.svg` |
-| `frontend/icons/symbols/car.svg` | `.svg` |
-| `frontend/icons/symbols/category.svg` | `.svg` |
-| `frontend/icons/symbols/chat.svg` | `.svg` |
-| `frontend/icons/symbols/check-circle.svg` | `.svg` |
-| `frontend/icons/symbols/check_circle.svg` | `.svg` |
-| `frontend/icons/symbols/clock.svg` | `.svg` |
-| `frontend/icons/symbols/dashboard.svg` | `.svg` |
-| `frontend/icons/symbols/database.svg` | `.svg` |
-| `frontend/icons/symbols/description.svg` | `.svg` |
-| `frontend/icons/symbols/eco.svg` | `.svg` |
-| `frontend/icons/symbols/euro.svg` | `.svg` |
-| `frontend/icons/symbols/file-text.svg` | `.svg` |
-| `frontend/icons/symbols/folder.svg` | `.svg` |
-| `frontend/icons/symbols/grid_view.svg` | `.svg` |
-| `frontend/icons/symbols/group.svg` | `.svg` |
-| `frontend/icons/symbols/group_center_filled.svg` | `.svg` |
-| `frontend/icons/symbols/group_filled.svg` | `.svg` |
-| `frontend/icons/symbols/hash.svg` | `.svg` |
-| `frontend/icons/symbols/help.svg` | `.svg` |
-| `frontend/icons/symbols/home.svg` | `.svg` |
-| `frontend/icons/symbols/hourglass.svg` | `.svg` |
-| `frontend/icons/symbols/image.svg` | `.svg` |
-| `frontend/icons/symbols/info.svg` | `.svg` |
-| `frontend/icons/symbols/inventory.svg` | `.svg` |
-| `frontend/icons/symbols/label.svg` | `.svg` |
-| `frontend/icons/symbols/layers.svg` | `.svg` |
-| `frontend/icons/symbols/link.svg` | `.svg` |
-| `frontend/icons/symbols/list.svg` | `.svg` |
-| `frontend/icons/symbols/location.svg` | `.svg` |
-| `frontend/icons/symbols/login.svg` | `.svg` |
-| `frontend/icons/symbols/logout.svg` | `.svg` |
-| `frontend/icons/symbols/mail.svg` | `.svg` |
-| `frontend/icons/symbols/map-pin.svg` | `.svg` |
-| `frontend/icons/symbols/map.svg` | `.svg` |
-| `frontend/icons/symbols/notifications.svg` | `.svg` |
-| `frontend/icons/symbols/palette.svg` | `.svg` |
-| `frontend/icons/symbols/payments.svg` | `.svg` |
-| `frontend/icons/symbols/person.svg` | `.svg` |
-| `frontend/icons/symbols/receipt.svg` | `.svg` |
-| `frontend/icons/symbols/ruler.svg` | `.svg` |
-| `frontend/icons/symbols/schedule.svg` | `.svg` |
-| `frontend/icons/symbols/school.svg` | `.svg` |
-| `frontend/icons/symbols/science.svg` | `.svg` |
-| `frontend/icons/symbols/search.svg` | `.svg` |
-| `frontend/icons/symbols/settings.svg` | `.svg` |
-| `frontend/icons/symbols/shopping-bag.svg` | `.svg` |
-| `frontend/icons/symbols/shopping_cart.svg` | `.svg` |
-| `frontend/icons/symbols/star.svg` | `.svg` |
-| `frontend/icons/symbols/store.svg` | `.svg` |
-| `frontend/icons/symbols/table.svg` | `.svg` |
-| `frontend/icons/symbols/tag.svg` | `.svg` |
-| `frontend/icons/symbols/task.svg` | `.svg` |
-| `frontend/icons/symbols/tune.svg` | `.svg` |
-| `frontend/icons/symbols/user.svg` | `.svg` |
-| `frontend/icons/symbols/warning.svg` | `.svg` |
-| `frontend/icons/symbols/wrench.svg` | `.svg` |
-| `frontend/imageERR.png` | `.png` |
-| `frontend/public/auth-tour/platform-card-view.jpg` | `.jpg` |
-| `frontend/public/auth-tour/platform-filterbar.jpg` | `.jpg` |
-| `frontend/public/auth-tour/platform-full-shell.jpg` | `.jpg` |
-| `frontend/public/auth-tour/platform-navbar.jpg` | `.jpg` |
-| `frontend/public/auth-tour/platform-table-view.jpg` | `.jpg` |
-| `frontend/reusable_components/vanilla_dropdown/chevron.svg` | `.svg` |
-| `storage/10/1/1000/10_1_1.jpg` | `.jpg` |
-| `storage/10/1/2160/10_1_1.jpg` | `.jpg` |
-| `storage/10/1/300/10_1_1.jpg` | `.jpg` |
-| `storage/10/1/original/10_1_1.jpg` | `.jpg` |
-| `storage/7/1/1000/7_1_1.jpg` | `.jpg` |
-| `storage/7/1/2160/7_1_1.jpg` | `.jpg` |
-| `storage/7/1/300/7_1_1.jpg` | `.jpg` |
-| `storage/7/1/original/7_1_1.jpg` | `.jpg` |
-| `storage/8/1/1000/8_1_1.jpg` | `.jpg` |
-| `storage/8/1/2160/8_1_1.jpg` | `.jpg` |
-| `storage/8/1/300/8_1_1.jpg` | `.jpg` |
-| `storage/8/1/original/8_1_1.jpg` | `.jpg` |
-| `storage/9/1/1000/9_1_1.png` | `.png` |
-| `storage/9/1/300/9_1_1.png` | `.png` |
-| `storage/9/1/original/9_1_1.png` | `.png` |
-| `storage/9/2/1000/9_2_1.png` | `.png` |
-| `storage/9/2/300/9_2_1.png` | `.png` |
-| `storage/9/2/original/9_2_1.png` | `.png` |
-| `storage/9/3/1000/9_3_1.png` | `.png` |
-| `storage/9/3/300/9_3_1.png` | `.png` |
-| `storage/9/3/original/9_3_1.png` | `.png` |
+| `app/frontend/dist/auth-tour/platform-card-view.jpg` | `.jpg` |
+| `app/frontend/dist/auth-tour/platform-filterbar.jpg` | `.jpg` |
+| `app/frontend/dist/auth-tour/platform-full-shell.jpg` | `.jpg` |
+| `app/frontend/dist/auth-tour/platform-navbar.jpg` | `.jpg` |
+| `app/frontend/dist/auth-tour/platform-table-view.jpg` | `.jpg` |
+| `app/frontend/favicon.ico` | `.ico` |
+| `app/frontend/favicon4E.png` | `.png` |
+| `app/frontend/favicon4ER.png` | `.png` |
+| `app/frontend/favicon4S.png` | `.png` |
+| `app/frontend/favicon4SL.png` | `.png` |
+| `app/frontend/icons/admin/card-visibility-checkbox-unchecked-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-checkbox-ambiguous-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-checkbox-checked-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-checkbox-unchecked-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-edit-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-global-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-table-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-ui-icon.svg` | `.svg` |
+| `app/frontend/icons/admin/permission-user-icon.svg` | `.svg` |
+| `app/frontend/icons/auth/login-icon.svg` | `.svg` |
+| `app/frontend/icons/auth/logout-icon.svg` | `.svg` |
+| `app/frontend/icons/auth/password-visibility-off-icon.svg` | `.svg` |
+| `app/frontend/icons/auth/password-visibility-on-icon.svg` | `.svg` |
+| `app/frontend/icons/general/chat-message-icon.svg` | `.svg` |
+| `app/frontend/icons/general/chevron-down-icon.svg` | `.svg` |
+| `app/frontend/icons/general/dataset-search-icon.svg` | `.svg` |
+| `app/frontend/icons/general/filter-list-icon.svg` | `.svg` |
+| `app/frontend/icons/general/filterbar-hide-icon.svg` | `.svg` |
+| `app/frontend/icons/general/filterbar-toggle-icon.svg` | `.svg` |
+| `app/frontend/icons/general/minimize-panel-icon.svg` | `.svg` |
+| `app/frontend/icons/general/modal-close-icon.svg` | `.svg` |
+| `app/frontend/icons/general/record-next-icon.svg` | `.svg` |
+| `app/frontend/icons/general/record-previous-icon.svg` | `.svg` |
+| `app/frontend/icons/general/table-tools-icon.svg` | `.svg` |
+| `app/frontend/icons/general/trash-icon.svg` | `.svg` |
+| `app/frontend/icons/general/user-person-icon.svg` | `.svg` |
+| `app/frontend/icons/general/view-palette-icon.svg` | `.svg` |
+| `app/frontend/icons/general/visible-fields-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/language-globe-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/nav-history-back-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/nav-history-forward-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/theme-dark-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/theme-light-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/theme-locked-dark-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/theme-locked-light-icon.svg` | `.svg` |
+| `app/frontend/icons/navigation/theme-system-icon.svg` | `.svg` |
+| `app/frontend/icons/site_favicons/site-initial-e-v1-16.png` | `.png` |
+| `app/frontend/icons/site_favicons/site-initial-es-v1-16.png` | `.png` |
+| `app/frontend/icons/site_favicons/site-initial-f-v1-16.png` | `.png` |
+| `app/frontend/icons/site_favicons/site-initial-s-v1-16.png` | `.png` |
+| `app/frontend/icons/symbols/alert-circle.svg` | `.svg` |
+| `app/frontend/icons/symbols/article.svg` | `.svg` |
+| `app/frontend/icons/symbols/attachment.svg` | `.svg` |
+| `app/frontend/icons/symbols/bolt-pattern.svg` | `.svg` |
+| `app/frontend/icons/symbols/bookmark.svg` | `.svg` |
+| `app/frontend/icons/symbols/build.svg` | `.svg` |
+| `app/frontend/icons/symbols/building.svg` | `.svg` |
+| `app/frontend/icons/symbols/calendar-clock.svg` | `.svg` |
+| `app/frontend/icons/symbols/calendar.svg` | `.svg` |
+| `app/frontend/icons/symbols/car.svg` | `.svg` |
+| `app/frontend/icons/symbols/category.svg` | `.svg` |
+| `app/frontend/icons/symbols/chat.svg` | `.svg` |
+| `app/frontend/icons/symbols/check-circle.svg` | `.svg` |
+| `app/frontend/icons/symbols/check_circle.svg` | `.svg` |
+| `app/frontend/icons/symbols/clock.svg` | `.svg` |
+| `app/frontend/icons/symbols/dashboard.svg` | `.svg` |
+| `app/frontend/icons/symbols/database.svg` | `.svg` |
+| `app/frontend/icons/symbols/description.svg` | `.svg` |
+| `app/frontend/icons/symbols/eco.svg` | `.svg` |
+| `app/frontend/icons/symbols/euro.svg` | `.svg` |
+| `app/frontend/icons/symbols/file-text.svg` | `.svg` |
+| `app/frontend/icons/symbols/folder.svg` | `.svg` |
+| `app/frontend/icons/symbols/grid_view.svg` | `.svg` |
+| `app/frontend/icons/symbols/group.svg` | `.svg` |
+| `app/frontend/icons/symbols/group_center_filled.svg` | `.svg` |
+| `app/frontend/icons/symbols/group_filled.svg` | `.svg` |
+| `app/frontend/icons/symbols/hash.svg` | `.svg` |
+| `app/frontend/icons/symbols/help.svg` | `.svg` |
+| `app/frontend/icons/symbols/home.svg` | `.svg` |
+| `app/frontend/icons/symbols/hourglass.svg` | `.svg` |
+| `app/frontend/icons/symbols/image.svg` | `.svg` |
+| `app/frontend/icons/symbols/info.svg` | `.svg` |
+| `app/frontend/icons/symbols/inventory.svg` | `.svg` |
+| `app/frontend/icons/symbols/label.svg` | `.svg` |
+| `app/frontend/icons/symbols/layers.svg` | `.svg` |
+| `app/frontend/icons/symbols/link.svg` | `.svg` |
+| `app/frontend/icons/symbols/list.svg` | `.svg` |
+| `app/frontend/icons/symbols/location.svg` | `.svg` |
+| `app/frontend/icons/symbols/login.svg` | `.svg` |
+| `app/frontend/icons/symbols/logout.svg` | `.svg` |
+| `app/frontend/icons/symbols/mail.svg` | `.svg` |
+| `app/frontend/icons/symbols/map-pin.svg` | `.svg` |
+| `app/frontend/icons/symbols/map.svg` | `.svg` |
+| `app/frontend/icons/symbols/notifications.svg` | `.svg` |
+| `app/frontend/icons/symbols/palette.svg` | `.svg` |
+| `app/frontend/icons/symbols/payments.svg` | `.svg` |
+| `app/frontend/icons/symbols/person.svg` | `.svg` |
+| `app/frontend/icons/symbols/receipt.svg` | `.svg` |
+| `app/frontend/icons/symbols/ruler.svg` | `.svg` |
+| `app/frontend/icons/symbols/schedule.svg` | `.svg` |
+| `app/frontend/icons/symbols/school.svg` | `.svg` |
+| `app/frontend/icons/symbols/science.svg` | `.svg` |
+| `app/frontend/icons/symbols/search.svg` | `.svg` |
+| `app/frontend/icons/symbols/settings.svg` | `.svg` |
+| `app/frontend/icons/symbols/shopping-bag.svg` | `.svg` |
+| `app/frontend/icons/symbols/shopping_cart.svg` | `.svg` |
+| `app/frontend/icons/symbols/star.svg` | `.svg` |
+| `app/frontend/icons/symbols/store.svg` | `.svg` |
+| `app/frontend/icons/symbols/table.svg` | `.svg` |
+| `app/frontend/icons/symbols/tag.svg` | `.svg` |
+| `app/frontend/icons/symbols/task.svg` | `.svg` |
+| `app/frontend/icons/symbols/tune.svg` | `.svg` |
+| `app/frontend/icons/symbols/user.svg` | `.svg` |
+| `app/frontend/icons/symbols/warning.svg` | `.svg` |
+| `app/frontend/icons/symbols/wrench.svg` | `.svg` |
+| `app/frontend/imageERR.png` | `.png` |
+| `app/frontend/public/auth-tour/platform-card-view.jpg` | `.jpg` |
+| `app/frontend/public/auth-tour/platform-filterbar.jpg` | `.jpg` |
+| `app/frontend/public/auth-tour/platform-full-shell.jpg` | `.jpg` |
+| `app/frontend/public/auth-tour/platform-navbar.jpg` | `.jpg` |
+| `app/frontend/public/auth-tour/platform-table-view.jpg` | `.jpg` |
+| `app/frontend/reusable_components/vanilla_dropdown/chevron.svg` | `.svg` |
+| `app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png` | `.png` |
+| `app/server_tools/public_bootstrap/source/fixtures/docs/ready-to-release.png` | `.png` |
+| `app/server_tools/public_bootstrap/source/fixtures/docs/start-here.png` | `.png` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-1000.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-2160.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-300.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-original.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/service-1000.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/service-2160.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/service-300.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/service-original.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-1000.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-2160.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-300.jpg` | `.jpg` |
+| `app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-original.jpg` | `.jpg` |

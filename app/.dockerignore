@@ -1,0 +1,27 @@
+# Defines which checkout content stays outside portable Filterest image builds.
+# Separates local state and maintainer metadata from the public runtime context.
+# Prevents secrets, caches, generated output, and user data entering image layers.
+# The application and database images share this repository-root boundary.
+/.git
+/.github
+/.queen
+/agent_tasks
+/.env
+/.env.*
+/dev_env.txt
+/filterest.paths.local
+/node_modules
+/frontend/dist
+/storage
+/storage_deleted
+/db_backups
+/runtime
+/data
+/testing/e2e/.auth
+/testing/test-results
+/testing/playwright-report
+*.crt
+*.pem
+*.key
+*.log
+*.tmp

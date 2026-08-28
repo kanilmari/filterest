@@ -1,0 +1,13 @@
+# Dynamic path locator for a standalone native Filterest installation.
+# Copy this immutable template to ../config/filterest.paths before customizing it.
+# Relative values resolve from the outer installation root; absolute values are accepted.
+# Process overrides: FILTEREST_PROJECTS_HOME, FILTEREST_KEYS_HOME,
+# FILTEREST_RUNTIME_DATA_HOME, FILTEREST_MAINTAINER_TOOLS_HOME, and
+# FILTEREST_OPERATIONS_HOME.
+# All logical homes must be distinct; application-source and .git targets are rejected.
+schema_version=1
+projects_home=projects
+keys_home=keys
+runtime_data_home=data/runtime
+maintainer_tools_home=data/maintainer_tools
+operations_home=data/operations

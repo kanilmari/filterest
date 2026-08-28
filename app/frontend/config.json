@@ -1,0 +1,8 @@
+{
+    "default_view": "card",
+    "cross_tab_login_sync": true,
+    "default_dataset_sort": {
+        "column": "__newest",
+        "direction": "DESC"
+    }
+}

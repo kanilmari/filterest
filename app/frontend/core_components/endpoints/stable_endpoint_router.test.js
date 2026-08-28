@@ -1,0 +1,410 @@
+// stable_endpoint_router.test.js
+// Verifies the typed stable endpoint wrappers layered on top of endpoint_router.js.
+// Bridges the stable route allowlist and the generic pipeline mock with focused contract tests.
+// Exists to keep Phase B hybrid migrations from silently widening back into dynamic routes.
+
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+
+const endpointRouterMock = vi.fn();
+const createStableApiClientMock = vi.fn();
+
+async function loadModule() {
+    vi.resetModules();
+    vi.doUnmock('../../generated/stable_api_client.js');
+    vi.doMock('./endpoint_router.js', () => ({
+        endpoint_router: endpointRouterMock,
+    }));
+    return import('./stable_endpoint_router.js');
+}
+
+async function loadModuleWithGeneratedClientSpy() {
+    vi.resetModules();
+    vi.doMock('./endpoint_router.js', () => ({
+        endpoint_router: endpointRouterMock,
+    }));
+    vi.doMock('../../generated/stable_api_client.js', () => ({
+        createStableApiClient: createStableApiClientMock,
+    }));
+    return import('./stable_endpoint_router.js');
+}
+
+describe('stable_endpoint_router', () => {
+    beforeEach(() => {
+        endpointRouterMock.mockReset();
+        createStableApiClientMock.mockReset();
+    });
+
+    test('rejects routes outside the typed stable inventory', async () => {
+        const mod = await loadModule();
+
+        await expect(mod.stable_endpoint_router('getResults')).rejects.toThrow(
+            'Route "getResults" is outside the typed stable API island'
+        );
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+    });
+
+    test('fetchAuthModes delegates through endpoint_router with the stable route name', async () => {
+        endpointRouterMock.mockResolvedValue({ needs_button: 'login', registration_enabled: false });
+        const mod = await loadModule();
+
+        await expect(mod.fetchAuthModes()).resolves.toEqual({
+            needs_button: 'login',
+            registration_enabled: false,
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('fetchAuthModes', { method: 'GET' });
+    });
+
+    test('creates the generated stable client with an adapter that routes live requests through endpoint_router', async () => {
+        endpointRouterMock.mockResolvedValue({ needs_button: 'logout', registration_enabled: true });
+        createStableApiClientMock.mockImplementation(({ requestAdapter }) => Object.freeze({
+            fetchAuthModes: () => requestAdapter({
+                routeSpec: {
+                    route_name: 'fetchAuthModes',
+                    path: '/api/auth-modes',
+                    method: 'GET',
+                },
+                routeName: 'fetchAuthModes',
+                method: 'GET',
+                path: '/api/auth-modes',
+                body: null,
+                needsCsrf: false,
+                baseUrl: '',
+                csrfTokenUrl: '/api/csrf-token',
+            }),
+            fetchUserPermissions: vi.fn(),
+            fetchFKCacheTriggers: vi.fn(),
+            refreshFKCacheTrigger: vi.fn(),
+        }));
+        const mod = await loadModuleWithGeneratedClientSpy();
+
+        await expect(mod.fetchAuthModes()).resolves.toEqual({
+            needs_button: 'logout',
+            registration_enabled: true,
+        });
+        expect(createStableApiClientMock).toHaveBeenCalledWith({
+            requestAdapter: expect.any(Function),
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('fetchAuthModes', { method: 'GET' });
+    });
+
+    test('fetchUserPermissions applies the manifest-backed GET default', async () => {
+        endpointRouterMock.mockResolvedValue({ endpoints: ['/ui/admin/permissions'] });
+        const mod = await loadModule();
+
+        await expect(mod.fetchUserPermissions()).resolves.toEqual({
+            endpoints: ['/ui/admin/permissions'],
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('fetchUserPermissions', { method: 'GET' });
+    });
+
+    test('fetchAdminUIFeatureFlags uses the protected candidate GET route', async () => {
+        endpointRouterMock.mockResolvedValue({
+            view_admin_cover_image_test_palette: true,
+        });
+        const mod = await loadModule();
+
+        await expect(mod.fetchAdminUIFeatureFlags()).resolves.toEqual({
+            view_admin_cover_image_test_palette: true,
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('adminUiFeatureFlags', {
+            method: 'GET',
+        });
+    });
+
+    test('site presentation wrappers preserve public read and atomic admin write methods', async () => {
+        const settings = {
+            dataset_cover_theme: { light: {}, dark: {}, shared: {} },
+            row_article_timestamp_display_mode: 'date_time',
+        };
+        endpointRouterMock.mockResolvedValue(settings);
+        const mod = await loadModule();
+
+        await expect(mod.fetchSitePresentationSettings()).resolves.toEqual(settings);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('sitePresentationSettings', {
+            method: 'GET',
+        });
+        await expect(mod.fetchAdminSitePresentationSettings()).resolves.toEqual(settings);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('adminSitePresentationSettings', {
+            method: 'GET',
+        });
+        await expect(mod.saveAdminSitePresentationSettings(settings)).resolves.toEqual(settings);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('adminSitePresentationSettings', {
+            method: 'POST',
+            body_data: settings,
+        });
+    });
+
+    test('fetchAdminVersionInfo uses the protected candidate GET route', async () => {
+        endpointRouterMock.mockResolvedValue({
+            product_name: 'Filterest',
+            app_version: '8.27.99',
+            db_version: '8.0.55',
+        });
+        const mod = await loadModule();
+
+        await expect(mod.fetchAdminVersionInfo({ suppressAuthRedirect: true })).resolves.toEqual({
+            product_name: 'Filterest',
+            app_version: '8.27.99',
+            db_version: '8.0.55',
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('adminVersionInfo', {
+            method: 'GET',
+            suppressAuthRedirect: true,
+        });
+    });
+
+    test('checkAdminVersionInfoAgain posts through the protected candidate route', async () => {
+        endpointRouterMock.mockResolvedValue({
+            latest_stable_version: '8.28.1',
+            upstream_check_performed: true,
+        });
+        const mod = await loadModule();
+
+        await expect(mod.checkAdminVersionInfoAgain({ suppressAuthRedirect: true })).resolves.toEqual({
+            latest_stable_version: '8.28.1',
+            upstream_check_performed: true,
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('adminVersionInfo', {
+            method: 'POST',
+            suppressAuthRedirect: true,
+        });
+    });
+
+    test('dataset sort default wrappers keep personal and administrator scopes separate', async () => {
+        endpointRouterMock.mockResolvedValue({ configured: true, scope: 'user' });
+        const mod = await loadModule();
+
+        await mod.savePersonalDatasetSortDefault({
+            dataset: 'travel_info',
+            value: '__newest:DESC',
+        });
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('savePersonalDatasetSortDefault', {
+            method: 'POST',
+            body_data: {
+                dataset: 'travel_info',
+                value: '__newest:DESC',
+            },
+        });
+
+        await mod.saveDatasetSortDefault({
+            dataset: 'travel_info',
+            value: '__newest:DESC',
+            scope: 'site',
+        });
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('saveDatasetSortDefault', {
+            method: 'POST',
+            body_data: {
+                dataset: 'travel_info',
+                value: '__newest:DESC',
+                scope: 'site',
+            },
+        });
+    });
+
+    test('refreshFKCacheTrigger posts the typed request body using the manifest-backed default method', async () => {
+        endpointRouterMock.mockResolvedValue({ updated: 7, errors: [] });
+        const mod = await loadModule();
+
+        await expect(mod.refreshFKCacheTrigger({ trigger_id: 42 })).resolves.toEqual({
+            updated: 7,
+            errors: [],
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('fkCacheRefresh', {
+            method: 'POST',
+            body_data: { trigger_id: 42 },
+        });
+    });
+
+    test('fetchDatasetAliasManagement loads candidate-route data with the manifest-backed GET default', async () => {
+        endpointRouterMock.mockResolvedValue({ datasets: [{ dataset_name: 'orders' }] });
+        const mod = await loadModule();
+
+        await expect(mod.fetchDatasetAliasManagement()).resolves.toEqual({
+            datasets: [{ dataset_name: 'orders' }],
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('getDatasetAliasManagement', { method: 'GET' });
+    });
+
+    test('saveDatasetAliasManagement posts the candidate alias payload through the manifest-backed POST default', async () => {
+        endpointRouterMock.mockResolvedValue({ status: 'ok', message: 'Alias saved' });
+        const mod = await loadModule();
+
+        await expect(mod.saveDatasetAliasManagement({
+            dataset_name: 'orders',
+            alias_slug: 'shop-orders',
+        })).resolves.toEqual({
+            status: 'ok',
+            message: 'Alias saved',
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('saveDatasetAliasManagement', {
+            method: 'POST',
+            body_data: {
+                dataset_name: 'orders',
+                alias_slug: 'shop-orders',
+            },
+        });
+    });
+
+    test('fetchDatasetHeaderConfig loads candidate-route data with the manifest-backed GET default', async () => {
+        endpointRouterMock.mockResolvedValue({ dataset_name: 'orders' });
+        const mod = await loadModule();
+
+        await expect(mod.fetchDatasetHeaderConfig('orders')).resolves.toEqual({
+            dataset_name: 'orders',
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('getDatasetHeaderConfig', {
+            method: 'GET',
+            url_params: 'orders',
+        });
+    });
+
+    test('saveDatasetHeaderConfig posts multipart payloads through the candidate wrapper', async () => {
+        endpointRouterMock.mockResolvedValue({ status: 'ok' });
+        const mod = await loadModule();
+        const payload = new FormData();
+        payload.append('dataset_name', 'orders');
+
+        await expect(mod.saveDatasetHeaderConfig(payload)).resolves.toEqual({
+            status: 'ok',
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('saveDatasetHeaderConfig', {
+            method: 'POST',
+            body_data: payload,
+        });
+    });
+
+    test('fetchCardVisibility loads candidate-route data with the manifest-backed GET default', async () => {
+        endpointRouterMock.mockResolvedValue({ columns: [{ column_uid: 9, column_name: 'title' }] });
+        const mod = await loadModule();
+
+        await expect(mod.fetchCardVisibility('orders')).resolves.toEqual({
+            columns: [{ column_uid: 9, column_name: 'title' }],
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('getCardVisibility', {
+            method: 'GET',
+            url_params: 'orders',
+        });
+    });
+
+    test('saveCardVisibility posts the candidate update payload through the manifest-backed POST default', async () => {
+        endpointRouterMock.mockResolvedValue({ status: 'ok', message: 'Saved' });
+        const mod = await loadModule();
+
+        await expect(mod.saveCardVisibility({
+            table_name: 'orders',
+            columns: [{ column_uid: 9, column_name: 'title' }],
+        })).resolves.toEqual({
+            status: 'ok',
+            message: 'Saved',
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('updateCardVisibility', {
+            method: 'POST',
+            body_data: {
+                table_name: 'orders',
+                columns: [{ column_uid: 9, column_name: 'title' }],
+            },
+        });
+    });
+
+    test('symbol registry wrappers use the same protected route for list and assignment', async () => {
+        endpointRouterMock
+            .mockResolvedValueOnce({ symbols: [{ key: 'table' }] })
+            .mockResolvedValueOnce({ status: 'ok' });
+        const mod = await loadModule();
+
+        await expect(mod.fetchAdminSymbols()).resolves.toEqual({
+            symbols: [{ key: 'table' }],
+        });
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(1, 'adminSymbols', {
+            method: 'GET',
+        });
+
+        await expect(mod.saveAdminSymbolAssignment({
+            target_type: 'dataset',
+            target_uid: 12,
+            icon_key: 'payments',
+        })).resolves.toEqual({ status: 'ok' });
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(2, 'adminSymbols', {
+            method: 'POST',
+            body_data: {
+                target_type: 'dataset',
+                target_uid: 12,
+                icon_key: 'payments',
+            },
+        });
+    });
+
+    test('view field collection wrappers preserve view identity and personal/site route separation', async () => {
+        endpointRouterMock
+            .mockResolvedValueOnce({ view_key: 'card', visible_columns: ['title'] })
+            .mockResolvedValueOnce({ status: 'ok' })
+            .mockResolvedValueOnce({ status: 'ok' });
+        const mod = await loadModule();
+
+        await mod.getViewFieldSets('travel_info', 'card');
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(1, 'getViewFieldSets', {
+            method: 'GET',
+            url_params: '?dataset=travel_info&view_key=card',
+        });
+
+        const payload = {
+            dataset: 'travel_info',
+            view_key: 'card',
+            name: 'Compact',
+            visible_columns: ['title'],
+        };
+        await mod.savePersonalViewFieldSet(payload);
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(2, 'savePersonalViewFieldSet', {
+            method: 'POST',
+            body_data: payload,
+        });
+
+        await mod.saveSiteViewFieldSet(payload);
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(3, 'saveSiteViewFieldSet', {
+            method: 'POST',
+            body_data: payload,
+        });
+    });
+
+    test('fetchChildTabConfig loads candidate-route data with the manifest-backed GET default', async () => {
+        endpointRouterMock.mockResolvedValue([{ id: 1, tab_key: 'comments', tab_order: 0, hidden: false }]);
+        const mod = await loadModule();
+
+        await expect(mod.fetchChildTabConfig('orders')).resolves.toEqual([
+            { id: 1, tab_key: 'comments', tab_order: 0, hidden: false },
+        ]);
+        expect(endpointRouterMock).toHaveBeenCalledWith('getChildTabConfig', {
+            method: 'GET',
+            url_params: 'orders',
+        });
+    });
+
+    test('saveChildTabConfig posts the candidate child-tab payload through the manifest-backed POST default', async () => {
+        endpointRouterMock.mockResolvedValue({ status: 'ok', message: 'Saved' });
+        const mod = await loadModule();
+
+        await expect(mod.saveChildTabConfig({
+            parent_table: 'orders',
+            tabs: [{ id: 1, tab_key: 'comments', tab_order: 0, hidden: false }],
+        })).resolves.toEqual({
+            status: 'ok',
+            message: 'Saved',
+        });
+        expect(endpointRouterMock).toHaveBeenCalledWith('saveChildTabConfig', {
+            method: 'POST',
+            body_data: {
+                parent_table: 'orders',
+                tabs: [{ id: 1, tab_key: 'comments', tab_order: 0, hidden: false }],
+            },
+        });
+    });
+
+    test('rejects explicit method mismatches before calling endpoint_router', async () => {
+        const mod = await loadModule();
+
+        await expect(
+            mod.stable_endpoint_router('fetchAuthModes', { method: 'POST' })
+        ).rejects.toThrow('Route "fetchAuthModes" only allows method(s): GET');
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+    });
+});

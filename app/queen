@@ -1,0 +1,18 @@
+#!/bin/bash
+# ==============================================================================
+# queen: Persistent Session Agent System
+#
+# Portable wrapper that calls Filterest's canonical Queen package.
+#
+# Usage:
+#   ./queen run "Fix the login bug"
+#   ./queen run --queen-family claude --worker-family codex "Fix the CSS"
+#   ./queen run --task-id 738 "Investigate the issue"
+#   ./queen status
+# ==============================================================================
+
+set -euo pipefail
+
+FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$FILTEREST_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m server_tools.queen "$@"

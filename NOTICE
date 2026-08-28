@@ -1,9 +1,10 @@
 Filterest
 Copyright 2026 Filterest Oy.
 
-Filterest is the public distribution of the platform prepared from a
-non-public maintainer release source. This notice applies only to files
-included in the public Filterest repository.
+Filterest is the independently usable public distribution of the platform.
+Its canonical public source is maintained as one complete subtree and mirrored
+to the public Filterest repository. This notice applies only to files included
+in that public source.
 
 This repository does not grant rights to non-public source history, private
 apps, private deployments, private API keys, customer data, or non-exported

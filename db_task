@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Compatibility task entrypoint for Filterest maintainers.
+set -euo pipefail
+INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+export FILTEREST_ROOT="$INSTALLATION_ROOT"
+export FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT"
+exec "$INSTALLATION_ROOT/app/db_task" "$@"

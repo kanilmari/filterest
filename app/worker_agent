@@ -1,0 +1,57 @@
+#!/bin/bash
+# ==============================================================================
+# worker_agent: Filterest Worker Agent Shortcut
+#
+# Delegate tasks to a background AI worker.
+# Default backend configured in server_tools/agent_tools/worker_agent_defaults.sh
+# Thin wrapper that calls server_tools/agent_tools/worker_agent/worker_agent_core.sh
+#
+# Usage:
+#   ./worker_agent "do something"                       # uses default backend
+#   ./worker_agent family=claude "do something"         # force Claude
+#   ./worker_agent family=codex "do something"          # force Codex
+#   ./worker_agent --prompt-file path/to/prompt.md      # prompt from file
+#   ./worker_agent --ticket agent_tasks/_db_dump/<id-slug>/ticket.md
+#   echo "do something" | ./worker_agent -              # stdin
+#   ./worker_agent --routine documentation_audit        # run a multi-step routine
+#   ./worker_agent --routine --list                     # list available routines
+#   ./worker_agent --list                               # list recent runs
+#   ./worker_agent --status <task_id>                   # check run status
+#   ./worker_agent --wait [task_id]                     # block until task completes
+#   ./worker_agent --help                               # show usage
+# ==============================================================================
+
+set -euo pipefail
+
+FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export FILTEREST_WORKSPACE_ROOT="${FILTEREST_WORKSPACE_ROOT:-$FILTEREST_ROOT}"
+
+WORKER_DIR="$FILTEREST_ROOT/server_tools/agent_tools/worker_agent"
+COMP_SCRIPT="$WORKER_DIR/worker_agent_completions.bash"
+
+# --setup-completion: install tab-completion permanently
+if [[ "${1:-}" == "--setup-completion" ]]; then
+    COMP_DIR="$HOME/.local/share/bash-completion/completions"
+    mkdir -p "$COMP_DIR"
+    cp "$COMP_SCRIPT" "$COMP_DIR/worker_agent"
+    echo "✓ Completion installed to $COMP_DIR/worker_agent"
+    # Also source it into the current shell if possible
+    echo ""
+    echo "To activate NOW in this terminal, run:"
+    echo "  source $COMP_SCRIPT"
+    echo ""
+    echo "New terminals will auto-load completions."
+    exit 0
+fi
+
+# Route --routine to the routine runner, everything else to the core
+if [[ "${1:-}" == "--routine" ]]; then
+    shift
+    if [[ -z "${FILTEREST_WORKER_ROUTINE_RUNNER:-}" || ! -f "$FILTEREST_WORKER_ROUTINE_RUNNER" ]]; then
+        echo "Error: This Filterest checkout has no project-specific worker routines configured." >&2
+        exit 2
+    fi
+    exec bash "$FILTEREST_WORKER_ROUTINE_RUNNER" "$@"
+else
+    exec bash "$WORKER_DIR/worker_agent_core.sh" "$@"
+fi

@@ -1,136 +1,44 @@
+# Defines local-only paths for canonical and public Filterest source checkouts.
+# Separates runtime data, protected settings, caches, and generated test output.
+# Keeps a copied folder safe to initialize as Git without exposing local secrets.
+# Public bootstrap fixture exceptions are added by the release generator when needed.
 node_modules/
-runtime/
-/storage
-/storage_deleted
-# Deployment-instance media remains runtime data even though the repository-root
-# storage paths are now compatibility links to the external runtime-data home.
-/instances/*/storage/
-/instances/*/storage_deleted/
-# Temporary rollback copies kept during the external runtime-data cutover.
-/storage.in_repo_backup_*/
-/storage_deleted.in_repo_backup_*/
-/apps/agent_network
-/apps/instance_control_panel
-/apps/cloud_management
-data/others/
-data/shared_dev_storage/
-data/bootstrap/
-/agent_tasks.deprecated/
-agent_tasks/_artifacts/
-/benchmark_results/
-# frontend/dist/ is rebuilt during audited public export and tracked for the toolchain-free administrator profile.
-server_tools/delivery_chain/helpers/patch_history/*.*
-easelect
-*.env
-!instances/template.env
-!testing/essential/test_variables.env
-apps/instance_control_panel/instance-control-panel-agents.local.json
-*.7z
-*.zip
-!server_tools/queen/quiet_time_automation_for_later.zip
-*.rej
+/config/
+/keys/
+/projects/
+/data/
+/backups/
+
+# Flat-layout compatibility paths remain ignored until all existing installs
+# have migrated to the installation-root directories above.
+/runtime/
+/storage/
+/storage_deleted/
+/db_backups/
+
+.env
+.env.*
+!.env.example
+dev_env.txt
+dev_env_test_creds.txt
+/filterest.paths.local
 *.crt
 *.pem
 *.key
-# Python
+*.log
+*.tmp
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-.codex
-/filterest.paths.local
-/docker/Dockerfile*.dockerignore
-
-# Playwright
-testing/e2e/.auth/
-testing/test-results/
-testing/test-results-visual/
-testing/my-test-results/
-testing/playwright-report/
-/test-results/
-/playwright-report/
-
-# Coverage artifacts
-/coverage/
-/coverage.out
-
-# Secrets
-dev_env.txt
-**/secrets.json
-*service-account*.json
-*service_account*.json
-*gserviceaccount*.json
-*credentials*.json
-*credential*.json
-*private-key*.json
-*private_key*.json
-google-application-credentials*.json
-apps/**/my-test-project-*.json
-
-# Private project sources live under the dynamically resolved projects_home.
-# These two paths are local build bridges created by project_bridges.sh.
-/apps/regfetch
-/apps/tukisuu
-
-# Local export staging for public/open-source slices
-/public-slice/
-/open-source-export/
-/dist-public/
-
-# Logs
-server.log
-server_output.log
-
-# Traefik
-docker/traefik/logs/
-!docker/traefik/logs/.gitkeep
-
-# IDE settings
-.vscode/settings.json
-
-# AI agent workspaces — allow skills & settings, ignore local/personal
-.claude/*
-!.claude/settings.json
-!.claude/skills/
-
-# Backup/old files
-*.old
-
-easelect_server
-*.bak
-easelect_dev
-easelect_prod
-
-# Instance backups (large SQL dumps, not for version control)
-instances/*/backups/*.sql
-instances/*/backups/*.sql.gz
-
-# Seed dumps and database backups
-data/db_backups/*.sql
-data/db_backups/easelect_migration_manifest_*.txt
-data/instance_trash/
-data/project_trash/
-easelect_full_dump*.sql
-agent_tasks/20_in_progress/20*--*/
-agent_tasks/_artifacts/worker_runs/
-agent_tasks/_artifacts/human_qa/
-agent_tasks/_artifacts/browser_audits/
-agent_tasks/_artifacts/filterest_regen/
-agent_tasks/_artifacts/gitnexus_refresh/
-agent_tasks/_db_dump/
-.gitnexus
-easelect_graph.html
-HANDOVER.md
-
-# Queen Machine runtime state (written by cron every cycle, not for version control)
 .queen/
-.queen_paused
+agent_tasks/
 
-# Ticket ownership locks (created by ./task start, removed by ./task hold/done/close)
-TICKET_*_ACTIVE/
+coverage/
+coverage.out
 
-# Ticket creation lock (created on demand by ./task new to serialize ID allocation)
-.task_new.lock
-
-# Per-ticket transition locks (created on demand by ./task move/hold/done/close/etc.)
-.task_transition_locks/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
