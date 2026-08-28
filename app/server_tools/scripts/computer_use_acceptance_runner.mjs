@@ -6,11 +6,26 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { execFileSync } from "child_process";
-import { chromium } from "@playwright/test";
+import { fileURLToPath } from "url";
+import { requireNodeDependency } from "../lib/node_dependency_loader.mjs";
+import {
+    loadBrowserTestCredentials,
+    resolveBrowserTestOtpCode,
+} from "../lib/browser_test_credentials.mjs";
 import { renderComputerUseReport } from "./computer_use_acceptance_reporter.mjs";
-import { isLocalEaselectUrl } from "./local_easelect_target.mjs";
+import {
+    isLocalEaselectUrl,
+    localAllowedHostsForBaseUrl,
+    resolveLocalFilterestBaseUrl,
+} from "./local_easelect_target.mjs";
 
-const defaultAllowedHosts = ["localhost:8082", "127.0.0.1:8082", "[::1]:8082"];
+const { chromium } = requireNodeDependency("@playwright/test");
+
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const applicationRoot = path.resolve(scriptDirectory, "../..");
+const defaultAllowedHosts = localAllowedHostsForBaseUrl(
+    resolveLocalFilterestBaseUrl({ applicationRoot }),
+);
 
 // Runs the browser and optional Computer Use API loop.
 export async function runComputerUseAcceptance(options, outputDir, repoRoot) {
@@ -27,7 +42,7 @@ export async function runComputerUseAcceptance(options, outputDir, repoRoot) {
     });
     const startedAt = new Date().toISOString();
     try {
-        const session = await openBrowserSession(browser, options, evidence, repoRoot);
+        const session = await openBrowserSession(browser, options, evidence);
         const initialScreenshot = await captureScreenshot(session.page, outputDir, "initial");
         const modelOutcome = options.dryRun
             ? dryRunOutcome()
@@ -87,7 +102,7 @@ function gitHead(repoRoot) {
 }
 
 // Opens a guarded Playwright context and navigates to the target.
-async function openBrowserSession(browser, options, evidence, repoRoot) {
+async function openBrowserSession(browser, options, evidence) {
     const localTarget = isLocalEaselectUrl(options.target);
     const authStatePath = options.useAuthState && localTarget && fs.existsSync(options.authState) ? options.authState : undefined;
     const context = await browser.newContext({
@@ -101,7 +116,7 @@ async function openBrowserSession(browser, options, evidence, repoRoot) {
     await installBrowserGuards(context, page, options, evidence);
     let auth = { status: "not_applicable" };
     if (localTarget && options.ensureLogin) {
-        auth = await ensureLocalAuthenticated(page, context, options, repoRoot);
+        auth = await ensureLocalAuthenticated(page, context, options);
     }
     await page.goto(options.target, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
@@ -110,8 +125,8 @@ async function openBrowserSession(browser, options, evidence, repoRoot) {
 }
 
 // Reuses or refreshes local auth state before Computer Use starts.
-async function ensureLocalAuthenticated(page, context, options, repoRoot) {
-    const credentials = loadTestCredentials(repoRoot);
+async function ensureLocalAuthenticated(page, context, options) {
+    const credentials = loadBrowserTestCredentials({ applicationRoot });
     await page.goto(new URL("/", options.target).toString(), { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(500);
     const existingProfile = await readUserProfile(page);
@@ -121,28 +136,6 @@ async function ensureLocalAuthenticated(page, context, options, repoRoot) {
     await performLocalLogin(page, context, options, credentials);
     const profile = await readUserProfile(page);
     return { status: "authenticated", refreshed: true, username: profile.username || credentials.username };
-}
-
-// Reads test-admin credentials from the repo-local development credential file.
-function loadTestCredentials(repoRoot) {
-    const configuredPath = String(process.env.FILTEREST_TEST_CREDENTIAL_FILE || "").trim();
-    const credentialPath = configuredPath
-        ? path.resolve(configuredPath)
-        : path.join(repoRoot, "dev_env_test_creds.txt");
-    const raw = fs.readFileSync(credentialPath, "utf8");
-    const values = new Map();
-    for (const line of raw.split(/\r?\n/)) {
-        const match = line.match(/^([^=#]+)=(.*)$/);
-        if (match) {
-            values.set(match[1].trim(), match[2].trim());
-        }
-    }
-    const username = values.get("TEST_ADMIN_USER") || "";
-    const password = values.get("TEST_ADMIN_PASS") || "";
-    if (!username || !password) {
-        throw new Error("missing TEST_ADMIN_USER or TEST_ADMIN_PASS in the configured test credential file");
-    }
-    return { username, password };
 }
 
 // Reads the current authenticated profile through the application API.
@@ -182,7 +175,9 @@ async function performLocalLogin(page, context, options, credentials) {
     }
     await page.locator('[data-testid="login-submit"]').click();
     await page.locator('[data-testid="login-otp-section"]').waitFor({ state: "visible", timeout: 10000 });
-    await page.locator('[data-testid="login-otp"]').fill("334726");
+    await page.locator('[data-testid="login-otp"]').fill(
+        resolveBrowserTestOtpCode({ applicationRoot }),
+    );
     await page.locator('[data-testid="login-submit"]').click();
     await page.waitForSelector('[data-testid^="tab-"]', { timeout: 15000 });
     if (options.useAuthState && options.authState) {

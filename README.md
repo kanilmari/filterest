@@ -158,12 +158,16 @@ application and PostgreSQL images, and waits until both are healthy. Generated
 secrets are never printed.
 
 The current Docker stack uses installation-owned bind mounts, not named
-volumes. It mounts `config/`, `keys/tls/`, `projects/`, `data/storage/`,
-`data/storage_deleted/`, `data/runtime/`, `data/postgres/`, and `backups/` into
-the appropriate application or database container paths. The application image
-and its `/filterest/app` source are read-only at runtime. Docker Compose reads
-secrets from `keys/docker.env`; the old root `.env` location is only a guarded
-one-time migration input, not the current settings contract.
+volumes. It mounts `config/`, `keys/tls/`, `keys/filterest_runtime/`, `projects/`,
+`data/storage/`, `data/storage_deleted/`, `data/runtime/`, `data/postgres/`, and
+`backups/` into the appropriate application or database container paths. The
+application image and its `/filterest/app` source are read-only at runtime.
+Docker Compose reads its generated database and session secrets from
+`keys/docker.env`; an OpenAI key saved by an administrator lives in the
+write-limited `keys/filterest_runtime/runtime_environment.env` file so it
+survives a container rebuild without making source writable. Setup moves an
+existing OpenAI key from `keys/docker.env` there once and clears the old copy.
+The old root `.env` location remains only a guarded one-time migration input.
 
 Native Linux setup remains available through two profiles:
 
@@ -278,10 +282,10 @@ carry forward only the five operator-owned directories after taking a backup.
 ```bash
 ./filterest setup --profile development  # one-time toolchain and database setup
 ./filterest start     # build and run the local application
-npm --prefix app test          # run frontend unit tests
+./filterest test-unit           # run frontend unit tests
 (cd app && go test ./...)      # run Go tests
-npm --prefix app run build     # build frontend assets
-npm --prefix app run qa        # run the broader project QA suite
+./filterest build               # build frontend assets
+./filterest qa                  # run the broader project QA suite
 ./queen status        # inspect the built-in persistent agent runtime
 ./db_report workline board  # inspect the canonical workline observatory state
 ./db_task list        # inspect database-backed development tasks
@@ -289,12 +293,11 @@ npm --prefix app run qa        # run the broader project QA suite
 ./filterest asset-linking status  # inspect shared media-linking readiness
 ```
 
-The development profile installs Node dependencies under
-`data/runtime/node/node_modules`. It creates one Git-ignored compatibility link,
-`app/node_modules -> ../data/runtime/node/node_modules`, so standard npm, Vite,
-Vitest, and Playwright resolution continues to work from the maintained package
-root. The link contains no maintained source and is not created by the browser-
-administration profile or used by production-style runtime deployment.
+The development profile installs Node dependencies and tool caches under
+`data/runtime/node/`. The root commands bind Vite, Vitest, Playwright, and the
+other Node tools to that mutable location without creating a compatibility link
+or cache below immutable `app/`. The browser-administration profile does not
+install or use the source-development dependency tree.
 
 Queen, database-backed tasks, and the browser Workline Observatory are part of
 Filterest's development and administration surface. Their durable records stay
@@ -302,6 +305,16 @@ in the installation database. Queen sessions and worker output use ignored
 local runtime directories; copying the source does not copy another
 installation's workline data or credentials. The worker command requires a
 separately installed and authenticated supported AI command-line client.
+
+Local API maintenance commands default to `https://localhost:8100` and read the
+protected account values from `keys/filterest_runtime/`. Deliberate process-level
+overrides use `FILTEREST_API_BASE_URL`, `FILTEREST_API_USERNAME`,
+`FILTEREST_API_PASSWORD`, and `FILTEREST_API_OTP_CODE`; `db_task` additionally
+accepts its tool-specific `DB_TASK_BASE_URL`. Legacy `EASELECT_API_*` and ambient
+`DEV_*` / `LOGIN_OTP_CODE` values are compatibility inputs only when the same
+public implementation is structurally embedded in a private host-product source
+checkout, so a standalone Filterest command cannot drift to the host's local
+runtime or credentials merely because they exist in the caller's shell.
 
 Keep user-facing features multilingual. Use the existing translation and
 language-key workflows instead of hardcoding one-language UI text.

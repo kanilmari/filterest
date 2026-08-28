@@ -1,10 +1,8 @@
 #!/bin/bash
-# ==============================================================================
-# local.sh: Local development mode for Easelect Control CLI
-#
-# Starts the Go backend locally without Docker.
-# Includes logging reliability checks (snap Go detection, log verification).
-# ==============================================================================
+# local.sh
+# Starts and stops the native backend used by the Filterest control command.
+# Bridges immutable application binaries with installation-owned configuration and logs.
+# Exists so local lifecycle operations preserve process identity and storage boundaries.
 
 source "${FILTEREST_SOURCE_ROOT:-$PROJECT_ROOT}/server_tools/lib/toolchain_version.sh"
 
@@ -147,7 +145,7 @@ _start_vite_dev() {
     local vite_hmr_port
     local vite_backend_url
 
-    vite_port="$(_read_local_env_value "VITE_DEV_PORT" "$db_env_file" "5173")"
+    vite_port="$(_read_local_env_value "VITE_DEV_PORT" "$db_env_file" "$(filterest_default_vite_port)")"
     vite_hmr_port="$(_read_local_env_value "VITE_HMR_PORT" "$db_env_file" "$vite_port")"
     vite_backend_url="$(_read_local_env_value "VITE_BACKEND_URL" "$db_env_file")"
     if [[ -z "$vite_backend_url" ]]; then
@@ -155,6 +153,10 @@ _start_vite_dev() {
     fi
 
     if fuser "${vite_port}/tcp" > /dev/null 2>&1; then
+        if [[ "${FILTEREST_REFUSE_OCCUPIED_PORT:-0}" == "1" ]]; then
+            echo -e "${YELLOW}⚠️  Vite port ${vite_port} is already in use; refusing broad reuse.${NC}"
+            return 1
+        fi
         if _vite_dev_server_is_ready "$vite_port"; then
             echo -e "${BLUE}⚡ Vite dev server already running on port ${vite_port}${NC}"
             return 0
@@ -218,8 +220,17 @@ start_local() {
     local custom_port="${1:-}"
     local preserve_derivative_instances="${2:-false}"
     local shared_dev_storage_prepared=false
+    local -a go_build_args=(-o "$LOCAL_BINARY_PATH")
     local project_name
     project_name="$(project_display_name)"
+
+    # A transferred Filterest folder deliberately has no Git metadata. Go's
+    # automatic VCS stamping can still try to query Git for the main package,
+    # so disable only that optional stamp for the standalone root launcher.
+    # Generated release identity remains bound separately in BUILD_IDENTITY.json.
+    if filterest_uses_standalone_root_ctl; then
+        go_build_args=(-buildvcs=false "${go_build_args[@]}")
+    fi
     
     check_env_file "$EASELECT_RUNTIME_ENV_FILE"
     if [[ -f "$EASELECT_DEV_ENV_FILE" ]]; then
@@ -297,7 +308,7 @@ start_local() {
     mkdir -p "$LOCAL_BINARY_DIR" "$(dirname "$LOG_FILE")"
     if ! (
         cd "$FILTEREST_BUILD_ROOT"
-        go build -o "$LOCAL_BINARY_PATH" "${FILTEREST_GO_BUILD_TARGET:-.}"
+        go build "${go_build_args[@]}" "${FILTEREST_GO_BUILD_TARGET:-.}"
     ) 2>&1; then
         echo -e "${RED}❌ Build failed${NC}"
         if [[ "$shared_dev_storage_prepared" == true ]]; then

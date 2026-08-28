@@ -7,21 +7,25 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+APPLICATION_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(
+    node "$APPLICATION_ROOT/server_tools/lib/filterest_project_boundary_cli.mjs" \
+        --print-project-boundary "$APPLICATION_ROOT"
+)"
 
 # shellcheck source=../ctl/lib/resolve_env.sh
-source "$PROJECT_ROOT/server_tools/ctl/lib/resolve_env.sh"
-cd "$PROJECT_ROOT"
+source "$APPLICATION_ROOT/server_tools/ctl/lib/resolve_env.sh"
+cd "$APPLICATION_ROOT"
 
-FILTEREST_PRODUCT_ROOT="$(cd "$PROJECT_ROOT/.." && pwd)"
+FILTEREST_PRODUCT_ROOT="$(cd "$APPLICATION_ROOT/.." && pwd)"
 FILTEREST_TEST_RUNTIME_ROOT="${FILTEREST_TEST_RUNTIME_ROOT:-$FILTEREST_PRODUCT_ROOT/data/testing}"
 if [[ "$FILTEREST_TEST_RUNTIME_ROOT" != /* ]]; then
     FILTEREST_TEST_RUNTIME_ROOT="$FILTEREST_PRODUCT_ROOT/$FILTEREST_TEST_RUNTIME_ROOT"
 fi
 FILTEREST_TEST_RUNTIME_ROOT="$(realpath -m -- "$FILTEREST_TEST_RUNTIME_ROOT")"
 case "$FILTEREST_TEST_RUNTIME_ROOT/" in
-    "$PROJECT_ROOT/"*)
-        echo "Error: FILTEREST_TEST_RUNTIME_ROOT must be outside immutable app/: $PROJECT_ROOT" >&2
+    "$APPLICATION_ROOT/"*)
+        echo "Error: FILTEREST_TEST_RUNTIME_ROOT must be outside immutable app/: $APPLICATION_ROOT" >&2
         exit 1
         ;;
 esac
@@ -72,7 +76,7 @@ if ! $SKIP_CAPTURE; then
     echo "=== Visual Guardian: Capturing screenshots ==="
     mkdir -p "$VISUAL_OUTPUT_DIR"
     rm -f "$VISUAL_OUTPUT_DIR"/*.png "$VISUAL_OUTPUT_DIR"/report.json
-    env -u NO_COLOR npx playwright test --config "$VISUAL_CONFIG" --reporter=list 2>&1 | cat
+    env -u NO_COLOR playwright test --config "$VISUAL_CONFIG" --reporter=list 2>&1 | cat
     echo ""
 fi
 

@@ -11,7 +11,7 @@ RUN npm ci
 
 COPY frontend/ ./frontend/
 COPY server_tools/lib/easelect_private_paths.mjs ./server_tools/lib/easelect_private_paths.mjs
-RUN npm run build
+RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build
 
 FROM golang:1.26.5-alpine3.24 AS backend-builder
 
@@ -94,6 +94,9 @@ RUN case "${FILTEREST_RUNTIME_UID}:${FILTEREST_RUNTIME_GID}" in \
 COPY --from=backend-builder /app/filterest ./filterest
 COPY --from=backend-builder /app/filterest-admin-recovery ./filterest-admin-recovery
 COPY frontend/ ./frontend/
+# Runtime language-source maintenance scans both immutable source families.
+# Keep backend source readable in the final image without granting write access.
+COPY backend/ ./backend/
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY docs/ ./docs/
 COPY go.mod ./go.mod
@@ -106,6 +109,7 @@ COPY docker/docker-entrypoint.sh ./docker/docker-entrypoint.sh
 RUN mkdir -p \
         /filterest/config \
         /filterest/keys/tls \
+        /filterest/keys/filterest_runtime \
         /filterest/projects \
         /filterest/data/storage \
         /filterest/data/storage_deleted \

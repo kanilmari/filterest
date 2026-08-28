@@ -65,12 +65,16 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	// ja tietokantapohjaiset avaimet (views, groups) system_lang_key_sources-tauluun.
 	// Tämä pitää ajaa ENNEN MarkOrphanLangKeys():ta, koska orphan-tunnistus
 	// perustuu nyt sources-taulun sisältöön (ei itsenäiseen skannaukseen).
-	sourceCount := system_table_tools.PopulateLangKeySources()
-	log.Printf("[STARTUP] Lang key sources: %d source(s) saved", sourceCount)
+	sourceCount, sourceErr := system_table_tools.PopulateLangKeySources()
+	if sourceErr != nil {
+		log.Printf("\033[31merror: [STARTUP] language-key source scan failed; orphan maintenance skipped: %v\033[0m", sourceErr)
+	} else {
+		log.Printf("[STARTUP] Lang key sources: %d source(s) saved", sourceCount)
 
-	// Merkitään orpoavaimet system_lang_key_sources-tauluun (source_type='orphan').
-	// Orpo = avain jolla ei ole yhtään non-orphan-lähdettä sources-taulussa.
-	orphanCount, deOrphaned := system_table_tools.MarkOrphanLangKeys()
-	log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
+		// Merkitään orpoavaimet system_lang_key_sources-tauluun (source_type='orphan').
+		// Orpo = avain jolla ei ole yhtään non-orphan-lähdettä sources-taulussa.
+		orphanCount, deOrphaned := system_table_tools.MarkOrphanLangKeys()
+		log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
+	}
 	log.Println("[STARTUP] Optional maintenance completed.")
 }

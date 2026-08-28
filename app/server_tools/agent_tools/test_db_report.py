@@ -277,6 +277,32 @@ class DBReportCLITest(unittest.TestCase):
         self.assertEqual(client.password, "entered-password")
         prompt.assert_called_once_with("Password for existing account 'operator@example.test': ")
 
+    def test_prompt_display_and_client_share_environment_selected_target(self):
+        args = db_report.build_parser().parse_args([
+            "--prompt-credentials",
+            "--credential-username",
+            "operator@example.test",
+            "workline",
+            "list",
+        ])
+        with (
+            patch(
+                f"{_DB_REPORT_MODULE}.resolve_api_base_url",
+                return_value="https://reports.example.test/",
+            ),
+            patch(
+                f"{_DB_REPORT_MODULE}.getpass.getpass",
+                return_value="entered-password",
+            ),
+            patch("builtins.print") as output,
+        ):
+            client = db_report.make_client(args, CapturingClient)
+
+        rendered = "\n".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("https://reports.example.test", rendered)
+        self.assertNotIn(db_report.DEFAULT_BASE_URL, rendered)
+        self.assertEqual(client.base_url, "https://reports.example.test")
+
     def test_metadata_file_must_contain_object(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             metadata_path = Path(temp_dir) / "metadata.json"

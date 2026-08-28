@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# Compatibility task entrypoint for Filterest maintainers.
+# db_task
+# Delegates standalone task operations to the canonical app implementation.
+# Bridges the public installation root with protected credentials and mutable task dumps.
+# Exists so maintainers use one stable command without writing state below immutable app/.
 set -euo pipefail
 INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export FILTEREST_ROOT="$INSTALLATION_ROOT"
 export FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT"
+export FILTEREST_WORKSPACE_ROOT="$INSTALLATION_ROOT"
+export GOWORK=off PYTHONPYCACHEPREFIX="$INSTALLATION_ROOT/data/runtime/python-cache" FILTEREST_RUNTIME_ROOT_OVERRIDE="$INSTALLATION_ROOT/data/runtime"
+export FILTEREST_TASK_DUMP_DIR="$INSTALLATION_ROOT/data/runtime/agent_tasks/_db_dump"
+export FILTEREST_TEST_CREDENTIAL_FILE="$INSTALLATION_ROOT/keys/filterest_runtime/dev_env_test_creds.txt"
+unset FILTEREST_DATABASE_COMMAND FILTEREST_DATABASE_SUBCOMMAND
+unset FILTEREST_DATABASE_DISPLAY_COMMAND FILTEREST_WORKER_AGENT_COMMAND
 exec "$INSTALLATION_ROOT/app/db_task" "$@"

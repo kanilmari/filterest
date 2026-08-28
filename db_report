@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Compatibility workline-report entrypoint for Filterest maintainers.
+# db_report
+# Delegates standalone workline reporting to the canonical app implementation.
+# Bridges the public installation root with protected credentials and DB-backed reports.
+# Exists so maintainers use one stable command without writing state below immutable app/.
 set -euo pipefail
 INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export FILTEREST_ROOT="$INSTALLATION_ROOT"
 export FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT"
+export FILTEREST_WORKSPACE_ROOT="$INSTALLATION_ROOT"
+export FILTEREST_TEST_CREDENTIAL_FILE="$INSTALLATION_ROOT/keys/filterest_runtime/dev_env_test_creds.txt"
+export GOWORK=off PYTHONPYCACHEPREFIX="$INSTALLATION_ROOT/data/runtime/python-cache" FILTEREST_RUNTIME_ROOT_OVERRIDE="$INSTALLATION_ROOT/data/runtime"
 exec "$INSTALLATION_ROOT/app/db_report" "$@"

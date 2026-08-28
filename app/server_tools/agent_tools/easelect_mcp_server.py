@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # easelect_mcp_server.py
-# Minimal MCP stdio server backed by the shared Easelect HTTP API client.
-# Bridges MCP JSON-RPC tool calls and easelect_api_client.py developer actions.
+# Runs an MCP stdio server backed by the shared Filterest HTTP API client.
+# Bridges MCP JSON-RPC tools with Filterest and embedded Easelect developer actions.
 # Exists so agents can use app-validated APIs instead of direct database writes.
 
 import json
@@ -9,9 +9,19 @@ import os
 import sys
 
 try:
-    from .easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from .easelect_api_client import (
+        DEFAULT_BASE_URL,
+        EaselectAPIClient,
+        EaselectAPIError,
+        resolve_api_base_url,
+    )
 except ImportError:
-    from easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from easelect_api_client import (
+        DEFAULT_BASE_URL,
+        EaselectAPIClient,
+        EaselectAPIError,
+        resolve_api_base_url,
+    )
 
 
 MCP_PROTOCOL_VERSION = "2025-03-26"
@@ -29,11 +39,12 @@ MCP_DISPLAY_COMMAND = os.environ.get(
     "FILTEREST_MCP_DISPLAY_COMMAND",
     "./filterest mcp",
 )
-LANG_KEY_HANDOVER_TEXT = """# Easelect MCP Language-Key API Handover
+LANG_KEY_HANDOVER_TEXT = """# Filterest MCP Language-Key API Handover
 
 Command: `__MCP_DISPLAY_COMMAND__`
-Default app URL: `https://localhost:8082`
-Override URL per call with `base_url`, or set `EASELECT_API_BASE_URL`.
+Default app URL: `__DEFAULT_BASE_URL__`
+Configure another target with `FILTEREST_API_BASE_URL` before starting the MCP server.
+Any per-call `base_url` may only confirm that configured target.
 
 Use these MCP tools for language keys:
 - `get_lang_key` with `{"lang_key":"view_card"}`
@@ -49,7 +60,9 @@ Rules:
 Minimal next-chat notice:
 Use repo MCP command `__MCP_DISPLAY_COMMAND__`; for language keys call `get_lang_key` then
 `upsert_lang_keys` with `dry_run:true`, then `dry_run:false`.
-""".replace("__MCP_DISPLAY_COMMAND__", MCP_DISPLAY_COMMAND)
+""".replace("__MCP_DISPLAY_COMMAND__", MCP_DISPLAY_COMMAND).replace(
+    "__DEFAULT_BASE_URL__", DEFAULT_BASE_URL
+)
 
 
 RESOURCE_DEFINITIONS = [
@@ -81,7 +94,7 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "base_url": {
                     "type": "string",
-                    "description": "Optional Easelect base URL. Defaults to https://localhost:8082.",
+                    "description": f"Optional Filterest base URL. Defaults to {DEFAULT_BASE_URL}.",
                 },
             },
         },
@@ -241,7 +254,7 @@ TOOL_DEFINITIONS = [
                 },
                 "base_url": {
                     "type": "string",
-                    "description": "Optional Easelect base URL. Defaults to https://localhost:8082.",
+                    "description": f"Optional Filterest base URL. Defaults to {DEFAULT_BASE_URL}.",
                 },
             },
             "required": ["lang_key"],
@@ -276,7 +289,7 @@ TOOL_DEFINITIONS = [
                 },
                 "base_url": {
                     "type": "string",
-                    "description": "Optional Easelect base URL. Defaults to https://localhost:8082.",
+                    "description": f"Optional Filterest base URL. Defaults to {DEFAULT_BASE_URL}.",
                 },
             },
             "required": ["updates"],
@@ -327,9 +340,20 @@ def make_tool_result(payload, *, is_error=False):
 
 
 def build_client(arguments, client_factory):
-    """Create an API client between optional MCP arguments and the shared client class."""
-    base_url = arguments.get("base_url") if isinstance(arguments, dict) else None
-    return client_factory(base_url=base_url)
+    """Create a client without letting tool input redirect server credentials."""
+    requested_base_url = (
+        arguments.get("base_url") if isinstance(arguments, dict) else None
+    )
+    if requested_base_url is not None:
+        requested_base_url = str(requested_base_url).strip().rstrip("/")
+        configured_base_url = resolve_api_base_url().rstrip("/")
+        if requested_base_url != configured_base_url:
+            raise ValueError(
+                "base_url must match the MCP server target; set "
+                "FILTEREST_API_BASE_URL before starting the server to use "
+                "another service"
+            )
+    return client_factory(base_url=requested_base_url)
 
 
 def require_string(arguments, name):

@@ -11,6 +11,7 @@
 # Local installation settings and generated developer output.
 /.env
 /.env.*
+/dev_env_test_creds.txt
 /app/node_modules/
 /app/frontend/dist/
 /app/testing/e2e/.auth/

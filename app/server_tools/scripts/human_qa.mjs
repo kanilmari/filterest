@@ -7,13 +7,24 @@ import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
-import { chromium } from "@playwright/test";
-import { authStatePathForTarget, isLocalEaselectUrl } from "./local_easelect_target.mjs";
+import { requireNodeDependency } from "../lib/node_dependency_loader.mjs";
+import {
+    loadBrowserTestCredentials,
+    resolveBrowserTestOtpCode,
+} from "../lib/browser_test_credentials.mjs";
+import {
+    authStatePathForTarget,
+    isLocalEaselectUrl,
+    resolveLocalFilterestBaseUrl,
+} from "./local_easelect_target.mjs";
 import { resolveFilterestTestRuntimePaths } from "./test_runtime_paths.mjs";
+
+const { chromium } = requireNodeDependency("@playwright/test");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../..");
+const defaultBaseUrl = resolveLocalFilterestBaseUrl({ applicationRoot: repoRoot });
 const testRuntimePaths = resolveFilterestTestRuntimePaths({ applicationRoot: repoRoot });
 const defaultAuthState = testRuntimePaths.authStorageState;
 const defaultArtifactRoot = testRuntimePaths.humanQa;
@@ -26,7 +37,7 @@ function usage() {
   ${humanQaDisplayCommand} prep <ticket-id> [options]
 
 Options:
-  --url <URL|route>          Browser target. Routes like /service_catalog use https://localhost:8082.
+  --url <URL|route>          Browser target. Routes like /service_catalog use ${defaultBaseUrl}.
   --file <path>              File target to open in the browser.
   --new <text>               What is new in this QA pass, repeatable.
   --easier <text>            What should now be easier or possible, repeatable.
@@ -204,13 +215,13 @@ function resolveTarget(rawValue, mode) {
         return value;
     }
     if (value.startsWith("/")) {
-        return `https://localhost:8082${value}`;
+        return `${defaultBaseUrl}${value}`;
     }
     const candidatePath = path.resolve(repoRoot, value);
     if (fs.existsSync(candidatePath)) {
         return pathToFileURL(candidatePath).toString();
     }
-    return `https://localhost:8082/${value}`;
+    return `${defaultBaseUrl}/${value}`;
 }
 
 function setTarget(options, rawValue, mode) {
@@ -459,27 +470,6 @@ function writeRuntimeStatus(session, status) {
     fs.writeFileSync(session.runtimeStatusPath, JSON.stringify(payload, null, 2) + "\n", "utf8");
 }
 
-function loadTestCredentials() {
-    const configuredPath = String(process.env.FILTEREST_TEST_CREDENTIAL_FILE || "").trim();
-    const credentialPath = configuredPath
-        ? path.resolve(configuredPath)
-        : path.join(repoRoot, "dev_env_test_creds.txt");
-    const raw = fs.readFileSync(credentialPath, "utf8");
-    const values = new Map();
-    for (const line of raw.split(/\r?\n/)) {
-        const match = line.match(/^([^=#]+)=(.*)$/);
-        if (match) {
-            values.set(match[1].trim(), match[2].trim());
-        }
-    }
-    const username = values.get("TEST_ADMIN_USER") || "";
-    const password = values.get("TEST_ADMIN_PASS") || "";
-    if (!username || !password) {
-        throw new Error("missing TEST_ADMIN_USER or TEST_ADMIN_PASS in the configured test credential file");
-    }
-    return { username, password };
-}
-
 async function readUserProfile(page) {
     return page.evaluate(async () => {
         const response = await fetch("/api/user-profile", { credentials: "include" });
@@ -555,13 +545,15 @@ async function performLocalLogin(page, session, credentials) {
     }
     await page.locator('[data-testid="login-submit"]').click();
     await page.locator('[data-testid="login-otp-section"]').waitFor({ state: "visible", timeout: 10000 });
-    await page.locator('[data-testid="login-otp"]').fill("334726");
+    await page.locator('[data-testid="login-otp"]').fill(
+        resolveBrowserTestOtpCode({ applicationRoot: repoRoot }),
+    );
     await page.locator('[data-testid="login-submit"]').click();
     await waitForAuthenticatedApp(page, credentials.username);
 }
 
 async function ensureLocalAuthenticated(page, context, session) {
-    const credentials = loadTestCredentials();
+    const credentials = loadBrowserTestCredentials({ applicationRoot: repoRoot });
     const rootUrl = new URL("/", session.target).toString();
     await page.goto(rootUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(500);

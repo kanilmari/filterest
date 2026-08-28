@@ -27,9 +27,9 @@
         "postcss": "8.5.23"
     },
     "scripts": {
-        "dev": "vite frontend",
-        "build": "vite build frontend",
-        "preview": "vite preview --outDir frontend/dist",
+        "dev": "vite --configLoader native frontend",
+        "build": "vite build --configLoader native frontend",
+        "preview": "vite preview --configLoader native frontend",
         "lint:css": "stylelint \"frontend/**/*.css\" --ignore-pattern \"frontend/dist/**\"",
         "qa": "./server_tools/scripts/qa.sh",
         "restart": "./ctl",

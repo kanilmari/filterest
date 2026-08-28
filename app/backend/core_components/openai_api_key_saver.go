@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"easelect/backend/core_components/runtimepaths"
 )
 
 const openAIAPIKeyEnvironmentName = "OPENAI_API_KEY"
@@ -25,11 +27,10 @@ var (
 // Between: the admin-only HTTP boundary and the resolved Filterest/Easelect private key location.
 // Why: makes the new key available immediately while keeping it out of logs, responses, and Git.
 func SaveOpenAIAPIKey(apiKey string) error {
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("resolve project root: %w", err)
-	}
-	return saveOpenAIAPIKeyToProjectEnvironment(projectRoot, apiKey)
+	return saveOpenAIAPIKeyToProjectEnvironment(
+		runtimepaths.Current().InstallationRoot,
+		apiKey,
+	)
 }
 
 func saveOpenAIAPIKeyToProjectEnvironment(projectRoot string, apiKey string) error {

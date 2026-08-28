@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
+import { resolveFilterestStorageRuntimePaths } from '../helpers/test-runtime-paths';
 
 type ArchivedFolderStatus = {
   folder?: string;
@@ -52,9 +53,11 @@ test.describe('T12 — Archived Storage Prune', () => {
 
   test('prune-archived-media-tables removes targeted archived dataset roots', async ({ page }) => {
     const folderName = `999${Date.now()}`;
-    const archivedMarker = path.join('storage_deleted', folderName, '1', 'marker.txt');
+    const { storageDeletedRoot } = resolveFilterestStorageRuntimePaths();
+    const archivedFolder = path.join(storageDeletedRoot, folderName);
+    const archivedMarker = path.join(archivedFolder, '1', 'marker.txt');
 
-    fs.rmSync(path.join('storage_deleted', folderName), { recursive: true, force: true });
+    fs.rmSync(archivedFolder, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(archivedMarker), { recursive: true });
     fs.writeFileSync(archivedMarker, 'marker');
 
@@ -100,7 +103,7 @@ test.describe('T12 — Archived Storage Prune', () => {
       expect(Array.isArray(pruneBody.pruned), 'Expected pruned array from prune-archived-media-tables.').toBe(true);
       expect(pruneBody.pruned).toContain(folderName);
 
-      await expect.poll(() => fs.existsSync(path.join('storage_deleted', folderName))).toBe(false);
+      await expect.poll(() => fs.existsSync(archivedFolder)).toBe(false);
 
       const checkAfter = await page.evaluate(async () => {
         const response = await fetch('/api/check-archived-media-tables', {
@@ -115,7 +118,7 @@ test.describe('T12 — Archived Storage Prune', () => {
       const checkAfterBody = JSON.parse(checkAfter.body) as ArchivedFolderCheckResponse;
       expect(checkAfterBody.archived?.some((entry) => entry.folder === folderName)).toBe(false);
     } finally {
-      fs.rmSync(path.join('storage_deleted', folderName), { recursive: true, force: true });
+      fs.rmSync(archivedFolder, { recursive: true, force: true });
     }
   });
 });

@@ -27,14 +27,27 @@ class EaselectPrivatePaths:
     tls_private_key_file: Path
 
 
-def resolve_embedded_project_root(canonical_filterest_root: Path | str) -> Path:
+def resolve_embedded_project_root(
+    canonical_filterest_root: Path | str,
+    environment: Mapping[str, str] | None = None,
+) -> Path:
     """Select the outer Easelect root only when Filterest is embedded there.
+
+    A root launcher can bind an explicit project boundary before delegating to
+    the shared implementation. This keeps the public root standalone even
+    inside the Easelect source workspace, while Easelect's private bridges bind
+    the outer composition deliberately.
 
     Public tools live under ``filterest/`` in the private source checkout, but
     the outer Easelect workspace remains the native development project. A
     copied or cloned Filterest tree has no private parent marker and therefore
     remains completely root-local.
     """
+
+    source_environment = os.environ if environment is None else environment
+    explicit_root = source_environment.get("FILTEREST_PROJECT_ROOT_OVERRIDE", "").strip()
+    if explicit_root:
+        return Path(explicit_root).expanduser().resolve()
 
     canonical_root = Path(canonical_filterest_root).resolve()
     product_root = (

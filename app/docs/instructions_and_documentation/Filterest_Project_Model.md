@@ -665,9 +665,10 @@ bits, and reviewed symlink targets. A matching version label alone is not
 proof. The mirror gate records both Git commits and fails if either tree has a
 missing, extra, or changed release-owned path.
 
-Mutable configuration, credentials, databases, media, logs, caches,
-`app/node_modules/`, and build scratch space are excluded from Git and source
-mirror equality. In a standalone install, the operator-owned
+Mutable configuration, credentials, databases, media, logs, caches, Node
+dependencies, and build scratch space are excluded from Git and source mirror
+equality and must not be created below immutable `app/`. In a standalone install,
+the operator-owned
 `config/`, `keys/`, `projects/`, `data/`, and `backups/` directories remain
 siblings of `app/` under the one `filterest/` root. Publication and update
 operations must preserve those siblings. This makes a complete Gitless copy of

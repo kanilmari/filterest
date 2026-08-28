@@ -11,4 +11,7 @@ set -euo pipefail
 
 FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="$FILTEREST_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+# shellcheck source=server_tools/lib/python_bytecode_cache.sh
+source "$FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
+filterest_configure_python_bytecode_cache "$FILTEREST_ROOT"
 exec python3 -m server_tools.agent_tools.db_task "$@"

@@ -1,11 +1,24 @@
-// local_easelect_target.mjs - Shared local Easelect QA target helpers.
-// Connects human_qa, AI acceptance, and Computer Use runners to local instances.
-// Keeps per-port auth-state and host allowlist behavior consistent.
-// Exists so non-8082 management/application instances can be tested like native.
+// local_easelect_target.mjs - Shared local Filterest/Easelect QA target helpers.
+// Connects Playwright and browser-acceptance tools to the product they belong to.
+// Keeps structural defaults, per-port auth state, and host allowlists consistent.
+// Exists so standalone Filterest never falls through to Easelect's native port.
 
 import path from "path";
+import { fileURLToPath } from "url";
+import {
+    defaultLocalFilterestBaseUrl,
+    isEmbeddedEaselectApplication,
+    isLocalFilterestHostname,
+    localAllowedHostsForBaseUrl,
+    resolveLocalFilterestBaseUrl,
+} from "./local_filterest_target.cjs";
 
-const localHostnames = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+export {
+    defaultLocalFilterestBaseUrl,
+    isEmbeddedEaselectApplication,
+    localAllowedHostsForBaseUrl,
+    resolveLocalFilterestBaseUrl,
+};
 
 // Parses a browser target into a URL object when possible.
 export function parseTargetUrl(target) {
@@ -22,7 +35,8 @@ export function isLocalEaselectUrl(target) {
     if (!parsed) {
         return false;
     }
-    return ["http:", "https:"].includes(parsed.protocol) && localHostnames.has(parsed.hostname);
+    return ["http:", "https:"].includes(parsed.protocol)
+        && isLocalFilterestHostname(parsed.hostname);
 }
 
 // Adds the explicit target host to a guarded browser allowlist.
@@ -38,12 +52,21 @@ export function addTargetHostToAllowedHosts(allowedHosts, target) {
 }
 
 // Picks a stable per-target auth-state path for local non-native ports.
-export function authStatePathForTarget(repoRoot, target, nativeAuthStatePath) {
+export function authStatePathForTarget(
+    repoRoot,
+    target,
+    nativeAuthStatePath,
+    environment = process.env,
+) {
     const parsed = parseTargetUrl(target);
     if (!parsed || !isLocalEaselectUrl(parsed)) {
         return nativeAuthStatePath;
     }
-    if (parsed.port === "" || parsed.port === "8082") {
+    const nativeBaseUrl = resolveLocalFilterestBaseUrl({
+        applicationRoot: repoRoot,
+        environment,
+    });
+    if (parsed.port === "" || parsed.origin === nativeBaseUrl) {
         return nativeAuthStatePath;
     }
     return path.join(
@@ -60,4 +83,15 @@ export function slugifyAuthStateHost(host) {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "")
         .slice(0, 80) || "local";
+}
+
+// Gives shell QA the same structural default without duplicating path logic.
+const executedModule = process.argv[1] ? path.resolve(process.argv[1]) : "";
+if (executedModule === fileURLToPath(import.meta.url)) {
+    if (process.argv[2] !== "--print-base-url" || !process.argv[3]) {
+        process.stderr.write("usage: local_easelect_target.mjs --print-base-url APP_ROOT\n");
+        process.exitCode = 2;
+    } else {
+        process.stdout.write(`${resolveLocalFilterestBaseUrl({ applicationRoot: process.argv[3] })}\n`);
+    }
 }

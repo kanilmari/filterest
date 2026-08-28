@@ -1,39 +1,60 @@
 // vite.config.mjs
-// Configures the frontend build pipeline for local development and production bundling.
-// Bridges Vite's dev/build workflow with Easelect's Go template and CSP placeholder requirements.
-//
-// Dev mode (npm run dev):
-//   - Vite dev server at http://localhost:5173 with HMR by default
-//   - Proxies /api, /login, /logout, /storage, /apps, /admin to the configured Go backend
-//   - Auto-scans all HTML files for Go template vars and replaces with dev defaults
-//
-// Build mode (npm run build):
-//   - Production bundle to frontend/dist/ with hashed filenames
-//   - base: /frontend/ for Go backend static serving
+// Configures frontend development routing and production bundling.
+// Bridges immutable app source with standalone or embedded mutable project storage.
+// Exists so Vite selects the correct backend and assets without app-local state.
 
-import { defineConfig } from 'vite';
 import http from 'http';
 import https from 'https';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import {
+  isNestedFilterestInstallation,
   isPrivateEaselectSourceCheckout,
   resolveEaselectPrivatePaths,
+  resolveFilterestProjectBoundary,
 } from '../server_tools/lib/easelect_private_paths.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const canonicalProjectRoot = resolve(__dirname, '..');
-const outerTransitionRoot = resolve(canonicalProjectRoot, '..');
-const projectRoot = isPrivateEaselectSourceCheckout(outerTransitionRoot)
-  ? outerTransitionRoot
-  : canonicalProjectRoot;
+const canonicalApplicationRoot = resolve(__dirname, '..');
+export function resolveViteProjectLayout(
+  applicationRoot,
+  environment = process.env,
+) {
+  const projectRoot = resolveFilterestProjectBoundary(
+    applicationRoot,
+    environment,
+  );
+  const privateEaselect = isPrivateEaselectSourceCheckout(projectRoot);
+  const nestedStandalone = (
+    !privateEaselect && isNestedFilterestInstallation(projectRoot)
+  );
+  return {
+    projectRoot,
+    privateEaselect,
+    nestedStandalone,
+    backendPort: privateEaselect ? 8082 : 8100,
+    defaultSiteName: privateEaselect ? 'Easelect' : 'Filterest',
+    storageDir: nestedStandalone
+      ? join(projectRoot, 'data', 'storage')
+      : join(projectRoot, 'storage'),
+    viteCacheDir: nestedStandalone
+      ? join(projectRoot, 'data', 'runtime', 'node', 'vite-cache')
+      : join(projectRoot, 'node_modules', '.vite'),
+    buildOutDir: nestedStandalone
+      ? join(projectRoot, 'data', 'runtime', 'node', 'frontend-dist')
+      : resolve(applicationRoot, 'frontend', 'dist'),
+  };
+}
+
+const projectLayout = resolveViteProjectLayout(canonicalApplicationRoot);
+const { projectRoot } = projectLayout;
 const privatePaths = resolveEaselectPrivatePaths(projectRoot);
 
 function readProjectEnvValue(key) {
   if (process.env[key]) return process.env[key];
 
-  const runtimeEnvFiles = isPrivateEaselectSourceCheckout(projectRoot)
+  const runtimeEnvFiles = projectLayout.privateEaselect
     ? [privatePaths.developmentEnvFile, privatePaths.runtimeEnvFile]
     : [privatePaths.runtimeEnvFile, privatePaths.developmentEnvFile];
   for (const envFileName of [
@@ -61,27 +82,12 @@ function readProjectEnvValue(key) {
   return '';
 }
 
-function isGeneratedFilterestCheckout() {
-  try {
-    readFileSync(join(projectRoot, 'VERSION_APP'), 'utf-8');
-  } catch {
-    return false;
-  }
-
-  try {
-    readFileSync(join(projectRoot, 'VERSION_EASELECT'), 'utf-8');
-    return false;
-  } catch {
-    return true;
-  }
-}
-
 function readProjectVersionAwarePortFallback() {
-  return isGeneratedFilterestCheckout() ? 8100 : 8082;
+  return projectLayout.backendPort;
 }
 
 function readProjectDefaultSiteName() {
-  return isGeneratedFilterestCheckout() ? 'Filterest' : 'Easelect';
+  return projectLayout.defaultSiteName;
 }
 
 function readProjectEnvPort(key, fallback) {
@@ -111,7 +117,7 @@ function resolveDevBackendURL() {
 }
 
 function resolveDevProjectLogoPath() {
-  const storageDir = join(projectRoot, 'storage');
+  const { storageDir } = projectLayout;
 
   for (const ext of ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif']) {
     const fileName = `project_logo${ext}`;
@@ -429,8 +435,9 @@ function goTemplateTransform() {
 
 const proxyOpts = { target: DEV_BACKEND_URL, changeOrigin: true, secure: false };
 
-export default defineConfig(({ command }) => ({
+export default ({ command }) => ({
   base: command === 'build' ? '/frontend/' : '/',
+  cacheDir: projectLayout.viteCacheDir,
   server: {
     port: VITE_DEV_PORT,
     strictPort: true,
@@ -448,7 +455,7 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [devForcedLoginRootRedirect(), frontendDevAssetRewrite(), goTemplateTransform()],
   build: {
-    outDir: resolve(__dirname, 'dist'),
+    outDir: projectLayout.buildOutDir,
     emptyOutDir: true,
     rollupOptions: {
       input: {
@@ -470,4 +477,4 @@ export default defineConfig(({ command }) => ({
   esbuild: {
     pure: command === 'build' ? ['console.log', 'console.info'] : [],
   },
-}));
+});

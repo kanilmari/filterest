@@ -13,6 +13,8 @@ APPLICATION_ROOT="$PROJECT_ROOT/app"
 KEYS_DIRECTORY="$PROJECT_ROOT/keys"
 TLS_DIRECTORY="$KEYS_DIRECTORY/tls"
 ENV_FILE="$KEYS_DIRECTORY/docker.env"
+RUNTIME_KEYS_DIRECTORY="$KEYS_DIRECTORY/filterest_runtime"
+RUNTIME_ENV_FILE="$RUNTIME_KEYS_DIRECTORY/runtime_environment.env"
 LEGACY_ENV_FILE="$PROJECT_ROOT/.env"
 ENV_TEMPLATE="$APPLICATION_ROOT/.env.example"
 COMPOSE_FILE="$PROJECT_ROOT/compose.yml"
@@ -62,24 +64,67 @@ run() {
     "$@"
 }
 
+# Reads the last canonical or export-prefixed assignment without a subprocess.
+# Connects existing operator-authored env syntax with protected setup migration.
+# Keeps secret values out of process arguments while sharing the setter grammar.
+env_file_value() {
+    local env_file="$1"
+    local key="$2"
+    local line=""
+    local value=""
+    local assignment_pattern="^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=(.*)$"
+
+    [[ -f "$env_file" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ $line =~ $assignment_pattern ]]; then
+            value="${BASH_REMATCH[2]}"
+        fi
+    done < "$env_file"
+    printf '%s' "$value"
+}
+
 env_value() {
     local key="$1"
-    grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d'=' -f2- || true
+    env_file_value "$ENV_FILE" "$key"
+}
+
+# Replaces one protected setting through a same-directory mode-0600 file.
+# Connects generated setup values with both Docker and runtime environment files.
+# Avoids putting secret values in subprocess arguments and rejects duplicate owners.
+set_env_file_value() {
+    local env_file="$1"
+    local key="$2"
+    local value="$3"
+    local temp_file=""
+    local line=""
+    local found=0
+    local assignment_pattern="^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=(.*)$"
+    [[ ! -L "$env_file" ]] || die "Protected settings path must not be a symbolic link: $env_file"
+    [[ -f "$env_file" ]] || die "Protected settings path is not a regular file: $env_file"
+    temp_file="$(mktemp "${env_file}.tmp.XXXXXX")"
+    {
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ $line =~ $assignment_pattern ]]; then
+                printf '%s=%s\n' "$key" "$value"
+                found=$((found + 1))
+                continue
+            fi
+            printf '%s\n' "$line"
+        done < "$env_file"
+        if [[ "$found" -eq 0 ]]; then
+            printf '%s=%s\n' "$key" "$value"
+        fi
+    } > "$temp_file"
+    if [[ "$found" -gt 1 ]]; then
+        rm -f "$temp_file"
+        die "Protected settings file contains duplicate $key declarations: $env_file"
+    fi
+    chmod 600 "$temp_file"
+    mv "$temp_file" "$env_file"
 }
 
 set_env_value() {
-    local key="$1"
-    local value="$2"
-    local temp_file=""
-    temp_file="$(mktemp "${ENV_FILE}.tmp.XXXXXX")"
-    awk -v wanted_key="$key" -v wanted_value="$value" '
-        BEGIN { found = 0 }
-        index($0, wanted_key "=") == 1 { print wanted_key "=" wanted_value; found = 1; next }
-        { print }
-        END { if (!found) print wanted_key "=" wanted_value }
-    ' "$ENV_FILE" > "$temp_file"
-    chmod 600 "$temp_file"
-    mv "$temp_file" "$ENV_FILE"
+    set_env_file_value "$ENV_FILE" "$1" "$2"
 }
 
 random_hex() {
@@ -142,6 +187,7 @@ prepare_installation_directories() {
     prepare_directory "$PROJECT_ROOT/config" 0750
     prepare_directory "$KEYS_DIRECTORY" 0700
     prepare_directory "$TLS_DIRECTORY" 0700
+    prepare_directory "$RUNTIME_KEYS_DIRECTORY" 0700
     prepare_directory "$PROJECT_ROOT/projects" 0750
     prepare_directory "$PROJECT_ROOT/data" 0750
     prepare_directory "$PROJECT_ROOT/data/storage" 0750
@@ -154,6 +200,54 @@ prepare_installation_directories() {
 
     set_env_value FILTEREST_RUNTIME_UID "$runtime_uid"
     set_env_value FILTEREST_RUNTIME_GID "$runtime_gid"
+}
+
+# Creates the mounted administrator-secret file with owner-only permissions.
+# Connects host setup to the container's keys/filterest_runtime write boundary.
+# Ensures API-managed secrets persist without making immutable app source writable.
+prepare_runtime_environment() {
+    local line=""
+    local openai_key_declarations=0
+
+    [[ ! -L "$RUNTIME_ENV_FILE" ]] || \
+        die "Protected runtime settings path must not be a symbolic link: $RUNTIME_ENV_FILE"
+    [[ ! -e "$RUNTIME_ENV_FILE" || -f "$RUNTIME_ENV_FILE" ]] || \
+        die "Protected runtime settings path is not a regular file: $RUNTIME_ENV_FILE"
+    if [[ ! -f "$RUNTIME_ENV_FILE" ]]; then
+        (umask 077; printf '%s\n' \
+            '# Administrator-managed runtime integration secrets.' \
+            'OPENAI_API_KEY=' \
+            > "$RUNTIME_ENV_FILE")
+    fi
+    chmod 0600 "$RUNTIME_ENV_FILE"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?OPENAI_API_KEY[[:space:]]*= ]]; then
+            openai_key_declarations=$((openai_key_declarations + 1))
+        fi
+    done < "$RUNTIME_ENV_FILE"
+    if [[ "$openai_key_declarations" -gt 1 ]]; then
+        die "Protected runtime settings file contains duplicate OPENAI_API_KEY declarations: $RUNTIME_ENV_FILE"
+    fi
+}
+
+# Moves the one legacy Docker-stored OpenAI key into the administrator runtime profile.
+# Connects existing keys/docker.env installations to the writable mounted secret file.
+# Keeps upgrades persistent without retaining duplicate secrets or exposing either value.
+migrate_docker_openai_api_key() {
+    local docker_api_key=""
+    local runtime_api_key=""
+
+    docker_api_key="$(env_value OPENAI_API_KEY)"
+    [[ -n "$docker_api_key" ]] || return 0
+    runtime_api_key="$(env_file_value "$RUNTIME_ENV_FILE" OPENAI_API_KEY)"
+    if [[ -n "$runtime_api_key" && "$runtime_api_key" != "$docker_api_key" ]]; then
+        die "OpenAI API key differs between keys/docker.env and keys/filterest_runtime/runtime_environment.env; keep the intended value in the runtime file and clear the Docker copy"
+    fi
+    if [[ -z "$runtime_api_key" ]]; then
+        set_env_file_value "$RUNTIME_ENV_FILE" OPENAI_API_KEY "$docker_api_key"
+    fi
+    set_env_value OPENAI_API_KEY ""
+    printf '✓ Moved the OpenAI API key into protected runtime settings.\n'
 }
 
 migrate_legacy_environment() {
@@ -232,6 +326,8 @@ prepare_environment() {
     chmod 600 "$ENV_FILE"
 
     prepare_installation_directories
+    prepare_runtime_environment
+    migrate_docker_openai_api_key
     prepare_tls_identity
 
     set_env_value FILTEREST_INSTALL_PROFILE docker

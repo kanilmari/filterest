@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .runtime_paths import resolve_queen_state_root
+
 
 class ManagedSessionError(RuntimeError):
     """Base error for managed-session file contract access."""
@@ -271,7 +273,7 @@ def runtime_state_path_for_transcript(transcript_path: Path) -> Path:
 
 def managed_session_registry_dir(project_root: Path) -> Path:
     """Return the canonical managed-session manifest directory."""
-    return project_root / ".queen" / "session_registry"
+    return resolve_queen_state_root(project_root) / "session_registry"
 
 
 def list_managed_sessions(project_root: Path) -> list[ManagedSessionRecord]:

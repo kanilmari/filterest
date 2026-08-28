@@ -119,6 +119,16 @@ class FilterestDockerRunnerTests(unittest.TestCase):
 
         self.assertEqual(stat.S_IMODE(env_file.stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE((self.root / "keys").stat().st_mode), 0o700)
+        runtime_keys = self.root / "keys/filterest_runtime"
+        runtime_environment = runtime_keys / "runtime_environment.env"
+        self.assertEqual(stat.S_IMODE(runtime_keys.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(runtime_environment.stat().st_mode), 0o600)
+        self.assertIn(
+            "OPENAI_API_KEY=",
+            runtime_environment.read_text(encoding="utf-8").splitlines(),
+        )
+        self.assertFalse((self.app_root / ".env").exists())
+        self.assertFalse((self.app_root / "keys").exists())
         self.assertEqual(
             stat.S_IMODE((self.root / "keys/tls/localhost.key").stat().st_mode),
             0o600,
@@ -139,6 +149,45 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "backups",
         ):
             self.assertTrue((self.root / relative_path).is_dir(), relative_path)
+
+    def test_setup_moves_existing_openai_key_outside_immutable_app(self) -> None:
+        legacy_secret = "test-docker-openai-key"
+        keys_root = self.root / "keys"
+        keys_root.mkdir(mode=0o700)
+        docker_environment = keys_root / "docker.env"
+        docker_environment.write_text(
+            (SOURCE_ROOT / ".env.example")
+            .read_text(encoding="utf-8")
+            .replace("OPENAI_API_KEY=", f"OPENAI_API_KEY={legacy_secret}"),
+            encoding="utf-8",
+        )
+        docker_environment.chmod(0o600)
+
+        completed = self.run_runner("setup")
+
+        runtime_environment = (
+            self.root / "keys/filterest_runtime/runtime_environment.env"
+        )
+        runtime_settings = runtime_environment.read_text(encoding="utf-8")
+        docker_settings = docker_environment.read_text(encoding="utf-8")
+        self.assertIn(f"OPENAI_API_KEY={legacy_secret}", runtime_settings)
+        self.assertIn("OPENAI_API_KEY=\n", docker_settings)
+        self.assertNotIn(f"OPENAI_API_KEY={legacy_secret}", docker_settings)
+        self.assertNotIn(legacy_secret, completed.stdout)
+        self.assertFalse((self.app_root / ".env").exists())
+        self.assertFalse((self.app_root / "keys").exists())
+
+        replacement_secret = "test-key-saved-through-admin"
+        runtime_environment.write_text(
+            runtime_settings.replace(legacy_secret, replacement_secret),
+            encoding="utf-8",
+        )
+        runtime_environment.chmod(0o600)
+        self.run_runner("setup")
+        self.assertIn(
+            f"OPENAI_API_KEY={replacement_secret}",
+            runtime_environment.read_text(encoding="utf-8"),
+        )
 
     def test_start_uses_root_compose_contract_and_waits_for_health(self) -> None:
         completed = self.run_runner(
@@ -267,6 +316,85 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("must not be a symbolic link", completed.stderr)
         self.assertEqual(outside_file.read_text(encoding="utf-8"), "sentinel\n")
+
+    def test_setup_rejects_a_symbolic_link_as_the_runtime_secret_target(self) -> None:
+        outside_file = self.root / "outside-runtime.env"
+        outside_file.write_text("sentinel\n", encoding="utf-8")
+        runtime_keys = self.root / "keys/filterest_runtime"
+        runtime_keys.mkdir(parents=True)
+        (runtime_keys / "runtime_environment.env").symlink_to(outside_file)
+
+        completed = subprocess.run(
+            ["bash", str(RUNNER), "setup"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=self.environment(),
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("must not be a symbolic link", completed.stderr)
+        self.assertEqual(outside_file.read_text(encoding="utf-8"), "sentinel\n")
+
+    def test_setup_rejects_duplicate_runtime_openai_key_without_migration(self) -> None:
+        first_secret = "test-first-runtime-key"
+        second_secret = "test-second-runtime-key"
+        runtime_keys = self.root / "keys/filterest_runtime"
+        runtime_keys.mkdir(parents=True)
+        runtime_environment = runtime_keys / "runtime_environment.env"
+        runtime_environment.write_text(
+            f"OPENAI_API_KEY={first_secret}\n"
+            f"export OPENAI_API_KEY={second_secret}\n",
+            encoding="utf-8",
+        )
+        runtime_environment.chmod(0o600)
+
+        completed = subprocess.run(
+            ["bash", str(RUNNER), "setup"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=self.environment(),
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("duplicate OPENAI_API_KEY declarations", completed.stderr)
+        self.assertNotIn(first_secret, completed.stderr)
+        self.assertNotIn(second_secret, completed.stderr)
+
+    def test_setup_migrates_into_one_export_prefixed_runtime_key(self) -> None:
+        legacy_secret = "test-export-migration-key"
+        keys_root = self.root / "keys"
+        runtime_keys = keys_root / "filterest_runtime"
+        runtime_keys.mkdir(parents=True)
+        docker_environment = keys_root / "docker.env"
+        docker_environment.write_text(
+            (SOURCE_ROOT / ".env.example")
+            .read_text(encoding="utf-8")
+            .replace("OPENAI_API_KEY=", f"OPENAI_API_KEY={legacy_secret}"),
+            encoding="utf-8",
+        )
+        docker_environment.chmod(0o600)
+        runtime_environment = runtime_keys / "runtime_environment.env"
+        runtime_environment.write_text(
+            "  export OPENAI_API_KEY =\nKEEP_ME=yes\n",
+            encoding="utf-8",
+        )
+        runtime_environment.chmod(0o600)
+
+        completed = self.run_runner("setup")
+
+        runtime_lines = runtime_environment.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(runtime_lines.count(f"OPENAI_API_KEY={legacy_secret}"), 1)
+        self.assertFalse(
+            any("export OPENAI_API_KEY" in line for line in runtime_lines)
+        )
+        self.assertIn("KEEP_ME=yes", runtime_lines)
+        self.assertNotIn(legacy_secret, completed.stdout)
+        self.assertIn(
+            "OPENAI_API_KEY=\n",
+            docker_environment.read_text(encoding="utf-8"),
+        )
 
     def test_setup_moves_one_safe_legacy_environment_into_keys(self) -> None:
         shutil.copy2(SOURCE_ROOT / ".env.example", self.root / ".env")

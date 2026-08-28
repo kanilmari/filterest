@@ -3,7 +3,6 @@
 // Bridges `npm test` / `npm run test:watch` and the browser-like jsdom harness.
 // Exists to keep Playwright and Visual Guardian specs out of Vitest's file selection.
 
-import { defineConfig } from 'vitest/config';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -15,7 +14,7 @@ const frontendSourceRoot = [
   resolve('frontend'),
 ].find((candidate) => existsSync(candidate)) || resolve('frontend');
 
-export default defineConfig({
+export default {
   cacheDir: join(resolveFilterestTestRuntimeRoot(), 'vite-cache'),
   resolve: {
     alias: [
@@ -33,7 +32,9 @@ export default defineConfig({
       '**/server_tools/scripts/vitest_process_runner.test.mjs',
       'testing/e2e/helpers/**/*.test.ts',
     ],
-    exclude: ['**/frontend/dist/**'],
+    // Outer Easelect keeps ignored generated Filterest candidates under
+    // dist-public/. They are release artifacts, not additional test roots.
+    exclude: ['**/frontend/dist/**', '**/dist-public/**'],
     maxWorkers: resolveVitestMaxWorkers(),
   },
-});
+};

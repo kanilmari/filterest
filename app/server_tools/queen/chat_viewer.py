@@ -13,6 +13,8 @@ import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
+
+from .runtime_paths import resolve_queen_state_root
 from zoneinfo import ZoneInfo
 
 from .session_store import ManagedSessionRecord
@@ -295,7 +297,7 @@ def _print_run_list(runs: list[dict], transcript_dir: Path) -> None:
 
 def print_managed_session_listing(sessions: list[ManagedSessionRecord], project_root: Path) -> None:
     """Print the available managed sessions from the shared file registry."""
-    registry_dir = project_root / ".queen" / "session_registry"
+    registry_dir = resolve_queen_state_root(project_root) / "session_registry"
     print(f"Managed-session registry: {registry_dir}")
     if not sessions:
         print("No managed sessions found.")

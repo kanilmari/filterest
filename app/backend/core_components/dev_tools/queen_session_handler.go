@@ -1386,7 +1386,7 @@ func parseQueenSessionOptionalTime(raw *string) (*time.Time, error) {
 }
 
 func queenSessionRegistryDir(projectRoot string) string {
-	return filepath.Join(projectRoot, ".queen", "session_registry")
+	return filepath.Join(resolveQueenStateRoot(projectRoot), "session_registry")
 }
 
 func queenSessionManifestPath(projectRoot string, sessionID string) string {
@@ -1396,6 +1396,9 @@ func queenSessionManifestPath(projectRoot string, sessionID string) string {
 func resolveQueenProjectRoot() (string, error) {
 	if override := strings.TrimSpace(os.Getenv("QUEEN_PROJECT_ROOT")); override != "" {
 		return filepath.Abs(override)
+	}
+	if paths := queenRuntimePathsResolver(); !paths.LegacyFlat && strings.TrimSpace(paths.ApplicationRoot) != "" {
+		return paths.ApplicationRoot, nil
 	}
 
 	transcriptDir, err := filepath.Abs(queenTranscriptDirResolver())
@@ -1410,10 +1413,11 @@ func resolveQueenProjectRoot() (string, error) {
 }
 
 func prepareQueenSessionFiles(projectRoot string, sessionID string, taskID *int) (string, string, string, string, error) {
-	transcriptDir := filepath.Join(projectRoot, ".queen", "transcripts")
-	logDir := filepath.Join(projectRoot, ".queen", "session_logs")
-	humanInboxDir := filepath.Join(projectRoot, ".queen", "session_inputs")
-	sessionStateDir := filepath.Join(projectRoot, ".queen", "session_state")
+	queenStateRoot := resolveQueenStateRoot(projectRoot)
+	transcriptDir := filepath.Join(queenStateRoot, "transcripts")
+	logDir := filepath.Join(queenStateRoot, "session_logs")
+	humanInboxDir := filepath.Join(queenStateRoot, "session_inputs")
+	sessionStateDir := filepath.Join(queenStateRoot, "session_state")
 	if err := os.MkdirAll(transcriptDir, 0o755); err != nil {
 		return "", "", "", "", err
 	}

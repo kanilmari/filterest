@@ -1,23 +1,36 @@
+<!-- E2E_Testing_Guide.md
+What: Documents Filterest's end-to-end browser test workflow and contracts.
+Between what: Connects the standalone installation, Playwright, and protected test credentials.
+Why: Keeps browser verification portable without coupling public source to Easelect.
+-->
 # E2E Testing Guide
 
 Playwright E2E tests for Filterest. Tests live in `app/testing/e2e/`.
-Run the commands below from the public Filterest product root; npm executes the
-test runner inside the immutable `app/` source directory.
+Run the commands below from the public Filterest product root. The public
+command executes Playwright against immutable `app/` while keeping dependencies,
+caches, reports, and authentication state in installation-owned `data/`.
+
+The standalone product command defaults browser tests to
+`https://localhost:8100`. Set `FILTEREST_E2E_BASE_URL` to another
+credential-free local HTTPS origin only when intentionally testing a different
+local Filterest runtime; the older `EASELECT_E2E_BASE_URL` name remains a
+compatibility fallback only for structurally embedded Easelect development
+tooling. A standalone checkout ignores that legacy Easelect-only variable.
 
 ## Quick Reference
 
 ```bash
 # Run a specific test file
-npm --prefix app run test:e2e -- testing/e2e/T_admin/T7_card_visibility.spec.ts --project=desktop-card
+./filterest test testing/e2e/T_admin/T7_card_visibility.spec.ts --project=desktop-card
 
 # Run all tests for one project
-npm --prefix app run test:e2e -- --project=desktop-card
+./filterest test --project=desktop-card
 
 # Run tests matching a name pattern
-npm --prefix app run test:e2e -- -g "can navigate" --project=desktop-card
+./filterest test -g "can navigate" --project=desktop-card
 
 # Run serially (debugging)
-npm --prefix app run test:e2e -- testing/e2e/T_admin/T7_card_visibility.spec.ts --project=desktop-card --workers=1
+./filterest test testing/e2e/T_admin/T7_card_visibility.spec.ts --project=desktop-card --workers=1
 
 # Serve the last HTML report manually without auto-opening a browser
 python3 -m http.server 9323 -d data/testing/playwright-report
@@ -27,13 +40,13 @@ python3 -m http.server 9323 -d data/testing/playwright-report
 For broad non-interactive runs, prefer:
 
 ```bash
-PLAYWRIGHT_HTML_OPEN=never npm --prefix app run test:e2e -- --project=desktop-card
+PLAYWRIGHT_HTML_OPEN=never ./filterest test --project=desktop-card
 ```
 
 For deterministic full-matrix baselines and long unattended runs, prefer:
 
 ```bash
-PLAYWRIGHT_HTML_OPEN=never npm --prefix app run test:e2e -- --workers=1 --reporter=list
+PLAYWRIGHT_HTML_OPEN=never ./filterest test --workers=1 --reporter=list
 ```
 
 Why this is the safest broad baseline:
@@ -100,9 +113,11 @@ Healthy end state after a normal run:
 
 The `login()` helper from `helpers/auth.ts` handles:
 - Navigating to `/` and waiting for the app to load
-- Fallback login if the session expired (username and password from the ignored
-  root file `dev_env_test_creds.txt`, or the explicit path in
-  `FILTEREST_TEST_CREDENTIAL_FILE`)
+- Fallback login if the session expired (username and password from the
+  installation-owned protected file
+  `keys/filterest_runtime/dev_env_test_creds.txt`, or the explicit path in
+  `FILTEREST_TEST_CREDENTIAL_FILE`; Easelect keeps its established absolute
+  private-root override)
 - Reading the explicit OTP from the test process `LOGIN_OTP_CODE`, ignored
   native development env, or finally the native runtime env resolved through
   `EASELECT_KEY_ROOT`; missing configuration fails before a browser auth

@@ -1,4 +1,10 @@
+// playwright.config.ts
+// Configures Filterest's primary Playwright end-to-end test projects and reports.
+// Bridges immutable application tests with installation-owned runtime state and target selection.
+// Exists so standalone browser verification remains deterministic and portable.
 import { defineConfig } from '@playwright/test';
+import * as path from 'node:path';
+import { resolveLocalFilterestBaseUrl } from './server_tools/scripts/local_filterest_target.cjs';
 import { resolveFilterestTestRuntimePaths } from './testing/e2e/helpers/test-runtime-paths';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
@@ -14,19 +20,7 @@ const requestedWorkerCount = Number.parseInt(process.env.PLAYWRIGHT_WORKERS || '
 const localWorkerCount = Number.isInteger(requestedWorkerCount) && requestedWorkerCount > 0
   ? requestedWorkerCount
   : 2;
-const requestedBaseURL = String(process.env.EASELECT_E2E_BASE_URL || '').trim();
-const baseURL = requestedBaseURL || 'https://localhost:8082';
-const parsedBaseURL = new URL(baseURL);
-if (
-  parsedBaseURL.protocol !== 'https:'
-  || parsedBaseURL.username
-  || parsedBaseURL.password
-  || !['localhost', '127.0.0.1'].includes(parsedBaseURL.hostname)
-) {
-  throw new Error(
-    'EASELECT_E2E_BASE_URL must be a credential-free local HTTPS origin.',
-  );
-}
+const baseURL = resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__dirname) });
 
 /**
  * Easelect GUI Test Matrix

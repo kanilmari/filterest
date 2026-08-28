@@ -1,4 +1,8 @@
 #!/bin/bash
+# ctl
+# Delegates application-level control commands to the canonical ctl implementation.
+# Bridges embedded or standalone launchers with shared lifecycle modes and completion setup.
+# Exists so immutable app source exposes one portable control entrypoint.
 # ==============================================================================
 # ctl: Filterest Control CLI - Wrapper
 #
@@ -14,7 +18,7 @@
 #   ctl --docker     # Docker environment
 #   ctl --instance   # Multi-instance management (same as 'i')
 #   ctl --traefik    # Traefik reverse proxy
-#   ctl --stop       # Stop all running instances
+#   ctl --stop       # Standalone: stop only this installation's local runtime
 #   ctl --help       # Show full help
 # ==============================================================================
 
@@ -25,11 +29,58 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
     return 1 2>/dev/null || exit 1
 fi
 
-# The source root owns the portable command. An embedding product may override
-# only the runtime project root and resolver while executing this same source.
+# The source root owns the portable command. Root launchers may bind an
+# explicit composition; a direct invocation derives the canonical nested root
+# so package scripts cannot write runtime files below immutable app/.
 FILTEREST_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${FILTEREST_PROJECT_ROOT_OVERRIDE:-}" ]] && \
+    [[ "$(basename "$FILTEREST_SOURCE_ROOT")" == "app" ]] && \
+    [[ -f "$FILTEREST_SOURCE_ROOT/go.mod" ]] && \
+    [[ -f "$FILTEREST_SOURCE_ROOT/VERSION_APP" ]]; then
+    INSTALLATION_ROOT="$(cd "$FILTEREST_SOURCE_ROOT/.." && pwd -P)"
+    OUTER_ROOT="$(cd "$INSTALLATION_ROOT/.." && pwd -P)"
+    if [[ -e "$OUTER_ROOT/.git" && -f "$OUTER_ROOT/VERSION_EASELECT" ]]; then
+        # An embedded development checkout keeps its established outer roots.
+        unset FILTEREST_ROOT FILTEREST_STANDALONE_ROOT_CTL
+        export FILTEREST_PROJECT_ROOT_OVERRIDE="$OUTER_ROOT"
+        export FILTEREST_BUILD_ROOT_OVERRIDE="$OUTER_ROOT"
+        export FILTEREST_RUNTIME_ROOT_OVERRIDE="$OUTER_ROOT/runtime"
+        export FILTEREST_LOG_FILE_OVERRIDE="$OUTER_ROOT/server_output.log"
+    else
+        # A standalone direct app/ call has the same boundary as root ./ctl.
+        unset FILTEREST_RESOLVE_ENV_LIB FILTEREST_PRIVATE_BOOTSTRAP_LIB
+        unset FILTEREST_LOCAL_DOCKER_COMPOSE_FILE FILTEREST_SHARED_DEV_STORAGE_HELPER
+        unset FILTEREST_INSTANCE_DOCKER_ROOT FILTEREST_INSTANCE_TEMPLATE_PATH
+        unset FILTEREST_SYNC_CONFIG_FILE FILTEREST_GO_BUILD_TARGET
+        unset FILTEREST_GO_RUN_PROCESS_PATTERN FILTEREST_QUEEN_PYTHON_MODULE
+        unset FILTEREST_DB_TASK_PYTHON_MODULE
+        unset FILTEREST_SCAFFOLD_EXTENSION_ROOT FILTEREST_SCAFFOLD_EXTENSION_ENV_SOURCES
+        unset FILTEREST_SCAFFOLD_EXTENSION_ENV_TEMPLATES FILTEREST_MACHINE_TRANSFER_COMMAND
+        unset FILTEREST_AUTOMATED_PREVIEW_INITIAL_ADMIN
+        unset ALLOW_UNGUARDED_FILTEREST_PREVIEW_RECREATE
+        unset ALLOW_INCOMPLETE_LOCAL_SETUP_RECREATE
+        unset PORT APP_PORT EASELECT_PORT VITE_DEV_PORT VITE_HMR_PORT
+        export GOWORK=off FILTEREST_STANDALONE_ROOT_CTL=1
+        export FILTEREST_STANDALONE_DEFAULT_PORT=8100
+        export FILTEREST_STANDALONE_DEFAULT_VITE_PORT=9100
+        export PORT=8100 APP_PORT=8100 EASELECT_PORT=8100
+        export FILTEREST_ROOT="$INSTALLATION_ROOT"
+        export FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT"
+        export FILTEREST_BUILD_ROOT_OVERRIDE="$FILTEREST_SOURCE_ROOT"
+        export FILTEREST_RUNTIME_ROOT_OVERRIDE="$INSTALLATION_ROOT/data/runtime"
+        export FILTEREST_LOG_FILE_OVERRIDE="$INSTALLATION_ROOT/data/runtime/logs/server_output.log"
+        export FILTEREST_NODE_MODULES_ROOT="$INSTALLATION_ROOT/data/runtime/node/node_modules"
+        export GOMODCACHE="$INSTALLATION_ROOT/data/runtime/go/module-cache"
+        export GOCACHE="$INSTALLATION_ROOT/data/runtime/go/build-cache"
+        export NODE_PATH="$FILTEREST_NODE_MODULES_ROOT"
+        export PATH="$FILTEREST_NODE_MODULES_ROOT/.bin:$PATH"
+    fi
+fi
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$FILTEREST_SOURCE_ROOT}"
 RESOLVE_ENV_LIB="${FILTEREST_RESOLVE_ENV_LIB:-$FILTEREST_SOURCE_ROOT/server_tools/ctl/lib/resolve_env.sh}"
+# shellcheck source=server_tools/lib/python_bytecode_cache.sh
+source "$FILTEREST_SOURCE_ROOT/server_tools/lib/python_bytecode_cache.sh"
+filterest_configure_python_bytecode_cache "$FILTEREST_SOURCE_ROOT"
 
 # Resolve environment (PATH, cd to project root) — needed for su/root
 source "$RESOLVE_ENV_LIB"

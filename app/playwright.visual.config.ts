@@ -1,7 +1,14 @@
+// playwright.visual.config.ts
+// Configures Filterest's focused visual Playwright test project.
+// Bridges visual specifications with the selected local Filterest target and runtime state.
+// Exists so visual regressions can be checked without Easelect-specific dependencies.
 import { defineConfig, devices } from '@playwright/test';
+import * as path from 'node:path';
+import { resolveLocalFilterestBaseUrl } from './server_tools/scripts/local_filterest_target.cjs';
 import { resolveFilterestTestRuntimePaths } from './testing/e2e/helpers/test-runtime-paths';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
+const baseURL = resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__dirname) });
 
 export default defineConfig({
   testDir: './testing/visual_guardian',
@@ -16,8 +23,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : 2,
   reporter: 'list',
   use: {
-    // All tests and development use port 8082
-    baseURL: 'https://localhost:8082',
+    baseURL,
     trace: 'on-first-retry',
     ignoreHTTPSErrors: true,
     storageState: testRuntimePaths.authStorageState,

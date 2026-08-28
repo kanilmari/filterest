@@ -169,8 +169,20 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         entrypoint = (
             PUBLIC_SOURCE_ROOT / "docker/docker-entrypoint.sh"
         ).read_text(encoding="utf-8")
+        runtime_stage = dockerfile.split("FROM alpine:3.24\n", maxsplit=1)[1]
 
         self.assertIn("COPY backend/ ./backend/", dockerfile)
+        self.assertIn("COPY backend/ ./backend/", runtime_stage)
+        self.assertLess(
+            runtime_stage.index("COPY backend/ ./backend/"),
+            runtime_stage.index("chmod -R a-w /filterest/app"),
+        )
+        self.assertIn(
+            "RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build", dockerfile
+        )
+        self.assertIn(
+            "COPY --from=frontend-builder /app/frontend/dist", dockerfile
+        )
         self.assertIn("-o filterest .", dockerfile)
         self.assertNotIn("COPY apps/", dockerfile)
         self.assertNotIn("filterest_projects", dockerfile)
@@ -195,9 +207,11 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         self.assertIn("FILTEREST_ROOT: /filterest", compose)
         self.assertIn("read_only: true", compose)
         self.assertIn("no-new-privileges:true", compose)
+        self.assertNotIn("OPENAI_API_KEY:", compose)
         for source, target in (
             ("../../config", "/filterest/config"),
             ("../../keys/tls", "/filterest/keys/tls"),
+            ("../../keys/filterest_runtime", "/filterest/keys/filterest_runtime"),
             ("../../projects", "/filterest/projects"),
             ("../../data/storage", "/filterest/data/storage"),
             ("../../data/storage_deleted", "/filterest/data/storage_deleted"),
@@ -256,6 +270,7 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             {
                 "/filterest/config",
                 "/filterest/keys/tls",
+                "/filterest/keys/filterest_runtime",
                 "/filterest/projects",
                 "/filterest/data/storage",
                 "/filterest/data/storage_deleted",
@@ -272,6 +287,9 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             "/filterest/backups",
         ):
             self.assertTrue(app_mounts[protected_target]["read_only"])
+        self.assertFalse(
+            app_mounts["/filterest/keys/filterest_runtime"].get("read_only", False)
+        )
 
         database_mounts = {
             mount["target"]: mount for mount in rendered["services"]["db"]["volumes"]

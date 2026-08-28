@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # test_easelect_api_client.py
-# Verifies shared API client request shaping for developer tooling.
+# Verifies shared API client request shaping and transport safeguards.
+# Bridges developer-tool requests with the public Filterest API client.
+# Exists so authentication and request behavior remain stable across tools.
 
 from __future__ import annotations
 
@@ -9,9 +11,17 @@ from pathlib import Path
 import ssl
 import tempfile
 import unittest
+import urllib.request
 from unittest.mock import Mock, patch
 
-from .easelect_api_client import EaselectAPIClient, load_project_env
+from .easelect_api_client import (
+    DEFAULT_BASE_URL,
+    LOCAL_NATIVE_PORT,
+    EaselectAPIClient,
+    EaselectAPIError,
+    _SameOriginRedirectHandler,
+    load_project_env,
+)
 
 
 class CapturingClient(EaselectAPIClient):
@@ -50,11 +60,11 @@ class PagingClient(EaselectAPIClient):
 class EaselectAPIClientTest(unittest.TestCase):
     def test_tls_context_skips_verification_only_for_exact_native_origin(self) -> None:
         local_context = EaselectAPIClient._ssl_context(
-            "https://localhost:8082",
+            DEFAULT_BASE_URL,
             environment={},
         )
         non_native_local_context = EaselectAPIClient._ssl_context(
-            "https://localhost:8090",
+            f"https://localhost:{LOCAL_NATIVE_PORT + 1}",
             environment={},
         )
 
@@ -76,10 +86,121 @@ class EaselectAPIClientTest(unittest.TestCase):
         context = EaselectAPIClient._ssl_context(
             "https://example.test",
             environment={"EASELECT_API_ALLOW_INSECURE_TLS": "1"},
+            embedded_easelect=True,
         )
 
         self.assertFalse(context.check_hostname)
         self.assertEqual(context.verify_mode, ssl.CERT_NONE)
+
+    def test_standalone_tls_ignores_legacy_easelect_insecure_override(self) -> None:
+        legacy_context = EaselectAPIClient._ssl_context(
+            "https://example.test",
+            environment={"EASELECT_API_ALLOW_INSECURE_TLS": "1"},
+            embedded_easelect=False,
+        )
+        filterest_context = EaselectAPIClient._ssl_context(
+            "https://example.test",
+            environment={"FILTEREST_API_ALLOW_INSECURE_TLS": "1"},
+            embedded_easelect=False,
+        )
+
+        self.assertTrue(legacy_context.check_hostname)
+        self.assertEqual(legacy_context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertFalse(filterest_context.check_hostname)
+        self.assertEqual(filterest_context.verify_mode, ssl.CERT_NONE)
+
+    def test_native_credentials_disable_ambient_https_proxy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "filterest"
+            app_root = project_root / "app"
+            app_root.mkdir(parents=True)
+            (app_root / "go.mod").write_text(
+                "module example.invalid/filterest\n",
+                encoding="utf-8",
+            )
+            (app_root / "VERSION_APP").write_text("1.0.0\n", encoding="utf-8")
+            with (
+                patch.dict(
+                    os.environ,
+                    {"HTTPS_PROXY": "https://credential-sink.example:8443"},
+                    clear=True,
+                ),
+                patch.object(
+                    urllib.request,
+                    "build_opener",
+                    return_value=Mock(),
+                ) as build_opener,
+            ):
+                EaselectAPIClient(project_root=str(project_root))
+
+        handlers = build_opener.call_args.args
+        proxy_handlers = [
+            handler
+            for handler in handlers
+            if isinstance(handler, urllib.request.ProxyHandler)
+        ]
+        self.assertEqual(len(proxy_handlers), 1)
+        self.assertEqual(proxy_handlers[0].proxies, {})
+
+    def test_remote_explicit_credentials_keep_normal_proxy_support(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
+            urllib.request,
+            "build_opener",
+            return_value=Mock(),
+        ) as build_opener:
+            EaselectAPIClient(
+                project_root=temp_dir,
+                base_url="https://api.example.test",
+                username="remote-user",
+                password="remote-password",
+                environment={},
+            )
+
+        self.assertFalse(any(
+            isinstance(handler, urllib.request.ProxyHandler)
+            for handler in build_opener.call_args.args
+        ))
+
+    def test_redirect_handler_allows_only_the_configured_origin(self) -> None:
+        handler = _SameOriginRedirectHandler("https://localhost:8100")
+        request = urllib.request.Request("https://localhost:8100/api/source")
+
+        redirected = handler.redirect_request(
+            request,
+            None,
+            307,
+            "Temporary Redirect",
+            {},
+            "/api/destination",
+        )
+
+        self.assertEqual(
+            redirected.full_url,
+            "https://localhost:8100/api/destination",
+        )
+
+    def test_redirect_handler_rejects_cross_origin_and_tls_downgrade(self) -> None:
+        handler = _SameOriginRedirectHandler("https://localhost:8100")
+        request = urllib.request.Request("https://localhost:8100/api/source")
+        unsafe_targets = (
+            "https://credential-sink.example/api",
+            "https://localhost:8199/api",
+            "http://localhost:8100/api",
+        )
+
+        for target in unsafe_targets:
+            with self.subTest(target=target), self.assertRaisesRegex(
+                EaselectAPIError,
+                "redirect outside",
+            ):
+                handler.redirect_request(
+                    request,
+                    None,
+                    302,
+                    "Found",
+                    {},
+                    target,
+                )
 
     def test_lang_key_upsert_uses_admin_route_and_preserves_omitted_yue(self) -> None:
         client = CapturingClient()
@@ -161,6 +282,202 @@ class EaselectAPIClientTest(unittest.TestCase):
 
         self.assertEqual(client.username, "resolved-user")
         self.assertEqual(client.password, "resolved-password")
+
+    def test_standalone_client_ignores_ambient_easelect_and_process_dev_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "filterest"
+            app_root = project_root / "app"
+            app_root.mkdir(parents=True)
+            (app_root / "go.mod").write_text(
+                "module example.invalid/filterest\n",
+                encoding="utf-8",
+            )
+            (app_root / "VERSION_APP").write_text("1.0.0\n", encoding="utf-8")
+            protected_root = project_root / "keys/filterest_runtime"
+            protected_root.mkdir(parents=True)
+            (protected_root / "development_environment.env").write_text(
+                "DEV_USERNAME=standalone-user\n"
+                "DEV_PASSWORD=standalone-password\n"
+                "DEV_LOGIN_VERIFICATION_CODE=246810\n",
+                encoding="utf-8",
+            )
+            client = EaselectAPIClient(
+                project_root=str(project_root),
+                environment={
+                    "EASELECT_API_BASE_URL": "https://localhost:8082",
+                    "EASELECT_API_USERNAME": "easelect-user",
+                    "EASELECT_API_PASSWORD": "easelect-password",
+                    "EASELECT_API_OTP_CODE": "111111",
+                    "DEV_USERNAME": "ambient-dev-user",
+                    "DEV_PASSWORD": "ambient-dev-password",
+                    "DEV_LOGIN_VERIFICATION_CODE": "222222",
+                    "LOGIN_OTP_CODE": "333333",
+                    "DB_TASK_BASE_URL": "https://localhost:8999",
+                    "EASELECT_KEY_ROOT": str(Path(temp_dir) / "easelect-keys"),
+                },
+            )
+
+        self.assertEqual(client.base_url, "https://localhost:8100")
+        self.assertEqual(client.username, "standalone-user")
+        self.assertEqual(client.password, "standalone-password")
+        self.assertEqual(client.otp_code, "246810")
+
+    def test_filterest_api_values_override_legacy_values_for_any_product(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "filterest"
+            app_root = project_root / "app"
+            app_root.mkdir(parents=True)
+            (app_root / "go.mod").write_text(
+                "module example.invalid/filterest\n",
+                encoding="utf-8",
+            )
+            (app_root / "VERSION_APP").write_text("1.0.0\n", encoding="utf-8")
+            client = EaselectAPIClient(
+                project_root=str(project_root),
+                environment={
+                    "FILTEREST_API_BASE_URL": "https://127.0.0.1:8199/path/",
+                    "FILTEREST_API_USERNAME": "filterest-user",
+                    "FILTEREST_API_PASSWORD": "filterest-password",
+                    "FILTEREST_API_OTP_CODE": "987654",
+                    "EASELECT_API_BASE_URL": "https://localhost:8082",
+                    "EASELECT_API_USERNAME": "easelect-user",
+                    "EASELECT_API_PASSWORD": "easelect-password",
+                    "EASELECT_API_OTP_CODE": "111111",
+                },
+            )
+
+        self.assertEqual(client.base_url, "https://127.0.0.1:8199/path")
+        self.assertEqual(client.username, "filterest-user")
+        self.assertEqual(client.password, "filterest-password")
+        self.assertEqual(client.otp_code, "987654")
+
+    def test_remote_target_never_loads_protected_local_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "filterest"
+            app_root = project_root / "app"
+            app_root.mkdir(parents=True)
+            (app_root / "go.mod").write_text(
+                "module example.invalid/filterest\n",
+                encoding="utf-8",
+            )
+            (app_root / "VERSION_APP").write_text("1.0.0\n", encoding="utf-8")
+            protected_root = project_root / "keys/filterest_runtime"
+            protected_root.mkdir(parents=True)
+            (protected_root / "development_environment.env").write_text(
+                "DEV_USERNAME=local-user\n"
+                "DEV_PASSWORD=local-password\n"
+                "DEV_LOGIN_VERIFICATION_CODE=246810\n",
+                encoding="utf-8",
+            )
+
+            client = EaselectAPIClient(
+                project_root=str(project_root),
+                base_url="https://api.example.test",
+                environment={
+                    "DEV_USERNAME": "ambient-user",
+                    "DEV_PASSWORD": "ambient-password",
+                    "DEV_LOGIN_VERIFICATION_CODE": "111111",
+                },
+            )
+
+        self.assertEqual(client.project_env, {})
+        self.assertEqual(client.username, "")
+        self.assertEqual(client.password, "")
+        self.assertIsNone(client.otp_code)
+        client.fetch_csrf_token = Mock(side_effect=AssertionError("network used"))
+        with self.assertRaisesRegex(RuntimeError, "protected local credentials"):
+            client.login()
+
+    def test_remote_target_accepts_only_api_specific_process_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = EaselectAPIClient(
+                project_root=temp_dir,
+                base_url="https://api.example.test",
+                environment={
+                    "FILTEREST_API_USERNAME": "remote-user",
+                    "FILTEREST_API_PASSWORD": "remote-password",
+                    "FILTEREST_API_OTP_CODE": "654321",
+                    "DEV_USERNAME": "ambient-user",
+                    "DEV_PASSWORD": "ambient-password",
+                },
+            )
+
+        self.assertEqual(client.username, "remote-user")
+        self.assertEqual(client.password, "remote-password")
+        self.assertEqual(client.otp_code, "654321")
+
+    def test_remote_target_accepts_explicit_constructor_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = EaselectAPIClient(
+                project_root=temp_dir,
+                base_url="https://api.example.test",
+                username="prompted-user",
+                password="prompted-password",
+                otp_code="123456",
+                environment={
+                    "DEV_USERNAME": "ambient-user",
+                    "DEV_PASSWORD": "ambient-password",
+                },
+            )
+
+        self.assertEqual(client.username, "prompted-user")
+        self.assertEqual(client.password, "prompted-password")
+        self.assertEqual(client.otp_code, "123456")
+
+    def test_remote_target_rejects_plaintext_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, self.assertRaisesRegex(
+            EaselectAPIError,
+            "require HTTPS",
+        ):
+            EaselectAPIClient(
+                project_root=temp_dir,
+                base_url="http://credential-sink.example",
+                username="remote-user",
+                password="remote-password",
+                environment={},
+            )
+
+    def test_explicit_plaintext_loopback_target_remains_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = EaselectAPIClient(
+                project_root=temp_dir,
+                base_url="http://127.0.0.1:8199",
+                username="local-user",
+                password="local-password",
+                environment={},
+            )
+
+        self.assertEqual(client.base_url, "http://127.0.0.1:8199")
+
+    def test_private_easelect_client_retains_legacy_process_compatibility(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "easelect"
+            project_root.mkdir()
+            (project_root / ".git").mkdir()
+            (project_root / "VERSION_EASELECT").write_text(
+                "1.0.0\n",
+                encoding="utf-8",
+            )
+            key_root = Path(temp_dir) / "protected-keys"
+            (key_root / "easelect_development").mkdir(parents=True)
+            client = EaselectAPIClient(
+                project_root=str(project_root),
+                environment={
+                    "EASELECT_KEY_ROOT": str(key_root),
+                    "EASELECT_API_BASE_URL": "https://127.0.0.1:8082",
+                    "EASELECT_API_USERNAME": "legacy-user",
+                    "EASELECT_API_PASSWORD": "legacy-password",
+                    "EASELECT_API_OTP_CODE": "135790",
+                    "DEV_USERNAME": "dev-user",
+                    "DEV_PASSWORD": "dev-password",
+                    "LOGIN_OTP_CODE": "111111",
+                },
+            )
+
+        self.assertEqual(client.base_url, "https://127.0.0.1:8082")
+        self.assertEqual(client.username, "legacy-user")
+        self.assertEqual(client.password, "legacy-password")
+        self.assertEqual(client.otp_code, "135790")
 
     def test_login_fails_closed_when_credentials_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

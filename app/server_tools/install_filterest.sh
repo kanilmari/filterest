@@ -29,7 +29,7 @@ source "$SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
 resolve_installation_private_paths() {
     easelect_resolve_private_paths "$INSTALLATION_ROOT"
     if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
-        local protected_runtime_root="$INSTALLATION_ROOT/keys/filterest_runtime"
+        local protected_runtime_root="$FILTEREST_KEYS_HOME/filterest_runtime"
         EASELECT_RUNTIME_ENV_FILE="$protected_runtime_root/runtime_environment.env"
         EASELECT_DEV_ENV_FILE="$protected_runtime_root/development_environment.env"
         EASELECT_TLS_CERT_FILE="$protected_runtime_root/local_tls_certificate/localhost_certificate.crt"
@@ -339,15 +339,42 @@ set_env_value() {
     local key="$2"
     local value="$3"
     local temp_file=""
+    local line=""
+    local found=0
+
+    [[ ! -L "$file" ]] || die "protected settings path must not be a symbolic link: $file"
+    [[ -f "$file" ]] || die "protected settings path is not a regular file: $file"
     temp_file="$(mktemp "${file}.tmp.XXXXXX")"
-    awk -v wanted_key="$key" -v wanted_value="$value" '
-        BEGIN { found = 0 }
-        index($0, wanted_key "=") == 1 { print wanted_key "=" wanted_value; found = 1; next }
-        { print }
-        END { if (!found) print wanted_key "=" wanted_value }
-    ' "$file" > "$temp_file"
-    chmod --reference="$file" "$temp_file" 2>/dev/null || chmod 600 "$temp_file"
+    {
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" == "$key="* ]]; then
+                printf '%s=%s\n' "$key" "$value"
+                found=$((found + 1))
+                continue
+            fi
+            printf '%s\n' "$line"
+        done < "$file"
+        if [[ "$found" -eq 0 ]]; then
+            printf '%s=%s\n' "$key" "$value"
+        fi
+    } > "$temp_file"
+    if [[ "$found" -gt 1 ]]; then
+        rm -f "$temp_file"
+        die "protected settings file contains duplicate $key declarations: $file"
+    fi
+    chmod 600 "$temp_file"
     mv "$temp_file" "$file"
+}
+
+write_psql_secret_variable() {
+    local variable_name="$1"
+    local secret_value="$2"
+    local encoded_value=""
+
+    [[ "$variable_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || \
+        die "unsafe psql secret variable name"
+    encoded_value="$(printf '%s' "$secret_value" | od -An -v -tx1 | tr -d ' \n')"
+    printf "\\set %s '%s'\n" "$variable_name" "$encoded_value"
 }
 
 is_placeholder_secret() {
@@ -727,14 +754,27 @@ prepare_database_superuser() {
     fi
 
     printf 'Creating the one-time Filterest PostgreSQL administrator role.\n'
-    sudo -u postgres psql -p "$port" -d postgres -v ON_ERROR_STOP=1 \
-        --set=role_name="$role" --set=role_password="$password" <<'SQL'
-SELECT format('CREATE ROLE %I WITH LOGIN SUPERUSER PASSWORD %L', :'role_name', :'role_password')
+    {
+        write_psql_secret_variable role_password_hex "$password"
+        cat <<'SQL'
+\o /dev/null
+SELECT format(
+    'CREATE ROLE %I WITH LOGIN SUPERUSER PASSWORD %L',
+    :'role_name',
+    convert_from(decode(:'role_password_hex', 'hex'), 'UTF8')
+)
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role_name');
 \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN SUPERUSER PASSWORD %L', :'role_name', :'role_password');
+SELECT format(
+    'ALTER ROLE %I WITH LOGIN SUPERUSER PASSWORD %L',
+    :'role_name',
+    convert_from(decode(:'role_password_hex', 'hex'), 'UTF8')
+);
 \gexec
+\o
 SQL
+    } | sudo -u postgres psql -p "$port" -d postgres -v ON_ERROR_STOP=1 \
+        --set=role_name="$role"
     printf '✓ PostgreSQL administrator role is ready; normal app use no longer needs sudo.\n'
 }
 

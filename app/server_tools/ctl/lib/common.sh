@@ -1,4 +1,8 @@
 #!/bin/bash
+# common.sh
+# Provides shared lifecycle, port, process, and presentation helpers for ctl.
+# Bridges standalone Filterest ownership checks with embedded Easelect legacy control paths.
+# Exists so destructive runtime actions remain centralized and product-boundary aware.
 # ==============================================================================
 # common.sh: Shared utilities for Easelect Control CLI
 #
@@ -14,7 +18,7 @@ NC='\033[0m'
 
 # Default values
 LOG_FILE="${FILTEREST_LOG_FILE_OVERRIDE:-server_output.log}"
-PORT=${EASELECT_PORT:-8082}
+PORT=${EASELECT_PORT:-${FILTEREST_STANDALONE_DEFAULT_PORT:-8082}}
 LOCAL_BINARY_DIR="${FILTEREST_RUNTIME_ROOT:-${PROJECT_ROOT:-.}/runtime}/bin"
 LOCAL_BINARY_PATH="$LOCAL_BINARY_DIR/easelect_dev"
 : "${EASELECT_RUNTIME_ENV_FILE:=${PROJECT_ROOT:-.}/.env}"
@@ -44,6 +48,121 @@ project_display_name() {
 filterest_is_standalone_public_install() {
     [[ -f "${FILTEREST_SOURCE_ROOT:-$PROJECT_ROOT}/VERSION_APP" ]] &&
         [[ ! -f "$PROJECT_ROOT/VERSION_EASELECT" ]]
+}
+
+filterest_uses_standalone_root_ctl() {
+    [[ "${FILTEREST_STANDALONE_ROOT_CTL:-0}" == "1" ]] &&
+        filterest_is_standalone_public_install
+}
+
+filterest_default_vite_port() {
+    if filterest_uses_standalone_root_ctl; then
+        printf '%s' "${FILTEREST_STANDALONE_DEFAULT_VITE_PORT:-9100}"
+        return
+    fi
+    printf '5173'
+}
+
+_standalone_runtime_env_file() {
+    if [[ -f "$EASELECT_DEV_ENV_FILE" ]]; then
+        printf '%s' "$EASELECT_DEV_ENV_FILE"
+        return
+    fi
+    printf '%s' "$EASELECT_RUNTIME_ENV_FILE"
+}
+
+_standalone_configured_backend_port() {
+    local env_file
+    local configured=""
+    env_file="$(_standalone_runtime_env_file)"
+    configured="$(_read_local_env_value "APP_PORT" "$env_file")"
+    [[ -n "$configured" ]] || configured="$(_read_local_env_value "PORT" "$env_file")"
+    [[ -n "$configured" ]] || configured="$(_read_local_env_value "EASELECT_PORT" "$env_file")"
+    printf '%s' "${configured:-${FILTEREST_STANDALONE_DEFAULT_PORT:-8100}}"
+}
+
+_standalone_configured_vite_port() {
+    local env_file
+    env_file="$(_standalone_runtime_env_file)"
+    _read_local_env_value "VITE_DEV_PORT" "$env_file" "$(filterest_default_vite_port)"
+}
+
+_standalone_configured_vite_hmr_port() {
+    local env_file
+    local vite_port
+    env_file="$(_standalone_runtime_env_file)"
+    vite_port="$(_standalone_configured_vite_port)"
+    _read_local_env_value "VITE_HMR_PORT" "$env_file" "$vite_port"
+}
+
+_standalone_listener_matches_role() {
+    local index="$1"
+    local role="$2"
+    local pid="${FILTEREST_PREFLIGHT_CAPTURED_PIDS[$index]}"
+    local cwd="${FILTEREST_PREFLIGHT_CAPTURED_CWDS[$index]}"
+    local executable="${FILTEREST_PREFLIGHT_CAPTURED_EXECUTABLES[$index]}"
+    local expected_backend=""
+    local command_line=""
+
+    if [[ "$role" == "backend" ]]; then
+        [[ "$cwd" == "$(cd "$PROJECT_ROOT" && pwd -P)" ]] || return 1
+        expected_backend="$(readlink -f "$LOCAL_BINARY_PATH" 2>/dev/null || true)"
+        [[ -n "$expected_backend" ]] || expected_backend="$LOCAL_BINARY_PATH"
+        [[ "$executable" == "$expected_backend" || \
+           "$executable" == "$expected_backend (deleted)" ]]
+        return
+    fi
+
+    [[ "$cwd" == "$(cd "$FILTEREST_BUILD_ROOT" && pwd -P)" ]] || return 1
+    command_line="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+    [[ "$command_line" == *"node_modules/vite/"* || \
+       "$command_line" == *"node_modules/.bin/vite"* ]]
+}
+
+_stop_standalone_listener_on_port() {
+    local port="$1"
+    local role="$2"
+    local pids=""
+    local index=0
+    local listening_status=0
+
+    filterest_port_is_listening "$port" || listening_status=$?
+    case "$listening_status" in
+        1) return 0 ;;
+        0) ;;
+        *) return 1 ;;
+    esac
+    pids="$(filterest_port_listener_pids "$port" || true)"
+    [[ -n "$pids" ]] || {
+        echo "error: listener on port $port could not be identified safely" >&2
+        return 1
+    }
+    filterest_capture_interactive_listener_snapshot "$port" "$pids" || return 1
+    for index in "${!FILTEREST_PREFLIGHT_CAPTURED_PIDS[@]}"; do
+        if ! _standalone_listener_matches_role "$index" "$role"; then
+            echo "error: refusing to stop unrelated listener on standalone $role port $port" >&2
+            return 1
+        fi
+    done
+    filterest_stop_listener_pids \
+        "$port" "$pids" "Standalone Filterest $role stopped." \
+        "" "" "" "" "" 1
+}
+
+_stop_standalone_local_runtime() {
+    local backend_port
+    local vite_port
+    local vite_hmr_port
+    backend_port="$(_standalone_configured_backend_port)"
+    vite_port="$(_standalone_configured_vite_port)"
+    vite_hmr_port="$(_standalone_configured_vite_hmr_port)"
+    _stop_standalone_listener_on_port "$backend_port" backend || return 1
+    if [[ "$vite_port" != "$backend_port" ]]; then
+        _stop_standalone_listener_on_port "$vite_port" vite || return 1
+    fi
+    if [[ "$vite_hmr_port" != "$backend_port" && "$vite_hmr_port" != "$vite_port" ]]; then
+        _stop_standalone_listener_on_port "$vite_hmr_port" vite || return 1
+    fi
 }
 
 # Resolve the product's bare database default without overriding an explicit
@@ -163,6 +282,11 @@ _free_local_dev_ports() {
 # ------------------------------------------------------------------------------
 stop_local_runtime() {
     echo -e "${YELLOW}🛑 Stopping local $(project_display_name) runtime...${NC}"
+    if filterest_uses_standalone_root_ctl; then
+        _stop_standalone_local_runtime
+        echo -e "${GREEN}✅ Local standalone Filterest runtime stopped${NC}"
+        return
+    fi
     _stop_local_runtime_components
     _stop_local_dev_docker_stack
     _free_local_dev_ports
@@ -175,6 +299,11 @@ stop_local_runtime() {
 # ------------------------------------------------------------------------------
 stop_all() {
     echo -e "${YELLOW}🛑 Stopping all $(project_display_name) instances...${NC}"
+    if filterest_uses_standalone_root_ctl; then
+        _stop_standalone_local_runtime
+        echo -e "${GREEN}✅ Standalone Filterest runtime stopped${NC}"
+        return
+    fi
     _stop_local_runtime_components
     _stop_local_dev_docker_stack
     _free_local_dev_ports
@@ -202,6 +331,15 @@ check_port_available() {
     local preserve_derivative_instances="${1:-false}"
 
     if lsof -i :${PORT} > /dev/null 2>&1; then
+        if filterest_uses_standalone_root_ctl; then
+            echo -e "${YELLOW}⚠️  Port ${PORT} is in use. Verifying this installation's backend...${NC}"
+            _stop_standalone_listener_on_port "$PORT" backend
+            return
+        fi
+        if [[ "${FILTEREST_REFUSE_OCCUPIED_PORT:-0}" == "1" ]]; then
+            echo -e "${RED}❌ Port ${PORT} is already in use; refusing broad automatic cleanup.${NC}" >&2
+            return 1
+        fi
         echo -e "${YELLOW}⚠️  Port ${PORT} is in use. Stopping existing processes...${NC}"
         if [[ "$preserve_derivative_instances" == "true" ]]; then
             stop_local_runtime
@@ -223,8 +361,8 @@ print_success() {
         db_env_file="$EASELECT_DEV_ENV_FILE"
     fi
     local vite_port
-    vite_port="$(_read_local_env_value "VITE_DEV_PORT" "$db_env_file" "5173")"
-    vite_port="${vite_port:-5173}"
+    vite_port="$(_read_local_env_value "VITE_DEV_PORT" "$db_env_file" "$(filterest_default_vite_port)")"
+    vite_port="${vite_port:-$(filterest_default_vite_port)}"
     local db_host
     db_host="$(_read_local_env_value "DB_HOST" "$db_env_file")"
     local db_port

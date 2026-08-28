@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# Compatibility Queen entrypoint for Filterest maintainers.
+# queen
+# Delegates standalone agent sessions to the canonical Queen implementation.
+# Bridges immutable app source with installation-owned transcripts, locks, and task dumps.
+# Exists so Queen never writes mutable state into immutable app source or root-level source files.
 set -euo pipefail
 INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export FILTEREST_ROOT="$INSTALLATION_ROOT"
 export FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT"
+export FILTEREST_WORKSPACE_ROOT="$INSTALLATION_ROOT"
+export FILTEREST_QUEEN_STATE_ROOT="$INSTALLATION_ROOT/data/runtime/queen"
+export FILTEREST_TASK_DUMP_DIR="$INSTALLATION_ROOT/data/runtime/agent_tasks/_db_dump"
+export FILTEREST_TEST_CREDENTIAL_FILE="$INSTALLATION_ROOT/keys/filterest_runtime/dev_env_test_creds.txt"
+export GOWORK=off PYTHONPYCACHEPREFIX="$INSTALLATION_ROOT/data/runtime/python-cache" FILTEREST_RUNTIME_ROOT_OVERRIDE="$INSTALLATION_ROOT/data/runtime"
+unset FILTEREST_DB_TASK_PYTHON_MODULE
 exec "$INSTALLATION_ROOT/app/queen" "$@"

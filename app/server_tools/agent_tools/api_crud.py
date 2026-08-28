@@ -10,9 +10,19 @@ import json
 import sys
 
 try:
-    from .easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from .easelect_api_client import (
+        DEFAULT_BASE_URL,
+        EaselectAPIClient,
+        EaselectAPIError,
+        resolve_api_base_url,
+    )
 except ImportError:
-    from easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from easelect_api_client import (
+        DEFAULT_BASE_URL,
+        EaselectAPIClient,
+        EaselectAPIError,
+        resolve_api_base_url,
+    )
 
 
 def load_json_argument(raw_value, label):
@@ -119,7 +129,7 @@ def print_columns(columns):
 
 def print_authentication_context(args):
     """Explain visible credential prompts before asking a human for secrets."""
-    base_url = args.base_url or "https://localhost:8082"
+    base_url = args.base_url or resolve_api_base_url()
     command = str(getattr(args, "command", "administrative API operation"))
     credential_username = str(getattr(args, "credential_username", "") or "").strip()
     print("Administrator authentication required")
@@ -446,9 +456,12 @@ def command_assign_symbol(args):
 def build_parser():
     """Build the api_crud parser between terminal commands and client methods."""
     parser = argparse.ArgumentParser(
-        description="Maintain Easelect datasets, columns, and rows through application APIs."
+        description="Maintain Filterest datasets, columns, and rows through application APIs."
     )
-    parser.add_argument("--base-url", help="Easelect base URL, default https://localhost:8082")
+    parser.add_argument(
+        "--base-url",
+        help=f"Filterest base URL, default {DEFAULT_BASE_URL}",
+    )
     parser.add_argument(
         "--prompt-credentials",
         action="store_true",

@@ -1,7 +1,7 @@
 // queen_chat_handler.go
 // Admin-only HTTP handlers for browsing Queen JSONL transcripts in the browser.
-// Bridges the local .queen/transcripts directory with JSON and SSE responses for the SPA admin tools.
-// Exists to expose the existing read-only Queen chat logs without requiring terminal-only tooling.
+// Bridges the resolved Queen runtime transcript directory with JSON and SSE responses for the SPA admin tools.
+// Exists so browser logs follow the same mutable-state boundary as managed and command-line Queen sessions.
 package devtools
 
 import (
@@ -243,6 +243,9 @@ func buildQueenTranscriptStreamPulse(transcriptPath string, info os.FileInfo, re
 func resolveQueenTranscriptDir() string {
 	if override := strings.TrimSpace(os.Getenv("QUEEN_TRANSCRIPT_DIR")); override != "" {
 		return override
+	}
+	if stateRoot, configured := resolveConfiguredQueenStateRoot(); configured {
+		return filepath.Join(stateRoot, "transcripts")
 	}
 
 	candidates := []string{

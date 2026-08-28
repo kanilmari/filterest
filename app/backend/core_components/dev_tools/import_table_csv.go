@@ -1,7 +1,7 @@
 // import_table_csv.go
-// CSV import helpers that read a table dump file and upsert its rows into the database.
+// CSV import helpers that read table dumps from the resolved mutable runtime area.
 // Bridges dev-tool HTTP requests, sanitized table metadata, and transactional bulk writes.
-// Exists to support local seed loading and repeatable table restoration during development.
+// Exists to restore development data without reading state beside immutable app source.
 package devtools
 
 import (
@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
@@ -23,7 +22,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// ImportTableCSV reads tables_data/<table>.csv using the transaction from ctx
+// ImportTableCSV reads the resolved tables_data/<table>.csv using the transaction from ctx
 // and upserts rows into the database. It returns an error if the transaction is
 // missing.
 func ImportTableCSV(ctx context.Context, tableName string) (string, string, error) {
@@ -51,7 +50,7 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 		return "", "", err
 	}
 
-	filePath := filepath.Join(".", "tables_data", sanitizedTable+".csv")
+	filePath := tableCSVFilePath(sanitizedTable)
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", "", fmt.Errorf("error opening csv: %v", err)

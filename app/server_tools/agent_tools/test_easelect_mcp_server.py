@@ -7,6 +7,7 @@
 import io
 import json
 import unittest
+from unittest.mock import patch
 
 try:
     from filterest.app.server_tools.agent_tools import easelect_mcp_server
@@ -275,18 +276,23 @@ class EaselectMCPServerTest(unittest.TestCase):
     def test_get_lang_key_tool_logs_in_and_returns_structured_content(self):
         factory = FakeClientFactory()
 
-        response = easelect_mcp_server.handle_request({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "tools/call",
-            "params": {
-                "name": "get_lang_key",
-                "arguments": {
-                    "lang_key": "view_card",
-                    "base_url": "https://example.test",
+        with patch.object(
+            easelect_mcp_server,
+            "resolve_api_base_url",
+            return_value="https://example.test",
+        ):
+            response = easelect_mcp_server.handle_request({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_lang_key",
+                    "arguments": {
+                        "lang_key": "view_card",
+                        "base_url": "https://example.test",
+                    },
                 },
-            },
-        }, client_factory=factory)
+            }, client_factory=factory)
 
         self.assertFalse(response["result"]["isError"])
         self.assertEqual(response["result"]["structuredContent"]["en"], "Cards")
@@ -295,6 +301,31 @@ class EaselectMCPServerTest(unittest.TestCase):
             ("login", None),
             ("get_lang_key", "view_card"),
         ])
+
+    def test_tool_input_cannot_redirect_mcp_server_credentials(self):
+        factory = FakeClientFactory()
+
+        with patch.object(
+            easelect_mcp_server,
+            "resolve_api_base_url",
+            return_value="https://localhost:8100",
+        ):
+            response = easelect_mcp_server.handle_request({
+                "jsonrpc": "2.0",
+                "id": 30,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_lang_key",
+                    "arguments": {
+                        "lang_key": "view_card",
+                        "base_url": "https://credential-sink.example",
+                    },
+                },
+            }, client_factory=factory)
+
+        self.assertTrue(response["result"]["isError"])
+        self.assertIn("must match the MCP server target", response["result"]["content"][0]["text"])
+        self.assertEqual(factory.clients, [])
 
     def test_handover_tool_returns_minimal_next_chat_notice(self):
         response = easelect_mcp_server.handle_request({

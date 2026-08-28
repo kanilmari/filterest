@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # easelect_api_client.py
-# Shared HTTP API client for Easelect developer and agent tooling.
-# Bridges root CLI wrappers, future MCP tools, and the native dev backend API.
+# Shared HTTP API client for Filterest and embedded Easelect developer tooling.
+# Bridges root CLI wrappers, future MCP tools, and the selected native backend API.
 # Exists so data changes go through app validation instead of direct SQL writes.
 
 import http.cookiejar
@@ -25,24 +25,103 @@ try:
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
+    from ..lib.filterest_paths import is_private_easelect_source_checkout
 except ImportError:
     from server_tools.lib.easelect_private_paths import (
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
+    from server_tools.lib.filterest_paths import is_private_easelect_source_checkout
 
 
 PROJECT_ROOT = str(resolve_embedded_project_root(CANONICAL_FILTEREST_ROOT))
-_IS_EMBEDDED_EASELECT_CHECKOUT = Path(PROJECT_ROOT) != CANONICAL_FILTEREST_ROOT
+_IS_EMBEDDED_EASELECT_CHECKOUT = is_private_easelect_source_checkout(
+    Path(PROJECT_ROOT)
+)
 
 
 LOCAL_NATIVE_PORT = 8082 if _IS_EMBEDDED_EASELECT_CHECKOUT else 8100
 DEFAULT_BASE_URL = f"https://localhost:{LOCAL_NATIVE_PORT}"
-INSECURE_TLS_ENV = "EASELECT_API_ALLOW_INSECURE_TLS"
+FILTEREST_API_BASE_URL_ENV = "FILTEREST_API_BASE_URL"
+FILTEREST_API_USERNAME_ENV = "FILTEREST_API_USERNAME"
+FILTEREST_API_PASSWORD_ENV = "FILTEREST_API_PASSWORD"
+FILTEREST_API_OTP_CODE_ENV = "FILTEREST_API_OTP_CODE"
+INSECURE_TLS_ENV = "FILTEREST_API_ALLOW_INSECURE_TLS"
+LEGACY_INSECURE_TLS_ENV = "EASELECT_API_ALLOW_INSECURE_TLS"
 
 
 class EaselectAPIError(RuntimeError):
     """Raised when the Easelect developer API returns an error response."""
+
+
+def _url_origin(url):
+    """Return a normalized web origin for redirect-boundary comparison."""
+
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return None
+    scheme = parsed.scheme.lower()
+    hostname = (parsed.hostname or "").lower()
+    if scheme not in {"http", "https"} or not hostname:
+        return None
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    effective_port = port or (443 if scheme == "https" else 80)
+    return scheme, hostname, effective_port
+
+
+def _validate_api_base_url(url):
+    """Reject malformed targets and plaintext credential transport off loopback."""
+
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        _ = parsed.port
+    except (TypeError, ValueError) as error:
+        raise EaselectAPIError("API base URL is invalid") from error
+    hostname = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise EaselectAPIError(
+            "API base URL must be an HTTP(S) origin or path without credentials, query, or fragment"
+        )
+    if parsed.scheme.lower() == "http" and hostname not in {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    }:
+        raise EaselectAPIError("remote API targets require HTTPS")
+    return str(url).rstrip("/")
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Permit API redirects only inside the client-configured origin."""
+
+    def __init__(self, base_url):
+        super().__init__()
+        self.allowed_origin = _url_origin(base_url)
+
+    def redirect_request(self, request, fp, code, message, headers, new_url):
+        resolved_url = urllib.parse.urljoin(request.full_url, new_url)
+        if self.allowed_origin is None or _url_origin(resolved_url) != self.allowed_origin:
+            raise EaselectAPIError(
+                "API redirect outside the configured scheme, host, or port was refused"
+            )
+        return super().redirect_request(
+            request,
+            fp,
+            code,
+            message,
+            headers,
+            resolved_url,
+        )
 
 
 def load_env_file(filepath):
@@ -60,12 +139,45 @@ def load_env_file(filepath):
     return env
 
 
-def load_project_env(project_root=PROJECT_ROOT):
-    private_paths = resolve_easelect_private_paths(Path(project_root))
+def load_project_env(project_root=PROJECT_ROOT, environment=None):
+    """Load only protected project files selected by the structural root."""
+
+    resolved_environment = os.environ if environment is None else environment
+    private_paths = resolve_easelect_private_paths(
+        Path(project_root),
+        resolved_environment,
+    )
     env = {}
     env.update(load_env_file(private_paths.runtime_env_file))
     env.update(load_env_file(private_paths.development_env_file))
     return env
+
+
+def _project_is_private_easelect(project_root):
+    return is_private_easelect_source_checkout(Path(project_root).resolve())
+
+
+def _default_base_url_for_project(project_root):
+    port = 8082 if _project_is_private_easelect(project_root) else 8100
+    return f"https://localhost:{port}"
+
+
+def resolve_api_base_url(project_root=PROJECT_ROOT, environment=None):
+    """Resolve a Filterest target without inheriting Easelect-only ambient state."""
+
+    resolved_environment = os.environ if environment is None else environment
+    filterest_target = str(
+        resolved_environment.get(FILTEREST_API_BASE_URL_ENV, "") or ""
+    ).strip()
+    if filterest_target:
+        return filterest_target.rstrip("/")
+    if _project_is_private_easelect(project_root):
+        legacy_target = str(
+            resolved_environment.get("EASELECT_API_BASE_URL", "") or ""
+        ).strip()
+        if legacy_target:
+            return legacy_target.rstrip("/")
+    return _default_base_url_for_project(project_root)
 
 
 class EaselectAPIClient:
@@ -78,30 +190,68 @@ class EaselectAPIClient:
         password=None,
         otp_code=None,
         verification_code_provider=None,
+        environment=None,
     ):
+        resolved_environment = os.environ if environment is None else environment
         self.project_root = project_root
-        self.project_env = load_project_env(project_root)
-        self.base_url = (
+        self.is_embedded_easelect = _project_is_private_easelect(project_root)
+        self.local_native_port = 8082 if self.is_embedded_easelect else 8100
+        self.base_url = _validate_api_base_url(str(
             base_url
-            or os.environ.get("EASELECT_API_BASE_URL")
-            or os.environ.get("DB_TASK_BASE_URL")
-            or DEFAULT_BASE_URL
-        ).rstrip("/")
+            or resolve_api_base_url(project_root, resolved_environment)
+        ).rstrip("/"))
+        self.is_local_native_target = self._is_local_native_base_url(
+            self.base_url,
+            native_port=self.local_native_port,
+        )
+
+        # Protected project files and generic development variables belong only
+        # to the exact native loopback service. A caller-selected remote URL
+        # must never inherit credentials that were stored for local development.
+        self.project_env = (
+            load_project_env(project_root, resolved_environment)
+            if self.is_local_native_target
+            else {}
+        )
+        legacy_api_username = ""
+        legacy_api_password = ""
+        legacy_api_otp_code = ""
+        legacy_dev_username = ""
+        legacy_dev_password = ""
+        legacy_dev_otp_code = ""
+        if self.is_embedded_easelect:
+            legacy_api_username = resolved_environment.get("EASELECT_API_USERNAME") or ""
+            legacy_api_password = resolved_environment.get("EASELECT_API_PASSWORD") or ""
+            legacy_api_otp_code = resolved_environment.get("EASELECT_API_OTP_CODE") or ""
+            if self.is_local_native_target:
+                legacy_dev_username = resolved_environment.get("DEV_USERNAME") or ""
+                legacy_dev_password = resolved_environment.get("DEV_PASSWORD") or ""
+                legacy_dev_otp_code = (
+                    resolved_environment.get("DEV_LOGIN_VERIFICATION_CODE")
+                    or resolved_environment.get("LOGIN_OTP_CODE")
+                    or ""
+                )
         self.username = (
             username
-            or os.environ.get("EASELECT_API_USERNAME")
+            or resolved_environment.get(FILTEREST_API_USERNAME_ENV)
+            or legacy_api_username
+            or legacy_dev_username
             or self.project_env.get("DEV_USERNAME")
             or ""
         ).strip()
         self.password = (
             password
-            or os.environ.get("EASELECT_API_PASSWORD")
+            or resolved_environment.get(FILTEREST_API_PASSWORD_ENV)
+            or legacy_api_password
+            or legacy_dev_password
             or self.project_env.get("DEV_PASSWORD")
             or ""
         ).strip()
         self.otp_code = (
             otp_code
-            or os.environ.get("EASELECT_API_OTP_CODE")
+            or resolved_environment.get(FILTEREST_API_OTP_CODE_ENV)
+            or legacy_api_otp_code
+            or legacy_dev_otp_code
             or self.project_env.get("DEV_LOGIN_VERIFICATION_CODE")
             or self.project_env.get("LOGIN_OTP_CODE")
         )
@@ -110,26 +260,58 @@ class EaselectAPIClient:
         self._authenticated = False
         self.cookie_jar = http.cookiejar.CookieJar()
         self._csrf_token = None
-        self._opener = urllib.request.build_opener(
+        transport_handlers = []
+        if self.is_local_native_target:
+            # urllib otherwise inherits HTTPS_PROXY from the process. Native
+            # administrator credentials must never leave loopback through an
+            # ambient or caller-controlled proxy.
+            transport_handlers.append(urllib.request.ProxyHandler({}))
+        transport_handlers.extend((
+            _SameOriginRedirectHandler(self.base_url),
             urllib.request.HTTPCookieProcessor(self.cookie_jar),
-            urllib.request.HTTPSHandler(context=self._ssl_context(self.base_url)),
-        )
+            urllib.request.HTTPSHandler(
+                context=self._ssl_context(
+                    self.base_url,
+                    environment=resolved_environment,
+                    embedded_easelect=self.is_embedded_easelect,
+                    native_port=self.local_native_port,
+                )
+            ),
+        ))
+        self._opener = urllib.request.build_opener(*transport_handlers)
 
     @staticmethod
-    def _ssl_context(base_url, environment=None):
+    def _ssl_context(
+        base_url,
+        environment=None,
+        embedded_easelect=None,
+        native_port=None,
+    ):
         """Verify remote TLS while allowing the native self-signed dev origin."""
         context = ssl.create_default_context()
         resolved_environment = os.environ if environment is None else environment
+        private_source = (
+            _IS_EMBEDDED_EASELECT_CHECKOUT
+            if embedded_easelect is None
+            else embedded_easelect
+        )
         if (
-            EaselectAPIClient._is_local_native_base_url(base_url)
+            EaselectAPIClient._is_local_native_base_url(
+                base_url,
+                native_port=native_port,
+            )
             or resolved_environment.get(INSECURE_TLS_ENV) == "1"
+            or (
+                private_source
+                and resolved_environment.get(LEGACY_INSECURE_TLS_ENV) == "1"
+            )
         ):
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
         return context
 
     @staticmethod
-    def _is_local_native_base_url(base_url):
+    def _is_local_native_base_url(base_url, native_port=None):
         """Recognize only the exact native loopback origin used for development."""
         try:
             parsed = urllib.parse.urlsplit(base_url)
@@ -140,7 +322,7 @@ class EaselectAPIClient:
         return (
             parsed.scheme == "https"
             and parsed.hostname in {"localhost", "127.0.0.1"}
-            and port == LOCAL_NATIVE_PORT
+            and port == (LOCAL_NATIVE_PORT if native_port is None else native_port)
             and parsed.username is None
             and parsed.password is None
             and parsed.path in {"", "/"}
@@ -252,10 +434,17 @@ class EaselectAPIClient:
         if self._authenticated:
             return {"authenticated": True, "cached": True}
         if not self.username or not self.password:
+            if not self.is_local_native_target:
+                raise EaselectAPIError(
+                    "remote API targets require credentials supplied explicitly "
+                    "as client arguments or FILTEREST_API_USERNAME/"
+                    "FILTEREST_API_PASSWORD process variables; protected local "
+                    "credentials are never sent to remote targets"
+                )
             raise EaselectAPIError(
                 "login credentials are missing; set DEV_USERNAME/DEV_PASSWORD "
-                "in the resolved environment or EASELECT_API_USERNAME/"
-                "EASELECT_API_PASSWORD in the process environment"
+                "in the resolved protected environment or FILTEREST_API_USERNAME/"
+                "FILTEREST_API_PASSWORD in the process environment"
             )
         csrf_token = self.fetch_csrf_token(force=True)
         first = self.request("POST", "/api/login", data={

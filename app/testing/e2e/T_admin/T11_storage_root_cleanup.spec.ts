@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
+import { resolveFilterestStorageRuntimePaths } from '../helpers/test-runtime-paths';
 
 type ArchiveResponse = {
   archived?: string[];
@@ -42,11 +43,14 @@ test.describe('T11 — Storage Root Cleanup', () => {
 
   test('archive-media-tables archives unknown storage root folders', async ({ page }) => {
     const folderName = `999${Date.now()}`;
-    const sourceMarker = path.join('storage', folderName, '1', 'marker.txt');
-    const archivedMarker = path.join('storage_deleted', folderName, '1', 'marker.txt');
+    const { storageRoot, storageDeletedRoot } = resolveFilterestStorageRuntimePaths();
+    const sourceFolder = path.join(storageRoot, folderName);
+    const archivedFolder = path.join(storageDeletedRoot, folderName);
+    const sourceMarker = path.join(sourceFolder, '1', 'marker.txt');
+    const archivedMarker = path.join(archivedFolder, '1', 'marker.txt');
 
-    fs.rmSync(path.join('storage', folderName), { recursive: true, force: true });
-    fs.rmSync(path.join('storage_deleted', folderName), { recursive: true, force: true });
+    fs.rmSync(sourceFolder, { recursive: true, force: true });
+    fs.rmSync(archivedFolder, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(sourceMarker), { recursive: true });
     fs.writeFileSync(sourceMarker, 'marker');
 
@@ -90,7 +94,7 @@ test.describe('T11 — Storage Root Cleanup', () => {
       expect(Array.isArray(archiveBody.archived), 'Expected archived array from archive-media-tables.').toBe(true);
       expect(archiveBody.archived).toContain(folderName);
 
-      await expect.poll(() => fs.existsSync(path.join('storage', folderName))).toBe(false);
+      await expect.poll(() => fs.existsSync(sourceFolder)).toBe(false);
       await expect.poll(() => fs.existsSync(archivedMarker)).toBe(true);
 
       const checkAfter = await page.evaluate(async () => {
@@ -106,8 +110,8 @@ test.describe('T11 — Storage Root Cleanup', () => {
       const checkAfterBody = JSON.parse(checkAfter.body);
       expect(checkAfterBody.unknown).not.toContain(folderName);
     } finally {
-      fs.rmSync(path.join('storage', folderName), { recursive: true, force: true });
-      fs.rmSync(path.join('storage_deleted', folderName), { recursive: true, force: true });
+      fs.rmSync(sourceFolder, { recursive: true, force: true });
+      fs.rmSync(archivedFolder, { recursive: true, force: true });
     }
   });
 });

@@ -28,9 +28,10 @@ make_probe_launcher() {
     local path="$1"
     {
         printf '%s\n' '#!/usr/bin/env bash'
-        printf '%s\n' 'printf '\''pwd=%s\nroot=%s\nbuild=%s\nruntime=%s\nlog=%s\nargs=%s\n'\'' \'
+        printf '%s\n' 'printf '\''pwd=%s\nroot=%s\nbuild=%s\nruntime=%s\nlog=%s\nnode=%s\nnodepath=%s\ngomod=%s\ngocache=%s\nargs=%s\n'\'' \'
         printf '%s\n' '    "$PWD" "$FILTEREST_ROOT" "$FILTEREST_BUILD_ROOT_OVERRIDE" \'
-        printf '%s\n' '    "$FILTEREST_RUNTIME_ROOT_OVERRIDE" "$FILTEREST_LOG_FILE_OVERRIDE" "$*"'
+        printf '%s\n' '    "$FILTEREST_RUNTIME_ROOT_OVERRIDE" "$FILTEREST_LOG_FILE_OVERRIDE" \'
+        printf '%s\n' '    "$FILTEREST_NODE_MODULES_ROOT" "$NODE_PATH" "$GOMODCACHE" "$GOCACHE" "$*"'
     } > "$path"
     chmod +x "$path"
 }
@@ -60,6 +61,10 @@ assert_root_launcher_contract() {
     assert_equal "$sandbox/app" "$(sed -n 's/^build=//p' <<< "$output")" "$launcher_name build root"
     assert_equal "$sandbox/data/runtime" "$(sed -n 's/^runtime=//p' <<< "$output")" "$launcher_name runtime root"
     assert_equal "$sandbox/data/runtime/logs/server_output.log" "$(sed -n 's/^log=//p' <<< "$output")" "$launcher_name log path"
+    assert_equal "$sandbox/data/runtime/node/node_modules" "$(sed -n 's/^node=//p' <<< "$output")" "$launcher_name Node dependency root"
+    assert_equal "$sandbox/data/runtime/node/node_modules" "$(sed -n 's/^nodepath=//p' <<< "$output")" "$launcher_name Node module search path"
+    assert_equal "$sandbox/data/runtime/go/module-cache" "$(sed -n 's/^gomod=//p' <<< "$output")" "$launcher_name Go module cache"
+    assert_equal "$sandbox/data/runtime/go/build-cache" "$(sed -n 's/^gocache=//p' <<< "$output")" "$launcher_name Go build cache"
     assert_equal "start --root /subcommand/root" "$(sed -n 's/^args=//p' <<< "$output")" "$launcher_name argument forwarding"
 }
 

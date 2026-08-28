@@ -12,6 +12,9 @@ RUNTIME_ROOT="$PROJECT_ROOT/runtime"
 if [[ -n "${FILTEREST_ROOT:-}" ]]; then
     RUNTIME_ROOT="$FILTEREST_ROOT/data/runtime"
 fi
+# shellcheck source=server_tools/lib/python_bytecode_cache.sh
+source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
+filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
 
 cd "$CANONICAL_FILTEREST_ROOT"
 
@@ -37,6 +40,9 @@ Everyday commands:
   maintenance data [arguments]  Preview or prune configured data through the API
 
 Developer commands:
+  build [arguments]             Build frontend assets without app-local caches
+  qa [arguments]                Run the broader source quality suite
+  test-unit [arguments]         Run Vitest frontend and Node unit tests
   database [arguments]          Run a read-only database inspection
   mcp [arguments]               Start the developer MCP server
   test [arguments]              Run Playwright without opening an HTML report
@@ -274,6 +280,15 @@ case "$command_name" in
         resolve_environment
         export FILTEREST_MCP_DISPLAY_COMMAND="${FILTEREST_MCP_DISPLAY_COMMAND:-$0 mcp}"
         exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/easelect_mcp_server.py" "$@"
+        ;;
+    build)
+        exec npm --prefix "$CANONICAL_FILTEREST_ROOT" run build -- "$@"
+        ;;
+    qa)
+        exec npm --prefix "$CANONICAL_FILTEREST_ROOT" run qa -- "$@"
+        ;;
+    test-unit)
+        exec npm --prefix "$CANONICAL_FILTEREST_ROOT" test -- "$@"
         ;;
     test)
 		exec "$CANONICAL_FILTEREST_ROOT/server_tools/scripts/safe_test.sh" "$@"

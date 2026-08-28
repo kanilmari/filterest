@@ -1,5 +1,11 @@
 /** Canonical mutable-test-root resolver for Playwright's TypeScript loader. */
+import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  isNestedFilterestInstallation,
+  isPrivateEaselectSourceCheckout,
+  resolveFilterestProjectBoundary,
+} from '../../../server_tools/lib/easelect_private_paths.mjs';
 
 export const FILTEREST_TEST_RUNTIME_ROOT_ENV = 'FILTEREST_TEST_RUNTIME_ROOT';
 
@@ -22,6 +28,12 @@ export type FilterestTestRuntimeOptions = {
   applicationRoot?: string;
   environment?: NodeJS.ProcessEnv | Record<string, string | undefined>;
 };
+
+export type FilterestStorageRuntimePaths = Readonly<{
+  projectBoundary: string;
+  storageRoot: string;
+  storageDeletedRoot: string;
+}>;
 
 const defaultApplicationRoot = path.resolve(__dirname, '../../..');
 
@@ -72,5 +84,54 @@ export function resolveFilterestTestRuntimePaths(
     aiAcceptance: path.join(root, 'human_qa', 'ai_acceptance'),
     computerUseAcceptance: path.join(root, 'human_qa', 'computer_use'),
     browserAudits: path.join(root, 'browser_audits'),
+  });
+}
+
+/**
+ * Resolves the storage roots used by the server under the active source layout.
+ * Nested standalone installs keep mutable data beside app/, embedded Easelect
+ * keeps its established outer roots, and legacy flat checkouts remain unchanged.
+ */
+export function resolveFilterestStorageRuntimePaths(
+  {
+    applicationRoot = defaultApplicationRoot,
+    environment = process.env,
+  }: FilterestTestRuntimeOptions = {},
+): FilterestStorageRuntimePaths {
+  const resolvedApplicationRoot = fs.realpathSync.native(path.resolve(applicationRoot));
+  const projectBoundary = path.resolve(
+    resolveFilterestProjectBoundary(resolvedApplicationRoot, environment),
+  );
+  const nestedApplication = (
+    path.basename(resolvedApplicationRoot) === 'app'
+    && isNestedFilterestInstallation(path.dirname(resolvedApplicationRoot))
+  );
+  const nestedStandalone = (
+    isNestedFilterestInstallation(projectBoundary)
+    && !isPrivateEaselectSourceCheckout(projectBoundary)
+  );
+  const dataRoot = nestedStandalone
+    ? path.join(projectBoundary, 'data')
+    : projectBoundary;
+  const storageRoot = path.join(dataRoot, 'storage');
+  const storageDeletedRoot = path.join(dataRoot, 'storage_deleted');
+
+  if (
+    nestedApplication
+    && (
+      isWithin(storageRoot, resolvedApplicationRoot)
+      || isWithin(storageDeletedRoot, resolvedApplicationRoot)
+    )
+  ) {
+    throw new Error(
+      `Standalone storage roots must resolve outside the immutable app directory: `
+      + resolvedApplicationRoot,
+    );
+  }
+
+  return Object.freeze({
+    projectBoundary,
+    storageRoot,
+    storageDeletedRoot,
   });
 }

@@ -1,4 +1,8 @@
 #!/bin/bash
+# ctl_main.sh
+# Implements Filterest and embedded Easelect lifecycle command dispatch.
+# Bridges root launchers with local, Docker, instance, proxy, and stop controllers.
+# Exists so shared control behavior has one implementation with explicit product boundaries.
 # ==============================================================================
 # ctl_main.sh: Filterest Control CLI - Main Entry Point
 #
@@ -15,7 +19,7 @@
 #   --docker        Run in Docker containers
 #   --restore-db    (Docker only) Restore database from a full dump or committed bootstrap zip
 #   --role          (instance create only) application or management
-#   --stop          Stop all running Filterest instances
+#   --stop          Standalone: stop only installation-owned local listeners
 #   --help          Show this help message
 # ==============================================================================
 
@@ -47,6 +51,7 @@ source "$RESOLVE_ENV_LIB"
 
 # Source library modules
 source "$SCRIPT_DIR/lib/env_permissions.sh"
+source "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
 source "$SCRIPT_DIR/lib/common.sh"
 source "$FILTEREST_SOURCE_ROOT/server_tools/lib/public_bootstrap.sh"
 if [[ -n "${FILTEREST_PRIVATE_BOOTSTRAP_LIB:-}" ]]; then
@@ -77,7 +82,8 @@ show_help() {
 QUICK START
 ───────────────────────────────────────────────────────────────────────────────
   ./ctl                     Käynnistä paikallisesti (kehitys)
-                            → Go-backend portissa 8082
+                            → Filterest-juuresta portissa 8100
+                            → Easelect-upotuksessa portissa 8082
                             → Käyttää ratkaistua native development env -tiedostoa
                             → Hot reload: muutokset näkyvät heti
 
@@ -97,7 +103,8 @@ QUICK START
                             → Käyttää ratkaistua native runtime env -tiedostoa
                             → PostgreSQL + PostGIS + pgvector
 
-  ./ctl --stop              Pysäytä kaikki käynnissä olevat instanssit
+  ./ctl --stop              Pysäytä itsenäisessä Filterestissä vain tämän
+                            asennuksen tunnistetut backend- ja Vite-prosessit
   ./ctl --refresh-all-dev-targets
                             Päivitä natiivi ensin ja käynnistä se,
                             sitten rebuildaa kaikki Docker-instanssit

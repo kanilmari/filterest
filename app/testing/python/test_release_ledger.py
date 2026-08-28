@@ -1386,6 +1386,8 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "build:filterest-9.0.0-stable-runtime-ff0410676144",
         "build:filterest-9.0.0-stable-runtime-04aabc163596",
         "build:filterest-9.0.0-stable-runtime-fd3615a31156",
+        "build:filterest-9.0.0-stable-runtime-24e4c45131f4",
+        "build:filterest-9.0.0-stable-runtime-55cbb2c37f2d",
     ]
     assert [record["source"]["commit"] for record in current_version_records] == [
         "d332ef51d5933f0aa0424f9dabc21de939440c4f",
@@ -1398,6 +1400,8 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "ff041067614473f9a7ebfc71518cf0687e298c14",
         "04aabc1635969368fc412cb3e624de0f57f72f53",
         "fd3615a311567efbda06b5a5a222d3a3971bb1c2",
+        "24e4c45131f4aa800c66c1ad04945c1ad259fae5",
+        "55cbb2c37f2d6e83b68fbc1fc3ad402367e80d17",
     ]
     assert all(
         record["maturity"] == "candidate"

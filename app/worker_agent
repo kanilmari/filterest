@@ -23,10 +23,40 @@
 
 set -euo pipefail
 
-FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export FILTEREST_WORKSPACE_ROOT="${FILTEREST_WORKSPACE_ROOT:-$FILTEREST_ROOT}"
+FILTEREST_APPLICATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+if [[ -z "${FILTEREST_WORKSPACE_ROOT:-}" ]] && \
+    [[ "$(basename "$FILTEREST_APPLICATION_ROOT")" == "app" ]] && \
+    [[ -f "$FILTEREST_APPLICATION_ROOT/go.mod" ]] && \
+    [[ -f "$FILTEREST_APPLICATION_ROOT/VERSION_APP" ]]; then
+    FILTEREST_INSTALLATION_ROOT="$(cd "$FILTEREST_APPLICATION_ROOT/.." && pwd -P)"
+    FILTEREST_OUTER_ROOT="$(cd "$FILTEREST_INSTALLATION_ROOT/.." && pwd -P)"
+    if [[ -e "$FILTEREST_OUTER_ROOT/.git" && -f "$FILTEREST_OUTER_ROOT/VERSION_EASELECT" ]]; then
+        export FILTEREST_WORKSPACE_ROOT="$FILTEREST_OUTER_ROOT"
+        export FILTEREST_RUNTIME_ROOT_OVERRIDE="$FILTEREST_OUTER_ROOT/runtime"
+        export FILTEREST_WORKER_DEV_PORT="${FILTEREST_WORKER_DEV_PORT:-8082}"
+        export FILTEREST_WORKER_DB_PORT="${FILTEREST_WORKER_DB_PORT:-5433}"
+        export FILTEREST_DATABASE_DISPLAY_COMMAND="${FILTEREST_DATABASE_DISPLAY_COMMAND:-./filterest_private/db}"
+    else
+        export FILTEREST_ROOT="$FILTEREST_INSTALLATION_ROOT"
+        export FILTEREST_WORKSPACE_ROOT="$FILTEREST_INSTALLATION_ROOT"
+        export FILTEREST_RUNTIME_ROOT_OVERRIDE="$FILTEREST_INSTALLATION_ROOT/data/runtime"
+        export FILTEREST_TEST_CREDENTIAL_FILE="${FILTEREST_TEST_CREDENTIAL_FILE:-$FILTEREST_INSTALLATION_ROOT/keys/filterest_runtime/dev_env_test_creds.txt}"
+        export FILTEREST_WORKER_OUTPUT_DIR_REL="${FILTEREST_WORKER_OUTPUT_DIR_REL:-data/runtime/agent_tasks/_artifacts/worker_runs}"
+        export FILTEREST_WORKER_LEGACY_OUTPUT_DIR_REL="${FILTEREST_WORKER_LEGACY_OUTPUT_DIR_REL:-data/runtime/agent_tasks/20_in_progress}"
+        export FILTEREST_WORKER_DEV_PORT="${FILTEREST_WORKER_DEV_PORT:-8100}"
+        export FILTEREST_WORKER_DB_PORT="${FILTEREST_WORKER_DB_PORT:-5432}"
+        export FILTEREST_DATABASE_DISPLAY_COMMAND="${FILTEREST_DATABASE_DISPLAY_COMMAND:-./filterest database}"
+        export GOWORK=off
+        unset FILTEREST_WORKER_ROUTINE_RUNNER FILTEREST_WORKER_ROUTINES_DIR
+    fi
+else
+    export FILTEREST_WORKSPACE_ROOT="${FILTEREST_WORKSPACE_ROOT:-$FILTEREST_APPLICATION_ROOT}"
+fi
+# shellcheck source=server_tools/lib/python_bytecode_cache.sh
+source "$FILTEREST_APPLICATION_ROOT/server_tools/lib/python_bytecode_cache.sh"
+filterest_configure_python_bytecode_cache "$FILTEREST_APPLICATION_ROOT"
 
-WORKER_DIR="$FILTEREST_ROOT/server_tools/agent_tools/worker_agent"
+WORKER_DIR="$FILTEREST_APPLICATION_ROOT/server_tools/agent_tools/worker_agent"
 COMP_SCRIPT="$WORKER_DIR/worker_agent_completions.bash"
 
 # --setup-completion: install tab-completion permanently

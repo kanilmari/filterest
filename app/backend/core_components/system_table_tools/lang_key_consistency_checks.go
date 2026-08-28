@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -475,47 +473,6 @@ func fetchSchemaTableNames() map[string]bool {
 	return result
 }
 
-// findProjectRoot etsii projektin juurihakemiston kulkemalla ylöspäin
-// ja etsimällä go.mod-tiedostoa.
-// Strategia: 1) os.Getwd() (paras kun palvelin käynnistetään ./ctl:llä)
-//  2. os.Executable() (binäärin sijainti, fallback)
-func findProjectRoot() string {
-	// Ensisijainen: nykyinen työhakemisto (./ctl käynnistää palvelimen projektin juuresta)
-	wd, wdErr := os.Getwd()
-	if wdErr == nil {
-		if found := findGoModDir(wd); found != "" {
-			return found
-		}
-	}
-
-	// Varasuunnitelma: binäärin sijainnista ylöspäin
-	exe, err := os.Executable()
-	if err == nil {
-		dir := filepath.Dir(exe)
-		if found := findGoModDir(dir); found != "" {
-			return found
-		}
-	}
-
-	return ""
-}
-
-// findGoModDir kulkee hakemistopuuta ylöspäin etsien go.mod-tiedostoa
-func findGoModDir(startDir string) string {
-	dir := startDir
-	for i := 0; i < 10; i++ {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return ""
-}
-
 // ScanLangSourcesHandler ajaa PopulateLangKeySources() + MarkOrphanLangKeys()
 // on-demand ilman palvelimen uudelleenkäynnistystä. Palauttaa JSON-tuloksen.
 // POST /api/scan-lang-sources
@@ -525,7 +482,12 @@ func ScanLangSourcesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sourceCount := PopulateLangKeySources()
+	sourceCount, err := PopulateLangKeySources()
+	if err != nil {
+		log.Printf("[ScanLangSourcesHandler] language-key source scan failed; orphan maintenance skipped: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "language-key source scan failed")
+		return
+	}
 	orphanCount, deOrphaned := MarkOrphanLangKeys()
 
 	result := map[string]interface{}{

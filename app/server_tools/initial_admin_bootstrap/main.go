@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -61,7 +62,7 @@ func main() {
 	}
 }
 
-// run coordinates config parsing, database inspection, admin creation, and one-time credential output.
+// run coordinates config parsing, database inspection, admin creation, and one-time credential handoff.
 // It bridges the generated Filterest setup script and the lower-level bootstrap helpers.
 func run(ctx context.Context, args []string) error {
 	cfg, err := parseConfig(args)
@@ -89,22 +90,29 @@ func run(ctx context.Context, args []string) error {
 		if err = writeCredentialHandoff(cfg.handoffFile, result); err != nil {
 			return err
 		}
-		fmt.Println("Filterest initial admin credentials generated.")
-		fmt.Printf("  Username: %s\n", result.username)
-		fmt.Printf("  Password: %s\n", result.password)
-		fmt.Printf("  Email: %s\n", result.email)
-		fmt.Printf("  Handoff file: %s\n", cfg.handoffFile)
-		fmt.Println("  Delete the handoff file after the first login and password rotation.")
-		if strings.HasSuffix(strings.ToLower(result.email), ".invalid") {
-			fmt.Println("  Dev-only email placeholder used; keep LOGIN_OTP_CODE configured for this local preview.")
-		}
+		writeBootstrapStatus(os.Stdout, cfg.handoffFile, result)
 	case "exists":
-		fmt.Printf("Filterest login-ready admin already exists: %s\n", result.username)
-		fmt.Println("  No password was generated or reprinted.")
+		writeBootstrapStatus(os.Stdout, cfg.handoffFile, result)
 	default:
 		return fmt.Errorf("unknown bootstrap result status: %s", result.status)
 	}
 	return nil
+}
+
+// writeBootstrapStatus reports the owner-only handoff without logging login material.
+func writeBootstrapStatus(writer io.Writer, handoffFile string, result initialAdminResult) {
+	switch result.status {
+	case "created":
+		fmt.Fprintln(writer, "Filterest initial admin credentials generated in an owner-only handoff file.")
+		fmt.Fprintf(writer, "  Handoff file: %s\n", handoffFile)
+		fmt.Fprintln(writer, "  Delete the handoff file after the first login and password rotation.")
+		if strings.HasSuffix(strings.ToLower(result.email), ".invalid") {
+			fmt.Fprintln(writer, "  Dev-only email placeholder used; keep local login verification configured for this preview.")
+		}
+	case "exists":
+		fmt.Fprintln(writer, "Filterest login-ready admin already exists.")
+		fmt.Fprintln(writer, "  No credentials were generated or reprinted.")
+	}
 }
 
 // parseConfig converts setup flags and secret-bearing environment variables into bootstrap config.
@@ -409,7 +417,7 @@ func generatePassword() (string, error) {
 }
 
 // writeCredentialHandoff writes the one-time credential file with owner-only permissions.
-// It bridges setup stdout and the local handoff artifact that must be deleted after rotation.
+// It bridges setup status and the local handoff artifact that must be deleted after rotation.
 func writeCredentialHandoff(path string, result initialAdminResult) error {
 	absolutePath := filepath.Clean(path)
 	if err := os.MkdirAll(filepath.Dir(absolutePath), 0o700); err != nil {

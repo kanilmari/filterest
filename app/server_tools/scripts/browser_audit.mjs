@@ -8,20 +8,26 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { chromium } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { requireNodeDependency } from "../lib/node_dependency_loader.mjs";
 import {
     buildFindings,
     writeDbTaskDraft,
     writeIssueSummary,
     writeMarkdownReport,
 } from "./browser_audit_reporter.mjs";
-import { isLocalEaselectUrl } from "./local_easelect_target.mjs";
+import {
+    isLocalEaselectUrl,
+    resolveLocalFilterestBaseUrl,
+} from "./local_easelect_target.mjs";
 import { resolveFilterestTestRuntimePaths } from "./test_runtime_paths.mjs";
+
+const { chromium } = requireNodeDependency("@playwright/test");
+const AxeBuilder = requireNodeDependency("@axe-core/playwright");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../..");
+const defaultBaseUrl = resolveLocalFilterestBaseUrl({ applicationRoot: repoRoot });
 const testRuntimePaths = resolveFilterestTestRuntimePaths({ applicationRoot: repoRoot });
 const defaultArtifactRoot = testRuntimePaths.browserAudits;
 const defaultAuthState = testRuntimePaths.authStorageState;
@@ -38,7 +44,7 @@ Options:
   --viewport <WxH|desktop|mobile|tablet>
                              Capture viewport. Default: desktop (1440x900).
   --auth-state <path>        Playwright storageState JSON for authenticated local audits.
-                             Default: FILTEREST_TEST_RUNTIME_ROOT/e2e/.auth/user.json for localhost:8082.
+                             Default: FILTEREST_TEST_RUNTIME_ROOT/e2e/.auth/user.json for ${defaultBaseUrl}.
   --no-auth-state            Do not reuse Playwright auth state.
   --capture-only             Capture screenshot and DOM summary only.
   --skip-vision              Skip AI vision analysis.
@@ -50,10 +56,10 @@ Options:
   --help                     Show this help.
 
 Examples:
-  ./filterest audit browser --url https://localhost:8082
+  ./filterest audit browser --url ${defaultBaseUrl}
   ./filterest audit browser --url https://example.com --skip-vision
-  npm run audit:browser -- --url https://localhost:8082
-  npm run audit:browser:full -- --url https://localhost:8082`;
+  npm run audit:browser -- --url ${defaultBaseUrl}
+  npm run audit:browser:full -- --url ${defaultBaseUrl}`;
 }
 
 // Parses simple flag arguments without adding another dependency to the repo.
@@ -173,7 +179,7 @@ function parseTargetUrl(rawUrl) {
     try {
         target = new URL(rawUrl);
     } catch (_error) {
-        throw new Error(`invalid --url "${rawUrl}", expected an absolute URL such as https://localhost:8082`);
+        throw new Error(`invalid --url "${rawUrl}", expected an absolute URL such as ${defaultBaseUrl}`);
     }
     if (!["http:", "https:"].includes(target.protocol)) {
         throw new Error(`unsupported URL protocol "${target.protocol}", expected http or https`);
@@ -467,7 +473,6 @@ function runLighthouseAudit(options, targetUrl, outputDir, authStatePath) {
     }
 
     const args = [
-        "lighthouse",
         targetUrl.toString(),
         "--quiet",
         "--output=json",
@@ -480,7 +485,7 @@ function runLighthouseAudit(options, targetUrl, outputDir, authStatePath) {
         args.push(`--extra-headers=${headerPath}`);
     }
 
-    const result = spawnSync("npx", args, {
+    const result = spawnSync("lighthouse", args, {
         cwd: repoRoot,
         env: { ...process.env, CHROME_PATH: chromium.executablePath() },
         encoding: "utf8",

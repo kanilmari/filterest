@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,28 @@ func TestSanitizeSiteSlugDefaultsToFilterest(t *testing.T) {
 		if got := sanitizeSiteSlug(input); got != want {
 			t.Fatalf("sanitizeSiteSlug(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestBootstrapStatusKeepsLoginMaterialOutOfOutput(t *testing.T) {
+	result := initialAdminResult{
+		status:   "created",
+		username: "username-must-stay-private",
+		password: "password-must-stay-private",
+		email:    "email-must-stay-private.invalid",
+	}
+	var output bytes.Buffer
+
+	writeBootstrapStatus(&output, "/protected/initial_admin_credentials.txt", result)
+
+	text := output.String()
+	for _, secret := range []string{result.username, result.password, result.email} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("bootstrap status exposed login material %q in %q", secret, text)
+		}
+	}
+	if !strings.Contains(text, "/protected/initial_admin_credentials.txt") {
+		t.Fatalf("bootstrap status did not identify the handoff file: %q", text)
 	}
 }
 

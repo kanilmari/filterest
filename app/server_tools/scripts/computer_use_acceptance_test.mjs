@@ -7,19 +7,28 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { runComputerUseAcceptance } from "./computer_use_acceptance_runner.mjs";
-import { addTargetHostToAllowedHosts, authStatePathForTarget } from "./local_easelect_target.mjs";
-import { resolveEaselectPrivatePaths } from "../lib/easelect_private_paths.mjs";
+import {
+    addTargetHostToAllowedHosts,
+    authStatePathForTarget,
+    localAllowedHostsForBaseUrl,
+    resolveLocalFilterestBaseUrl,
+} from "./local_easelect_target.mjs";
+import {
+    resolveEaselectPrivatePaths,
+    resolveFilterestProjectBoundary,
+} from "../lib/easelect_private_paths.mjs";
 import { resolveFilterestTestRuntimePaths } from "./test_runtime_paths.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../..");
 loadRootEnv();
+const defaultBaseUrl = resolveLocalFilterestBaseUrl({ applicationRoot: repoRoot });
 const testRuntimePaths = resolveFilterestTestRuntimePaths({ applicationRoot: repoRoot });
 const defaultAuthState = testRuntimePaths.authStorageState;
 const defaultArtifactRoot = testRuntimePaths.computerUseAcceptance;
 const defaultViewport = { width: 1024, height: 768, name: "computer-use-default" };
-const defaultAllowedHosts = ["localhost:8082", "127.0.0.1:8082", "[::1]:8082"];
+const defaultAllowedHosts = localAllowedHostsForBaseUrl(defaultBaseUrl);
 const humanQaDisplayCommand = process.env.FILTEREST_HUMAN_QA_DISPLAY_COMMAND || "./filterest audit human";
 
 // Shows the live Computer Use acceptance command contract.
@@ -29,7 +38,7 @@ function usage() {
   ${humanQaDisplayCommand} computer-use-test <ticket-id> --file <path> [options]
 
 Options:
-  --url <URL|route>          Browser target. Routes like /service_catalog use https://localhost:8082.
+  --url <URL|route>          Browser target. Routes like /service_catalog use ${defaultBaseUrl}.
   --file <path>              File target to open in the browser.
   --check <text>             Acceptance checklist item; repeatable.
   --goal <text>              Extra custom prompt instruction; repeatable.
@@ -62,7 +71,8 @@ Examples:
 
 // Reads the resolved runtime env into process.env without logging secrets.
 function loadRootEnv() {
-    const envPath = resolveEaselectPrivatePaths(repoRoot).runtimeEnvFile;
+    const projectBoundary = resolveFilterestProjectBoundary(repoRoot, process.env);
+    const envPath = resolveEaselectPrivatePaths(projectBoundary, process.env).runtimeEnvFile;
     if (!fs.existsSync(envPath)) {
         return;
     }
@@ -246,13 +256,13 @@ function resolveTarget(rawValue, mode) {
         return value;
     }
     if (value.startsWith("/")) {
-        return `https://localhost:8082${value}`;
+        return `${defaultBaseUrl}${value}`;
     }
     const candidatePath = path.resolve(repoRoot, value);
     if (fs.existsSync(candidatePath)) {
         return pathToFileURL(candidatePath).toString();
     }
-    return `https://localhost:8082/${value}`;
+    return `${defaultBaseUrl}/${value}`;
 }
 
 // Converts named or explicit viewport arguments into Playwright dimensions.

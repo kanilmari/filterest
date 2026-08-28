@@ -30,15 +30,19 @@ try:
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
+    from ..lib.filterest_paths import is_private_easelect_source_checkout
 except ImportError:
     from server_tools.lib.easelect_private_paths import (
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
+    from server_tools.lib.filterest_paths import is_private_easelect_source_checkout
 
 
 PROJECT_ROOT = str(resolve_embedded_project_root(_CANONICAL_FILTEREST_ROOT))
-_IS_EMBEDDED_EASELECT_CHECKOUT = Path(PROJECT_ROOT) != _CANONICAL_FILTEREST_ROOT
+_IS_EMBEDDED_EASELECT_CHECKOUT = is_private_easelect_source_checkout(
+    Path(PROJECT_ROOT)
+)
 DUMP_DIR = os.environ.get(
     "FILTEREST_TASK_DUMP_DIR",
     os.path.join(PROJECT_ROOT, "agent_tasks", "_db_dump"),
@@ -67,12 +71,67 @@ REMOTE_TEST_ADMIN_FALLBACK_ENV = "DB_TASK_ALLOW_REMOTE_TEST_ADMIN_FALLBACK"
 REMOTE_DEV_CREDENTIALS_ENV = "DB_TASK_ALLOW_REMOTE_DEV_CREDENTIALS"
 INSECURE_TLS_ENV = "DB_TASK_ALLOW_INSECURE_TLS"
 LOCAL_NATIVE_PORT = 8082 if _IS_EMBEDDED_EASELECT_CHECKOUT else 8100
+FILTEREST_API_BASE_URL_ENV = "FILTEREST_API_BASE_URL"
+FILTEREST_API_USERNAME_ENV = "FILTEREST_API_USERNAME"
+FILTEREST_API_PASSWORD_ENV = "FILTEREST_API_PASSWORD"
+FILTEREST_API_OTP_CODE_ENV = "FILTEREST_API_OTP_CODE"
 _DEV_USERNAME_EXPLICIT_KEY = "_DB_TASK_DEV_USERNAME_EXPLICIT"
 _DEV_PASSWORD_EXPLICIT_KEY = "_DB_TASK_DEV_PASSWORD_EXPLICIT"
 _OTP_EXPLICIT_KEY = "_DB_TASK_OTP_EXPLICIT"
 
-# Default server — the native dev instance
-BASE_URL = os.environ.get("DB_TASK_BASE_URL", f"https://localhost:{LOCAL_NATIVE_PORT}")
+
+def _resolve_db_task_base_url(environment=None):
+    """Keep the task-specific target while gating Easelect's legacy target."""
+
+    resolved_environment = os.environ if environment is None else environment
+    default_port = 8082 if _IS_EMBEDDED_EASELECT_CHECKOUT else 8100
+    target = (
+        resolved_environment.get("DB_TASK_BASE_URL")
+        or resolved_environment.get(FILTEREST_API_BASE_URL_ENV)
+        or (
+            resolved_environment.get("EASELECT_API_BASE_URL")
+            if _IS_EMBEDDED_EASELECT_CHECKOUT
+            else ""
+        )
+        or f"https://localhost:{default_port}"
+    )
+    return str(target).strip().rstrip("/")
+
+
+def _validate_db_task_base_url(base_url):
+    """Reject malformed targets and plaintext credential transport off loopback."""
+
+    normalized_target = str(base_url or "").strip().rstrip("/")
+    try:
+        parsed = urllib.parse.urlsplit(normalized_target)
+        _ = parsed.port
+    except (TypeError, ValueError) as error:
+        raise ValueError("DB task API base URL is invalid") from error
+
+    hostname = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "DB task API base URL must be an HTTP(S) origin or path without "
+            "credentials, query, or fragment"
+        )
+    if parsed.scheme.lower() == "http" and hostname not in {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    }:
+        raise ValueError("remote DB task API targets require HTTPS")
+    return normalized_target
+
+
+# Default server — the structurally selected native development instance.
+BASE_URL = _resolve_db_task_base_url()
 
 # Status aliases matching ./task conventions
 STATUS_ALIASES = {
@@ -635,7 +694,7 @@ def _direct_db_fetch_tasks(status=None, task_id=None, queue=None, groups=None):
 
 
 def _load_credentials():
-    """Load login credentials from project files before process-level overrides."""
+    """Load project credentials before structurally permitted process overrides."""
     private_paths = resolve_easelect_private_paths(Path(PROJECT_ROOT))
     creds = {}
     for path in [
@@ -652,26 +711,50 @@ def _load_credentials():
                     continue
                 key, _, val = line.partition("=")
                 creds[key.strip()] = val.strip()
-    dev_username_explicit = bool(os.environ.get("DEV_USERNAME"))
-    dev_password_explicit = bool(os.environ.get("DEV_PASSWORD"))
-    dev_login_code_explicit = bool(os.environ.get("DEV_LOGIN_VERIFICATION_CODE"))
-    otp_explicit = bool(os.environ.get("LOGIN_OTP_CODE")) or dev_login_code_explicit
-    if dev_username_explicit:
-        creds["DEV_USERNAME"] = os.environ["DEV_USERNAME"]
-    if dev_password_explicit:
-        creds["DEV_PASSWORD"] = os.environ["DEV_PASSWORD"]
-    if otp_explicit:
-        creds["LOGIN_OTP_CODE"] = os.environ["LOGIN_OTP_CODE"]
-    if dev_login_code_explicit:
-        creds["DEV_LOGIN_VERIFICATION_CODE"] = os.environ["DEV_LOGIN_VERIFICATION_CODE"]
-    if os.environ.get("EASELECT_API_USERNAME"):
-        creds["DEV_USERNAME"] = os.environ["EASELECT_API_USERNAME"]
+    dev_username_explicit = False
+    dev_password_explicit = False
+    otp_explicit = False
+
+    # A public Filterest root accepts only Filterest-named process credentials.
+    # Legacy Easelect and generic DEV_/LOGIN_OTP values remain compatibility
+    # inputs only when the resolved project is the private Easelect checkout.
+    if _IS_EMBEDDED_EASELECT_CHECKOUT:
+        if os.environ.get("DEV_USERNAME"):
+            creds["DEV_USERNAME"] = os.environ["DEV_USERNAME"]
+            dev_username_explicit = True
+        if os.environ.get("DEV_PASSWORD"):
+            creds["DEV_PASSWORD"] = os.environ["DEV_PASSWORD"]
+            dev_password_explicit = True
+        if os.environ.get("LOGIN_OTP_CODE"):
+            creds["LOGIN_OTP_CODE"] = os.environ["LOGIN_OTP_CODE"]
+            otp_explicit = True
+        if os.environ.get("DEV_LOGIN_VERIFICATION_CODE"):
+            creds["DEV_LOGIN_VERIFICATION_CODE"] = os.environ[
+                "DEV_LOGIN_VERIFICATION_CODE"
+            ]
+            otp_explicit = True
+        if os.environ.get("EASELECT_API_USERNAME"):
+            creds["DEV_USERNAME"] = os.environ["EASELECT_API_USERNAME"]
+            dev_username_explicit = True
+        if os.environ.get("EASELECT_API_PASSWORD"):
+            creds["DEV_PASSWORD"] = os.environ["EASELECT_API_PASSWORD"]
+            dev_password_explicit = True
+        if os.environ.get("EASELECT_API_OTP_CODE"):
+            creds["DEV_LOGIN_VERIFICATION_CODE"] = os.environ[
+                "EASELECT_API_OTP_CODE"
+            ]
+            otp_explicit = True
+
+    if os.environ.get(FILTEREST_API_USERNAME_ENV):
+        creds["DEV_USERNAME"] = os.environ[FILTEREST_API_USERNAME_ENV]
         dev_username_explicit = True
-    if os.environ.get("EASELECT_API_PASSWORD"):
-        creds["DEV_PASSWORD"] = os.environ["EASELECT_API_PASSWORD"]
+    if os.environ.get(FILTEREST_API_PASSWORD_ENV):
+        creds["DEV_PASSWORD"] = os.environ[FILTEREST_API_PASSWORD_ENV]
         dev_password_explicit = True
-    if os.environ.get("EASELECT_API_OTP_CODE"):
-        creds["DEV_LOGIN_VERIFICATION_CODE"] = os.environ["EASELECT_API_OTP_CODE"]
+    if os.environ.get(FILTEREST_API_OTP_CODE_ENV):
+        creds["DEV_LOGIN_VERIFICATION_CODE"] = os.environ[
+            FILTEREST_API_OTP_CODE_ENV
+        ]
         otp_explicit = True
     creds[_DEV_USERNAME_EXPLICIT_KEY] = dev_username_explicit
     creds[_DEV_PASSWORD_EXPLICIT_KEY] = dev_password_explicit
@@ -808,10 +891,18 @@ def _curl_uses_insecure_tls(*, base_url=None, environment=None):
     )
 
 
-def _curl_session_command(jar):
-    """Build the shared curl prefix with target-aware TLS verification."""
+def _curl_session_command(jar, *, base_url=None):
+    """Build the curl prefix with target-aware TLS and proxy isolation."""
+    resolved_base_url = _validate_db_task_base_url(
+        BASE_URL if base_url is None else base_url
+    )
     cmd = ["curl"]
-    if _curl_uses_insecure_tls():
+    if _is_local_native_base_url(resolved_base_url):
+        # curl otherwise inherits HTTP(S)_PROXY/ALL_PROXY. The exact native
+        # service uses protected credentials and an intentionally unverified
+        # local certificate, so it must never be reachable through a proxy.
+        cmd += ["--noproxy", "*"]
+    if _curl_uses_insecure_tls(base_url=resolved_base_url):
         cmd.append("-k")
     cmd += [
         "-s",
@@ -829,26 +920,69 @@ def _curl_session_command(jar):
     return cmd
 
 
+def _write_secure_curl_headers(headers):
+    """Write sensitive request headers to an owner-only transient curl file."""
+    if not headers:
+        return None
+    normalized_headers = [str(header) for header in headers]
+    if any("\r" in header or "\n" in header for header in normalized_headers):
+        raise ValueError("curl request headers must not contain line breaks")
+
+    fd, path = tempfile.mkstemp(prefix="db_task_headers_", suffix=".txt")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as header_file:
+            for header in normalized_headers:
+                header_file.write(f"{header}\n")
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+    return path
+
+
+def _cleanup_secure_curl_headers(path):
+    """Remove a transient curl header file without masking request errors."""
+    if not path:
+        return
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
 def _curl_raw(jar, method, path, data=None, extra_headers=None):
     """Low-level curl call that returns parsed JSON or raw text."""
-    cmd = _curl_session_command(jar)
+    target = _validate_db_task_base_url(BASE_URL)
+    cmd = _curl_session_command(jar, base_url=target)
+    request_body = json.dumps(data) if data else None
+    header_file = _write_secure_curl_headers(extra_headers)
     if method != "GET":
         cmd += ["-X", method]
-    if data:
-        cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(data)]
-    if extra_headers:
-        for h in extra_headers:
-            cmd += ["-H", h]
-    cmd.append(f"{BASE_URL}{path}")
+    if request_body is not None:
+        cmd += ["-H", "Content-Type: application/json", "--data-binary", "@-"]
+    if header_file:
+        cmd += ["--header", f"@{header_file}"]
+    cmd.append(f"{target}{path}")
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=SUBPROCESS_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
-        return None
+        try:
+            result = subprocess.run(
+                cmd,
+                input=request_body,
+                capture_output=True,
+                text=True,
+                timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return None
+    finally:
+        _cleanup_secure_curl_headers(header_file)
     if result.returncode != 0:
         return None
     headers, body = _split_curl_response(result.stdout)
@@ -878,6 +1012,7 @@ def _get_session():
     """Authenticate and return (cookie_jar_path, csrf_token).
     Reuses an existing session if the cookie jar is still valid."""
     global _cached_session
+    target = _validate_db_task_base_url(BASE_URL)
     jar = _get_session_cookie_jar_path()
 
     # Check cached in-process session
@@ -902,7 +1037,7 @@ def _get_session():
     dev_otp_code = creds.get("DEV_LOGIN_VERIFICATION_CODE", "")
     test_otp_code = creds.get("LOGIN_OTP_CODE", "")
     if (
-        not _is_local_native_base_url(BASE_URL)
+        not _is_local_native_base_url(target)
         and os.environ.get(REMOTE_DEV_CREDENTIALS_ENV) != "1"
         and creds.get(_OTP_EXPLICIT_KEY) is not True
     ):
@@ -924,7 +1059,7 @@ def _get_session():
         # Step 1: Get initial CSRF from the public bootstrap endpoint.
         info = _curl_raw(jar, "GET", "/api/csrf-token")
         if not info or not isinstance(info, dict):
-            print("Error: Cannot reach server at " + BASE_URL, file=sys.stderr)
+            print("Error: Cannot reach server at " + target, file=sys.stderr)
             sys.exit(1)
         csrf = info.get("csrf_token", "")
 
@@ -970,31 +1105,38 @@ def _api(method, path, data=None, params=None):
     """Make an authenticated API call and reject HTTP/API error payloads."""
     jar, csrf = _get_session()
 
-    url = f"{BASE_URL}{path}"
+    target = _validate_db_task_base_url(BASE_URL)
+    url = f"{target}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
 
-    cmd = _curl_session_command(jar)
+    cmd = _curl_session_command(jar, base_url=target)
+    request_body = json.dumps(data) if data else None
+    header_file = _write_secure_curl_headers([f"X-CSRF-Token: {csrf}"])
     cmd += ["-X", method]
-    cmd += ["-H", f"X-CSRF-Token: {csrf}"]
-    if data:
-        cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(data)]
+    cmd += ["--header", f"@{header_file}"]
+    if request_body is not None:
+        cmd += ["-H", "Content-Type: application/json", "--data-binary", "@-"]
     cmd += ["--write-out", f"\n{HTTP_STATUS_MARKER}%{{http_code}}"]
     cmd.append(url)
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=SUBPROCESS_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
-        print(
-            f"Error: API call timed out after {CURL_MAX_TIME_SECONDS}s: {method} {path}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        try:
+            result = subprocess.run(
+                cmd,
+                input=request_body,
+                capture_output=True,
+                text=True,
+                timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"Error: API call timed out after {CURL_MAX_TIME_SECONDS}s: {method} {path}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    finally:
+        _cleanup_secure_curl_headers(header_file)
     if result.returncode != 0:
         print(f"Error: API call failed: {result.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -2030,8 +2172,12 @@ def cmd_groups_list(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="db_task: Database-backed ticket manager for Easelect",
-        epilog="Source of truth: dev_agent_tasks table. Dumps to agent_tasks/_db_dump/ for backup.",
+        description="db_task: Database-backed ticket manager for Filterest",
+        epilog=(
+            f"Default Filterest API: {BASE_URL}. Override with DB_TASK_BASE_URL or "
+            "FILTEREST_API_BASE_URL. Source of truth: dev_agent_tasks table. "
+            "Dumps to agent_tasks/_db_dump/ for backup."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command")
 

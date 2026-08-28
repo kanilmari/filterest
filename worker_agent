@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
-# Compatibility worker-agent entrypoint for Filterest maintainers.
+# worker_agent
+# Delegates standalone worker runs to the canonical app implementation.
+# Bridges immutable agent tooling with installation-owned output and credential paths.
+# Exists so maintainers keep one stable command without mutable state below app/.
 set -euo pipefail
 INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export FILTEREST_ROOT="$INSTALLATION_ROOT"
 export FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT"
+export FILTEREST_WORKSPACE_ROOT="$INSTALLATION_ROOT"
+export FILTEREST_TEST_CREDENTIAL_FILE="$INSTALLATION_ROOT/keys/filterest_runtime/dev_env_test_creds.txt"
+export GOWORK=off PYTHONPYCACHEPREFIX="$INSTALLATION_ROOT/data/runtime/python-cache" FILTEREST_RUNTIME_ROOT_OVERRIDE="$INSTALLATION_ROOT/data/runtime"
+export FILTEREST_WORKER_OUTPUT_DIR_REL="data/runtime/agent_tasks/_artifacts/worker_runs"
+export FILTEREST_WORKER_LEGACY_OUTPUT_DIR_REL="data/runtime/agent_tasks/20_in_progress"
+export FILTEREST_WORKER_DEV_PORT="8100"
+export FILTEREST_WORKER_DB_PORT="5432"
+export FILTEREST_DATABASE_DISPLAY_COMMAND="./filterest database"
+unset FILTEREST_WORKER_ROUTINE_RUNNER FILTEREST_WORKER_ROUTINES_DIR
 exec "$INSTALLATION_ROOT/app/worker_agent" "$@"

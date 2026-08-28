@@ -1,12 +1,9 @@
+// global-setup.ts
+// Creates one authenticated browser session before the end-to-end test suite.
+// Bridges protected test credentials, login, and installation-owned Playwright state.
+// Exists so all browser projects reuse a deterministic session without exposing secrets.
 /**
- * global-setup.ts — Runs once before all tests.
- *
- * Logs in with the test admin user and saves the authenticated session
- * (cookies, localStorage) to .auth/user.json. All test projects then
- * re-use that session via storageState so login only happens once.
- *
- * This avoids repeated authentication work and keeps every project on one
- * deterministic session. Successful logins no longer consume the server's
+ * Successful logins no longer consume the server's
  * failed-login limit (10 rejected credentials or factors / 15 min).
  */
 
@@ -35,6 +32,7 @@ import {
 } from './helpers/storage-state-file';
 import { hydrateAuthenticatedTreeDataCache } from './helpers/tree-data-cache';
 import { resolveFilterestTestRuntimePaths } from './helpers/test-runtime-paths';
+import { resolveLocalFilterestBaseUrl } from '../../server_tools/scripts/local_filterest_target.cjs';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
 const AUTH_FILE = testRuntimePaths.authStorageState;
@@ -47,7 +45,7 @@ async function globalSetup(_config: FullConfig) {
   const baseURL =
     _config.projects[0]?.use?.baseURL && typeof _config.projects[0].use.baseURL === 'string'
       ? _config.projects[0].use.baseURL
-      : 'https://localhost:8082';
+      : resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__dirname, '../..') });
 
   // Restrict the shared auth root before the registry or session state touches it.
   const authDir = path.dirname(AUTH_FILE);

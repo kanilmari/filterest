@@ -9,6 +9,7 @@ import path from 'path';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
   resolveEaselectPrivatePaths,
+  resolveFilterestProjectBoundary,
   resolveFilterestHomes,
 } from './easelect_private_paths.mjs';
 
@@ -24,6 +25,34 @@ afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+describe('resolveFilterestProjectBoundary', () => {
+  test('maps app to its installation unless a true Easelect source parent exists', () => {
+    const root = temporaryRoot();
+    const easelectRoot = path.join(root, 'easelect');
+    const installationRoot = path.join(easelectRoot, 'filterest');
+    const applicationRoot = path.join(installationRoot, 'app');
+    fs.mkdirSync(applicationRoot, { recursive: true });
+    fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+
+    expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(
+      installationRoot,
+    );
+
+    fs.mkdirSync(path.join(easelectRoot, '.git'));
+    expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(
+      installationRoot,
+    );
+    fs.writeFileSync(path.join(applicationRoot, 'go.mod'), 'module filterest\n');
+    fs.writeFileSync(path.join(applicationRoot, 'VERSION_APP'), 'test\n');
+    expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(easelectRoot);
+
+    const explicitRoot = path.join(root, 'explicit-boundary');
+    expect(resolveFilterestProjectBoundary(applicationRoot, {
+      FILTEREST_PROJECT_ROOT_OVERRIDE: explicitRoot,
+    })).toBe(explicitRoot);
+  });
 });
 
 describe('resolveEaselectPrivatePaths', () => {

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from ..agent_tools.easelect_api_client import load_project_env
 from ..lib.easelect_private_paths import resolve_embedded_project_root
+from ..lib.filterest_paths import is_private_easelect_source_checkout
 
 
 _CANONICAL_FILTEREST_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -21,10 +22,13 @@ _PROJECT_ROOT = resolve_embedded_project_root(_CANONICAL_FILTEREST_ROOT)
 _HTTP_TIMEOUT = 30
 
 
-def _load_base_url() -> str:
-    """Resolve the native application URL from Filterest's normal env chain."""
-    environment = load_project_env(_PROJECT_ROOT)
-    port = str(environment.get("APP_PORT") or "8082").strip()
+def _load_base_url(project_root: Path = _PROJECT_ROOT) -> str:
+    """Resolve the configured port or the product-appropriate native default."""
+    environment = load_project_env(project_root)
+    default_port = (
+        "8082" if is_private_easelect_source_checkout(project_root) else "8100"
+    )
+    port = str(environment.get("APP_PORT") or default_port).strip()
     return f"https://localhost:{port}"
 
 

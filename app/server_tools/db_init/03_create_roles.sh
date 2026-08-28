@@ -22,48 +22,88 @@ for required_name in \
     fi
 done
 
+write_psql_secret_variable() {
+    local variable_name="$1"
+    local secret_value="$2"
+    local encoded_value=""
+
+    if [[ ! "$variable_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        printf 'Unsafe psql secret variable name\n' >&2
+        return 1
+    fi
+    encoded_value="$(printf '%s' "$secret_value" | od -An -v -tx1 | tr -d ' \n')"
+    printf "\\set %s '%s'\n" "$variable_name" "$encoded_value"
+}
+
 printf 'Creating configured Filterest database roles...\n'
-psql -v ON_ERROR_STOP=1 \
-    --username "$POSTGRES_USER" \
-    --dbname "$POSTGRES_DB" \
-    --set=admin_user="$POSTGRES_USER" \
-    --set=readonly_user="$DB_READONLY_USER" \
-    --set=readonly_password="$DB_READONLY_PASSWORD" \
-    --set=confidential_user="$DB_CONFIDENTIAL_USER" \
-    --set=confidential_password="$DB_CONFIDENTIAL_PASSWORD" \
-    --set=basic_user="$DB_BASIC_USER" \
-    --set=basic_password="$DB_BASIC_PASSWORD" \
-    --set=guest_user="$DB_GUEST_USER" \
-    --set=guest_password="$DB_GUEST_PASSWORD" <<'SQL'
-SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'readonly_user', :'readonly_password')
+{
+    write_psql_secret_variable readonly_password_hex "$DB_READONLY_PASSWORD"
+    write_psql_secret_variable confidential_password_hex "$DB_CONFIDENTIAL_PASSWORD"
+    write_psql_secret_variable basic_password_hex "$DB_BASIC_PASSWORD"
+    write_psql_secret_variable guest_password_hex "$DB_GUEST_PASSWORD"
+    cat <<'SQL'
+\o /dev/null
+SELECT format(
+    'CREATE ROLE %I WITH LOGIN PASSWORD %L',
+    :'readonly_user',
+    convert_from(decode(:'readonly_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'readonly_user' <> current_user
   AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'readonly_user');
 \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'readonly_user', :'readonly_password')
+SELECT format(
+    'ALTER ROLE %I WITH LOGIN PASSWORD %L',
+    :'readonly_user',
+    convert_from(decode(:'readonly_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'readonly_user' <> current_user;
 \gexec
 
-SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'confidential_user', :'confidential_password')
+SELECT format(
+    'CREATE ROLE %I WITH LOGIN PASSWORD %L',
+    :'confidential_user',
+    convert_from(decode(:'confidential_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'confidential_user' <> current_user
   AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'confidential_user');
 \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'confidential_user', :'confidential_password')
+SELECT format(
+    'ALTER ROLE %I WITH LOGIN PASSWORD %L',
+    :'confidential_user',
+    convert_from(decode(:'confidential_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'confidential_user' <> current_user;
 \gexec
 
-SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'basic_user', :'basic_password')
+SELECT format(
+    'CREATE ROLE %I WITH LOGIN PASSWORD %L',
+    :'basic_user',
+    convert_from(decode(:'basic_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'basic_user' <> current_user
   AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'basic_user');
 \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'basic_user', :'basic_password')
+SELECT format(
+    'ALTER ROLE %I WITH LOGIN PASSWORD %L',
+    :'basic_user',
+    convert_from(decode(:'basic_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'basic_user' <> current_user;
 \gexec
 
-SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'guest_user', :'guest_password')
+SELECT format(
+    'CREATE ROLE %I WITH LOGIN PASSWORD %L',
+    :'guest_user',
+    convert_from(decode(:'guest_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'guest_user' <> current_user
   AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'guest_user');
 \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'guest_user', :'guest_password')
+SELECT format(
+    'ALTER ROLE %I WITH LOGIN PASSWORD %L',
+    :'guest_user',
+    convert_from(decode(:'guest_password_hex', 'hex'), 'UTF8')
+)
 WHERE :'guest_user' <> current_user;
 \gexec
 
@@ -131,6 +171,15 @@ WHERE EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'res
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA restricted GRANT USAGE, SELECT ON SEQUENCES TO %I', :'confidential_user')
 WHERE EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'restricted');
 \gexec
+\o
 SQL
+} | psql -v ON_ERROR_STOP=1 \
+    --username "$POSTGRES_USER" \
+    --dbname "$POSTGRES_DB" \
+    --set=admin_user="$POSTGRES_USER" \
+    --set=readonly_user="$DB_READONLY_USER" \
+    --set=confidential_user="$DB_CONFIDENTIAL_USER" \
+    --set=basic_user="$DB_BASIC_USER" \
+    --set=guest_user="$DB_GUEST_USER"
 
 printf 'Configured Filterest database roles created successfully.\n'

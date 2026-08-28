@@ -14,9 +14,13 @@ if str(_REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPOSITORY_ROOT))
 
 try:
-    from .easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from .easelect_api_client import DEFAULT_BASE_URL, EaselectAPIClient, EaselectAPIError
 except ImportError:
-    from server_tools.agent_tools.easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from server_tools.agent_tools.easelect_api_client import (
+        DEFAULT_BASE_URL,
+        EaselectAPIClient,
+        EaselectAPIError,
+    )
 
 
 def print_json(payload):
@@ -42,9 +46,12 @@ def command_status(args):
 def build_parser():
     """Build the api_asset_linking parser between terminal commands and client methods."""
     parser = argparse.ArgumentParser(
-        description="Inspect Easelect asset-linking configuration through application APIs."
+        description="Inspect Filterest asset-linking configuration through application APIs."
     )
-    parser.add_argument("--base-url", help="Easelect base URL, default https://localhost:8082")
+    parser.add_argument(
+        "--base-url",
+        help=f"Filterest base URL, default {DEFAULT_BASE_URL}",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 

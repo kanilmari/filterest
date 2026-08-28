@@ -11,8 +11,11 @@ import (
 	"database/sql/driver"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"easelect/backend/core_components/runtimepaths"
 )
 
 type stubDriver struct {
@@ -54,6 +57,13 @@ func (t *stubTx) Commit() error   { return nil }
 func (t *stubTx) Rollback() error { return nil }
 
 func TestImportTableCSVTx_DoNothingOnEmptyUpdate(t *testing.T) {
+	legacyRoot := t.TempDir()
+	paths, err := runtimepaths.Resolve(legacyRoot, legacyRoot, false)
+	if err != nil {
+		t.Fatalf("resolve legacy runtime paths: %v", err)
+	}
+	configureTableCSVRuntimePathsForTest(t, paths)
+
 	drv := &stubDriver{}
 	sql.Register("stub", drv)
 	db, err := sql.Open("stub", "")
@@ -67,10 +77,10 @@ func TestImportTableCSVTx_DoNothingOnEmptyUpdate(t *testing.T) {
 		t.Fatalf("begin failed: %v", err)
 	}
 
-	if err := os.MkdirAll("tables_data", 0o755); err != nil {
+	if err := os.MkdirAll(tableCSVDataDir(), 0o755); err != nil {
 		t.Fatalf("failed to create tables_data: %v", err)
 	}
-	csvPath := "tables_data/test_table.csv"
+	csvPath := tableCSVFilePath("test_table")
 	data := "id,created,updated\n1,2025-08-14,2025-08-14\n"
 	if err := os.WriteFile(csvPath, []byte(data), 0o644); err != nil {
 		t.Fatalf("failed to write csv: %v", err)
@@ -85,5 +95,8 @@ func TestImportTableCSVTx_DoNothingOnEmptyUpdate(t *testing.T) {
 	}
 	if len(drv.lastArgs) != 3 {
 		t.Fatalf("expected 3 args, got %d", len(drv.lastArgs))
+	}
+	if filepath.Dir(csvPath) != filepath.Join(legacyRoot, "tables_data") {
+		t.Fatalf("legacy CSV directory = %q", filepath.Dir(csvPath))
 	}
 }

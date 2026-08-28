@@ -32,7 +32,7 @@ source "$SCRIPT_DIR/ctl/lib/env_permissions.sh"
 source "$SCRIPT_DIR/lib/easelect_private_paths.sh"
 easelect_resolve_private_paths "$PROJECT_ROOT"
 if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
-  protected_runtime_root="$INSTALLATION_ROOT/keys/filterest_runtime"
+  protected_runtime_root="$FILTEREST_KEYS_HOME/filterest_runtime"
   EASELECT_RUNTIME_ENV_FILE="$protected_runtime_root/runtime_environment.env"
   EASELECT_DEV_ENV_FILE="$protected_runtime_root/development_environment.env"
   EASELECT_TLS_CERT_FILE="$protected_runtime_root/local_tls_certificate/localhost_certificate.crt"

@@ -100,7 +100,7 @@ func ensureQueenThreadForStart(
 }
 
 func queenThreadRegistryDir(projectRoot string) string {
-	return filepath.Join(projectRoot, ".queen", "thread_registry")
+	return filepath.Join(resolveQueenStateRoot(projectRoot), "thread_registry")
 }
 
 func queenThreadRegistryDirFromTranscriptDir(transcriptDir string) string {

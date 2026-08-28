@@ -27,6 +27,7 @@ from .chat_viewer import (
 )
 from .persistent_agent import PersistentAgent
 from .conversation_loop import ConversationLoop, SingleWorkerAutopilotLoop
+from .runtime_paths import resolve_queen_state_root
 from .session_store import (
     ManagedSessionError,
     ManagedSessionHumanReplyQueued,
@@ -114,12 +115,12 @@ def _default_transcript_path(project_root: Path, task_id: int | None) -> Path:
     """Build the default JSONL transcript path for a queen run."""
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     task_label = f"task_{task_id}" if task_id is not None else "manual"
-    return project_root / ".queen" / "transcripts" / f"queen_run_{timestamp}_{task_label}.jsonl"
+    return resolve_queen_state_root(project_root) / "transcripts" / f"queen_run_{timestamp}_{task_label}.jsonl"
 
 
 def _direct_run_guard_path(project_root: Path, task_id: int) -> Path:
     """Return the task-scoped lock path that serializes direct Queen runs."""
-    return project_root / ".queen" / "run_guards" / f"queen_task_{task_id}.lock"
+    return resolve_queen_state_root(project_root) / "run_guards" / f"queen_task_{task_id}.lock"
 
 
 def _read_direct_run_guard_metadata(lock_handle) -> dict[str, str]:
@@ -688,7 +689,9 @@ def cmd_status(args: argparse.Namespace) -> None:
 def cmd_chat(args: argparse.Namespace) -> None:
     """View Queen transcript files as a chat timeline."""
     project_root = _resolve_project_root()
-    transcript_dir = args.transcript_dir or (project_root / ".queen" / "transcripts")
+    transcript_dir = args.transcript_dir or (
+        resolve_queen_state_root(project_root) / "transcripts"
+    )
 
     if args.list_sessions:
         print_managed_session_listing(list_managed_sessions(project_root), project_root)

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Configure one persistent native-development agent login without exposing secrets."""
+"""dev_agent_credentials.py
+What: Configures one persistent native-development agent login.
+Between what: Connects the admin tool, native API, and protected key roots.
+Why: Activates accounts without exposing secrets or writing inside app source.
+"""
 
 from __future__ import annotations
 
+import errno
 import getpass
 import os
 import re
 import stat
 import sys
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 
 CANONICAL_FILTEREST_ROOT = Path(__file__).resolve().parents[2]
@@ -20,11 +26,11 @@ try:
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
+    from ..lib.filterest_paths import is_private_easelect_source_checkout
     from .easelect_api_client import (
         DEFAULT_BASE_URL,
         EaselectAPIClient,
         EaselectAPIError,
-        load_env_file,
         load_project_env,
     )
 except ImportError:
@@ -32,11 +38,11 @@ except ImportError:
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
+    from server_tools.lib.filterest_paths import is_private_easelect_source_checkout
     from server_tools.agent_tools.easelect_api_client import (
         DEFAULT_BASE_URL,
         EaselectAPIClient,
         EaselectAPIError,
-        load_env_file,
         load_project_env,
     )
 
@@ -59,6 +65,125 @@ PERSISTED_KEYS = (
 
 class AgentCredentialConfigurationError(ValueError):
     """Reject invalid accounts or unsafe protected-file updates."""
+
+
+def _require_native_credential_target(
+    target: str,
+    *,
+    project_root: Path | None = None,
+) -> str:
+    """Allow credential setup only against this product's exact loopback origin."""
+
+    resolved_project = Path(project_root or PROJECT_ROOT).resolve()
+    native_port = (
+        8082 if is_private_easelect_source_checkout(resolved_project) else 8100
+    )
+    normalized_target = str(target or "").strip().rstrip("/")
+    if not EaselectAPIClient._is_local_native_base_url(
+        normalized_target,
+        native_port=native_port,
+    ):
+        raise AgentCredentialConfigurationError(
+            "persistent agent credentials can be configured only through the "
+            f"exact native loopback service on port {native_port}"
+        )
+    return normalized_target
+
+
+def _path_is_inside(candidate: Path, parent: Path) -> bool:
+    return candidate == parent or parent in candidate.parents
+
+
+def _resolve_test_credential_file(
+    *,
+    application_root: Path | None = None,
+    environment: Mapping[str, str] | None = None,
+    project_root: Path | None = None,
+) -> Path:
+    """Resolve and validate the reserved administrator credential file."""
+
+    resolved_environment = os.environ if environment is None else environment
+    immutable_app = Path(application_root or CANONICAL_FILTEREST_ROOT)
+    mutable_project = Path(project_root or PROJECT_ROOT).expanduser().resolve()
+    configured_path = str(
+        resolved_environment.get("FILTEREST_TEST_CREDENTIAL_FILE", "") or ""
+    ).strip()
+    if configured_path:
+        candidate = Path(configured_path).expanduser()
+    elif is_private_easelect_source_checkout(mutable_project):
+        candidate = mutable_project / "dev_env_test_creds.txt"
+    else:
+        candidate = (
+            mutable_project
+            / "keys"
+            / "filterest_runtime"
+            / "dev_env_test_creds.txt"
+        )
+
+    lexical_app = Path(os.path.abspath(immutable_app))
+    lexical_candidate = Path(os.path.abspath(candidate))
+    resolved_app = immutable_app.resolve()
+    resolved_candidate = candidate.resolve(strict=False)
+    if (
+        _path_is_inside(lexical_candidate, lexical_app)
+        or _path_is_inside(resolved_candidate, resolved_app)
+    ):
+        raise AgentCredentialConfigurationError(
+            "reserved administrator credentials must stay outside immutable app source"
+        )
+
+    try:
+        target_stat = lexical_candidate.lstat()
+    except FileNotFoundError:
+        return lexical_candidate
+    if stat.S_ISLNK(target_stat.st_mode):
+        raise AgentCredentialConfigurationError(
+            "reserved administrator credential file must not be a symlink"
+        )
+    if not stat.S_ISREG(target_stat.st_mode):
+        raise AgentCredentialConfigurationError(
+            "reserved administrator credential file must be a regular file"
+        )
+    return lexical_candidate
+
+
+def _load_test_credentials(credential_file: Path) -> dict[str, str]:
+    """Read the validated credential file without following a replacement symlink."""
+
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    if no_follow is None:
+        raise AgentCredentialConfigurationError(
+            "this platform cannot safely read the reserved administrator credential file"
+        )
+    try:
+        descriptor = os.open(credential_file, os.O_RDONLY | no_follow)
+    except FileNotFoundError:
+        return {}
+    except OSError as error:
+        if error.errno == errno.ELOOP:
+            raise AgentCredentialConfigurationError(
+                "reserved administrator credential file must not be a symlink"
+            ) from error
+        raise
+
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise AgentCredentialConfigurationError(
+                "reserved administrator credential file must be a regular file"
+            )
+        values: dict[str, str] = {}
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            descriptor = -1
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+        return values
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
 def _validate_username(username: str) -> str:
@@ -204,7 +329,8 @@ def _activate_existing_agent_admin(
 ) -> None:
     """Use the ignored development test administrator to activate one existing account."""
 
-    test_credentials = load_env_file(PROJECT_ROOT / "dev_env_test_creds.txt")
+    target = _require_native_credential_target(target)
+    test_credentials = _load_test_credentials(_resolve_test_credential_file())
     project_env = load_project_env(PROJECT_ROOT)
     authorizer_username = str(test_credentials.get("TEST_ADMIN_USER") or "").strip()
     authorizer_password = str(test_credentials.get("TEST_ADMIN_PASS") or "").strip()
@@ -253,7 +379,9 @@ def configure_agent_credentials(
 ) -> dict[str, str]:
     """Prompt once, verify the fixed-PIN admin, and persist only after success."""
 
-    target = (base_url or DEFAULT_BASE_URL).rstrip("/")
+    # Validate before showing prompts, reading either protected credential file,
+    # or constructing a network client. This command is intentionally local-only.
+    target = _require_native_credential_target(base_url or DEFAULT_BASE_URL)
     print("Persistent Filterest agent administrator setup")
     print(f"  Service: native Filterest development application at {target}")
     print("  Target: one existing dedicated agent administrator account")

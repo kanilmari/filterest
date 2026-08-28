@@ -1,13 +1,11 @@
-/**
- * L1_login.spec.ts
- *
- * Tests the login form directly — does NOT use the auth helper's login() function.
- * Verifies that submitting valid credentials redirects to the app home page.
- */
+// L1_login.spec.ts
+// Verifies the login form directly without relying on the shared login helper.
+// Bridges protected browser-test credentials with the user-visible authentication flow.
+// Exists so successful sign-in and redirect behavior have independent coverage.
 
 import { test, expect } from '@playwright/test';
-import * as fs from 'fs';
 import {
+  loadCredentials,
   loadOtpCode,
   openLoginEntry,
   submitCredentialsAndWaitForOtp,
@@ -30,20 +28,8 @@ test.describe('L1 — Login', () => {
     await expect(privacyLabel.locator('[data-lang-key="privacy_notice_login_acceptance_suffix"]'))
       .toHaveText('.');
 
-    // 2. Read credentials from dev_env_test_creds.txt
-    const creds = fs.readFileSync('dev_env_test_creds.txt', 'utf8');
-    const username =
-      creds
-        .split('\n')
-        .find((l) => l.startsWith('TEST_ADMIN_USER='))
-        ?.split('=')[1]
-        ?.trim() ?? 'admin';
-    const password =
-      creds
-        .split('\n')
-        .find((l) => l.startsWith('TEST_ADMIN_PASS='))
-        ?.split('=')[1]
-        ?.trim() ?? 'password';
+    // 2. Read credentials from the protected mutable credential scope.
+    const { username, password } = loadCredentials();
 
     // 3. Fill credentials (Phase 1)
     await page.locator('[data-testid="login-username"]').fill(username);

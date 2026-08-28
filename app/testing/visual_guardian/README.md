@@ -12,7 +12,7 @@ Visual Guardian is intentionally scoped to **visual** QA:
 - It does **not** triage ordinary Playwright assertion failures from `app/testing/e2e/`.
 
 Ordinary Playwright failures are currently expected to be debugged using the standard runner artifacts:
-- console output from `./filterest test` or `npm --prefix app run test:e2e`
+- console output from `./filterest test`
 - the HTML report in `data/testing/playwright-report`
 - retry traces in `data/testing/test-results`
 - Visual Guardian screenshots in `data/testing/test-results/visual_guardian`

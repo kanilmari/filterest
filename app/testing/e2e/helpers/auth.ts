@@ -1,26 +1,18 @@
-/**
- * auth.ts — Centralized authentication helpers for E2E tests.
- *
- * Eliminates login code duplication across test files.
- * All tests import { login, loadCredentials } from this module.
- */
+// auth.ts
+// Provides centralized authentication and credential-loading helpers for browser tests.
+// Bridges protected credential files, Playwright pages, and repeated login workflows.
+// Exists so tests share safe authentication behavior without duplicating secret handling.
 
 import { expect, type Page } from '@playwright/test';
-import * as fs from 'fs';
 import * as path from 'path';
-import { resolveEaselectPrivatePaths } from '../../../server_tools/lib/easelect_private_paths.mjs';
+import {
+  loadBrowserTestCredentials,
+  resolveBrowserTestCredentialFilePath,
+  resolveBrowserTestOtpCode,
+  writeBrowserTestCredentialsFile,
+} from '../../../server_tools/lib/browser_test_credentials.mjs';
 
 const projectRoot = path.resolve(__dirname, '../../..');
-
-function resolveNativeEnvironmentFiles(
-  environment: Record<string, string | undefined>,
-): { developmentEnvFile: string; runtimeEnvFile: string } {
-  const resolved = resolveEaselectPrivatePaths(projectRoot, environment);
-  return {
-    developmentEnvFile: resolved.developmentEnvFile,
-    runtimeEnvFile: resolved.runtimeEnvFile,
-  };
-}
 
 export type TestCredentials = {
   username: string;
@@ -31,6 +23,31 @@ export type SessionInfo = {
   user_id?: number;
   username?: string;
 };
+
+/**
+ * Resolves the protected browser-test credential file outside immutable app source.
+ * Explicit process configuration keeps Easelect's established absolute root path intact.
+ * Standalone Filterest defaults to its installation-owned keys/filterest_runtime scope.
+ */
+export function resolveTestCredentialFilePath(
+  environment: Record<string, string | undefined> = process.env,
+  applicationRoot = projectRoot,
+): string {
+  return resolveBrowserTestCredentialFilePath({ applicationRoot, environment });
+}
+
+/** Writes the reserved E2E identities without following a credential-file symlink. */
+export function writeTestCredentialsFile(
+  contents: string,
+  environment: Record<string, string | undefined> = process.env,
+  applicationRoot = projectRoot,
+): string {
+  return writeBrowserTestCredentialsFile({
+    applicationRoot,
+    contents,
+    environment,
+  });
+}
 
 /**
  * Validates that a session belongs to the exact non-guest test identity requested by the caller.
@@ -185,28 +202,11 @@ export async function waitForAuthenticatedApp(
 }
 
 /**
- * Loads admin test credentials from dev_env_test_creds.txt.
+ * Loads admin test credentials from the protected mutable credential scope.
  * File format: TEST_ADMIN_USER=... and TEST_ADMIN_PASS=... on separate lines.
  */
 export function loadCredentials(): TestCredentials {
-  const credentialPath =
-    process.env.FILTEREST_TEST_CREDENTIAL_FILE?.trim() || 'dev_env_test_creds.txt';
-  const credentialFile = fs.readFileSync(credentialPath, 'utf8');
-  const lines = credentialFile.split('\n');
-  const userLine = lines.find((line) => line.startsWith('TEST_ADMIN_USER='));
-  const passLine = lines.find((line) => line.startsWith('TEST_ADMIN_PASS='));
-
-  const username = userLine?.split('=')[1]?.trim() ?? '';
-  const password = passLine?.split('=')[1]?.trim() ?? '';
-
-  if (!username || !password) {
-    throw new Error(
-      'Missing TEST_ADMIN_USER or TEST_ADMIN_PASS in the configured test credential file. ' +
-      'Run setup/setup_test_user.spec.ts first.'
-    );
-  }
-
-  return { username, password };
+  return loadBrowserTestCredentials({ applicationRoot: projectRoot });
 }
 
 /**
@@ -223,36 +223,12 @@ export function loadOtpCode({
   devEnvFile?: string;
   runtimeEnvFile?: string;
 } = {}): string {
-  const processOtp = environment.LOGIN_OTP_CODE?.trim() || '';
-  if (processOtp) {
-    return processOtp;
-  }
-
-  const resolvedPaths = resolveNativeEnvironmentFiles(environment);
-  const candidateFiles = [devEnvFile || resolvedPaths.developmentEnvFile];
-  if (runtimeEnvFile || !devEnvFile) {
-    candidateFiles.push(runtimeEnvFile || resolvedPaths.runtimeEnvFile);
-  }
-
-  for (const candidateFile of candidateFiles) {
-    if (!fs.existsSync(candidateFile)) {
-      continue;
-    }
-    const otpLine = fs
-      .readFileSync(candidateFile, 'utf8')
-      .split('\n')
-      .find((line) => line.trimStart().startsWith('LOGIN_OTP_CODE='));
-    const fileOtp = otpLine
-      ? otpLine.slice(otpLine.indexOf('=') + 1).trim()
-      : '';
-    if (fileOtp) {
-      return fileOtp;
-    }
-  }
-
-  throw new Error(
-    'Missing LOGIN_OTP_CODE. Set it in the process or the resolved development/runtime environment before running browser login tests.',
-  );
+  return resolveBrowserTestOtpCode({
+    applicationRoot: projectRoot,
+    developmentEnvFile: devEnvFile,
+    environment,
+    runtimeEnvFile,
+  });
 }
 
 /**

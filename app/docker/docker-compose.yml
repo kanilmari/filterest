@@ -64,7 +64,6 @@ services:
       ENABLE_SQL_MIGRATIONS: ${ENABLE_SQL_MIGRATIONS:-false}
       ENABLE_API_LANGUAGE: ${ENABLE_API_LANGUAGE:-false}
       EASELECT_TRUSTED_PROXY_PEER_IPS: ${EASELECT_TRUSTED_PROXY_PEER_IPS:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_API_MODEL: ${OPENAI_API_MODEL:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -83,6 +82,11 @@ services:
         source: ../../keys/tls
         target: /filterest/keys/tls
         read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../keys/filterest_runtime
+        target: /filterest/keys/filterest_runtime
         bind:
           create_host_path: false
       - type: bind

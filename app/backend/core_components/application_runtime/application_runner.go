@@ -29,6 +29,7 @@ import (
 	"easelect/backend/core_components/runtimepaths"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/startup"
+	"easelect/backend/core_components/system_table_tools"
 	"easelect/backend/pipeline/rate_limiting"
 )
 
@@ -41,16 +42,19 @@ import (
 // AppDBCompatibilityManifest and MigrationDirectories let a private outer
 // composition declare its release metadata and merge its migrations explicitly,
 // while FrontendExtensions serves disjoint browser modules without placing them
-// inside the canonical public source tree.
+// inside the canonical public source tree. AdditionalLangKeySourceRoots lets
+// that composition include its own frontend/backend sources in language-key
+// maintenance without teaching public Filterest to discover sibling projects.
 type Options struct {
-	BuildEnvironment           string
-	InstallationRoot           string
-	ApplicationRoot            string
-	ProductRoot                string
-	FrontendRoot               string
-	AppDBCompatibilityManifest string
-	MigrationDirectories       []string
-	FrontendExtensions         []FrontendExtension
+	BuildEnvironment             string
+	InstallationRoot             string
+	ApplicationRoot              string
+	ProductRoot                  string
+	FrontendRoot                 string
+	AppDBCompatibilityManifest   string
+	MigrationDirectories         []string
+	FrontendExtensions           []FrontendExtension
+	AdditionalLangKeySourceRoots []string
 }
 
 // FrontendExtension mounts one additional browser-source directory below the
@@ -202,6 +206,20 @@ func Run(options Options) {
 	}
 	if err := runtimepaths.Configure(runtimePaths); err != nil {
 		log.Fatalf("Filterest runtime path configuration failed: %v", err)
+	}
+	additionalLangKeySourceRoots := make([]string, 0, len(options.AdditionalLangKeySourceRoots))
+	for _, sourceRoot := range options.AdditionalLangKeySourceRoots {
+		resolvedSourceRoot, resolveErr := normalizeRuntimeRoot(
+			sourceRoot,
+			roots.installationRoot,
+		)
+		if resolveErr != nil {
+			log.Fatalf("Additional language-key source root resolution failed: %v", resolveErr)
+		}
+		additionalLangKeySourceRoots = append(additionalLangKeySourceRoots, resolvedSourceRoot)
+	}
+	if err := system_table_tools.ConfigureAdditionalLangKeySourceRoots(additionalLangKeySourceRoots); err != nil {
+		log.Fatalf("Additional language-key source root configuration failed: %v", err)
 	}
 	productRoot := resolveProductRoot(
 		options.ProductRoot,

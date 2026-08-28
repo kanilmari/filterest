@@ -1,9 +1,7 @@
-/**
- * global-teardown.ts — Runs once after all tests.
- *
- * Reuses the authenticated Playwright storage state and deletes synthetic
- * E2E datasets/folders that may remain after interrupted or failed tests.
- */
+// global-teardown.ts
+// Removes synthetic browser-test data after the end-to-end test suite.
+// Bridges authenticated Playwright state with API-backed test-data cleanup.
+// Exists so interrupted or failed tests do not leave operator-visible residue.
 
 import type { FullConfig } from '@playwright/test';
 import * as fs from 'fs';
@@ -24,6 +22,7 @@ import {
 } from './helpers/test-artifact-run-registry';
 import { removeStorageStateFile } from './helpers/storage-state-file';
 import { resolveFilterestTestRuntimePaths } from './helpers/test-runtime-paths';
+import { resolveLocalFilterestBaseUrl } from '../../server_tools/scripts/local_filterest_target.cjs';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
 const AUTH_FILE = testRuntimePaths.authStorageState;
@@ -45,7 +44,7 @@ function resolveBaseURL(config: FullConfig): string {
   const configuredBaseURL = config.projects[0]?.use?.baseURL;
   return typeof configuredBaseURL === 'string' && configuredBaseURL.trim() !== ''
     ? configuredBaseURL
-    : 'https://localhost:8082';
+    : resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__dirname, '../..') });
 }
 
 /** Prevents a rejected parallel runner from tearing down another process's active E2E run. */

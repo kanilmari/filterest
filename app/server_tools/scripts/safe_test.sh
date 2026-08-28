@@ -4,11 +4,15 @@
 # Bridges the Filterest command surface with the repository browser-test matrix.
 # Exists so safe browser testing no longer requires a dedicated root file.
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+APPLICATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROJECT_ROOT="$(
+    node "$APPLICATION_ROOT/server_tools/lib/filterest_project_boundary_cli.mjs" \
+        --print-project-boundary "$APPLICATION_ROOT"
+)" || exit $?
 
 # shellcheck source=../ctl/lib/resolve_env.sh
-source "$PROJECT_ROOT/server_tools/ctl/lib/resolve_env.sh"
-cd "$PROJECT_ROOT"
+source "$APPLICATION_ROOT/server_tools/ctl/lib/resolve_env.sh"
+cd "$APPLICATION_ROOT"
 
 RAM_PER_WORKER_GB=5
 MAX_WORKERS_CAP=6
@@ -32,7 +36,7 @@ if [[ -f /proc/meminfo ]]; then
     SWAP_TOTAL=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)
     if [[ "$SWAP_TOTAL" -eq 0 ]]; then
         echo "WARNING: No swap configured. OOM-killer may terminate tests under memory pressure."
-        echo "  → Run: sudo $PROJECT_ROOT/server_tools/scripts/setup_swap.sh"
+        echo "  → Run: sudo $APPLICATION_ROOT/server_tools/scripts/setup_swap.sh"
     fi
 fi
 
@@ -40,9 +44,9 @@ echo ""
 PIDS_BEFORE=$(pgrep -f 'headless.*chromium|chromium.*headless|playwright' -u "$(id -u)" 2>/dev/null | sort)
 
 if echo "$@" | grep -q -- '--workers'; then
-    npx playwright test -c playwright.config.ts --reporter=list "$@"
+    playwright test -c playwright.config.ts --reporter=list "$@"
 else
-    npx playwright test -c playwright.config.ts --reporter=list --workers="${WORKERS}" "$@"
+    playwright test -c playwright.config.ts --reporter=list --workers="${WORKERS}" "$@"
 fi
 TEST_EXIT=$?
 

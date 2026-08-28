@@ -1,7 +1,7 @@
 // export_table_csv.go
-// CSV export helpers that stream one table out of the database into a downloadable file.
+// CSV export helpers that stream one table into the resolved mutable runtime area.
 // Bridges dev-tool HTTP requests, queryable-column discovery, and filesystem CSV writes.
-// Exists to support local backups, migrations, and table-level inspection without manual SQL.
+// Exists to support local inspection without creating state beside immutable app source.
 package devtools
 
 import (
@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// ExportTableCSVToFile exports a table to tables_data/<table>.csv and returns the file path and used table name.
+// ExportTableCSVToFile exports a table to the resolved tables_data runtime directory.
 func ExportTableCSVToFile(ctx context.Context, tableName string) (string, string, error) {
 	if tableName == "" {
 		tableName = "dev_todo"
@@ -32,12 +31,12 @@ func ExportTableCSVToFile(ctx context.Context, tableName string) (string, string
 		return "", "", err
 	}
 
-	dir := filepath.Join(".", "tables_data")
+	dir := tableCSVDataDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", "", fmt.Errorf("error creating dir: %v", err)
 	}
 
-	filePath := filepath.Join(dir, tableName+".csv")
+	filePath := tableCSVFilePath(sanitizedTableName)
 	f, err := os.Create(filePath)
 	if err != nil {
 		return "", "", fmt.Errorf("error creating csv: %v", err)

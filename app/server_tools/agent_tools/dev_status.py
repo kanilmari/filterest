@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""
-dev_status.py - inspect the tracked app/DB pair and the active development DB.
-
-This command is intentionally read-only:
-- reads VERSION_EASELECT or VERSION_APP plus VERSION_DB from git-tracked files
-- reads the compatibility manifest row for the current app version
-- connects with DB_READONLY_* credentials
-- reports latest system_db_version and optional system_database_identity state
+"""dev_status.py
+What: Inspects the tracked app/DB identity and active development database.
+Between what: Connects immutable release inputs with read-only runtime evidence.
+Why: Reports compatibility without mutating source, operator state, or database data.
 """
 
 from __future__ import annotations
@@ -30,26 +26,23 @@ if not __package__ and str(CANONICAL_FILTEREST_ROOT) not in sys.path:
 try:
     from ..lib.easelect_private_paths import (
         resolve_easelect_private_paths,
-        resolve_embedded_project_root,
+    )
+    from ..lib.dev_status_path_resolver import (
+        DevStatusPaths,
+        resolve_dev_status_paths,
     )
 except ImportError:
     from server_tools.lib.easelect_private_paths import (
         resolve_easelect_private_paths,
-        resolve_embedded_project_root,
+    )
+    from server_tools.lib.dev_status_path_resolver import (
+        DevStatusPaths,
+        resolve_dev_status_paths,
     )
 
 
-PROJECT_ROOT = resolve_embedded_project_root(CANONICAL_FILTEREST_ROOT)
-
-
-_CONFIGURED_MANIFEST_PATH = os.environ.get(
-    "FILTEREST_APP_DB_COMPATIBILITY_MANIFEST",
-    "server_tools/versioning/app_db_compatibility.jsonl",
-)
-MANIFEST_PATH = Path(_CONFIGURED_MANIFEST_PATH)
-if not MANIFEST_PATH.is_absolute():
-    MANIFEST_PATH = PROJECT_ROOT / MANIFEST_PATH
-SHARED_DEV_STORAGE_STATE_DIR = PROJECT_ROOT / "data" / "shared_dev_storage"
+STATUS_PATHS = resolve_dev_status_paths(CANONICAL_FILTEREST_ROOT)
+PROJECT_ROOT = STATUS_PATHS.project_root
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -90,19 +83,24 @@ def read_required_text(path: Path) -> str:
     return text
 
 
-def read_current_app_version() -> tuple[str, str]:
-    for file_name in ("VERSION_EASELECT", "VERSION_APP"):
-        path = PROJECT_ROOT / file_name
+def read_current_app_version(
+    status_paths: DevStatusPaths = STATUS_PATHS,
+) -> tuple[str, str]:
+    for path in status_paths.app_version_paths:
         if path.exists():
-            return read_required_text(path), file_name
+            return read_required_text(path), path.name
     raise RuntimeError("missing VERSION_EASELECT or VERSION_APP")
 
 
-def read_current_manifest_row(app_version: str) -> dict[str, Any] | None:
-    if not MANIFEST_PATH.exists():
-        raise RuntimeError(f"compatibility manifest not found: {MANIFEST_PATH}")
+def read_current_manifest_row(
+    app_version: str,
+    status_paths: DevStatusPaths = STATUS_PATHS,
+) -> dict[str, Any] | None:
+    manifest_path = status_paths.manifest_path
+    if not manifest_path.exists():
+        raise RuntimeError(f"compatibility manifest not found: {manifest_path}")
 
-    for raw_line in MANIFEST_PATH.read_text(encoding="utf-8").splitlines():
+    for raw_line in manifest_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -240,16 +238,19 @@ fi
     }
 
 
-def collect_shared_dev_storage_status(env: dict[str, str]) -> dict[str, Any]:
+def collect_shared_dev_storage_status(
+    env: dict[str, str],
+    status_paths: DevStatusPaths = STATUS_PATHS,
+) -> dict[str, Any]:
     enabled = normalize_bool(env.get("SHARED_DEV_STORAGE_ENABLED", "false"))
-    state_dir = SHARED_DEV_STORAGE_STATE_DIR
+    state_dir = status_paths.shared_dev_storage_state_dir
     pid_file = state_dir / "sync_daemon.pid"
     log_file = state_dir / "sync_daemon.log"
     session_file = state_dir / "session.env"
     last_pull_file = state_dir / "last_pull.env"
     last_push_file = state_dir / "last_push.env"
-    local_storage_path = PROJECT_ROOT / "storage"
-    local_storage_deleted_path = PROJECT_ROOT / "storage_deleted"
+    local_storage_path = status_paths.storage_path
+    local_storage_deleted_path = status_paths.storage_deleted_path
 
     ssh_key = (
         env.get("SHARED_DEV_STORAGE_SSH_KEY_PATH", "").strip()
@@ -355,7 +356,7 @@ def fetch_optional_single_row(
 def collect_status() -> dict[str, Any]:
     env = resolve_environment()
     repo_app_version, repo_app_version_file = read_current_app_version()
-    repo_db_version = read_required_text(PROJECT_ROOT / "VERSION_DB")
+    repo_db_version = read_required_text(STATUS_PATHS.db_version_path)
     manifest_row = read_current_manifest_row(repo_app_version)
 
     db_host = env.get("DB_HOST", "localhost").strip() or "localhost"

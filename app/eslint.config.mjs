@@ -1,7 +1,9 @@
 // eslint.config.mjs
-import js from "@eslint/js";
-import globals from "globals";
-import importPlugin from "eslint-plugin-import-x";
+import { requireNodeDependency } from './server_tools/lib/node_dependency_loader.mjs';
+
+const js = requireNodeDependency('@eslint/js');
+const globals = requireNodeDependency('globals');
+const importPlugin = requireNodeDependency('eslint-plugin-import-x');
 
 export default [
   {

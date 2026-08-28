@@ -1,14 +1,25 @@
 #!/bin/bash
 # qa.sh
-# Runs the full Quality Assurance suite for the project.
-# Includes CSS linting, import checks, and other validation steps.
+# Runs the bounded Quality Assurance suite for the selected product workspace.
+# Bridges shell orchestration with frontend, backend, import, and policy checks.
+# Exists so standalone Filterest and embedded Easelect share repeatable local verification.
 set -e
 
 CALLER_ROOT="$(pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ADDITIONAL_QA_SCRIPT="${FILTEREST_ADDITIONAL_QA_SCRIPT:-}"
+# shellcheck source=../lib/python_bytecode_cache.sh
+source "$PROJECT_ROOT/server_tools/lib/python_bytecode_cache.sh"
+filterest_configure_python_bytecode_cache "$PROJECT_ROOT"
 cd "$PROJECT_ROOT"
+QA_BASE_URL="$(
+    node ./server_tools/scripts/local_easelect_target.mjs \
+        --print-base-url "$PROJECT_ROOT"
+)"
+QA_CREDENTIAL_FILE="${FILTEREST_TEST_CREDENTIAL_FILE:-$(cd "$PROJECT_ROOT/.." && pwd -P)/keys/filterest_runtime/dev_env_test_creds.txt}"
+export FILTEREST_TEST_CREDENTIAL_FILE="$QA_CREDENTIAL_FILE"
+export FILTEREST_E2E_BASE_URL="$QA_BASE_URL"
 
 echo "🔍 Running QA Checks..."
 
@@ -20,7 +31,7 @@ node ./frontend/styles/check_css_imports.js ./frontend/styles/imports.css --fix-
 # 2. Lint JS (ESLint)
 echo "🧠 Linting JS..."
 ESLINT_CONFIG_PATH="eslint.config.mjs"
-npx eslint --config "$ESLINT_CONFIG_PATH" . --fix
+eslint --config "$ESLINT_CONFIG_PATH" . --fix
 
 # 3. Check JS Imports
 echo "🔗 Checking JS Imports..."
@@ -118,10 +129,10 @@ echo "🏗️  Building frontend..."
 npm run build
 
 # 15. Run E2E Smoke Tests (if credentials exist and the server is running)
-if [ ! -f dev_env_test_creds.txt ]; then
-    echo "⚠️  Skipping E2E tests because dev_env_test_creds.txt is not present."
+if [ ! -f "$QA_CREDENTIAL_FILE" ]; then
+    echo "⚠️  Skipping E2E tests because $QA_CREDENTIAL_FILE is not present."
     echo "   (Provide test credentials and a Filterest-owned runtime before running Playwright smoke.)"
-elif curl -k -s -I https://localhost:8082 >/dev/null; then
+elif curl -k -s -I "$QA_BASE_URL" >/dev/null; then
     if [ "${QA_PLAYWRIGHT_FULL:-0}" = "1" ]; then
         echo "🎭 Running full E2E matrix..."
         PLAYWRIGHT_HTML_OPEN=never npm run test:e2e
@@ -133,11 +144,11 @@ elif curl -k -s -I https://localhost:8082 >/dev/null; then
         )
 
         echo "🎭 Running E2E smoke tests (${QA_PLAYWRIGHT_PROJECT})..."
-        PLAYWRIGHT_HTML_OPEN=never npx playwright test --project="${QA_PLAYWRIGHT_PROJECT}" "${QA_PLAYWRIGHT_SPECS[@]}"
+        PLAYWRIGHT_HTML_OPEN=never playwright test --project="${QA_PLAYWRIGHT_PROJECT}" "${QA_PLAYWRIGHT_SPECS[@]}"
         echo "   (Run QA_PLAYWRIGHT_FULL=1 npm run qa for the full Playwright matrix.)"
     fi
 else
-    echo "⚠️  Skipping E2E tests because server is not running on port 8082."
+    echo "⚠️  Skipping E2E tests because the server is not running at $QA_BASE_URL."
     echo "   (Run '../ctl' from the application root to start the server.)"
 fi
 

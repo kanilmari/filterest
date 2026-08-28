@@ -19,7 +19,12 @@ if not __package__ and str(_CANONICAL_FILTEREST_ROOT) not in sys.path:
 
 try:
     from ..lib.easelect_private_paths import resolve_embedded_project_root
-    from .easelect_api_client import DEFAULT_BASE_URL, EaselectAPIClient, EaselectAPIError
+    from .easelect_api_client import (
+        DEFAULT_BASE_URL,
+        EaselectAPIClient,
+        EaselectAPIError,
+        resolve_api_base_url,
+    )
     from .dev_agent_credentials import configure_agent_credentials
 except ImportError:
     from server_tools.lib.easelect_private_paths import resolve_embedded_project_root
@@ -27,6 +32,7 @@ except ImportError:
         DEFAULT_BASE_URL,
         EaselectAPIClient,
         EaselectAPIError,
+        resolve_api_base_url,
     )
     from server_tools.agent_tools.dev_agent_credentials import configure_agent_credentials
 
@@ -143,7 +149,7 @@ def make_client(args, client_factory=EaselectAPIClient):
     username = str(args.credential_username or "").strip()
     if not username:
         raise ValueError("--credential-username is required with --prompt-credentials")
-    target = args.base_url or DEFAULT_BASE_URL
+    target = str(args.base_url or resolve_api_base_url()).rstrip("/")
     print("Authentication context:")
     print(f"  Service: Filterest workline-report API at {target}")
     print(f"  Existing account authorizing access: {username}")
@@ -163,7 +169,7 @@ def make_client(args, client_factory=EaselectAPIClient):
         ).strip()
 
     return client_factory(
-        base_url=args.base_url,
+        base_url=target,
         username=username,
         password=password,
         verification_code_provider=verification_code_provider,
@@ -556,9 +562,12 @@ def command_credentials_configure(args, _client=None):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Manage canonical development worklines and retrospective reports through the app API."
+        description="Manage canonical Filterest development worklines and retrospective reports through the app API."
     )
-    parser.add_argument("--base-url", help=f"Application URL, default {DEFAULT_BASE_URL}")
+    parser.add_argument(
+        "--base-url",
+        help=f"Filterest application URL, default {DEFAULT_BASE_URL}",
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     parser.add_argument(
         "--prompt-credentials",

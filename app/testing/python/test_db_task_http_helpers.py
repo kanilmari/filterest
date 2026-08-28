@@ -74,10 +74,11 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
         self.assertFalse(credentials[db_task._DEV_PASSWORD_EXPLICIT_KEY])
         self.assertFalse(credentials[db_task._OTP_EXPLICIT_KEY])
 
-    def test_load_credentials_marks_complete_process_overrides_as_explicit(self):
+    def test_private_load_credentials_marks_legacy_process_overrides_as_explicit(self):
         with (
             patch.object(db_task, "PROJECT_ROOT", "/missing"),
             patch.object(db_task, "TEST_CREDENTIALS_FILE", "/missing/test_creds.txt"),
+            patch.object(db_task, "_IS_EMBEDDED_EASELECT_CHECKOUT", True),
             patch.dict(os.environ, {
                 "EASELECT_API_USERNAME": "remote_user",
                 "EASELECT_API_PASSWORD": "remote-password",
@@ -89,6 +90,180 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
         self.assertTrue(credentials[db_task._DEV_USERNAME_EXPLICIT_KEY])
         self.assertTrue(credentials[db_task._DEV_PASSWORD_EXPLICIT_KEY])
         self.assertTrue(credentials[db_task._OTP_EXPLICIT_KEY])
+
+    def test_standalone_load_credentials_ignores_legacy_process_values(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "filterest"
+            app_root = project_root / "app"
+            app_root.mkdir(parents=True)
+            (app_root / "go.mod").write_text(
+                "module example.invalid/filterest\n",
+                encoding="utf-8",
+            )
+            (app_root / "VERSION_APP").write_text("1.0.0\n", encoding="utf-8")
+            protected_root = project_root / "keys/filterest_runtime"
+            protected_root.mkdir(parents=True)
+            (protected_root / "development_environment.env").write_text(
+                "DEV_USERNAME=standalone_user\n"
+                "DEV_PASSWORD=standalone-password\n"
+                "DEV_LOGIN_VERIFICATION_CODE=246810\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(db_task, "PROJECT_ROOT", str(project_root)),
+                patch.object(
+                    db_task,
+                    "TEST_CREDENTIALS_FILE",
+                    str(protected_root / "dev_env_test_creds.txt"),
+                ),
+                patch.object(db_task, "_IS_EMBEDDED_EASELECT_CHECKOUT", False),
+                patch.dict(
+                    os.environ,
+                    {
+                        "EASELECT_API_USERNAME": "easelect_user",
+                        "EASELECT_API_PASSWORD": "easelect-password",
+                        "EASELECT_API_OTP_CODE": "111111",
+                        "DEV_USERNAME": "ambient_dev_user",
+                        "DEV_PASSWORD": "ambient-dev-password",
+                        "DEV_LOGIN_VERIFICATION_CODE": "222222",
+                        "LOGIN_OTP_CODE": "333333",
+                    },
+                    clear=True,
+                ),
+            ):
+                credentials = db_task._load_credentials()
+
+        self.assertEqual(credentials["DEV_USERNAME"], "standalone_user")
+        self.assertEqual(credentials["DEV_PASSWORD"], "standalone-password")
+        self.assertEqual(credentials["DEV_LOGIN_VERIFICATION_CODE"], "246810")
+        self.assertFalse(credentials[db_task._DEV_USERNAME_EXPLICIT_KEY])
+        self.assertFalse(credentials[db_task._DEV_PASSWORD_EXPLICIT_KEY])
+        self.assertFalse(credentials[db_task._OTP_EXPLICIT_KEY])
+
+    def test_standalone_load_credentials_accepts_filterest_process_values(self):
+        with (
+            patch.object(db_task, "PROJECT_ROOT", "/missing"),
+            patch.object(db_task, "TEST_CREDENTIALS_FILE", "/missing/test_creds.txt"),
+            patch.object(db_task, "_IS_EMBEDDED_EASELECT_CHECKOUT", False),
+            patch.dict(
+                os.environ,
+                {
+                    "FILTEREST_API_USERNAME": "filterest_user",
+                    "FILTEREST_API_PASSWORD": "filterest-password",
+                    "FILTEREST_API_OTP_CODE": "654321",
+                    "EASELECT_API_USERNAME": "easelect_user",
+                    "EASELECT_API_PASSWORD": "easelect-password",
+                    "EASELECT_API_OTP_CODE": "111111",
+                },
+                clear=True,
+            ),
+        ):
+            credentials = db_task._load_credentials()
+
+        self.assertEqual(credentials["DEV_USERNAME"], "filterest_user")
+        self.assertEqual(credentials["DEV_PASSWORD"], "filterest-password")
+        self.assertEqual(credentials["DEV_LOGIN_VERIFICATION_CODE"], "654321")
+        self.assertTrue(credentials[db_task._DEV_USERNAME_EXPLICIT_KEY])
+        self.assertTrue(credentials[db_task._DEV_PASSWORD_EXPLICIT_KEY])
+        self.assertTrue(credentials[db_task._OTP_EXPLICIT_KEY])
+
+    def test_db_task_target_keeps_specific_override_and_gates_legacy_easelect(self):
+        hostile_environment = {
+            "EASELECT_API_BASE_URL": "https://localhost:8082",
+        }
+        with patch.object(db_task, "_IS_EMBEDDED_EASELECT_CHECKOUT", False):
+            self.assertEqual(
+                db_task._resolve_db_task_base_url(hostile_environment),
+                "https://localhost:8100",
+            )
+            self.assertEqual(
+                db_task._resolve_db_task_base_url({
+                    **hostile_environment,
+                    "FILTEREST_API_BASE_URL": "https://localhost:8199/",
+                }),
+                "https://localhost:8199",
+            )
+            self.assertEqual(
+                db_task._resolve_db_task_base_url({
+                    **hostile_environment,
+                    "FILTEREST_API_BASE_URL": "https://localhost:8199",
+                    "DB_TASK_BASE_URL": "https://localhost:8299/",
+                }),
+                "https://localhost:8299",
+            )
+        with patch.object(db_task, "_IS_EMBEDDED_EASELECT_CHECKOUT", True):
+            self.assertEqual(
+                db_task._resolve_db_task_base_url(hostile_environment),
+                "https://localhost:8082",
+            )
+
+    def test_db_task_target_rejects_remote_http_and_malformed_urls(self):
+        rejected_targets = (
+            "http://tasks.example.com",
+            "ftp://tasks.example.com",
+            "https://user:password@tasks.example.com",
+            "https://tasks.example.com?target=other",
+            "https://tasks.example.com#other",
+            "https://tasks.example.com:not-a-port",
+        )
+
+        for target in rejected_targets:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                db_task._validate_db_task_base_url(target)
+
+    def test_db_task_target_keeps_explicit_plaintext_loopback_available(self):
+        for target in (
+            "http://localhost:8199",
+            "http://127.0.0.1:8199/",
+            "http://[::1]:8199",
+        ):
+            with self.subTest(target=target):
+                self.assertEqual(
+                    db_task._validate_db_task_base_url(target),
+                    target.rstrip("/"),
+                )
+
+    def test_remote_http_is_rejected_before_curl_runs(self):
+        with (
+            patch.object(db_task, "BASE_URL", "http://credential-sink.example"),
+            patch.object(db_task.subprocess, "run") as curl,
+            self.assertRaisesRegex(ValueError, "require HTTPS"),
+        ):
+            db_task._curl_raw("/tmp/cookies", "GET", "/api/csrf-token")
+
+        curl.assert_not_called()
+
+    def test_db_task_target_normalization_preserves_path_prefix(self):
+        calls = []
+
+        def fake_run(command, **_kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout='HTTP/1.1 200 OK\r\n\r\n{"ok":true}',
+                stderr="",
+            )
+
+        with (
+            patch.object(
+                db_task,
+                "BASE_URL",
+                "https://tasks.example.com/filterest/",
+            ),
+            patch.object(db_task.subprocess, "run", side_effect=fake_run),
+        ):
+            result = db_task._curl_raw(
+                "/tmp/cookies",
+                "GET",
+                "/api/csrf-token",
+            )
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(
+            calls[0][-1],
+            "https://tasks.example.com/filterest/api/csrf-token",
+        )
 
     def test_credential_attempts_prefer_explicit_then_e2e_admin(self):
         credentials = {
@@ -309,6 +484,119 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
             f"{db_task.BASE_URL}/api/example?title=hello+world&status=new",
         )
         self.assertIn("-k", cmd)
+
+    def test_raw_curl_keeps_json_and_sensitive_headers_out_of_process_arguments(self):
+        password = "raw-password-must-not-enter-argv"
+        otp = "raw-otp-must-not-enter-argv"
+        csrf = "raw-csrf-must-not-enter-argv"
+        header_paths = []
+
+        def fake_run(cmd, **kwargs):
+            rendered_argv = "\n".join(cmd)
+            for secret in (password, otp, csrf):
+                self.assertNotIn(secret, rendered_argv)
+            self.assertEqual(
+                json.loads(kwargs["input"]),
+                {"password": password, "otp_code": otp},
+            )
+            self.assertIn("--data-binary", cmd)
+            self.assertEqual(cmd[cmd.index("--data-binary") + 1], "@-")
+
+            header_reference = cmd[cmd.index("--header") + 1]
+            self.assertTrue(header_reference.startswith("@"))
+            header_path = Path(header_reference[1:])
+            header_paths.append(header_path)
+            self.assertEqual(stat.S_IMODE(header_path.stat().st_mode), 0o600)
+            self.assertEqual(
+                header_path.read_text(encoding="utf-8"),
+                f"X-CSRF-Token: {csrf}\n",
+            )
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout='HTTP/1.1 200 OK\r\n\r\n{"ok":true}',
+                stderr="",
+            )
+
+        with patch.object(db_task.subprocess, "run", side_effect=fake_run):
+            result = db_task._curl_raw(
+                "/tmp/jar",
+                "POST",
+                "/api/login",
+                {"password": password, "otp_code": otp},
+                [f"X-CSRF-Token: {csrf}"],
+            )
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(len(header_paths), 1)
+        self.assertFalse(header_paths[0].exists())
+
+    def test_authenticated_api_keeps_csrf_and_json_out_of_process_arguments(self):
+        csrf = "api-csrf-must-not-enter-argv"
+        body_secret = "api-json-must-not-enter-argv"
+        header_paths = []
+
+        def fake_run(cmd, **kwargs):
+            rendered_argv = "\n".join(cmd)
+            self.assertNotIn(csrf, rendered_argv)
+            self.assertNotIn(body_secret, rendered_argv)
+            self.assertEqual(json.loads(kwargs["input"]), {"secret": body_secret})
+
+            header_reference = cmd[cmd.index("--header") + 1]
+            header_path = Path(header_reference.removeprefix("@"))
+            header_paths.append(header_path)
+            self.assertEqual(
+                header_path.read_text(encoding="utf-8"),
+                f"X-CSRF-Token: {csrf}\n",
+            )
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=api_curl_response(200, {"ok": True}),
+                stderr="",
+            )
+
+        with (
+            patch.object(db_task, "_get_session", return_value=("/tmp/jar", csrf)),
+            patch.object(db_task.subprocess, "run", side_effect=fake_run),
+        ):
+            result = db_task._api(
+                "POST",
+                "/api/app/agent-tools/tasks",
+                data={"secret": body_secret},
+            )
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(len(header_paths), 1)
+        self.assertFalse(header_paths[0].exists())
+
+    def test_native_curl_disables_hostile_ambient_proxies_on_both_ports(self):
+        hostile_proxy_environment = {
+            "HTTP_PROXY": "http://credential-sink.example:8080",
+            "HTTPS_PROXY": "http://credential-sink.example:8443",
+            "ALL_PROXY": "socks5://credential-sink.example:1080",
+        }
+
+        for port in (8082, 8100):
+            target = f"https://localhost:{port}"
+            with (
+                self.subTest(target=target),
+                patch.object(db_task, "LOCAL_NATIVE_PORT", port),
+                patch.object(db_task, "BASE_URL", target),
+                patch.dict(os.environ, hostile_proxy_environment, clear=True),
+            ):
+                command = db_task._curl_session_command("/tmp/cookies")
+
+            self.assertIn("--noproxy", command)
+            no_proxy_index = command.index("--noproxy")
+            self.assertEqual(command[no_proxy_index + 1], "*")
+            self.assertIn("-k", command)
+
+    def test_remote_https_curl_keeps_normal_proxy_support(self):
+        with patch.object(db_task, "BASE_URL", "https://tasks.example.com"):
+            command = db_task._curl_session_command("/tmp/cookies")
+
+        self.assertNotIn("--noproxy", command)
 
     def test_api_verifies_remote_tls_by_default(self):
         calls = []

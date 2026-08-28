@@ -26,10 +26,11 @@ from pathlib import Path
 from typing import Optional
 
 from ..lib.easelect_private_paths import resolve_embedded_project_root
+from .runtime_paths import resolve_queen_state_root
 
 _CANONICAL_FILTEREST_ROOT = Path(__file__).resolve().parent.parent.parent
 _PROJECT_ROOT = resolve_embedded_project_root(_CANONICAL_FILTEREST_ROOT)
-_TRANSCRIPT_DIR = _PROJECT_ROOT / ".queen" / "transcripts"
+_TRANSCRIPT_DIR = resolve_queen_state_root(_PROJECT_ROOT) / "transcripts"
 QAP_CONTROLLER_ROLE = "controller"
 QAP_CONTROLLER_AGENT_NAME = "QAP controller"
 QAP_CONTROLLER_DEBUG_TEXT_KEY = "debug_full_text"

@@ -1,3 +1,8 @@
+<!-- Browser_Audit_Agent.md
+What: Documents the public command for repeatable single-page browser audits.
+Between what: Connects operator audit requests, local browser tooling, and generated reports.
+Why: Keeps accessibility, performance, and visual review reproducible outside Easelect.
+-->
 # Browser Audit Agent
 
 `./filterest audit browser` runs a one-page browser audit from the local repo. It opens a
@@ -8,14 +13,14 @@ to review the screenshot, and writes one prioritized markdown report.
 ## Commands
 
 ```bash
-./filterest audit browser --url https://localhost:8082
+./filterest audit browser --url https://localhost:8100
 ./filterest audit browser --url https://example.com --skip-vision
-./filterest audit browser --url https://localhost:8082 --issue-summary --db-task-draft
-npm --prefix app run audit:browser -- --url https://localhost:8082
-npm --prefix app run audit:browser:full -- --url https://localhost:8082
+./filterest audit browser --url https://localhost:8100 --issue-summary --db-task-draft
+./filterest audit browser --url https://localhost:8100 --capture-only
+./filterest audit browser --url https://localhost:8100
 ```
 
-`npm --prefix app run audit:browser` is the capture-only variant.
+The explicit `--capture-only` option skips the full analysis stages.
 `audit:browser:full` runs the full pipeline.
 
 ## Output
@@ -47,7 +52,7 @@ The CLI prints the markdown report path on stdout.
 
 ## Local Filterest Auth
 
-For `https://localhost:8082`, the tool reuses
+For the standalone local target `https://localhost:8100`, the tool reuses
 `data/testing/e2e/.auth/user.json` when it exists. That is the same Playwright
 storage-state file produced by `app/testing/e2e/global-setup.ts`; no manual login is
 needed after a normal E2E or Visual Guardian setup run.
@@ -55,7 +60,7 @@ needed after a normal E2E or Visual Guardian setup run.
 If the auth file is missing, create it with a small Playwright run:
 
 ```bash
-PLAYWRIGHT_HTML_OPEN=never npm --prefix app run test:e2e -- testing/e2e/smoke.spec.ts --project=desktop-card --reporter=list
+PLAYWRIGHT_HTML_OPEN=never ./filterest test testing/e2e/smoke.spec.ts --project=desktop-card --reporter=list
 ```
 
 Use `--no-auth-state` when intentionally auditing the anonymous view.

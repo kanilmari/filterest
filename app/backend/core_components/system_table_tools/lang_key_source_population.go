@@ -5,14 +5,17 @@
 package system_table_tools
 
 import (
-	backend "easelect/backend/core_components"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/runtimepaths"
 
 	"github.com/lib/pq"
 )
@@ -21,8 +24,12 @@ import (
 // varmistamalla, ettei niitä ajeta ilman tuoretta skannausta.
 // MarkOrphanLangKeys() ja cleanupStaleLangKeySources() tarkistavat tämän.
 var (
-	lastSourceScan   time.Time
-	lastSourceScanMu sync.Mutex
+	lastSourceScan                 time.Time
+	lastSourceScanMu               sync.Mutex
+	additionalLangKeySourceRoots   []string
+	additionalLangKeySourceRootsMu sync.RWMutex
+	currentLangKeyRuntimePaths     = runtimepaths.Current
+	walkLangKeySourceTree          = filepath.Walk
 )
 
 // SourceScanIsFresh palauttaa true jos PopulateLangKeySources() on ajettu
@@ -39,12 +46,119 @@ func markSourceScanDone() {
 	lastSourceScanMu.Unlock()
 }
 
-func codebaseSourceRoots(projectRoot string) []string {
-	canonicalRoot := filepath.Join(projectRoot, "filterest")
-	if info, err := os.Stat(filepath.Join(canonicalRoot, "go.mod")); err == nil && info.Mode().IsRegular() {
-		return []string{canonicalRoot, projectRoot}
+func markSourceScanFailed() {
+	lastSourceScanMu.Lock()
+	lastSourceScan = time.Time{}
+	lastSourceScanMu.Unlock()
+}
+
+// ConfigureAdditionalLangKeySourceRoots records composition-owned source roots.
+// Public Filterest configures none; private compositions must opt in explicitly.
+func ConfigureAdditionalLangKeySourceRoots(sourceRoots []string) error {
+	normalizedRoots := make([]string, 0, len(sourceRoots))
+	seenRoots := make(map[string]bool, len(sourceRoots))
+	for _, sourceRoot := range sourceRoots {
+		if strings.TrimSpace(sourceRoot) == "" {
+			return fmt.Errorf("additional language-key source root must not be empty")
+		}
+		if !filepath.IsAbs(sourceRoot) {
+			return fmt.Errorf("additional language-key source root must be absolute: %q", sourceRoot)
+		}
+		normalizedRoot := filepath.Clean(sourceRoot)
+		if seenRoots[normalizedRoot] {
+			continue
+		}
+		seenRoots[normalizedRoot] = true
+		normalizedRoots = append(normalizedRoots, normalizedRoot)
 	}
-	return []string{projectRoot}
+	sort.Strings(normalizedRoots)
+
+	additionalLangKeySourceRootsMu.Lock()
+	additionalLangKeySourceRoots = normalizedRoots
+	additionalLangKeySourceRootsMu.Unlock()
+	return nil
+}
+
+func configuredAdditionalLangKeySourceRoots() []string {
+	additionalLangKeySourceRootsMu.RLock()
+	defer additionalLangKeySourceRootsMu.RUnlock()
+
+	result := make([]string, len(additionalLangKeySourceRoots))
+	copy(result, additionalLangKeySourceRoots)
+	return result
+}
+
+func pathIsInsideRoot(root string, candidate string) bool {
+	relativePath, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return false
+	}
+	return relativePath == "." ||
+		(relativePath != ".." && !filepath.IsAbs(relativePath) &&
+			!strings.HasPrefix(relativePath, ".."+string(filepath.Separator)))
+}
+
+func validateLangKeySourceRoot(sourceRoot string, requireApplicationMarkers bool) error {
+	rootInfo, err := os.Stat(sourceRoot)
+	if err != nil {
+		return fmt.Errorf("language-key source root %q: %w", sourceRoot, err)
+	}
+	if !rootInfo.IsDir() {
+		return fmt.Errorf("language-key source root %q is not a directory", sourceRoot)
+	}
+	if requireApplicationMarkers {
+		for _, marker := range []string{"go.mod", "VERSION_APP"} {
+			markerInfo, markerErr := os.Stat(filepath.Join(sourceRoot, marker))
+			if markerErr != nil {
+				return fmt.Errorf("language-key application root marker %q: %w", marker, markerErr)
+			}
+			if !markerInfo.Mode().IsRegular() {
+				return fmt.Errorf("language-key application root marker %q is not a regular file", marker)
+			}
+		}
+	}
+	for _, sourceDirectory := range []string{"frontend", "backend"} {
+		directoryPath := filepath.Join(sourceRoot, sourceDirectory)
+		directoryInfo, directoryErr := os.Stat(directoryPath)
+		if directoryErr != nil {
+			return fmt.Errorf("language-key source directory %q: %w", directoryPath, directoryErr)
+		}
+		if !directoryInfo.IsDir() {
+			return fmt.Errorf("language-key source directory %q is not a directory", directoryPath)
+		}
+	}
+	return nil
+}
+
+func codebaseSourceRoots(paths runtimepaths.Paths) ([]string, error) {
+	installationRoot := strings.TrimSpace(paths.InstallationRoot)
+	applicationRoot := strings.TrimSpace(paths.ApplicationRoot)
+	if installationRoot == "" || !filepath.IsAbs(installationRoot) {
+		return nil, fmt.Errorf("configured Filterest installation root is unresolved")
+	}
+	if applicationRoot == "" || !filepath.IsAbs(applicationRoot) {
+		return nil, fmt.Errorf("configured Filterest application root is unresolved")
+	}
+	installationRoot = filepath.Clean(installationRoot)
+	applicationRoot = filepath.Clean(applicationRoot)
+	if !pathIsInsideRoot(installationRoot, applicationRoot) {
+		return nil, fmt.Errorf("configured Filterest application root %q is outside installation root %q", applicationRoot, installationRoot)
+	}
+	if err := validateLangKeySourceRoot(applicationRoot, true); err != nil {
+		return nil, err
+	}
+
+	sourceRoots := []string{applicationRoot}
+	for _, sourceRoot := range configuredAdditionalLangKeySourceRoots() {
+		if !pathIsInsideRoot(installationRoot, sourceRoot) {
+			return nil, fmt.Errorf("additional language-key source root %q is outside installation root %q", sourceRoot, installationRoot)
+		}
+		if err := validateLangKeySourceRoot(sourceRoot, false); err != nil {
+			return nil, err
+		}
+		sourceRoots = append(sourceRoots, sourceRoot)
+	}
+	return sourceRoots, nil
 }
 
 // sourceEntry — yksi avain-lähde -pari koodiskannauksesta
@@ -56,17 +170,17 @@ type sourceEntry struct {
 // scanCodebaseForLangKeySources skannaa frontend/ ja backend/ -hakemistot
 // ja palauttaa listan avain→tiedostopolku -pareista. Skipaa dist/-kansion.
 // Tunnistaa samat kaavat kuin scanCodebaseForLangKeys() mutta säilyttää tiedostopolun.
-func scanCodebaseForLangKeySources() []sourceEntry {
+func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 	var results []sourceEntry
 
-	projectRoot := findProjectRoot()
-	if projectRoot == "" {
-		log.Printf("[scanCodebaseForLangKeySources] project root not found")
-		return results
+	paths := currentLangKeyRuntimePaths()
+	sourceRoots, err := codebaseSourceRoots(paths)
+	if err != nil {
+		return nil, err
 	}
 
 	var scanDirs []string
-	for _, sourceRoot := range codebaseSourceRoots(projectRoot) {
+	for _, sourceRoot := range sourceRoots {
 		scanDirs = append(
 			scanDirs,
 			filepath.Join(sourceRoot, "frontend"),
@@ -75,12 +189,14 @@ func scanCodebaseForLangKeySources() []sourceEntry {
 	}
 
 	for _, dir := range scanDirs {
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return nil
+		walkErr := walkLangKeySourceTree(dir, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			// Skipaa dist/, node_modules/ ja muut build-kansiot
-			if strings.Contains(path, "/dist/") || strings.Contains(path, "/node_modules/") {
+			if info.IsDir() {
+				if path != dir && (info.Name() == "dist" || info.Name() == "node_modules") {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			ext := filepath.Ext(path)
@@ -89,10 +205,17 @@ func scanCodebaseForLangKeySources() []sourceEntry {
 			}
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
-				return nil
+				return readErr
 			}
 			content := string(data)
-			relPath, _ := filepath.Rel(projectRoot, path)
+			relPath, relErr := filepath.Rel(paths.InstallationRoot, path)
+			if relErr != nil || !pathIsInsideRoot(paths.InstallationRoot, path) {
+				if relErr != nil {
+					return relErr
+				}
+				return fmt.Errorf("language-key source file %q is outside installation root %q", path, paths.InstallationRoot)
+			}
+			relPath = filepath.ToSlash(relPath)
 
 			// Kerätään kustakin tiedostosta löytyneet avaimet (deduplikoitu per tiedosto)
 			foundInFile := make(map[string]bool)
@@ -126,35 +249,54 @@ func scanCodebaseForLangKeySources() []sourceEntry {
 			}
 			return nil
 		})
+		if walkErr != nil {
+			return nil, fmt.Errorf("scan language-key source directory %q: %w", dir, walkErr)
+		}
 	}
 
-	return results
+	return results, nil
 }
 
 // PopulateLangKeySources skannaa koodipohjan ja skeeman ja täyttää
 // system_lang_key_sources-taulun lähdetiedoilla. Palauttaa lisättyjen rivien määrän.
 // Kutsutaan startupissa ENNEN MarkOrphanLangKeys():ta, koska orphan-tunnistus
 // perustuu sources-taulun sisältöön.
-func PopulateLangKeySources() (total int) {
+func PopulateLangKeySources() (total int, scanErr error) {
+	// A new attempt invalidates any previous success immediately. Otherwise a
+	// failed retry within the five-minute freshness window could still permit
+	// stale cleanup and orphan deletion against an incomplete source snapshot.
+	markSourceScanFailed()
+
+	// Resolve and scan immutable sources before any database write. Missing or
+	// unreadable source trees are a hard safety failure, never an empty scan.
+	codeSources, err := scanCodebaseForLangKeySources()
+	if err != nil {
+		return 0, fmt.Errorf("scan codebase language-key sources: %w", err)
+	}
+
 	// Haetaan kaikki lang_key → id
 	keyToID := make(map[string]int64)
 	rows, err := backend.Db.Query("SELECT id, lang_key FROM system_lang_keys")
 	if err != nil {
 		log.Printf("[PopulateLangKeySources] lang_keys query: %v", err)
-		return
+		return 0, err
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var id int64
 		var key string
-		if err := rows.Scan(&id, &key); err == nil {
-			keyToID[key] = id
+		if err := rows.Scan(&id, &key); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan language-key registry row: %w", err)
 		}
+		keyToID[key] = id
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, fmt.Errorf("scan language-key registry: %w", err)
 	}
 	rows.Close()
 
 	// ── 1. Koodipohjan lähteet (JS, HTML, Go -tiedostot) ─────────────
-	codeSources := scanCodebaseForLangKeySources()
 	codeCount := 0
 	for _, src := range codeSources {
 		id, ok := keyToID[src.langKey]
@@ -163,7 +305,9 @@ func PopulateLangKeySources() (total int) {
 		}
 		if upsertSource(id, "code", src.filePath, "") {
 			codeCount++
+			continue
 		}
+		return codeCount, fmt.Errorf("save code language-key source %q from %q", src.langKey, src.filePath)
 	}
 
 	// ── 2. Skeeman lähteet (sarake- ja taulunimet) ───────────────────
@@ -309,7 +453,7 @@ func PopulateLangKeySources() (total int) {
 	}
 	log.Printf("[PopulateLangKeySources] %d source(s) saved (code: %d, schema: %d, db: %d, foreign_keys: %d, lang_key_cols: %d)",
 		total, codeCount, schemaCount, dbCount, foreignKeyCount, langKeyColCount)
-	return total
+	return total, nil
 }
 
 // upsertSource tekee UPSERT:n system_lang_key_sources-tauluun.

@@ -9,9 +9,9 @@ import json
 import sys
 
 try:
-    from .easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from .easelect_api_client import DEFAULT_BASE_URL, EaselectAPIClient, EaselectAPIError
 except ImportError:
-    from easelect_api_client import EaselectAPIClient, EaselectAPIError
+    from easelect_api_client import DEFAULT_BASE_URL, EaselectAPIClient, EaselectAPIError
 
 
 def load_updates_file(path):
@@ -78,9 +78,12 @@ def command_upsert_many(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Maintain Easelect language keys through the application API."
+        description="Maintain Filterest language keys through the application API."
     )
-    parser.add_argument("--base-url", help="Easelect base URL, default https://localhost:8082")
+    parser.add_argument(
+        "--base-url",
+        help=f"Filterest base URL, default {DEFAULT_BASE_URL}",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 

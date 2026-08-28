@@ -59,6 +59,8 @@ cd "$INSTALLATION_ROOT"
 source "$SCRIPT_DIR/lib/public_bootstrap.sh"
 source "$SCRIPT_DIR/lib/toolchain_version.sh"
 source "$SCRIPT_DIR/lib/easelect_private_paths.sh"
+source "$SCRIPT_DIR/lib/source_dependency_installer.sh"
+source "$SCRIPT_DIR/lib/setup_runtime_paths.sh"
 if [[ -n "${FILTEREST_PRIVATE_BOOTSTRAP_LIB:-}" ]]; then
     # Private Easelect may additionally restore its encrypted release-paired
     # bootstrap archive. Standalone Filterest intentionally does not ship this
@@ -72,7 +74,7 @@ fi
 resolve_installation_private_paths() {
     easelect_resolve_private_paths "$INSTALLATION_ROOT"
     if [[ "$FILTEREST_SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
-        local protected_runtime_root="$INSTALLATION_ROOT/keys/filterest_runtime"
+        local protected_runtime_root="$FILTEREST_KEYS_HOME/filterest_runtime"
         EASELECT_RUNTIME_ENV_FILE="$protected_runtime_root/runtime_environment.env"
         EASELECT_DEV_ENV_FILE="$protected_runtime_root/development_environment.env"
         EASELECT_TLS_CERT_FILE="$protected_runtime_root/local_tls_certificate/localhost_certificate.crt"
@@ -82,31 +84,6 @@ resolve_installation_private_paths() {
     fi
 }
 resolve_installation_private_paths
-
-# Standard npm, Vite, Playwright, and Node module resolution starts at the app
-# package and looks for app/node_modules. Standalone development installs keep
-# the actual dependency tree in mutable runtime storage and expose only this
-# ignored relative link in the source tree. Admin installations never need or
-# create the development-only link.
-ensure_nested_node_dependency_bridge() {
-    [[ "$FILTEREST_SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]] || return 0
-
-    local bridge_path="$FILTEREST_SOURCE_ROOT/node_modules"
-    local bridge_target="../data/runtime/node/node_modules"
-    if [[ -L "$bridge_path" ]]; then
-        [[ "$(readlink "$bridge_path")" == "$bridge_target" ]] || {
-            echo -e "${RED}❌ Refusing to replace an unexpected app/node_modules link${NC}" >&2
-            exit 1
-        }
-        return 0
-    fi
-    if [[ -e "$bridge_path" ]]; then
-        echo -e "${RED}❌ Refusing to replace the existing app/node_modules path${NC}" >&2
-        echo "   Move it outside app and rerun setup; dependencies belong in data/runtime/node." >&2
-        exit 1
-    fi
-    ln -s "$bridge_target" "$bridge_path"
-}
 
 FORCE_RECREATE=false
 RESUME_EXISTING=false
@@ -457,6 +434,19 @@ detect_superuser_access() {
 
 detect_superuser_access
 
+write_psql_secret_variable() {
+    local variable_name="$1"
+    local secret_value="$2"
+    local encoded_value=""
+
+    if [[ ! "$variable_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        echo -e "${RED}❌ Unsafe psql secret variable name${NC}" >&2
+        return 1
+    fi
+    encoded_value="$(printf '%s' "$secret_value" | od -An -v -tx1 | tr -d ' \n')"
+    printf "\\set %s '%s'\n" "$variable_name" "$encoded_value"
+}
+
 create_role() {
     local role_name="$1"
     local role_password="$2"
@@ -471,16 +461,15 @@ create_role() {
             ;;
     esac
 
-    run_superuser_psql -qAt \
-        --set=role_name="$role_name" \
-        --set=role_password="$role_password" \
-        --set=role_attributes="$extra_opts" <<'SQL'
+    {
+        write_psql_secret_variable role_password_hex "$role_password"
+        cat <<'SQL'
 \o /dev/null
 SELECT format(
     'CREATE ROLE %I WITH LOGIN%s PASSWORD %L',
     :'role_name',
     CASE WHEN btrim(:'role_attributes') = '' THEN '' ELSE ' ' || btrim(:'role_attributes') END,
-    :'role_password'
+    convert_from(decode(:'role_password_hex', 'hex'), 'UTF8')
 )
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role_name');
 \gexec
@@ -488,11 +477,14 @@ SELECT format(
     'ALTER ROLE %I WITH LOGIN%s PASSWORD %L',
     :'role_name',
     CASE WHEN btrim(:'role_attributes') = '' THEN '' ELSE ' ' || btrim(:'role_attributes') END,
-    :'role_password'
+    convert_from(decode(:'role_password_hex', 'hex'), 'UTF8')
 );
 \gexec
 \o
 SQL
+    } | run_superuser_psql -qAt \
+        --set=role_name="$role_name" \
+        --set=role_attributes="$extra_opts"
 }
 
 run_local_db_psql_stdin() {
@@ -544,7 +536,11 @@ ensure_generated_filterest_initial_admin() {
     fi
 
     local site_slug="${FILTEREST_SITE_SLUG:-${SITE_SLUG:-filterest}}"
-    local handoff_file="${FILTEREST_INITIAL_ADMIN_HANDOFF_FILE:-data/bootstrap/initial_admin_credentials.txt}"
+    local handoff_file=""
+    handoff_file="$(filterest_resolve_initial_admin_handoff_file \
+        "$FILTEREST_SOURCE_ROOT" \
+        "$INSTALLATION_ROOT" \
+        "${FILTEREST_INITIAL_ADMIN_HANDOFF_FILE:-}")" || return 1
     local environment_type_lc
     environment_type_lc="$(printf '%s' "${ENVIRONMENT_TYPE:-}" | tr '[:upper:]' '[:lower:]')"
     local initial_admin_args=(
@@ -572,7 +568,8 @@ ensure_generated_filterest_initial_admin() {
         GOMODCACHE="$RUNTIME_ROOT/go/module-cache" \
         GOCACHE="$RUNTIME_ROOT/go/build-cache" \
         GOFLAGS=-mod=readonly \
-        go run "$FILTEREST_SOURCE_ROOT/server_tools/initial_admin_bootstrap" "${initial_admin_args[@]}"
+        go -C "$FILTEREST_SOURCE_ROOT" run ./server_tools/initial_admin_bootstrap \
+            "${initial_admin_args[@]}"
 }
 
 create_role "$DB_ADMIN_USER" "$DB_ADMIN_PASSWORD" "SUPERUSER"
@@ -1087,17 +1084,8 @@ if [[ "$SETUP_PROFILE" == "development" ]]; then
             printf '%s\n' "$NODE_MANIFEST_SIGNATURE" > "$NODE_MANIFEST_MARKER"
         fi
     fi
-    ensure_nested_node_dependency_bridge
-
     echo "  Running go mod download..."
-    mkdir -p "$RUNTIME_ROOT/go/module-cache" "$RUNTIME_ROOT/go/build-cache"
-    (
-        cd "$FILTEREST_SOURCE_ROOT"
-        GOMODCACHE="$RUNTIME_ROOT/go/module-cache" \
-            GOCACHE="$RUNTIME_ROOT/go/build-cache" \
-            GOFLAGS=-mod=readonly \
-            go mod download
-    ) 2>&1 | tail -3 || true
+    filterest_download_go_modules "$FILTEREST_SOURCE_ROOT" "$RUNTIME_ROOT"
 else
     echo -e "${GREEN}  ✓ Admin profile: source-development dependencies skipped${NC}"
 fi
@@ -1124,5 +1112,9 @@ else
     echo -e "  Access: ${BLUE}https://localhost:${ACCESS_PORT}${NC}"
 fi
 echo ""
-echo -e "${YELLOW}  Note: storage/ directory is not in git.${NC}"
+STORAGE_DISPLAY_PATH="storage/"
+if [[ "$FILTEREST_SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
+    STORAGE_DISPLAY_PATH="data/storage/"
+fi
+echo -e "${YELLOW}  Note: ${STORAGE_DISPLAY_PATH} directory is not in git.${NC}"
 echo -e "${YELLOW}  If you need uploaded media, copy it from a backup.${NC}"

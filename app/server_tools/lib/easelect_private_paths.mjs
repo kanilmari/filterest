@@ -21,6 +21,35 @@ export function isNestedFilterestInstallation(projectRoot) {
   );
 }
 
+/**
+ * Resolves the mutable project boundary for tools whose source lives under app/.
+ * An explicit wrapper override wins; otherwise app maps to its installation root,
+ * and only a parent carrying both Easelect source markers maps to the outer workspace.
+ */
+export function resolveFilterestProjectBoundary(
+  applicationRoot,
+  environment = process.env,
+) {
+  const explicitRoot = String(
+    environment.FILTEREST_PROJECT_ROOT_OVERRIDE || '',
+  ).trim();
+  if (explicitRoot) {
+    return path.resolve(explicitRoot);
+  }
+
+  const normalizedSourceRoot = fs.realpathSync.native(path.resolve(applicationRoot));
+  const installationRoot = path.basename(normalizedSourceRoot) === 'app'
+    ? path.dirname(normalizedSourceRoot)
+    : normalizedSourceRoot;
+  const possibleEaselectRoot = path.dirname(installationRoot);
+  return (
+    isNestedFilterestInstallation(installationRoot)
+    && isPrivateEaselectSourceCheckout(possibleEaselectRoot)
+  )
+    ? fs.realpathSync.native(possibleEaselectRoot)
+    : installationRoot;
+}
+
 const SUPPORTED_PATH_KEYS = new Set([
   'schema_version',
   'projects_home',

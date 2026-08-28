@@ -152,6 +152,10 @@ class BootstrapSeedShellTests(unittest.TestCase):
         )
         self.assertNotIn('$PROJECT_ROOT/filterest/go.mod', setup_script)
         self.assertIn(
+            'go -C "$FILTEREST_SOURCE_ROOT" run ./server_tools/initial_admin_bootstrap',
+            setup_script,
+        )
+        self.assertNotIn(
             'go run "$FILTEREST_SOURCE_ROOT/server_tools/initial_admin_bootstrap"',
             setup_script,
         )
@@ -159,6 +163,29 @@ class BootstrapSeedShellTests(unittest.TestCase):
             "go run ./server_tools/initial_admin_bootstrap",
             setup_script,
         )
+
+    def test_nested_setup_uses_the_resolved_protected_keys_home(self) -> None:
+        lifecycle_scripts = (
+            "install_filterest.sh",
+            "run_filterest_admin.sh",
+            "scaffold.sh",
+            "setup_local_dev_environment.sh",
+            "update_filterest.sh",
+        )
+        for script_name in lifecycle_scripts:
+            source = (PUBLIC_SOURCE_ROOT / "server_tools" / script_name).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                'protected_runtime_root="$FILTEREST_KEYS_HOME/filterest_runtime"',
+                source,
+                script_name,
+            )
+            self.assertNotIn(
+                'protected_runtime_root="$INSTALLATION_ROOT/keys/filterest_runtime"',
+                source,
+                script_name,
+            )
 
     def test_public_setup_exposes_private_bootstrap_only_as_generic_optional_hook(self) -> None:
         setup_script = (

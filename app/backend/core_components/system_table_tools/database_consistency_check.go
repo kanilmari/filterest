@@ -78,9 +78,13 @@ func CheckDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
 	// MarkOrphanLangKeys() vaatii tuoreen skannauksen (SourceScanIsFresh guard).
 	// Ajetaan skannaus vain jos edellisestä on kulunut yli 5 min (startup tai API hoitaa normaalisti).
 	if !SourceScanIsFresh() {
-		PopulateLangKeySources()
+		if _, err := PopulateLangKeySources(); err != nil {
+			log.Printf("[CheckDatabaseConsistency] language-key source scan failed; orphan maintenance skipped: %v", err)
+		}
 	}
-	MarkOrphanLangKeys()
+	if SourceScanIsFresh() {
+		MarkOrphanLangKeys()
+	}
 	cat8 := checkOrphanLangKeys()
 	result.Categories = append(result.Categories, cat8)
 

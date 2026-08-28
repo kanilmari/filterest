@@ -9,12 +9,16 @@ import path from "path";
 import { execFileSync } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
 import { runAcceptance } from "./ai_acceptance_runner.mjs";
-import { authStatePathForTarget } from "./local_easelect_target.mjs";
+import {
+    authStatePathForTarget,
+    resolveLocalFilterestBaseUrl,
+} from "./local_easelect_target.mjs";
 import { resolveFilterestTestRuntimePaths } from "./test_runtime_paths.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../..");
+const defaultBaseUrl = resolveLocalFilterestBaseUrl({ applicationRoot: repoRoot });
 const testRuntimePaths = resolveFilterestTestRuntimePaths({ applicationRoot: repoRoot });
 const defaultAuthState = testRuntimePaths.authStorageState;
 const defaultArtifactRoot = testRuntimePaths.aiAcceptance;
@@ -28,7 +32,7 @@ function usage() {
   ${humanQaDisplayCommand} ai-test <ticket-id> --file <path> [options]
 
 Options:
-  --url <URL|route>          Browser target. Routes like /service_catalog use https://localhost:8082.
+  --url <URL|route>          Browser target. Routes like /service_catalog use ${defaultBaseUrl}.
   --file <path>              File target to open in the browser.
   --plan-file <path>         JSON plan with steps/checks; repeatable.
   --check <text>             Narrative acceptance checklist item; repeatable.
@@ -241,13 +245,13 @@ function resolveTarget(rawValue, mode) {
         return value;
     }
     if (value.startsWith("/")) {
-        return `https://localhost:8082${value}`;
+        return `${defaultBaseUrl}${value}`;
     }
     const candidatePath = path.resolve(repoRoot, value);
     if (fs.existsSync(candidatePath)) {
         return pathToFileURL(candidatePath).toString();
     }
-    return `https://localhost:8082/${value}`;
+    return `${defaultBaseUrl}/${value}`;
 }
 
 // Converts named or explicit viewport arguments into Playwright dimensions.
