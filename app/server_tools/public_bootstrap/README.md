@@ -13,8 +13,14 @@ Filterest branding and runtime boundaries.
 
 The three reviewed walkthrough images and the user-approved service, risk, and
 ticket starter images remain immutable fixture inputs under `source/fixtures/`.
-First-run setup materializes the required row-scoped copies under the mutable
-installation data root; runtime media is never tracked in the public source.
+The runtime-media manifest declares a monotonic materialization revision. On
+the first startup for a strictly newer revision, Filterest creates only missing
+row-scoped copies under the mutable installation data root and records the
+completed revision under `data/bootstrap/`. The same or an older revision is
+not run again, so an operator's later deletion remains in force. Existing
+runtime files are never overwritten, and runtime media is never tracked in the
+public source. Intentionally offering new missing fixture copies requires an
+explicit materialization-revision increase.
 
 If you need to change the public bootstrap schema or seed rows, change the
 reviewed inputs and regenerate the derived artifacts. Do not treat ad-hoc edits

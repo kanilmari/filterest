@@ -129,7 +129,7 @@
       "sha256": "e51e615ca723b84b0d3079187b09d747a843a71e7865c4d5ef23e2801b70d969"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "8556282aa44872a414448849a32f784ac95063dfb436c0c509077ea9038ee59b"
+      "sha256": "b8c2eb55a685b99a7ecfe87fa0bd2f1442465605a7595509de4eae42cd1ef954"
     }
   },
   "source_files": {
@@ -149,10 +149,13 @@
       "sha256": "e7d93194c36e209253016c50c3a78b84a6a6ea17e438b4600981133514d4b47f"
     },
     "filterest/app/server_tools/public_bootstrap/source/app_tables.seed.sql": {
-      "sha256": "8845444e4b7de8d00322d964b42cce02d20ab3509a7a8e109c0547f41ee75e02"
+      "sha256": "97a592f3abbc577b65b01c51398f7b265813fcdc2687dc211f8a68f7070558e9"
     },
     "filterest/app/server_tools/public_bootstrap/source/app_tables.lang_keys.sql": {
       "sha256": "eceae1e83cb82e0ba6f233b4b3fa872e2f852d36dc0cc02e52aab249964e837f"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/runtime_media.v1.json": {
+      "sha256": "16912f87733071d17c63b6918c347cfe0b84231befe9b92d2db2c41bcea6ea27"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"
@@ -162,6 +165,42 @@
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/start-here.png": {
       "sha256": "eb426eed32b17fee2bdf54ba1d240f4048e58e8871106f5ba7ceba843474d02d"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-1000.jpg": {
+      "sha256": "230853cba68e3a12bdf6376051653674cfeea64a79ff0d18089577bcec5edf3f"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-2160.jpg": {
+      "sha256": "9dd5d43a4fdf893187884cd955ffde813e9a6d2c76ea4c6de54c37f95d2d7667"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-300.jpg": {
+      "sha256": "875585e8df3a5460b25935709f313be163f736d7ae8be5de53f98715ecde5a27"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-original.jpg": {
+      "sha256": "4dccd979522e43cd9f8ca826a1cdb9b81d16e7f74baf4a147c359c4f7495e2d2"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/service-1000.jpg": {
+      "sha256": "25a600d92d3fcf45d2ee944cb53fd2909b1c58eff670372bcc9839d35c3846ba"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/service-2160.jpg": {
+      "sha256": "75a6f9f512ada649b6d3a20cadce3441e9b68749ff5ba38ddd55cba810b206a2"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/service-300.jpg": {
+      "sha256": "1be258205cb6e4f46a0bb053db7ae1d1297ee72528bb1d3df14f3b80cdec3f90"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/service-original.jpg": {
+      "sha256": "14436dea18d4bc8ce562363edaa0bf83d07347a3258f5e36304f7c1e9772af06"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-1000.jpg": {
+      "sha256": "41c5419a4b03b7377a4af8d62bca95414c83d735a19ef4806670b4dd5f23556e"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-2160.jpg": {
+      "sha256": "53e9a67b3a3f2b75bec1204f1c2359a3d580d9408d9d79590947f91f33ee0910"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-300.jpg": {
+      "sha256": "9ecf9367f0ced65a6699cb18485a654a55ecbfe57981d1c065963e35e3aebb51"
+    },
+    "filterest/app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-original.jpg": {
+      "sha256": "f8f32d59c38a1635c0a0464cb4a3f203e85d7be3f8ab149c263389b5f559b563"
     }
   }
 }

@@ -105,6 +105,11 @@ services:
         bind:
           create_host_path: false
       - type: bind
+        source: ../../data/bootstrap
+        target: /filterest/data/bootstrap
+        bind:
+          create_host_path: false
+      - type: bind
         source: ../../data/runtime
         target: /filterest/data/runtime
         bind:

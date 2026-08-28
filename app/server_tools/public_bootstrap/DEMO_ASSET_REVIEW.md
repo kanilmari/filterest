@@ -3,6 +3,7 @@
 - Target: `Filterest public demo assets`
 - Auth-tour JPEG assets: `5`
 - Immutable bootstrap fixture sources: `15`
+- Runtime storage destinations: `21`
 - Findings: `0`
 
 ## Verdict

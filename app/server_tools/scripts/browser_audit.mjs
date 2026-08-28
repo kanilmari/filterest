@@ -337,8 +337,11 @@ async function collectDomSnapshot(page, targetUrl) {
                 alt: image.getAttribute("alt"),
                 ariaLabel: image.getAttribute("aria-label") || "",
                 role: image.getAttribute("role") || "",
-                width: image.naturalWidth || image.width || 0,
-                height: image.naturalHeight || image.height || 0,
+                complete: image.complete,
+                naturalWidth: image.naturalWidth,
+                naturalHeight: image.naturalHeight,
+                renderedWidth: image.width || 0,
+                renderedHeight: image.height || 0,
                 selector: selectorFor(image),
             }));
 

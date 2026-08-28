@@ -142,6 +142,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         for relative_path in (
             "config",
             "projects",
+            "data/bootstrap",
             "data/storage",
             "data/storage_deleted",
             "data/runtime",
@@ -149,6 +150,9 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "backups",
         ):
             self.assertTrue((self.root / relative_path).is_dir(), relative_path)
+        self.assertEqual(
+            stat.S_IMODE((self.root / "data/bootstrap").stat().st_mode), 0o700
+        )
 
     def test_setup_moves_existing_openai_key_outside_immutable_app(self) -> None:
         legacy_secret = "test-docker-openai-key"
@@ -226,13 +230,22 @@ class FilterestDockerRunnerTests(unittest.TestCase):
                 docker_calls,
             )
 
-    def test_repeated_setup_preserves_the_installation_identity_and_secrets(self) -> None:
+    def test_repeated_setup_preserves_identity_secrets_and_bootstrap_state(self) -> None:
         self.run_runner("setup")
         first_settings = (self.root / "keys/docker.env").read_bytes()
+        bootstrap_marker = (
+            self.root / "data/bootstrap/public-bootstrap-media-r1.complete.json"
+        )
+        bootstrap_marker.write_text("operator-owned marker\n", encoding="utf-8")
+        bootstrap_marker.chmod(0o600)
 
         self.run_runner("setup")
 
         self.assertEqual((self.root / "keys/docker.env").read_bytes(), first_settings)
+        self.assertEqual(
+            bootstrap_marker.read_text(encoding="utf-8"), "operator-owned marker\n"
+        )
+        self.assertEqual(stat.S_IMODE(bootstrap_marker.stat().st_mode), 0o600)
 
     def test_start_migrates_a_stopped_legacy_volume_and_retains_the_source(self) -> None:
         self.run_runner("setup")

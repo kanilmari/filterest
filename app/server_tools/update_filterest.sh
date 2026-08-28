@@ -47,7 +47,8 @@ Options:
 
 The updater refuses dirty checkouts, development snapshots, draft/prerelease
 GitHub releases, non-fast-forward histories, and unapproved release origins.
-Before changing the checkout it backs up PostgreSQL plus storage directories.
+Before changing the checkout it backs up PostgreSQL, storage directories, and
+the installation-owned bootstrap state that records completed starter-media runs.
 USAGE
 }
 
@@ -269,7 +270,7 @@ show_plan() {
     printf '  Published version: %s\n' "$TARGET_VERSION"
     printf '  Release commit: %s\n' "$TARGET_COMMIT"
     printf '  Profile: %s\n' "$PROFILE"
-    printf '  Safety: database + storage backup, then fast-forward-only update\n'
+    printf '  Safety: database + mutable-data backup, then fast-forward-only update\n'
     if [[ "$current_version" == "$TARGET_VERSION" && "$(git -C "$INSTALLATION_ROOT" rev-parse HEAD)" == "$TARGET_COMMIT" ]]; then
         printf '\nFilterest is already on the latest published stable release.\n'
         exit 0
@@ -333,6 +334,17 @@ create_backup() {
         [[ -e "$INSTALLATION_ROOT/data/storage_deleted" ]] && storage_paths+=(storage_deleted)
         tar --dereference -C "$INSTALLATION_ROOT/data" -czf "$backup_dir/storage.tar.gz" "${storage_paths[@]}"
         chmod 600 "$backup_dir/storage.tar.gz"
+    fi
+    if [[ -e "$INSTALLATION_ROOT/data/bootstrap" ]]; then
+        [[ ! -L "$INSTALLATION_ROOT/data/bootstrap" ]] || \
+            die "bootstrap state directory must not be a symbolic link"
+        [[ -d "$INSTALLATION_ROOT/data/bootstrap" ]] || \
+            die "bootstrap state path is not a directory"
+        # Archive links as links instead of dereferencing them. Completion-marker
+        # validation remains the application's responsibility after a restore,
+        # while the update backup cannot be tricked into reading outside data/.
+        tar -C "$INSTALLATION_ROOT/data" -czf "$backup_dir/bootstrap.tar.gz" bootstrap
+        chmod 600 "$backup_dir/bootstrap.tar.gz"
     fi
     printf 'from_version=%s\nto_version=%s\nrelease_tag=%s\nrelease_commit=%s\ncreated_at=%s\n' \
         "$(tr -d '[:space:]' < "$APP_VERSION_FILE")" "$TARGET_VERSION" \

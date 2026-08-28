@@ -177,6 +177,15 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             runtime_stage.index("COPY backend/ ./backend/"),
             runtime_stage.index("chmod -R a-w /filterest/app"),
         )
+        fixture_copy = (
+            "COPY server_tools/public_bootstrap/source/fixtures/ "
+            "./server_tools/public_bootstrap/source/fixtures/"
+        )
+        self.assertIn(fixture_copy, runtime_stage)
+        self.assertLess(
+            runtime_stage.index(fixture_copy),
+            runtime_stage.index("chmod -R a-w /filterest/app"),
+        )
         self.assertIn(
             "RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build", dockerfile
         )
@@ -195,6 +204,7 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         self.assertIn("USER filterest", dockerfile)
         self.assertNotIn("chown -R filterest:filterest", dockerfile)
         self.assertNotIn("/app/storage", dockerfile)
+        self.assertIn("/filterest/data/bootstrap", dockerfile)
         self.assertIn("https://127.0.0.1:8082/health", dockerfile)
         self.assertNotIn("openssl req", entrypoint)
         self.assertIn("local TLS identity is incomplete", entrypoint)
@@ -213,6 +223,7 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             ("../../keys/tls", "/filterest/keys/tls"),
             ("../../keys/filterest_runtime", "/filterest/keys/filterest_runtime"),
             ("../../projects", "/filterest/projects"),
+            ("../../data/bootstrap", "/filterest/data/bootstrap"),
             ("../../data/storage", "/filterest/data/storage"),
             ("../../data/storage_deleted", "/filterest/data/storage_deleted"),
             ("../../data/runtime", "/filterest/data/runtime"),
@@ -272,6 +283,7 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
                 "/filterest/keys/tls",
                 "/filterest/keys/filterest_runtime",
                 "/filterest/projects",
+                "/filterest/data/bootstrap",
                 "/filterest/data/storage",
                 "/filterest/data/storage_deleted",
                 "/filterest/data/runtime",
@@ -289,6 +301,13 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             self.assertTrue(app_mounts[protected_target]["read_only"])
         self.assertFalse(
             app_mounts["/filterest/keys/filterest_runtime"].get("read_only", False)
+        )
+        self.assertFalse(
+            app_mounts["/filterest/data/bootstrap"].get("read_only", False)
+        )
+        self.assertEqual(
+            app_mounts["/filterest/data/bootstrap"]["source"],
+            str((INSTALLATION_ROOT / "data/bootstrap").resolve()),
         )
 
         database_mounts = {

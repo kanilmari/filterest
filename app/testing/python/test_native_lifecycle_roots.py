@@ -233,6 +233,8 @@ def test_nested_scaffold_writes_only_mutable_installation_siblings(tmp_path: Pat
         assert stat.S_IMODE((installation_root / mutable_root).stat().st_mode) == 0o700
     assert (installation_root / "data/runtime/bin").is_dir()
     assert (installation_root / "data/runtime/logs").is_dir()
+    assert (installation_root / "data/bootstrap").is_dir()
+    assert stat.S_IMODE((installation_root / "data/bootstrap").stat().st_mode) == 0o700
     assert (installation_root / "data/storage").is_dir()
     assert (installation_root / "data/storage_deleted").is_dir()
     assert (installation_root / "config/filterest.paths").read_text(
@@ -480,6 +482,7 @@ def test_lifecycle_scripts_use_source_and_install_roots_by_responsibility() -> N
     assert 'RUNTIME_ROOT="$INSTALLATION_ROOT/data/runtime"' in admin_runner
     assert 'TLS_CERT_FILE="${TLS_CERT_FILE:-$EASELECT_TLS_CERT_FILE}"' in admin_runner
     assert 'BACKUP_ROOT="$INSTALLATION_ROOT/backups"' in updater
+    assert '"$backup_dir/bootstrap.tar.gz" bootstrap' in updater
     assert '"$INSTALLATION_ROOT/data/storage"' in updater
     assert 'git -C "$INSTALLATION_ROOT" merge --ff-only "$TARGET_COMMIT"' in updater
     assert '${TARGET_COMMIT}:${GIT_SOURCE_PREFIX}go.mod' in updater

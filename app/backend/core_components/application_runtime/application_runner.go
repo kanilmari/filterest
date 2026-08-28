@@ -45,16 +45,19 @@ import (
 // inside the canonical public source tree. AdditionalLangKeySourceRoots lets
 // that composition include its own frontend/backend sources in language-key
 // maintenance without teaching public Filterest to discover sibling projects.
+// MaterializePublicBootstrapMedia is an explicit public-launcher capability;
+// private compositions leave it false so their storage remains untouched.
 type Options struct {
-	BuildEnvironment             string
-	InstallationRoot             string
-	ApplicationRoot              string
-	ProductRoot                  string
-	FrontendRoot                 string
-	AppDBCompatibilityManifest   string
-	MigrationDirectories         []string
-	FrontendExtensions           []FrontendExtension
-	AdditionalLangKeySourceRoots []string
+	BuildEnvironment                string
+	InstallationRoot                string
+	ApplicationRoot                 string
+	MaterializePublicBootstrapMedia bool
+	ProductRoot                     string
+	FrontendRoot                    string
+	AppDBCompatibilityManifest      string
+	MigrationDirectories            []string
+	FrontendExtensions              []FrontendExtension
+	AdditionalLangKeySourceRoots    []string
 }
 
 // FrontendExtension mounts one additional browser-source directory below the
@@ -206,6 +209,16 @@ func Run(options Options) {
 	}
 	if err := runtimepaths.Configure(runtimePaths); err != nil {
 		log.Fatalf("Filterest runtime path configuration failed: %v", err)
+	}
+	if options.MaterializePublicBootstrapMedia {
+		createdMediaCount, materializeErr := startup.MaterializePublicBootstrapMedia(runtimePaths)
+		if materializeErr != nil {
+			log.Fatalf("\033[31merror: public bootstrap media materialization failed: %v\033[0m", materializeErr)
+		}
+		log.Printf(
+			"[PUBLIC BOOTSTRAP MEDIA] created %d missing installation storage files; existing operator files were left untouched",
+			createdMediaCount,
+		)
 	}
 	additionalLangKeySourceRoots := make([]string, 0, len(options.AdditionalLangKeySourceRoots))
 	for _, sourceRoot := range options.AdditionalLangKeySourceRoots {

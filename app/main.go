@@ -11,7 +11,12 @@ import application_runtime "easelect/backend/core_components/application_runtime
 var buildEnv = "dev"
 
 func main() {
-	application_runtime.Run(application_runtime.Options{
-		BuildEnvironment: buildEnv,
-	})
+	application_runtime.Run(publicRuntimeOptions())
+}
+
+func publicRuntimeOptions() application_runtime.Options {
+	return application_runtime.Options{
+		BuildEnvironment:                buildEnv,
+		MaterializePublicBootstrapMedia: true,
+	}
 }

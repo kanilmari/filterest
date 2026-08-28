@@ -189,6 +189,7 @@ cmd_setup() {
       "$INSTALLATION_ROOT/config"
       "$INSTALLATION_ROOT/keys"
       "$INSTALLATION_ROOT/projects"
+      "$INSTALLATION_ROOT/data/bootstrap"
       "$INSTALLATION_ROOT/data/storage"
       "$INSTALLATION_ROOT/data/storage_deleted"
       "$INSTALLATION_ROOT/data/others"
@@ -241,6 +242,7 @@ cmd_setup() {
       "$INSTALLATION_ROOT/keys" \
       "$INSTALLATION_ROOT/projects" \
       "$INSTALLATION_ROOT/data" \
+      "$INSTALLATION_ROOT/data/bootstrap" \
       "$INSTALLATION_ROOT/backups"
     local path_contract="$INSTALLATION_ROOT/config/filterest.paths"
     if [[ -f "$path_contract" ]]; then

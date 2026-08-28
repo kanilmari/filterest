@@ -190,6 +190,7 @@ prepare_installation_directories() {
     prepare_directory "$RUNTIME_KEYS_DIRECTORY" 0700
     prepare_directory "$PROJECT_ROOT/projects" 0750
     prepare_directory "$PROJECT_ROOT/data" 0750
+    prepare_directory "$PROJECT_ROOT/data/bootstrap" 0700
     prepare_directory "$PROJECT_ROOT/data/storage" 0750
     prepare_directory "$PROJECT_ROOT/data/storage_deleted" 0750
     prepare_directory "$PROJECT_ROOT/data/runtime" 0750

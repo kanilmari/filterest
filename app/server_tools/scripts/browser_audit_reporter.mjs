@@ -53,6 +53,24 @@ function buildDomFindings(domSnapshot) {
         ));
     }
 
+    const brokenContentImages = domSnapshot.images
+        .filter((image) => image.src && image.role !== "presentation")
+        .filter((image) => (
+            image.complete === true && (
+                Number(image.naturalWidth ?? image.width ?? 0) <= 0 ||
+                Number(image.naturalHeight ?? image.height ?? 0) <= 0
+            )
+        ));
+    if (brokenContentImages.length > 0) {
+        findings.push(finding(
+            "P1",
+            "DOM",
+            `${brokenContentImages.length} content image(s) failed to load or decode.`,
+            "Fix the image response or runtime asset installation; a styled image box is not proof that the image bytes loaded.",
+            brokenContentImages.slice(0, 3).map((image) => image.src).join("; "),
+        ));
+    }
+
     const unlabeledControls = domSnapshot.forms.flatMap((form) => form.controls)
         .filter((control) => ["input", "select", "textarea"].includes(control.tag))
         .filter((control) => !["hidden", "submit", "button", "reset"].includes(control.type))

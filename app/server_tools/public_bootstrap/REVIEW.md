@@ -5,7 +5,7 @@
 - Seed tables: `30`
 - Example emails: `0`
 - Manifest format: `2`
-- Manifest source files: `10`
+- Manifest source files: `23`
 - Findings: `0`
 
 ## Verdict
@@ -136,7 +136,7 @@ PASS
 ## Manifest Hash Coverage
 
 - Generated files with hashes: `2`
-- Source files with hashes: `10`
+- Source files with hashes: `23`
 
 ## Email Domains
 

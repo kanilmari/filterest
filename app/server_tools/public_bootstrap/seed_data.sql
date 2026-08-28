@@ -1060,8 +1060,9 @@ VALUES (
 
 -- User-reviewed starter-row images captured from the verified asset-linking
 -- upload flow. IDs, parent links, source metadata, ordering, and primary flags
--- match the accepted Filterest preview; storage files are copied separately by
--- the public repository generator.
+-- match the accepted Filterest preview. The first startup for a strictly newer
+-- media revision materializes only missing runtime copies. The completed
+-- revision never overwrites or recreates operator-managed copies on restart.
 INSERT INTO public.palvelukatalogi_assets
     (id, palvelukatalogi_id, asset_kind, filename, original_name, mime_type,
      size_bytes, title, description, sort_order, is_primary, metadata_json,
@@ -1115,7 +1116,8 @@ VALUES (1, 1);
 INSERT INTO public.dokumentaatio_tiketit_relation (dokumentaatio_id, tiketti_id)
 VALUES (3, 1);
 
--- Restore the reviewed public images that ship with the minimal workspace.
+-- Bind starter rows to reviewed image names. Startup fills only missing files
+-- for these names and never overwrites an existing mutable runtime copy.
 UPDATE public.palvelukatalogi SET cached_image = '7_1_1.jpg' WHERE id = 1;
 UPDATE public.riskienhallinta SET cached_image = '8_1_1.jpg' WHERE id = 1;
 UPDATE public.dokumentaatio
