@@ -1337,8 +1337,9 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "8.40.8": {"min_version": "9.6.2", "target_version": "9.6.2"},
         "8.41.0": {"min_version": "9.6.4", "target_version": "9.6.4"},
         "9.0.0": {"min_version": "9.6.7", "target_version": "9.6.7"},
+        "9.0.1": {"min_version": "9.6.7", "target_version": "9.6.7"},
     }
-    version_order = {"8.40.8": 0, "8.41.0": 1, "9.0.0": 2}
+    version_order = {"8.40.8": 0, "8.41.0": 1, "9.0.0": 2, "9.0.1": 3}
     assert all(
         entry.record["app_version"] in expected_databases
         and entry.record["artifact_type"] == "runtime"
@@ -1349,7 +1350,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         and entry.record["source"]["model"]
         == (
             "public_first"
-            if entry.record["app_version"] == "9.0.0"
+            if entry.record["app_version"] in {"9.0.0", "9.0.1"}
             else "legacy_maintainer_export"
         )
         for entry in tail
@@ -1388,6 +1389,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "build:filterest-9.0.0-stable-runtime-fd3615a31156",
         "build:filterest-9.0.0-stable-runtime-24e4c45131f4",
         "build:filterest-9.0.0-stable-runtime-55cbb2c37f2d",
+        "build:filterest-9.0.0-stable-runtime-0f6f8c9f1893",
     ]
     assert [record["source"]["commit"] for record in current_version_records] == [
         "d332ef51d5933f0aa0424f9dabc21de939440c4f",
@@ -1402,10 +1404,14 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "fd3615a311567efbda06b5a5a222d3a3971bb1c2",
         "24e4c45131f4aa800c66c1ad04945c1ad259fae5",
         "55cbb2c37f2d6e83b68fbc1fc3ad402367e80d17",
+        "0f6f8c9f189376164ca9ce25b43cc52cc32840a5",
+    ]
+    assert [record["maturity"] for record in current_version_records] == [
+        *(["candidate"] * 12),
+        "published",
     ]
     assert all(
-        record["maturity"] == "candidate"
-        and record["source"]["model"] == "public_first"
+        record["source"]["model"] == "public_first"
         for record in current_version_records
     )
     assert all(entry.record["app_version"] != "8.29.4" for entry in entries)

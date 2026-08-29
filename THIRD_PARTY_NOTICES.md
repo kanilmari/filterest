@@ -6,7 +6,7 @@ not legal advice and still needs human/project approval before publication.
 
 ## Candidate
 
-- Filterest app version: `9.0.0`
+- Filterest app version: `9.0.1`
 - Database version: `9.6.7`
 - Go metadata source: `go list metadata with go mod download cache`
 - npm metadata source: `package-lock.json with installed package.json license metadata`
