@@ -155,13 +155,13 @@
       "sha256": "eceae1e83cb82e0ba6f233b4b3fa872e2f852d36dc0cc02e52aab249964e837f"
     },
     "server_tools/public_slice_export/public_bootstrap/fixtures/docs/first-dataset.png": {
-      "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"
+      "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"
     },
     "server_tools/public_slice_export/public_bootstrap/fixtures/docs/ready-to-release.png": {
-      "sha256": "6b09ffdc1c42ba04b4467ce20a2df1476f1c17895e5922c56458f4a6ac7d252f"
+      "sha256": "c054dd219ef69cbf8b8f77652072bf5a60a80625c30060dc4c72157dd35dc0ec"
     },
     "server_tools/public_slice_export/public_bootstrap/fixtures/docs/start-here.png": {
-      "sha256": "eb426eed32b17fee2bdf54ba1d240f4048e58e8871106f5ba7ceba843474d02d"
+      "sha256": "3d85bfdba3b64bbf053e1b2bcfa85c15d9dc642c2a1f0ec3a6d59154ab29ab6c"
     }
   }
 }
