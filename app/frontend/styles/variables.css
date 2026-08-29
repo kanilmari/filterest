@@ -27,13 +27,9 @@
     --interaction-control-bg-rest: var(--bg-surface);
     --interaction-control-bg-hover: color-mix(in srgb, var(--color-brand) 12%, var(--bg-surface) 88%);
     --interaction-control-bg-active: color-mix(in srgb, var(--color-brand) 22%, var(--bg-surface) 78%);
-    --interaction-control-shadow-rest:
-        inset 0 0 0 rgb(0 0 0 / 0%),
-        inset 0 1px 0 rgb(255 255 255 / 25%),
-        0 5px 10px rgb(0 0 0 / 18%);
+    --interaction-control-shadow-rest: 0 5px 10px rgb(0 0 0 / 18%);
     --interaction-control-shadow-active:
         inset 0 5px 9px rgb(0 0 0 / 28%),
-        inset 0 1px 0 rgb(255 255 255 / 8%),
         0 1px 3px rgb(0 0 0 / 15%);
     --interaction-focus-ring: color-mix(in srgb, var(--color-brand) 58%, var(--bg-surface) 42%);
     --interaction-selection-hover-bg: color-mix(in srgb, var(--color-brand) 7%, transparent);

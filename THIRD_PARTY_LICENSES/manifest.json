@@ -1,0 +1,965 @@
+{
+  "asset_components": [
+    {
+      "assets": [
+        {
+          "path": "app/frontend/icons/admin/permission-checkbox-unchecked-icon.svg",
+          "sha256": "42da75291c1aa4f010f218905a4a52288b0412f513dc4d7fac171299b8c7220c"
+        },
+        {
+          "path": "app/frontend/icons/auth/login-icon.svg",
+          "sha256": "12a690a6c694d0bc0bfb3cc4cad1f750d929a8327cbe22d4340b1f0ed51868ae"
+        },
+        {
+          "path": "app/frontend/icons/auth/logout-icon.svg",
+          "sha256": "e071244e57265d6f7e39eafabb3c8173029d7c92b49e3e71985f66c91a82cd1d"
+        },
+        {
+          "path": "app/frontend/icons/auth/password-visibility-off-icon.svg",
+          "sha256": "50bb4e8d6573ecdd88dcff8255d1eb6218b17ebf89ba96d914d4c989a4a9d9cb"
+        },
+        {
+          "path": "app/frontend/icons/auth/password-visibility-on-icon.svg",
+          "sha256": "cceab44418258ee9d2d9b1a5e828d5c33d89b907ca0e62477a793de2fb54ac77"
+        },
+        {
+          "path": "app/frontend/icons/general/dataset-search-icon.svg",
+          "sha256": "ee209ddc7cd0a7cae49e68d9a558e0d36a4f6d7f0de3e448429dfc9337fe7eec"
+        },
+        {
+          "path": "app/frontend/icons/general/filterbar-hide-icon.svg",
+          "sha256": "69541729a0f2e47486d659fe52951f5b3bd98ce64e172665cf4fed222bfc4fb5"
+        },
+        {
+          "path": "app/frontend/icons/general/modal-close-icon.svg",
+          "sha256": "42da75291c1aa4f010f218905a4a52288b0412f513dc4d7fac171299b8c7220c"
+        },
+        {
+          "path": "app/frontend/icons/general/trash-icon.svg",
+          "sha256": "c8ca819a641d9fd741788008d4592ade0da689d64a536d2f2176e6ff0f992197"
+        },
+        {
+          "path": "app/frontend/icons/general/user-person-icon.svg",
+          "sha256": "bc4f8da466dcad62dd146025e5912d59608dfa6f1711752573780e4f32c3803f"
+        },
+        {
+          "path": "app/frontend/icons/navigation/language-globe-icon.svg",
+          "sha256": "4a98a46994f46afd2e52676d448c7bac05de2e0c32d44e65e352f8be39e0ec13"
+        },
+        {
+          "path": "app/frontend/icons/navigation/nav-history-back-icon.svg",
+          "sha256": "80db68ca82af83b9e689e080b007a6f0318b8da6f9f920157bffb60e63dd3edc"
+        },
+        {
+          "path": "app/frontend/icons/navigation/nav-history-forward-icon.svg",
+          "sha256": "702e4b7838162a8e251edcaa99ea9aef4ec3cdd59122d6934db9eb88330e37fb"
+        },
+        {
+          "path": "app/frontend/icons/navigation/theme-light-icon.svg",
+          "sha256": "4e183b937fb722f95d61b06d450c47c8282803a762e099e7d5ff639db8ad3867"
+        },
+        {
+          "path": "app/frontend/icons/navigation/theme-system-icon.svg",
+          "sha256": "e129fe290b281a7559df6e275011908f3f2c8f93f91144dddc2290dde6be888e"
+        },
+        {
+          "path": "app/frontend/icons/symbols/alert-circle.svg",
+          "sha256": "35ec4726c588f6a48488d3bdda39e9ce3f0823c597f0485e695fa2d08b0496bb"
+        },
+        {
+          "path": "app/frontend/icons/symbols/article.svg",
+          "sha256": "b6dfe4915b2ee4c8c84348647172f5f2867b37e3a40835933e910129535779c7"
+        },
+        {
+          "path": "app/frontend/icons/symbols/attachment.svg",
+          "sha256": "3a2fea4e5c45cea1147173ac0e401cdde2b46fd7f500ee88a96a2151ecce458a"
+        },
+        {
+          "path": "app/frontend/icons/symbols/bookmark.svg",
+          "sha256": "4b846936c8f31fd6e34feb80bf9427fa82945ea9fc15c8b3d9e27815f090dcb6"
+        },
+        {
+          "path": "app/frontend/icons/symbols/build.svg",
+          "sha256": "6331e0e162fd41c8d5ef34db970baebe3cd457fd6aa34b7cc6dc87a03e9d629f"
+        },
+        {
+          "path": "app/frontend/icons/symbols/building.svg",
+          "sha256": "19b8303f6589dc1adddad5396dcee4ccd4a8364049fc58bad54edfa85b030c9c"
+        },
+        {
+          "path": "app/frontend/icons/symbols/calendar-clock.svg",
+          "sha256": "5e564d081de3554c4bed7de42ae0b8e940660d203bd8a60d630455d32340cc41"
+        },
+        {
+          "path": "app/frontend/icons/symbols/calendar.svg",
+          "sha256": "4845c333ab1b34a93a04bb18bc9000ffd4d99be84df4b55327fd27fccd1da8be"
+        },
+        {
+          "path": "app/frontend/icons/symbols/category.svg",
+          "sha256": "37640105b80e2150b93ea7b87efe734cd5a4c3ebc158082d75a9dd94a6c1d511"
+        },
+        {
+          "path": "app/frontend/icons/symbols/chat.svg",
+          "sha256": "688cf4c14b220ecf6140a2c6e611341abdfba21601d477621825f1beb2ac3248"
+        },
+        {
+          "path": "app/frontend/icons/symbols/check-circle.svg",
+          "sha256": "9395b15325f11f226f9794a7e7c0761f7f0d3e905df1fa7f14fd26b97aac3383"
+        },
+        {
+          "path": "app/frontend/icons/symbols/check_circle.svg",
+          "sha256": "afd2aca29b6ede6456e1a23f1f2711263bd49fd1250402c98bb5c81c01344cf6"
+        },
+        {
+          "path": "app/frontend/icons/symbols/clock.svg",
+          "sha256": "5e564d081de3554c4bed7de42ae0b8e940660d203bd8a60d630455d32340cc41"
+        },
+        {
+          "path": "app/frontend/icons/symbols/dashboard.svg",
+          "sha256": "3614907671d04f069d615ae0dbe33aef46abfbc35eea17b0fc8a2c53d0cb09e4"
+        },
+        {
+          "path": "app/frontend/icons/symbols/database.svg",
+          "sha256": "fe2e372552a3895a05c9668f5f38579f316f7f5f92440f18cc0e28bf75b52709"
+        },
+        {
+          "path": "app/frontend/icons/symbols/description.svg",
+          "sha256": "ee949cad9931ba946a3bfa7aa0a49692fae595845dcf4e7fe48dc14c974f1a78"
+        },
+        {
+          "path": "app/frontend/icons/symbols/eco.svg",
+          "sha256": "cafe24997e5e8fffcb21a07e5c9690cefac046def3d44262b955e92316b0ce37"
+        },
+        {
+          "path": "app/frontend/icons/symbols/file-text.svg",
+          "sha256": "9b86033744d710685bd34acfc5f12ef7d01df9f475fff06574ba6ea152d83367"
+        },
+        {
+          "path": "app/frontend/icons/symbols/folder.svg",
+          "sha256": "a43d0c01fe2df6071caca0b6e7561147491a3786339ef1dd4b1f4470fb7ca022"
+        },
+        {
+          "path": "app/frontend/icons/symbols/grid_view.svg",
+          "sha256": "f6332fe0a36368f2bf5833d14e86a7470ba8bfbef38b39acb8f3f46984be9f33"
+        },
+        {
+          "path": "app/frontend/icons/symbols/group.svg",
+          "sha256": "536fd1a0f303e5a889cda0ead5fc3af2b956c571f4b09dad242129af98e299e4"
+        },
+        {
+          "path": "app/frontend/icons/symbols/group_center_filled.svg",
+          "sha256": "a3ddb97be8a3abf369bc6d4534571de83a869657a40f9323d6d6e3ebfc588790"
+        },
+        {
+          "path": "app/frontend/icons/symbols/group_filled.svg",
+          "sha256": "825363abc5be5350be3d7a7d7ec01fcc1597cc85d08855eb2ce14b13ba29f91b"
+        },
+        {
+          "path": "app/frontend/icons/symbols/hash.svg",
+          "sha256": "8a735ceb9a7b0be8342adb131a2171b5757410961039163a09ce137fb1d96567"
+        },
+        {
+          "path": "app/frontend/icons/symbols/help.svg",
+          "sha256": "01a1778aec76e33d961cc79767caa493037a779b5cec807e59c809bc8b610e8b"
+        },
+        {
+          "path": "app/frontend/icons/symbols/home.svg",
+          "sha256": "0eef4a4510a95a01f907dbe30df2f0aa4472f31d810f7c8df8c68c6025405e05"
+        },
+        {
+          "path": "app/frontend/icons/symbols/image.svg",
+          "sha256": "3abf4c9ec187284cc72655f376c362aa10232e44dcb704d39489e569482b58cb"
+        },
+        {
+          "path": "app/frontend/icons/symbols/info.svg",
+          "sha256": "26dd1fa9112a6c27dd7c703ae502eea3a9405bdb91f33764992c461fe7cad5ca"
+        },
+        {
+          "path": "app/frontend/icons/symbols/inventory.svg",
+          "sha256": "4f27c4a8ae7be33de38171cc95efa61be65380fbcaece1fcc2f988f92c2b6d4d"
+        },
+        {
+          "path": "app/frontend/icons/symbols/label.svg",
+          "sha256": "4e90af9e4362e5faf2ff25f9f45648f9bb98f6987b5c28f612285d5648bbae0e"
+        },
+        {
+          "path": "app/frontend/icons/symbols/layers.svg",
+          "sha256": "29da6446f377d6390a33d412f10725dd9b661ebe357098812691d3fa9880bcfb"
+        },
+        {
+          "path": "app/frontend/icons/symbols/link.svg",
+          "sha256": "81e07d1daedd3219653b99f1251559bf34e004f119abc7ddfc9cd7b38f07ffe3"
+        },
+        {
+          "path": "app/frontend/icons/symbols/list.svg",
+          "sha256": "06e4d99bf15cbb7b38101bf287b8078d3b9d4bc4109d8066e5497743bb09e957"
+        },
+        {
+          "path": "app/frontend/icons/symbols/location.svg",
+          "sha256": "d386cfbdfe4aacfa38aafc1f3c084a64e742f2d7753a258f719cb8f38864fe80"
+        },
+        {
+          "path": "app/frontend/icons/symbols/login.svg",
+          "sha256": "b936d7e84b9252a25d1bc98aca262f162fab4ced07fcb0eb62b05c8a7c618e6f"
+        },
+        {
+          "path": "app/frontend/icons/symbols/logout.svg",
+          "sha256": "4f204d685bf2f090334aba985a73de1afaca37c8c4b110bcc0abdbb5e5d2a4b4"
+        },
+        {
+          "path": "app/frontend/icons/symbols/mail.svg",
+          "sha256": "c91afe4544d06825408026c2b89bb4171050258aa3b37c5edda5e57e20a0a2c4"
+        },
+        {
+          "path": "app/frontend/icons/symbols/map-pin.svg",
+          "sha256": "cf95a2efc1c46fc193ccd7b6a775876e15d3595463335e70d4d9c4d51612bcc3"
+        },
+        {
+          "path": "app/frontend/icons/symbols/map.svg",
+          "sha256": "f8364adb94f21562791e912d6f9a10c7dabb36458c7189dc9c29f157a77d9051"
+        },
+        {
+          "path": "app/frontend/icons/symbols/notifications.svg",
+          "sha256": "e8e1501306a7ae67dc494c4653b2ca834c37686dd9c0b93eb2c193a4715d7a62"
+        },
+        {
+          "path": "app/frontend/icons/symbols/payments.svg",
+          "sha256": "9b5e8f5a17a649f9c2215976ee29ce689d9efb8b30b2b785fe3835f7e963454f"
+        },
+        {
+          "path": "app/frontend/icons/symbols/person.svg",
+          "sha256": "5e03ce706116fc98c3e0b996a9bb4156ece1d245bf8e1f4ea8ad59d82a8f9a70"
+        },
+        {
+          "path": "app/frontend/icons/symbols/receipt.svg",
+          "sha256": "e673839ca7adb014ac28dda09f71bf4cd3bd5866ebac41113989e0385cb91798"
+        },
+        {
+          "path": "app/frontend/icons/symbols/schedule.svg",
+          "sha256": "c19e8fde579b530189952c2aacaae0a9c75c2a41fef33b6c4f0825992a64c68a"
+        },
+        {
+          "path": "app/frontend/icons/symbols/school.svg",
+          "sha256": "13d5b550922c3dc5b4d8557ea93eacbe9afe61cf6ab85cd0965b1d2db72741e2"
+        },
+        {
+          "path": "app/frontend/icons/symbols/science.svg",
+          "sha256": "76f80d01c451ebebfa2d235a203807420bd623f48b6a7ae3c82557cc42fd1387"
+        },
+        {
+          "path": "app/frontend/icons/symbols/search.svg",
+          "sha256": "3ba74fc48b457c89b1e37b9763dcefb68798c773f6d7dac972f6a7628693dd1d"
+        },
+        {
+          "path": "app/frontend/icons/symbols/settings.svg",
+          "sha256": "a55c70f38066fbfd5c09ae345c1decb13c7ec450e17c4f8b9fa012f44b6ee2b0"
+        },
+        {
+          "path": "app/frontend/icons/symbols/shopping-bag.svg",
+          "sha256": "abbe5999849c1aa59e23a837c363d856e8f3b3124da4697b4272afb9c307e079"
+        },
+        {
+          "path": "app/frontend/icons/symbols/shopping_cart.svg",
+          "sha256": "7273b5dac6baea7ef1fc7cbf2e3763e361d132ecf2d15702132e3d0dbcf5f37e"
+        },
+        {
+          "path": "app/frontend/icons/symbols/star.svg",
+          "sha256": "a4595cf792c194a624d58998a038635d888ec47159cc36b4e3ecd3aed3c3bb78"
+        },
+        {
+          "path": "app/frontend/icons/symbols/store.svg",
+          "sha256": "47b8998da13586cdb17e6311fd664e6ac708f74bd6ea0059f786d896cdda563f"
+        },
+        {
+          "path": "app/frontend/icons/symbols/table.svg",
+          "sha256": "39afd1c08c3c0a5ff5ffe2b92d400c93a291877d730389a15c2e9b09927fdbd3"
+        },
+        {
+          "path": "app/frontend/icons/symbols/tag.svg",
+          "sha256": "d5a19cee6ee4598b2bc9fb482537543e13ee32a400def7ffa825b2ce98464936"
+        },
+        {
+          "path": "app/frontend/icons/symbols/task.svg",
+          "sha256": "807f93351e7ff038713452147a1de4d6a6172770f682a16e4f3fe8053fba8522"
+        },
+        {
+          "path": "app/frontend/icons/symbols/tune.svg",
+          "sha256": "5bb427e1678ec727824044c7d8618fbfc01123fbb80d11256c1ca8bd9fe8e54e"
+        },
+        {
+          "path": "app/frontend/icons/symbols/user.svg",
+          "sha256": "d4fd0bf457b694bcac75753198f86354d5567097fc0d24d35ac451c5120c0780"
+        },
+        {
+          "path": "app/frontend/icons/symbols/warning.svg",
+          "sha256": "6dc1a5fa6a22b233a24a017e26b97bbed923f0996e4218da6fcaea473adf92af"
+        }
+      ],
+      "component": "Google Material Icons and Symbols",
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source_file": "material-symbols-Apache-2.0.txt"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt",
+          "sha256": "83769e9742c5dd96343b795687f61faff06eee58d69db9f37bc9276cdc88385b",
+          "source_file": "material-symbols-NOTICE.txt"
+        }
+      ],
+      "embedded_sources": [
+        {
+          "path": "app/frontend/core_components/navigation/main_tabs/tab_icon_library.js",
+          "sha256": "88b40baaab54d6712974fd70835039215cbc0f22012a96ad1735620e3c6eaad5"
+        },
+        {
+          "path": "app/frontend/templates/login.html",
+          "sha256": "490fbce52907cd3e515803f5819b02cc385e0ccd61a8a2b7e66aeaae7020f84e"
+        }
+      ],
+      "license": "Apache-2.0",
+      "source": "https://github.com/google/material-design-icons"
+    },
+    {
+      "assets": [
+        {
+          "path": "app/frontend/icons/general/table-tools-icon.svg",
+          "sha256": "83c7bc4dee30333a9276cdedf504d8a457d88e818c8bc65a1998f30393d5037d"
+        },
+        {
+          "path": "app/frontend/icons/symbols/car.svg",
+          "sha256": "7e967b3c1f35524531f23bd453197f49460420f5e653af14a23911ffa05e495a"
+        },
+        {
+          "path": "app/frontend/icons/symbols/euro.svg",
+          "sha256": "6087179c5061ea9f38534998013ca2e8e89dc216d4f5603e828e50e353b874d5"
+        },
+        {
+          "path": "app/frontend/icons/symbols/hourglass.svg",
+          "sha256": "2e4459fdbf7827650318231f609b22ab57c8b54d9215a021ba627a1d218ad4e2"
+        },
+        {
+          "path": "app/frontend/icons/symbols/palette.svg",
+          "sha256": "ac8319722134ce5a705c01ae668cd256a279217b7dc2391e912c84685dc75c73"
+        },
+        {
+          "path": "app/frontend/icons/symbols/ruler.svg",
+          "sha256": "65818abd523458944bbdf8703453aaf08a94f0e03295e345ef646a63d4a38ba2"
+        },
+        {
+          "path": "app/frontend/icons/symbols/wrench.svg",
+          "sha256": "43fb7b07230e9dd2f4966cd515fc178a3370ea4e8ebe8b2e37bec53089e06b80"
+        }
+      ],
+      "component": "Lucide Icons",
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt",
+          "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+          "source_file": "lucide-LICENSE.txt"
+        }
+      ],
+      "embedded_sources": [],
+      "license": "ISC",
+      "source": "https://github.com/lucide-icons/lucide"
+    }
+  ],
+  "asset_provenance": {
+    "path": "app/server_tools/licenses/asset_provenance.json",
+    "sha256": "6cb22493a8db1771be5e22d2bac80987b5220ed537fdc4e629b5b13dcc28be8e"
+  },
+  "combined_binary_license": "GPL-3.0-or-later",
+  "database_version": "9.6.7",
+  "dependencies": [
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-anthropics-anthropic-sdk-go-v1.19.0-faf6ca380dee-1-LICENSE",
+          "sha256": "8bf96984ff8bcfae7e48cae76a529e8a25317ba9e02abf7fd3cc64fdf95657a6",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/anthropics/anthropic-sdk-go",
+      "scope": "release-binary",
+      "version": "v1.19.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-chai2010-webp-v1.4.0-82ebf916fa54-1-LICENSE",
+          "sha256": "2f5fe632b0238f6435b12131521c689b8daf987f28e2b7a4eb14845c89c76cf5",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "github.com/chai2010/webp",
+      "scope": "release-binary",
+      "version": "v1.4.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-disintegration-imaging-v1.6.2-a519053e1eec-1-LICENSE",
+          "sha256": "2faf853d6762426a3aa267237de1d08ecd6afb981043569fb26293a575f2a971",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/disintegration/imaging",
+      "scope": "release-binary",
+      "version": "v1.6.2"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-google-uuid-v1.6.0-0bbb5769d1c9-1-LICENSE",
+          "sha256": "0a8d61ed3cbfd5312326e8126c31ce9c627a283adc99131b56896d29ada04b2d",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "github.com/google/uuid",
+      "scope": "release-binary",
+      "version": "v1.6.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-gorilla-securecookie-v1.1.2-69e1cb231393-1-LICENSE",
+          "sha256": "0b77fdea862f869ef4f201ac5649bdbd38ccb055c7f6454dffae9e2adb4941c1",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "github.com/gorilla/securecookie",
+      "scope": "release-binary",
+      "version": "v1.1.2"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-gorilla-sessions-v1.4.0-86715e2102b4-1-LICENSE",
+          "sha256": "c1a758e7cc513c560c7b117ddea26a949de0f6bc3fadbfb9ebaba68ff8998508",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "github.com/gorilla/sessions",
+      "scope": "release-binary",
+      "version": "v1.4.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-joho-godotenv-v1.5.1-d3250180717e-1-LICENCE",
+          "sha256": "4334bf49b7e1a6736ce1b21814d5cce392000204d059ee6a845eeb966e7a1e31",
+          "source_file": "LICENCE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/joho/godotenv",
+      "scope": "release-binary",
+      "version": "v1.5.1"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-lib-pq-v1.10.9-2f943f85f11a-1-LICENSE.md",
+          "sha256": "3e2d79d27727d59ab1c9752f57654733d6c8824936c22800594dccfe8864ec28",
+          "source_file": "LICENSE.md"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/lib/pq",
+      "scope": "release-binary",
+      "version": "v1.10.9"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-pgvector-pgvector-go-v0.2.3-02a5f6b317a4-1-LICENSE.txt",
+          "sha256": "8d899495773282daf11e0a1ff203967c71abda500e4fd246dc197d7b3ca37638",
+          "source_file": "LICENSE.txt"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/pgvector/pgvector-go",
+      "scope": "release-binary",
+      "version": "v0.2.3"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-sashabaranov-go-openai-v1.36.1-389af7d4b752-1-LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "Apache-2.0",
+      "name": "github.com/sashabaranov/go-openai",
+      "scope": "release-binary",
+      "version": "v1.36.1"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-tidwall-gjson-v1.18.0-6d44db203e82-1-LICENSE",
+          "sha256": "be83ad53208d03a9fe08c7fac231cabf79422989ef5706bff217bd35104ebf07",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/tidwall/gjson",
+      "scope": "release-binary",
+      "version": "v1.18.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-tidwall-match-v1.1.1-98ebc616cb44-1-LICENSE",
+          "sha256": "be83ad53208d03a9fe08c7fac231cabf79422989ef5706bff217bd35104ebf07",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/tidwall/match",
+      "scope": "release-binary",
+      "version": "v1.1.1"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-tidwall-pretty-v1.2.1-bbab3931ba1a-1-LICENSE",
+          "sha256": "0ca70311227fe097c662dece3f359e3317fa7f9d41f8d29eb45fc5135e216139",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/tidwall/pretty",
+      "scope": "release-binary",
+      "version": "v1.2.1"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-github.com-tidwall-sjson-v1.2.5-5bb783e1f317-1-LICENSE",
+          "sha256": "dbf5e2aa91aee5f19a1ce2cc7891e2ac37204b6461c0adc539426636e27b208e",
+          "source_file": "LICENSE"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "MIT",
+      "name": "github.com/tidwall/sjson",
+      "scope": "release-binary",
+      "version": "v1.2.5"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-crypto-v0.40.0-bb9f020887de-1-LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "source_file": "LICENSE"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-crypto-v0.40.0-bb9f020887de-2-PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "source_file": "PATENTS"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "golang.org/x/crypto",
+      "scope": "release-binary",
+      "version": "v0.40.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-1-LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "source_file": "LICENSE"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-2-PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "source_file": "PATENTS"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "golang.org/x/image",
+      "scope": "release-binary",
+      "version": "v0.43.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-1-LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "source_file": "LICENSE"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-2-PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "source_file": "PATENTS"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "golang.org/x/sys",
+      "scope": "release-binary",
+      "version": "v0.34.0"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-1-LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "source_file": "LICENSE"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-2-PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "source_file": "PATENTS"
+        }
+      ],
+      "ecosystem": "go-toolchain",
+      "license": "BSD-3-Clause",
+      "name": "Go runtime and standard library",
+      "scope": "release-binary",
+      "version": "go1.26.5"
+    },
+    {
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-1-COPYING",
+          "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+          "source_file": "COPYING"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-2-PATENTS",
+          "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c",
+          "source_file": "PATENTS"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-3-AUTHORS",
+          "sha256": "f9681940f35ab74858ac2717a511fa6237b67f65e99f457c21223e60a851c85a",
+          "source_file": "AUTHORS"
+        }
+      ],
+      "ecosystem": "go-vendored",
+      "license": "BSD-3-Clause",
+      "name": "github.com/chai2010/webp:libwebp",
+      "scope": "release-binary",
+      "version": "1.4.0"
+    }
+  ],
+  "filterest_app_version": "9.0.1",
+  "first_party_assets": [
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/dist/auth-tour/platform-card-view.jpg",
+      "sha256": "489854e52191fe712415c51ff44b6e35bbe5d7f2e8d84cd95cb62fc74cef21d1"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/dist/auth-tour/platform-filterbar.jpg",
+      "sha256": "dd725adadca6eab5313726c85b4b908ddc8a049f130a0eebf22a5613e588fc65"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/dist/auth-tour/platform-full-shell.jpg",
+      "sha256": "d28187b2d0d2e1ff2f270fec003ec161c5dc68b3c246f0f20200d16f680e2670"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/dist/auth-tour/platform-navbar.jpg",
+      "sha256": "d083b73374ac6fc6b3fc41b38d4eab1e59090f743f8978f942d4f9f6557a718b"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/dist/auth-tour/platform-table-view.jpg",
+      "sha256": "d8bc5fb850145db78c047a7fdfdcccfeb3cd9d976c14fbf5e88ac53ed4368f2a"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/favicon.ico",
+      "sha256": "b3e8e1c3bba6fdc19e275caa17e97d2c3832d247fad7f124eb2bd9a84a800955"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/favicon4E.png",
+      "sha256": "fee9220d7d0b8bda6e3a093159e8745c7cd550ff18661ed5b8b03dbfc6959019"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/favicon4ER.png",
+      "sha256": "0e8535c4a89f55acdfea40ed73664db57770c87909aa7ff42abf69a6a79c9bea"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/favicon4S.png",
+      "sha256": "ac34524cbcaf4b253d11e4f001a002c791538dbaca0cf3a02469e2b599142cad"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/favicon4SL.png",
+      "sha256": "27cbd2030ee927bc1fd7a6a30f907a2200c53315eae4c8dba624a5d95c833706"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/card-visibility-checkbox-unchecked-icon.svg",
+      "sha256": "4b89cfad43d350df34ae83912e53d41c8fb8a3d5e5f081079c24e3d0d7282b5c"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-checkbox-ambiguous-icon.svg",
+      "sha256": "8366973113453020da6c67f66627aadc6525242e43f3189b542b8090434c1676"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-checkbox-checked-icon.svg",
+      "sha256": "e8938c3d45ffc942e86a1805b8ec3b0169c314f508e93499eb727be7213f6f2d"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-edit-icon.svg",
+      "sha256": "7ffb5fb29047b45fd48bc9385ab33285cf8643cd78e9b6bdc6c9d43b3531d44d"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-global-icon.svg",
+      "sha256": "62b7e87b6e6a4134d79b84019eab83c52e22564a88a89cab1a59bbf3bad0675e"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-table-icon.svg",
+      "sha256": "708a2be66a3d2fb0839116d21253bce4ffedcf3d0629377772b4b2f623dcac99"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-ui-icon.svg",
+      "sha256": "eedf8b437a1e224715ed0a96f3ff013b395b3d3aee52a9bf124a0610e7590b99"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/admin/permission-user-icon.svg",
+      "sha256": "d5b5997bd01ef1d3b3a7bb7b70197fed10b225eabb332a7ed871e35a3509231e"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/chat-message-icon.svg",
+      "sha256": "d00d04f389fed92e2703b278159f595ad905c01ac95462358aa158bd83ad8536"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/chevron-down-icon.svg",
+      "sha256": "25f6226044596ae1d18f442d3350582c9d0d9a62ab3b9c17c37e0ac5759ca766"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/filter-list-icon.svg",
+      "sha256": "1d8cb800428950e289a562d96d91e862494fe4efc537975a03fea7c984bd8f23"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/filterbar-toggle-icon.svg",
+      "sha256": "9f01946750cb412f5d38df332aaba0e46ba39ef2b617a27c103297e450fe65a9"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/minimize-panel-icon.svg",
+      "sha256": "b18122cadd6029837687c1bf0c7fa1e27081729dad344774af45d6d50005b138"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/record-next-icon.svg",
+      "sha256": "108c7d6cfc3b28185cb03f5681ec36a80af588339286de5a10be4985e0e4ce9c"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/record-previous-icon.svg",
+      "sha256": "6866547a75d3ed406baa61c1894c75356a4e077b1caf47b3e6f0e33de7fb41a2"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/view-palette-icon.svg",
+      "sha256": "b5408c78237e806f953ee806db230f3f078593c2a3a19ee5cd67d231322ecde1"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/general/visible-fields-icon.svg",
+      "sha256": "d08e81a19ebb15413f94f160bf6d3642fe0de1d2a14c212996b57af1e95cb2d4"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/navigation/theme-dark-icon.svg",
+      "sha256": "000148c027dee05c9e278d48eb55c759150946d8c1783275de102488cb91768c"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/navigation/theme-locked-dark-icon.svg",
+      "sha256": "e7d8e0ff4bdc5a070c373674677c354cff805334b25362ddbf0baddb4717269b"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/navigation/theme-locked-light-icon.svg",
+      "sha256": "5b5c7d987c7de2722abd4946fe96dcda1a0ed6cd42deda33e30ccca69f7be041"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/site_favicons/site-initial-e-v1-16.png",
+      "sha256": "05aa55fc11d82b1345bad7d22febe76efd6755c613cb78a60d27227f0f2bcda4"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/site_favicons/site-initial-es-v1-16.png",
+      "sha256": "ec41e0ecd35509c200456cac33748df68dbc997c2def738f8a7bfcdf3d4d5e52"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/site_favicons/site-initial-f-v1-16.png",
+      "sha256": "6c2efd7f4f77c8ac63de6067fea6f0dd2ea732be7c466a67fa43c50992d0c739"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/site_favicons/site-initial-s-v1-16.png",
+      "sha256": "ac34524cbcaf4b253d11e4f001a002c791538dbaca0cf3a02469e2b599142cad"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/icons/symbols/bolt-pattern.svg",
+      "sha256": "9d6c4ad655b76ef950ad13c896dc90d5e1c933e8778dfc4d17ccb5968b17bc72"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/imageERR.png",
+      "sha256": "ae46743f7a6dedca95035d0fe9a0994f30f06f95c1da2a18295d14732ee350d1"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/public/auth-tour/platform-card-view.jpg",
+      "sha256": "489854e52191fe712415c51ff44b6e35bbe5d7f2e8d84cd95cb62fc74cef21d1"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/public/auth-tour/platform-filterbar.jpg",
+      "sha256": "dd725adadca6eab5313726c85b4b908ddc8a049f130a0eebf22a5613e588fc65"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/public/auth-tour/platform-full-shell.jpg",
+      "sha256": "d28187b2d0d2e1ff2f270fec003ec161c5dc68b3c246f0f20200d16f680e2670"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/public/auth-tour/platform-navbar.jpg",
+      "sha256": "d083b73374ac6fc6b3fc41b38d4eab1e59090f743f8978f942d4f9f6557a718b"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/public/auth-tour/platform-table-view.jpg",
+      "sha256": "d8bc5fb850145db78c047a7fdfdcccfeb3cd9d976c14fbf5e88ac53ed4368f2a"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/frontend/reusable_components/vanilla_dropdown/chevron.svg",
+      "sha256": "32d5f1b8148efdd827b586e59399ce876ce00815b6994da6bba75b80bec7d8e3"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png",
+      "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/docs/ready-to-release.png",
+      "sha256": "6b09ffdc1c42ba04b4467ce20a2df1476f1c17895e5922c56458f4a6ac7d252f"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/docs/start-here.png",
+      "sha256": "eb426eed32b17fee2bdf54ba1d240f4048e58e8871106f5ba7ceba843474d02d"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-1000.jpg",
+      "sha256": "230853cba68e3a12bdf6376051653674cfeea64a79ff0d18089577bcec5edf3f"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-2160.jpg",
+      "sha256": "9dd5d43a4fdf893187884cd955ffde813e9a6d2c76ea4c6de54c37f95d2d7667"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-300.jpg",
+      "sha256": "875585e8df3a5460b25935709f313be163f736d7ae8be5de53f98715ecde5a27"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-original.jpg",
+      "sha256": "4dccd979522e43cd9f8ca826a1cdb9b81d16e7f74baf4a147c359c4f7495e2d2"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-1000.jpg",
+      "sha256": "25a600d92d3fcf45d2ee944cb53fd2909b1c58eff670372bcc9839d35c3846ba"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-2160.jpg",
+      "sha256": "75a6f9f512ada649b6d3a20cadce3441e9b68749ff5ba38ddd55cba810b206a2"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-300.jpg",
+      "sha256": "1be258205cb6e4f46a0bb053db7ae1d1297ee72528bb1d3df14f3b80cdec3f90"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-original.jpg",
+      "sha256": "14436dea18d4bc8ce562363edaa0bf83d07347a3258f5e36304f7c1e9772af06"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-1000.jpg",
+      "sha256": "41c5419a4b03b7377a4af8d62bca95414c83d735a19ef4806670b4dd5f23556e"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-2160.jpg",
+      "sha256": "53e9a67b3a3f2b75bec1204f1c2359a3d580d9408d9d79590947f91f33ee0910"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-300.jpg",
+      "sha256": "9ecf9367f0ced65a6699cb18485a654a55ecbfe57981d1c065963e35e3aebb51"
+    },
+    {
+      "license": "GPL-2.0-or-later",
+      "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-original.jpg",
+      "sha256": "f8f32d59c38a1635c0a0464cb4a3f203e85d7be3f8ab149c263389b5f559b563"
+    }
+  ],
+  "go_metadata_source": "GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -tags 'netgo osusergo' -deps metadata plus compiled vendored components and Go toolchain",
+  "npm_metadata_source": "package-lock.json production dependency graph",
+  "project_source_license": "GPL-2.0-or-later",
+  "schema_version": 2,
+  "unresolved": []
+}

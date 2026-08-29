@@ -138,7 +138,7 @@
 	background-image: var(--dataset-background-image);
 	background-position: center top;
 	background-repeat: no-repeat;
-	background-size: 100% auto;
+	background-size: cover;
 	clip-path: inset(var(--dataset-background-image-blur, 0));
 	content: '';
 	filter: blur(var(--dataset-background-image-blur, 0));

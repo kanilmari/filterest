@@ -6,6 +6,16 @@ Its canonical public source is maintained as one complete subtree and mirrored
 to the public Filterest repository. This notice applies only to files included
 in that public source.
 
+Filterest's own source is licensed under `GPL-2.0-or-later`. Distributed
+Filterest binaries combine that code with Apache-2.0 components and are
+therefore conveyed under GPL version 3 or any later version. Complete retained
+third-party license and notice texts are listed in `THIRD_PARTY_NOTICES.md` and
+stored under `THIRD_PARTY_LICENSES/`. The complete GPL version 3 text supplied
+with those binaries is retained at `app/server_tools/licenses/GPL-3.0.txt`.
+The Linux administrator binaries dynamically link the supported host's glibc
+and libm libraries; those operating-system libraries are not copied into the
+release assets.
+
 This repository does not grant rights to non-public source history, private
 apps, private deployments, private API keys, customer data, or non-exported
 assets.

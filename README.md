@@ -175,7 +175,9 @@ The setup command asks which kind of installation you need:
 
 - **Browser administration** is the recommended choice for normal use. It
   installs PostgreSQL 16, PostGIS, pgvector, and a checksum-verified Filterest
-  binary. It does not install Go, Node.js, npm packages, or browser-test tools.
+  binary. The binary uses the supported host's glibc 2.34-or-newer C runtime;
+  no glibc or compiler runtime is copied into the release asset. It does not
+  install Go, Node.js, npm packages, or browser-test tools.
 - **Development and administration** installs the same runtime plus Go 1.26.5,
   Node.js 24, source dependencies, and the Chromium browser used by the
   automated UI tests.
@@ -342,7 +344,7 @@ private vulnerability-reporting channel.
 
 ## License
 
-Filterest is licensed under the GNU General Public License version 2
-(`GPL-2.0-only`). See `LICENSE` and
+Filterest is licensed under the GNU General Public License version 2 or, at
+your option, any later version (`GPL-2.0-or-later`). See `LICENSE` and
 `app/docs/publication/PUBLICATION_CHECKLIST.md`. The source license does not grant
 trademark rights in the `FILTEREST` name or logo.

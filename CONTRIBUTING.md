@@ -6,7 +6,7 @@ source.
 
 Filterest is intended to be owner-led open source rather than a
 contribution-driven or contribution-operated project. The public source is made
-available for inspection, use under the GPLv2 license, reproducible bug
+available for inspection, use under the GPL version 2-or-later license, reproducible bug
 reports, setup feedback, and carefully scoped public review. It is not intended
 to become a community-governed development workflow.
 

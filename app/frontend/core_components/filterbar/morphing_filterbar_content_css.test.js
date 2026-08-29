@@ -112,6 +112,9 @@ describe('morphing filterbar content CSS', () => {
         expect(css).toMatch(
             /clip-path: inset\(var\(--dataset-background-image-blur, 0(?:px)?\)\)/
         );
+        expect(css).toContain('background-position: center top');
+        expect(css).toContain('background-repeat: no-repeat');
+        expect(css).toContain('background-size: cover');
     });
 
     test('keeps the compact palette inside the visible area and scrollable', () => {

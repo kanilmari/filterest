@@ -148,6 +148,7 @@
     padding-left: 0;
     padding-right: 0;
     width: 71px;
+    border: 1px solid var(--border_color);
 }
 
 .language-button-icon {

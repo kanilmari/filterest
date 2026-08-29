@@ -244,6 +244,22 @@ architecture_name() {
     esac
 }
 
+# The reviewed admin release binaries intentionally use the host C runtime so
+# glibc and compiler-runtime bytes are not silently redistributed inside them.
+# Keep this floor aligned with the release builder's ELF compatibility gate.
+require_admin_binary_glibc() {
+    local current=""
+
+    [[ "$PROFILE" == "admin" ]] || return 0
+    command -v getconf >/dev/null 2>&1 || \
+        die "the prebuilt admin profile requires a glibc-based Linux host"
+    current="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')"
+    [[ "$current" =~ ^[0-9]+\.[0-9]+$ ]] || \
+        die "could not verify the host glibc version required by the prebuilt admin binary"
+    [[ "$(printf '%s\n' "$current" '2.34' | sort -V | head -n 1)" == '2.34' ]] || \
+        die "the prebuilt admin binary requires glibc 2.34 or newer (found $current)"
+}
+
 install_go_toolchain_if_needed() {
     local required_version=""
     local current_version=""
@@ -678,6 +694,7 @@ ensure_admin_binary() {
     if [[ "$PROFILE" != "admin" ]]; then
         return 0
     fi
+    require_admin_binary_glibc
     if [[ -f "$APP_VERSION_FILE" ]]; then
         version="$(tr -d '[:space:]' < "$APP_VERSION_FILE")"
     else

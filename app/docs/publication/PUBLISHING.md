@@ -100,8 +100,11 @@ Ubuntu-family systems the one-time ARM64 prerequisite is:
 sudo apt install gcc-aarch64-linux-gnu
 ```
 
-The resulting binaries keep WebP support but are statically linked, so an
-administrator does not inherit the maintainer machine's Linux library version.
+The resulting binaries keep WebP support and dynamically link only the
+reviewed host glibc/libm surface. The builder rejects binaries requiring newer
+than glibc 2.34, verifies both architectures' embedded Go version and module
+set against the retained third-party manifest, and the admin installer checks
+the same glibc floor before using a prebuilt binary.
 
 ## Updating Later Releases
 

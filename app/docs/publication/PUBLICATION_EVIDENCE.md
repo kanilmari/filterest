@@ -3,8 +3,8 @@
 This file is generated from the Filterest public-slice candidate flow.
 It is evidence for review, not approval to publish.
 
-- Generated at: `2026-08-29T08:11:37Z`
-- Release source commit used by the generator: `6ed85e1518b292058d9e342de034c004f2486fa4`
+- Generated at: `2026-08-29T19:08:27Z`
+- Release source commit used by the generator: `14b0155f4d1e3670d7b7445bc9d98c02170f956d`
 - Generated Filterest commit: this repository commit; run `git log -1 --oneline`
 - Filterest app version: `9.0.1`
 - Database version: `9.6.7`
@@ -18,7 +18,7 @@ It is evidence for review, not approval to publish.
 | Launch-facing public docs wording review | `app/docs/publication/PUBLICATION_DOCS_REVIEW.md` |
 | Publication governance docs review | `app/docs/publication/PUBLICATION_GOVERNANCE_REVIEW.md` |
 | Ownership and trademark notice | `NOTICE`; the governance review verifies the accepted Filterest Oy ownership, distinct-name, and allowed-use boundaries. |
-| Public source license | `LICENSE` and package metadata declare GPLv2 / `GPL-2.0-only`. |
+| Public source license | `LICENSE` and package metadata declare GPL version 2 or later / `GPL-2.0-or-later`; binaries that include Apache-2.0 components are conveyed under GPL version 3 or later. |
 | Third-party notice inventory | `THIRD_PARTY_NOTICES.md` |
 | Third-party notice inventory review | `app/docs/publication/THIRD_PARTY_NOTICE_REVIEW.md` |
 | Public app/DB compatibility | `app/server_tools/versioning/app_db_compatibility.jsonl` and `app/server_tools/versioning/schema_snapshots/db-9.6.7.sql` |

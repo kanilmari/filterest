@@ -1,0 +1,10 @@
+Material Symbols
+
+Copyright Google LLC.
+
+The bundled Material Symbols SVG paths are provided under the Apache License,
+Version 2.0. The complete license text is retained in
+material-symbols-Apache-2.0.txt.
+
+Upstream project: https://github.com/google/material-design-icons
+Official licensing guide: https://developers.google.com/fonts/docs/material_symbols
