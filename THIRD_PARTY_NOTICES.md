@@ -11,7 +11,7 @@ Complete upstream legal and attribution document bytes are retained under
 - Database version: `9.6.7`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `6ba312efcda11623a2822738356d34264cca49a12905bd756a7ee3e3eee1c6ab`
+- License bundle manifest SHA-256: `c2e37b2bd3ae3db625b998aa6d16c128d7c48fb87f485023fb67fd90e4de9fd4`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -tags 'netgo osusergo' -deps metadata plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - compiled Go modules listed: `17`

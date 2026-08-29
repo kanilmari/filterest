@@ -367,7 +367,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "6cb22493a8db1771be5e22d2bac80987b5220ed537fdc4e629b5b13dcc28be8e"
+    "sha256": "b6314021d0b5433ca161af121261b7794dcf3fdc171215f9ad6492196edc14d9"
   },
   "combined_binary_license": "GPL-3.0-or-later",
   "database_version": "9.6.7",
@@ -884,77 +884,77 @@
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png",
-      "sha256": "77779de3984a98e3fe7b6f0d01e3224165f707ab20796706c6b5221740dc6d22"
+      "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/docs/ready-to-release.png",
-      "sha256": "6b09ffdc1c42ba04b4467ce20a2df1476f1c17895e5922c56458f4a6ac7d252f"
+      "sha256": "c054dd219ef69cbf8b8f77652072bf5a60a80625c30060dc4c72157dd35dc0ec"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/docs/start-here.png",
-      "sha256": "eb426eed32b17fee2bdf54ba1d240f4048e58e8871106f5ba7ceba843474d02d"
+      "sha256": "3d85bfdba3b64bbf053e1b2bcfa85c15d9dc642c2a1f0ec3a6d59154ab29ab6c"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-1000.jpg",
-      "sha256": "230853cba68e3a12bdf6376051653674cfeea64a79ff0d18089577bcec5edf3f"
+      "sha256": "fec7802d55206dc5fd5ca74e26950ab76143c20a70af485bd6da0a1b1d0f6048"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-2160.jpg",
-      "sha256": "9dd5d43a4fdf893187884cd955ffde813e9a6d2c76ea4c6de54c37f95d2d7667"
+      "sha256": "abb61fa5105bcfe7a7c735e6d209ecb60bc364f3a4ebe344b256a21f4086bd48"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-300.jpg",
-      "sha256": "875585e8df3a5460b25935709f313be163f736d7ae8be5de53f98715ecde5a27"
+      "sha256": "82b3e9511b0ac0c981ba91c3a8ec405e8770b66fcd92ef47a5273e8ca07e05a8"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-original.jpg",
-      "sha256": "4dccd979522e43cd9f8ca826a1cdb9b81d16e7f74baf4a147c359c4f7495e2d2"
+      "sha256": "9281cd1ac4edb02e6c233dead55ea8d0986fc4f062e098c6ef0e29023b72a578"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-1000.jpg",
-      "sha256": "25a600d92d3fcf45d2ee944cb53fd2909b1c58eff670372bcc9839d35c3846ba"
+      "sha256": "c9d0742afd8b17bbfeadc0e00bf0b724ceeaabf104af53fd9614f723e47ec3bc"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-2160.jpg",
-      "sha256": "75a6f9f512ada649b6d3a20cadce3441e9b68749ff5ba38ddd55cba810b206a2"
+      "sha256": "2b02918b8dbd1a42f6bd65935a06c2e62e2e4a915dd91a0b047d4fb85c4fd6f5"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-300.jpg",
-      "sha256": "1be258205cb6e4f46a0bb053db7ae1d1297ee72528bb1d3df14f3b80cdec3f90"
+      "sha256": "e31de058265630753db73e567111944986c4b20ce26e3e8285b808d6091b8dfa"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-original.jpg",
-      "sha256": "14436dea18d4bc8ce562363edaa0bf83d07347a3258f5e36304f7c1e9772af06"
+      "sha256": "bda89535047c297e90e3a6163c15519ef2a6ff76329038327a9ff328f7b32419"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-1000.jpg",
-      "sha256": "41c5419a4b03b7377a4af8d62bca95414c83d735a19ef4806670b4dd5f23556e"
+      "sha256": "ddf7e70dd12bfd2867a2854dd03c86e40c9a5eecbfb8777a4f33243e3d973c79"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-2160.jpg",
-      "sha256": "53e9a67b3a3f2b75bec1204f1c2359a3d580d9408d9d79590947f91f33ee0910"
+      "sha256": "d2c3550fb4673dbb013fb9ac32f1467ba368e604281fa60b405cb78323e9fb01"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-300.jpg",
-      "sha256": "9ecf9367f0ced65a6699cb18485a654a55ecbfe57981d1c065963e35e3aebb51"
+      "sha256": "b60286031256864f507d44f11c497cb15a4b30036ebceeac377cb91d4fda6f86"
     },
     {
       "license": "GPL-2.0-or-later",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-original.jpg",
-      "sha256": "f8f32d59c38a1635c0a0464cb4a3f203e85d7be3f8ab149c263389b5f559b563"
+      "sha256": "adca8974a9d808d286286dc6529024d8aa2b3837c417224008f69805cd32b113"
     }
   ],
   "go_metadata_source": "GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -tags 'netgo osusergo' -deps metadata plus compiled vendored components and Go toolchain",
