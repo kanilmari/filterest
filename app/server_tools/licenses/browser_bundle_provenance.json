@@ -1,0 +1,91 @@
+{
+  "components": [
+    {
+      "documents": [
+        {
+          "path": "esbuild-0.25.4-LICENSE.md",
+          "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681"
+        }
+      ],
+      "integrity": "sha512-8pgjLUcUjcgDg+2Q4NYXnPbo/vncAY4UmyaCm0jZevERqCHZIaWwdJHkf8XQtu4AxSKCdvrUbT0XUr1IdZzI8Q==",
+      "installed_license_path": "LICENSE.md",
+      "license": "MIT",
+      "markers": [
+        {
+          "minimum_occurrences": 1,
+          "needle": "Cannot add the same private member more than once"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "access private method"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "instanceof WeakSet"
+        }
+      ],
+      "name": "esbuild",
+      "package_path": "node_modules/esbuild",
+      "required_by": "node_modules/vite",
+      "source": "https://github.com/evanw/esbuild",
+      "version": "0.25.4"
+    },
+    {
+      "documents": [
+        {
+          "path": "rollup-4.60.4-LICENSE.md",
+          "sha256": "fa1bd040c5bdeefe65b3821cebf474f2733ce65df13089bd151dda1778e62fe8"
+        }
+      ],
+      "integrity": "sha512-WHeFSbZYsPu3+bLoNRUuAO+wavNlocOPf3wSHTP7hcFKVnJeWsYlCDbr3mTS14FCizf9ccIxXA8sGL8zKeQN3g==",
+      "installed_license_path": "LICENSE.md",
+      "license": "MIT",
+      "markers": [
+        {
+          "minimum_occurrences": 1,
+          "needle": "Object.freeze(Object.defineProperty({__proto__:null,"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "Symbol.toStringTag,{value:\"Module\"}"
+        }
+      ],
+      "name": "rollup",
+      "package_path": "node_modules/rollup",
+      "required_by": "node_modules/vite",
+      "source": "https://github.com/rollup/rollup",
+      "version": "4.60.4"
+    },
+    {
+      "documents": [
+        {
+          "path": "vite-6.4.3-LICENSE.md",
+          "sha256": "008938a3441801ca3960f8e3ccb4c0738e7996442a53063141d57d3769a7344d"
+        }
+      ],
+      "integrity": "sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==",
+      "installed_license_path": "LICENSE.md",
+      "license": "MIT",
+      "markers": [
+        {
+          "minimum_occurrences": 1,
+          "needle": "__vite__mapDeps"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "vite:preloadError"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "Unable to preload CSS for"
+        }
+      ],
+      "name": "vite",
+      "package_path": "node_modules/vite",
+      "required_by": "",
+      "source": "https://github.com/vitejs/vite",
+      "version": "6.4.3"
+    }
+  ],
+  "schema_version": 1
+}

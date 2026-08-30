@@ -200,8 +200,8 @@ func TestLoginHandlerRendersStandalonePageWhenBrowsingIsOptional(t *testing.T) {
 	if loc := rr.Header().Get("Location"); loc != "" {
 		t.Fatalf("unexpected redirect Location = %q", loc)
 	}
-	if got := rr.Body.String(); got != "standalone|back|tourshots|localhost" {
-		t.Fatalf("body = %q, want %q", got, "standalone|back|tourshots|localhost")
+	if got := rr.Body.String(); got != "standalone|back|notourshots|localhost" {
+		t.Fatalf("body = %q, want %q", got, "standalone|back|notourshots|localhost")
 	}
 }
 
@@ -221,8 +221,8 @@ func TestLoginHandlerRendersStandalonePageWithRedirectParamWhenBrowsingIsOptiona
 	if loc := rr.Header().Get("Location"); loc != "" {
 		t.Fatalf("unexpected redirect Location = %q", loc)
 	}
-	if got := rr.Body.String(); got != "standalone|back|tourshots|localhost" {
-		t.Fatalf("body = %q, want %q", got, "standalone|back|tourshots|localhost")
+	if got := rr.Body.String(); got != "standalone|back|notourshots|localhost" {
+		t.Fatalf("body = %q, want %q", got, "standalone|back|notourshots|localhost")
 	}
 }
 
@@ -282,19 +282,20 @@ func TestLoginHandlerKeepsPublicReturnButtonOutOfFragment(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if got := rr.Body.String(); got != "fragment|noback|tourshots|localhost" {
-		t.Fatalf("body = %q, want %q", got, "fragment|noback|tourshots|localhost")
+	if got := rr.Body.String(); got != "fragment|noback|notourshots|localhost" {
+		t.Fatalf("body = %q, want %q", got, "fragment|noback|notourshots|localhost")
 	}
 }
 
-func TestLoginHandlerKeepsFilterestTourScreenshotsHiddenWhenEnvEnablesThem(t *testing.T) {
+func TestLoginHandlerKeepsTourScreenshotsHiddenWhenEnvEnablesThem(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "prod")
 	t.Setenv("LOGIN_PAGE_TOUR_SCREENSHOTS_ENABLED", "true")
+	t.Setenv("SITE_NAME", "easelect.com")
 	prepareLoginHandlerSessionStore(t)
 	setupLoginHandlerMockDB(t, true)
 	setupLoginHandlerFrontend(t)
 
-	req := httptest.NewRequest(http.MethodGet, "https://filterest.com/login", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://easelect.com/login", nil)
 	rr := httptest.NewRecorder()
 
 	LoginHandler(rr, req)
@@ -302,8 +303,8 @@ func TestLoginHandlerKeepsFilterestTourScreenshotsHiddenWhenEnvEnablesThem(t *te
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if got := rr.Body.String(); got != "standalone|noback|notourshots|filterest.com" {
-		t.Fatalf("body = %q, want %q", got, "standalone|noback|notourshots|filterest.com")
+	if got := rr.Body.String(); got != "standalone|noback|notourshots|easelect.com" {
+		t.Fatalf("body = %q, want %q", got, "standalone|noback|notourshots|easelect.com")
 	}
 }
 

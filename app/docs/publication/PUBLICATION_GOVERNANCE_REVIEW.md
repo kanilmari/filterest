@@ -3,8 +3,7 @@
 - Target: `generated Filterest export tree`
 - Required governance files checked: `6`
 - Resolved license P0 gates checked: `2`
-- Resolved owner P0 gates checked: `3`
-- Blocking owner/evidence P0 gates checked: `1`
+- Resolved owner P0 gates checked: `4`
 - Resolved P0/P1 evidence gates checked: `7`
 - Stable repeat-evidence gates checked: `4`
 - Manual-final publication gates checked: `2`
@@ -24,7 +23,7 @@ PASS
 - SECURITY.md matches the approved support@filterest.fi private-disclosure decision.
 - CONTRIBUTING.md matches the approved owner-led/no-routine-public-PR posture.
 - NOTICE matches the approved Filterest ownership, trademark, distinct-name, and allowed-use boundaries.
-- THIRD_PARTY_NOTICES.md and its manifest-bound license bundle remain blocked until their exact final bytes receive owner/legal acceptance.
+- THIRD_PARTY_NOTICES.md and its manifest-bound license bundle retain exact owner-accepted hashes; final readiness fails if either changes.
 - Confirm public docs do not claim supported rollback beyond manual backup-based recovery.
 
 This deterministic report verifies recorded decisions and local evidence but does not perform the gated remote publication.

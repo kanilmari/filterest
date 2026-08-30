@@ -33,26 +33,12 @@ var (
 	configuredFaviconReader  = backend.ConfiguredFaviconFile
 )
 
-// shouldShowLoginTourScreenshots reads the login tour screenshot toggle from env.
-// Between the browser-facing site name, instance .env, and login template it
-// decides whether the tour tab should include screenshot cards.
-// Why: public Filterest pages must not claim screenshot assets exist before the
-// public tour media is ready, while the shared gallery infrastructure remains.
-func shouldShowLoginTourScreenshots(siteName string) bool {
-	normalizedSiteName := strings.ToLower(strings.TrimSpace(siteName))
-	if strings.Contains(normalizedSiteName, "filterest") {
-		return false
-	}
-
-	raw := strings.TrimSpace(strings.ToLower(os.Getenv("LOGIN_PAGE_TOUR_SCREENSHOTS_ENABLED")))
-	switch raw {
-	case "", "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
+// shouldShowLoginTourScreenshots keeps the dormant gallery contract available.
+// Screenshot presentation is intentionally disabled for every site until new
+// synthetic captures have passed content, authorship, and publication review.
+// Why: an environment toggle must not re-enable withdrawn media by accident.
+func shouldShowLoginTourScreenshots(_ string) bool {
+	return false
 }
 
 // resolveLoginSiteName returns the public name shown on the login page.

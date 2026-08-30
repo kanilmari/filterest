@@ -59,8 +59,8 @@ test.describe('L4 — Forced Login Landing', () => {
 
     await expect(page.locator('[data-testid="login-page-tab-tour"]')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[data-testid="login-page-panel-tour"]')).toBeVisible();
-    await expect(page.locator('[data-testid="login-tour-gallery"]')).toBeVisible();
-    await expect(page.locator('[data-testid^="login-tour-shot-"]')).toHaveCount(5);
+    await expect(page.locator('[data-testid="login-tour-gallery"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="login-tour-shot-"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="login-form"]')).toBeHidden();
   });
 

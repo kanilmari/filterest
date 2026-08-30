@@ -1,9 +1,34 @@
 {
   "components": {
-    "Filterest first-party assets": {
+    "Filterest brand and fallback images": {
+      "author": "Filterest project contributors",
       "documents": [],
       "license": "GPL-2.0-or-later",
-      "source": "Filterest Oy original project assets"
+      "party": "first-party",
+      "publication_rights_basis": "Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30.",
+      "rights_holder": "Filterest project contributors",
+      "rights_review": "owner-attested",
+      "source": "Original Filterest brand, favicon, and fallback graphics"
+    },
+    "Filterest demo placeholder images": {
+      "author": "Filterest human project owner",
+      "documents": [],
+      "license": "GPL-2.0-or-later",
+      "party": "first-party",
+      "publication_rights_basis": "The author created these neutral text placeholders in Microsoft Paint without third-party source imagery and approved their redistribution with Filterest under GPL-2.0-or-later on 2026-08-30; no separate attribution is requested.",
+      "rights_holder": "Filterest human project owner",
+      "rights_review": "owner-attested",
+      "source": "Original neutral text placeholder images created in Microsoft Paint"
+    },
+    "Filterest original interface SVGs": {
+      "author": "Filterest project contributors",
+      "documents": [],
+      "license": "GPL-2.0-or-later",
+      "party": "first-party",
+      "publication_rights_basis": "Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30.",
+      "rights_holder": "Filterest project contributors",
+      "rights_review": "owner-attested",
+      "source": "Original SVG geometry maintained in Filterest source"
     },
     "Google Material Icons and Symbols": {
       "documents": [
@@ -11,6 +36,7 @@
         "material-symbols-NOTICE.txt"
       ],
       "license": "Apache-2.0",
+      "party": "third-party",
       "source": "https://github.com/google/material-design-icons"
     },
     "Lucide Icons": {
@@ -18,6 +44,7 @@
         "lucide-LICENSE.txt"
       ],
       "license": "ISC",
+      "party": "third-party",
       "source": "https://github.com/lucide-icons/lucide"
     }
   },
@@ -29,79 +56,49 @@
       "sha256": "88b40baaab54d6712974fd70835039215cbc0f22012a96ad1735620e3c6eaad5"
     },
     {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/dist/auth-tour/platform-card-view.jpg",
-      "sha256": "489854e52191fe712415c51ff44b6e35bbe5d7f2e8d84cd95cb62fc74cef21d1"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/dist/auth-tour/platform-filterbar.jpg",
-      "sha256": "dd725adadca6eab5313726c85b4b908ddc8a049f130a0eebf22a5613e588fc65"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/dist/auth-tour/platform-full-shell.jpg",
-      "sha256": "d28187b2d0d2e1ff2f270fec003ec161c5dc68b3c246f0f20200d16f680e2670"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/dist/auth-tour/platform-navbar.jpg",
-      "sha256": "d083b73374ac6fc6b3fc41b38d4eab1e59090f743f8978f942d4f9f6557a718b"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/dist/auth-tour/platform-table-view.jpg",
-      "sha256": "d8bc5fb850145db78c047a7fdfdcccfeb3cd9d976c14fbf5e88ac53ed4368f2a"
-    },
-    {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/favicon.ico",
       "sha256": "b3e8e1c3bba6fdc19e275caa17e97d2c3832d247fad7f124eb2bd9a84a800955"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/favicon4E.png",
       "sha256": "fee9220d7d0b8bda6e3a093159e8745c7cd550ff18661ed5b8b03dbfc6959019"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/favicon4ER.png",
       "sha256": "0e8535c4a89f55acdfea40ed73664db57770c87909aa7ff42abf69a6a79c9bea"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/favicon4S.png",
       "sha256": "ac34524cbcaf4b253d11e4f001a002c791538dbaca0cf3a02469e2b599142cad"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/favicon4SL.png",
       "sha256": "27cbd2030ee927bc1fd7a6a30f907a2200c53315eae4c8dba624a5d95c833706"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/card-visibility-checkbox-unchecked-icon.svg",
       "sha256": "4b89cfad43d350df34ae83912e53d41c8fb8a3d5e5f081079c24e3d0d7282b5c"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-checkbox-ambiguous-icon.svg",
       "sha256": "8366973113453020da6c67f66627aadc6525242e43f3189b542b8090434c1676"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-checkbox-checked-icon.svg",
       "sha256": "e8938c3d45ffc942e86a1805b8ec3b0169c314f508e93499eb727be7213f6f2d"
@@ -113,31 +110,31 @@
       "sha256": "42da75291c1aa4f010f218905a4a52288b0412f513dc4d7fac171299b8c7220c"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-edit-icon.svg",
       "sha256": "7ffb5fb29047b45fd48bc9385ab33285cf8643cd78e9b6bdc6c9d43b3531d44d"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-global-icon.svg",
       "sha256": "62b7e87b6e6a4134d79b84019eab83c52e22564a88a89cab1a59bbf3bad0675e"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-table-icon.svg",
       "sha256": "708a2be66a3d2fb0839116d21253bce4ffedcf3d0629377772b4b2f623dcac99"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-ui-icon.svg",
       "sha256": "eedf8b437a1e224715ed0a96f3ff013b395b3d3aee52a9bf124a0610e7590b99"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-user-icon.svg",
       "sha256": "d5b5997bd01ef1d3b3a7bb7b70197fed10b225eabb332a7ed871e35a3509231e"
@@ -167,13 +164,13 @@
       "sha256": "cceab44418258ee9d2d9b1a5e828d5c33d89b907ca0e62477a793de2fb54ac77"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/chat-message-icon.svg",
       "sha256": "d00d04f389fed92e2703b278159f595ad905c01ac95462358aa158bd83ad8536"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/chevron-down-icon.svg",
       "sha256": "25f6226044596ae1d18f442d3350582c9d0d9a62ab3b9c17c37e0ac5759ca766"
@@ -185,7 +182,7 @@
       "sha256": "ee209ddc7cd0a7cae49e68d9a558e0d36a4f6d7f0de3e448429dfc9337fe7eec"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/filter-list-icon.svg",
       "sha256": "1d8cb800428950e289a562d96d91e862494fe4efc537975a03fea7c984bd8f23"
@@ -197,13 +194,13 @@
       "sha256": "69541729a0f2e47486d659fe52951f5b3bd98ce64e172665cf4fed222bfc4fb5"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/filterbar-toggle-icon.svg",
       "sha256": "9f01946750cb412f5d38df332aaba0e46ba39ef2b617a27c103297e450fe65a9"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/minimize-panel-icon.svg",
       "sha256": "b18122cadd6029837687c1bf0c7fa1e27081729dad344774af45d6d50005b138"
@@ -215,13 +212,13 @@
       "sha256": "42da75291c1aa4f010f218905a4a52288b0412f513dc4d7fac171299b8c7220c"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/record-next-icon.svg",
       "sha256": "108c7d6cfc3b28185cb03f5681ec36a80af588339286de5a10be4985e0e4ce9c"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/record-previous-icon.svg",
       "sha256": "6866547a75d3ed406baa61c1894c75356a4e077b1caf47b3e6f0e33de7fb41a2"
@@ -245,13 +242,13 @@
       "sha256": "bc4f8da466dcad62dd146025e5912d59608dfa6f1711752573780e4f32c3803f"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/view-palette-icon.svg",
       "sha256": "b5408c78237e806f953ee806db230f3f078593c2a3a19ee5cd67d231322ecde1"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/visible-fields-icon.svg",
       "sha256": "d08e81a19ebb15413f94f160bf6d3642fe0de1d2a14c212996b57af1e95cb2d4"
@@ -275,7 +272,7 @@
       "sha256": "702e4b7838162a8e251edcaa99ea9aef4ec3cdd59122d6934db9eb88330e37fb"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/navigation/theme-dark-icon.svg",
       "sha256": "000148c027dee05c9e278d48eb55c759150946d8c1783275de102488cb91768c"
@@ -287,13 +284,13 @@
       "sha256": "4e183b937fb722f95d61b06d450c47c8282803a762e099e7d5ff639db8ad3867"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/navigation/theme-locked-dark-icon.svg",
       "sha256": "e7d8e0ff4bdc5a070c373674677c354cff805334b25362ddbf0baddb4717269b"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/navigation/theme-locked-light-icon.svg",
       "sha256": "5b5c7d987c7de2722abd4946fe96dcda1a0ed6cd42deda33e30ccca69f7be041"
@@ -305,25 +302,25 @@
       "sha256": "e129fe290b281a7559df6e275011908f3f2c8f93f91144dddc2290dde6be888e"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-e-v1-16.png",
       "sha256": "05aa55fc11d82b1345bad7d22febe76efd6755c613cb78a60d27227f0f2bcda4"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-es-v1-16.png",
       "sha256": "ec41e0ecd35509c200456cac33748df68dbc997c2def738f8a7bfcdf3d4d5e52"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-f-v1-16.png",
       "sha256": "6c2efd7f4f77c8ac63de6067fea6f0dd2ea732be7c466a67fa43c50992d0c739"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-s-v1-16.png",
       "sha256": "ac34524cbcaf4b253d11e4f001a002c791538dbaca0cf3a02469e2b599142cad"
@@ -347,7 +344,7 @@
       "sha256": "3a2fea4e5c45cea1147173ac0e401cdde2b46fd7f500ee88a96a2151ecce458a"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/symbols/bolt-pattern.svg",
       "sha256": "9d6c4ad655b76ef950ad13c896dc90d5e1c933e8778dfc4d17ccb5968b17bc72"
@@ -719,43 +716,13 @@
       "sha256": "43fb7b07230e9dd2f4966cd515fc178a3370ea4e8ebe8b2e37bec53089e06b80"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/imageERR.png",
       "sha256": "ae46743f7a6dedca95035d0fe9a0994f30f06f95c1da2a18295d14732ee350d1"
     },
     {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/public/auth-tour/platform-card-view.jpg",
-      "sha256": "489854e52191fe712415c51ff44b6e35bbe5d7f2e8d84cd95cb62fc74cef21d1"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/public/auth-tour/platform-filterbar.jpg",
-      "sha256": "dd725adadca6eab5313726c85b4b908ddc8a049f130a0eebf22a5613e588fc65"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/public/auth-tour/platform-full-shell.jpg",
-      "sha256": "d28187b2d0d2e1ff2f270fec003ec161c5dc68b3c246f0f20200d16f680e2670"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/public/auth-tour/platform-navbar.jpg",
-      "sha256": "d083b73374ac6fc6b3fc41b38d4eab1e59090f743f8978f942d4f9f6557a718b"
-    },
-    {
-      "component": "Filterest first-party assets",
-      "kind": "asset",
-      "path": "app/frontend/public/auth-tour/platform-table-view.jpg",
-      "sha256": "d8bc5fb850145db78c047a7fdfdcccfeb3cd9d976c14fbf5e88ac53ed4368f2a"
-    },
-    {
-      "component": "Filterest first-party assets",
+      "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/reusable_components/vanilla_dropdown/chevron.svg",
       "sha256": "32d5f1b8148efdd827b586e59399ce876ce00815b6994da6bba75b80bec7d8e3"
@@ -764,99 +731,99 @@
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/templates/login.html",
-      "sha256": "490fbce52907cd3e515803f5819b02cc385e0ccd61a8a2b7e66aeaae7020f84e"
+      "sha256": "42a5ccee6c0cb15b940ef503999348f77ed9f48a61b7ce426691a1d997614569"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png",
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/docs/ready-to-release.png",
       "sha256": "c054dd219ef69cbf8b8f77652072bf5a60a80625c30060dc4c72157dd35dc0ec"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/docs/start-here.png",
       "sha256": "3d85bfdba3b64bbf053e1b2bcfa85c15d9dc642c2a1f0ec3a6d59154ab29ab6c"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-1000.jpg",
       "sha256": "fec7802d55206dc5fd5ca74e26950ab76143c20a70af485bd6da0a1b1d0f6048"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-2160.jpg",
       "sha256": "abb61fa5105bcfe7a7c735e6d209ecb60bc364f3a4ebe344b256a21f4086bd48"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-300.jpg",
       "sha256": "82b3e9511b0ac0c981ba91c3a8ec405e8770b66fcd92ef47a5273e8ca07e05a8"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/risk-original.jpg",
       "sha256": "9281cd1ac4edb02e6c233dead55ea8d0986fc4f062e098c6ef0e29023b72a578"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-1000.jpg",
       "sha256": "c9d0742afd8b17bbfeadc0e00bf0b724ceeaabf104af53fd9614f723e47ec3bc"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-2160.jpg",
       "sha256": "2b02918b8dbd1a42f6bd65935a06c2e62e2e4a915dd91a0b047d4fb85c4fd6f5"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-300.jpg",
       "sha256": "e31de058265630753db73e567111944986c4b20ce26e3e8285b808d6091b8dfa"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/service-original.jpg",
       "sha256": "bda89535047c297e90e3a6163c15519ef2a6ff76329038327a9ff328f7b32419"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-1000.jpg",
       "sha256": "ddf7e70dd12bfd2867a2854dd03c86e40c9a5eecbfb8777a4f33243e3d973c79"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-2160.jpg",
       "sha256": "d2c3550fb4673dbb013fb9ac32f1467ba368e604281fa60b405cb78323e9fb01"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-300.jpg",
       "sha256": "b60286031256864f507d44f11c497cb15a4b30036ebceeac377cb91d4fda6f86"
     },
     {
-      "component": "Filterest first-party assets",
+      "component": "Filterest demo placeholder images",
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-original.jpg",
       "sha256": "adca8974a9d808d286286dc6529024d8aa2b3837c417224008f69805cd32b113"
     }
   ],
-  "reviewed_on": "2026-08-29",
-  "schema_version": 1
+  "reviewed_on": "2026-08-30",
+  "schema_version": 2
 }

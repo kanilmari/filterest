@@ -214,98 +214,18 @@
                 hidden>
                 <div class="auth-tour-content" data-html-lang-key="{{if eq .SiteName "easelect.com"}}login_page_platform_story_easelect_html{{else}}login_page_platform_story_site_html+{{.SiteName}}{{end}}"></div>
                 {{if .ShowTourScreenshots}}
-                <section class="auth-tour-gallery" data-testid="login-tour-gallery" aria-label="Tour gallery">
+                <!--
+                  The screenshot gallery is deliberately empty and server-disabled.
+                  To restore it, add only synthetic captures that have a reviewed
+                  asset-provenance group, then repopulate auth-tour-gallery-grid
+                  with auth-tour-shot buttons using the existing CSS/JS contract.
+                -->
+                <section class="auth-tour-gallery" data-testid="login-tour-gallery" aria-label="Tour gallery" hidden>
                     <div class="auth-tour-gallery-header">
                         <h3 data-lang-key="login_page_tour_gallery_heading">Interface snapshots</h3>
                         <p data-lang-key="login_page_tour_gallery_intro">Open a screenshot to inspect how navigation, cards, tables, and filters work together in the same UI.</p>
                     </div>
-                    <div class="auth-tour-gallery-grid">
-                        <button
-                            type="button"
-                            class="auth-tour-shot auth-tour-shot--wide saturate_on_hover"
-                            data-testid="login-tour-shot-full-shell"
-                            data-aria-label-lang-key="login_page_tour_image_full_shell_title"
-                            aria-haspopup="dialog">
-                            <img
-                                src="/frontend/public/auth-tour/platform-full-shell.jpg"
-                                data-lang-key="login_page_tour_image_full_shell_alt"
-                                alt="Screenshot of the full application workspace."
-                                loading="lazy"
-                                decoding="async">
-                            <span class="auth-tour-shot-copy">
-                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_full_shell_title">Full application workspace</strong>
-                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_full_shell_caption">Cards, navigation, and filtering in one continuous workspace.</span>
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            class="auth-tour-shot saturate_on_hover"
-                            data-testid="login-tour-shot-navbar"
-                            data-aria-label-lang-key="login_page_tour_image_navbar_title"
-                            aria-haspopup="dialog">
-                            <img
-                                src="/frontend/public/auth-tour/platform-navbar.jpg"
-                                data-lang-key="login_page_tour_image_navbar_alt"
-                                alt="Screenshot of the navigation bar."
-                                loading="lazy"
-                                decoding="async">
-                            <span class="auth-tour-shot-copy">
-                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_navbar_title">Navigation and tools</strong>
-                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_navbar_caption">Main tabs, theme switching, and language controls stay within easy reach.</span>
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            class="auth-tour-shot saturate_on_hover"
-                            data-testid="login-tour-shot-card-view"
-                            data-aria-label-lang-key="login_page_tour_image_card_view_title"
-                            aria-haspopup="dialog">
-                            <img
-                                src="/frontend/public/auth-tour/platform-card-view.jpg"
-                                data-lang-key="login_page_tour_image_card_view_alt"
-                                alt="Screenshot of the card view."
-                                loading="lazy"
-                                decoding="async">
-                            <span class="auth-tour-shot-copy">
-                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_card_view_title">Card view</strong>
-                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_card_view_caption">Cards combine quick scanning, media, and a fast path into deeper record detail.</span>
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            class="auth-tour-shot saturate_on_hover"
-                            data-testid="login-tour-shot-table-view"
-                            data-aria-label-lang-key="login_page_tour_image_table_view_title"
-                            aria-haspopup="dialog">
-                            <img
-                                src="/frontend/public/auth-tour/platform-table-view.jpg"
-                                data-lang-key="login_page_tour_image_table_view_alt"
-                                alt="Screenshot of the table view."
-                                loading="lazy"
-                                decoding="async">
-                            <span class="auth-tour-shot-copy">
-                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_table_view_title">Table view</strong>
-                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_table_view_caption">Tables support comparison, quick editing, and dense information management.</span>
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            class="auth-tour-shot saturate_on_hover"
-                            data-testid="login-tour-shot-filterbar"
-                            data-aria-label-lang-key="login_page_tour_image_filterbar_title"
-                            aria-haspopup="dialog">
-                            <img
-                                src="/frontend/public/auth-tour/platform-filterbar.jpg"
-                                data-lang-key="login_page_tour_image_filterbar_alt"
-                                alt="Screenshot of the filter bar."
-                                loading="lazy"
-                                decoding="async">
-                            <span class="auth-tour-shot-copy">
-                                <strong class="auth-tour-shot-title" data-lang-key="login_page_tour_image_filterbar_title">Filter bar</strong>
-                                <span class="auth-tour-shot-caption" data-lang-key="login_page_tour_image_filterbar_caption">Search, column-level filters, sorting, and active constraints work together in one surface.</span>
-                            </span>
-                        </button>
-                    </div>
+                    <div class="auth-tour-gallery-grid"></div>
                 </section>
                 {{end}}
             </section>

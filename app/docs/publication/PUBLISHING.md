@@ -103,8 +103,12 @@ sudo apt install gcc-aarch64-linux-gnu
 The resulting binaries keep WebP support and dynamically link only the
 reviewed host glibc/libm surface. The builder rejects binaries requiring newer
 than glibc 2.34, verifies both architectures' embedded Go version and module
-set against the retained third-party manifest, and the admin installer checks
-the same glibc floor before using a prebuilt binary.
+set against the `filterest` target in the retained third-party manifest, and
+the admin installer checks the same glibc floor before using a prebuilt binary.
+The notice generator separately inventories the tagged release server, the
+untagged container server, and the container's `filterest-admin-recovery`
+binary. Shared modules retain one license row with explicit binary membership;
+the recovery-only terminal dependency cannot be hidden by the server's graph.
 
 ## Updating Later Releases
 
@@ -123,3 +127,26 @@ not transfer into the standalone publication repository.
 
 Filterest is mirrored into its own repository without copying non-public
 maintainer-workspace history. The active standalone checkout is `../filterest`.
+
+## Public Asset Rights Boundary
+
+The reviewed asset-provenance register at
+`app/server_tools/licenses/asset_provenance.json` classifies every distributed
+image and every source file that embeds third-party icon geometry. A public
+candidate fails if an asset is absent from the register, its bytes change, or a
+component uses the former generic first-party label without an explicit author,
+rights holder, publication-rights basis, license, and owner attestation.
+
+Filterest's project-original media is recorded in separate groups for neutral
+demo placeholders, original interface SVGs, and brand or fallback graphics.
+The demo placeholders are simple text images created by the human project owner
+in Microsoft Paint without third-party source imagery. They are redistributed
+with Filterest under GPL-2.0-or-later and require no separate attribution.
+Third-party SVG sources retain their own component names, licenses, upstream
+links, and exact legal-document bytes in the release license bundle.
+
+Auth-tour screenshots are currently excluded from both source and built public
+trees. The dormant gallery implementation and private capture utility remain
+available, but captures go only to the ignored review area. Reintroducing any
+screenshot requires a separate content-and-provenance review before the public
+candidate can pass.
