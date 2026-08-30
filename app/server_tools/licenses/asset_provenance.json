@@ -39,7 +39,16 @@
       "party": "third-party",
       "source": "https://github.com/google/material-design-icons"
     },
+    "Heroicons / Tailwind Labs": {
+      "documents": [
+        "heroicons-LICENSE.txt"
+      ],
+      "license": "MIT",
+      "party": "third-party",
+      "source": "https://github.com/tailwindlabs/heroicons"
+    },
     "Lucide Icons": {
+      "classification_note": "Embedded interface icon geometry without a documented first-party rights basis is conservatively treated as Lucide/Feather third-party content; exact upstream byte identity is not asserted.",
       "documents": [
         "lucide-LICENSE.txt"
       ],
@@ -50,10 +59,39 @@
   },
   "files": [
     {
+      "component": "Heroicons / Tailwind Labs",
+      "kind": "embedded-icon-source",
+      "path": "app/backend/core_components/middlewares/maintenance_page.html",
+      "sha256": "85d863542513c895a5d4450036498fd1b12555b8c783e0e6aa924bd070088d74",
+      "source_detail": "Heroicons 24px outline wrench-screwdriver",
+      "upstream": "https://github.com/tailwindlabs/heroicons/blob/master/optimized/24/outline/wrench-screwdriver.svg"
+    },
+    {
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/navigation/main_tabs/tab_icon_library.js",
       "sha256": "88b40baaab54d6712974fd70835039215cbc0f22012a96ad1735620e3c6eaad5"
+    },
+    {
+      "component": "Lucide Icons",
+      "kind": "embedded-icon-source",
+      "path": "app/frontend/core_components/table_views/card_view/big_card_ui_handler.js",
+      "sha256": "476ac2c9cf63799164d701c9c3c3decaf5e455284cadf5c7ed1a7a7ee48713f7",
+      "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
+    },
+    {
+      "component": "Lucide Icons",
+      "kind": "embedded-icon-source",
+      "path": "app/frontend/reusable_components/key_value_container/kv_container_printer.js",
+      "sha256": "4c86b38fbaa52f1bdbced3d50242fdf35aba6a5c9485855012313be658bdfe3e",
+      "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
+    },
+    {
+      "component": "Lucide Icons",
+      "kind": "embedded-icon-source",
+      "path": "app/frontend/reusable_components/vanilla_tree/van_tr_components/tree_icon_creator.js",
+      "sha256": "9f078f14dd511d271e10daf21be7ec49ee7de9f34610cb9edffb78b7f5c0c6f2",
+      "source_detail": "Embedded folder and chevron geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {
       "component": "Filterest brand and fallback images",
@@ -824,6 +862,6 @@
       "sha256": "adca8974a9d808d286286dc6529024d8aa2b3837c417224008f69805cd32b113"
     }
   ],
-  "reviewed_on": "2026-08-30",
+  "reviewed_on": "2026-08-31",
   "schema_version": 2
 }

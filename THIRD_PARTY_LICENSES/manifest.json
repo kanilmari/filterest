@@ -323,6 +323,26 @@
       "source": "https://github.com/google/material-design-icons"
     },
     {
+      "assets": [],
+      "component": "Heroicons / Tailwind Labs",
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt",
+          "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985",
+          "source_file": "heroicons-LICENSE.txt"
+        }
+      ],
+      "embedded_sources": [
+        {
+          "path": "app/backend/core_components/middlewares/maintenance_page.html",
+          "sha256": "85d863542513c895a5d4450036498fd1b12555b8c783e0e6aa924bd070088d74"
+        }
+      ],
+      "license": "MIT",
+      "party": "third-party",
+      "source": "https://github.com/tailwindlabs/heroicons"
+    },
+    {
       "assets": [
         {
           "path": "app/frontend/icons/general/table-tools-icon.svg",
@@ -361,7 +381,20 @@
           "source_file": "lucide-LICENSE.txt"
         }
       ],
-      "embedded_sources": [],
+      "embedded_sources": [
+        {
+          "path": "app/frontend/core_components/table_views/card_view/big_card_ui_handler.js",
+          "sha256": "476ac2c9cf63799164d701c9c3c3decaf5e455284cadf5c7ed1a7a7ee48713f7"
+        },
+        {
+          "path": "app/frontend/reusable_components/key_value_container/kv_container_printer.js",
+          "sha256": "4c86b38fbaa52f1bdbced3d50242fdf35aba6a5c9485855012313be658bdfe3e"
+        },
+        {
+          "path": "app/frontend/reusable_components/vanilla_tree/van_tr_components/tree_icon_creator.js",
+          "sha256": "9f078f14dd511d271e10daf21be7ec49ee7de9f34610cb9edffb78b7f5c0c6f2"
+        }
+      ],
       "license": "ISC",
       "party": "third-party",
       "source": "https://github.com/lucide-icons/lucide"
@@ -369,7 +402,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "8ff0bee6a82d1bcbcc9bae81e7d07392d9734d4b90f1a90f43b49637fe98be3b"
+    "sha256": "29ef5e9a73947fc0400c822490a8260c4cad429456883fb66e3648ffef519b3d"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -804,7 +837,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.0.3",
+  "filterest_app_version": "9.0.4",
   "first_party_components": [
     {
       "assets": [

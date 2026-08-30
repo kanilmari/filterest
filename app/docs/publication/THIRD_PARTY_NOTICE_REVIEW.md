@@ -1,7 +1,7 @@
 # Filterest Third-Party Notice Review
 
 - Target: `generated Filterest export tree`
-- Filterest app version: `9.0.3`
+- Filterest app version: `9.0.4`
 - Database version: `9.6.7`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
@@ -12,8 +12,8 @@
 - browser bundle build components matched: `3`
 - third-party asset files matched: `80`
 - first-party asset files matched: `47`
-- source files containing third-party icon geometry matched: `2`
-- retained legal and attribution documents verified: `33`
+- source files containing third-party icon geometry matched: `6`
+- retained legal and attribution documents verified: `34`
 - unresolved third-party rows: `0`
 - Findings: `0`
 
