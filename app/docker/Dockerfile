@@ -103,6 +103,7 @@ COPY go.mod ./go.mod
 COPY --from=release-identity-selector /release-identity/selected/ ./
 RUN mkdir -p ./server_tools/versioning
 COPY server_tools/versioning/release_ledger.v1.jsonl ./server_tools/versioning/release_ledger.v1.jsonl
+COPY server_tools/migrations/ ./server_tools/migrations/
 COPY server_tools/public_bootstrap/source/fixtures/ ./server_tools/public_bootstrap/source/fixtures/
 COPY VERSION_* ./
 COPY docker/docker-entrypoint.sh ./docker/docker-entrypoint.sh

@@ -3,10 +3,10 @@
 This file is generated from the Filterest public-slice candidate flow.
 It is evidence for review, not approval to publish.
 
-- Generated at: `2026-08-30T02:07:23Z`
-- Release source commit used by the generator: `b892f40033e2544232c74616c6a69021205a3319`
+- Generated at: `2026-08-30T03:08:51Z`
+- Release source commit used by the generator: `cf5e738b6328885cca071311519778e0feb37ff0`
 - Generated Filterest commit: this repository commit; run `git log -1 --oneline`
-- Filterest app version: `9.0.1`
+- Filterest app version: `9.0.2`
 - Database version: `9.6.7`
 
 ## Automated Evidence Included In This Commit
