@@ -6,26 +6,58 @@ package middlewares
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
+	"strings"
 
 	backend "easelect/backend/core_components"
 )
 
-// ShouldUseMinifiedAssetsInDev returns true when minified JS/CSS should be served.
-// Production environments always return true, ensuring hashed bundles stay active.
-// In development, the system_config flag defaults to true and can be toggled to
-// allow serving unminified source files for easier debugging.
-func ShouldUseMinifiedAssetsInDev() (bool, error) {
-	if os.Getenv("ENVIRONMENT_TYPE") != "dev" {
-		return true, nil
+const frontendAssetModeEnvironmentVariable = "FILTEREST_FRONTEND_ASSET_MODE"
+
+// resolveFrontendAssetModeOverride resolves an explicit instance-owned source/dist choice.
+// Between protected runtime configuration and the legacy database-backed development toggle.
+// Exists so parallel local instances can serve different frontend builds without sharing state.
+func resolveFrontendAssetModeOverride(environmentType string, requestedMode string) (bool, bool, error) {
+	if environmentType != "dev" {
+		return true, true, nil
 	}
 
-	var useMinified sql.NullBool
-	err := backend.Db.QueryRow(`
+	switch strings.ToLower(strings.TrimSpace(requestedMode)) {
+	case "":
+		return false, false, nil
+	case "source":
+		return false, true, nil
+	case "dist":
+		return true, true, nil
+	default:
+		return true, true, fmt.Errorf(
+			"%s must be source or dist, got %q",
+			frontendAssetModeEnvironmentVariable,
+			requestedMode,
+		)
+	}
+}
+
+// ShouldUseMinifiedAssetsInDev returns true when minified JS/CSS should be served.
+// Production environments always return true, ensuring hashed bundles stay active.
+// Development first honors the instance-owned source/dist environment choice;
+// installations without it retain the legacy database-backed toggle.
+func ShouldUseMinifiedAssetsInDev() (bool, error) {
+	useMinified, resolved, err := resolveFrontendAssetModeOverride(
+		os.Getenv("ENVIRONMENT_TYPE"),
+		os.Getenv(frontendAssetModeEnvironmentVariable),
+	)
+	if resolved || err != nil {
+		return useMinified, err
+	}
+
+	var storedUseMinified sql.NullBool
+	err = backend.Db.QueryRow(`
                 SELECT boolean_value
                 FROM system_config
                 WHERE key = 'use_minified_js_css_in_dev_env'
-        `).Scan(&useMinified)
+	`).Scan(&storedUseMinified)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return true, nil
@@ -33,9 +65,9 @@ func ShouldUseMinifiedAssetsInDev() (bool, error) {
 		return true, err
 	}
 
-	if !useMinified.Valid {
+	if !storedUseMinified.Valid {
 		return true, nil
 	}
 
-	return useMinified.Bool, nil
+	return storedUseMinified.Bool, nil
 }

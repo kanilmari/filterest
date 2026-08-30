@@ -93,6 +93,48 @@ _read_local_env_value() {
     printf '%s\n' "$default_value"
 }
 
+# Resolve the browser asset build selected for this local process.
+# Between protected instance settings and the backend/Vite startup branches.
+# Exists so native development stays source-based while release previews use dist.
+_resolve_local_frontend_asset_mode() {
+    local db_env_file="$1"
+    local requested_mode=""
+
+    requested_mode="$(_read_local_env_value \
+        "FILTEREST_FRONTEND_ASSET_MODE" "$db_env_file" "source")"
+    requested_mode="$(ascii_lowercase "$requested_mode")"
+    case "$requested_mode" in
+        source|dist)
+            printf '%s\n' "$requested_mode"
+            ;;
+        *)
+            echo "error: FILTEREST_FRONTEND_ASSET_MODE must be source or dist, got '$requested_mode'" >&2
+            return 1
+            ;;
+    esac
+}
+
+# Verify the immutable production frontend assets before starting dist mode.
+# Between Vite output and the Go template asset resolver.
+# Exists so a prod-like preview cannot silently fall back to raw source files.
+_require_local_dist_frontend_assets() {
+    local dist_dir="$FILTEREST_BUILD_ROOT/frontend/dist"
+    local pattern=""
+    local match_count=""
+
+    [[ -d "$dist_dir" ]] || {
+        echo "error: frontend dist directory is missing: $dist_dir" >&2
+        return 1
+    }
+    for pattern in 'main.*.min.js' 'login.*.min.js' 'imports.*.min.css'; do
+        match_count="$(find "$dist_dir" -maxdepth 1 -type f -name "$pattern" | wc -l | tr -d '[:space:]')"
+        [[ "$match_count" == "1" ]] || {
+            echo "error: dist mode requires exactly one $pattern asset in $dist_dir, found $match_count" >&2
+            return 1
+        }
+    done
+}
+
 # ------------------------------------------------------------------------------
 # Helper: suggest the shared-dev SSH tunnel when the configured local DB target
 # looks like a localhost tunnel instead of the default native PostgreSQL port.
@@ -244,6 +286,7 @@ start_local() {
         db_env_file="$EASELECT_RUNTIME_ENV_FILE"
     fi
     local configured_port
+    local frontend_asset_mode
     configured_port="$(_read_local_env_value "APP_PORT" "$db_env_file")"
     if [[ -z "$configured_port" ]]; then
         configured_port="$(_read_local_env_value "PORT" "$db_env_file")"
@@ -260,6 +303,12 @@ start_local() {
     export PORT
     export EASELECT_PORT="$PORT"
     export APP_PORT="$PORT"
+
+    frontend_asset_mode="$(_resolve_local_frontend_asset_mode "$db_env_file")" || exit 1
+    export FILTEREST_FRONTEND_ASSET_MODE="$frontend_asset_mode"
+    if [[ "$frontend_asset_mode" == "dist" ]]; then
+        _require_local_dist_frontend_assets || exit 1
+    fi
 
     if [[ -n "$custom_port" || -n "$configured_port" ]]; then
         echo -e "${BLUE}🖥️  Starting ${project_name} locally on port ${PORT}...${NC}"
@@ -346,8 +395,12 @@ start_local() {
             fi
             exit 1
         fi
-        if ! _start_vite_dev "$db_env_file"; then
-            echo -e "${YELLOW}⚠️  Continuing because Go backend is healthy, but Vite/HMR is unavailable.${NC}"
+        if [[ "$frontend_asset_mode" == "source" ]]; then
+            if ! _start_vite_dev "$db_env_file"; then
+                echo -e "${YELLOW}⚠️  Continuing because Go backend is healthy, but Vite/HMR is unavailable.${NC}"
+            fi
+        else
+            echo -e "${GREEN}📦 Frontend dist build active; Vite/HMR was not started.${NC}"
         fi
         print_success
         _verify_logging

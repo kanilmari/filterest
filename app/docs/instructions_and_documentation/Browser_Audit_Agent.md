@@ -57,6 +57,12 @@ For the standalone local target `https://localhost:8100`, the tool reuses
 storage-state file produced by `app/testing/e2e/global-setup.ts`; no manual login is
 needed after a normal E2E or Visual Guardian setup run.
 
+Maintainer release audits start this target through the private preview helper,
+which serves the hashed `frontend/dist` build and refuses readiness if the login
+document falls back to raw source assets. Native source/HMR measurements from
+port 8082 or Vite must be labeled as development measurements and must not be
+used as the release bundle's Lighthouse score.
+
 If the auth file is missing, create it with a small Playwright run:
 
 ```bash

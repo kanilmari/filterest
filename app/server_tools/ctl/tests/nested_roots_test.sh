@@ -114,5 +114,11 @@ grep -Fq 'npm --prefix "$FILTEREST_BUILD_ROOT" run dev' \
     "$SOURCE_ROOT/server_tools/ctl/lib/local.sh" || fail "Vite does not use the selected build root"
 grep -Fq 'cd "$FILTEREST_BUILD_ROOT"' \
     "$SOURCE_ROOT/server_tools/ctl/lib/local.sh" || fail "Go build does not use the selected build root"
+grep -Fq 'FILTEREST_FRONTEND_ASSET_MODE" "$db_env_file" "source"' \
+    "$SOURCE_ROOT/server_tools/ctl/lib/local.sh" || fail "native frontend does not default to source mode"
+grep -Fq '_require_local_dist_frontend_assets' \
+    "$SOURCE_ROOT/server_tools/ctl/lib/local.sh" || fail "dist startup does not validate its frontend assets"
+grep -Fq 'Frontend dist build active; Vite/HMR was not started.' \
+    "$SOURCE_ROOT/server_tools/ctl/lib/local.sh" || fail "dist startup does not skip Vite/HMR"
 
 printf 'nested ctl root contract: ok\n'

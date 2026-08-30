@@ -1338,8 +1338,17 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "8.41.0": {"min_version": "9.6.4", "target_version": "9.6.4"},
         "9.0.0": {"min_version": "9.6.7", "target_version": "9.6.7"},
         "9.0.1": {"min_version": "9.6.7", "target_version": "9.6.7"},
+        "9.0.2": {"min_version": "9.6.7", "target_version": "9.6.7"},
+        "9.0.3": {"min_version": "9.6.7", "target_version": "9.6.7"},
     }
-    version_order = {"8.40.8": 0, "8.41.0": 1, "9.0.0": 2, "9.0.1": 3}
+    version_order = {
+        "8.40.8": 0,
+        "8.41.0": 1,
+        "9.0.0": 2,
+        "9.0.1": 3,
+        "9.0.2": 4,
+        "9.0.3": 5,
+    }
     assert all(
         entry.record["app_version"] in expected_databases
         and entry.record["artifact_type"] == "runtime"
@@ -1350,7 +1359,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         and entry.record["source"]["model"]
         == (
             "public_first"
-            if entry.record["app_version"] in {"9.0.0", "9.0.1"}
+            if entry.record["app_version"] in {"9.0.0", "9.0.1", "9.0.2", "9.0.3"}
             else "legacy_maintainer_export"
         )
         for entry in tail
