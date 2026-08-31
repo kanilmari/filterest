@@ -9,18 +9,23 @@ import (
 
 func TestIsAddRowColumnUserInsertable(t *testing.T) {
 	tests := []struct {
-		name   string
-		value  sql.NullBool
-		wanted bool
+		name           string
+		value          sql.NullBool
+		isMultilingual bool
+		wanted         bool
 	}{
 		{name: "missing metadata preserves legacy form", value: sql.NullBool{}, wanted: true},
 		{name: "explicit true stays editable", value: sql.NullBool{Bool: true, Valid: true}, wanted: true},
+		{name: "multilingual explicit true stays editable", value: sql.NullBool{Bool: true, Valid: true}, isMultilingual: true, wanted: true},
 		{name: "explicit false is server owned", value: sql.NullBool{Bool: false, Valid: true}, wanted: false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			column := dtt_models.AddRowColumnInfo{Insertable: test.value}
+			column := dtt_models.AddRowColumnInfo{
+				Insertable:     test.value,
+				IsMultilingual: test.isMultilingual,
+			}
 			if got := isAddRowColumnUserInsertable(column); got != test.wanted {
 				t.Fatalf("isAddRowColumnUserInsertable() = %v, want %v", got, test.wanted)
 			}

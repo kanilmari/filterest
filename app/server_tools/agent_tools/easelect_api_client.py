@@ -873,6 +873,20 @@ class EaselectAPIClient:
             csrf=True,
         )
 
+    def set_column_insertable(self, dataset_name, column_uid, insertable):
+        """Set one column's new-row form availability through the canonical admin API."""
+        self.login()
+        return self.request(
+            "POST",
+            "/api/admin/column-insertable",
+            data={
+                "dataset": str(dataset_name),
+                "column_uid": int(column_uid),
+                "insertable": bool(insertable),
+            },
+            csrf=True,
+        )
+
     def delete_rows(self, dataset_name, ids):
         """Delete rows between confirmed MCP ids and the delete-rows API."""
         self.login()

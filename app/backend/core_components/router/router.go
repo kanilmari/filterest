@@ -220,6 +220,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/embedding-source-policy", ai_features.ExternalEmbeddingSourcePolicyHandler, "ai_features.ExternalEmbeddingSourcePolicyHandler")
 	functionRegisterHandler("/api/admin/ui-languages", lang.AdminUILanguagesHandler, "lang.AdminUILanguagesHandler")
 	functionRegisterHandler("/api/admin/column-multilingual", system_table_tools.UpdateColumnMultilingualHandler, "system_table_tools.UpdateColumnMultilingualHandler")
+	functionRegisterHandler("/api/admin/column-insertable", system_table_tools.UpdateColumnInsertableHandler, "system_table_tools.UpdateColumnInsertableHandler")
 	functionRegisterHandler("/api/dataset_permissions", backend.PermissionsHandler, "backend.PermissionsHandler")
 	functionRegisterHandler("/api/datasets", system_table_tools.GetGroupedTables, "system_table_tools.GetGroupedTables")
 	functionRegisterHandler("/api/update-oids", system_table_tools.HandleUpdateOidsAndTableNames, "system_table_tools.HandleUpdateOidsAndTableNames")

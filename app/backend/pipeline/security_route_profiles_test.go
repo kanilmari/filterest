@@ -23,6 +23,7 @@ func TestSensitiveMaintenanceRoutesRequireAdmin(t *testing.T) {
 		"dtt_foreign_keys.DeleteForeignKeyHandler",
 		"dtt_crud_workflows.SimpleQueryTableHandler",
 		"system_table_tools.UpdateColumnMultilingualHandler",
+		"system_table_tools.UpdateColumnInsertableHandler",
 		"router.saveOpenAIAPIKeyHandler",
 	}
 

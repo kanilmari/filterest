@@ -521,6 +521,27 @@ class EaselectAPIClientTest(unittest.TestCase):
             }],
         )
 
+    def test_set_column_insertable_uses_canonical_admin_payload(self) -> None:
+        client = CapturingClient()
+
+        client.set_column_insertable("travel_deals", 473, True)
+
+        self.assertEqual(
+            client.calls,
+            [{
+                "method": "POST",
+                "path": "/api/admin/column-insertable",
+                "data": {
+                    "dataset": "travel_deals",
+                    "column_uid": 473,
+                    "insertable": True,
+                },
+                "query": None,
+                "csrf": True,
+                "expect_json": True,
+            }],
+        )
+
     def test_login_reuses_authenticated_client_session(self) -> None:
         client = EaselectAPIClient.__new__(EaselectAPIClient)
         client._authenticated = True

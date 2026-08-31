@@ -355,6 +355,15 @@ def command_modify_columns(args):
     print_json(result)
 
 
+def command_column_insertable(args):
+    result = make_client(args).set_column_insertable(
+        args.dataset_name,
+        args.column_uid,
+        args.insertable == "true",
+    )
+    print_json(result)
+
+
 def command_drop_dataset(args):
     if args.confirm_dataset_name != args.dataset_name:
         raise ValueError("--confirm-dataset-name must match dataset_name")
@@ -531,6 +540,15 @@ def build_parser():
     modify_parser.add_argument("--allow-column-removal", action="store_true")
     modify_parser.add_argument("--raw-json", help="Raw /api/modify-columns payload JSON object or @path")
     modify_parser.set_defaults(func=command_modify_columns)
+
+    insertable_parser = subparsers.add_parser(
+        "column-insertable",
+        help="Set whether one canonical dataset column appears in new-row forms",
+    )
+    insertable_parser.add_argument("dataset_name")
+    insertable_parser.add_argument("column_uid", type=int)
+    insertable_parser.add_argument("insertable", choices=["true", "false"])
+    insertable_parser.set_defaults(func=command_column_insertable)
 
     drop_parser = subparsers.add_parser("drop-dataset", help="Drop a dataset")
     drop_parser.add_argument("dataset_name")

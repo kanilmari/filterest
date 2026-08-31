@@ -185,6 +185,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.GetCardVisibilityHandler":              AdminProfile,
 	"system_table_tools.UpdateCardVisibilityHandler":           AdminProfile,
 	"system_table_tools.UpdateColumnMultilingualHandler":       AdminProfile,
+	"system_table_tools.UpdateColumnInsertableHandler":         AdminProfile,
 	"system_table_tools.GetAdminUIFeatureFlagsHandler":         AdminProfile,
 	"system_table_tools.AdminSitePresentationSettingsHandler":  AdminProfile,
 	"system_table_tools.AdminRowGroupsHandler":                 AdminProfile,

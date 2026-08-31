@@ -46,6 +46,14 @@ class FakeClient:
         self.calls.append(("modify_columns", request_data))
         return {"message": "modified"}
 
+    def set_column_insertable(self, dataset_name, column_uid, insertable):
+        self.calls.append(("set_column_insertable", dataset_name, column_uid, insertable))
+        return {
+            "dataset": dataset_name,
+            "column_uid": column_uid,
+            "insertable": insertable,
+        }
+
     def drop_dataset(self, dataset_name):
         self.calls.append(("drop_dataset", dataset_name))
         return {"message": "dropped"}
@@ -140,6 +148,21 @@ class API_CRUDTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertEqual(self.client.calls, [])
+
+    def test_column_insertable_uses_canonical_column_uid(self):
+        exit_code, output = self.run_main([
+            "column-insertable",
+            "travel_deals",
+            "473",
+            "true",
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            self.client.calls,
+            [("set_column_insertable", "travel_deals", 473, True)],
+        )
+        self.assertEqual(json.loads(output)["insertable"], True)
 
     def test_update_row_parses_jsonish_set_values(self):
         exit_code, _ = self.run_main([
