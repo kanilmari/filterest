@@ -151,6 +151,11 @@ test.describe('T3 — Modify Columns', () => {
       const columns = Array.isArray(visibility?.columns) ? visibility.columns : [];
       const websiteColumn = columns.find((column: Record<string, unknown>) => column.column_name === 'website');
       expect(websiteColumn, 'The late link field must receive system column metadata.').toBeTruthy();
+      const websiteColumnUID = websiteColumn?.column_uid;
+      expect(
+        Number.isInteger(websiteColumnUID) && Number(websiteColumnUID) > 0,
+        'The late link field must receive a positive stable column_uid.',
+      ).toBe(true);
 
       const saveVisibilityResponse = await postJsonWithCsrf(page, '/api/card-visibility/update', {
         table_name: datasetName,
@@ -193,6 +198,54 @@ test.describe('T3 — Modify Columns', () => {
       await expect(websiteLink).toBeVisible({ timeout: 15000 });
       await expect(websiteLink).toHaveAttribute('target', '_blank');
       await expect(websiteLink).toHaveAttribute('rel', /noopener/);
+
+      const renameColumnResponse = await postJsonWithCsrf(page, '/api/modify-columns', {
+        dataset_name: datasetName,
+        modified_columns: [{
+          original_name: 'website',
+          new_name: 'website_url',
+          data_type: 'TEXT',
+          length: null,
+        }],
+        added_columns: [],
+        removed_columns: [],
+      });
+      expect(
+        renameColumnResponse.ok,
+        `Admin could not rename the late link field: ${renameColumnResponse.body}`,
+      ).toBe(true);
+
+      const renamedVisibilityResponse = await getJson(
+        page,
+        `/api/card-visibility/${encodeURIComponent(datasetName)}`,
+      );
+      expect(
+        renamedVisibilityResponse.ok,
+        `Could not load renamed field metadata: ${renamedVisibilityResponse.body}`,
+      ).toBe(true);
+      const renamedVisibility = JSON.parse(renamedVisibilityResponse.body);
+      const renamedColumns = Array.isArray(renamedVisibility?.columns)
+        ? renamedVisibility.columns
+        : [];
+      const renamedWebsiteColumn = renamedColumns.find(
+        (column: Record<string, unknown>) => column.column_name === 'website_url',
+      );
+      expect(renamedWebsiteColumn, 'The renamed field must retain one metadata row.').toBeTruthy();
+      expect(
+        Number.isInteger(renamedWebsiteColumn?.column_uid)
+          && Number(renamedWebsiteColumn?.column_uid) > 0,
+        'The renamed field must receive a positive stable column_uid.',
+      ).toBe(true);
+      expect(
+        renamedColumns.filter(
+          (column: Record<string, unknown>) => column.column_name === 'website_url',
+        ),
+      ).toHaveLength(1);
+      expect(
+        renamedColumns.some(
+          (column: Record<string, unknown>) => column.column_name === 'website',
+        ),
+      ).toBe(false);
     } finally {
       if (!page.isClosed()) {
         await page.keyboard.press('Escape').catch(() => {});

@@ -28,6 +28,44 @@ test("fetches the requested row through the independent article projection", asy
     expect(row.description).toBe("Full article description");
 });
 
+test("keeps repaired column metadata articles distinct by generic row id", async () => {
+    const rowsByID = new Map([
+        [473, { id: 473, column_uid: 473, column_name: "description" }],
+        [526, { id: 526, column_uid: 526, column_name: "keywords" }],
+    ]);
+    const requestRows = vi.fn(async ({ filters }) => ({
+        data: [rowsByID.get(filters.id)],
+    }));
+
+    const description = await fetchPermittedRowArticleData({
+        tableName: "system_column_details",
+        rowItem: rowsByID.get(473),
+        requestRows,
+    });
+    const keywords = await fetchPermittedRowArticleData({
+        tableName: "system_column_details",
+        rowItem: rowsByID.get(526),
+        requestRows,
+    });
+
+    expect(description).toEqual({
+        id: 473,
+        column_uid: 473,
+        column_name: "description",
+    });
+    expect(keywords).toEqual({
+        id: 526,
+        column_uid: 526,
+        column_name: "keywords",
+    });
+    expect(requestRows).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        filters: { id: 473 },
+    }));
+    expect(requestRows).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        filters: { id: 526 },
+    }));
+});
+
 test("does not reuse the card snapshot when the authorized row is missing", async () => {
     await expect(fetchPermittedRowArticleData({
         tableName: "travel_info",

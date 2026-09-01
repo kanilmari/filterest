@@ -593,6 +593,19 @@ func TestUpdateColumnMetadataInsertsNewColumn(t *testing.T) {
 	if !strings.Contains(state.execCalls[1], "card_element") {
 		t.Fatalf("exec[1] = %q, want explicit card_element default in INSERT", state.execCalls[1])
 	}
+	insertSQL := strings.ToLower(state.execCalls[1])
+	columnListStart := strings.Index(insertSQL, "(")
+	columnListEnd := strings.Index(insertSQL[columnListStart+1:], ")")
+	if columnListStart < 0 || columnListEnd < 0 {
+		t.Fatalf("exec[1] = %q, want an explicit INSERT column list", state.execCalls[1])
+	}
+	columnListEnd += columnListStart + 1
+	for _, columnName := range strings.Split(insertSQL[columnListStart+1:columnListEnd], ",") {
+		switch strings.TrimSpace(columnName) {
+		case "id", "column_uid":
+			t.Fatalf("exec[1] = %q, identity column %q must use its database default", state.execCalls[1], strings.TrimSpace(columnName))
+		}
+	}
 }
 
 func TestUpdateColumnMetadataDeletesRemovedColumn(t *testing.T) {
