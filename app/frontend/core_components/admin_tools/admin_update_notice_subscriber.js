@@ -1,11 +1,12 @@
 // admin_update_notice_subscriber.js
-// Renders and maintains the fixed administrator production-update warning.
+// Renders and maintains the persistent administrator production-update toast.
 // Bridges the protected bounded SSE stream, browser lifecycle, and localized banner UI.
 // Exists so administrators can save work before a deployment drain or restart.
 // PIPELINE_EXCEPTION: EventSource is a bounded server-sent stream, not a finite request/response API call.
 
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
+import { showToast } from "../../reusable_components/notifications/toast_notification_printer.js";
 import { getButtonState } from "./auth_mode_handler.js";
 
 export const ADMIN_UPDATE_NOTICE_STREAM_ROUTE = "/api/admin/update-notice/stream";
@@ -25,6 +26,7 @@ const UPDATE_NOTICE_LABELS = Object.freeze({
         outage: "Palvelu voi olla hetken poissa käytöstä, ja kirjautumista voidaan pyytää uudelleen.",
         details: "Tiedot",
         hideDetails: "Piilota tiedot",
+        dismiss: "Sulje",
         plannedTime: "Arvioitu aloitus",
         now: "nyt",
     }),
@@ -37,6 +39,7 @@ const UPDATE_NOTICE_LABELS = Object.freeze({
         outage: "The service may be briefly unavailable, and you may be asked to sign in again.",
         details: "Details",
         hideDetails: "Hide details",
+        dismiss: "Dismiss",
         plannedTime: "Estimated start",
         now: "now",
     }),
@@ -49,6 +52,7 @@ const UPDATE_NOTICE_LABELS = Object.freeze({
         outage: "服务可能会短暂不可用，并且可能需要重新登录。",
         details: "详情",
         hideDetails: "隐藏详情",
+        dismiss: "关闭",
         plannedTime: "预计开始时间",
         now: "现在",
     }),
@@ -64,6 +68,12 @@ let unopenedFailures = 0;
 let lifecycleListenersInstalled = false;
 let currentSnapshot = null;
 let serverClockAnchor = null;
+let noticeToastHandle = null;
+let dismissedSnapshotKey = null;
+
+function snapshotDismissalKey(snapshot) {
+    return `${snapshot.notice_id}:${snapshot.state}:${snapshot.updated_at}`;
+}
 
 function resolveLabels() {
     const language = String(getLanguageWithBrowserFallback() || "en").toLowerCase();
@@ -103,6 +113,11 @@ function closeEventSource() {
 
 function removeBanner() {
     clearCountdownTimer();
+    if (noticeToastHandle) {
+        noticeToastHandle.dismiss({ immediate: true });
+        noticeToastHandle = null;
+        return;
+    }
     document.getElementById(BANNER_ID)?.remove();
 }
 
@@ -123,8 +138,7 @@ export function formatUpdateNoticeCountdown(deadlineMs, nowMs, labels = resolveL
 }
 
 function updateBannerCountdown() {
-    const countdown = document.querySelector(`#${BANNER_ID} [data-update-notice-countdown]`);
-    if (!countdown || !currentSnapshot) return;
+    if (!currentSnapshot) return;
     const nowMs = estimatedServerTimeMs();
     const expiresAtMs = Date.parse(currentSnapshot.expires_at);
     if (Number.isFinite(expiresAtMs) && nowMs >= expiresAtMs) {
@@ -133,21 +147,24 @@ function updateBannerCountdown() {
         removeBanner();
         return;
     }
+    const countdown = document.querySelector(`#${BANNER_ID} [data-update-notice-countdown]`);
+    if (!countdown) return;
     const startsAtMs = Date.parse(currentSnapshot.starts_at);
     if (!Number.isFinite(startsAtMs)) return;
     countdown.textContent = formatUpdateNoticeCountdown(startsAtMs, nowMs);
 }
 
-function ensureBanner() {
+function ensureBanner(labels) {
     let banner = document.getElementById(BANNER_ID);
+    if (banner?.getAttribute("aria-hidden") === "true") {
+        banner.remove();
+        banner = null;
+    }
     if (banner) return banner;
 
-    banner = document.createElement("aside");
-    banner.id = BANNER_ID;
-    banner.className = "admin-update-notice";
-    banner.setAttribute("role", "status");
-    banner.setAttribute("aria-live", "polite");
-    banner.innerHTML = `
+    const content = document.createElement("div");
+    content.className = "admin-update-notice__content";
+    content.innerHTML = `
         <div class="admin-update-notice__main">
             <span class="admin-update-notice__marker" data-update-notice-marker></span>
             <strong class="admin-update-notice__title" data-update-notice-title></strong>
@@ -159,6 +176,25 @@ function ensureBanner() {
             <p data-update-notice-outage></p>
             <p><strong data-update-notice-planned-label></strong> <time data-update-notice-planned-time></time></p>
         </div>`;
+    noticeToastHandle = showToast({
+        content,
+        level: "warning",
+        autoClose: false,
+        position: "top-center",
+        variant: "attention",
+        dismissOnClick: false,
+        dismissLabel: labels.dismiss,
+    });
+    banner = noticeToastHandle.element;
+    banner.id = BANNER_ID;
+    banner.classList.add("admin-update-notice");
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+
+    banner.querySelector(".toast-notification-close").addEventListener("click", () => {
+        if (currentSnapshot) dismissedSnapshotKey = snapshotDismissalKey(currentSnapshot);
+        noticeToastHandle = null;
+    });
 
     const toggle = banner.querySelector(".admin-update-notice__details-toggle");
     toggle.addEventListener("click", () => {
@@ -169,7 +205,6 @@ function ensureBanner() {
         const labels = resolveLabels();
         toggle.textContent = expanded ? labels.details : labels.hideDetails;
     });
-    document.body.prepend(banner);
     return banner;
 }
 
@@ -193,6 +228,7 @@ export function renderAdminUpdateNoticeSnapshot(snapshot) {
         (Number.isFinite(expiresAtMs) && serverTimeMs >= expiresAtMs)) {
         currentSnapshot = null;
         serverClockAnchor = null;
+        dismissedSnapshotKey = null;
         removeBanner();
         return true;
     }
@@ -204,9 +240,12 @@ export function renderAdminUpdateNoticeSnapshot(snapshot) {
         serverTimeMs,
         performanceTimeMs: performance.now(),
     };
+    if (dismissedSnapshotKey === snapshotDismissalKey(snapshot)) {
+        return true;
+    }
 
     const labels = resolveLabels();
-    const banner = ensureBanner();
+    const banner = ensureBanner(labels);
     const draining = snapshot.state === "draining";
     banner.dataset.state = snapshot.state;
     banner.querySelector("[data-update-notice-marker]").textContent = draining
@@ -225,13 +264,20 @@ export function renderAdminUpdateNoticeSnapshot(snapshot) {
         timeStyle: "short",
     }).format(new Date(startsAtMs));
     const toggle = banner.querySelector(".admin-update-notice__details-toggle");
+    banner.querySelector(".toast-notification-close").setAttribute("aria-label", labels.dismiss);
     toggle.textContent = toggle.getAttribute("aria-expanded") === "true"
         ? labels.hideDetails
         : labels.details;
 
-    updateBannerCountdown();
     clearCountdownTimer();
-    countdownTimer = setInterval(updateBannerCountdown, 1000);
+    const countdown = banner.querySelector("[data-update-notice-countdown]");
+    countdown.hidden = draining;
+    if (draining) {
+        countdown.textContent = "";
+    } else {
+        updateBannerCountdown();
+        countdownTimer = setInterval(updateBannerCountdown, 1000);
+    }
     return true;
 }
 
@@ -337,5 +383,6 @@ export function stopAdminUpdateNoticeSubscriber() {
     closeEventSource();
     currentSnapshot = null;
     serverClockAnchor = null;
+    dismissedSnapshotKey = null;
     removeBanner();
 }

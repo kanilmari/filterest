@@ -10,22 +10,36 @@
  * 1. All colors via CSS variables — theme-aware, never hardcoded.
  * 2. Z-index from the project hierarchy (--z-toast in variables.css).
  * 3. Border-radius from framework tokens (--fw-radius-md).
- * 4. Supports 4 severity levels: success, info, warning, error.
+ * 4. Supports 4 severity levels plus an opt-in emphasized attention variant.
+ * 5. Keeps bottom-right as the default while allowing a top-center stack.
  */
 
 /* =========================================
-   Toast Container — fixed stack, bottom-right
+   Toast Containers — fixed stacks by typed position
    ========================================= */
-#toast-notification-container {
+.toast-notification-container {
     position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
     display: flex;
-    flex-direction: column-reverse;
     gap: 10px;
     z-index: var(--z-toast);
     pointer-events: none;
     max-width: 420px;
+}
+
+.toast-notification-container[data-toast-position="bottom-right"] {
+    right: max(1.5rem, env(safe-area-inset-right));
+    bottom: max(1.5rem, env(safe-area-inset-bottom));
+    flex-direction: column-reverse;
+}
+
+.toast-notification-container[data-toast-position="top-center"] {
+    top: max(8px, env(safe-area-inset-top));
+    left: 50%;
+    width: min(720px, calc(100vw - 24px));
+    max-width: none;
+    flex-direction: column;
+    align-items: stretch;
+    transform: translateX(-50%);
 }
 
 /* =========================================
@@ -59,6 +73,11 @@
 .toast-notification-text {
     flex: 1;
     overflow-wrap: anywhere;
+}
+
+.toast-notification-content {
+    flex: 1;
+    min-width: 0;
 }
 
 /* =========================================
@@ -115,6 +134,15 @@
     --toast-text: color-mix(in srgb, #991b1b 70%, var(--fw-color-text) 30%);
 }
 
+/* --- Attention: stronger orange emphasis independent of message severity --- */
+.toast-notification-item[data-toast-variant="attention"] {
+    --toast-bg: color-mix(in srgb, hsl(28deg 92% 52%) 19%, var(--bg_color_extreme) 81%);
+    --toast-border: hsl(24deg 82% 43%);
+    --toast-text: color-mix(in srgb, hsl(20deg 82% 28%) 78%, var(--fw-color-text) 22%);
+    border-width: 2px;
+    box-shadow: 0 10px 28px rgb(0 0 0 / 28%);
+}
+
 /* =========================================
    Dark Mode — stronger tint, lighter text
    ========================================= */
@@ -136,4 +164,34 @@
 [data-theme="dark"] .toast-notification-item[data-toast-level="error"] {
     --toast-bg: color-mix(in srgb, #ef4444 18%, var(--bg_color_extreme) 82%);
     --toast-text: color-mix(in srgb, #fca5a5 80%, var(--fw-color-text) 20%);
+}
+
+[data-theme="dark"] .toast-notification-item[data-toast-variant="attention"],
+body.dark-mode .toast-notification-item[data-toast-variant="attention"] {
+    --toast-bg: color-mix(in srgb, hsl(24deg 88% 50%) 27%, var(--bg_color_extreme) 73%);
+    --toast-border: hsl(28deg 92% 62%);
+    --toast-text: color-mix(in srgb, hsl(35deg 100% 84%) 86%, var(--fw-color-text) 14%);
+}
+
+@media (prefers-color-scheme: dark) {
+    body:not(.light-mode) .toast-notification-item[data-toast-variant="attention"] {
+        --toast-bg: color-mix(in srgb, hsl(24deg 88% 50%) 27%, var(--bg_color_extreme) 73%);
+        --toast-border: hsl(28deg 92% 62%);
+        --toast-text: color-mix(in srgb, hsl(35deg 100% 84%) 86%, var(--fw-color-text) 14%);
+    }
+}
+
+body.light-mode .toast-notification-item[data-toast-variant="attention"] {
+    --toast-bg: color-mix(in srgb, hsl(28deg 92% 52%) 19%, var(--bg_color_extreme) 81%);
+    --toast-border: hsl(24deg 82% 43%);
+    --toast-text: color-mix(in srgb, hsl(20deg 82% 28%) 78%, var(--fw-color-text) 22%);
+}
+
+@media (width <= 640px) {
+    .toast-notification-container[data-toast-position="bottom-right"] {
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        left: max(12px, env(safe-area-inset-left));
+        max-width: none;
+    }
 }

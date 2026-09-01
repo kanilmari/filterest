@@ -1342,6 +1342,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "9.0.3": {"min_version": "9.6.7", "target_version": "9.6.7"},
         "9.0.4": {"min_version": "9.6.7", "target_version": "9.6.7"},
         "9.0.5": {"min_version": "9.6.7", "target_version": "9.6.7"},
+        "9.0.6": {"min_version": "9.6.7", "target_version": "9.6.7"},
     }
     version_order = {
         "8.40.8": 0,
@@ -1352,6 +1353,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "9.0.3": 5,
         "9.0.4": 6,
         "9.0.5": 7,
+        "9.0.6": 8,
     }
     assert all(
         entry.record["app_version"] in expected_databases
@@ -1364,7 +1366,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         == (
             "public_first"
             if entry.record["app_version"]
-            in {"9.0.0", "9.0.1", "9.0.2", "9.0.3", "9.0.4", "9.0.5"}
+            in {"9.0.0", "9.0.1", "9.0.2", "9.0.3", "9.0.4", "9.0.5", "9.0.6"}
             else "legacy_maintainer_export"
         )
         for entry in tail

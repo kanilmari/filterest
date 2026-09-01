@@ -111,6 +111,8 @@ describe("administrator update-notice subscriber", () => {
         eventSources[0].emit("update_notice", snapshot());
         const banner = document.getElementById("adminProductionUpdateNotice");
         expect(banner?.dataset.state).toBe("announced");
+        expect(banner?.dataset.toastVariant).toBe("attention");
+        expect(banner?.parentElement?.dataset.toastPosition).toBe("top-center");
         expect(banner?.textContent).toContain("A site update will begin soon");
         expect(banner?.textContent).not.toContain("release-2026-08-24");
 
@@ -121,6 +123,8 @@ describe("administrator update-notice subscriber", () => {
         }));
         expect(banner?.dataset.state).toBe("draining");
         expect(banner?.textContent).toContain("The site update is starting now");
+        expect(banner?.textContent.match(/\bnow\b/g)).toHaveLength(1);
+        expect(banner?.querySelector("[data-update-notice-countdown]")?.hidden).toBe(true);
 
         eventSources[0].emit("update_notice", snapshot({
             state: "cleared",
@@ -130,11 +134,36 @@ describe("administrator update-notice subscriber", () => {
         expect(document.getElementById("adminProductionUpdateNotice")).toBeNull();
     });
 
+    test("stays until user dismissal and returns for a newer update state", async () => {
+        const mod = await loadModule();
+        mod.renderAdminUpdateNoticeSnapshot(snapshot());
+        const announced = document.getElementById("adminProductionUpdateNotice");
+
+        vi.advanceTimersByTime(60000);
+        expect(document.getElementById("adminProductionUpdateNotice")).toBe(announced);
+        announced?.querySelector(".admin-update-notice__details-toggle")?.click();
+        expect(document.getElementById("adminProductionUpdateNotice")).toBe(announced);
+
+        announced?.querySelector(".toast-notification-close")?.click();
+        expect(mod.renderAdminUpdateNoticeSnapshot(snapshot())).toBe(true);
+        expect(document.getElementById("adminProductionUpdateNotice")?.getAttribute("aria-hidden")).toBe("true");
+
+        expect(mod.renderAdminUpdateNoticeSnapshot(snapshot({
+            state: "draining",
+            updated_at: "2026-08-24T10:09:00Z",
+            server_time: "2026-08-24T10:09:00Z",
+        }))).toBe(true);
+        expect(document.getElementById("adminProductionUpdateNotice")?.dataset.state).toBe("draining");
+        expect(document.getElementById("adminProductionUpdateNotice")?.getAttribute("aria-hidden")).toBeNull();
+        vi.advanceTimersByTime(300);
+        expect(document.getElementById("adminProductionUpdateNotice")?.dataset.state).toBe("draining");
+    });
+
     test.each([
-        ["fi-FI", "Sivustopäivitys alkaa pian", "Tallenna keskeneräiset työsi"],
-        ["zh-CN", "网站更新即将开始", "请在更新前保存"],
-        ["sv-SE", "A site update will begin soon", "Save any unfinished work"],
-    ])("uses fixed localized copy for %s", async (language, title, savePrompt) => {
+        ["fi-FI", "Sivustopäivitys alkaa pian", "Tallenna keskeneräiset työsi", "Sulje"],
+        ["zh-CN", "网站更新即将开始", "请在更新前保存", "关闭"],
+        ["sv-SE", "A site update will begin soon", "Save any unfinished work", "Dismiss"],
+    ])("uses fixed localized copy for %s", async (language, title, savePrompt, dismissLabel) => {
         getLanguageMock.mockReturnValue(language);
         const mod = await loadModule();
 
@@ -142,6 +171,7 @@ describe("administrator update-notice subscriber", () => {
         const text = document.getElementById("adminProductionUpdateNotice")?.textContent;
         expect(text).toContain(title);
         expect(text).toContain(savePrompt);
+        expect(document.querySelector(".toast-notification-close")?.getAttribute("aria-label")).toBe(dismissLabel);
     });
 
     test("advances the countdown from the monotonic server-time anchor", async () => {

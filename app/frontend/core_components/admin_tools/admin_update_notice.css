@@ -1,22 +1,27 @@
 /* admin_update_notice.css
- * Styles the persistent administrator warning shown before production updates.
- * Bridges fixed localized notice copy with light/dark application themes.
+ * Styles rich content inside the shared persistent update-notification toast.
+ * Bridges localized notice copy with the toast library and light/dark application themes.
  * Exists so the save-work warning remains visible without blocking normal editing.
  */
 
 .admin-update-notice {
-  position: fixed;
-  top: max(8px, env(safe-area-inset-top));
-  left: 50%;
-  z-index: calc(var(--z-modal, 101000) - 20);
   width: min(720px, calc(100vw - 24px));
   box-sizing: border-box;
+  display: block;
   overflow: hidden;
+  padding: 0;
   border: 1px solid hsl(35deg 75% 42%);
   border-radius: var(--border_radius, 8px);
   color: var(--text_color);
   background: color-mix(in srgb, var(--bg_color_extreme) 94%, hsl(35deg 90% 50%));
   box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  cursor: default;
+  user-select: text;
+}
+
+.admin-update-notice__content,
+.admin-update-notice > .toast-notification-content {
+  width: 100%;
 }
 
 .admin-update-notice[data-state="draining"] {
@@ -29,7 +34,7 @@
   align-items: center;
   gap: 10px;
   min-height: 42px;
-  padding: 7px 10px;
+  padding: 7px 42px 7px 10px;
 }
 
 .admin-update-notice__marker {
