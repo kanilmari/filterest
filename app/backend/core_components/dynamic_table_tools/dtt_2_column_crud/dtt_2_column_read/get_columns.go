@@ -77,7 +77,11 @@ func GetColumnsMapForTable(datasetName string) (map[int]dtt_models.ColumnInfo, e
        JOIN information_schema.columns c
          ON c.table_name = $1 AND c.column_name = cd.column_name
        WHERE cd.table_uid = $2
-         AND COALESCE(cd.hide_everywhere, false) = false
+	     AND (
+	         COALESCE(cd.hide_everywhere, false) = false
+	         OR cd.column_name = 'id'
+	     )
+	     AND COALESCE(cd.client_delivery_mode, 'include') = 'include'
          AND cd.column_name NOT IN ('embedding_vector', 'search_vector_simple')
        ORDER BY cd.co_number
    `

@@ -190,6 +190,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.AdminSitePresentationSettingsHandler":  AdminProfile,
 	"system_table_tools.AdminRowGroupsHandler":                 AdminProfile,
 	"system_table_tools.AdminRowGroupMembershipsHandler":       AdminProfile,
+	"system_table_tools.AdminRowAccessRulesHandler":            AdminProfile,
 	"system_table_tools.GetDatasetHeaderConfigHandler":         AdminProfile,
 	"system_table_tools.SaveDatasetHeaderConfigHandler":        AdminProfile,
 	"system_table_tools.GetChildTabConfigHandler":              LoginOnlyProfile, // Read by all users for reverse-FK/referring-tab rendering
@@ -202,6 +203,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.DeletePersonalViewFieldSetHandler":     LoginOnlyProfile,
 	"system_table_tools.SaveSiteViewFieldSetHandler":           AdminProfile,
 	"system_table_tools.AssignSiteViewFieldSetHandler":         AdminProfile,
+	"system_table_tools.ResetSharedViewFieldSetHandler":        AdminProfile,
 	"system_table_tools.DeleteSharedViewFieldSetHandler":       AdminProfile,
 	"system_table_tools.GetFilterbarSectionLayoutHandler":      AdminProfile,
 	"system_table_tools.SaveFilterbarSectionLayoutHandler":     AdminProfile,

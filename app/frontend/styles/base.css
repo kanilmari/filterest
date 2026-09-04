@@ -41,7 +41,8 @@ body {
 
 .body_wrapper {
     overflow: hidden;
-    background-color: var(--bg_color_blended_2);
+    min-height: 100vh;
+    background-color: var(--bg_color_extreme);
 }
 
 /* Yleiset perustyylit */
@@ -59,6 +60,16 @@ body {
        2560px the sidebar / toggle stay inside the content area and
        the slide-out animation is hidden beyond the edge. */
     contain: paint;
+}
+
+/* The 2560px application shell stops growing on ultra-wide displays. Only
+   then paint a complete structural edge around the HTML surface, including
+   the menu and filter panel. Because the edge belongs to their shared
+   containing block, hiding either panel cannot remove or relocate it. */
+@media (width >= 2562px) {
+    .body_content {
+        border: 1px solid var(--border_color);
+    }
 }
 
 #tabs_container {

@@ -58,6 +58,7 @@ describe('translatePage', () => {
     });
 
     afterEach(() => {
+        vi.restoreAllMocks();
         document.body.innerHTML = '';
         document.body.className = '';
         delete window.translationPromises;
@@ -147,7 +148,7 @@ describe('translatePage', () => {
 
     test('uses local fallbacks for field-set ownership and inheritance status', async () => {
         const source = document.createElement('p');
-        source.dataset.langKey = 'field_set_source_metadata';
+        source.dataset.langKey = 'field_set_source_group';
         document.body.appendChild(source);
         const reset = document.createElement('button');
         reset.dataset.langKey = 'use_site_default';
@@ -156,16 +157,32 @@ describe('translatePage', () => {
         const { translatePage } = await import('./translation_handler.js');
 
         await translatePage('fi');
-        expect(source.textContent).toBe('Metadatan oletus on käytössä');
+        expect(source.textContent).toBe('Ryhmäkohtainen oletus on käytössä');
         expect(reset.textContent).toBe('Käytä sivuston oletusta');
 
         await translatePage('en');
-        expect(source.textContent).toBe('Metadata default in use');
+        expect(source.textContent).toBe('Group default in use');
         expect(reset.textContent).toBe('Use site default');
 
         await translatePage('yue');
-        expect(source.textContent).toBe('正在使用中繼資料預設設定');
+        expect(source.textContent).toBe('正在使用群組預設設定');
         expect(reset.textContent).toBe('使用網站預設設定');
+    });
+
+    test('renders the local fallback after the translation service fails', async () => {
+        const source = document.createElement('p');
+        source.dataset.langKey = 'field_set_source_group';
+        document.body.appendChild(source);
+        window.translationPromises.en = Promise.reject(new Error('translation service blocked'));
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const { translatePage } = await import('./translation_handler.js');
+        await translatePage('en');
+
+        expect(source.textContent).toBe('Group default in use');
+        expect(document.documentElement.lang).toBe('en');
+        expect(document.body.classList.contains('loading')).toBe(false);
+        warning.mockRestore();
     });
 
     test('uses explicit lang variable attributes for placeholder translations', async () => {

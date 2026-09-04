@@ -75,6 +75,8 @@ import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { decorateStandardCardDetailKey } from "./card_detail_standard_key_decorator.js";
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
 import { resolveSiteTimestampDisplayOptions } from "./row_article_presentation_settings.js";
+import { isDatasetRowSelected } from "../dataset_row_selection_store.js";
+import { createEditRowPermissionsButton } from "../../admin_tools/row_access_editor.js";
 
 /** Update all mass-delete bars to reflect current selection count. */
 export function updateMassDeleteBar() {
@@ -89,6 +91,9 @@ export function updateMassDeleteBar() {
                 btn.dataset.langKey = 'delete_selected';
                 btn.textContent = `Poista valitut (${count})`;
             }
+            bar.querySelectorAll('.edit-row-permissions-button').forEach((button) => {
+                button.__updateSelectionCount?.(count);
+            });
         } else {
             bar.style.display = 'none';
         }
@@ -161,11 +166,12 @@ async function resolveCardRenderContext(
     data_types,
     locale = getLanguageWithBrowserFallback()
 ) {
-    const [hasDeleteRight, timestampDisplayOptions] = await Promise.all([
+    const [hasDeleteRight, canManageRowAccess, timestampDisplayOptions] = await Promise.all([
         hasDatasetPermission(
             "/api/delete-rows",
             table_name
         ),
+        hasDatasetPermission("/api/admin/row-access-rules", ""),
         resolveSiteTimestampDisplayOptions(locale),
     ]);
     const tableHasImageRole = columns.some((column) =>
@@ -176,6 +182,7 @@ async function resolveCardRenderContext(
 
     return {
         hasDeleteRight,
+        canManageRowAccess,
         tableHasImageRole,
         timestampDisplayOptions,
     };
@@ -407,6 +414,7 @@ async function createSingleCard(
         );
     const {
         hasDeleteRight,
+        canManageRowAccess,
         tableHasImageRole,
         timestampDisplayOptions,
     } = resolvedContext;
@@ -431,11 +439,13 @@ async function createSingleCard(
     }
 
     /* --- VALINTARUUTU (jos poistoon oikeus) -------------------- */
-    if (hasDeleteRight) {
+    if (hasDeleteRight || canManageRowAccess) {
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.classList.add("card_checkbox");
         cb.dataset.testid = 'card-select-checkbox';
+        cb.checked = isDatasetRowSelected(table_name, row_item.id);
+        card.classList.toggle("selected", cb.checked);
 
         if (row_item.id != null) {
             const checkboxId = `${table_name}_card_checkbox_${row_item.id}`;
@@ -1234,21 +1244,29 @@ export async function create_card_view(columns, data, table_name) {
     wrapper.appendChild(card_sidebar_panel);
     wrapper.appendChild(rowArticlePlaceholder);
 
-    // Mass delete bar — hidden until cards are selected
+    // Shared selected-row action bar — hidden until cards are selected.
     const massDeleteBar = document.createElement("div");
-    massDeleteBar.classList.add("card_mass_delete_bar");
+    massDeleteBar.classList.add("card_mass_delete_bar", "card_selected_row_action_bar");
     massDeleteBar.style.display = "none";
 
-    const massDeleteBtn = document.createElement("button");
-    massDeleteBtn.classList.add("button", "fw-btn", "mass_delete_button");
-    massDeleteBtn.dataset.langKey = "delete_selected";
-    massDeleteBtn.addEventListener("click", async () => {
-        const { delete_selected_items } = await import("../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover.js");
-        await delete_selected_items(table_name);
-        updateMassDeleteBar();
-    });
-    massDeleteBar.appendChild(massDeleteBtn);
-    wrapper.prepend(massDeleteBar);
+    if (renderContext.hasDeleteRight) {
+        const massDeleteBtn = document.createElement("button");
+        massDeleteBtn.classList.add("button", "fw-btn", "mass_delete_button");
+        massDeleteBtn.dataset.langKey = "delete_selected";
+        massDeleteBtn.addEventListener("click", async () => {
+            const { delete_selected_items } = await import("../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover.js");
+            await delete_selected_items(table_name);
+            updateMassDeleteBar();
+        });
+        massDeleteBar.appendChild(massDeleteBtn);
+    }
+    if (renderContext.canManageRowAccess) {
+        massDeleteBar.appendChild(createEditRowPermissionsButton(table_name));
+    }
+    if (massDeleteBar.children.length > 0) {
+        wrapper.prepend(massDeleteBar);
+        setTimeout(updateMassDeleteBar, 0);
+    }
 
     if (collapsed) {
         wrapper.classList.add("big-card-open");

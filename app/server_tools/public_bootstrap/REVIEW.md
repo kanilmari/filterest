@@ -1,11 +1,11 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `52`
-- Seed tables: `30`
+- Schema tables: `56`
+- Seed tables: `32`
 - Example emails: `0`
 - Manifest format: `2`
-- Manifest source files: `23`
+- Manifest source files: `26`
 - Findings: `0`
 
 ## Verdict
@@ -51,6 +51,10 @@ PASS
 - `public.system_lang_keys`
 - `public.system_lang_keys_archive`
 - `public.system_languages`
+- `public.system_permission_actions`
+- `public.system_permission_categories`
+- `public.system_row_access_rule_events`
+- `public.system_row_access_rules`
 - `public.system_row_group_memberships`
 - `public.system_row_groups`
 - `public.system_table_folders`
@@ -92,6 +96,8 @@ PASS
 - `public.system_lang_key_translations`
 - `public.system_lang_keys`
 - `public.system_languages`
+- `public.system_permission_actions`
+- `public.system_permission_categories`
 - `public.system_table_folders`
 - `public.system_table_views`
 - `public.system_user_group_memberships`
@@ -115,16 +121,18 @@ PASS
 - `public.riskienhallinta_tiketit_relation`: 1
 - `public.system_about`: 1
 - `public.system_column_details`: 47
-- `public.system_config`: 12
-- `public.system_db_tables`: 50
+- `public.system_config`: 13
+- `public.system_db_tables`: 54
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
-- `public.system_functions`: 38
+- `public.system_functions`: 41
 - `public.system_group_table_func_rights`: 24
 - `public.system_lang_key_sources`: 0
-- `public.system_lang_key_translations`: 105
-- `public.system_lang_keys`: 404
+- `public.system_lang_key_translations`: 110
+- `public.system_lang_keys`: 491
 - `public.system_languages`: 5
+- `public.system_permission_actions`: 7
+- `public.system_permission_categories`: 4
 - `public.system_table_folders`: 14
 - `public.system_table_views`: 12
 - `public.system_user_group_memberships`: 2
@@ -136,7 +144,7 @@ PASS
 ## Manifest Hash Coverage
 
 - Generated files with hashes: `2`
-- Source files with hashes: `23`
+- Source files with hashes: `26`
 
 ## Email Domains
 

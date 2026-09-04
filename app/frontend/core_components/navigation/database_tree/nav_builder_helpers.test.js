@@ -147,6 +147,7 @@ describe('getAdminToolsStructure', () => {
         expect(maintenance).toBeDefined();
         expect(maintenance.children.length).toBeGreaterThan(0);
         expect(tableTools.children.some(c => c.id === 'card_visibility')).toBe(true);
+        expect(tableTools.children.some(c => c.id === 'view_field_assignments')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'service_catalog_moderation')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'dataset_alias_management')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'symbols')).toBe(true);

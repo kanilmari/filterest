@@ -58,6 +58,7 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"system_table_tools.GetChildTabConfigHandler":              {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.SaveChildTabConfigHandler":             {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.GetViewFieldSetsHandler":               {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.ResetSharedViewFieldSetHandler":        {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.SavePersonalViewFieldSetHandler":       {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.AssignPersonalViewFieldSetHandler":     {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.ResetPersonalViewFieldSetHandler":      {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},

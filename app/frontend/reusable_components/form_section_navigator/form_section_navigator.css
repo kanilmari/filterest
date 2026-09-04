@@ -80,11 +80,6 @@
     color: var(--button_hover_text_color);
 }
 
-.form-section-navigator__arrow:active:not(:disabled),
-.form-section-navigator__step:active {
-    transform: scale(var(--button_pressed_scale));
-}
-
 .form-section-navigator__arrow:focus-visible,
 .form-section-navigator__step:focus-visible {
     outline: 2px solid var(--auth-focus-color, var(--border_color));
@@ -118,7 +113,7 @@
     font-weight: 650;
     cursor: pointer;
     transition: background-color 0.2s ease, border-color 0.2s ease,
-        color 0.2s ease, transform 0.15s ease;
+        color 0.2s ease;
 }
 
 .form-section-navigator__footer-button--next {
@@ -133,10 +128,6 @@
 .form-section-navigator__footer-button:hover {
     background: var(--button_hover_bg_color);
     color: var(--button_hover_text_color);
-}
-
-.form-section-navigator__footer-button:active {
-    transform: scale(var(--button_pressed_scale));
 }
 
 .form-section-navigator__footer-button:focus-visible {

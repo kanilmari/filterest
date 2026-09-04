@@ -188,6 +188,29 @@ test("presents the older legacy fallback response as the metadata default", asyn
         .toBe("metadata");
 });
 
+test("presents a group assignment as a group source instead of metadata", async () => {
+    api.getViewFieldSets.mockResolvedValue({
+        active_field_set_id: 12,
+        personal_field_set_id: null,
+        site_default_field_set_id: 8,
+        effective_scope: "group",
+        available_columns: ["title", "id"],
+        visible_columns: ["title"],
+        can_edit_personal: true,
+        can_edit_site_default: false,
+        field_sets: [
+            { id: 12, name: "Team", scope: "shared", visible_columns: ["title"] },
+        ],
+    });
+    const { buildColumnViewPresetSelector } = await import("./column_view_preset_builder.js");
+    const row = buildColumnViewPresetSelector("orders", ["title", "id"], "table");
+    await vi.waitFor(() => expect(api.getViewFieldSets).toHaveBeenCalledTimes(1));
+
+    const status = row.querySelector('[data-testid="field-set-effective-source"]');
+    expect(status?.dataset.effectiveScope).toBe("group");
+    expect(status?.textContent).toBe("Ryhmäkohtainen oletus on käytössä");
+});
+
 test("shows a safe diagnostic when an active assignment is absent from returned collections", async () => {
     api.getViewFieldSets.mockResolvedValue({
         active_field_set_id: 99,

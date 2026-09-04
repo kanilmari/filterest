@@ -49,12 +49,12 @@ func TestBuildReadRowPolicyConditionAddsOwnerFallbackForNonPilot(t *testing.T) {
 	}
 
 	condition, args := buildReadRowPolicyCondition("some_other_table", "basic", 42, policy, 3)
-	want := `("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $3) AND ("some_other_table"."enabled" = TRUE OR "some_other_table"."user_id" = $3)`
+	want := `public.resolve_effective_row_access($4, "some_other_table"."id", $5, 'read', (("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $3) AND ("some_other_table"."enabled" = TRUE OR "some_other_table"."user_id" = $3)), FALSE)`
 	if condition != want {
 		t.Fatalf("condition = %q, want %q", condition, want)
 	}
-	if len(args) != 1 || args[0] != 42 {
-		t.Fatalf("args = %v, want [42]", args)
+	if len(args) != 3 || args[0] != 42 || args[1] != "some_other_table" || args[2] != 42 {
+		t.Fatalf("args = %v, want [42 some_other_table 42]", args)
 	}
 }
 
@@ -68,7 +68,7 @@ func TestBuildReadRowPolicyConditionIgnoresShadowLegacyOwnerColumn(t *testing.T)
 	}
 
 	condition, _ := buildReadRowPolicyCondition("some_other_table", "basic", 42, policy, 1)
-	want := `("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $1)`
+	want := `public.resolve_effective_row_access($2, "some_other_table"."id", $3, 'read', (("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $1)), FALSE)`
 	if condition != want {
 		t.Fatalf("condition = %q, want active owner column to stay user_id", condition)
 	}
@@ -82,11 +82,21 @@ func TestBuildReadRowPolicyConditionSkipsUnknownPolicy(t *testing.T) {
 	}
 
 	condition, args := buildReadRowPolicyCondition("some_other_table", "basic", 42, policy, 1)
-	if condition != "" {
-		t.Fatalf("condition = %q, want empty for unknown policy", condition)
+	want := `public.resolve_effective_row_access($1, "some_other_table"."id", $2, 'read', (TRUE), FALSE)`
+	if condition != want {
+		t.Fatalf("condition = %q, want exact-row resolver with broader TRUE", condition)
 	}
-	if len(args) != 0 {
-		t.Fatalf("args = %#v, want none", args)
+	if len(args) != 2 || args[0] != "some_other_table" || args[1] != 42 {
+		t.Fatalf("args = %#v, want dataset and actor", args)
+	}
+}
+
+func TestBuildEffectiveRowAccessConditionRejectsUnsupportedActions(t *testing.T) {
+	condition, args := buildEffectiveRowAccessConditionForReference(
+		"some_other_table", "candidate", 42, "create", "TRUE", 1,
+	)
+	if condition != "FALSE" || len(args) != 0 {
+		t.Fatalf("unsupported row action = (%q, %#v), want fail-closed FALSE", condition, args)
 	}
 }
 

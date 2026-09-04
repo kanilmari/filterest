@@ -42,6 +42,7 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "ui.admin.fix_media_subfolders", URLRouteEndpoint: "/ui/admin/fix_media_subfolders", SpecificTableRelated: false},
 	{Name: "ui.admin.fk_cache_triggers", URLRouteEndpoint: "/ui/admin/fk_cache_triggers", SpecificTableRelated: false},
 	{Name: "ui.admin.card_visibility", URLRouteEndpoint: "/ui/admin/card_visibility", SpecificTableRelated: false},
+	{Name: "ui.admin.view_field_assignments", URLRouteEndpoint: "/ui/admin/view_field_assignments", SpecificTableRelated: false},
 	{Name: "ui.admin.asset_linking", URLRouteEndpoint: "/ui/admin/asset_linking", SpecificTableRelated: false},
 	{Name: "ui.admin.child_tab_config", URLRouteEndpoint: "/ui/admin/child_tab_config", SpecificTableRelated: false},
 	{Name: "ui.admin.dataset_alias_management", URLRouteEndpoint: "/ui/admin/dataset_alias_management", SpecificTableRelated: false},

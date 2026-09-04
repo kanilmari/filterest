@@ -508,15 +508,34 @@ class EaselectAPIClient:
             "yue": before.get("yue", ""),
             "usage_explanation": before.get("usage_explanation", ""),
         }
+        patch_values = {"lang_key": lang_key}
         for field in ("fi", "en", "ch", "yue", "usage_explanation"):
             if field in update and update[field] is not None:
                 next_values[field] = str(update[field])
+                patch_values[field] = str(update[field])
+
+        if len(patch_values) == 1:
+            raise EaselectAPIError(
+                f"at least one language-key field is required for {lang_key}"
+            )
 
         if dry_run:
             after = dict(next_values)
+            after["exists"] = True
         else:
-            self.request("POST", "/api/admin/lang-key", data=next_values, csrf=True)
+            self.request("POST", "/api/admin/lang-key", data=patch_values, csrf=True)
             after = self.get_lang_key(lang_key)
+
+            mismatched_fields = [
+                field
+                for field in ("fi", "en", "ch", "yue", "usage_explanation")
+                if str(after.get(field, "")) != str(next_values.get(field, ""))
+            ]
+            if after.get("exists") is False or mismatched_fields:
+                details = ", ".join(mismatched_fields) or "exists"
+                raise EaselectAPIError(
+                    f"language-key readback mismatch for {lang_key}: {details}"
+                )
 
         return {
             "lang_key": lang_key,

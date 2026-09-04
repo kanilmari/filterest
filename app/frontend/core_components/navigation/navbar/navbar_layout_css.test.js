@@ -30,4 +30,26 @@ describe('navbar layout CSS', () => {
         expect(topBarRule).toContain('border-right: 2px solid var(--border_color);');
         expect(topBarRule).toContain('margin-right: 0;');
     });
+
+    test('keeps the navbar inset edge painted throughout the collapsed state', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
+        const collapsedRule = css.match(/#navbar\.collapsed\s*\{([^}]*)\}/)?.[1] || '';
+        const completedRule = css.match(
+            /#navbar\.collapsed\.navbar-collapse-complete\s*\{([^}]*)\}/
+        )?.[1] || '';
+
+        expect(collapsedRule).toContain('box-shadow: inset -2px 0 0 0 var(--border_color);');
+        expect(completedRule).toContain('box-shadow: inset -2px 0 0 0 var(--border_color);');
+    });
+
+    test('aligns rectangular tab-button borders with the navbar edge', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, '../main_tabs/tabs.css'), 'utf8');
+        const buttonRule = css.match(
+            /#navbar #navmenu \.navtablinks\[data-tab-presentation\^="button"\]\s*\{([^}]*)\}/
+        )?.[1] || '';
+
+        expect(buttonRule).toContain('box-sizing: border-box;');
+        expect(buttonRule).toContain('width: 100%;');
+        expect(buttonRule).toContain('border-right: 2px solid var(--border_color);');
+    });
 });

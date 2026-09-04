@@ -376,6 +376,10 @@ body.dark-mode .card--modern {
     border-left: 1px solid var(--card-modern-separator-color);
 }
 
+.card--modern .card_detail_tile--placeholder {
+    min-height: calc(2.35rem + 16px);
+}
+
 .card--modern .card_detail_tile_icon {
     display: inline-flex;
     align-items: center;
@@ -453,6 +457,10 @@ body.dark-mode .card--modern {
 
     .card--modern .card_detail_tile--column-separated {
         border-left: 0;
+    }
+
+    .card--modern .card_detail_tile--placeholder {
+        display: none;
     }
 
     .card--modern .card_detail_tile:not(:first-child) {

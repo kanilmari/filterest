@@ -52,6 +52,13 @@
   transition: box-shadow 0.3s ease;
 }
 
+.dataset-search-input-shell {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .dataset-search-input {
   flex: 1;
   height: 44px;
@@ -228,6 +235,13 @@
 
 .filterbar-search-only .dataset-search-input:focus {
   background: var(--bg_color_extreme) !important;
+}
+
+/* The narrow clear action is overlaid inside the text field so it does not
+   become a third bordered segment or interrupt the input's outer edge. */
+.dataset-search-input-shell > .dataset-search-input {
+  width: 100%;
+  padding-right: 44px !important;
 }
 
 /* ============================================

@@ -435,14 +435,6 @@ body.dark-mode .image_first_view_modal {
     background: currentcolor;
 }
 
-.image_first_view_modal .row_article_image_first_arrow:active {
-    transform: translateY(-50%);
-}
-
-.image_first_view_modal .row_article_row_navigation_button:active {
-    transform: none;
-}
-
 .row_article_image_first_arrow--previous {
     left: clamp(8px, 2vw, 28px);
 }

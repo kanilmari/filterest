@@ -8,3 +8,4 @@ export * from "./dataset_search_header_builder.js";
 export * from "./dataset_search_location_handler.js";
 export * from "./dataset_search_executor.js";
 export * from "./dataset_search_component_builder.js";
+export * from "./dataset_search_clearer.js";

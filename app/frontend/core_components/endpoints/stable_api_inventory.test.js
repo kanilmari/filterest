@@ -79,6 +79,7 @@ describe('stable_api_inventory', () => {
             'savePersonalDatasetSortDefault',
             'savePersonalViewFieldSet',
             'saveSiteViewFieldSet',
+            'resetSharedViewFieldSet',
             'checkJsonColumns',
         ]));
 

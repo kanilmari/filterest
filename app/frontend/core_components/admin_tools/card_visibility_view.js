@@ -42,12 +42,23 @@ const CARD_DETAIL_LABEL_MODE_OPTIONS = [
     'both',
 ];
 
+const CLIENT_DELIVERY_MODE_OPTIONS = [
+    { value: 'include', labelKey: 'client_delivery_include' },
+    { value: 'server_only', labelKey: 'client_delivery_server_only' },
+];
+
 const VISIBILITY_FLAGS = [
     { key: 'card_element',               type: 'select', options: CARD_ELEMENT_OPTIONS },
     { key: 'card_detail_capitalization', type: 'checkbox' },
     { key: 'show_key_on_card',           type: 'checkbox' },
     { key: 'show_value_on_card',         type: 'checkbox' },
     { key: 'hide_everywhere',            type: 'checkbox' },
+    {
+        key: 'client_delivery_mode',
+        type: 'select',
+        options: CLIENT_DELIVERY_MODE_OPTIONS,
+        isCellDisabled: (row) => Boolean(row.client_delivery_mode_locked),
+    },
     { key: 'hide_on_small_card',         type: 'checkbox' },
     { key: 'hide_false_null_on_sml_crd', type: 'checkbox' },
     { key: 'hide_false_null_on_big_crd', type: 'checkbox' },
@@ -90,7 +101,9 @@ function buildEditorColumns() {
         if (option && typeof option === 'object') {
             return {
                 value: option.value,
-                label: option.label || option.value,
+                label: option.labelKey
+                    ? getTranslationForKey(option.labelKey) || option.value
+                    : option.label || option.value,
             };
         }
         return { value: option, label: option };
@@ -117,6 +130,7 @@ function buildEditorColumns() {
             options: flag.type === 'select' && Array.isArray(flag.options)
                 ? normalizeSelectOptions(flag.options)
                 : [],
+            isCellDisabled: flag.isCellDisabled,
         })),
     ];
 }

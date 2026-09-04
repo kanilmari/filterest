@@ -1,0 +1,274 @@
+/*
+ * view_field_assignments_view.css
+ * Styles the dedicated site/group field-assignment administration page.
+ * Bridges theme tokens with the dataset tree, group picker, and sortable field list.
+ * Exists so the workflow remains readable, responsive, and geometry-stable in both themes.
+ */
+
+.view-field-assignments {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+    color: var(--text_color);
+}
+
+.view-field-assignments__title,
+.view-field-assignments__description,
+.view-field-assignments__target-status,
+.view-field-assignments__selection-warning,
+.view-field-assignments__mixed-warning,
+.view-field-assignments__field-warning,
+.view-field-assignments__status,
+.view-field-assignments__fields-title {
+    margin: 0;
+}
+
+.view-field-assignments__description,
+.view-field-assignments__target-status,
+.view-field-assignments__status {
+    color: var(--empty_field_text_color);
+}
+
+.view-field-assignments__layout {
+    display: grid;
+    grid-template-columns: minmax(15rem, 19rem) minmax(0, 75rem);
+    gap: 1rem;
+    align-items: start;
+    justify-content: center;
+    width: 100%;
+}
+
+.view-field-assignments__tree-panel,
+.view-field-assignments__editor {
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--table_border_color, var(--border_color));
+    border-radius: var(--fw-radius-md, var(--border_radius_small));
+    background: var(--bg_color_2);
+}
+
+.view-field-assignments__tree-panel {
+    position: sticky;
+    top: 0.75rem;
+    max-height: calc(100vh - 3rem);
+    overflow: auto;
+}
+
+.view-field-assignments__editor,
+.view-field-assignments__controls {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.view-field-assignments__editor {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 75rem;
+}
+
+.view-field-assignments__controls {
+    grid-template-columns: minmax(8rem, max-content) minmax(12rem, 1fr);
+    align-items: center;
+}
+
+.view-field-assignments__label {
+    font-weight: 650;
+}
+
+.view-field-assignments__select,
+.view-field-assignments__input,
+.view-field-assignments__priority,
+.view-field-assignments__field-search {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.65rem;
+    color: var(--text_color);
+    border: 1px solid var(--border_color);
+    border-radius: var(--fw-radius-sm, var(--border_radius_small));
+    background: var(--input_bg_color);
+}
+
+.view-field-assignments__group-picker {
+    min-width: 0;
+}
+
+.view-field-assignments__target-status,
+.view-field-assignments__selection-warning,
+.view-field-assignments__field-warning,
+.view-field-assignments__mixed-warning {
+    grid-column: 1 / -1;
+}
+
+.view-field-assignments__selection-warning,
+.view-field-assignments__field-warning,
+.view-field-assignments__mixed-warning {
+    padding: 0.65rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--primary_color) 55%, var(--border_color));
+    border-radius: var(--fw-radius-sm, var(--border_radius_small));
+    background: color-mix(in srgb, var(--primary_color) 12%, var(--bg_color_2));
+}
+
+.view-field-assignments__priority-row {
+    display: contents;
+}
+
+.view-field-assignments__priority-row[hidden] {
+    display: none;
+}
+
+.view-field-assignments__priority-label-row {
+    display: inline-flex;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.view-field-assignments__priority-help-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0.3rem;
+    border: 1px solid var(--border_color);
+    border-radius: 50%;
+    color: var(--text_color);
+    background: var(--button_bg_color);
+    cursor: pointer;
+}
+
+.view-field-assignments__priority-help-button:focus-visible {
+    outline: 2px solid var(--primary_color);
+    outline-offset: 2px;
+}
+
+.view-field-assignments__priority-help-icon {
+    width: 0.9rem;
+    height: 0.9rem;
+    color: currentcolor;
+    background-color: currentcolor;
+}
+
+.view-field-assignments__priority-help {
+    grid-column: 1 / -1;
+    margin: -0.15rem 0 0;
+    padding: 0.65rem 0.75rem;
+    border-left: 3px solid var(--primary_color);
+    color: var(--empty_field_text_color);
+    background: color-mix(in srgb, var(--primary_color) 8%, transparent);
+    line-height: 1.45;
+}
+
+.view-field-assignments__fields-header {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) minmax(12rem, 18rem);
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.35rem;
+}
+
+.view-field-assignments__field-list {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    /* The administration page owns vertical scrolling. Keeping the complete
+       field list in normal flow avoids a nested scroll area inside the editor. */
+    list-style: none;
+}
+
+.view-field-assignments__field-row {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(8rem, 1fr) minmax(8rem, auto) auto;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid var(--table_border_color, var(--border_color));
+    border-radius: var(--fw-radius-sm, var(--border_radius_small));
+    background: var(--table_row_bg_color, var(--bg_color));
+}
+
+.view-field-assignments__field-row.is-dragging {
+    opacity: 0.55;
+}
+
+.view-field-assignments__drag-handle {
+    color: var(--empty_field_text_color);
+    cursor: grab;
+    font-size: 1.1rem;
+    user-select: none;
+}
+
+.view-field-assignments__field-identity {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.view-field-assignments__field-identity small {
+    color: var(--empty_field_text_color);
+    font-variant-numeric: tabular-nums;
+}
+
+.view-field-assignments__visibility,
+.view-field-assignments__order-controls,
+.view-field-assignments__actions {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.view-field-assignments__move {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0.3rem 0.5rem;
+}
+
+.view-field-assignments__actions {
+    justify-content: flex-end;
+    min-height: 2.75rem;
+}
+
+.view-field-assignments__button {
+    min-width: 10.5rem;
+}
+
+@media (width <= 820px) {
+    .view-field-assignments__layout {
+        grid-template-columns: 1fr;
+    }
+
+    .view-field-assignments__tree-panel {
+        position: static;
+        max-height: 20rem;
+    }
+}
+
+@media (width <= 600px) {
+    .view-field-assignments__controls,
+    .view-field-assignments__fields-header,
+    .view-field-assignments__field-row {
+        grid-template-columns: 1fr;
+    }
+
+    .view-field-assignments__target-status,
+    .view-field-assignments__selection-warning,
+    .view-field-assignments__field-warning,
+    .view-field-assignments__mixed-warning {
+        grid-column: auto;
+    }
+
+    .view-field-assignments__drag-handle {
+        display: none;
+    }
+
+    .view-field-assignments__actions {
+        align-items: stretch;
+        flex-direction: column-reverse;
+    }
+
+    .view-field-assignments__button {
+        width: 100%;
+    }
+}

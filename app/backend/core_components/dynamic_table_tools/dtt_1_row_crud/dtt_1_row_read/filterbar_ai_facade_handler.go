@@ -771,6 +771,7 @@ func readFilterbarAIWorkspaceCapabilities(ctx context.Context, currentDataset st
 		  ON c.table_schema = 'public'
 		 AND c.table_name = t.table_name
 		 AND c.column_name = cd.column_name
+		 AND COALESCE(cd.client_delivery_mode, 'include') = 'include'
 		 AND c.column_name NOT IN ('embedding_vector', 'search_vector_simple')
 		WHERE COALESCE(t.table_name, '') <> ''
 		GROUP BY t.table_name, t.multi_lang_embeddings
@@ -847,12 +848,19 @@ func normalizeFilterbarAICapabilityColumns(columns []string) []string {
 
 func readFilterbarAIFilterableColumnNames(dataset string) ([]string, error) {
 	rows, err := backend.Db.Query(`
-		SELECT column_name
-		FROM information_schema.columns
-		WHERE table_schema = 'public'
-		  AND table_name = $1
-		  AND column_name NOT IN ('embedding_vector', 'search_vector_simple')
-		ORDER BY ordinal_position
+		SELECT columns.column_name
+		FROM information_schema.columns AS columns
+		LEFT JOIN public.system_db_tables AS tables
+		  ON tables.table_name = columns.table_name
+		 AND COALESCE(NULLIF(tables.schema_name, ''), 'public') = columns.table_schema
+		LEFT JOIN public.system_column_details AS details
+		  ON details.table_uid = tables.table_uid
+		 AND details.column_name = columns.column_name
+		WHERE columns.table_schema = 'public'
+		  AND columns.table_name = $1
+		  AND COALESCE(details.client_delivery_mode, 'include') = 'include'
+		  AND columns.column_name NOT IN ('embedding_vector', 'search_vector_simple')
+		ORDER BY columns.ordinal_position
 	`, dataset)
 	if err != nil {
 		return nil, err

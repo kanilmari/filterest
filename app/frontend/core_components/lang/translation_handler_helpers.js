@@ -38,8 +38,7 @@ export function formatMissingKey(baseKey, variablePart) {
 
 /**
  * Replace supported placeholders in a translation string with the variable part.
- * Currently supports both $table_name and $site_name so existing dataset-driven
- * translations and login-page site-aware copy can share the same key syntax.
+ * Supports the shared dataset/site placeholders and a generic numeric count.
  *
  * @param {string} translation - The translation text (may contain "$table_name")
  * @param {string|null} variablePart - The value to substitute, or null to skip
@@ -50,7 +49,8 @@ export function applyTranslationVariable(translation, variablePart) {
     if (!variablePart) return translation;
     return translation
         .split('$table_name').join(variablePart)
-        .split('$site_name').join(variablePart);
+        .split('$site_name').join(variablePart)
+        .split('$count').join(variablePart);
 }
 
 /**

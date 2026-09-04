@@ -146,7 +146,9 @@ type acMockConfig struct {
 	specificRelated      bool // returned for system_functions/specific_table_related
 	isAdmin              bool // whether admin membership row exists (group_id=1)
 	permissionGranted    bool // whether permission row exists in system_group_table_func_rights
+	permissionByTable    map[string]bool
 	tableExists          bool // returned for information_schema.tables EXISTS check
+	tableExistsByName    map[string]bool
 	tableIdentityMatches bool // whether a supplied table name and UID resolve to one registry row
 }
 
@@ -247,14 +249,24 @@ func (c *acMockConn) QueryContext(_ context.Context, query string, args []driver
 
 	case strings.Contains(query, "system_group_table_func_rights"):
 		// Permission check (table-specific or table-less JOIN query).
-		if c.cfg.permissionGranted {
+		granted := c.cfg.permissionGranted
+		if c.cfg.permissionByTable != nil && len(args) >= 3 {
+			tableName, _ := args[len(args)-1].Value.(string)
+			granted = c.cfg.permissionByTable[tableName]
+		}
+		if granted {
 			return mockOneRow("col"), nil
 		}
 		return mockEmptyRows("col"), nil
 
 	case strings.Contains(query, "information_schema.tables"):
 		// Table existence check in the ?datasets= multi-table path.
-		return mockBoolRow("exists", c.cfg.tableExists), nil
+		exists := c.cfg.tableExists
+		if c.cfg.tableExistsByName != nil && len(args) > 0 {
+			tableName, _ := args[0].Value.(string)
+			exists = c.cfg.tableExistsByName[tableName]
+		}
+		return mockBoolRow("exists", exists), nil
 
 	case strings.Contains(query, "table_uid::text") && strings.Contains(query, "FROM public.system_db_tables"):
 		return mockBoolRow("exists", c.cfg.tableIdentityMatches), nil
@@ -1001,15 +1013,18 @@ func TestWithAccessControl_MultiDataset_AllGranted(t *testing.T) {
 	}
 }
 
-// TestWithAccessControl_MultiDataset_Denied returns 403 when the user lacks
-// permission for any of the datasets in ?datasets=t1,t2.
+// TestWithAccessControl_MultiDataset_Denied returns 403 without invoking the
+// handler when one requested dataset is allowed and another is forbidden.
 func TestWithAccessControl_MultiDataset_Denied(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, acMockConfig{
-		specificRelated:   true,
-		permissionGranted: false,
-		tableExists:       true,
-		isAdmin:           false,
+		specificRelated: true,
+		permissionByTable: map[string]bool{
+			"t1": true,
+			"t2": false,
+		},
+		tableExists: true,
+		isAdmin:     false,
 	})
 	req := buildReq(t, store, http.MethodGet, "/api/get-results?datasets=t1,t2", int(42), nil, "")
 	rr := httptest.NewRecorder()
@@ -1025,18 +1040,14 @@ func TestWithAccessControl_MultiDataset_Denied(t *testing.T) {
 	}
 }
 
-// TestWithAccessControl_MultiDataset_NoValidTables verifies that when none of the
-// dataset names exist in the schema, the middleware falls back to a tableless
-// userHasFunctionPermissionOnTable call. Because the function is specific_table_related,
-// that call returns false (specific_table_related=true requires a table name → denied).
-// This is the expected production behavior: a specific-table function with no resolvable
-// table is always denied.
+// TestWithAccessControl_MultiDataset_NoValidTables verifies that nonexistent
+// datasets fail closed as not found instead of being filtered from the request.
 func TestWithAccessControl_MultiDataset_NoValidTables(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, acMockConfig{
 		specificRelated:   true,
 		permissionGranted: true,
-		tableExists:       false, // no tables exist → validTables is empty
+		tableExists:       false,
 		isAdmin:           false,
 	})
 	req := buildReq(t, store, http.MethodGet, "/api/get-results?datasets=ghost1,ghost2", int(42), nil, "")
@@ -1045,12 +1056,57 @@ func TestWithAccessControl_MultiDataset_NoValidTables(t *testing.T) {
 
 	WithAccessControl("/api/get-results", "test", noopHandler(&called))(rr, req)
 
-	// Tableless fallback fails: specific_table_related=true but no table name → denied.
 	if called {
-		t.Error("handler must not be called when specific_table_related=true but no valid tables")
+		t.Error("handler must not be called for nonexistent datasets")
 	}
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("status: got %d, want 403", rr.Code)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("status: got %d, want 404", rr.Code)
+	}
+}
+
+func TestWithAccessControl_MultiDataset_RejectsExistingAndNonexistent(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		specificRelated:   true,
+		permissionGranted: true,
+		tableExistsByName: map[string]bool{
+			"t1":    true,
+			"ghost": false,
+		},
+	})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results?datasets=t1,ghost", int(42), nil, "")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/api/get-results", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Error("handler must not be called when any requested dataset does not exist")
+	}
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("status: got %d, want 404", rr.Code)
+	}
+}
+
+func TestWithAccessControl_MultiDataset_RejectsHiddenCloudDataset(t *testing.T) {
+	t.Setenv("CLOUD_MANAGEMENT_UI_ENABLED", "0")
+	store := setupTestStore(t)
+	setupMockDB(t, acMockConfig{
+		specificRelated:   true,
+		permissionGranted: true,
+		tableExists:       true,
+	})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results?datasets=t1,app_cloud_services", int(42), nil, "")
+	rr := httptest.NewRecorder()
+	called := false
+
+	WithAccessControl("/api/get-results", "test", noopHandler(&called))(rr, req)
+
+	if called {
+		t.Error("handler must not be called when any requested dataset is hidden")
+	}
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("status: got %d, want 404", rr.Code)
 	}
 }
 

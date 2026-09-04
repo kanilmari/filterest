@@ -230,6 +230,10 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 				Action: "delete",
 			})
 		}
+		// Group membership removal can change the winning per-view field set.
+		if table_name == "system_user_group_memberships" {
+			dtt_1_row_read.InvalidateUserColumnSettingsCache("", "")
+		}
 	}
 	if !dbutils.RegisterAfterCommitHook(r.Context(), publishDeleteEvents) {
 		// Non-lazy test/tool contexts publish immediately as a fallback.

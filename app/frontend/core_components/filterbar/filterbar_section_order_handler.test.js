@@ -10,6 +10,7 @@ import {
     DEFAULT_FILTERBAR_SECTION_ORDER,
     normalizeFilterbarSectionCollapsed,
     normalizeFilterbarSectionOrder,
+    shouldPersistFilterbarSectionToggle,
     setupFilterbarSectionOrdering,
 } from "./filterbar_section_order_handler.js";
 
@@ -137,5 +138,19 @@ describe("normalizeFilterbarSectionCollapsed", () => {
         expect(filters.expand).not.toHaveBeenCalled();
         expect(filters.collapse).not.toHaveBeenCalled();
         expect(filters.classList.contains("is-collapsed")).toBe(true);
+    });
+});
+
+describe("shouldPersistFilterbarSectionToggle", () => {
+    test("rejects the coordinator's temporary disclosure operations", () => {
+        const container = document.createElement("div");
+        const section = document.createElement("section");
+        section.dataset.filterbarSectionKey = "filters";
+        container.appendChild(section);
+
+        expect(shouldPersistFilterbarSectionToggle(section, container)).toBe(true);
+
+        section.dataset.filterbarTemporaryDisclosureOperation = "true";
+        expect(shouldPersistFilterbarSectionToggle(section, container)).toBe(false);
     });
 });

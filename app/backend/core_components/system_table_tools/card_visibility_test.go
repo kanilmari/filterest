@@ -120,9 +120,9 @@ func TestNormalizeFieldViewColumnsUsesRequestOrderAsGlobalOrder(t *testing.T) {
 		{ColumnUID: 3, ColumnName: "summary"},
 	}
 	requested := []CardVisibilityColumn{
-		{ColumnUID: 3, ColumnName: "untrusted-summary", HideEverywhere: true},
-		{ColumnUID: 1, ColumnName: "untrusted-id", HideEverywhere: false},
-		{ColumnUID: 2, ColumnName: "untrusted-title", HideEverywhere: false},
+		{ColumnUID: 3, ColumnName: "untrusted-summary", HideEverywhere: true, ClientDeliveryMode: "include"},
+		{ColumnUID: 1, ColumnName: "untrusted-id", HideEverywhere: false, ClientDeliveryMode: "include"},
+		{ColumnUID: 2, ColumnName: "untrusted-title", HideEverywhere: false, ClientDeliveryMode: "include"},
 	}
 
 	got, err := normalizeFieldViewColumns(guards, requested)
@@ -139,8 +139,8 @@ func TestNormalizeFieldViewColumnsUsesRequestOrderAsGlobalOrder(t *testing.T) {
 			t.Fatalf("column %d co_number = %d, want %d", column.ColumnUID, column.CoNumber, index+1)
 		}
 	}
-	if got[1].ColumnName != "id" || !got[1].HideEverywhereLocked {
-		t.Fatalf("protected column metadata = %#v, want canonical locked id", got[1])
+	if got[1].ColumnName != "id" || got[1].HideEverywhereLocked || !got[1].ClientDeliveryModeLocked {
+		t.Fatalf("id metadata = %#v, want visually hideable but delivery-locked id", got[1])
 	}
 }
 
@@ -162,16 +162,16 @@ func TestNormalizeFieldViewColumnsRejectsIncompleteDuplicateAndForeignLists(t *t
 		{
 			name: "duplicate",
 			requested: []CardVisibilityColumn{
-				{ColumnUID: 1},
-				{ColumnUID: 1},
+				{ColumnUID: 1, ClientDeliveryMode: "include"},
+				{ColumnUID: 1, ClientDeliveryMode: "include"},
 			},
 			wantError: "appears more than once",
 		},
 		{
 			name: "foreign uid",
 			requested: []CardVisibilityColumn{
-				{ColumnUID: 1},
-				{ColumnUID: 99},
+				{ColumnUID: 1, ClientDeliveryMode: "include"},
+				{ColumnUID: 99, ClientDeliveryMode: "include"},
 			},
 			wantError: "does not belong",
 		},
@@ -187,25 +187,67 @@ func TestNormalizeFieldViewColumnsRejectsIncompleteDuplicateAndForeignLists(t *t
 	}
 }
 
-func TestNormalizeFieldViewColumnsProtectsTechnicalFieldsButAllowsUnhide(t *testing.T) {
+func TestNormalizeFieldViewColumnsAllowsVisualIDHiding(t *testing.T) {
 	guards := []fieldViewColumnGuard{
-		{ColumnUID: 1, ColumnName: "id", LockReason: "primary_key"},
-	}
-
-	_, err := normalizeFieldViewColumns(
-		guards,
-		[]CardVisibilityColumn{{ColumnUID: 1, HideEverywhere: true}},
-	)
-	if err == nil || !strings.Contains(err.Error(), "primary_key") {
-		t.Fatalf("hidden protected field error = %v, want primary_key", err)
+		{ColumnUID: 1, ColumnName: "id"},
+		{ColumnUID: 2, ColumnName: "title"},
 	}
 
 	columns, err := normalizeFieldViewColumns(
 		guards,
-		[]CardVisibilityColumn{{ColumnUID: 1, HideEverywhere: false}},
+		[]CardVisibilityColumn{
+			{ColumnUID: 1, HideEverywhere: true, ClientDeliveryMode: "include"},
+			{ColumnUID: 2, HideEverywhere: false, ClientDeliveryMode: "include"},
+		},
 	)
-	if err != nil || len(columns) != 1 || columns[0].HideEverywhere {
-		t.Fatalf("unhide protected field = (%#v, %v), want one visible field", columns, err)
+	if err != nil || len(columns) != 2 || !columns[0].HideEverywhere {
+		t.Fatalf("hidden id = (%#v, %v), want visually hidden transport id", columns, err)
+	}
+}
+
+func TestNormalizeFieldViewColumnsKeepsIDAsClientTransportButAllowsVisualHidingElsewhere(t *testing.T) {
+	guards := []fieldViewColumnGuard{
+		{ColumnUID: 1, ColumnName: "id", LockReason: "primary_key"},
+		{ColumnUID: 2, ColumnName: "embedding_vector"},
+	}
+
+	_, err := normalizeFieldViewColumns(
+		guards,
+		[]CardVisibilityColumn{
+			{ColumnUID: 1, ClientDeliveryMode: "server_only"},
+			{ColumnUID: 2, ClientDeliveryMode: "server_only"},
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "client transport key") {
+		t.Fatalf("id server-only error = %v, want client transport rejection", err)
+	}
+
+	columns, err := normalizeFieldViewColumns(
+		guards,
+		[]CardVisibilityColumn{
+			{ColumnUID: 1, ClientDeliveryMode: "include"},
+			{ColumnUID: 2, ClientDeliveryMode: "server_only"},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !columns[0].ClientDeliveryModeLocked || columns[0].ClientDeliveryMode != "include" {
+		t.Fatalf("id delivery = %#v, want locked include", columns[0])
+	}
+	if columns[1].ClientDeliveryMode != "server_only" {
+		t.Fatalf("embedding delivery = %q, want server_only", columns[1].ClientDeliveryMode)
+	}
+}
+
+func TestNormalizeFieldViewColumnsRejectsMissingClientDeliveryMode(t *testing.T) {
+	guards := []fieldViewColumnGuard{{ColumnUID: 2, ColumnName: "embedding_vector"}}
+	_, err := normalizeFieldViewColumns(
+		guards,
+		[]CardVisibilityColumn{{ColumnUID: 2}},
+	)
+	if err == nil || !strings.Contains(err.Error(), "invalid client delivery mode") {
+		t.Fatalf("missing client delivery mode error = %v, want fail-closed rejection", err)
 	}
 }
 
@@ -218,8 +260,8 @@ func TestNormalizeFieldViewColumnsRequiresOneVisibleField(t *testing.T) {
 	_, err := normalizeFieldViewColumns(
 		guards,
 		[]CardVisibilityColumn{
-			{ColumnUID: 2, HideEverywhere: true},
-			{ColumnUID: 3, HideEverywhere: true},
+			{ColumnUID: 2, HideEverywhere: true, ClientDeliveryMode: "include"},
+			{ColumnUID: 3, HideEverywhere: true, ClientDeliveryMode: "include"},
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "at least one") {

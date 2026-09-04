@@ -80,11 +80,12 @@ const addRowColumnsWithTypesQuery = `
         AND c.table_name = fk_info.column_table_name
     LEFT JOIN system_foreign_key_relations_1_m fk_rel
         ON fk_rel.source_table_uid = sdt.table_uid AND c.column_name = fk_rel.source_column_name
-    WHERE
-        c.table_schema = $2
-        AND sdt.table_uid = $1
-        AND COALESCE(scd.hide_everywhere, false) = false
-    ORDER BY
+	    WHERE
+	        c.table_schema = $2
+	        AND sdt.table_uid = $1
+	        AND COALESCE(scd.hide_everywhere, false) = false
+	        AND COALESCE(scd.client_delivery_mode, 'include') = 'include'
+	    ORDER BY
         scd.co_number,
         c.ordinal_position;
 `

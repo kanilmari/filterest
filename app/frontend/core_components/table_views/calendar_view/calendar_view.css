@@ -61,19 +61,13 @@
   padding: 7px 11px;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.12s ease;
+    border-color 0.15s ease;
 }
 
 .calendar-view__nav-button:hover,
 .calendar-view__mode-button:hover {
   background: var(--button_hover_bg_color);
   color: var(--button_hover_text_color);
-}
-
-.calendar-view__nav-button:active,
-.calendar-view__mode-button:active {
-  transform: scale(var(--button_pressed_scale, 0.98));
 }
 
 .calendar-view__mode-button--active {

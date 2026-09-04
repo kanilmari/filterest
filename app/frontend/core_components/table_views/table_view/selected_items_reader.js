@@ -3,9 +3,14 @@
 // Bridges localStorage view state with DOM-based selection markers.
 // Exists to provide a unified selection API for delete, bulk, and detail actions.
 import { computeIdCellIndex, parseIdFromText, parseRowObject } from './selected_items_reader_helpers.js';
+import { getDatasetRowSelection } from '../dataset_row_selection_store.js';
 
 export function get_selected_items(table_name) {
     const datasetName = table_name;
+    const storedSelection = getDatasetRowSelection(datasetName);
+    if (storedSelection.ids.length > 0) {
+        return storedSelection;
+    }
     const current_view = localStorage.getItem(`${datasetName}_view`) || 'table';
     const ids = [];
     const rows = [];

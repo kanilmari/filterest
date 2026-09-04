@@ -33,7 +33,9 @@ LANG_KEY_HANDOVER_RESOURCE_URI = "easelect://developer/lang-key-api-handover"
 SERVER_INSTRUCTIONS = (
     "For Easelect language-key changes, use get_lang_key and upsert_lang_keys. "
     "Run upsert_lang_keys with dry_run=true first, then repeat with dry_run=false "
-    "to write through the application API. Never update system_lang_keys with direct SQL."
+    "to write through the application API and verify exact value readback. New UI keys need "
+    "authored fi, en, ch, yue, and usage_explanation values. Never update "
+    "system_lang_keys with direct SQL."
 )
 MCP_DISPLAY_COMMAND = os.environ.get(
     "FILTEREST_MCP_DISPLAY_COMMAND",
@@ -56,6 +58,10 @@ Rules:
 - Do not write `system_lang_keys` with direct SQL.
 - Omitted fields are preserved by reading the existing key before writing.
 - `fi`, `en`, `ch`, `yue`, and `usage_explanation` are accepted update fields.
+- A real write fails if the API readback does not match every requested value.
+- New UI keys should supply all five authored fields; the command-line `language check`
+  and `language check-many` gates additionally fail for missing or incomplete values.
+- Value readback does not approve or replace normalized locale review status.
 
 Minimal next-chat notice:
 Use repo MCP command `__MCP_DISPLAY_COMMAND__`; for language keys call `get_lang_key` then

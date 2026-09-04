@@ -344,6 +344,31 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/row-access-rules",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AdminRowAccessRulesHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/row-group-memberships",
       "match_type": "exact",
       "handler_name": "system_table_tools.AdminRowGroupMembershipsHandler",
@@ -616,6 +641,35 @@
       "path_pattern": "/api/admin/view-field-sets/shared/delete",
       "match_type": "exact",
       "handler_name": "system_table_tools.DeleteSharedViewFieldSetHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/admin/view-field-sets/shared/reset",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.ResetSharedViewFieldSetHandler",
       "methods": [
         "POST"
       ],

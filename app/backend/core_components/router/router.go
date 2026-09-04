@@ -172,6 +172,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/site-presentation-settings", system_table_tools.AdminSitePresentationSettingsHandler, "system_table_tools.AdminSitePresentationSettingsHandler")
 	functionRegisterHandler("/api/admin/row-groups", system_table_tools.AdminRowGroupsHandler, "system_table_tools.AdminRowGroupsHandler")
 	functionRegisterHandler("/api/admin/row-group-memberships", system_table_tools.AdminRowGroupMembershipsHandler, "system_table_tools.AdminRowGroupMembershipsHandler")
+	functionRegisterHandler("/api/admin/row-access-rules", system_table_tools.AdminRowAccessRulesHandler, "system_table_tools.AdminRowAccessRulesHandler")
 
 	// DevTools-reitit (vain eksplisiittisessä kehitysympäristössä)
 	envType := os.Getenv("ENVIRONMENT_TYPE")
@@ -255,6 +256,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/view-field-sets/personal/delete", system_table_tools.DeletePersonalViewFieldSetHandler, "system_table_tools.DeletePersonalViewFieldSetHandler")
 	functionRegisterHandler("/api/admin/view-field-sets/site/save", system_table_tools.SaveSiteViewFieldSetHandler, "system_table_tools.SaveSiteViewFieldSetHandler")
 	functionRegisterHandler("/api/admin/view-field-sets/site/assign", system_table_tools.AssignSiteViewFieldSetHandler, "system_table_tools.AssignSiteViewFieldSetHandler")
+	functionRegisterHandler("/api/admin/view-field-sets/shared/reset", system_table_tools.ResetSharedViewFieldSetHandler, "system_table_tools.ResetSharedViewFieldSetHandler")
 	functionRegisterHandler("/api/admin/view-field-sets/shared/delete", system_table_tools.DeleteSharedViewFieldSetHandler, "system_table_tools.DeleteSharedViewFieldSetHandler")
 	functionRegisterHandler("/api/filterbar-section-layout/save", system_table_tools.SaveFilterbarSectionLayoutHandler, "system_table_tools.SaveFilterbarSectionLayoutHandler")
 	functionRegisterHandler("/api/filterbar-section-layout", system_table_tools.GetFilterbarSectionLayoutHandler, "system_table_tools.GetFilterbarSectionLayoutHandler")

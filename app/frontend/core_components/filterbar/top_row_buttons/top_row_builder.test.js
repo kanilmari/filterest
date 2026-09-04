@@ -69,5 +69,9 @@ describe("buildTopRow", () => {
             ["filterbar_add_manage_content", "Add & manage content", false],
             ["filterbar_view_content_as", "View content as…", false],
         ]);
+        const queryContent = disclosureBuilderMock.mock.calls[0][0].contentElement;
+        expect(
+            queryContent.querySelector("[data-temporary-filters-toggle-for]")
+        ).toBeNull();
     });
 });

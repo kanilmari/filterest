@@ -32,6 +32,7 @@ import {
     resolveDatasetDisplayValue,
     setLocalizedDatasetText,
 } from '../dataset_value_localizer.js';
+import { isDatasetRowSelected } from '../dataset_row_selection_store.js';
 
 /* ===========================================================
  *  Column Width Preservation
@@ -61,6 +62,7 @@ export function create_table_element(columns, data, table_name, dataTypes) {
     const table = document.createElement('table');
     table.classList.add('table_from_db');
     table.id = `${table_name}_table`;
+    table.dataset.tableName = table_name;
     table.dataset.testid = 'dataset-view-table';
 
     table.dataset.columns = JSON.stringify(columns);
@@ -297,12 +299,14 @@ function createTableBody(columns, data, table_name, dataTypes = {}) {
 
     data.forEach((item, rowIndex) => {
         const row = document.createElement('tr');
+        row._row = item;
+        if (item?.id != null) row.dataset.rowId = String(item.id);
 
         const numbering_td = createRowNumberingCell(rowIndex + 1);
         row.appendChild(numbering_td);
 
         // Checkbox
-        const checkbox_td = createCheckboxCell(row, table_name);
+        const checkbox_td = createCheckboxCell(row, table_name, item);
         row.appendChild(checkbox_td);
 
         // Data-sarakkeet
@@ -327,7 +331,7 @@ export function createRowNumberingCell(rowNumber) {
     return numberingCell;
 }
 
-export function createCheckboxCell(row, _table_name) {
+export function createCheckboxCell(row, table_name, rowData = row?._row || null) {
     const checkbox_td = document.createElement('td');
     checkbox_td.style.textAlign = 'center';
     checkbox_td.style.verticalAlign = 'middle';
@@ -336,6 +340,8 @@ export function createCheckboxCell(row, _table_name) {
     row_checkbox.type = 'checkbox';
     row_checkbox.classList.add('row_checkbox');
     row_checkbox.dataset.testid = 'row-select-checkbox';
+    row_checkbox.checked = isDatasetRowSelected(table_name, rowData?.id ?? row?.dataset?.rowId);
+    row.classList.toggle('selected', row_checkbox.checked);
     row_checkbox.addEventListener('click', (event) => update_row_selection_from_click(event, row));
     row_checkbox.addEventListener('change', () => update_row_selection(row));
     checkbox_td.appendChild(row_checkbox);

@@ -137,7 +137,6 @@
     background: var(--interaction-control-bg-active, var(--fw-color-primary-soft));
     box-shadow: var(--interaction-control-shadow-active, none);
     filter: brightness(.96);
-    transform: none;
 }
 
 .fw-btn:focus-visible {

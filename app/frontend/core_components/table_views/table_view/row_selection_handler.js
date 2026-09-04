@@ -3,6 +3,8 @@
 // Bridges the table body DOM, row-checkbox input state, and select-all control.
 // Exists to keep mouse/keyboard row selection consistent across initial and appended rows.
 
+import { setDatasetRowSelected } from '../dataset_row_selection_store.js';
+
 const lastClickedCheckboxByTable = new WeakMap();
 
 export function update_row_selection(row) {
@@ -17,7 +19,17 @@ export function update_row_selection(row) {
         row.classList.remove('selected');
     }
 
-    syncSelectAllCheckbox(row.closest('table'));
+    const table = row.closest('table');
+    const datasetName = table?.dataset?.tableName
+        || String(table?.id || '').replace(/_table$/, '');
+    setDatasetRowSelected(
+        datasetName,
+        row?._row?.id ?? row?.dataset?.rowId,
+        row?._row,
+        checkbox.checked
+    );
+
+    syncSelectAllCheckbox(table);
 }
 
 /**
@@ -82,6 +94,15 @@ export function update_card_selection(card) {
     } else {
         card.classList.remove('selected');
     }
+    const datasetName = card._table_name
+        || card.dataset.tableName
+        || card.closest('.card_view_wrapper')?.dataset?.tableName;
+    setDatasetRowSelected(
+        datasetName,
+        card._row?.id ?? card.dataset.id,
+        card._row,
+        checkbox.checked
+    );
 }
 
 function syncSelectAllCheckbox(table) {

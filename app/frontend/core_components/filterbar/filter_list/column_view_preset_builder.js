@@ -451,7 +451,11 @@ function visibleFromHidden(fieldOptions, hiddenColumns) {
 
 export function normalizeEffectiveFieldSetScope(scope) {
     const normalized = String(scope || "").trim().toLowerCase();
-    if (normalized === "personal" || normalized === "site") return normalized;
+    if (
+        normalized === "personal"
+        || normalized === "group"
+        || normalized === "site"
+    ) return normalized;
     // Older servers used "legacy" for the metadata-owned fallback.
     return "metadata";
 }
@@ -460,6 +464,8 @@ export function effectiveFieldSetSourceLabel(scope) {
     switch (normalizeEffectiveFieldSetScope(scope)) {
     case "personal":
         return t("field_set_source_personal", "Henkilökohtainen ohitus on käytössä");
+    case "group":
+        return t("field_set_source_group", "Ryhmäkohtainen oletus on käytössä");
     case "site":
         return t("field_set_source_site", "Sivuston oletus on käytössä");
     default:

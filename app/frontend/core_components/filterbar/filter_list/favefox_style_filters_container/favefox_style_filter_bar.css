@@ -503,7 +503,7 @@ body.dark-mode .favefox-filterbar .filter-section:nth-child(even) {
     cursor: pointer;
     font-size: 0.875rem;
     font-weight: 500;
-    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
     width: 100%;
     min-width: 140px;
     display: flex;
@@ -514,10 +514,6 @@ body.dark-mode .favefox-filterbar .filter-section:nth-child(even) {
 .favefox-show-more:hover {
     background-color: var(--fw-color-surface-alt);
     border-color: var(--fw-color-border-strong);
-}
-
-.favefox-show-more:active {
-    transform: scale(0.98);
 }
 
 /* Show less button - ghost style */

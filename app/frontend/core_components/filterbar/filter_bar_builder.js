@@ -68,6 +68,10 @@ import { buildAdminVersionInfoIndicator } from "../admin_tools/admin_version_inf
 import { createDatasetHeaderConfigHeroButton } from "../admin_tools/dataset_header_config_modal.js";
 import { mountDatasetCoverTestPalette } from "../admin_tools/dataset_cover_test_palette.js";
 import { executeDatasetSurfaceFilterbarProvider } from "./dataset_surface_provider/filterbar_provider_executor.js";
+import {
+    createTemporaryFiltersOpenerAndCloser,
+    createTemporaryFiltersToggleButton,
+} from "./filters_opener_and_closer.js";
 
 /* ===========================================================
  *  Yleiset muuttujat ja apurit
@@ -552,10 +556,18 @@ function createInlineHeroContent(tableName, {
     heroSortRow.classList.add(
         "dataset-filter-primary-actions",
         "dataset-filter-primary-actions--query",
-        "dataset-filter-row-spread",
         "filterbar-inline-hero-sort-row"
     );
     heroSortRow.appendChild(createSortDropdown(tableName, columns, dataTypes));
+
+    const heroFilterActions = document.createElement("div");
+    heroFilterActions.classList.add(
+        "dataset-filter-primary-actions",
+        "filterbar-inline-hero-filter-actions"
+    );
+    heroFilterActions.appendChild(
+        createTemporaryFiltersToggleButton(tableName, "content-hero")
+    );
     const resetSearchBtn = document.createElement("button");
     resetSearchBtn.classList.add("reset-search-button", "fw-btn");
     resetSearchBtn.dataset.testid = "btn-reset-search-content-hero";
@@ -564,8 +576,9 @@ function createInlineHeroContent(tableName, {
     resetSearchBtn.addEventListener("click", () =>
         clearAllFilters(tableName, resetTargetElement || inlineHeroHost)
     );
-    heroSortRow.appendChild(resetSearchBtn);
+    heroFilterActions.appendChild(resetSearchBtn);
     heroInner.appendChild(heroSortRow);
+    heroInner.appendChild(heroFilterActions);
 
     inlineHeroHost.appendChild(heroInner);
     let paletteControl = null;
@@ -759,7 +772,7 @@ function buildStandardFilterbarContent(container, {
     while (secondaryFilterBar.firstChild) {
         secondaryFilterContent.appendChild(secondaryFilterBar.firstChild);
     }
-    buildFilterbarDisclosureSection({
+    const filtersSection = buildFilterbarDisclosureSection({
         iconPath: "/frontend/icons/general/filter-list-icon.svg",
         iconClassName: "filterbar-section-heading-icon--filters",
         langKey: "filterbar_filter_results",
@@ -775,6 +788,7 @@ function buildStandardFilterbarContent(container, {
 
     return {
         searchPanel,
+        filtersSection,
         destroy() {
             destroyCallbacks.forEach((callback) => {
                 try {
@@ -1734,6 +1748,18 @@ export function create_filter_bar(
     }
     syncSharedTopBar();
 
+    const temporaryFiltersCoordinator =
+        createTemporaryFiltersOpenerAndCloser({
+            tableName,
+            eventHost: tablePartsContainer,
+            panel,
+            filtersSection: filterBarContent.filtersSection,
+            sectionLayoutReady: sectionOrdering.ready,
+            isPanelHidden: isHidden,
+            showPanel,
+            hidePanel,
+        });
+
     // Scroll pass-through
     const getContentScrollTarget = () => activeScrollable;
     const isWideScreen = () => window.innerWidth >= FILTERBAR_BREAKPOINT_PX;
@@ -1780,6 +1806,7 @@ export function create_filter_bar(
 
     // Fixed toggle button — toggles panel visibility
     fixedToggleButton.addEventListener("click", () => {
+        temporaryFiltersCoordinator.releaseTemporaryOwnership();
         if (!isHidden()) {
             panelManuallyHidden = true;
             autoCollapsedForNarrow = false;
@@ -1795,6 +1822,7 @@ export function create_filter_bar(
 
     // Hide-filter button
     hideFilterBtn.addEventListener("click", () => {
+        temporaryFiltersCoordinator.releaseTemporaryOwnership();
         panelManuallyHidden = true;
         autoCollapsedForNarrow = false;
         hidePanel();
@@ -1806,7 +1834,11 @@ export function create_filter_bar(
     window.addEventListener("resize", () => {
         clearTimeout(_filterbarResizeTimer);
         _filterbarResizeTimer = setTimeout(() => {
-            applyResponsivePanelVisibility();
+            if (temporaryFiltersCoordinator.isActive()) {
+                showPanel();
+            } else {
+                applyResponsivePanelVisibility();
+            }
             if (!isHidden()) {
                 syncModeToScroll();
             }
@@ -1819,6 +1851,7 @@ export function create_filter_bar(
     // causing the big-card refresh path to hide the whole filter UI.
     document.addEventListener("big-card-toggle", (e) => {
         if (e.detail?.tableName !== tableName) return;
+        temporaryFiltersCoordinator.releaseTemporaryOwnership();
         bigCardOpen = e.detail.isOpen;
         if (panelManuallyHidden || autoCollapsedForNarrow) {
             hidePanel();
@@ -1837,6 +1870,7 @@ export function create_filter_bar(
             fixedToggleButton.contains(e.target) ||
             sharedTopBar.contains(e.target);
         if (!clickedInside) {
+            temporaryFiltersCoordinator.releaseTemporaryOwnership();
             panelManuallyHidden = true;
             autoCollapsedForNarrow = false;
             hidePanel();
@@ -1877,6 +1911,7 @@ export function create_filter_bar(
             viewObserverRaf = 0;
         }
         clearTimeout(_filterbarResizeTimer);
+        temporaryFiltersCoordinator.destroy();
         filterBarContent.destroy?.();
         sectionOrdering.destroy?.();
         overviewSection?.destroy?.();

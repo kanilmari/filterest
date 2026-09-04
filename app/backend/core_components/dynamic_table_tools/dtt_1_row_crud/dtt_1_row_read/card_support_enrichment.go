@@ -267,6 +267,7 @@ func fetchCardSupportColumnsFromMetadata(tableName string, visibleColumns []stri
 		   JOIN system_column_details scd ON scd.table_uid = sdt.table_uid
 		  WHERE sdt.table_name = $1
 		    AND COALESCE(scd.hide_everywhere, false) = false
+		    AND COALESCE(scd.client_delivery_mode, 'include') = 'include'
 		    AND COALESCE(scd.show_value_on_card, false) = true
 		    AND scd.card_element ILIKE '%image%'
 		  ORDER BY scd.co_number, scd.column_name`,

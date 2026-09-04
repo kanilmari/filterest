@@ -84,6 +84,11 @@ func TestGetRequestDBForRequestUsesBasicPoolForPilotAdminDataset(t *testing.T) {
 	if got := GetRequestDBForRequest("basic", pilotReq); got != basicDB {
 		t.Fatalf("GetRequestDBForRequest(basic, pilot) = %p, want basic pool %p", got, basicDB)
 	}
+
+	policyAdminReq := httptest.NewRequest("GET", "/api/admin/row-access-rules?dataset=app_service_catalog", nil)
+	if got := GetRequestDBForRequest("admin", policyAdminReq); got != adminDB {
+		t.Fatalf("GetRequestDBForRequest(admin, row-access editor) = %p, want admin pool %p", got, adminDB)
+	}
 }
 
 func TestGetRequestDBForRequestFallsBackWhenPilotBasicPoolMissing(t *testing.T) {

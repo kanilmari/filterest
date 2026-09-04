@@ -15,6 +15,9 @@ const registerComponentMock = vi.fn();
 const unregisterStateMock = vi.fn();
 const unregisterLocationStateMock = vi.fn();
 const datasetSearchRegistryMock = new Map();
+const clearCommittedDatasetSearchMock = vi.fn();
+const hasCommittedDatasetSearchMock = vi.fn();
+const notifyCommittedDatasetSearchChangedMock = vi.fn();
 let stateSubscriber = null;
 
 const datasetSearchStateMock = {
@@ -83,6 +86,13 @@ vi.mock("./dataset_search_executor.js", () => ({
     do_intelligent_search: vi.fn(),
 }));
 
+vi.mock("./dataset_search_clearer.js", () => ({
+    clearCommittedDatasetSearch: clearCommittedDatasetSearchMock,
+    DATASET_COMMITTED_SEARCH_CHANGED_EVENT: "dataset-committed-search-changed",
+    hasCommittedDatasetSearch: hasCommittedDatasetSearchMock,
+    notifyCommittedDatasetSearchChanged: notifyCommittedDatasetSearchChangedMock,
+}));
+
 describe("createDatasetSearchComponent", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -93,6 +103,9 @@ describe("createDatasetSearchComponent", () => {
         datasetSearchStateMock.get.mockReturnValue("");
         datasetSearchLocationStateMock.get.mockReturnValue(false);
         datasetSearchRegistryMock.clear();
+        clearCommittedDatasetSearchMock.mockReset().mockReturnValue(true);
+        hasCommittedDatasetSearchMock.mockReset().mockReturnValue(false);
+        notifyCommittedDatasetSearchChangedMock.mockReset();
         stateSubscriber = null;
         window.history.replaceState({}, "", "/");
     });
@@ -127,7 +140,9 @@ describe("createDatasetSearchComponent", () => {
 
         const component = createDatasetSearchComponent("app_users");
         const inputLabel = component.element.querySelector(`label[for="${component.input.id}"]`);
-        const submitButton = component.element.querySelector("button");
+        const submitButton = component.element.querySelector(
+            '[data-testid="dataset-search-submit"]'
+        );
         const buttonLabel = submitButton.querySelector('span[data-lang-key="search"]');
         const buttonIcon = submitButton.querySelector(".dataset-search-submit-icon");
 
@@ -138,6 +153,49 @@ describe("createDatasetSearchComponent", () => {
         expect(buttonLabel).not.toBeNull();
         expect(buttonLabel.textContent).toBe("Search");
 
+        component.destroy();
+    });
+
+    test("places a committed-search X inside the field before submit and clears only through the narrow command", async () => {
+        hasCommittedDatasetSearchMock.mockReturnValue(true);
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+
+        const component = createDatasetSearchComponent("app_users");
+        document.body.appendChild(component.element);
+        const clearButton = component.element.querySelector(
+            '[data-testid="dataset-search-clear"]'
+        );
+        const submitButton = component.element.querySelector(
+            '[data-testid="dataset-search-submit"]'
+        );
+        const inputShell = component.element.querySelector(
+            ".dataset-search-input-shell"
+        );
+
+        expect(clearButton.hidden).toBe(false);
+        expect(inputShell.contains(component.input)).toBe(true);
+        expect(inputShell.contains(clearButton)).toBe(true);
+        expect(inputShell.nextElementSibling).toBe(submitButton);
+        expect(clearButton.dataset.titleLangKey).toBe("clear_text_search");
+        expect(clearButton.dataset.ariaLabelLangKey).toBe("clear_text_search");
+        expect(clearButton.getAttribute("aria-label")).toBe("Clear text search");
+
+        clearButton.click();
+
+        expect(clearCommittedDatasetSearchMock).toHaveBeenCalledWith("app_users");
+        expect(renderActiveFiltersMock).toHaveBeenCalledWith("app_users");
+        expect(document.activeElement).toBe(component.input);
+        component.destroy();
+    });
+
+    test("keeps the X hidden when no committed search exists", async () => {
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+
+        const component = createDatasetSearchComponent("app_users");
+
+        expect(
+            component.element.querySelector('[data-testid="dataset-search-clear"]').hidden
+        ).toBe(true);
         component.destroy();
     });
 
@@ -227,7 +285,7 @@ describe("createDatasetSearchComponent", () => {
         const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
 
         const component = createDatasetSearchComponent("dev_agent_tasks");
-        component.element.querySelector("button").click();
+        component.element.querySelector('[data-testid="dataset-search-submit"]').click();
         await Promise.resolve();
 
         expect(updateURLMock).toHaveBeenCalledWith(

@@ -176,11 +176,6 @@ body.light-mode #nav_tree .tree-current-project-badge {
     margin-left: 8px;
 }
 
-#navContainer button:active,
-#nav_tree button:active {
-    transform: scale(var(--button_pressed_scale));
-}
-
 .collapsible.child-active::after {
     content: "•";
     color: rgb(0 70 255);
@@ -353,10 +348,6 @@ body.light-mode #nav_tree .tree-current-project-badge {
 .navbar-auth-action:hover {
     background-color: var(--button_hover_bg_color);
     color: var(--button_hover_text_color);
-}
-
-.navbar-auth-action:active {
-    transform: scale(var(--button_pressed_scale));
 }
 
 .navbar-auth-action-icon {
@@ -618,11 +609,12 @@ body.light-mode #nav_tree .tree-current-project-badge {
 #navbar.collapsed {
     transform: translateX(calc(-1 * var(--navbar_width)));
     pointer-events: none;
-    box-shadow: none;
+    /* Keep the structural edge painted for the whole closing transition. */
+    box-shadow: inset -2px 0 0 0 var(--border_color);
 }
 
 #navbar.collapsed.navbar-collapse-complete {
-    box-shadow: none;
+    box-shadow: inset -2px 0 0 0 var(--border_color);
 }
 
 .body_content.navbar-transitions-ready #navbar {

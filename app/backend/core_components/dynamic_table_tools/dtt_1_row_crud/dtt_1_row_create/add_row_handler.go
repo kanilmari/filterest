@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"easelect/backend/core_components/dynamic_table_tools/ai_features"
+	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	row_mutation_policy "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
@@ -142,9 +143,17 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 	}
 	if !dbutils.RegisterAfterCommitHook(r.Context(), func() {
 		event_bus.Bus.Publish(tableName, eventToPublish)
+		// Group membership changes can change the winning per-view field set.
+		if tableName == "system_user_group_memberships" {
+			dtt_1_row_read.InvalidateUserColumnSettingsCache("", "")
+		}
 	}) {
 		// Non-lazy test/tool contexts publish immediately as a fallback.
 		event_bus.Bus.Publish(tableName, eventToPublish)
+		// Keep the fallback behavior equivalent to the normal post-commit hook.
+		if tableName == "system_user_group_memberships" {
+			dtt_1_row_read.InvalidateUserColumnSettingsCache("", "")
+		}
 	}
 
 	w.WriteHeader(http.StatusCreated)

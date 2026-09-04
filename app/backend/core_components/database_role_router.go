@@ -11,6 +11,7 @@ import (
 )
 
 const requestPolicyOnlyAdminPilotTableName = "app_service_catalog"
+const adminRowAccessRulesRoute = "/api/admin/row-access-rules"
 
 // GetRequestDBForRole returns the role-aligned DB handle for runtime request work.
 // It prefers the dedicated pool for the supplied role and falls back to Db only when
@@ -50,6 +51,12 @@ func GetRequestDBForRequest(role string, request *http.Request) *sql.DB {
 
 func shouldUsePolicyOnlyAdminPilotPool(role string, request *http.Request) bool {
 	if role != "admin" || request == nil || request.URL == nil {
+		return false
+	}
+	// The row-access editor manages policy metadata and therefore needs the
+	// administrator pool even when its target is the pilot dataset. Ordinary
+	// dataset reads/writes continue through the policy-only basic pool.
+	if request.URL.Path == adminRowAccessRulesRoute {
 		return false
 	}
 	return strings.TrimSpace(request.URL.Query().Get("dataset")) == requestPolicyOnlyAdminPilotTableName

@@ -28,6 +28,8 @@ type CardVisibilityColumn struct {
 	CoNumber                 int    `json:"co_number"`
 	HideEverywhereLocked     bool   `json:"hide_everywhere_locked"`
 	HideEverywhereLockReason string `json:"hide_everywhere_lock_reason"`
+	ClientDeliveryMode       string `json:"client_delivery_mode"`
+	ClientDeliveryModeLocked bool   `json:"client_delivery_mode_locked"`
 	CardElement              string `json:"card_element"`
 	CardDetailLabelMode      string `json:"card_detail_label_mode"`
 	CardDetailIconSVG        string `json:"card_detail_icon_svg"`
@@ -62,6 +64,7 @@ const fieldViewColumnGuardQuery = `
 		scd.column_uid,
 		scd.column_name,
 		CASE
+			WHEN scd.column_name = 'id' THEN ''
 			WHEN primary_keys.column_name IS NOT NULL THEN 'primary_key'
 			WHEN sdt.row_policy_owner_column = scd.column_name THEN 'row_owner'
 			WHEN columns.is_nullable = 'NO'
@@ -152,6 +155,12 @@ func normalizeFieldViewColumns(
 			return nil, fmt.Errorf("column_uid %d appears more than once", column.ColumnUID)
 		}
 		seen[column.ColumnUID] = true
+		// The conventional id is a required client transport key, not a mandatory
+		// visual field. Keep it eligible for UI hiding even if older guard data
+		// still describes its primary-key role.
+		if guard.ColumnName == "id" {
+			guard.LockReason = ""
+		}
 		if column.HideEverywhere && guard.LockReason != "" {
 			return nil, fmt.Errorf(
 				"field %q cannot be hidden everywhere: %s",
@@ -164,6 +173,14 @@ func normalizeFieldViewColumns(
 		column.CoNumber = index + 1
 		column.HideEverywhereLocked = guard.LockReason != ""
 		column.HideEverywhereLockReason = guard.LockReason
+		column.ClientDeliveryMode = normalizeClientDeliveryMode(column.ClientDeliveryMode)
+		if column.ClientDeliveryMode == "" {
+			return nil, fmt.Errorf("field %q has an invalid client delivery mode", guard.ColumnName)
+		}
+		column.ClientDeliveryModeLocked = guard.ColumnName == "id"
+		if column.ClientDeliveryModeLocked && column.ClientDeliveryMode == "server_only" {
+			return nil, fmt.Errorf("field %q is required as a client transport key", guard.ColumnName)
+		}
 		normalized = append(normalized, column)
 		if !column.HideEverywhere {
 			visibleFieldCount++
@@ -236,6 +253,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(scd.show_key_on_card, true)        AS show_key_on_card,
 		       COALESCE(scd.show_value_on_card, true)      AS show_value_on_card,
 		       COALESCE(scd.hide_everywhere, false)         AS hide_everywhere,
+		       COALESCE(scd.client_delivery_mode, 'include') AS client_delivery_mode,
 		       COALESCE(scd.hide_on_small_card, false)      AS hide_on_small_card,
 		       COALESCE(scd.hide_false_null_on_sml_crd, false) AS hide_false_null_on_sml_crd,
 		       COALESCE(scd.hide_false_null_on_big_crd, false) AS hide_false_null_on_big_crd,
@@ -291,6 +309,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			&c.CardDetailLabelMode, &c.CardDetailIconSVG, &c.CardDetailIconKey,
 			&c.CardDetailCapitalization,
 			&c.ShowKeyOnCard, &c.ShowValueOnCard, &c.HideEverywhere,
+			&c.ClientDeliveryMode,
 			&c.HideOnSmallCard, &c.HideFalseNullOnSmlCrd, &c.HideFalseNullOnBigCrd,
 			&c.HideOnBgCrdIfNotOwn, &c.HideInFilterPanel,
 		); err != nil {
@@ -320,6 +339,8 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		guard := guardByUID[columns[index].ColumnUID]
 		columns[index].HideEverywhereLocked = guard.LockReason != ""
 		columns[index].HideEverywhereLockReason = guard.LockReason
+		columns[index].ClientDeliveryMode = normalizeClientDeliveryMode(columns[index].ClientDeliveryMode)
+		columns[index].ClientDeliveryModeLocked = guard.ColumnName == "id"
 	}
 
 	if columns == nil {
@@ -503,6 +524,7 @@ func buildCardVisibilityUpdateQuery(includeIconKey, includeCapitalization bool) 
 	addSetClause("show_key_on_card")
 	addSetClause("show_value_on_card")
 	addSetClause("hide_everywhere")
+	addSetClause("client_delivery_mode")
 	addSetClause("hide_on_small_card")
 	addSetClause("hide_false_null_on_sml_crd")
 	addSetClause("hide_false_null_on_big_crd")
@@ -533,6 +555,7 @@ func buildCardVisibilityUpdateArgs(col CardVisibilityColumn, includeIconKey, inc
 		col.ShowKeyOnCard,
 		col.ShowValueOnCard,
 		col.HideEverywhere,
+		normalizeClientDeliveryMode(col.ClientDeliveryMode),
 		col.HideOnSmallCard,
 		col.HideFalseNullOnSmlCrd,
 		col.HideFalseNullOnBigCrd,
@@ -541,6 +564,17 @@ func buildCardVisibilityUpdateArgs(col CardVisibilityColumn, includeIconKey, inc
 		col.ColumnUID,
 	)
 	return args
+}
+
+func normalizeClientDeliveryMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "include":
+		return "include"
+	case "server_only":
+		return "server_only"
+	default:
+		return ""
+	}
 }
 
 func normalizeCardDetailLabelMode(labelMode string) string {

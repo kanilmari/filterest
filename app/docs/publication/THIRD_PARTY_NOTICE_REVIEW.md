@@ -1,8 +1,8 @@
 # Filterest Third-Party Notice Review
 
 - Target: `generated Filterest export tree`
-- Filterest app version: `9.0.7`
-- Database version: `9.6.8`
+- Filterest app version: `9.1.0`
+- Database version: `9.7.0`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`

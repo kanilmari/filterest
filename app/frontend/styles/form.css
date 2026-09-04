@@ -61,7 +61,6 @@ button {
     background: var(--interaction-control-bg-active, var(--button_active_bg_color));
     box-shadow: var(--interaction-control-shadow-active, none);
     filter: brightness(.96);
-    transform: none;
 }
 
 .button:focus-visible {

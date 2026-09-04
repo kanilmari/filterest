@@ -41,10 +41,6 @@
     outline-offset: 2px;
 }
 
-.row-group-facet-chip:active {
-    transform: scale(var(--button_pressed_scale));
-}
-
 .row-group-facet-chip--active {
     border-color: var(--primary_color);
     background: var(--primary_color);

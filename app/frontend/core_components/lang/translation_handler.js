@@ -38,6 +38,12 @@ const LOCAL_TRANSLATION_FALLBACKS = {
         ch: "正在使用个人覆盖设置",
         yue: "正在使用個人覆寫設定",
     },
+    field_set_source_group: {
+        fi: "Ryhmäkohtainen oletus on käytössä",
+        en: "Group default in use",
+        ch: "正在使用组默认设置",
+        yue: "正在使用群組預設設定",
+    },
     field_set_source_site: {
         fi: "Sivuston oletus on käytössä",
         en: "Site default in use",
@@ -154,10 +160,10 @@ const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 
 
 // Dev-tilan ilmoitukset käyttävät nyt yhteistä toast-järjestelmää.
 // Tuotannossa ei kutsuta (IS_DEV_MODE-tarkistus kutsukohdissa).
-function _showDevTranslationNotice(message, isError = false) {
+function _showDevTranslationNotice(message, level = 'info') {
     showToast({
         message: `🔤 ${message}`,
-        level: isError ? 'error' : 'info',
+        level,
         duration: 4000,
     });
 }
@@ -247,6 +253,7 @@ export async function translatePage(chosen_language) {
 
     const requestSequence = ++translationRequestSequence;
     const requestIsCurrent = () => requestSequence === translationRequestSequence;
+    let safeDefaultTranslations = defaultTranslations;
 
     if (IS_DEV_MODE) console.log('translatePage called with language:', chosen_language);
 
@@ -262,6 +269,7 @@ export async function translatePage(chosen_language) {
                     nextDefaultTranslations = _unwrapTranslationResponse(await endpoint_router('translations', { url_params: '?lang=en' }));
                 }
                 if (!requestIsCurrent()) return;
+                safeDefaultTranslations = nextDefaultTranslations;
                 if (IS_DEV_MODE && debug) console.log('Default English translations loaded', nextDefaultTranslations);
             } catch (error) {
                 if (!requestIsCurrent()) return;
@@ -328,8 +336,30 @@ export async function translatePage(chosen_language) {
     } catch (error) {
         if (!requestIsCurrent()) return;
         console.warn('translatePage – unhandled error:', error);
-        // Virhetilanteessakin poistetaan loading, jotta sivu ei jää jumiin
-        document.body.classList.remove('loading');
+        // Palvelimen kielihaun epäonnistuminen ei saa jättää tyhjää käyttöliittymää.
+        // Näytä vasta pyynnön päätyttyä pieni lähdekoodin hätävarasanasto,
+        // mahdollinen aiemmin ladattu englanti ja lopuksi luettava avainmuotoilu.
+        // Näin selain ei väläytä hätävarakieltä ennen normaalia palvelinvastausta.
+        const renderFallbackTranslation = translationRenderQueue.catch(() => undefined).then(async () => {
+            if (!requestIsCurrent()) return;
+
+            defaultTranslations = safeDefaultTranslations || {};
+            currentTranslations = {};
+            currentChosenLang = chosen_language;
+            document.documentElement.setAttribute('lang', chosen_language);
+            globalMissingKeys = [];
+            globalMissingKeySources = {};
+            translateElements(currentTranslations, chosen_language);
+            observeDomChanges();
+
+            document.body.classList.remove('loading');
+            void Promise.allSettled([
+                refreshCardLanguages(chosen_language),
+                refreshLocalizedDatasetValues(chosen_language),
+            ]);
+        });
+        translationRenderQueue = renderFallbackTranslation;
+        await renderFallbackTranslation;
     }
 }
 /**
@@ -410,11 +440,10 @@ function observeDomChanges() {
                         return;
                     }
 
-                    // Verbose-lokitus: dev-tilassa konsoliin + visuaalinen ilmoitus
+                    // Verbose-lokitus: konsoli kertoo haun heti. Käyttäjälle näytetään
+                    // vain yksi lopputulosilmoitus, jotta Fetching + 0/x ei näytä
+                    // kahdelta erilliseltä virheeltä.
                     if (IS_DEV_MODE) console.log(`[AI Translation] Fetching ${aiEligibleMissing.length} missing key(s) for lang="${currentChosenLang}":`, aiEligibleMissing);
-                    if (IS_DEV_MODE) {
-                        _showDevTranslationNotice(`AI: Fetching ${aiEligibleMissing.length} missing key(s): ${aiEligibleMissing.slice(0, 5).join(', ')}${aiEligibleMissing.length > 5 ? '...' : ''}`);
-                    }
 
                     endpoint_router('generateTranslations', {
                         method: 'POST',
@@ -458,7 +487,20 @@ function observeDomChanges() {
 
                         if (IS_DEV_MODE) console.log(`[AI Translation] Received ${receivedCount} translation(s) for lang="${currentChosenLang}"`);
                         if (IS_DEV_MODE) {
-                            _showDevTranslationNotice(`AI: Received ${receivedCount}/${aiEligibleMissing.length} translation(s)`);
+                            const unresolvedCount = unresolvedKeys.length;
+                            if (unresolvedCount === 0) {
+                                _showDevTranslationNotice(`AI added ${receivedCount}/${aiEligibleMissing.length} missing translation(s)`, 'success');
+                            } else if (receivedCount === 0) {
+                                _showDevTranslationNotice(
+                                    `No translations were added for ${unresolvedCount} missing key(s). Add reviewed values with the language-key API tool.`,
+                                    'warning'
+                                );
+                            } else {
+                                _showDevTranslationNotice(
+                                    `AI added ${receivedCount}/${aiEligibleMissing.length}; ${unresolvedCount} key(s) still need reviewed values.`,
+                                    'warning'
+                                );
+                            }
                         }
 
                         // Käännetään kaikki puuttuvat elementit uudestaan
@@ -469,7 +511,7 @@ function observeDomChanges() {
                     .catch(error => {
                         console.warn("[AI Translation] Error fetching translations:", error);
                         if (IS_DEV_MODE) {
-                            _showDevTranslationNotice(`AI Translation ERROR: ${error.message}`, true);
+                            _showDevTranslationNotice(`AI Translation ERROR: ${error.message}`, 'error');
                         }
                     });
                 }, _AI_FETCH_DEBOUNCE_MS);
@@ -547,7 +589,7 @@ function translateElement(one_element, translation_data, chosen_language, missin
         if (IS_DEV_MODE && baseKeyForSource && globalOrphanKeys.has(baseKeyForSource) && !_warnedOrphanKeys.has(baseKeyForSource)) {
             _warnedOrphanKeys.add(baseKeyForSource);
             console.warn(`[ORPHAN KEY] ⚠️ '${baseKeyForSource}' on merkitty orvoksi, mutta sitä käytetään sivulla. Tarkista sovelluslogiikka.`);
-            _showDevTranslationNotice(`⚠️ Orpo avain käytössä: ${baseKeyForSource}`, true);
+            _showDevTranslationNotice(`⚠️ Orpo avain käytössä: ${baseKeyForSource}`, 'warning');
         }
 
         if (baseKeyForSource && missing_keys?.includes(baseKeyForSource) && !globalMissingKeySources[baseKeyForSource]) {

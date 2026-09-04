@@ -109,9 +109,9 @@ func normalizeCardStyleVariant(value string) string {
 	}
 }
 
-// fetchUserColumnSettingsOrDefaults resolves personal > site > metadata defaults
-// for one stable view key. GetResults still intersects these preferences with
-// real SELECT rights, so hiding a field is never treated as authorization.
+// fetchUserColumnSettingsOrDefaults resolves personal > group > site > metadata
+// defaults for one stable view key. GetResults still intersects these preferences
+// with real SELECT rights, so hiding a field is never treated as authorization.
 func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db *sql.DB) ([]UserColumnSetting, error) {
 	var tableUID int
 	if err := db.QueryRow(`SELECT table_uid FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&tableUID); err != nil {
@@ -126,8 +126,28 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 			FROM public.system_view_field_set_assignments AS assignments
 			JOIN public.system_table_views AS views ON views.id = assignments.view_id
 			WHERE assignments.table_uid = $1 AND views.view_key = $2
-			  AND (assignments.user_id = $3 OR assignments.user_id IS NULL)
-			ORDER BY (assignments.user_id IS NOT NULL) DESC
+			  AND (
+			      assignments.user_id = $3
+			      OR (
+			          assignments.group_id IS NOT NULL
+			          AND EXISTS (
+			              SELECT 1
+			              FROM public.system_user_group_memberships AS memberships
+			              WHERE memberships.user_id = $3
+			                AND memberships.group_id = assignments.group_id
+			          )
+			      )
+			      OR (assignments.user_id IS NULL AND assignments.group_id IS NULL)
+			  )
+			ORDER BY
+			  CASE
+			      WHEN assignments.user_id IS NOT NULL THEN 3
+			      WHEN assignments.group_id IS NOT NULL THEN 2
+			      ELSE 1
+			  END DESC,
+			  assignments.group_priority DESC,
+			  assignments.group_id ASC NULLS LAST,
+			  assignments.field_set_id ASC
 			LIMIT 1`, tableUID, viewKey, preferenceUser).Scan(&assignedFieldSetID)
 	}
 	if assignmentErr != nil && assignmentErr != sql.ErrNoRows {
@@ -141,6 +161,7 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 			JOIN public.system_column_details AS details ON details.column_uid = members.column_uid
 			WHERE members.field_set_id = $1
 			  AND COALESCE(details.hide_everywhere, false) = false
+			  AND COALESCE(details.client_delivery_mode, 'include') = 'include'
 			ORDER BY members.sort_order`, assignedFieldSetID)
 		if queryErr != nil {
 			return nil, queryErr
@@ -160,7 +181,9 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 	queryDefaults := `
 		SELECT details.column_name, COALESCE(details.co_number, details.column_uid), 0, false
 		FROM public.system_column_details AS details
-		WHERE details.table_uid = $1 AND COALESCE(details.hide_everywhere, false) = false`
+		WHERE details.table_uid = $1
+		  AND COALESCE(details.hide_everywhere, false) = false
+		  AND COALESCE(details.client_delivery_mode, 'include') = 'include'`
 	if viewKey == "card" {
 		queryDefaults += ` AND COALESCE(details.hide_on_small_card, false) = false`
 	}
@@ -311,8 +334,9 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
           )
         WHERE c.table_name = $1
           AND c.table_schema = 'public'
-          AND COALESCE(scd.hide_everywhere, false) = false
-          AND c.column_name NOT IN ('embedding_vector', 'search_vector_simple')
+		  AND COALESCE(scd.hide_everywhere, false) = false
+		  AND COALESCE(scd.client_delivery_mode, 'include') = 'include'
+		  AND c.column_name NOT IN ('embedding_vector', 'search_vector_simple')
     `, cardDetailIconExpr, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, cardDetailLabelModeExpr)
 	rows, err := db.Query(query, tableName)
 	if err != nil {

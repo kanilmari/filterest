@@ -27,6 +27,8 @@ function buildColumn(overrides = {}) {
         show_key_on_card: true,
         show_value_on_card: true,
         hide_everywhere: false,
+        client_delivery_mode: 'include',
+        client_delivery_mode_locked: false,
         hide_on_small_card: false,
         hide_false_null_on_sml_crd: false,
         hide_false_null_on_big_crd: false,
@@ -226,13 +228,17 @@ describe('card_visibility_view', () => {
         cardElementSelect.dispatchEvent(new Event('change', { bubbles: true }));
         await flushAsyncWork();
 
-        const labelModeSelect = /** @type {HTMLSelectElement | undefined} */ (selectInputs[1]);
+        const labelModeSelect = /** @type {HTMLSelectElement | undefined} */ (
+            selectInputs.find((select) => Array.from(select.options).some((option) => option.value === 'both'))
+        );
         expect(labelModeSelect).toBeDefined();
         labelModeSelect.value = 'both';
         labelModeSelect.dispatchEvent(new Event('change', { bubbles: true }));
         await flushAsyncWork();
 
-        const iconKeySelect = /** @type {HTMLSelectElement | undefined} */ (selectInputs[2]);
+        const iconKeySelect = /** @type {HTMLSelectElement | undefined} */ (
+            selectInputs.find((select) => Array.from(select.options).some((option) => option.value === 'calendar'))
+        );
         expect(iconKeySelect).toBeDefined();
         iconKeySelect.value = 'calendar';
         iconKeySelect.dispatchEvent(new Event('change', { bubbles: true }));

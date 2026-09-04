@@ -266,6 +266,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 	}
+	visibleColUids = appendRequiredClientTransportColumnUIDs(columnsMap, visibleColUids)
 
 	cardSupportColumnsLoadedWithMainQuery := []string(nil)
 	if request.URL.Query().Get("include_card_support") == "1" {
@@ -342,6 +343,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		)
 	}
 	result_columns = filterCardSupportColumnsFromResultColumns(result_columns, cardSupportColumnsLoadedWithMainQuery)
+	result_columns = filterTransportOnlyColumnsFromPresentation(result_columns, visibleColumnNames)
 
 	column_data_types = enrichServiceCatalogModerationDataTypes(table_name, column_data_types)
 

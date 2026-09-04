@@ -33,6 +33,12 @@ import {
     requestGpsPosition,
 } from "./dataset_search_location_handler.js";
 import { do_intelligent_search } from "./dataset_search_executor.js";
+import {
+    clearCommittedDatasetSearch,
+    DATASET_COMMITTED_SEARCH_CHANGED_EVENT,
+    hasCommittedDatasetSearch,
+    notifyCommittedDatasetSearchChanged,
+} from "./dataset_search_clearer.js";
 
 export const DEFAULT_SEARCH_CLASSES = {
     wrapper: ["dataset-search-row"],
@@ -127,6 +133,8 @@ export function createDatasetSearchComponent(tableName, options = {}) {
     leftColumn.classList.add(...classConfig.fields);
     const searchRow = document.createElement("div");
     searchRow.classList.add(...classConfig.inputRow);
+    const inputShell = document.createElement("div");
+    inputShell.classList.add("dataset-search-input-shell");
     const globalSearchInput = document.createElement("input");
     globalSearchInput.type = "text";
     if (!options.placeholder) {
@@ -149,7 +157,8 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         options.placeholder || `Search for ${tableName}...`;
     applyVisuallyHiddenStyles(globalSearchLabel);
     searchRow.appendChild(globalSearchLabel);
-    searchRow.appendChild(globalSearchInput);
+    inputShell.appendChild(globalSearchInput);
+    searchRow.appendChild(inputShell);
 
     const locationRow = document.createElement("div");
     locationRow.classList.add(...classConfig.locationRow);
@@ -203,6 +212,27 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         globalSearchButton.append(buttonIcon, buttonLabel);
     }
 
+    const clearSearchButton = document.createElement("button");
+    clearSearchButton.type = "button";
+    // This control is positioned inside the input. It intentionally does not
+    // inherit a shared button primitive whose pressed-state transform could
+    // replace the translateY used for vertical centring.
+    clearSearchButton.classList.add("dataset-search-clear-button");
+    clearSearchButton.dataset.testid =
+        variant === "filterbar"
+            ? "dataset-search-clear"
+            : `dataset-search-clear-${variant}`;
+    clearSearchButton.dataset.titleLangKey = "clear_text_search";
+    clearSearchButton.dataset.ariaLabelLangKey = "clear_text_search";
+    clearSearchButton.title = "Clear text search";
+    clearSearchButton.setAttribute("aria-label", "Clear text search");
+    const clearSearchIcon = document.createElement("span");
+    clearSearchIcon.classList.add("dataset-search-clear-icon");
+    clearSearchIcon.setAttribute("aria-hidden", "true");
+    clearSearchIcon.textContent = "×";
+    clearSearchButton.appendChild(clearSearchIcon);
+
+    inputShell.appendChild(clearSearchButton);
     searchRow.appendChild(globalSearchButton);
     leftColumn.appendChild(searchRow);
     leftColumn.appendChild(locationRow);
@@ -356,6 +386,17 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         setParams(tableName, params);
         updateURL(tableName, params, undefined, getCommitSearchUrlOptions(options));
         renderActiveFilters(tableName);
+        notifyCommittedDatasetSearchChanged(tableName);
+    }
+
+    function syncCommittedSearchControls() {
+        clearSearchButton.hidden = !hasCommittedDatasetSearch(tableName);
+    }
+
+    function clearCommittedSearch() {
+        if (!clearCommittedDatasetSearch(tableName)) return;
+        renderActiveFilters(tableName);
+        globalSearchInput.focus();
     }
 
     function handleInput() {
@@ -394,10 +435,21 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         } else {
             localStorage.setItem(STORAGE_KEY_DRAFT, newVal);
         }
+        syncCommittedSearchControls();
     }
     addManagedListener(window, "dataset-query-params-changed", handleQueryParamSync);
+    addManagedListener(
+        window,
+        DATASET_COMMITTED_SEARCH_CHANGED_EVENT,
+        (event) => {
+            if (event.detail?.dataset === tableName) {
+                syncCommittedSearchControls();
+            }
+        }
+    );
 
     addManagedListener(globalSearchButton, "click", commitSearch);
+    addManagedListener(clearSearchButton, "click", clearCommittedSearch);
     addManagedListener(globalSearchInput, "keypress", (e) => {
         if (e.key === "Enter") commitSearch();
     });
@@ -437,6 +489,7 @@ export function createDatasetSearchComponent(tableName, options = {}) {
                 : (cb) => Promise.resolve().then(cb);
         scheduleMicrotask(() => commitSearch({ replaceUrl: true }));
     }
+    syncCommittedSearchControls();
 
     let component = null;
     component = {

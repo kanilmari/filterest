@@ -7,10 +7,11 @@ import { getUnifiedTableState, setUnifiedTableState, refreshTableUnified } from 
 import { getParams, setParams, updateURL } from "../../navigation/nav_engine/query_params.js";
 import {
     ongoingSearchResults,
-    getDatasetSearchInputs,
     do_intelligent_search,
     rerenderCachedSearchResults,
 } from "../text_search/create_text_search_panel.js";
+import { clearCommittedDatasetSearch } from "../text_search/dataset_search_clearer.js";
+import { highlightActiveFilterSetChange } from "./active_filter_change_highlighter.js";
 import { ROW_GROUP_FILTER_KEY } from "./row_group_facet_printer.js";
 import {
     groupFilters,
@@ -235,6 +236,7 @@ export function renderActiveFilters(tableName) {
             host.style.display = "none";
         }
     });
+    highlightActiveFilterSetChange(container, [...seenLabels]);
 }
 
 async function removeFilter(tableName, keys) {
@@ -277,39 +279,6 @@ async function removeFilter(tableName, keys) {
 }
 
 function removeSearch(tableName) {
-    const params = getParams(tableName);
-    delete params.search;
-    setParams(tableName, params);
-    updateURL(tableName, params);
-
-    const inputs = getDatasetSearchInputs(tableName);
-    inputs.forEach((input) => {
-        input.value = '';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    ongoingSearchResults[tableName] = null;
-
-    // Clean up search artifacts (second AI table, stage notices)
-    const viewContainer = document.getElementById(`${tableName}_table_view_container`);
-    if (viewContainer) {
-        viewContainer
-            .querySelectorAll(
-                `#${tableName}_search_ai_table, #${tableName}_search_ai_cards, #${tableName}_search_ai_host`
-            )
-            .forEach((el) => el.remove());
-        viewContainer.querySelectorAll(".search-stage-notice").forEach((el) => el.remove());
-    }
-
-    const cardViewContainer = document.getElementById(`${tableName}_card_view_container`);
-    if (cardViewContainer) {
-        cardViewContainer
-            .querySelectorAll(
-                `#${tableName}_search_ai_table, #${tableName}_search_ai_cards, #${tableName}_search_ai_host, .search-stage-notice`
-            )
-            .forEach((el) => el.remove());
-    }
-
-    // Välitön UI-päivitys ennen async-refreshiä
+    if (!clearCommittedDatasetSearch(tableName)) return;
     renderActiveFilters(tableName);
-    refreshTableUnified(tableName, { skipUrlParams: true });
 }

@@ -81,7 +81,14 @@ func shouldApplyReadRowPolicy(tableName, userRole string, policy ReadRowPolicy) 
 // fragment for non-admin reads. argStart is the 1-based placeholder index to use
 // if an owner fallback parameter needs to be appended.
 func buildLegacyReadMustTrueCondition(tableName, userRole string, userID int, mustTrueCols []string, ownerColumn string, argStart int) (string, []interface{}) {
-	return buildReadRowPolicyCondition(tableName, userRole, userID, legacyMustTrueReadPolicy(mustTrueCols, ownerColumn), argStart)
+	return buildLegacyReadPolicyBaseConditionForReference(
+		tableName,
+		tableName,
+		userRole,
+		userID,
+		legacyMustTrueReadPolicy(mustTrueCols, ownerColumn),
+		argStart,
+	)
 }
 
 // buildReadRowPolicyCondition constructs the SQL fragment for the active read-row policy.
@@ -102,25 +109,56 @@ func buildReadRowPolicyCondition(tableName, userRole string, userID int, policy 
 // Intelligent-search candidate queries use aliases, but policy applicability
 // must still be decided from the canonical dataset name (not the alias).
 func buildReadRowPolicyConditionForReference(tableName, tableReference, userRole string, userID int, policy ReadRowPolicy, argStart int) (string, []interface{}) {
-	if policy.Name != rowPolicyAllFlagsTrueUnlessOwner || !shouldApplyReadRowPolicy(tableName, userRole, policy) {
+	if userRole == "admin" {
 		return "", nil
 	}
 
+	baseCondition, baseArgs := buildLegacyReadPolicyBaseConditionForReference(
+		tableName,
+		tableReference,
+		userRole,
+		userID,
+		policy,
+		argStart,
+	)
+	if baseCondition == "" {
+		baseCondition = "TRUE"
+	}
+
+	effectiveCondition, effectiveArgs := buildEffectiveRowAccessConditionForReference(
+		tableName,
+		tableReference,
+		userID,
+		"read",
+		baseCondition,
+		argStart+len(baseArgs),
+	)
+	return effectiveCondition, append(baseArgs, effectiveArgs...)
+}
+
+func buildLegacyReadPolicyBaseConditionForReference(
+	tableName string,
+	tableReference string,
+	userRole string,
+	userID int,
+	policy ReadRowPolicy,
+	argStart int,
+) (string, []interface{}) {
+	if policy.Name != rowPolicyAllFlagsTrueUnlessOwner || !shouldApplyReadRowPolicy(tableName, userRole, policy) {
+		return "", nil
+	}
 	quotedTable := pq.QuoteIdentifier(tableReference)
 	args := make([]interface{}, 0, 1)
 	ownerArgRef := ""
-
-	// user_id=1 is the guest session user — no owner exception for anonymous visitors
 	if policy.OwnerColumn != "" && userID > 1 {
 		args = append(args, userID)
 		ownerArgRef = fmt.Sprintf("$%d", argStart)
 	}
-
-	var cond []string
+	conditions := make([]string, 0, len(policy.FlagColumns))
 	for _, col := range policy.FlagColumns {
-		extraCond := fmt.Sprintf("%s.%s = TRUE", quotedTable, pq.QuoteIdentifier(col))
+		condition := fmt.Sprintf("%s.%s = TRUE", quotedTable, pq.QuoteIdentifier(col))
 		if ownerArgRef != "" {
-			extraCond = fmt.Sprintf(
+			condition = fmt.Sprintf(
 				"(%s.%s = TRUE OR %s.%s = %s)",
 				quotedTable,
 				pq.QuoteIdentifier(col),
@@ -129,10 +167,43 @@ func buildReadRowPolicyConditionForReference(tableName, tableReference, userRole
 				ownerArgRef,
 			)
 		}
-		cond = append(cond, extraCond)
+		conditions = append(conditions, condition)
 	}
+	return strings.Join(conditions, " AND "), args
+}
 
-	return strings.Join(cond, " AND "), args
+// buildEffectiveRowAccessConditionForReference wraps an existing broader rule
+// in the normalized exact-row resolver. Direct deny wins, direct allow follows,
+// and no direct rule preserves the supplied broader policy result.
+func buildEffectiveRowAccessConditionForReference(
+	tableName string,
+	tableReference string,
+	userID int,
+	action string,
+	broaderCondition string,
+	argStart int,
+) (string, []interface{}) {
+	switch action {
+	case "read", "update", "delete":
+	default:
+		return "FALSE", nil
+	}
+	if userID <= 0 {
+		userID = 1
+	}
+	if strings.TrimSpace(broaderCondition) == "" {
+		broaderCondition = "FALSE"
+	}
+	condition := fmt.Sprintf(
+		"public.resolve_effective_row_access($%d, %s.%s, $%d, '%s', (%s), FALSE)",
+		argStart,
+		pq.QuoteIdentifier(tableReference),
+		pq.QuoteIdentifier("id"),
+		argStart+1,
+		action,
+		broaderCondition,
+	)
+	return condition, []interface{}{tableName, userID}
 }
 
 // appendReadPolicyToWhereClause adds the active read policy to an existing WHERE clause and argument list.
@@ -168,41 +239,102 @@ func AppendMutationRowPolicyToWhereClause(
 	whereClause string,
 	args []interface{},
 ) (string, []interface{}, error) {
+	return appendMutationRowPolicyForAction(
+		q,
+		tableName,
+		userRole,
+		userID,
+		"delete",
+		whereClause,
+		args,
+	)
+}
+
+// AppendUpdateRowPolicyToWhereClause repeats the exact-row update decision on
+// the UPDATE statement itself. The earlier row lock remains useful for stable
+// data, while this predicate closes the permission-rule change window.
+func AppendUpdateRowPolicyToWhereClause(
+	q dbutils.Querier,
+	tableName string,
+	userRole string,
+	userID int,
+	whereClause string,
+	args []interface{},
+) (string, []interface{}, error) {
+	return appendMutationRowPolicyForAction(
+		q,
+		tableName,
+		userRole,
+		userID,
+		"update",
+		whereClause,
+		args,
+	)
+}
+
+func appendMutationRowPolicyForAction(
+	q dbutils.Querier,
+	tableName string,
+	userRole string,
+	userID int,
+	action string,
+	whereClause string,
+	args []interface{},
+) (string, []interface{}, error) {
+	if userRole == "admin" {
+		return whereClause, args, nil
+	}
+
 	quotedTable := pq.QuoteIdentifier(tableName)
+	broaderCondition := "TRUE"
 	switch {
-	case tableName == rlsPilotTableName && userRole != "admin":
+	case tableName == rlsPilotTableName:
 		if userID <= 1 {
-			if strings.TrimSpace(whereClause) == "" {
-				return " WHERE FALSE", args, nil
-			}
-			return whereClause + " AND FALSE", args, nil
+			broaderCondition = "FALSE"
+			break
 		}
 		args = append(args, userID)
-		ownerCondition := fmt.Sprintf(
+		broaderCondition = fmt.Sprintf(
 			"%s.%s = $%d",
 			quotedTable,
 			pq.QuoteIdentifier("user_id"),
 			len(args),
 		)
-		if strings.TrimSpace(whereClause) == "" {
-			return " WHERE " + ownerCondition, args, nil
-		}
-		return whereClause + " AND " + ownerCondition, args, nil
-	case tableName != rlsPilotTableName && userRole != "admin":
+	case tableName != rlsPilotTableName:
 		policy, err := getLegacyMustTrueReadPolicy(q, tableName)
 		if err != nil {
 			return whereClause, args, fmt.Errorf("load mutation row policy for %s: %w", tableName, err)
 		}
-		whereClause, args = appendReadPolicyToWhereClause(
-			tableName,
-			userRole,
-			userID,
-			policy,
-			whereClause,
-			args,
-		)
+		if policy.Name == rowPolicyAllFlagsTrueUnlessOwner && shouldApplyReadRowPolicy(tableName, userRole, policy) {
+			var baseArgs []interface{}
+			broaderCondition, baseArgs = buildLegacyReadPolicyBaseConditionForReference(
+				tableName,
+				tableName,
+				userRole,
+				userID,
+				policy,
+				len(args)+1,
+			)
+			if broaderCondition == "" {
+				broaderCondition = "TRUE"
+			}
+			args = append(args, baseArgs...)
+		}
 	}
-	return whereClause, args, nil
+
+	effectiveCondition, effectiveArgs := buildEffectiveRowAccessConditionForReference(
+		tableName,
+		tableName,
+		userID,
+		action,
+		broaderCondition,
+		len(args)+1,
+	)
+	args = append(args, effectiveArgs...)
+	if strings.TrimSpace(whereClause) == "" {
+		return " WHERE " + effectiveCondition, args, nil
+	}
+	return whereClause + " AND " + effectiveCondition, args, nil
 }
 
 // LockRowsVisibleForMutation verifies that every requested row is writable by
@@ -245,11 +377,16 @@ func rowsVisibleForMutation(q *sql.Tx, tableName, userRole string, userID int, r
 		return false, nil
 	}
 	var err error
-	whereClause, args, err = AppendMutationRowPolicyToWhereClause(
+	action := "delete"
+	if lockRows {
+		action = "update"
+	}
+	whereClause, args, err = appendMutationRowPolicyForAction(
 		q,
 		tableName,
 		userRole,
 		userID,
+		action,
 		whereClause,
 		args,
 	)

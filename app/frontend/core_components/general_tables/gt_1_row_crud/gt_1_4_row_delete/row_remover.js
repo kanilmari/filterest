@@ -9,6 +9,7 @@ import { showSuccessToast, showWarningToast } from '../../../../reusable_compone
 import { showConfirmModal } from '../../../../reusable_components/modal/confirm_modal_builder.js';
 import { findHeaderColumn, buildConfirmationMessage, buildDeletePayload } from './row_remover_helpers.js';
 import { getLanguageWithBrowserFallback } from '../../../state_stores/lang_preference_reader.js';
+import { clearDatasetRowSelection } from '../../../table_views/dataset_row_selection_store.js';
 
 function getHeaderColumnName(table_name) {
     const dataTypes = JSON.parse(localStorage.getItem(`${table_name}_dataTypes`) || '{}');
@@ -90,6 +91,7 @@ export async function delete_selected_items(table_name) {
         });
 
         showSuccessToast('Valitut kohteet poistettu onnistuneesti! ☺');
+        clearDatasetRowSelection(table_name);
 
         // Päivitetään näkymä refreshTableUnified-funktion avulla
         await refreshTableUnified(table_name, { skipUrlParams: true });

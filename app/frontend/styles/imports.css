@@ -44,6 +44,7 @@
 @import url("../core_components/filterbar/filterbar_calendar.css");
 @import url("../core_components/filterbar/filterbar_layout.css");
 @import url("../core_components/filterbar/shared_topbar.css");
+@import url("../core_components/filterbar/filters_opener_and_closer.css");
 @import url("../core_components/admin_tools/admin_version_info_indicator.css");
 @import url("../core_components/admin_tools/admin_update_notice.css");
 @import url("../core_components/filterbar/text_search/text_search.css");
@@ -94,6 +95,8 @@
 @import url("../core_components/admin_tools/user_authentication.css");
 @import url("../core_components/admin_tools/symbol_registry.css");
 @import url("../core_components/admin_tools/field_view_editor.css");
+@import url("../core_components/admin_tools/view_field_assignments_view.css");
+@import url("../core_components/admin_tools/row_access_editor.css");
 @import url("../core_components/workline_observatory/workline_observatory_view.css");
 @import url("../core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/create_table_admin.css");
 @import url("../custom_views/search_vector_maintenance.css");

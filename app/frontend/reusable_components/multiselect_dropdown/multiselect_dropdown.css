@@ -93,6 +93,23 @@
   overflow-y: auto;
 }
 
+.msd-option-group + .msd-option-group {
+  border-top: 1px solid var(--border_color);
+}
+
+.msd-option-group-label {
+  padding: 0.45rem 0.5rem 0.25rem;
+  color: var(--empty_field_text_color, var(--text_color));
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.msd-dropdown--disabled {
+  opacity: 0.72;
+}
+
 .msd-option {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

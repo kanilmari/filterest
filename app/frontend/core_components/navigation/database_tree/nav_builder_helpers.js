@@ -105,6 +105,7 @@ export function getAdminToolsStructure() {
                 { id: 'foreign_keys', name: 'foreign_keys' },
                 { id: 'asset_linking', name: 'asset_linking' },
                 { id: 'card_visibility', name: 'card_visibility' },
+                { id: 'view_field_assignments', name: 'view_field_assignments' },
                 { id: 'service_catalog_moderation', name: 'service_catalog_moderation' },
                 { id: 'child_tab_config', name: 'child_tab_config' },
                 { id: 'dataset_alias_management', name: 'dataset_alias_management' },

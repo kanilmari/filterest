@@ -196,7 +196,6 @@
 }
 
 .modal .form-actions .submit-button:active {
-    transform: translateY(0) scale(0.98);
     box-shadow: 0 2px 8px var(--auth-submit-shadow, hsl(var(--brand-hue) 50% 50% / 0.3));
 }
 
@@ -246,7 +245,6 @@
 
 .modal_close_button:active {
     opacity: 0.8;
-    transform: scale(0.95);
 }
 
 /* Styles specifically for image modals */
@@ -424,7 +422,7 @@
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    transition: box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .modal .form-actions .danger-button:hover {
@@ -433,7 +431,6 @@
 }
 
 .modal .form-actions .danger-button:active {
-    transform: translateY(0) scale(0.98);
     box-shadow: 0 2px 6px hsl(0deg 70% 50% / 0.25);
 }
 
@@ -486,6 +483,5 @@ ul.delete-item-list li.delete-item-list-overflow {
 }
 
 .modal-button.primary:active {
-    transform: translateY(0) scale(0.98);
     box-shadow: 0 2px 8px var(--auth-submit-shadow, hsl(var(--brand-hue) 50% 50% / 0.3));
 }

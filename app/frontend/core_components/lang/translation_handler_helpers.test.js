@@ -118,6 +118,11 @@ describe('applyTranslationVariable', () => {
         expect(applyTranslationVariable('$site_name runs on $site_name', 'Easelect'))
             .toBe('Easelect runs on Easelect');
     });
+
+    test('replaces a count placeholder', () => {
+        expect(applyTranslationVariable('Selected rows: $count', '3'))
+            .toBe('Selected rows: 3');
+    });
 });
 
 // ---------------------------------------------------------------------------

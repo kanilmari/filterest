@@ -136,9 +136,14 @@
     width: calc(100% - 2px);
 }
 
-#navmenu .navtablinks[data-tab-presentation^="button"] {
+#navbar #navmenu .navtablinks[data-tab-presentation^="button"] {
+    box-sizing: border-box;
     justify-self: left;
-    width: calc(100% - 2px);
+    width: 100%;
+    /* The rectangular SVG deliberately overshoots its viewBox, so its right
+       segment is clipped. Paint that missing segment on the rectangular
+       button itself at the navbar edge. Rounded SVG tabs stay untouched. */
+    border-right: 2px solid var(--border_color);
 }
 
 .navtablinks[data-tab-presentation="button-active"] {

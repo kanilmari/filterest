@@ -16,6 +16,12 @@ func TestAddRowColumnsQueryExcludesGloballyHiddenFields(t *testing.T) {
 	) {
 		t.Fatal("add-row metadata must exclude fields hidden everywhere")
 	}
+	if !strings.Contains(
+		addRowColumnsWithTypesQuery,
+		"COALESCE(scd.client_delivery_mode, 'include') = 'include'",
+	) {
+		t.Fatal("add-row metadata must exclude server-only fields")
+	}
 	if !strings.Contains(addRowColumnsWithTypesQuery, "ORDER BY\n        scd.co_number") {
 		t.Fatal("add-row metadata must preserve the global field order")
 	}

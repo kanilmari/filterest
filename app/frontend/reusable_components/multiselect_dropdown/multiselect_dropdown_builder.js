@@ -4,16 +4,20 @@
 // Exists to provide a framework-free multiselect dropdown for filter bars and other UI surfaces.
 
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
+import { VIEW_DEACTIVATE_EVENT } from '../view_lifecycle_events.js';
+
+let multiselectDropdownSequence = 0;
 
 /**
  * Creates a multiselect dropdown component with include toggles and an explicit exclude action.
  *
  * @param {Object} config
  * @param {HTMLElement} config.containerElement - Element to mount into
- * @param {Array<{value: string, label: string}>} config.options - Options list
+ * @param {Array<{value: string, label: string, searchTerms?: string[], groupLabel?: string}>} config.options - Options list
  * @param {string} [config.placeholder="Select..."] - Trigger placeholder
  * @param {string} [config.searchPlaceholder="Search..."] - Search field placeholder
  * @param {boolean} [config.useSearch=true] - Show search field
+ * @param {HTMLElement} [config.portalElement=document.body] - Element that owns the floating list
  * @param {{ includeValues?: string[], excludeValues?: string[] }} [config.initialState] - Initial per-option filter state
  * @param {string} [config.excludeLabel="Exclude"] - Label for the per-row exclude action
  * @param {string} [config.resetLabel="Reset"] - Label for the per-row reset action shown for excluded values
@@ -22,6 +26,8 @@ import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
  * @param {boolean} [config.allowExclude=true] - Whether per-row exclude actions are rendered
  * @param {string} [config.selectedCountLabel="selected"] - Summary label for multiple selected values
  * @param {string} [config.excludedCountLabel="excluded"] - Summary label for multiple excluded values
+ * @param {string} [config.noResultsLabel="No results"] - Empty search-result label
+ * @param {string} [config.clearLabel="Clear selection"] - Accessible clear-button label
  * @param {function} [config.onChange] - Called with { includeValues, excludeValues } on change
  */
 export function createMultiselectDropdown({
@@ -30,6 +36,7 @@ export function createMultiselectDropdown({
 	placeholder = "Select...",
 	searchPlaceholder = "Search...",
 	useSearch = true,
+	portalElement = document.body,
 	initialState = {},
 	excludeLabel = "Exclude",
 	resetLabel = "Reset",
@@ -38,14 +45,20 @@ export function createMultiselectDropdown({
 	allowExclude = true,
 	selectedCountLabel = "selected",
 	excludedCountLabel = "excluded",
+	noResultsLabel = "No results",
+	clearLabel = "Clear selection",
 	onChange,
 }) {
 	if (!containerElement) {
 		throw new Error("containerElement is required.");
 	}
+	if (!(portalElement instanceof HTMLElement)) {
+		throw new Error("portalElement must be an HTML element.");
+	}
 
 	let currentOptions = options || [];
 	let optionStates = new Map();
+	let disabled = false;
 	applyState(initialState);
 
 	const instance = {
@@ -54,6 +67,7 @@ export function createMultiselectDropdown({
 		getState,
 		setValue,
 		setOptions,
+		setDisabled,
 		open,
 		close,
 		destroy,
@@ -75,6 +89,9 @@ export function createMultiselectDropdown({
 	inputEl.placeholder = placeholder;
 	inputEl.readOnly = true;
 	inputEl.classList.add('msd-dropdown-input');
+	inputEl.setAttribute('role', 'combobox');
+	inputEl.setAttribute('aria-haspopup', 'listbox');
+	inputEl.setAttribute('aria-expanded', 'false');
 	inputWrapper.appendChild(inputEl);
 
 	const chevronContainer = createMaskIconSpan(
@@ -89,11 +106,14 @@ export function createMultiselectDropdown({
 	clearBtn.type = 'button';
 	clearBtn.classList.add('msd-clear-btn');
 	clearBtn.textContent = "×";
+	clearBtn.title = clearLabel;
+	clearBtn.setAttribute('aria-label', clearLabel);
 	clearBtn.style.display = "none";
 	inputRow.appendChild(clearBtn);
 
 	clearBtn.addEventListener('click', (e) => {
 		e.stopPropagation();
+		if (disabled) return;
 		setValue({ includeValues: [], excludeValues: [] }, true);
 		close();
 	});
@@ -104,7 +124,11 @@ export function createMultiselectDropdown({
 	const listWrapper = document.createElement('div');
 	listWrapper.classList.add('msd-dropdown-list');
 	listWrapper.style.display = 'none';
-	document.body.appendChild(listWrapper);
+	listWrapper.id = `msd_dropdown_list_${++multiselectDropdownSequence}`;
+	// The caller owns the surrounding overlay context. Keeping that decision at
+	// the composition boundary lets this reusable component stay unaware of
+	// modals while ensuring its floating list remains clickable above them.
+	portalElement.appendChild(listWrapper);
 
 	// Search field
 	let searchInput = null;
@@ -115,6 +139,7 @@ export function createMultiselectDropdown({
 		searchInput = document.createElement('input');
 		searchInput.type = 'text';
 		searchInput.placeholder = searchPlaceholder;
+		searchInput.setAttribute('aria-label', searchPlaceholder);
 		searchInput.classList.add('msd-dropdown-search-input');
 
 		searchContainer.appendChild(searchInput);
@@ -123,17 +148,44 @@ export function createMultiselectDropdown({
 		searchInput.addEventListener('input', () => {
 			renderList(searchInput.value.trim());
 		});
+		searchInput.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				close();
+				inputEl.focus({ preventScroll: true });
+				return;
+			}
+			if (event.key === 'ArrowDown') {
+				event.preventDefault();
+				focusOptionAt(0);
+			}
+		});
 	}
 
 	// Options container
 	const optionsList = document.createElement('div');
 	optionsList.classList.add('msd-dropdown-options');
+	optionsList.id = `${listWrapper.id}_options`;
+	optionsList.setAttribute('role', 'listbox');
+	optionsList.setAttribute('aria-multiselectable', 'true');
+	inputEl.setAttribute('aria-controls', optionsList.id);
 	listWrapper.appendChild(optionsList);
 
 	// --- Toggle on input click ---
 	inputEl.addEventListener('click', (e) => {
 		e.stopPropagation();
+		if (disabled) return;
 		toggle();
+	});
+	inputEl.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape') {
+			close();
+			return;
+		}
+		if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			open();
+		}
 	});
 
 	// --- Close on outside click ---
@@ -143,9 +195,14 @@ export function createMultiselectDropdown({
 		}
 	};
 	document.addEventListener('click', handleOutsideClick);
+	const ownerView = containerElement.closest('#tabs_container > .content_div');
+	const handleOwnerViewDeactivation = () => close();
+	ownerView?.addEventListener(VIEW_DEACTIVATE_EVENT, handleOwnerViewDeactivation);
 
 	let isTrackingPosition = false;
 	let rafHandle = 0;
+	let ownerConnectionObserver = null;
+	let destroyed = false;
 
 	function positionListWrapper() {
 		if (listWrapper.style.display === 'none') {
@@ -199,6 +256,29 @@ export function createMultiselectDropdown({
 		window.addEventListener('scroll', schedulePositionUpdate, true);
 	}
 
+	function startOwnerConnectionTracking() {
+		if (ownerConnectionObserver || typeof MutationObserver !== 'function') {
+			return;
+		}
+		ownerConnectionObserver = new MutationObserver(() => {
+			// The popup is portalled outside its owning view. Destroy it when SPA
+			// navigation removes the anchor so an orphaned list cannot cover the
+			// next admin page or retain document/window listeners.
+			if (!containerElement.isConnected) {
+				destroy();
+			}
+		});
+		ownerConnectionObserver.observe(document.documentElement, {
+			childList: true,
+			subtree: true,
+		});
+	}
+
+	function stopOwnerConnectionTracking() {
+		ownerConnectionObserver?.disconnect();
+		ownerConnectionObserver = null;
+	}
+
 	function stopPositionTracking() {
 		if (!isTrackingPosition) {
 			return;
@@ -215,28 +295,57 @@ export function createMultiselectDropdown({
 	function renderList(filterText = "") {
 		optionsList.replaceChildren();
 
-		const filtered = currentOptions.filter(o =>
-			o.label.toLowerCase().includes(filterText.toLowerCase())
+		const normalizedFilter = normalizeSearchText(filterText);
+		const filtered = currentOptions.filter((option) =>
+			searchableOptionText(option).includes(normalizedFilter)
 		);
 
 		if (filtered.length === 0) {
 			const noResults = document.createElement('div');
 			noResults.classList.add('msd-no-results');
-			noResults.textContent = "No results";
+			noResults.textContent = noResultsLabel;
 			optionsList.appendChild(noResults);
 			return;
 		}
 
-		filtered.forEach(opt => {
+		const groupedOptions = [];
+		const groupByLabel = new Map();
+		filtered.forEach((option) => {
+			const groupLabel = String(option.groupLabel || "");
+			let group = groupByLabel.get(groupLabel);
+			if (!group) {
+				group = { label: groupLabel, options: [] };
+				groupByLabel.set(groupLabel, group);
+				groupedOptions.push(group);
+			}
+			group.options.push(option);
+		});
+
+		groupedOptions.forEach((optionGroup) => {
+			const groupElement = document.createElement('div');
+			groupElement.classList.add('msd-option-group');
+			if (optionGroup.label) {
+				groupElement.setAttribute('role', 'group');
+				groupElement.setAttribute('aria-label', optionGroup.label);
+				const heading = document.createElement('div');
+				heading.classList.add('msd-option-group-label');
+				heading.setAttribute('aria-hidden', 'true');
+				heading.textContent = optionGroup.label;
+				groupElement.appendChild(heading);
+			}
+
+			optionGroup.options.forEach((opt) => {
 			const item = document.createElement('div');
 			item.classList.add('msd-option');
-			item.tabIndex = 0;
-			item.setAttribute('role', 'button');
+			item.dataset.optionValue = String(opt.value);
+			item.tabIndex = disabled ? -1 : 0;
+			item.setAttribute('role', 'option');
 
 			const optionState = getOptionState(opt.value);
 			item.dataset.state = optionState;
 			item.classList.toggle('msd-option--include', optionState === 'include');
 			item.classList.toggle('msd-option--exclude', optionState === 'exclude');
+			item.setAttribute('aria-selected', String(optionState === 'include'));
 
 			const checkbox = document.createElement('button');
 			checkbox.type = 'button';
@@ -245,6 +354,7 @@ export function createMultiselectDropdown({
 			checkbox.setAttribute('role', 'checkbox');
 			checkbox.setAttribute('aria-checked', ariaCheckedValueForState(optionState));
 			checkbox.value = opt.value;
+			checkbox.disabled = disabled;
 			checkbox.setAttribute('aria-label', opt.label);
 
 			const labelSpan = document.createElement('span');
@@ -253,6 +363,7 @@ export function createMultiselectDropdown({
 
 			const toggleOption = (e) => {
 				e?.stopPropagation?.();
+				if (disabled) return;
 				toggleCheckboxState(opt.value);
 			};
 			checkbox.addEventListener('click', toggleOption);
@@ -261,6 +372,25 @@ export function createMultiselectDropdown({
 				if (e.key === 'Enter' || e.key === ' ') {
 					e.preventDefault();
 					toggleOption(e);
+					window.requestAnimationFrame(() => focusOptionValue(opt.value));
+					return;
+				}
+				if (e.key === 'Escape') {
+					e.preventDefault();
+					close();
+					inputEl.focus({ preventScroll: true });
+					return;
+				}
+				const options = getRenderedOptions();
+				const currentIndex = options.indexOf(item);
+				let nextIndex = currentIndex;
+				if (e.key === 'ArrowDown') nextIndex = currentIndex + 1;
+				if (e.key === 'ArrowUp') nextIndex = currentIndex - 1;
+				if (e.key === 'Home') nextIndex = 0;
+				if (e.key === 'End') nextIndex = options.length - 1;
+				if (nextIndex !== currentIndex) {
+					e.preventDefault();
+					focusOptionAt(Math.max(0, Math.min(nextIndex, options.length - 1)));
 				}
 			});
 
@@ -269,6 +399,7 @@ export function createMultiselectDropdown({
 			if (allowExclude) {
 				const actionButton = document.createElement('button');
 				actionButton.type = 'button';
+				actionButton.disabled = disabled;
 				actionButton.classList.add('msd-option-action');
 				const isExcluded = optionState === 'exclude';
 				const actionLabel = isExcluded ? resetLabel : excludeLabel;
@@ -292,8 +423,24 @@ export function createMultiselectDropdown({
 				});
 				item.appendChild(actionButton);
 			}
-			optionsList.appendChild(item);
+			groupElement.appendChild(item);
+			});
+			optionsList.appendChild(groupElement);
 		});
+	}
+
+	function getRenderedOptions() {
+		return Array.from(optionsList.querySelectorAll('.msd-option'));
+	}
+
+	function focusOptionAt(index) {
+		getRenderedOptions()[index]?.focus({ preventScroll: true });
+	}
+
+	function focusOptionValue(value) {
+		getRenderedOptions()
+			.find((option) => option.dataset.optionValue === String(value))
+			?.focus({ preventScroll: true });
 	}
 
 	function updateDisplay() {
@@ -363,10 +510,23 @@ export function createMultiselectDropdown({
 		renderList("");
 	}
 
+	function setDisabled(nextDisabled) {
+		disabled = Boolean(nextDisabled);
+		containerElement.classList.toggle('msd-dropdown--disabled', disabled);
+		inputEl.disabled = disabled;
+		clearBtn.disabled = disabled;
+		searchInput?.toggleAttribute('disabled', disabled);
+		if (disabled) close();
+		renderList(searchInput?.value?.trim() || "");
+	}
+
 	function open() {
+		if (disabled || destroyed || !containerElement.isConnected) return;
 		listWrapper.style.display = 'flex';
+		inputEl.setAttribute('aria-expanded', 'true');
 		listWrapper.style.visibility = 'hidden';
 		startPositionTracking();
+		startOwnerConnectionTracking();
 		positionListWrapper();
 		listWrapper.style.visibility = '';
 		if (searchInput) {
@@ -378,16 +538,21 @@ export function createMultiselectDropdown({
 
 	function close() {
 		listWrapper.style.display = 'none';
+		inputEl.setAttribute('aria-expanded', 'false');
 		listWrapper.style.visibility = '';
 		listWrapper.classList.remove('msd-dropdown-list--open-upward');
 		listWrapper.style.top = '';
 		listWrapper.style.bottom = '';
 		stopPositionTracking();
+		stopOwnerConnectionTracking();
 	}
 
 	function destroy() {
+		if (destroyed) return;
+		destroyed = true;
 		close();
 		document.removeEventListener('click', handleOutsideClick);
+		ownerView?.removeEventListener(VIEW_DEACTIVATE_EVENT, handleOwnerViewDeactivation);
 		listWrapper.remove();
 		if (containerElement.__dropdown === instance) {
 			delete containerElement.__dropdown;
@@ -483,4 +648,26 @@ function ariaCheckedValueForState(state) {
 	if (state === 'include') return 'true';
 	if (state === 'exclude') return 'mixed';
 	return 'false';
+}
+
+function normalizeSearchText(value) {
+	return String(value ?? "")
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLocaleLowerCase();
+}
+
+// Option labels stay concise while searchTerms can contain stable IDs and
+// secondary metadata. This keeps feature-specific identity knowledge out of
+// the reusable dropdown and avoids exposing fields the caller did not choose.
+function searchableOptionText(option) {
+	const searchTerms = Array.isArray(option?.searchTerms)
+		? option.searchTerms
+		: [];
+	return normalizeSearchText([
+		option?.label,
+		option?.value,
+		option?.groupLabel,
+		...searchTerms,
+	].filter(Boolean).join(" "));
 }

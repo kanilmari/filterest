@@ -23,12 +23,14 @@ export function appendDataToTable(table, newData, columns, dataTypes, tableName)
 
     newData.forEach((item, index) => {
         const row = document.createElement('tr');
+        row._row = item;
+        if (item?.id != null) row.dataset.rowId = String(item.id);
 
         const numbering_td = createRowNumberingCell(existingRows + index + 1);
         row.appendChild(numbering_td);
 
         // Luodaan checkbox-solu
-        const checkbox_td = createCheckboxCell(row, tableName);
+        const checkbox_td = createCheckboxCell(row, tableName, item);
         row.appendChild(checkbox_td);
 
         // Luodaan data-solut

@@ -338,7 +338,8 @@ describe('stable_endpoint_router', () => {
         endpointRouterMock
             .mockResolvedValueOnce({ view_key: 'card', visible_columns: ['title'] })
             .mockResolvedValueOnce({ status: 'ok' })
-            .mockResolvedValueOnce({ status: 'ok' });
+            .mockResolvedValueOnce({ status: 'ok' })
+            .mockResolvedValueOnce({ status: 'ok', removed_assignments: 1 });
         const mod = await loadModule();
 
         await mod.getViewFieldSets('travel_info', 'card');
@@ -363,6 +364,18 @@ describe('stable_endpoint_router', () => {
         expect(endpointRouterMock).toHaveBeenNthCalledWith(3, 'saveSiteViewFieldSet', {
             method: 'POST',
             body_data: payload,
+        });
+
+        const resetPayload = {
+            dataset: 'travel_info',
+            view_key: 'card',
+            target_scope: 'groups',
+            target_group_ids: [43],
+        };
+        await mod.resetSharedViewFieldSet(resetPayload);
+        expect(endpointRouterMock).toHaveBeenNthCalledWith(4, 'resetSharedViewFieldSet', {
+            method: 'POST',
+            body_data: resetPayload,
         });
     });
 

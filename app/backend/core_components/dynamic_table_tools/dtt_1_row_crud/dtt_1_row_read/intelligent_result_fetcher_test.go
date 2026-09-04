@@ -65,7 +65,7 @@ func TestFetchFullTextRowsUsesComputedFallbackWhenStoredVectorIsMissingPerRow(t 
 	if !strings.Contains(state.finalQuery, "to_tsvector('simple'") {
 		t.Fatalf("final query = %q, want on-the-fly simple tsvector fallback", state.finalQuery)
 	}
-	if len(state.finalArgs) != 1 || state.finalArgs[0].Value != "firefox:*" {
+	if len(state.finalArgs) != 3 || state.finalArgs[0].Value != "firefox:*" || state.finalArgs[1].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[2].Value) != "1" {
 		t.Fatalf("final args = %#v, want tsquery firefox:*", state.finalArgs)
 	}
 }
@@ -92,7 +92,7 @@ func TestFetchFullTextRowsKeepsILikeFallbackWhenVectorColumnIsMissing(t *testing
 	if strings.Contains(state.finalQuery, "to_tsvector('simple'") {
 		t.Fatalf("final query = %q, did not expect tsvector fallback in no-vector path", state.finalQuery)
 	}
-	if len(state.finalArgs) != 1 || state.finalArgs[0].Value != "%Firefox%" {
+	if len(state.finalArgs) != 3 || state.finalArgs[0].Value != "%Firefox%" || state.finalArgs[1].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[2].Value) != "1" {
 		t.Fatalf("final args = %#v, want ILIKE %%Firefox%%", state.finalArgs)
 	}
 }
@@ -119,7 +119,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryUsesStoredVector(t *testing.
 	if !strings.Contains(state.finalQuery, `ORDER BY ("src"."id" = $2) DESC`) {
 		t.Fatalf("final query = %q, want exact id result first", state.finalQuery)
 	}
-	if len(state.finalArgs) != 2 || state.finalArgs[0].Value != "161:*" || fmt.Sprint(state.finalArgs[1].Value) != "161" {
+	if len(state.finalArgs) != 4 || state.finalArgs[0].Value != "161:*" || fmt.Sprint(state.finalArgs[1].Value) != "161" || state.finalArgs[2].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[3].Value) != "1" {
 		t.Fatalf("final args = %#v, want tsquery + numeric id", state.finalArgs)
 	}
 }
@@ -146,7 +146,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryUsesILikeFallback(t *testing
 	if !strings.Contains(state.finalQuery, `ORDER BY ("app_service_catalog"."id" = $2) DESC`) {
 		t.Fatalf("final query = %q, want exact id result first", state.finalQuery)
 	}
-	if len(state.finalArgs) != 2 || state.finalArgs[0].Value != "%161%" || fmt.Sprint(state.finalArgs[1].Value) != "161" {
+	if len(state.finalArgs) != 4 || state.finalArgs[0].Value != "%161%" || fmt.Sprint(state.finalArgs[1].Value) != "161" || state.finalArgs[2].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[3].Value) != "1" {
 		t.Fatalf("final args = %#v, want ILIKE + numeric id", state.finalArgs)
 	}
 }
@@ -173,7 +173,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryHasNoQueryableColumns(t *tes
 	if !strings.Contains(state.finalQuery, `"app_service_catalog"."id" = $1`) {
 		t.Fatalf("final query = %q, want exact id predicate", state.finalQuery)
 	}
-	if len(state.finalArgs) != 1 || fmt.Sprint(state.finalArgs[0].Value) != "161" {
+	if len(state.finalArgs) != 3 || fmt.Sprint(state.finalArgs[0].Value) != "161" || state.finalArgs[1].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[2].Value) != "1" {
 		t.Fatalf("final args = %#v, want one used numeric-id placeholder", state.finalArgs)
 	}
 }
@@ -204,9 +204,10 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 
 	for _, fragment := range []string{
 		`("src"."published" = TRUE OR "src"."user_id" = $2)`,
-		`search_row_group_membership.table_uid = $3`,
+		`public.resolve_effective_row_access($3, "src"."id", $4, 'read'`,
+		`search_row_group_membership.table_uid = $5`,
 		`search_row_group_membership.row_id = "src"."id"`,
-		`search_row_group.slug = $4`,
+		`search_row_group.slug = $6`,
 		`search_row_group.enabled = TRUE`,
 	} {
 		if !strings.Contains(state.finalQuery, fragment) {
@@ -216,11 +217,13 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 	if strings.Index(state.finalQuery, "search_row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
 		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
 	}
-	if len(state.finalArgs) != 4 ||
+	if len(state.finalArgs) != 6 ||
 		state.finalArgs[0].Value != "firefox:*" ||
 		fmt.Sprint(state.finalArgs[1].Value) != "8" ||
-		fmt.Sprint(state.finalArgs[2].Value) != "104" ||
-		state.finalArgs[3].Value != "security" {
+		state.finalArgs[2].Value != "travel_info" ||
+		fmt.Sprint(state.finalArgs[3].Value) != "8" ||
+		fmt.Sprint(state.finalArgs[4].Value) != "104" ||
+		state.finalArgs[5].Value != "security" {
 		t.Fatalf("unexpected authorized candidate args: %#v", state.finalArgs)
 	}
 }
@@ -248,9 +251,10 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 
 	for _, fragment := range []string{
 		`"travel_info"."published" = TRUE`,
-		`search_row_group_membership.table_uid = $2`,
+		`public.resolve_effective_row_access($2, "travel_info"."id", $3, 'read'`,
+		`search_row_group_membership.table_uid = $4`,
 		`search_row_group_membership.row_id = "travel_info"."id"`,
-		`search_row_group.slug = $3`,
+		`search_row_group.slug = $5`,
 	} {
 		if !strings.Contains(state.finalQuery, fragment) {
 			t.Fatalf("vector candidate query lacks %q: %s", fragment, state.finalQuery)
@@ -259,7 +263,7 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 	if strings.Index(state.finalQuery, "search_row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
 		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
 	}
-	if len(state.finalArgs) != 3 || fmt.Sprint(state.finalArgs[1].Value) != "104" || state.finalArgs[2].Value != "security" {
+	if len(state.finalArgs) != 5 || state.finalArgs[1].Value != "travel_info" || fmt.Sprint(state.finalArgs[2].Value) != "1" || fmt.Sprint(state.finalArgs[3].Value) != "104" || state.finalArgs[4].Value != "security" {
 		t.Fatalf("unexpected vector candidate args: %#v", state.finalArgs)
 	}
 }

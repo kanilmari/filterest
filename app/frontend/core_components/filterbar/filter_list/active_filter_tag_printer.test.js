@@ -16,6 +16,7 @@ const appendDataToViewMock = vi.fn();
 const setResultsCountMock = vi.fn();
 const doIntelligentSearchMock = vi.fn();
 const rerenderCachedSearchResultsMock = vi.fn();
+const clearCommittedDatasetSearchMock = vi.fn();
 const ongoingSearchResultsMock = {};
 const groupFiltersMock = vi.fn(() => ({
     status: {
@@ -49,9 +50,12 @@ vi.mock("../../../reusable_components/results_count/results_count_printer.js", (
 
 vi.mock("../text_search/create_text_search_panel.js", () => ({
     ongoingSearchResults: ongoingSearchResultsMock,
-    getDatasetSearchInputs: () => [],
     do_intelligent_search: doIntelligentSearchMock,
     rerenderCachedSearchResults: rerenderCachedSearchResultsMock,
+}));
+
+vi.mock("../text_search/dataset_search_clearer.js", () => ({
+    clearCommittedDatasetSearch: clearCommittedDatasetSearchMock,
 }));
 
 vi.mock("./row_filter_checker.js", () => ({
@@ -71,6 +75,7 @@ describe("renderActiveFilters", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
         vi.clearAllMocks();
+        clearCommittedDatasetSearchMock.mockReturnValue(true);
         Object.keys(ongoingSearchResultsMock).forEach((key) => delete ongoingSearchResultsMock[key]);
         groupFiltersMock.mockImplementation(() => ({
             status: {
@@ -161,5 +166,19 @@ describe("renderActiveFilters", () => {
         });
         expect(rerenderCachedSearchResultsMock).not.toHaveBeenCalled();
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("tasks", { filters: {} });
+    });
+
+    test("search chip uses the same narrow committed-search clear command as the field X", async () => {
+        document.body.innerHTML = `
+            <div id="tasks_card_top_controls"></div>
+            <div id="tasks_results_count"></div>
+        `;
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+
+        renderActiveFilters("tasks");
+        document.querySelector(".active-filter-item .remove-active-filter").click();
+
+        expect(clearCommittedDatasetSearchMock).toHaveBeenCalledWith("tasks");
+        expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
     });
 });

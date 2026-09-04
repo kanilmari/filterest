@@ -9,6 +9,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,6 +30,17 @@ var legacyLanguageColumns = map[string]string{
 	"ch":  "ch",
 	"yue": "yue",
 }
+
+type langKeyMaintenanceRecord struct {
+	Exists           bool
+	Fi               string
+	En               string
+	Ch               string
+	Yue              string
+	UsageExplanation string
+}
+
+var readLangKeyMaintenanceRecord = readLangKeyMaintenanceRecordFromDatabase
 
 const canonicalTranslationsQuery = `
 	WITH RECURSIVE locale_chain AS (
@@ -192,7 +204,7 @@ func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetLangKeyTranslationsHandler returns fi/en/ch/yue values and one usage explanation for a single lang key.
+// GetLangKeyTranslationsHandler returns existence, fi/en/ch/yue values, and one usage explanation for a single lang key.
 func GetLangKeyTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	langKey := strings.TrimSpace(r.URL.Query().Get("lang_key"))
 	if langKey == "" {
@@ -200,57 +212,78 @@ func GetLangKeyTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var fi, en, ch, yue sql.NullString
-	err := backend.Db.QueryRow(
-		"SELECT fi, en, ch, yue FROM system_lang_keys WHERE lang_key = $1",
-		langKey,
-	).Scan(&fi, &en, &ch, &yue)
-
-	result := map[string]string{
-		"fi":                "",
-		"en":                "",
-		"ch":                "",
-		"yue":               "",
-		"usage_explanation": "",
+	record, err := readLangKeyMaintenanceRecord(langKey)
+	if err != nil {
+		log.Printf("[GetLangKeyTranslationsHandler] language-key query failed: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to read language key")
+		return
 	}
 
-	if err == nil {
-		if fi.Valid {
-			result["fi"] = fi.String
-		}
-		if en.Valid {
-			result["en"] = en.String
-		}
-		if ch.Valid {
-			result["ch"] = ch.String
-		}
-		if yue.Valid {
-			result["yue"] = yue.String
-		}
-	}
-
-	// Hae usage_explanation system_lang_key_sources -taulusta (paras match)
-	var explanation sql.NullString
-	_ = backend.Db.QueryRow(`
-		SELECT s.usage_explanation
-		FROM system_lang_key_sources s
-		JOIN system_lang_keys k ON k.id = s.lang_key_id
-		WHERE k.lang_key = $1 AND s.usage_explanation != ''
-		ORDER BY
-			CASE WHEN s.source_type = 'dataset_header' THEN 0
-			     WHEN s.source_type = 'code' THEN 1
-			     ELSE 2 END,
-			s.id
-		LIMIT 1
-	`, langKey).Scan(&explanation)
-	if explanation.Valid {
-		result["usage_explanation"] = explanation.String
+	result := map[string]interface{}{
+		"exists":            record.Exists,
+		"fi":                record.Fi,
+		"en":                record.En,
+		"ch":                record.Ch,
+		"yue":               record.Yue,
+		"usage_explanation": record.UsageExplanation,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if encErr := json.NewEncoder(w).Encode(result); encErr != nil {
 		fmt.Printf("\033[31m[GetLangKeyTranslationsHandler] encode error: %s\033[0m\n", encErr.Error())
 	}
+}
+
+// readLangKeyMaintenanceRecordFromDatabase distinguishes a missing key from an empty translation.
+// Between the maintenance API and legacy/source tables, it returns one deterministic readback record.
+// Query failures remain errors so verification tools never mistake an unavailable database for missing data.
+func readLangKeyMaintenanceRecordFromDatabase(langKey string) (langKeyMaintenanceRecord, error) {
+	var record langKeyMaintenanceRecord
+	var fi, en, ch, yue sql.NullString
+	err := backend.Db.QueryRow(
+		"SELECT fi, en, ch, yue FROM system_lang_keys WHERE lang_key = $1",
+		langKey,
+	).Scan(&fi, &en, &ch, &yue)
+	if errors.Is(err, sql.ErrNoRows) {
+		return record, nil
+	}
+	if err != nil {
+		return record, err
+	}
+	record.Exists = true
+	if fi.Valid {
+		record.Fi = fi.String
+	}
+	if en.Valid {
+		record.En = en.String
+	}
+	if ch.Valid {
+		record.Ch = ch.String
+	}
+	if yue.Valid {
+		record.Yue = yue.String
+	}
+
+	var explanation sql.NullString
+	explanationErr := backend.Db.QueryRow(`
+		SELECT s.usage_explanation
+		FROM system_lang_key_sources s
+		JOIN system_lang_keys k ON k.id = s.lang_key_id
+		WHERE k.lang_key = $1 AND s.usage_explanation != ''
+		ORDER BY
+			CASE WHEN s.source_type = 'admin_api' AND s.source_high = 'admin_lang_key' THEN 0
+			     WHEN s.source_type = 'dataset_header' THEN 1
+			     WHEN s.source_type = 'code' THEN 2
+			     ELSE 3 END,
+			s.id
+		LIMIT 1
+	`, langKey).Scan(&explanation)
+	if explanationErr == nil && explanation.Valid {
+		record.UsageExplanation = explanation.String
+	} else if explanationErr != nil && !errors.Is(explanationErr, sql.ErrNoRows) {
+		return langKeyMaintenanceRecord{}, explanationErr
+	}
+	return record, nil
 }
 
 // UpdateLangKeyHandler upserts one lang key and optional usage explanation from the dev editor.

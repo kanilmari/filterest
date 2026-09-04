@@ -1,0 +1,86 @@
+/*
+ * row_access_editor.css
+ * Styles the shared selected-row action and exact-row permission modal.
+ * Bridges standard theme tokens with compact action rows and audit guidance.
+ * Exists so the same permission workflow remains readable in light, dark, and responsive layouts.
+ */
+
+.edit-row-permissions-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.edit-row-permissions-button__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.row-access-editor {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--text_color);
+}
+
+.row-access-editor__selection-summary,
+.row-access-editor__loading,
+.row-access-editor__status {
+  margin: 0;
+}
+
+.row-access-editor__selection-summary {
+  color: var(--empty_field_text_color);
+}
+
+.row-access-editor__principal-picker {
+  min-width: 0;
+}
+
+.row-access-editor__principal-picker[aria-busy="true"] {
+  cursor: progress;
+}
+
+.row-access-editor__actions {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.row-access-editor__action-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.7fr) minmax(11rem, 1fr) minmax(10rem, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem;
+  border: 1px solid var(--table_border_color, var(--border_color));
+  border-radius: var(--fw-radius-md);
+  background: var(--bg_color_2);
+}
+
+.row-access-editor__action-row > label {
+  font-weight: 650;
+}
+
+.row-access-editor__current-state {
+  color: var(--empty_field_text_color);
+  font-size: 0.9rem;
+}
+
+.row-access-editor textarea {
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.row-access-editor__status--error {
+  color: var(--color-error, #c33);
+}
+
+.row-access-editor__footer {
+  justify-content: flex-end;
+}
+
+@media (width <= 680px) {
+  .row-access-editor__action-row {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+}

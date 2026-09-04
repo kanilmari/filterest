@@ -453,23 +453,13 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 				tableList[i] = strings.TrimSpace(tableList[i])
 			}
 
-			validTables := []string{}
 			for _, tbl := range tableList {
-				if tableExists(tbl) {
-					validTables = append(validTables, tbl)
+				if !tableExists(tbl) {
+					httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
+					return
 				}
-			}
-
-			if len(validTables) > 0 {
-				for _, tbl := range validTables {
-					if !userHasFunctionPermissionOnTable(userID, urlRoute, tbl, "") {
-						denyRouteAccess(w, r, session, userID, "403 - Forbidden (multiple datasets)")
-						return
-					}
-				}
-			} else {
-				if !userHasFunctionPermissionOnTable(userID, urlRoute, "", "") {
-					denyRouteAccess(w, r, session, userID, "403 - Forbidden (no valid datasets)")
+				if !userHasFunctionPermissionOnTable(userID, urlRoute, tbl, "") {
+					denyRouteAccess(w, r, session, userID, "403 - Forbidden (multiple datasets)")
 					return
 				}
 			}

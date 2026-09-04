@@ -149,4 +149,22 @@ describe("card_detail_tile_builder", () => {
         expect(tiles[3].classList.contains("card_detail_tile--row-separated")).toBe(true);
         expect(tiles[3].classList.contains("card_detail_tile--column-separated")).toBe(true);
     });
+
+    test("balances odd detail counts with a bordered empty desktop cell", () => {
+        const container = document.createElement("div");
+
+        renderModernCardDetails(container, [
+            { column: "one", label: "One", rawValue: "1" },
+            { column: "two", label: "Two", rawValue: "2" },
+            { column: "three", label: "Three", rawValue: "3" },
+        ]);
+
+        expect(container.style.getPropertyValue("--card-details-modern-rows")).toBe("2");
+        const tiles = Array.from(container.querySelectorAll(".card_detail_tile"));
+        expect(tiles).toHaveLength(4);
+        expect(tiles[3].classList.contains("card_detail_tile--placeholder")).toBe(true);
+        expect(tiles[3].classList.contains("card_detail_tile--row-separated")).toBe(true);
+        expect(tiles[3].classList.contains("card_detail_tile--column-separated")).toBe(true);
+        expect(tiles[3].getAttribute("aria-hidden")).toBe("true");
+    });
 });

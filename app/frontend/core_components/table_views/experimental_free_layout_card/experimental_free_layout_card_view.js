@@ -10,6 +10,7 @@ import {
 } from "../card_view/card_field_formatter.js";
 import { openRowArticleView } from "../card_view/row_article_opener.js";
 import { update_card_selection } from "../table_view/row_selection_handler.js";
+import { isDatasetRowSelected } from "../dataset_row_selection_store.js";
 import { makeColumnClass } from "../../filterbar/filter_list/column_visibility_handler.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import {
@@ -498,10 +499,13 @@ export async function createExperimentalFreeLayoutCard({
         card.dataset.id = rowItem.id;
     }
 
-    if (renderContext.hasDeleteRight) {
+    if (renderContext.hasDeleteRight || renderContext.canManageRowAccess) {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.classList.add("card_checkbox");
+        checkbox.dataset.testid = "card-select-checkbox";
+        checkbox.checked = isDatasetRowSelected(tableName, rowItem.id);
+        card.classList.toggle("selected", checkbox.checked);
         checkbox.dataset.ariaLabelLangKey = "select";
         checkbox.dataset.ariaLabelLangContext = String(rowItem.id ?? "");
         checkbox.setAttribute(
@@ -665,6 +669,7 @@ export async function rebuildExperimentalFreeLayoutCard(
     const dataTypes = card._data_types;
     const renderContext = card._render_context || {
         hasDeleteRight: false,
+        canManageRowAccess: false,
         tableHasImageRole: false,
     };
     const rebuiltCard = await createExperimentalFreeLayoutCard({

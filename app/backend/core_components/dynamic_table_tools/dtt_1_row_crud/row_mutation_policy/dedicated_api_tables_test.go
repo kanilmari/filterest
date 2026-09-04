@@ -18,6 +18,10 @@ func TestRequiresDedicatedMutationAPI(t *testing.T) {
 		"system_column_field_sets",
 		"system_column_field_set_members",
 		"system_view_field_set_assignments",
+		"system_permission_categories",
+		"system_permission_actions",
+		"system_row_access_rules",
+		"system_row_access_rule_events",
 	} {
 		if !RequiresDedicatedMutationAPI(tableName) {
 			t.Fatalf("%s must reject generic mutations", tableName)

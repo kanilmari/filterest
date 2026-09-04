@@ -88,6 +88,8 @@ export interface CardVisibilityColumn {
     co_number: number;
     hide_everywhere_locked: boolean;
     hide_everywhere_lock_reason: string;
+    client_delivery_mode: string;
+    client_delivery_mode_locked: boolean;
     card_element: string;
     card_detail_label_mode: string;
     card_detail_icon_svg: string;

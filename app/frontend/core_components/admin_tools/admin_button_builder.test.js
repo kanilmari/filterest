@@ -22,6 +22,11 @@ const createFieldViewEditorButtonMock = vi.hoisted(() => vi.fn(() => {
     button.dataset.testid = "btn-edit-fields-view";
     return button;
 }));
+const createEditRowPermissionsButtonMock = vi.hoisted(() => vi.fn(() => {
+    const button = document.createElement("button");
+    button.dataset.testid = "btn-edit-row-permissions";
+    return button;
+}));
 
 vi.mock("../general_tables/gt_toolbar/toolbar_button_creator.js", () => ({
     createDeleteSelectedButton: vi.fn(() => document.createElement("button")),
@@ -66,6 +71,10 @@ vi.mock("./field_view_editor.js", () => ({
     createFieldViewEditorButton: createFieldViewEditorButtonMock,
 }));
 
+vi.mock("./row_access_editor.js", () => ({
+    createEditRowPermissionsButton: createEditRowPermissionsButtonMock,
+}));
+
 vi.mock("../table_views/experimental_free_layout_card/experimental_free_layout_card_store.js", () => ({
     EXPERIMENTAL_FREE_LAYOUT_CARD_STYLE_VARIANT: "experimental_free_layout",
     STANDARD_CARD_STYLE_VARIANT: "standard",
@@ -85,6 +94,7 @@ describe("appendChatUIIfAllowed", () => {
         hasDatasetPermissionMock.mockReset();
         hasDatasetPermissionMock.mockResolvedValue(false);
         createFieldViewEditorButtonMock.mockClear();
+        createEditRowPermissionsButtonMock.mockClear();
         getTranslationForKeyMock.mockReset();
         getTranslationForKeyMock.mockReturnValue("");
     });
@@ -113,6 +123,33 @@ describe("appendChatUIIfAllowed", () => {
         );
         expect(managementContainer.querySelector('[data-testid="btn-edit-fields-view"]'))
             .not.toBeNull();
+    });
+
+    test("places the global row-permission editor beside selected-row deletion", async () => {
+        hasDatasetPermissionMock.mockImplementation((route, dataset) => (
+            Promise.resolve(
+                (route === "/api/delete-rows" && dataset === "demo_table")
+                || (route === "/api/admin/row-access-rules" && dataset === "")
+            )
+        ));
+        const { appendAdminFeatures } = await import("./admin_button_builder.js");
+        const managementContainer = document.createElement("div");
+        const viewSelectorContainer = document.createElement("div");
+
+        await appendAdminFeatures(
+            "demo_table",
+            managementContainer,
+            viewSelectorContainer,
+            "table"
+        );
+
+        expect(hasDatasetPermissionMock).toHaveBeenCalledWith(
+            "/api/admin/row-access-rules",
+            ""
+        );
+        expect(createEditRowPermissionsButtonMock).toHaveBeenCalledWith("demo_table");
+        expect(managementContainer.children[1]?.dataset.testid)
+            .toBe("btn-edit-row-permissions");
     });
 
     test("builds admin view controls from the dataset view registry", async () => {

@@ -203,9 +203,23 @@ function getDragAfterElement(container, clientY, draggedSection) {
     }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
 }
 
+/**
+ * Decide whether one disclosure event represents a user-owned layout change.
+ * Between section toggle events and the shared persisted section-layout payload.
+ * Exists so temporary Filters shortcuts cannot overwrite the owner's saved layout.
+ */
+export function shouldPersistFilterbarSectionToggle(section, panelBody) {
+    return (
+        section instanceof HTMLElement &&
+        section.parentElement === panelBody &&
+        section.matches(SECTION_SELECTOR) &&
+        section.dataset.filterbarTemporaryDisclosureOperation !== "true"
+    );
+}
+
 export function setupFilterbarSectionOrdering(panelBody) {
     if (!(panelBody instanceof HTMLElement)) {
-        return { destroy: () => {} };
+        return { ready: Promise.resolve(), destroy: () => {} };
     }
 
     const controller = new AbortController();
@@ -240,7 +254,7 @@ export function setupFilterbarSectionOrdering(panelBody) {
         hasRoutePermission(FILTERBAR_SECTION_LAYOUT_ROUTE) &&
         hasRoutePermission(FILTERBAR_SECTION_LAYOUT_SAVE_ROUTE);
     if (!canPersistLayout) {
-        return { destroy: () => {} };
+        return { ready: Promise.resolve(), destroy: () => {} };
     }
 
     panelBody.addEventListener("dragstart", (event) => {
@@ -295,17 +309,14 @@ export function setupFilterbarSectionOrdering(panelBody) {
 
     panelBody.addEventListener("animated-disclosure-toggle", (event) => {
         const section = event.target;
-        if (!(section instanceof HTMLElement) || section.parentElement !== panelBody) {
-            return;
-        }
-        if (!section.matches(SECTION_SELECTOR)) {
+        if (!shouldPersistFilterbarSectionToggle(section, panelBody)) {
             return;
         }
         scheduleSave();
     }, { signal });
 
     markSections();
-    fetchSectionLayout()
+    const ready = fetchSectionLayout()
         .then(async (layout) => {
             applyingRemoteLayout = true;
             applySectionOrder(panelBody, layout.section_order);
@@ -319,6 +330,7 @@ export function setupFilterbarSectionOrdering(panelBody) {
         });
 
     return {
+        ready,
         destroy() {
             clearTimeout(saveTimer);
             controller.abort();

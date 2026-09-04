@@ -24,6 +24,7 @@ import { generate_database_consistency_view } from '../../admin_tools/database_c
 import { generate_fix_media_subfolders_view } from '../../admin_tools/fix_media_subfolders_view.js';
 import { generate_fk_cache_triggers_view } from '../../admin_tools/fk_cache_triggers_view.js';
 import { generate_card_visibility_form } from '../../admin_tools/card_visibility_view.js';
+import { generate_view_field_assignments_view } from '../../admin_tools/view_field_assignments_view.js';
 import { generate_child_tab_config_form } from '../../admin_tools/child_tab_config_view.js';
 import { generate_dataset_alias_management_view } from '../../admin_tools/dataset_alias_management_view.js';
 import { generate_dataset_header_config_view } from '../../admin_tools/dataset_header_config_view.js';
@@ -178,6 +179,18 @@ export const custom_views = [
         containerId: 'card_visibility_container',
         group: 'admin_tools',
         requiredPermission: '/ui/admin/card_visibility',
+    },
+    {
+        name: 'view_field_assignments',
+        loadFunction: async () => {
+            return loadManagementView(
+                'view_field_assignments_container',
+                generate_view_field_assignments_view
+            );
+        },
+        containerId: 'view_field_assignments_container',
+        group: 'admin_tools',
+        requiredPermission: '/ui/admin/view_field_assignments',
     },
     {
         name: 'asset_linking',

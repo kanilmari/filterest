@@ -172,5 +172,17 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
         containerElement.appendChild(tile);
     });
 
+    if (entries.length > 1 && entries.length % MODERN_CARD_DETAIL_DESKTOP_COLUMNS !== 0) {
+        const placeholder = document.createElement("div");
+        placeholder.className = [
+            "card_detail_tile",
+            "card_detail_tile--row-separated",
+            "card_detail_tile--column-separated",
+            "card_detail_tile--placeholder",
+        ].join(" ");
+        placeholder.setAttribute("aria-hidden", "true");
+        containerElement.appendChild(placeholder);
+    }
+
     setModernCardDetailLabelColumnWidth(containerElement, maxVisibleLabelLength);
 }

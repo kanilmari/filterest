@@ -231,14 +231,37 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			}
 		}
 
-		// Rakennetaan UPDATE-lause
-		query := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE id = $2",
-			pq.QuoteIdentifier(tableName),
+		// Repeat the row-access predicate on the UPDATE itself. The preflight
+		// lock proves the original target set, while this second check ensures
+		// a concurrently changed permission cannot be bypassed before write.
+		quotedTable := pq.QuoteIdentifier(tableName)
+		whereClause := fmt.Sprintf(
+			" WHERE %s.%s = $2",
+			quotedTable,
+			pq.QuoteIdentifier("id"),
+		)
+		updateArgs := []interface{}{value, updateRequest.ID}
+		whereClause, updateArgs, err = dtt_1_row_read.AppendUpdateRowPolicyToWhereClause(
+			tx,
+			tableName,
+			userRole,
+			userID,
+			whereClause,
+			updateArgs,
+		)
+		if err != nil {
+			log.Printf("\033[31merror: building update row policy for %s id %d: %v\033[0m\n", tableName, updateRequest.ID, err)
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error checking row permissions")
+			return
+		}
+		query := fmt.Sprintf("UPDATE %s SET %s = $1%s",
+			quotedTable,
 			pq.QuoteIdentifier(update.Column),
+			whereClause,
 		)
 
 		// Suoritetaan kysely oikeaa DB-yhteyttä vasten
-		result, err := tx.Exec(query, value, updateRequest.ID)
+		result, err := tx.Exec(query, updateArgs...)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error updating row")
@@ -306,9 +329,17 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	}
 	if !dbutils.RegisterAfterCommitHook(request.Context(), func() {
 		event_bus.Bus.Publish(tableName, eventToPublish)
+		// Group membership changes can change the winning per-view field set.
+		if tableName == "system_user_group_memberships" {
+			dtt_1_row_read.InvalidateUserColumnSettingsCache("", "")
+		}
 	}) {
 		// Non-lazy test/tool contexts publish immediately as a fallback.
 		event_bus.Bus.Publish(tableName, eventToPublish)
+		// Keep the fallback behavior equivalent to the normal post-commit hook.
+		if tableName == "system_user_group_memberships" {
+			dtt_1_row_read.InvalidateUserColumnSettingsCache("", "")
+		}
 	}
 
 	// Palautetaan vastaus

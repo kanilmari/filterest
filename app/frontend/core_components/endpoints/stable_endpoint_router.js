@@ -366,6 +366,11 @@ export async function assignSiteViewFieldSet(request) {
     return stable_candidate_endpoint_router('assignSiteViewFieldSet', { body_data: request });
 }
 
+/** Remove selected administrator-managed site or group assignments. */
+export async function resetSharedViewFieldSet(request) {
+    return stable_candidate_endpoint_router('resetSharedViewFieldSet', { body_data: request });
+}
+
 /** Delete one shared collection through the administrator-only route. */
 export async function deleteSharedViewFieldSet(request) {
     return stable_candidate_endpoint_router('deleteSharedViewFieldSet', { body_data: request });

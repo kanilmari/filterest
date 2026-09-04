@@ -23,6 +23,7 @@ import {
     clearMainTabActiveState,
 } from '../main_tabs/main_tab_active_state.js';
 import { ensure_private_custom_views_loaded } from '../admin_and_user_tools/custom_view_reader.js';
+import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
 
 export async function handle_all_navigation(name, customViews, options = {}) {
     const { skipUrlUpdate = false, forceReload = false } = options;
@@ -143,6 +144,11 @@ async function _performNavigationCore(
         if (typeof container_element.__cleanupListeners === 'function') {
             container_element.__cleanupListeners();
         }
+        // Reusable children may render a floating surface under document.body,
+        // outside this container. Announce the generic view transition before
+        // hiding it so each child can close its own surface without navigation
+        // learning the component's classes, state, or toggle implementation.
+        container_element.dispatchEvent(new CustomEvent(VIEW_DEACTIVATE_EVENT));
         container_element.classList.add('hidden');
     });
 

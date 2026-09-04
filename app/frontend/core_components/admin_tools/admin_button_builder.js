@@ -41,6 +41,7 @@ import {
     getDatasetViewSelectorTextForLanguage,
 } from "../table_views/dataset_view_registry.js";
 import { createFieldViewEditorButton } from "./field_view_editor.js";
+import { createEditRowPermissionsButton } from "./row_access_editor.js";
 
 /**
  * SSE-yhteyden avaava funktio, joka asuu nyt admin-tiedostossa,
@@ -241,6 +242,7 @@ export async function appendAdminFeatures(
         canDeleteRows,
         canModifyColumns,
         canEditFieldView,
+        canManageRowAccess,
         canEmbedRows,
         canChangeViewStyle,
     ] = await Promise.all([
@@ -250,6 +252,7 @@ export async function appendAdminFeatures(
         // intentionally tableless. Passing the active dataset here would ask
         // the strict checker for a table-specific grant that does not exist.
         hasDatasetPermission("/api/card-visibility/update", ""),
+        hasDatasetPermission("/api/admin/row-access-rules", ""),
         hasDatasetPermission("/api/embedding_stream_handler", table_name),
         hasDatasetPermission("/ui/table-view-style-buttons", table_name),
     ]);
@@ -258,6 +261,12 @@ export async function appendAdminFeatures(
     if (canDeleteRows) {
         const deleteBtn = createDeleteSelectedButton(table_name, current_view);
         managementButtonsContainer.appendChild(deleteBtn);
+    }
+
+    if (canManageRowAccess) {
+        managementButtonsContainer.appendChild(
+            createEditRowPermissionsButton(table_name)
+        );
     }
 
     // 2) Sarakehallinta

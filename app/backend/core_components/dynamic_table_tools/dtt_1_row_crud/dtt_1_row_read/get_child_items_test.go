@@ -178,15 +178,15 @@ func TestIsRelatedParentRowVisibleHidesMissingAndPolicyFilteredRows(t *testing.T
 		{
 			name:     "missing parent",
 			userID:   42,
-			wantSQL:  `WHERE "parent_rows"."id" = $1`,
-			wantArgs: []driver.Value{int64(7)},
+			wantSQL:  `public.resolve_effective_row_access($2, "parent_rows"."id", $3, 'read', (TRUE), FALSE)`,
+			wantArgs: []driver.Value{int64(7), "parent_rows", int64(42)},
 		},
 		{
 			name:       "parent hidden by row policy",
 			readPolicy: legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
 			userID:     42,
-			wantSQL:    `("parent_rows"."published" = TRUE OR "parent_rows"."user_id" = $2)`,
-			wantArgs:   []driver.Value{int64(7), int64(42)},
+			wantSQL:    `public.resolve_effective_row_access($3, "parent_rows"."id", $4, 'read', (("parent_rows"."published" = TRUE OR "parent_rows"."user_id" = $2)), FALSE)`,
+			wantArgs:   []driver.Value{int64(7), int64(42), "parent_rows", int64(42)},
 		},
 	}
 
@@ -283,11 +283,11 @@ func TestReadParentForeignKeyValuesReappliesParentReadPolicy(t *testing.T) {
 	lastQuery := state.lastQuery
 	lastArgs := append([]driver.NamedValue(nil), state.lastArgs...)
 	state.mu.Unlock()
-	if !strings.Contains(lastQuery, `WHERE "parent_rows"."id" = $1 AND ("parent_rows"."published" = TRUE OR "parent_rows"."user_id" = $2)`) {
+	if !strings.Contains(lastQuery, `WHERE "parent_rows"."id" = $1 AND public.resolve_effective_row_access($3, "parent_rows"."id", $4, 'read', (("parent_rows"."published" = TRUE OR "parent_rows"."user_id" = $2)), FALSE)`) {
 		t.Fatalf("parent FK query did not reapply row policy: %s", lastQuery)
 	}
-	if len(lastArgs) != 2 || lastArgs[0].Value != int64(7) || lastArgs[1].Value != int64(42) {
-		t.Fatalf("parent FK query args = %#v, want parent and owner IDs", lastArgs)
+	if len(lastArgs) != 4 || lastArgs[0].Value != int64(7) || lastArgs[1].Value != int64(42) || lastArgs[2].Value != "parent_rows" || lastArgs[3].Value != int64(42) {
+		t.Fatalf("parent FK query args = %#v, want parent, owner, dataset, and actor", lastArgs)
 	}
 }
 
@@ -593,11 +593,11 @@ func TestBuildRelatedItemsQueryWithReadPolicyAddsOwnerFallback(t *testing.T) {
 		legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
 	)
 
-	if !strings.Contains(query, `WHERE "dev_agent_tasks"."queue_id" = $1 AND ("dev_agent_tasks"."published" = TRUE OR "dev_agent_tasks"."user_id" = $2)`) {
+	if !strings.Contains(query, `WHERE "dev_agent_tasks"."queue_id" = $1 AND public.resolve_effective_row_access($3, "dev_agent_tasks"."id", $4, 'read', (("dev_agent_tasks"."published" = TRUE OR "dev_agent_tasks"."user_id" = $2)), FALSE)`) {
 		t.Fatalf("query missing read policy with owner fallback: %s", query)
 	}
-	if len(args) != 2 || args[0] != 42 || args[1] != 9 {
-		t.Fatalf("query args = %#v, want []interface{}{42, 9}", args)
+	if len(args) != 4 || args[0] != 42 || args[1] != 9 || args[2] != "dev_agent_tasks" || args[3] != 9 {
+		t.Fatalf("query args = %#v, want relation, owner, dataset, and actor", args)
 	}
 }
 
