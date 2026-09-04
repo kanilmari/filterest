@@ -6,14 +6,6 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-vi.mock("../../core_components/endpoints/endpoint_router.js", () => ({
-    endpoint_router: vi.fn(),
-}));
-
-vi.mock("../../core_components/lang/translation_handler.js", () => ({
-    getTranslationForKey: vi.fn(() => ""),
-}));
-
 vi.mock("../notifications/toast_notification_printer.js", () => ({
     showErrorToast: vi.fn(),
 }));
@@ -37,8 +29,9 @@ vi.mock("../modal/modal_builder.js", () => ({
     }),
 }));
 
-import { endpoint_router } from "../../core_components/endpoints/endpoint_router.js";
 import { buildCaptionMap, openImageSourcePicker, parseFilename } from "./image_source_picker.js";
+
+const endpointRouter = vi.fn();
 
 const selection = {
     provider: "pexels",
@@ -81,7 +74,7 @@ describe("image_source_picker", () => {
     });
 
     test("previews and returns one local file for the active add-row draft", async () => {
-        endpoint_router.mockImplementation(async (routeName, options = {}) => {
+        endpointRouter.mockImplementation(async (routeName, options = {}) => {
             if (routeName === "imageSourcePickerProviders") {
                 return { providers: [{ key: "pexels", name: "Pexels", configured: true }] };
             }
@@ -94,7 +87,7 @@ describe("image_source_picker", () => {
             throw new Error(`unexpected route ${routeName}`);
         });
         const onSelect = vi.fn();
-        openImageSourcePicker({ onSelect });
+        openImageSourcePicker({ onSelect, endpointRouter });
 
         const input = document.querySelector('[data-testid="image-source-picker-url"]');
         input.value = selection.source_page_url;

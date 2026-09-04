@@ -8,6 +8,7 @@ import { get_input_type } from "./row_input_builder.js";
 import { buildChildGeometryField } from "./row_geometry_builder.js";
 import { createVanillaDropdown } from "../../../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
 import { showWarningToast } from "../../../../reusable_components/notifications/toast_notification_printer.js";
+import { endpoint_router } from "../../../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
@@ -331,9 +332,15 @@ function buildFileUploadField(fieldset, fileUploadSpec, childObjectState, option
         webPickerButton.type = "button";
         webPickerButton.classList.add("shared_asset_web_picker_button", "fw-btn", "fw-btn--ghost");
         webPickerButton.dataset.testid = "child-image-source-picker-open";
-        webPickerButton.textContent = getImageSourcePickerText("pick_image_from_web", "Pick image from web");
+        webPickerButton.textContent = getImageSourcePickerText("pick_image_from_web", "Pick image from web", {
+            getTranslation: getTranslationForKey,
+            getLanguage: getLanguageWithBrowserFallback,
+        });
         webPickerButton.addEventListener("click", () => {
             openImageSourcePicker({
+                endpointRouter: endpoint_router,
+                getTranslation: getTranslationForKey,
+                getLanguage: getLanguageWithBrowserFallback,
                 onSelect: ({ file, selection, captions }) => {
                     updateSelectedFilesState(childObjectState, fileUploadSpec, [file], {
                         replace: true,

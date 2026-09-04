@@ -3,9 +3,6 @@
 // Bridges provider page URLs, same-origin previews, and add-row File objects.
 // Exists so users can import credited images without exposing API keys or losing their row draft.
 
-import { endpoint_router } from "../../core_components/endpoints/endpoint_router.js";
-import { getTranslationForKey } from "../../core_components/lang/translation_handler.js";
-import { getLanguageWithBrowserFallback } from "../../core_components/state_stores/lang_preference_reader.js";
 import { createStackedModal } from "../modal/modal_builder.js";
 import { showErrorToast } from "../notifications/toast_notification_printer.js";
 
@@ -32,10 +29,13 @@ const LOCALIZED_FALLBACK_COPY = Object.freeze({
     loading: { fi: "Ladataan…", en: "Loading…", ch: "正在加载…", yue: "載入緊…" },
 });
 
-export function getImageSourcePickerText(key, fallback = "") {
-    const serverTranslation = getTranslationForKey(key);
+export function getImageSourcePickerText(key, fallback = "", {
+    getTranslation = () => "",
+    getLanguage = () => "en",
+} = {}) {
+    const serverTranslation = getTranslation(key);
     if (serverTranslation && serverTranslation !== key) return serverTranslation;
-    const language = getLanguageWithBrowserFallback();
+    const language = getLanguage();
     return LOCALIZED_FALLBACK_COPY[key]?.[language]
         || LOCALIZED_FALLBACK_COPY[key]?.en
         || fallback;
@@ -68,15 +68,15 @@ function parseFilename(response, selection) {
     return `${selection?.provider || "web"}-${selection?.provider_asset_id || "image"}.jpg`;
 }
 
-async function fetchImageResponse(sourceUrl, purpose) {
-    return endpoint_router("imageSourcePickerFile", {
+async function fetchImageResponse(sourceUrl, purpose, endpointRouter) {
+    return endpointRouter("imageSourcePickerFile", {
         method: "POST",
         body_data: { source_url: sourceUrl, purpose },
         returnResponse: true,
     });
 }
 
-function appendAttribution(container, selection) {
+function appendAttribution(container, selection, getText) {
     container.replaceChildren();
     const text = document.createElement("span");
     text.textContent = selection?.attribution?.text || "";
@@ -88,7 +88,7 @@ function appendAttribution(container, selection) {
         sourceLink.href = sourcePage;
         sourceLink.target = "_blank";
         sourceLink.rel = "noopener noreferrer";
-        sourceLink.textContent = getImageSourcePickerText("open_source_page", "Open source page");
+        sourceLink.textContent = getText("open_source_page", "Open source page");
         container.appendChild(sourceLink);
     }
 }
@@ -97,14 +97,26 @@ function appendAttribution(container, selection) {
  * Opens the shared web-image picker and returns its controller.
  * onSelect receives a local File plus provider metadata and FI/EN credits.
  */
-export function openImageSourcePicker({ onSelect = () => {} } = {}) {
+export function openImageSourcePicker({
+    onSelect = () => {},
+    endpointRouter,
+    getTranslation = () => "",
+    getLanguage = () => "en",
+} = {}) {
+    if (typeof endpointRouter !== "function") {
+        throw new TypeError("openImageSourcePicker requires an endpoint router");
+    }
+    const getText = (key, fallback = "") => getImageSourcePickerText(key, fallback, {
+        getTranslation,
+        getLanguage,
+    });
     const root = document.createElement("div");
     root.classList.add("image-source-picker");
     root.dataset.testid = "image-source-picker";
 
     const intro = document.createElement("p");
     intro.classList.add("image-source-picker__intro");
-    intro.textContent = getImageSourcePickerText(
+    intro.textContent = getText(
         "image_source_picker_help",
         "Paste an Unsplash, Pexels, or Pixabay photo-page URL. The image and its credit will be saved with this new row.",
     );
@@ -118,7 +130,7 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
     form.classList.add("image-source-picker__form");
     const sourceLabel = document.createElement("label");
     sourceLabel.htmlFor = "image-source-picker-url";
-    sourceLabel.textContent = getImageSourcePickerText("image_source_url", "Image page URL");
+    sourceLabel.textContent = getText("image_source_url", "Image page URL");
     const sourceRow = document.createElement("div");
     sourceRow.classList.add("image-source-picker__source-row");
     const sourceInput = document.createElement("input");
@@ -132,7 +144,7 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
     const resolveButton = document.createElement("button");
     resolveButton.type = "submit";
     resolveButton.classList.add("fw-btn", "fw-btn--primary");
-    resolveButton.textContent = getImageSourcePickerText("preview", "Preview");
+    resolveButton.textContent = getText("preview", "Preview");
     sourceRow.append(sourceInput, resolveButton);
     form.append(sourceLabel, sourceRow);
 
@@ -155,12 +167,12 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.classList.add("cancel-button", "fw-btn", "fw-btn--ghost");
-    cancelButton.textContent = getImageSourcePickerText("cancel", "Cancel");
+    cancelButton.textContent = getText("cancel", "Cancel");
     const selectButton = document.createElement("button");
     selectButton.type = "button";
     selectButton.classList.add("submit-button", "fw-btn", "fw-btn--primary");
     selectButton.dataset.testid = "image-source-picker-select";
-    selectButton.textContent = getImageSourcePickerText("use_image", "Use image");
+    selectButton.textContent = getText("use_image", "Use image");
     selectButton.disabled = true;
     actions.append(cancelButton, selectButton);
 
@@ -174,7 +186,7 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
         previewObjectUrl = "";
     };
     const stacked = createStackedModal({
-        titlePlainText: getImageSourcePickerText("pick_image_from_web", "Pick image from web"),
+        titlePlainText: getText("pick_image_from_web", "Pick image from web"),
         contentElements: [root],
         width: "min(1180px, 96vw)",
         maxWidth: "96vw",
@@ -184,7 +196,7 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
 
     cancelButton.addEventListener("click", stacked.hide);
 
-    void endpoint_router("imageSourcePickerProviders")
+    void endpointRouter("imageSourcePickerProviders")
         .then((payload) => {
             const providers = Array.isArray(payload?.providers) ? payload.providers : [];
             providerList.replaceChildren(...providers.map((provider) => {
@@ -193,13 +205,13 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
                 item.dataset.testid = "image-source-picker-provider";
                 item.classList.toggle("is-unavailable", provider?.configured !== true);
                 item.textContent = `${provider?.name || provider?.key}: ${provider?.configured === true
-                    ? getImageSourcePickerText("available", "available")
-                    : getImageSourcePickerText("not_configured", "not configured")}`;
+                    ? getText("available", "available")
+                    : getText("not_configured", "not configured")}`;
                 return item;
             }));
         })
         .catch(() => {
-            providerList.textContent = getImageSourcePickerText("provider_status_unavailable", "Provider status is unavailable.");
+            providerList.textContent = getText("provider_status_unavailable", "Provider status is unavailable.");
         });
 
     form.addEventListener("submit", async (event) => {
@@ -208,30 +220,30 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
         if (!sourceUrl) return;
         resolveButton.disabled = true;
         selectButton.disabled = true;
-        status.textContent = getImageSourcePickerText("loading", "Loading…");
+        status.textContent = getText("loading", "Loading…");
         resolvedSelection = null;
         preview.hidden = true;
         revokePreview();
         try {
-            const payload = await endpoint_router("imageSourcePickerResolve", {
+            const payload = await endpointRouter("imageSourcePickerResolve", {
                 method: "POST",
                 body_data: { source_url: sourceUrl },
             });
             resolvedSelection = payload?.selection || null;
             if (!resolvedSelection) throw new Error("Image provider returned no selection.");
-            const response = await fetchImageResponse(sourceUrl, "preview");
+            const response = await fetchImageResponse(sourceUrl, "preview", endpointRouter);
             const blob = await response.blob();
             previewObjectUrl = URL.createObjectURL(blob);
             previewImage.src = previewObjectUrl;
             previewImage.alt = resolvedSelection?.image?.alt_text
                 || resolvedSelection?.description
-                || getImageSourcePickerText("image_preview", "Image preview");
-            appendAttribution(attribution, resolvedSelection);
+                || getText("image_preview", "Image preview");
+            appendAttribution(attribution, resolvedSelection, getText);
             preview.hidden = false;
             selectButton.disabled = false;
-            status.textContent = getImageSourcePickerText("image_ready", "Image is ready to use.");
+            status.textContent = getText("image_ready", "Image is ready to use.");
         } catch (error) {
-            status.textContent = error?.message || getImageSourcePickerText("image_load_failed", "The image could not be loaded.");
+            status.textContent = error?.message || getText("image_load_failed", "The image could not be loaded.");
             showErrorToast(status.textContent);
         } finally {
             resolveButton.disabled = false;
@@ -241,9 +253,9 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
     selectButton.addEventListener("click", async () => {
         if (!resolvedSelection) return;
         selectButton.disabled = true;
-        status.textContent = getImageSourcePickerText("loading", "Loading…");
+        status.textContent = getText("loading", "Loading…");
         try {
-            const response = await fetchImageResponse(sourceInput.value.trim(), "select");
+            const response = await fetchImageResponse(sourceInput.value.trim(), "select", endpointRouter);
             const blob = await response.blob();
             const file = new File([blob], parseFilename(response, resolvedSelection), {
                 type: blob.type || response.headers.get("Content-Type") || "image/jpeg",
@@ -256,7 +268,7 @@ export function openImageSourcePicker({ onSelect = () => {} } = {}) {
             });
             stacked.hide();
         } catch (error) {
-            status.textContent = error?.message || getImageSourcePickerText("image_import_failed", "The image could not be imported.");
+            status.textContent = error?.message || getText("image_import_failed", "The image could not be imported.");
             showErrorToast(status.textContent);
             selectButton.disabled = false;
         }
