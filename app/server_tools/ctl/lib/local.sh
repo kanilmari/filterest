@@ -238,21 +238,21 @@ _shared_dev_storage_prepare() {
     local helper
     helper="$(_shared_dev_storage_helper)"
     [[ -x "$helper" ]] || return 0
-    "$helper" prepare
+    "$helper" prepare --quiet
 }
 
 _shared_dev_storage_start_sync() {
     local helper
     helper="$(_shared_dev_storage_helper)"
     [[ -x "$helper" ]] || return 0
-    "$helper" start-sync
+    "$helper" start-sync --quiet
 }
 
 _shared_dev_storage_release() {
     local helper
     helper="$(_shared_dev_storage_helper)"
     [[ -x "$helper" ]] || return 0
-    "$helper" release
+    "$helper" release --quiet
 }
 
 # ------------------------------------------------------------------------------

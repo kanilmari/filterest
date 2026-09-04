@@ -192,7 +192,9 @@ _shared_dev_storage_deactivate_if_enabled() {
     local helper
     helper="$(_shared_dev_storage_helper)"
     [[ -x "$helper" ]] || return 0
-    "$helper" deactivate
+    # Normal lifecycle output stays owner-facing; the helper still emits
+    # failure diagnostics, while its explicit status action retains details.
+    "$helper" deactivate --quiet
 }
 
 # ------------------------------------------------------------------------------
@@ -369,16 +371,9 @@ print_success() {
     db_port="$(_read_local_env_value "DB_PORT" "$db_env_file")"
     local shared_dev_storage_enabled
     shared_dev_storage_enabled="$(_read_local_env_value "SHARED_DEV_STORAGE_ENABLED" "$db_env_file")"
-    local shared_dev_vps_host
-    shared_dev_vps_host="$(_read_local_env_value "SHARED_DEV_VPS_HOST" "$db_env_file")"
-    local shared_dev_vps_user
-    shared_dev_vps_user="$(_read_local_env_value "SHARED_DEV_VPS_USER" "$db_env_file")"
-    local shared_dev_root
-    shared_dev_root="$(_read_local_env_value "SHARED_DEV_ROOT" "$db_env_file")"
     db_host="${db_host:-localhost}"
     db_port="${db_port:-5432}"
     shared_dev_storage_enabled="${shared_dev_storage_enabled:-false}"
-    shared_dev_root="${shared_dev_root:-/srv/easelect-dev}"
     if [[ "$mode" == "docker" ]]; then
         vite_port="${VITE_PORT:-$vite_port}"
         db_host="${DB_BIND_HOST:-127.0.0.1}"
@@ -405,9 +400,9 @@ print_success() {
         fi
         echo "   🗄️  Database:     ${db_host}:${db_port} (${db_label})"
         if [[ "$(printf '%s' "$shared_dev_storage_enabled" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
-            echo "   📦 Storage:      ${shared_dev_vps_user}@${shared_dev_vps_host}:${shared_dev_root}/storage/current (shared-dev cache sync)"
+            echo "   📦 Shared development data ready (app runs locally; files synchronized with VPS)"
         else
-            echo "   📦 Storage:      storage/ + storage_deleted/ (local-only)"
+            echo "   📦 Development data: local only"
         fi
         echo "   📋 Logs:         tail -f ${LOG_FILE}"
     fi
