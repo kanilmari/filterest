@@ -181,6 +181,46 @@ describe("initTabs", () => {
         expect(document.querySelector('.navtablinks[data-id="dev_agent_tasks"]')).toBeNull();
     });
 
+    test("pins system about last for authenticated users even outside the project", async () => {
+        const { initTabs } = await import("./main_tab_printer.js");
+
+        await initTabs({
+            preloadedContentTablesResponse: {
+                datasets: [
+                    {
+                        dataset_name: "system_about",
+                        is_in_current_project: false,
+                        is_top_level_in_current_project: false,
+                        is_about_table: true,
+                        icon_key: "help",
+                    },
+                    {
+                        dataset_name: "travel_info",
+                        is_top_level_in_current_project: true,
+                    },
+                    {
+                        dataset_name: "travel_deals",
+                        is_top_level_in_current_project: true,
+                    },
+                ],
+                tab_order: [
+                    { tab_id: "system_about", sort_order: 1 },
+                    { tab_id: "travel_deals", sort_order: 2 },
+                    { tab_id: "travel_info", sort_order: 3 },
+                    { tab_id: "static:user", sort_order: 4 },
+                ],
+            },
+        });
+
+        const renderedIds = Array.from(document.querySelectorAll(".navtablinks"))
+            .map((tab) => tab.dataset.id);
+        expect(renderedIds).toEqual([
+            "travel_deals",
+            "travel_info",
+            "system_about",
+        ]);
+    });
+
     test("uses the filled-center group icon for the system users tab fallback", async () => {
         const { initTabs } = await import("./main_tab_printer.js");
         const preloadedContentTablesResponse = {

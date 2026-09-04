@@ -116,6 +116,21 @@ func TestWithCSP_HeaderContainsExpectedDirectives(t *testing.T) {
 	}
 }
 
+func TestWithCSP_AllowsLocalBlobImagePreviewWithoutOpeningOtherSources(t *testing.T) {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	WithCSP(http.HandlerFunc(okHandler)).ServeHTTP(rr, req)
+
+	csp := rr.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "img-src 'self' blob:") {
+		t.Fatalf("CSP image policy does not allow the local object-URL preview: %s", csp)
+	}
+	if strings.Contains(csp, "img-src *") || strings.Contains(csp, "img-src https:") {
+		t.Fatalf("CSP image policy unexpectedly allows arbitrary remote images: %s", csp)
+	}
+}
+
 func TestGetCSPNonce_InsideMiddleware(t *testing.T) {
 	var nonce string
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

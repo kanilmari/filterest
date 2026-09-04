@@ -12,7 +12,7 @@ vi.mock("../../icons/icon_loader.js", () => ({
     }),
 }));
 
-import { createModal, showModal, hideModal } from "./modal_builder.js";
+import { createModal, createStackedModal, showModal, hideModal } from "./modal_builder.js";
 
 describe("modal_builder accessibility", () => {
     beforeEach(() => {
@@ -245,5 +245,37 @@ describe("modal_builder accessibility", () => {
         vi.runAllTimers();
 
         expect(document.activeElement).toBe(otpInput);
+    });
+
+    test("keeps the underlying draft mounted while a stacked modal owns focus", () => {
+        const draftInput = document.createElement("input");
+        draftInput.value = "Unsaved draft";
+        const { modal: underlyingModal } = createModal({
+            titlePlainText: "Add row",
+            contentElements: [draftInput],
+        });
+        showModal();
+        vi.runAllTimers();
+
+        const sourceInput = document.createElement("input");
+        const stacked = createStackedModal({
+            titlePlainText: "Pick image from web",
+            contentElements: [sourceInput],
+        });
+        stacked.show();
+        vi.runAllTimers();
+
+        expect(underlyingModal.inert).toBe(true);
+        expect(underlyingModal.getAttribute("aria-hidden")).toBe("true");
+        expect(document.activeElement).toBe(sourceInput);
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        vi.runAllTimers();
+
+        expect(document.body.contains(stacked.modal_overlay)).toBe(false);
+        expect(underlyingModal.inert).toBe(false);
+        expect(underlyingModal.hasAttribute("aria-hidden")).toBe(false);
+        expect(draftInput.value).toBe("Unsaved draft");
+        expect(document.getElementById("custom_modal_overlay")?.style.display).toBe("flex");
     });
 });

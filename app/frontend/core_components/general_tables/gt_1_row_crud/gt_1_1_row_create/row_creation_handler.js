@@ -42,7 +42,7 @@ document.addEventListener("input", (event) => {
  */
 export async function open_add_row_modal(table_uid, table_name) {
     const datasetName = table_name || getDatasetNameByUID(table_uid);
-    const modalWidth = "min(600px, calc(100vw - 32px))";
+    const modalWidth = "min(850px, calc(100vw - 32px))";
     const loadingStatus = document.createElement("p");
     loadingStatus.dataset.langKey = "loading";
     loadingStatus.textContent = "Loading…";

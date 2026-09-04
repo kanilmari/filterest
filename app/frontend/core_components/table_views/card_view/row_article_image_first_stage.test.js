@@ -65,6 +65,8 @@ describe("row article image-first stage", () => {
             .toBe(true);
         expect(revealTitle.textContent).toBe("Example article");
         expect(revealTitle.getAttribute("aria-hidden")).toBe("true");
+        expect(element.querySelector("[data-testid='row-article-image-first-caption']").hidden)
+            .toBe(true);
     });
 
     test("supports buttons, arrow keys, and horizontal touch gestures", () => {
@@ -93,6 +95,20 @@ describe("row article image-first stage", () => {
         expect(element.querySelector("img").getAttribute("src")).toBe("/storage/two.jpg");
         expect(element.querySelector("[data-testid='row-article-image-previous']")
             .getAttribute("aria-label")).toBe("Previous image");
+    });
+
+    test("shows the active image caption as an overlay and updates it with navigation", () => {
+        const rows = [
+            { id: 1, filename: "one.jpg", alt: "One", description: { en: "First image" } },
+            { id: 2, filename: "two.jpg", alt: "Two", description: { en: "Second image" } },
+        ];
+        const { element } = createStage(rows);
+        const caption = element.querySelector("[data-testid='row-article-image-first-caption']");
+
+        expect(caption.textContent).toBe("First image");
+        expect(caption.hidden).toBe(false);
+        element.querySelector("[data-testid='row-article-image-next']").click();
+        expect(caption.textContent).toBe("Second image");
     });
 
     test("shows the article cue and treats raster letterbox space as the backdrop", () => {

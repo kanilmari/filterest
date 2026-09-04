@@ -7,6 +7,7 @@ import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { createImageElement } from "./card_avatar_builder.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { isSvgImageAsset } from "./svg_image_presentation.js";
+import { setRowArticleImageCaption } from "./row_article_image_caption.js";
 
 const SWIPE_NAVIGATION_THRESHOLD_PX = 44;
 const SVG_BACKDROP_RASTER_MAX_EDGE_PX = 1024;
@@ -312,7 +313,10 @@ export function buildRowArticleImageFirstStage({
     revealTitle.setAttribute("aria-hidden", "true");
     revealTitle.textContent = rowLabel;
     revealTitle.hidden = !rowLabel;
-    revealCluster.appendChild(revealTitle);
+    const caption = document.createElement("p");
+    caption.classList.add("row_article_image_caption", "row_article_image_first_caption");
+    caption.dataset.testid = "row-article-image-first-caption";
+    revealCluster.append(revealTitle, caption);
     revealCluster.addEventListener("animationend", (event) => {
         if (event.target !== revealCluster) {
             return;
@@ -367,6 +371,7 @@ export function buildRowArticleImageFirstStage({
             return;
         }
         const imagePath = resolvePath(row.filename);
+        setRowArticleImageCaption(caption, row);
         const nextMediaElement = createImageElement(imagePath, true, {
             tableName,
             rowLabel,

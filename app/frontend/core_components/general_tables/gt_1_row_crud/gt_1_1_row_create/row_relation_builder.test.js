@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
     applySelectedFileMetadata,
+    applyWebImageSelectionMetadata,
     buildManyToManySection,
     buildOneToManySection,
     buildFileAcceptAttribute,
@@ -32,12 +33,18 @@ vi.mock("../../../../reusable_components/notifications/toast_notification_printe
     showWarningToast: vi.fn(),
 }));
 
+vi.mock("../../../../reusable_components/image_source_picker/image_source_picker.js", () => ({
+    getImageSourcePickerText: vi.fn((_key, fallback) => fallback),
+    openImageSourcePicker: vi.fn(),
+}));
+
 vi.mock("../../../lang/translation_handler.js", () => ({
     getTranslationForKey: vi.fn(() => ""),
 }));
 
 import { fetchColumnsInfo, fetchReferencedData } from "./row_api_fetcher.js";
 import { createVanillaDropdown } from "../../../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
+import { openImageSourcePicker } from "../../../../reusable_components/image_source_picker/image_source_picker.js";
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -317,6 +324,83 @@ describe("buildOneToManySection", () => {
         const attachmentChildState = modalFormState._childRowsArray.find((child) => child.fileUploadSpec?.profile_key === "attachment");
         expect(Array.isArray(attachmentChildState?._actualFileObjects)).toBe(true);
         expect(attachmentChildState._actualFileObjects).toHaveLength(2);
+    });
+
+    test("opens the web picker only for the image profile and keeps the file in that child row", async () => {
+        fetchColumnsInfo.mockResolvedValue([
+            { column_name: "article_id", data_type: "INTEGER" },
+            { column_name: "filename", data_type: "TEXT" },
+            { column_name: "asset_kind", data_type: "TEXT" },
+            { column_name: "original_name", data_type: "TEXT" },
+            { column_name: "mime_type", data_type: "TEXT" },
+            { column_name: "size_bytes", data_type: "INTEGER" },
+            { column_name: "title", data_type: "TEXT", is_multilingual: false },
+            multilingualTextColumn("description"),
+            { column_name: "metadata_json", data_type: "TEXT", is_multilingual: false },
+        ]);
+        const form = document.createElement("form");
+        const modalFormState = {};
+        await buildOneToManySection(form, [{
+            source_table_uid: "123",
+            source_dataset_name: "article_assets",
+            source_column_name: "article_id",
+            target_insert_specs: JSON.stringify({
+                file_upload: {
+                    enabled: true,
+                    filename_column: "filename",
+                    profiles: {
+                        image: { enabled: true, asset_kinds: ["image"], allowed_file_types: ["jpg"] },
+                        attachment: { enabled: true, asset_kinds: ["document"], allowed_file_types: ["pdf"] },
+                    },
+                },
+            }),
+        }], modalFormState);
+
+        expect(form.querySelectorAll('[data-testid="child-image-source-picker-open"]')).toHaveLength(1);
+        form.querySelector('[data-testid="child-image-source-picker-open"]').click();
+        expect(openImageSourcePicker).toHaveBeenCalledOnce();
+
+        const file = new File(["image"], "pexels-123.jpg", { type: "image/jpeg" });
+        openImageSourcePicker.mock.calls[0][0].onSelect({
+            file,
+            captions: { fi: "Kuva: Tekijä / Pexels.", en: "Photo: Author / Pexels." },
+            selection: {
+                schema_version: "1",
+                provider: "pexels",
+                provider_asset_id: "123",
+                source_page_url: "https://www.pexels.com/photo/example-123/",
+                creator_name: "Author",
+                description: "Mountain lake",
+                image: { alt_text: "Mountain lake", width: 1200, height: 800 },
+            },
+        });
+
+        const imageState = modalFormState._childRowsArray.find((row) => row.fileUploadSpec?.profile_key === "image");
+        const attachmentState = modalFormState._childRowsArray.find((row) => row.fileUploadSpec?.profile_key === "attachment");
+        expect(imageState._actualFileObjects).toEqual([file]);
+        expect(attachmentState._actualFileObjects).toBeUndefined();
+        expect(JSON.parse(imageState.data.description)).toEqual({
+            fi: "Kuva: Tekijä / Pexels.",
+            en: "Photo: Author / Pexels.",
+        });
+        expect(imageState.data.title).toBe("Mountain lake");
+        expect(JSON.parse(imageState.data.metadata_json).image_source).toMatchObject({
+            provider: "pexels",
+            provider_asset_id: "123",
+        });
+        expect(form.querySelector('[data-testid="child-file-upload-selected-image"]').textContent).toContain("pexels-123.jpg");
+    });
+});
+
+describe("applyWebImageSelectionMetadata", () => {
+    test("does not invent columns that the child table does not have", () => {
+        const state = { data: {}, _fieldControls: new Map() };
+        applyWebImageSelectionMetadata(state, {
+            file: new File(["image"], "image.jpg", { type: "image/jpeg" }),
+            selection: { provider: "pexels", provider_asset_id: "1", image: {} },
+            captions: { fi: "Kuva", en: "Photo" },
+        });
+        expect(state.data).toEqual({});
     });
 });
 

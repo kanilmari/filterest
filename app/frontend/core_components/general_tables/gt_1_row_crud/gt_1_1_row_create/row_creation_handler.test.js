@@ -82,7 +82,7 @@ describe("open_add_row_modal", () => {
         expect(mocks.createModal).toHaveBeenCalledTimes(1);
         expect(mocks.showModal).toHaveBeenCalledTimes(1);
         expect(mocks.createModal.mock.calls[0][0].width).toBe(
-            "min(600px, calc(100vw - 32px))"
+            "min(850px, calc(100vw - 32px))"
         );
         expect(mocks.createModal.mock.calls[0][0].contentElements[0].getAttribute("role"))
             .toBe("status");
@@ -107,7 +107,7 @@ describe("open_add_row_modal", () => {
         expect(mocks.createModal).toHaveBeenCalledTimes(2);
         expect(mocks.createModal.mock.calls[1][0].contentElements).toEqual([form]);
         expect(mocks.createModal.mock.calls[1][0].width).toBe(
-            "min(600px, calc(100vw - 32px))"
+            "min(850px, calc(100vw - 32px))"
         );
         expect(mocks.showModal).toHaveBeenCalledTimes(2);
     });

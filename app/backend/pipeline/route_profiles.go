@@ -152,6 +152,9 @@ var RouteProfiles = map[string]RouteProfile{
 	"lang.AdminLangKeyHandler":                      AdminProfile,
 	"router.adminHandler":                           AdminProfile,
 	"dtt_1_row_read.FilterbarAIConversationHandler": LoginOnlyProfile,
+	"image_source_picker.ProvidersHandler":          LoginOnlyProfile,
+	"image_source_picker.ResolveHandler":            LoginOnlyProfile,
+	"image_source_picker.FileHandler":               LoginOnlyProfile,
 
 	// ── Admin-only routes (full access control + admin flag) ──
 

@@ -12,6 +12,10 @@ import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
 import { buildMultilingualTextareaGroup } from "./row_multilingual_input_builder.js";
+import {
+    getImageSourcePickerText,
+    openImageSourcePicker,
+} from "../../../../reusable_components/image_source_picker/image_source_picker.js";
 
 const ASSET_PROFILE_LABELS = {
     image: () => getTranslationForKey("image") || "Image",
@@ -192,15 +196,20 @@ function appendChildColumnInput(fieldset, datasetName, ccol, childObjectState) {
     label.style.margin = "10px 0 5px";
 
     const dataTypeLower = ccol.data_type.toLowerCase();
+    childObjectState._fieldControls = childObjectState._fieldControls || new Map();
 
     if (ccol.is_multilingual === true) {
-        buildMultilingualTextareaGroup(fieldset, {
+        const multilingualControl = buildMultilingualTextareaGroup(fieldset, {
             tableName: datasetName,
             column: ccol,
             idPrefix: childId,
             onValueChange: (value) => {
                 childObjectState.data[ccol.column_name] = value;
             },
+        });
+        childObjectState._fieldControls.set(ccol.column_name, {
+            kind: "multilingual",
+            ...multilingualControl,
         });
         return;
     }
@@ -241,6 +250,11 @@ function appendChildColumnInput(fieldset, datasetName, ccol, childObjectState) {
         childObjectState.data[ccol.column_name] = e.target.value;
     });
 
+    childObjectState._fieldControls.set(ccol.column_name, {
+        kind: "scalar",
+        input: childInput,
+    });
+
     fieldset.appendChild(label);
     fieldset.appendChild(childInput);
 }
@@ -260,6 +274,8 @@ function buildFileUploadField(fieldset, fileUploadSpec, childObjectState, option
     fileInput.style.marginBottom = "10px";
     fileInput.dataset.testid = `child-file-upload-${fileUploadSpec.profile_key || "default"}`;
     fileInput.multiple = supportsMultipleFileSelection(fileUploadSpec, childObjectState);
+    childObjectState._fileInputControl = fileInput;
+    childObjectState._fileRequiredWhenEmpty = options.required === true;
 
     const selectedFiles = document.createElement("div");
     selectedFiles.classList.add("shared_asset_selected_files");
@@ -309,8 +325,35 @@ function buildFileUploadField(fieldset, fileUploadSpec, childObjectState, option
         fileInput.value = "";
     });
 
+    let webPickerButton = null;
+    if (canPickImageFromWeb(fileUploadSpec, childObjectState)) {
+        webPickerButton = document.createElement("button");
+        webPickerButton.type = "button";
+        webPickerButton.classList.add("shared_asset_web_picker_button", "fw-btn", "fw-btn--ghost");
+        webPickerButton.dataset.testid = "child-image-source-picker-open";
+        webPickerButton.textContent = getImageSourcePickerText("pick_image_from_web", "Pick image from web");
+        webPickerButton.addEventListener("click", () => {
+            openImageSourcePicker({
+                onSelect: ({ file, selection, captions }) => {
+                    updateSelectedFilesState(childObjectState, fileUploadSpec, [file], {
+                        replace: true,
+                    });
+                    applyWebImageSelectionMetadata(childObjectState, {
+                        file,
+                        selection,
+                        captions,
+                    });
+                    renderSelectedFileList(selectedFiles, childObjectState, fileUploadSpec);
+                },
+            });
+        });
+    }
+
     fieldset.appendChild(label);
     group.appendChild(fileInput);
+    if (webPickerButton) {
+        group.appendChild(webPickerButton);
+    }
     group.appendChild(helpText);
     group.appendChild(selectedFiles);
     fieldset.appendChild(group);
@@ -485,6 +528,10 @@ function updateSelectedFilesState(childObjectState, fileUploadSpec, incomingFile
     }
 
     childObjectState._actualFileObjects = nextFiles;
+    if (childObjectState._fileInputControl instanceof HTMLInputElement) {
+        childObjectState._fileInputControl.required = childObjectState._fileRequiredWhenEmpty === true
+            && nextFiles.length === 0;
+    }
     childObjectState._actualFileObject = nextFiles.length === 1
         ? nextFiles[0]
         : null;
@@ -492,6 +539,90 @@ function updateSelectedFilesState(childObjectState, fileUploadSpec, incomingFile
     clearAutoManagedAssetMetadata(childObjectState);
     if (nextFiles.length === 1) {
         applySelectedFileMetadata(childObjectState, fileUploadSpec, nextFiles[0]);
+    }
+}
+
+function canPickImageFromWeb(fileUploadSpec, childObjectState) {
+    if (childObjectState?.sharedAssetRelation !== true) return false;
+    const profileKey = String(fileUploadSpec?.profile_key || "").trim().toLowerCase();
+    if (profileKey) return profileKey === "image";
+    const assetKinds = Array.isArray(fileUploadSpec?.asset_kinds)
+        ? fileUploadSpec.asset_kinds.map((value) => String(value).trim().toLowerCase())
+        : [];
+    return assetKinds.length === 1 && assetKinds[0] === "image";
+}
+
+function setChildFieldValue(childObjectState, columnName, value) {
+    const control = childObjectState?._fieldControls?.get(columnName);
+    if (control?.kind === "multilingual") {
+        const valuesByLanguage = value && typeof value === "object"
+            ? value
+            : Object.fromEntries(control.textareas.map((textarea) => [
+                textarea.dataset.languageCode,
+                String(value ?? ""),
+            ]));
+        control.textareas.forEach((textarea) => {
+            textarea.value = String(valuesByLanguage[textarea.dataset.languageCode] || "");
+        });
+        childObjectState.data[columnName] = control.syncValue();
+        return;
+    }
+
+    const scalarValue = value && typeof value === "object"
+        ? JSON.stringify(value)
+        : String(value ?? "");
+    childObjectState.data[columnName] = scalarValue;
+    if (control?.kind === "scalar") {
+        control.input.value = scalarValue;
+    }
+}
+
+/** Applies provider credit and provenance without persisting provider image URLs. */
+export function applyWebImageSelectionMetadata(childObjectState, {
+    file,
+    selection,
+    captions,
+} = {}) {
+    if (!childObjectState || !selection || !file) return;
+    const preferredLanguage = getLanguageWithBrowserFallback();
+    const captionMap = {
+        fi: String(captions?.fi || "").trim(),
+        en: String(captions?.en || "").trim(),
+    };
+    const scalarCaption = captionMap[preferredLanguage]
+        || captionMap.en
+        || captionMap.fi;
+    const title = String(selection.description || selection.image?.alt_text || file.name).trim();
+
+    const descriptionControl = childObjectState._fieldControls?.get("description");
+    if (descriptionControl) {
+        setChildFieldValue(
+            childObjectState,
+            "description",
+            descriptionControl.kind === "multilingual" ? captionMap : scalarCaption,
+        );
+    }
+    if (childObjectState._fieldControls?.has("title")) {
+        setChildFieldValue(childObjectState, "title", title);
+    }
+    if (childObjectState._fieldControls?.has("metadata_json")) {
+        setChildFieldValue(childObjectState, "metadata_json", {
+            image_source: {
+                schema_version: selection.schema_version,
+                provider: selection.provider,
+                provider_asset_id: selection.provider_asset_id,
+                source_page_url: selection.source_page_url,
+                creator_name: selection.creator_name,
+                creator_profile_url: selection.creator_profile_url,
+                description: selection.description,
+                alt_text: selection.image?.alt_text,
+                width: selection.image?.width,
+                height: selection.image?.height,
+                license: selection.license,
+                attribution: selection.attribution,
+                resolved_at: selection.resolved_at,
+            },
+        });
     }
 }
 

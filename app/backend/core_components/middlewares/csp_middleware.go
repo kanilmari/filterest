@@ -48,7 +48,10 @@ func WithCSP(next http.Handler) http.Handler {
 				"script-src 'self' 'nonce-%[1]s'; "+
 				"style-src 'self' 'nonce-%[1]s'; "+
 				"connect-src 'self'; "+
-				"img-src 'self'; "+
+				// The authenticated web-image picker previews bytes fetched through
+				// Filterest's same-origin proxy as an in-memory object URL. Keep
+				// remote image hosts blocked while allowing that local blob only.
+				"img-src 'self' blob:; "+
 				"font-src    'self'; "+
 				"frame-src   'self' https://maps.google.com https://www.google.com https://embed.here.com/; "+
 				"base-uri    'self'; "+

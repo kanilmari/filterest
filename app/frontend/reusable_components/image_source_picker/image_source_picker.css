@@ -1,0 +1,106 @@
+/*
+ * image_source_picker.css
+ *
+ * Web-image resolver inside the reusable stacked modal.
+ * Bridges provider status, URL resolution, preview, and selection actions.
+ * Exists to keep a large image preview usable in both light and dark themes.
+ */
+
+.image-source-picker {
+    display: grid;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    gap: var(--fw-space-4, 16px);
+    min-height: min(680px, 78dvh);
+}
+
+.image-source-picker__intro,
+.image-source-picker__status {
+    margin: 0;
+}
+
+.image-source-picker__providers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--fw-space-2, 8px);
+}
+
+.image-source-picker__provider {
+    padding: 6px 10px;
+    border: 1px solid var(--border_color);
+    border-radius: 999px;
+    background: var(--bg_color_2);
+}
+
+.image-source-picker__provider.is-unavailable {
+    opacity: 0.6;
+}
+
+.image-source-picker__form {
+    display: grid;
+    gap: var(--fw-space-2, 8px);
+}
+
+.image-source-picker__source-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--fw-space-2, 8px);
+}
+
+.image-source-picker__source-row input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.image-source-picker__preview {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: var(--fw-space-2, 8px);
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.image-source-picker__preview[hidden] {
+    display: none;
+}
+
+.image-source-picker__preview img {
+    display: block;
+    max-width: 100%;
+    max-height: 54dvh;
+    object-fit: contain;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius, 12px);
+    background: var(--bg_color_extreme);
+}
+
+.image-source-picker__attribution {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--text_color_secondary, var(--text_color));
+    text-align: center;
+}
+
+.image-source-picker__actions {
+    margin-top: auto !important;
+}
+
+.shared_asset_web_picker_button {
+    width: fit-content;
+    margin-block: 0 10px;
+}
+
+@media (width <= 640px) {
+    .image-source-picker {
+        min-height: 0;
+    }
+
+    .image-source-picker__source-row {
+        grid-template-columns: 1fr;
+    }
+}

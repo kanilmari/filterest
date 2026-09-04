@@ -38,6 +38,7 @@ import (
 	"easelect/backend/core_components/symbol_registry"
 	"easelect/backend/core_components/system_table_tools"
 	"easelect/backend/pipeline"
+	image_source_picker "easelect/backend/reusable_components/image_source_picker"
 	"easelect/backend/reusable_components/vanilla_tree"
 )
 
@@ -173,6 +174,9 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/row-groups", system_table_tools.AdminRowGroupsHandler, "system_table_tools.AdminRowGroupsHandler")
 	functionRegisterHandler("/api/admin/row-group-memberships", system_table_tools.AdminRowGroupMembershipsHandler, "system_table_tools.AdminRowGroupMembershipsHandler")
 	functionRegisterHandler("/api/admin/row-access-rules", system_table_tools.AdminRowAccessRulesHandler, "system_table_tools.AdminRowAccessRulesHandler")
+	functionRegisterHandler("/api/image-source-picker/providers", image_source_picker.ProvidersHandler, "image_source_picker.ProvidersHandler")
+	functionRegisterHandler("/api/image-source-picker/resolve", image_source_picker.ResolveHandler, "image_source_picker.ResolveHandler")
+	functionRegisterHandler("/api/image-source-picker/file", image_source_picker.FileHandler, "image_source_picker.FileHandler")
 
 	// DevTools-reitit (vain eksplisiittisessä kehitysympäristössä)
 	envType := os.Getenv("ENVIRONMENT_TYPE")

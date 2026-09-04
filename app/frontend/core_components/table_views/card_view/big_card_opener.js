@@ -60,6 +60,8 @@ import { refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_r
 import { buildConfirmationMessage } from "../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
+import { syncRowArticleInlineImageCaptions } from "./row_article_image_caption.js";
+import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
 import { buildRowArticleQueryString } from "./row_article_url_state.js";
@@ -266,6 +268,14 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                             rowLabel: row_presentation_label,
                         },
                     };
+                    const captionRows = resolveRowArticleImageRows(
+                        imgChild?.rows || [],
+                        imgChild ? [] : parent_row_image_rows,
+                    );
+                    syncRowArticleInlineImageCaptions(
+                        rowArticleContentElement,
+                        captionRows,
+                    );
                     return buildRowArticleImageGallery(
                         table_name,
                         row_item.id,

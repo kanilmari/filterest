@@ -102,7 +102,8 @@ function getTabOrderIdentifier(tabId) {
  * Hakee projektin taulut API:sta ja järjestää ne:
  * 1. Jos tab_order_json sisältää static:* entryjä: järjestää kaikki tabit (data + static)
  * 2. Jos tab_order_json on vanhassa muodossa: järjestää data-tabit, static-tabit fallbackiin
- * 3. Muuten fallback: Main-taulu → system_users → About-taulu → muut aakkosjärjestyksessä + static-tabit
+ * 3. Muuten fallback: Main-taulu → system_users → muut aakkosjärjestyksessä + static-tabit
+ * 4. system_about on kirjautuneen käyttäjän viimeinen sisältövälilehti riippumatta tallennetusta järjestyksestä.
  */
 async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContentTablesResponse = null } = {}) {
     try {
@@ -115,9 +116,13 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
         // Show only tables that live directly under the active project root.
         // Tables inside project subfolders still belong to the project, but they
         // no longer appear in the main SVG tab row.
+        const systemAboutTable = datasets.find(
+            (table) => table.dataset_name === "system_about"
+        );
         const projectTables = datasets.filter((t) =>
             t.is_top_level_in_current_project ||
-            t.dataset_name === 'system_users'
+            t.dataset_name === 'system_users' ||
+            t === systemAboutTable
         );
 
         // Selects the dataset tab icon from DB metadata, with stable fallbacks
@@ -140,6 +145,19 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                     hasPresentationMedia,
                 };
             }
+            if (table.dataset_name === "system_about") {
+                return {
+                    userContent: true,
+                    id: "system_about",
+                    text: "About",
+                    langKey: "system_about",
+                    iconKey: getDatasetTabIconKey(table) || "help",
+                    isProjectTable: false,
+                    dataset: "system_about",
+                    route: "/api/get-results",
+                    hasPresentationMedia,
+                };
+            }
             return {
                 id: table.dataset_name,
                 text: formatTableName(table.dataset_name),
@@ -153,6 +171,18 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
         };
 
         const staticTabsWithoutUsers = staticTabsData.filter((t) => t.id !== 'system_users');
+
+        // About is a site-level destination rather than project content. Keep it
+        // at the bottom even when an older saved tab order tries to place it
+        // among application datasets.
+        const placeSystemAboutLast = (tabs) => {
+            const aboutTab = tabs.find((tab) => tab.id === "system_about");
+            if (!aboutTab) return tabs;
+            return [
+                ...tabs.filter((tab) => tab.id !== "system_about"),
+                aboutTab,
+            ];
+        };
 
         const getDefaultProjectTabs = () => {
             const mainTable = projectTables.find((t) => t.is_main_table === true);
@@ -247,7 +277,7 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                     return a.id.localeCompare(b.id);
                 });
 
-                return sortedTabs;
+                return placeSystemAboutLast(sortedTabs);
             }
 
             // Legacy format: order only project/data tabs, keep static tabs in default position.
@@ -266,11 +296,17 @@ async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContent
                 return a.dataset_name.localeCompare(b.dataset_name);
             });
 
-            return [...sorted.map(buildTabObj), ...staticTabsWithoutUsers];
+            return placeSystemAboutLast([
+                ...sorted.map(buildTabObj),
+                ...staticTabsWithoutUsers,
+            ]);
         }
 
         // Fallback: original hardcoded ordering + static tabs in their default position
-        return [...getDefaultProjectTabs(), ...staticTabsWithoutUsers];
+        return placeSystemAboutLast([
+            ...getDefaultProjectTabs(),
+            ...staticTabsWithoutUsers,
+        ]);
     } catch (err) {
         console.warn("fetchProjectTabs error:", err);
         // Always return static tabs so the user can at least see login/logout/account

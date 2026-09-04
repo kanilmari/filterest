@@ -468,3 +468,159 @@ export function hideModal({ immediate = false } = {}) {
         finishModalHide(modal_overlay);
     }
 }
+
+let stackedModalSerial = 0;
+
+/**
+ * Builds an independent modal layer above the singleton application modal.
+ * The underlying dialog stays in the DOM with its draft intact, but becomes
+ * inert and hidden from assistive technology until this layer closes.
+ */
+export function createStackedModal({
+    titlePlainText = "Dialog",
+    contentElements = [],
+    footerElements = null,
+    width = "min(1100px, 96vw)",
+    maxWidth = "96vw",
+    maxHeight = "97dvh",
+    cleanupCallback = null,
+} = {}) {
+    stackedModalSerial += 1;
+    const serial = stackedModalSerial;
+    const overlay = document.createElement("div");
+    overlay.classList.add("modal_overlay", "stacked_modal_overlay");
+    overlay.dataset.testid = "stacked-modal-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+
+    const modal = document.createElement("div");
+    modal.classList.add("modal", "stacked_modal");
+    modal.dataset.testid = "stacked-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.tabIndex = -1;
+    modal.style.width = width;
+    modal.style.maxWidth = maxWidth;
+    modal.style.maxHeight = maxHeight;
+
+    const header = document.createElement("div");
+    header.classList.add("modal_header");
+    const title = document.createElement("h2");
+    title.id = `stacked_modal_title_${serial}`;
+    title.textContent = titlePlainText;
+    modal.setAttribute("aria-labelledby", title.id);
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.classList.add("modal_close_button", "fw-btn");
+    closeButton.dataset.testid = "stacked-modal-close-button";
+    const closeIcon = document.createElement("span");
+    closeIcon.setAttribute("aria-hidden", "true");
+    const closeLabel = document.createElement("span");
+    closeLabel.dataset.langKey = "close";
+    closeLabel.textContent = "Close";
+    applyVisuallyHiddenStyles(closeLabel);
+    closeButton.append(closeIcon, closeLabel);
+    void setElementSvgContent(closeIcon, "/frontend/icons/general/modal-close-icon.svg");
+    header.append(title, closeButton);
+
+    const body = document.createElement("div");
+    body.classList.add("modal_body");
+    body.id = `stacked_modal_body_${serial}`;
+    modal.setAttribute("aria-describedby", body.id);
+    contentElements.forEach((element) => body.appendChild(element));
+    modal.append(header, body);
+
+    if (Array.isArray(footerElements) && footerElements.length > 0) {
+        const footer = document.createElement("div");
+        footer.classList.add("modal_footer");
+        footerElements.forEach((element) => footer.appendChild(element));
+        modal.appendChild(footer);
+    }
+    applyModalButtonHoverSaturation(modal);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const underlyingModal = document.getElementById("custom_modal");
+    const underlyingInert = underlyingModal?.inert === true;
+    const underlyingAriaHidden = underlyingModal?.getAttribute("aria-hidden");
+    const previousFocus = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    let isOpen = false;
+
+    const restoreUnderlyingModal = () => {
+        if (!(underlyingModal instanceof HTMLElement)) return;
+        underlyingModal.inert = underlyingInert;
+        if (underlyingAriaHidden == null) {
+            underlyingModal.removeAttribute("aria-hidden");
+        } else {
+            underlyingModal.setAttribute("aria-hidden", underlyingAriaHidden);
+        }
+    };
+
+    const hide = () => {
+        if (!isOpen && !overlay.isConnected) return;
+        isOpen = false;
+        document.removeEventListener("keydown", handleKeyboardEvent, true);
+        overlay.remove();
+        restoreUnderlyingModal();
+        try {
+            cleanupCallback?.();
+        } catch (error) {
+            console.warn("stacked modal cleanup failed", error);
+        }
+        if (previousFocus && document.contains(previousFocus) && isElementRendered(previousFocus)) {
+            focusElement(previousFocus);
+        }
+    };
+
+    const handleKeyboardEvent = (event) => {
+        if (!isOpen) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            hide();
+            return;
+        }
+        if (event.key !== "Tab") return;
+
+        const focusableElements = getFocusableModalElements(modal);
+        if (focusableElements.length === 0) {
+            event.preventDefault();
+            focusElement(modal);
+            return;
+        }
+        const first = focusableElements[0];
+        const last = focusableElements[focusableElements.length - 1];
+        if (!modal.contains(document.activeElement)) {
+            event.preventDefault();
+            focusElement(first);
+        } else if (event.shiftKey && (document.activeElement === first || document.activeElement === modal)) {
+            event.preventDefault();
+            focusElement(last);
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            focusElement(first);
+        }
+    };
+
+    const show = () => {
+        if (isOpen) return;
+        isOpen = true;
+        if (underlyingModal instanceof HTMLElement) {
+            underlyingModal.inert = true;
+            underlyingModal.setAttribute("aria-hidden", "true");
+        }
+        overlay.style.display = "flex";
+        overlay.setAttribute("aria-hidden", "false");
+        document.addEventListener("keydown", handleKeyboardEvent, true);
+        focusModalSurface(modal);
+    };
+
+    closeButton.addEventListener("click", hide);
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) hide();
+    });
+
+    return { modal_overlay: overlay, modal, show, hide };
+}

@@ -21,6 +21,46 @@
     opacity: 0.85;
 }
 
+/* Captions belong only to article media. Ordinary articles place the text
+   under the matching image; image-first deliberately overlays the same text. */
+.row_article_image_caption {
+    box-sizing: border-box;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.row_article_inline_image_caption {
+    width: 100%;
+    margin: 0;
+    padding: 0.7rem 0 0;
+    text-align: start;
+}
+
+.row_article_image_first_caption {
+    position: absolute;
+    z-index: 3;
+    inset-inline-start: 50%;
+    inset-block-end: clamp(1.25rem, 4vh, 3rem);
+    width: min(90vw, 900px);
+    margin: 0;
+    padding: 0.7rem 1rem;
+    transform: translateX(-50%);
+    border: 1px solid color-mix(in srgb, var(--border_color) 72%, transparent);
+    border-radius: var(--border_radius, 8px);
+    background: color-mix(in srgb, var(--bg_color_extreme) 76%, transparent);
+    box-shadow: 0 8px 28px color-mix(in srgb, var(--bg_color_extreme) 45%, transparent);
+    color: var(--text_color);
+    text-align: center;
+    text-shadow: 0 1px 3px color-mix(in srgb, var(--bg_color_extreme) 85%, transparent);
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+}
+
+.row_article_image_first_caption[hidden] {
+    display: none;
+}
+
 /* ── Standalone image-first article ────────────── */
 .image_first_view_modal {
     --image-first-backdrop-blur: 48px;

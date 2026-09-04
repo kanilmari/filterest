@@ -191,6 +191,11 @@ export const SUPPORTING_ROUTE_GROUPS = Object.freeze({
         'importTableCsv',
         'logClientError',
     ]),
+    imageSourcePicker: Object.freeze([
+        'imageSourcePickerProviders',
+        'imageSourcePickerResolve',
+        'imageSourcePickerFile',
+    ]),
 });
 
 /** @type {Readonly<Record<string, readonly string[]>>} */

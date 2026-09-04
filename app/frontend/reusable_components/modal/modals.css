@@ -19,6 +19,19 @@
     z-index: var(--z-modal);
 }
 
+/* A feature can open a second shared modal without replacing the draft in the
+   singleton modal below it. This layer is intentionally one level higher and
+   remains bounded on very small screens. */
+.stacked_modal_overlay {
+    z-index: calc(var(--z-modal) + 1);
+}
+
+.stacked_modal {
+    width: min(1100px, 96vw);
+    max-width: 96vw;
+    max-height: 97dvh;
+}
+
 /* Blur-taustainen overlay kuvamodaalille */
 .modal_overlay_blur {
     background: rgb(0 0 0 / 80%);
