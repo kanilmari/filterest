@@ -49,7 +49,7 @@ export function appendFormActions(form, table_uid, columns, modal_form_state, cl
     });
 }
 
-/** Lomakkeen submit: lähetetään pään data, lapsidatat ja M2M-liitokset backendille */
+/** Lomakkeen submit: lähetetään päärivi, asset-lapset ja olemassa olevien rivien liitokset. */
 async function submit_new_row(table_uid, form, columns, modal_form_state, clearStateCallback) {
     const formData = new FormData();
 
@@ -69,51 +69,11 @@ async function submit_new_row(table_uid, form, columns, modal_form_state, clearS
         mainData["_childRows"] = childRowsToSend;
     }
 
-    let finalM2M = [];
-    if (
-        modal_form_state["_manyToManyRows"] &&
-        modal_form_state["_manyToManyRows"].length > 0
-    ) {
-        for (let m2m of modal_form_state["_manyToManyRows"]) {
-            const modeInputs = form.querySelectorAll(
-                `input[name="${m2m.modeRadioName}"]`
-            );
-            let selectedMode = "existing";
-            modeInputs.forEach((radio) => {
-                if (radio.checked) {
-                    selectedMode = radio.value;
-                }
-            });
-
-            if (selectedMode === "existing") {
-                const existingVal = m2m.existingHiddenInput.value;
-                if (existingVal) {
-                    finalM2M.push({
-                        linkDatasetName: m2m.linkTableName,
-                        mainDatasetFkColumn: m2m.mainTableFkColumn,
-                        thirdDatasetName: m2m.thirdTableName,
-                        thirdDatasetFkColumn: m2m.thirdTableFkColumn,
-                        selectedValue: existingVal,
-                        isNewRow: false,
-                    });
-                }
-            } else {
-                const newData = m2m.newRowState.data || {};
-                if (Object.keys(newData).length > 0) {
-                    finalM2M.push({
-                        linkDatasetName: m2m.linkTableName,
-                        mainDatasetFkColumn: m2m.mainTableFkColumn,
-                        thirdDatasetName: m2m.thirdTableName,
-                        thirdDatasetFkColumn: m2m.thirdTableFkColumn,
-                        isNewRow: true,
-                        newRowData: newData,
-                    });
-                }
-            }
-        }
-    }
-    if (finalM2M.length > 0) {
-        mainData["_manyToMany"] = finalM2M;
+    const existingLinks = collectExistingLinksForSubmission(
+        modal_form_state._existingRelationLinks
+    );
+    if (existingLinks.length > 0) {
+        mainData._existingLinks = existingLinks;
     }
 
     const mainDataJSON = JSON.stringify(mainData);
@@ -185,23 +145,37 @@ export function shouldSubmitChildRow(child) {
         }
         return Boolean(child._actualFileObject);
     }
-
-    if (child._actualFileObject) {
-        return true;
+    if (child.ownedChildKind === "location") {
+        return Object.values(child.data || {}).some(hasMeaningfulChildValue);
     }
+    return false;
+}
 
-    if (!child.data || typeof child.data !== "object") {
-        return false;
-    }
+function hasMeaningfulChildValue(value) {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (Array.isArray(value)) return value.some(hasMeaningfulChildValue);
+    if (typeof value === "object") return Object.values(value).some(hasMeaningfulChildValue);
+    return true;
+}
 
-    return Object.values(child.data).some((value) => {
-        if (value === null || value === undefined) {
-            return false;
+export function collectExistingLinksForSubmission(existingRelationLinks = []) {
+    if (!Array.isArray(existingRelationLinks)) return [];
+    return existingRelationLinks.flatMap((relation) => {
+        const relationId = Number(relation?.relationId);
+        const rowIds = Array.from(new Set(
+            (Array.isArray(relation?.rowIds) ? relation.rowIds : [])
+                .map((rowId) => Number(rowId))
+                .filter((rowId) => Number.isSafeInteger(rowId) && rowId > 0)
+        ));
+        if (!Number.isSafeInteger(relationId) || relationId <= 0 || rowIds.length === 0) {
+            return [];
         }
-        if (typeof value === "string") {
-            return value.trim() !== "";
-        }
-        return true;
+        return [{
+            relationKind: relation.relationKind,
+            relationId,
+            rowIds,
+        }];
     });
 }
 

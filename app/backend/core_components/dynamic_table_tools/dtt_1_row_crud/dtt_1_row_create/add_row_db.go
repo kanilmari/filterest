@@ -1,6 +1,6 @@
 // add_row_db.go
 // Database operations for adding new rows to dynamic tables.
-// Bridges the add-row handler and the database with INSERT logic for main, child, and M2M rows.
+// Bridges the add-row handler and the database with main-row, owned-child, and existing-link writes.
 // Exists to encapsulate all row-insertion SQL in one file.
 package dtt_1_row_create
 
@@ -22,7 +22,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// insertDataAccordingToPayload lisää päätaulun rivin, lapsirivit ja M2M-liitokset.
+// insertDataAccordingToPayload lisää päätaulun rivin, omistetut lapsirivit ja olemassa olevien rivien liitokset.
 // Palauttaa luodun päärivin id-arvon (mainRowID) sekä ChildInsertResult-listan lapsiriveistä.
 // Between: AddRowMultipartHandler -> Database
 // Why: Orchestrates the insertion of the main row, child rows, and many-to-many relationships.
@@ -50,7 +50,7 @@ func insertDataAccordingToPayload(
 	}
 	userRole := getSessionUserRoleOrGuest(r)
 
-	// ------------------------------------------------------------ childRows & m2m
+	// ------------------------------------------------------------ owned children & existing links
 	var childRows []ChildRowPayload
 	if raw := payload["_childRows"]; raw != nil {
 		if unmarshalErr := json.Unmarshal(mustJSON(raw), &childRows); unmarshalErr != nil {
@@ -59,13 +59,21 @@ func insertDataAccordingToPayload(
 		}
 		delete(payload, "_childRows")
 	}
-	var manyToManyRows []ManyToManyPayload
-	if raw := payload["_manyToMany"]; raw != nil {
-		if unmarshalErr := json.Unmarshal(mustJSON(raw), &manyToManyRows); unmarshalErr != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid _manyToMany payload")
+	var existingLinks []ExistingRelationLinkPayload
+	if raw := payload["_existingLinks"]; raw != nil {
+		if unmarshalErr := json.Unmarshal(mustJSON(raw), &existingLinks); unmarshalErr != nil {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid _existingLinks payload")
 			return 0, nil, unmarshalErr
 		}
-		delete(payload, "_manyToMany")
+		delete(payload, "_existingLinks")
+	}
+	// The former nested M:M contract could create arbitrary related business
+	// rows and accepted physical table/column names from the browser. Refuse it
+	// explicitly instead of silently keeping a hidden compatibility bypass.
+	if raw := payload["_manyToMany"]; raw != nil {
+		err := errors.New("nested related-row creation is no longer supported")
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return 0, nil, err
 	}
 	payload, err = applyPilotCreatePayload(tableName, userRole, payload, currentUserID, currentUsername)
 	if err != nil {
@@ -103,7 +111,9 @@ func insertDataAccordingToPayload(
 		if exclude[strings.ToLower(c.ColumnName)] || c.GenerationExpression != "" || strings.ToUpper(c.IsIdentity) == "YES" {
 			continue
 		}
-		allowed[c.ColumnName] = true
+		if isAddRowColumnUserInsertable(c) {
+			allowed[c.ColumnName] = true
+		}
 	}
 
 	//------------------------------------------------------------------
@@ -111,6 +121,11 @@ func insertDataAccordingToPayload(
 	//------------------------------------------------------------------
 	filteredRow := map[string]interface{}{}
 	for colName, val := range payload {
+		if !allowed[colName] {
+			err := fmt.Errorf("column %s is not insertable", colName)
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return 0, nil, err
+		}
 		colType := strings.ToLower(columnTypeMap[colName])
 
 		if strings.Contains(colType, "vector") {
@@ -159,9 +174,7 @@ func insertDataAccordingToPayload(
 			}
 		}
 
-		if allowed[colName] {
-			filteredRow[colName] = val
-		}
+		filteredRow[colName] = val
 	}
 
 	//------------------------------------------------------------------
@@ -183,6 +196,52 @@ func insertDataAccordingToPayload(
 		}
 	}
 	applyCurrentActorOwnership(filteredRow, columnsInfo, currentUserID, currentUsername)
+	if err := validateMainForeignKeyReads(
+		tx,
+		columnsInfo,
+		filteredRow,
+		currentUserID,
+		userRole,
+	); err != nil {
+		var forbidden *forbiddenError
+		if errors.As(err, &forbidden) {
+			httpresponse.RespondWithError(w, http.StatusForbidden, forbidden.msg)
+		} else {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		}
+		return 0, nil, err
+	}
+	childRows, err = resolveAndAuthorizeOwnedChildren(
+		tx,
+		tableUID,
+		childRows,
+		currentUserID,
+	)
+	if err != nil {
+		var forbidden *forbiddenError
+		if errors.As(err, &forbidden) {
+			httpresponse.RespondWithError(w, http.StatusForbidden, forbidden.msg)
+		} else {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		}
+		return 0, nil, err
+	}
+	resolvedExistingLinks, err := resolveAndAuthorizeExistingLinks(
+		tx,
+		tableUID,
+		existingLinks,
+		currentUserID,
+		userRole,
+	)
+	if err != nil {
+		var forbidden *forbiddenError
+		if errors.As(err, &forbidden) {
+			httpresponse.RespondWithError(w, http.StatusForbidden, forbidden.msg)
+		} else {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		}
+		return 0, nil, err
+	}
 	for _, column := range columnsInfo {
 		if requiredGeometryValueMissing(
 			column.ColumnName,
@@ -236,16 +295,42 @@ func insertDataAccordingToPayload(
 		}
 		childType := map[string]string{}
 		childNull := map[string]bool{}
+		childAllowed := map[string]bool{}
 		for _, cc := range childCols {
 			childType[cc.ColumnName] = cc.DataType
 			childNull[cc.ColumnName] = strings.ToUpper(cc.IsNullable) == "YES"
+			lowerName := strings.ToLower(cc.ColumnName)
+			if lowerName != "id" && lowerName != "created" && lowerName != "updated" &&
+				lowerName != "embedding_vector" && lowerName != "creation_spec" &&
+				cc.ColumnName != child.ReferencingColumn && isAddRowColumnUserInsertable(cc) {
+				childAllowed[cc.ColumnName] = true
+			}
 		}
 
 		for colName, raw := range child.Data {
+			if colName == "_file" {
+				delete(child.Data, colName)
+				continue
+			}
+			if !childAllowed[colName] {
+				err := fmt.Errorf("owned child column %s is not insertable", colName)
+				httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+				return 0, nil, err
+			}
 			colType := strings.ToLower(childType[colName])
 
 			if strings.Contains(colType, "vector") {
 				delete(child.Data, colName)
+				continue
+			}
+
+			if strings.Contains(colType, "geometry") {
+				normalizedValue, normalizeErr := normalizeGeometryInsertValue(raw, childNull[colName])
+				if normalizeErr != nil {
+					httpresponse.RespondWithError(w, http.StatusBadRequest, "geometry value is required for "+colName)
+					return 0, nil, normalizeErr
+				}
+				child.Data[colName] = normalizedValue
 				continue
 			}
 
@@ -280,7 +365,7 @@ func insertDataAccordingToPayload(
 			}
 		}
 
-		cID, cErr := insertSingleChildRow(tx, mainRowID, child)
+		cID, cErr := insertSingleChildRow(tx, mainRowID, child, childType)
 		if cErr != nil {
 			fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", cErr.Error())
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting child row")
@@ -296,46 +381,12 @@ func insertDataAccordingToPayload(
 	}
 
 	//------------------------------------------------------------------
-	// 5) M2M-liitokset
+	// 5) OLEMASSA OLEVIEN RIVIEN LIITOKSET
 	//------------------------------------------------------------------
-	for _, m2m := range manyToManyRows {
-		linkVal := m2m.SelectedValue
-		if m2m.IsNewRow && m2m.NewRowData != nil {
-			thirdUID, err := getTableUID(m2m.ThirdTableName, tx)
-			if err != nil {
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching relation table metadata")
-				return 0, nil, err
-			}
-			thirdColumns, err := getAddRowColumnsWithTypes(thirdUID, schemaName)
-			if err != nil {
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching relation table columns")
-				return 0, nil, err
-			}
-			if err := normalizeMultilingualCreatePayload(m2m.NewRowData, thirdColumns); err != nil {
-				httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
-				return 0, nil, err
-			}
-			newID, err := insertNewThirdTableRow(tx, m2m.ThirdTableName, m2m.NewRowData)
-			if err != nil {
-				fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting third table row")
-				return 0, nil, err
-			}
-			linkVal = newID
-		}
-		if linkVal == nil {
-			continue
-		}
-		if err := insertOneManyToManyRelation(tx, mainRowID, ManyToManyPayload{
-			LinkTableName:      m2m.LinkTableName,
-			MainTableFkColumn:  m2m.MainTableFkColumn,
-			ThirdTableFkColumn: m2m.ThirdTableFkColumn,
-			SelectedValue:      linkVal,
-		}); err != nil {
-			fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting M2M relation")
-			return 0, nil, err
-		}
+	if err := applyExistingLinks(tx, mainRowID, resolvedExistingLinks); err != nil {
+		fmt.Printf("\033[31m[add_row_db.go] [applyExistingLinks] error: %s\033[0m\n", err.Error())
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error linking existing rows")
+		return 0, nil, err
 	}
 
 	//------------------------------------------------------------------
@@ -510,7 +561,7 @@ func insertMainRow(ctx context.Context, tx *sql.Tx, tableName string, rowData ma
 // Palauttaa lisätyn rivin id-arvon (childRowID).
 // Between: insertDataAccordingToPayload -> Database
 // Why: Executes the SQL INSERT for a child row.
-func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload) (int64, error) {
+func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload, columnTypeMap map[string]string) (int64, error) {
 	if child.TableName == "" || child.ReferencingColumn == "" {
 		return 0, fmt.Errorf("missing child data field: tableName or referencingColumn")
 	}
@@ -531,6 +582,16 @@ func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload) (i
 
 	for col, val := range child.Data {
 		insertColumns = append(insertColumns, pq.QuoteIdentifier(col))
+		if strings.Contains(strings.ToLower(columnTypeMap[col]), "geometry") {
+			if val == nil || strings.TrimSpace(fmt.Sprint(val)) == "" {
+				placeholders = append(placeholders, "NULL")
+				continue
+			}
+			placeholders = append(placeholders, fmt.Sprintf("ST_GeomFromText($%d, 4326)", i))
+			values = append(values, val)
+			i++
+			continue
+		}
 		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
 		values = append(values, val)
 		i++
@@ -561,58 +622,4 @@ func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload) (i
 	}
 
 	return childRowID, nil
-}
-
-// insertNewThirdTableRow lisää uuden rivin kolmanteen tauluun (m2m), jos
-// sellaista ei vielä ole. Palauttaa luodun rivin ID:n.
-// Between: insertDataAccordingToPayload -> Database
-// Why: Creates a new row in the target table of a many-to-many relationship if needed.
-func insertNewThirdTableRow(tx *sql.Tx, tableName string, rowData map[string]interface{}) (int64, error) {
-	if len(rowData) == 0 {
-		return 0, nil
-	}
-
-	insertCols := []string{}
-	placeholders := []string{}
-	values := []interface{}{}
-	i := 1
-
-	for col, val := range rowData {
-		insertCols = append(insertCols, pq.QuoteIdentifier(col))
-		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-		values = append(values, val)
-		i++
-	}
-
-	query := fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) RETURNING id`,
-		pq.QuoteIdentifier(tableName),
-		strings.Join(insertCols, ", "),
-		strings.Join(placeholders, ", "),
-	)
-
-	var newID int64
-	err := tx.QueryRow(query, values...).Scan(&newID)
-	if err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertNewThirdTableRow] error: %s\033[0m\n", err.Error())
-		return 0, err
-	}
-	return newID, nil
-}
-
-// insertOneManyToManyRelation lisää m2m-suhteen linkkitauluun.
-// Between: insertDataAccordingToPayload -> Database
-// Why: Inserts a row into the link table of a many-to-many relationship.
-func insertOneManyToManyRelation(tx *sql.Tx, mainRowID int64, m2m ManyToManyPayload) error {
-	insertQuery := fmt.Sprintf(
-		`INSERT INTO %s (%s, %s) VALUES ($1, $2)`,
-		pq.QuoteIdentifier(m2m.LinkTableName),
-		pq.QuoteIdentifier(m2m.MainTableFkColumn),
-		pq.QuoteIdentifier(m2m.ThirdTableFkColumn),
-	)
-	_, err := tx.Exec(insertQuery, mainRowID, m2m.SelectedValue)
-	if err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertOneManyToManyRelation] error: %s\033[0m\n", err.Error())
-	}
-	return err
 }

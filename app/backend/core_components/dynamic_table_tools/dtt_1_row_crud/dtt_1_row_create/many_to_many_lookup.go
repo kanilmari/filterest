@@ -16,6 +16,7 @@ import (
 
 // ManyToManyInfo edustaa many-to-many -suhdetta dedikoidusta taulusta
 type ManyToManyInfo struct {
+	RelationID         int64  `json:"relation_id"`
 	LinkTableUID       string `json:"bridging_table_uid"`
 	LinkTableName      string `json:"bridging_dataset_name"`
 	MainTableFkColumn  string `json:"main_dataset_fk_column"`
@@ -43,6 +44,7 @@ func GetManyToManyTablesHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 func GetManyToManyTablesHandler(w http.ResponseWriter, mainTableUID string) error {
 	query := `
         SELECT
+                fr.id,
                 fr.bridging_table_uid,
                 s_br.table_name AS bridging_table_name,
                 CASE
@@ -78,6 +80,7 @@ func GetManyToManyTablesHandler(w http.ResponseWriter, mainTableUID string) erro
 	for rows.Next() {
 		var info ManyToManyInfo
 		if err := rows.Scan(
+			&info.RelationID,
 			&info.LinkTableUID,
 			&info.LinkTableName,
 			&info.MainTableFkColumn,

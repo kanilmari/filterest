@@ -15,6 +15,8 @@ import { buildDatasetQueryParams } from './endpoint_data_fetcher_helpers.js';
 export async function fetchFilterOptions({
     dataset_name,
     value_column = 'id',
+    search = '',
+    limit = null,
 } = {}) {
     if (!dataset_name) {
         throw new Error('fetchFilterOptions requires dataset_name');
@@ -24,6 +26,13 @@ export async function fetchFilterOptions({
         dataset: dataset_name,
         value_column,
     });
+	const normalizedSearch = String(search || '').trim();
+	if (normalizedSearch) {
+		params.set('search', normalizedSearch);
+	}
+	if (Number.isInteger(limit) && limit > 0) {
+		params.set('limit', String(limit));
+	}
 
     return await endpoint_router('getFilterOptions', {
         url_params: `?${params.toString()}`,

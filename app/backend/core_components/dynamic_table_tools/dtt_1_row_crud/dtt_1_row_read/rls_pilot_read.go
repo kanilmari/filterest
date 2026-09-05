@@ -352,6 +352,79 @@ func RowsVisibleForDelete(q *sql.Tx, tableName, userRole string, userID int, row
 	return rowsVisibleForMutation(q, tableName, userRole, userID, rowIDs, false)
 }
 
+// RowsVisibleForRead verifies and key-locks an exact set of relation targets.
+// Add-row linking uses it so a guessed hidden row identifier cannot be joined
+// merely because the physical row exists.
+func RowsVisibleForRead(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64) (bool, error) {
+	uniqueRowIDs := make([]int64, 0, len(rowIDs))
+	requested := make(map[int64]struct{}, len(rowIDs))
+	for _, rowID := range rowIDs {
+		if rowID <= 0 {
+			return false, nil
+		}
+		if _, found := requested[rowID]; found {
+			continue
+		}
+		requested[rowID] = struct{}{}
+		uniqueRowIDs = append(uniqueRowIDs, rowID)
+	}
+	if len(uniqueRowIDs) == 0 {
+		return false, nil
+	}
+	if tableName == rlsPilotTableName && userRole != "admin" && userID <= 1 {
+		return false, nil
+	}
+
+	quotedTable := pq.QuoteIdentifier(tableName)
+	whereClause := fmt.Sprintf(
+		" WHERE %s.%s = ANY($1)",
+		quotedTable,
+		pq.QuoteIdentifier("id"),
+	)
+	args := []interface{}{pq.Array(uniqueRowIDs)}
+	policy, err := getLegacyMustTrueReadPolicy(q, tableName)
+	if err != nil {
+		return false, fmt.Errorf("load read row policy for %s: %w", tableName, err)
+	}
+	whereClause, args = appendReadPolicyToWhereClause(
+		tableName,
+		userRole,
+		userID,
+		policy,
+		whereClause,
+		args,
+	)
+	query := fmt.Sprintf(
+		"SELECT %s.%s FROM %s%s ORDER BY %s.%s FOR KEY SHARE",
+		quotedTable,
+		pq.QuoteIdentifier("id"),
+		quotedTable,
+		whereClause,
+		quotedTable,
+		pq.QuoteIdentifier("id"),
+	)
+	rows, err := q.Query(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("check readable relation rows for %s: %w", tableName, err)
+	}
+	defer rows.Close()
+
+	visible := make(map[int64]struct{}, len(uniqueRowIDs))
+	for rows.Next() {
+		var rowID int64
+		if err := rows.Scan(&rowID); err != nil {
+			return false, fmt.Errorf("scan readable relation row for %s: %w", tableName, err)
+		}
+		if _, requestedRow := requested[rowID]; requestedRow {
+			visible[rowID] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("iterate readable relation rows for %s: %w", tableName, err)
+	}
+	return len(visible) == len(uniqueRowIDs), nil
+}
+
 func rowsVisibleForMutation(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64, lockRows bool) (bool, error) {
 	uniqueRowIDs := make([]int64, 0, len(rowIDs))
 	requested := make(map[int64]struct{}, len(rowIDs))

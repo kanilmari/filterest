@@ -593,7 +593,7 @@ BEGIN
 END $$;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.7.0', 'Filterest generated public bootstrap');
+VALUES ('9.7.2', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 

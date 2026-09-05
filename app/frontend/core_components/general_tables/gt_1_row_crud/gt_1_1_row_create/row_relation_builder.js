@@ -1,17 +1,15 @@
 // row_relation_builder.js
-// Builds 1-to-many and many-to-many form sections for row creation.
-// Between the row creation form, FK data fetching, and the DOM.
-// Exists to handle related data input fields with child row management.
+// Builds asset-child form sections for row creation.
+// Between the row creation form, asset metadata, and the DOM.
+// Exists to keep the allowed file-asset exception separate from business-row links.
 
-import { fetchColumnsInfo, fetchReferencedData } from "./row_api_fetcher.js";
+import { fetchColumnsInfo } from "./row_api_fetcher.js";
 import { get_input_type } from "./row_input_builder.js";
 import { buildChildGeometryField } from "./row_geometry_builder.js";
-import { createVanillaDropdown } from "../../../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
 import { showWarningToast } from "../../../../reusable_components/notifications/toast_notification_printer.js";
 import { endpoint_router } from "../../../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
-import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
 import { buildMultilingualTextareaGroup } from "./row_multilingual_input_builder.js";
 import {
     getImageSourcePickerText,
@@ -34,6 +32,16 @@ const AUTO_MANAGED_ASSET_COLUMNS = new Set([
     "size_bytes",
     "sort_order",
     "is_primary",
+]);
+
+const AUTO_MANAGED_CHILD_COLUMNS = new Set([
+    "id",
+    "created",
+    "updated",
+    "embedding_vector",
+    "search_vector",
+    "search_vector_simple",
+    "creation_spec",
 ]);
 
 const AUTO_MANAGED_ASSET_METADATA_COLUMNS = new Set([
@@ -61,111 +69,145 @@ const ARCHIVE_EXTENSIONS = new Set([
     "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz",
 ]);
 
-export async function buildOneToManySection(form, oneToManyRelations, modal_form_state) {
+export async function buildOneToManySection(
+    form,
+    oneToManyRelations,
+    modal_form_state,
+    childColumnsByTableUID = new Map()
+) {
     modal_form_state["_childRowsArray"] =
         modal_form_state["_childRowsArray"] || [];
 
     for (const ref of oneToManyRelations) {
-        if (
-            ref.insert_new_source_with_target &&
-            ref.insert_new_source_with_target.Bool === false
-        ) {
+        let targetInsertSpecs = null;
+        try {
+            if (ref.target_insert_specs) {
+                targetInsertSpecs = JSON.parse(ref.target_insert_specs);
+            }
+        } catch (parseErr) {
+            console.warn("virhe target_insert_specs JSON-parsinnassa:", parseErr);
+        }
+        const fileUploadSpec = targetInsertSpecs?.file_upload || null;
+        const relationCreateSetting = readRelationCreateSetting(ref);
+        if (relationCreateSetting === false) {
             continue;
         }
 
         try {
-            let childColumns = await fetchColumnsInfo(ref.source_table_uid);
+            let childColumns = childColumnsByTableUID.get(String(ref.source_table_uid));
+            if (!Array.isArray(childColumns)) {
+                childColumns = await fetchColumnsInfo(ref.source_table_uid);
+            }
+            if (!Array.isArray(childColumns)) {
+                throw new Error("asset child schema was unavailable");
+            }
             childColumns = childColumns.filter(
                 (cc) => cc.column_name !== ref.source_column_name
             );
+            const uploadProfiles = resolveFileUploadProfiles(fileUploadSpec);
+            const isSharedAssetChild = isSharedAssetRelation({
+                datasetName: ref.source_dataset_name,
+                fileUploadSpec,
+                childColumns,
+            });
+            const ownedChildKind = fileUploadSpec?.enabled === true
+                ? "asset"
+                : relationCreateSetting === true && isOptionalLocationRelation(childColumns)
+                    ? "location"
+                    : "";
 
-                let targetInsertSpecs = null;
-                try {
-                    if (ref.target_insert_specs) {
-                        targetInsertSpecs = JSON.parse(ref.target_insert_specs);
-                    }
-                } catch (parseErr) {
-                    console.warn(
-                        "virhe target_insert_specs JSON-parsinnassa:",
-                        parseErr
-                    );
-                }
-                const fileUploadSpec = targetInsertSpecs?.file_upload || null;
-                const uploadProfiles = resolveFileUploadProfiles(fileUploadSpec);
-                const isSharedAssetChild = isSharedAssetRelation({
-                    datasetName: ref.source_dataset_name,
-                    fileUploadSpec,
-                    childColumns,
-                });
-                const hasSharedProfiles = uploadProfiles.length > 1
-                    || Boolean(fileUploadSpec?.profiles && Object.keys(fileUploadSpec.profiles).length > 0);
-
-                if (
-                    fileUploadSpec &&
-                    fileUploadSpec.enabled &&
-                    fileUploadSpec.filename_column
-                ) {
-                    childColumns = childColumns.filter(
-                        (cc) =>
-                            cc.column_name !== fileUploadSpec.filename_column
-                    );
-                }
-
-                childColumns = filterManagedChildColumns(
-                    childColumns,
-                    fileUploadSpec,
-                    isSharedAssetChild
-                );
-
-                const sectionUploadSpecs = uploadProfiles.length > 0
-                    ? uploadProfiles
-                    : [null];
-
-                if (childColumns.length > 0 || fileUploadSpec?.enabled) {
-                    sectionUploadSpecs.forEach((uploadSpec) => {
-                        const fieldset = document.createElement("fieldset");
-                        fieldset.style.marginTop = "20px";
-                        const activeFileUploadSpec = uploadSpec || fileUploadSpec;
-                        fieldset.dataset.relationKind = "one-to-many";
-                        fieldset.dataset.relationDatasetLangKey = ref.source_dataset_name;
-                        fieldset.dataset.uploadProfile = activeFileUploadSpec?.profile_key || "";
-
-                        appendOneToManyLegend(fieldset, ref.source_dataset_name, activeFileUploadSpec, hasSharedProfiles);
-
-                        const childObjectState = {
-                            datasetName: ref.source_dataset_name,
-                            referencingColumn: ref.source_column_name,
-                            data: {},
-                            fileUploadSpec: activeFileUploadSpec,
-                            sharedAssetRelation: isSharedAssetChild,
-                        };
-                        modal_form_state["_childRowsArray"].push(childObjectState);
-
-                        for (const ccol of childColumns) {
-                            appendChildColumnInput(
-                                fieldset,
-                                ref.source_dataset_name,
-                                ccol,
-                                childObjectState
-                            );
-                        }
-
-                        if (activeFileUploadSpec?.enabled) {
-                            buildFileUploadField(
-                                fieldset,
-                                activeFileUploadSpec,
-                                childObjectState,
-                                { required: !hasSharedProfiles }
-                            );
-                        }
-
-                        form.appendChild(fieldset);
-                    });
-                }
-            } catch (err) {
-                console.warn("virhe lapsitaulun sarakkeiden haussa:", err);
+            // Ordinary related business rows remain link-only. Location rows
+            // are the second explicit owned-child exception: they may be
+            // created with the parent, but an untouched location page submits
+            // nothing and every location field stays optional.
+            if (!ownedChildKind) {
+                continue;
             }
+            const hasSharedProfiles = uploadProfiles.length > 1
+                || Boolean(fileUploadSpec?.profiles && Object.keys(fileUploadSpec.profiles).length > 0);
+
+            if (fileUploadSpec?.enabled && fileUploadSpec.filename_column) {
+                childColumns = childColumns.filter(
+                    (cc) => cc.column_name !== fileUploadSpec.filename_column
+                );
+            }
+
+            childColumns = filterManagedChildColumns(
+                childColumns,
+                fileUploadSpec,
+                isSharedAssetChild
+            );
+
+            const sectionUploadSpecs = uploadProfiles.length > 0
+                ? uploadProfiles
+                : [null];
+
+            if (childColumns.length > 0 || fileUploadSpec?.enabled) {
+                sectionUploadSpecs.forEach((uploadSpec) => {
+                    const fieldset = document.createElement("fieldset");
+                    fieldset.style.marginTop = "20px";
+                    const activeFileUploadSpec = uploadSpec || fileUploadSpec;
+                    fieldset.dataset.relationKind = "one-to-many";
+                    fieldset.dataset.relationDatasetLangKey = ref.source_dataset_name;
+                    fieldset.dataset.uploadProfile = activeFileUploadSpec?.profile_key || "";
+
+                    appendOneToManyLegend(fieldset, ref.source_dataset_name, activeFileUploadSpec, hasSharedProfiles);
+
+                    const childObjectState = {
+                        relationId: Number(ref.relation_id) || 0,
+                        datasetName: ref.source_dataset_name,
+                        referencingColumn: ref.source_column_name,
+                        data: {},
+                        fileUploadSpec: activeFileUploadSpec,
+                        sharedAssetRelation: isSharedAssetChild,
+                        ownedChildKind,
+                    };
+                    modal_form_state["_childRowsArray"].push(childObjectState);
+
+                    for (const ccol of childColumns) {
+                        appendChildColumnInput(
+                            fieldset,
+                            ref.source_dataset_name,
+                            ccol,
+                            childObjectState
+                        );
+                    }
+
+                    if (activeFileUploadSpec?.enabled) {
+                        buildFileUploadField(
+                            fieldset,
+                            activeFileUploadSpec,
+                            childObjectState,
+                            { required: !hasSharedProfiles }
+                        );
+                    }
+
+                    form.appendChild(fieldset);
+                });
+            }
+        } catch (err) {
+            console.warn("virhe lapsitaulun sarakkeiden haussa:", err);
+        }
     }
+}
+
+export function readRelationCreateSetting(relation = {}) {
+    const raw = relation.insert_new_source_with_target;
+    if (typeof raw === "boolean") return raw;
+    if (!raw || typeof raw !== "object") return null;
+    if (raw.Valid === false || raw.valid === false) return null;
+    if (typeof raw.Bool === "boolean") return raw.Bool;
+    if (typeof raw.bool === "boolean") return raw.bool;
+    return null;
+}
+
+export function isOptionalLocationRelation(childColumns = []) {
+    return Array.isArray(childColumns) && childColumns.some((column) => {
+        const dataType = String(column?.data_type || "").toLowerCase();
+        return dataType.includes("geometry")
+            || dataType.includes("geography")
+            || dataType === "point";
+    });
 }
 
 function appendOneToManyLegend(fieldset, datasetName, fileUploadSpec, showProfileLabel) {
@@ -371,7 +413,7 @@ function filterManagedChildColumns(childColumns, fileUploadSpec, isSharedAssetCh
         return [];
     }
 
-    const managedColumns = new Set();
+    const managedColumns = new Set(AUTO_MANAGED_CHILD_COLUMNS);
     if (fileUploadSpec?.filename_column) {
         managedColumns.add(fileUploadSpec.filename_column);
     }
@@ -795,250 +837,4 @@ export function resolveAssetKindForSelectedFile(fileUploadSpec, file) {
     }
 
     return assetKinds[0];
-}
-
-/** Rakentaa monesta->moneen-lomakesektion */
-export async function buildManyToManySection(form, manyToManyInfos, modal_form_state) {
-    modal_form_state["_manyToManyRows"] =
-        modal_form_state["_manyToManyRows"] || [];
-
-    for (const info of manyToManyInfos) {
-        const relationInfo = normalizeManyToManyInfo(info);
-        if (
-            !relationInfo.linkTableName ||
-            !relationInfo.mainTableFkColumn ||
-            !relationInfo.thirdTableName ||
-            !relationInfo.thirdTableUID ||
-            !relationInfo.thirdTableFkColumn
-        ) {
-            console.warn("puutteellinen m2m-relaatiometadata:", info);
-            continue;
-        }
-
-        const fieldset = document.createElement("fieldset");
-        fieldset.dataset.testid = `many-to-many-section-${relationInfo.thirdTableName}`;
-        fieldset.dataset.relationKind = "many-to-many";
-        fieldset.dataset.relationDatasetLangKey = relationInfo.thirdTableName;
-        fieldset.style.marginTop = "20px";
-        const legend = document.createElement("legend");
-        const m2mLabelSpan = document.createElement("span");
-        m2mLabelSpan.dataset.langKey = 'add_many_to_many_relation';
-        const m2mDatasetSpan = document.createElement("span");
-        m2mDatasetSpan.dataset.langKey = relationInfo.thirdTableName;
-        legend.appendChild(m2mLabelSpan);
-        legend.appendChild(document.createTextNode(" "));
-        legend.appendChild(m2mDatasetSpan);
-        fieldset.appendChild(legend);
-
-        // Haetaan "kolmannen taulun" sarakkeet
-        try {
-            const thirdTableColumns = await fetchColumnsInfo(relationInfo.thirdTableUID);
-            const exclude_cols = [
-                "id",
-                "created",
-                "updated",
-                "embedding_vector",
-                "creation_spec",
-            ];
-            const sanitizedThirdCols = thirdTableColumns.filter(
-                (tc) => !exclude_cols.includes(tc.column_name)
-            );
-
-            // Valinta: olemassaoleva rivi / uusi rivi
-            const radioContainer = document.createElement("div");
-            radioContainer.style.display = "flex";
-            radioContainer.style.gap = "1em";
-
-            const existingRadio = document.createElement("input");
-            existingRadio.type = "radio";
-            existingRadio.name = relationInfo.modeRadioName;
-            existingRadio.value = "existing";
-            existingRadio.checked = true;
-            const existingRadioLabel = document.createElement("label");
-            // existingRadioLabel.textContent = 'Valitse olemassaolevista';
-            existingRadioLabel.setAttribute(
-                "data-lang-key",
-                "choose_from_existing"
-            );
-
-            const newRadio = document.createElement("input");
-            newRadio.type = "radio";
-            newRadio.name = relationInfo.modeRadioName;
-            newRadio.value = "new";
-            const newRadioLabel = document.createElement("label");
-            // newRadioLabel.textContent = 'Luo kokonaan uusi rivi';
-            newRadioLabel.dataset.langKey = "create_new_row";
-
-            radioContainer.appendChild(existingRadio);
-            radioContainer.appendChild(existingRadioLabel);
-            radioContainer.appendChild(newRadio);
-            radioContainer.appendChild(newRadioLabel);
-            fieldset.appendChild(radioContainer);
-
-            // Dropdown + hidden input
-            const dropdown_container = document.createElement("div");
-            dropdown_container.style.marginTop = "1em";
-
-            const hiddenInput = document.createElement("input");
-            hiddenInput.type = "hidden";
-            hiddenInput.name = `_m2m_existing_${relationInfo.linkTableName}_${relationInfo.thirdTableName}`;
-            dropdown_container.appendChild(hiddenInput);
-
-            // Haetaan kolmannen taulun data
-            fetchReferencedData(relationInfo.thirdTableName)
-                .then((thirdTableOptions) => {
-                    if (!Array.isArray(thirdTableOptions)) return;
-                    const chosenLanguage = getLanguageWithBrowserFallback();
-                    const mapped = thirdTableOptions.map((opt) => {
-                        const pk = Object.keys(opt).find(
-                            (k) => k !== "display"
-                        );
-                        return {
-                            value: opt[pk],
-                            label: `${opt[pk]} - ${resolveDatasetDisplayValue(
-                                opt["display"],
-                                null,
-                                chosenLanguage
-                            )}`,
-                        };
-                    });
-                    createVanillaDropdown({
-                        containerElement: dropdown_container,
-                        options: mapped,
-                        placeholder: getTranslationForKey('select') || "Valitse...",
-                        searchPlaceholder: getTranslationForKey('search') || "Hae...",
-                        showClearButton: true,
-                        useSearch: true,
-                        onChange: (val) => {
-                            hiddenInput.value = val || "";
-                        },
-                    });
-                })
-                .catch((err) =>
-                    console.warn(
-                        "virhe kolmannen taulun datan haussa:",
-                        err
-                    )
-                );
-
-            fieldset.appendChild(dropdown_container);
-
-            // Uuden rivin luontikentät
-            const newRowFieldset = document.createElement("div");
-            newRowFieldset.style.display = "none";
-            newRowFieldset.style.marginTop = "1em";
-            newRowFieldset.style.borderLeft = "2px solid #ccc";
-            newRowFieldset.style.paddingLeft = "10px";
-
-            // Tallennetaan tilaan tieto, että luodaan uusi
-            const newRowState = { data: {} };
-            modal_form_state[`_m2m_new_${relationInfo.thirdTableName}`] = newRowState.data;
-            modal_form_state["_manyToManyRows"].push({
-                linkTableName: relationInfo.linkTableName,
-                mainTableFkColumn: relationInfo.mainTableFkColumn,
-                thirdTableName: relationInfo.thirdTableName,
-                thirdTableFkColumn: relationInfo.thirdTableFkColumn,
-                modeRadioName: relationInfo.modeRadioName,
-                existingHiddenInput: hiddenInput,
-                newRowState,
-            });
-
-            for (const col of sanitizedThirdCols) {
-                if (col.is_multilingual === true) {
-                    buildMultilingualTextareaGroup(newRowFieldset, {
-                        tableName: relationInfo.thirdTableName,
-                        column: col,
-                        idPrefix: `m2m-${relationInfo.thirdTableName}-${col.column_name}`,
-                        onValueChange: (value) => {
-                            newRowState.data[col.column_name] = value;
-                        },
-                    });
-                    continue;
-                }
-                const l = document.createElement("label");
-                // l.textContent = col.column_name;
-                l.dataset.langKey = col.column_name;
-                l.style.display = "block";
-                l.style.marginTop = "5px";
-
-                const inp = document.createElement("input");
-                inp.type = get_input_type(col.data_type);
-                inp.style.display = "block";
-                inp.style.marginBottom = "5px";
-                inp.addEventListener("input", (e) => {
-                    newRowState.data[col.column_name] = e.target.value;
-                });
-
-                newRowFieldset.appendChild(l);
-                newRowFieldset.appendChild(inp);
-            }
-            const setNewRowInputsEnabled = (enabled) => {
-                newRowFieldset.querySelectorAll("input, textarea, select").forEach((input) => {
-                    input.disabled = !enabled;
-                });
-            };
-            setNewRowInputsEnabled(false);
-            fieldset.appendChild(newRowFieldset);
-
-            // Radio-logiikka
-            existingRadio.addEventListener("change", () => {
-                if (existingRadio.checked) {
-                    dropdown_container.style.display = "block";
-                    newRowFieldset.style.display = "none";
-                    setNewRowInputsEnabled(false);
-                    modal_form_state[
-                        `_m2m_mode_${relationInfo.thirdTableName}`
-                    ] = "existing";
-                }
-            });
-            newRadio.addEventListener("change", () => {
-                if (newRadio.checked) {
-                    dropdown_container.style.display = "none";
-                    newRowFieldset.style.display = "block";
-                    setNewRowInputsEnabled(true);
-                    modal_form_state[
-                        `_m2m_mode_${relationInfo.thirdTableName}`
-                    ] = "new";
-                }
-            });
-
-            form.appendChild(fieldset);
-        } catch (err) {
-            console.warn("virhe m2m-sarakkeiden haussa:", err);
-        }
-    }
-}
-
-function normalizeManyToManyInfo(info = {}) {
-    const thirdTableName = String(
-        info.third_dataset_name ||
-        info.thirdTableName ||
-        ""
-    ).trim();
-
-    return {
-        linkTableName: String(
-            info.bridging_dataset_name ||
-            info.link_dataset_name ||
-            info.linkTableName ||
-            ""
-        ).trim(),
-        mainTableFkColumn: String(
-            info.main_dataset_fk_column ||
-            info.mainTableFkColumn ||
-            ""
-        ).trim(),
-        thirdTableUID: String(
-            info.third_table_uid ||
-            info.thirdTableUID ||
-            ""
-        ).trim(),
-        thirdTableName,
-        thirdTableFkColumn: String(
-            info.third_dataset_fk_column ||
-            info.thirdTableFkColumn ||
-            ""
-        ).trim(),
-        modeRadioName: `m2m_mode_${thirdTableName}`,
-    };
 }

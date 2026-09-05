@@ -41,6 +41,20 @@ describe('endpoint_data_fetcher', () => {
         });
     });
 
+    test('fetchFilterOptions forwards bounded server-search inputs', async () => {
+        const mod = await import('./endpoint_data_fetcher.js');
+        await mod.fetchFilterOptions({
+            dataset_name: 'service catalog',
+            value_column: 'service_id',
+            search: 'Matrix #42',
+            limit: 100,
+        });
+
+        expect(endpointRouter).toHaveBeenCalledWith('getFilterOptions', {
+            url_params: '?dataset=service+catalog&value_column=service_id&search=Matrix+%2342&limit=100',
+        });
+    });
+
     test('fetchFilterOptions requires a dataset name', async () => {
         const mod = await loadModule();
 

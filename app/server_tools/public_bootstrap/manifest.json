@@ -1,8 +1,8 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "9.2.2",
-  "db_version": "9.7.0",
+  "app_version": "9.2.3",
+  "db_version": "9.7.2",
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -137,7 +137,7 @@
       "sha256": "64047bf07c8b68640df0bdff760fca3f4044637dbe652b006b5833b9b139b07b"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "da0f3732225424df5e005f4b72fb62b62fd0378fd9bd7c65e35149d31e7ba2c7"
+      "sha256": "1be94465824904329be06949c1416b1d57f14a076a994963e99afceb6da1bcf5"
     }
   },
   "source_files": {

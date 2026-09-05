@@ -342,6 +342,12 @@
     {
       "component": "Filterest brand and fallback images",
       "kind": "asset",
+      "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-16.png",
+      "sha256": "0b3059f41d718c1a5aa84a556239861d9687af70cc9418c21ee2f35e2ed04300"
+    },
+    {
+      "component": "Filterest brand and fallback images",
+      "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-e-v1-16.png",
       "sha256": "05aa55fc11d82b1345bad7d22febe76efd6755c613cb78a60d27227f0f2bcda4"
     },

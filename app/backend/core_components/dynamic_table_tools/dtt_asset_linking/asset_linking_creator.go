@@ -25,6 +25,9 @@ func EnsureSharedAssetRelation(
 	fkColumnName := parentTable + "_id"
 
 	if existingStatus, err := FindFileUploadRelationStatusByChildTable(tx, parentTableUID, childTable); err == nil {
+		if permissionErr := CopyPhysicalTablePermissions(tx, parentTable, childTable); permissionErr != nil {
+			return FileUploadRelationStatus{}, false, permissionErr
+		}
 		if existingStatus.UploadConfig.FilenameColumn == "" {
 			existingStatus.UploadConfig.FilenameColumn = initialConfig.FilenameColumn
 		}
@@ -64,6 +67,9 @@ func EnsureSharedAssetRelation(
 
 		if createErr := dtt_3_table_create.CreateTableInDatabase(tx, childTable, columns, foreignKeys); createErr != nil {
 			return FileUploadRelationStatus{}, false, createErr
+		}
+		if permissionErr := CopyPhysicalTablePermissions(tx, parentTable, childTable); permissionErr != nil {
+			return FileUploadRelationStatus{}, false, permissionErr
 		}
 		if refreshErr := refreshAssetLinkingCatalogMetadata(tx); refreshErr != nil {
 			return FileUploadRelationStatus{}, false, refreshErr

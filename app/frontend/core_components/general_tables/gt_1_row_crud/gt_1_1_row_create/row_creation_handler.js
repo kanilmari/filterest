@@ -16,6 +16,7 @@ import {
 } from "./row_api_fetcher.js";
 import { buildMainForm } from "./row_form_builder.js";
 import { appendFormActions } from "./row_submission_handler.js";
+import { relationHasEnabledFileUpload } from "./row_existing_relation_builder.js";
 import { showWarningToast } from "../../../../reusable_components/notifications/toast_notification_printer.js";
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { initializeFormSectionNavigator } from "../../../../reusable_components/form_section_navigator/form_section_navigator.js";
@@ -56,8 +57,34 @@ export async function open_add_row_modal(table_uid, table_name) {
     showModal();
 
     try {
-        // 1) Haetaan saraketiedot
-        const columns_info = await fetchColumnsInfo(table_uid);
+        // Start the expensive schema read immediately. Relation metadata is
+        // cheap; as soon as it arrives, preload only asset-child schemas in
+        // parallel with the main schema. Ordinary related datasets no longer
+        // need their create schemas because this form only links their rows.
+        const columnsRequest = fetchColumnsInfo(table_uid);
+        let [oneToManyRelations, manyToManyInfos] = await Promise.all([
+            fetchOneToManyRelations(table_uid),
+            fetchManyToManyInfos(table_uid),
+        ]);
+        if (!oneToManyRelations) oneToManyRelations = [];
+        if (!manyToManyInfos) manyToManyInfos = [];
+
+        const assetTableUIDs = Array.from(new Set(
+            oneToManyRelations
+                .filter(relationHasEnabledFileUpload)
+                .map((relation) => String(relation.source_table_uid || ""))
+                .filter(Boolean)
+        ));
+        const assetColumnsRequest = Promise.all(assetTableUIDs.map(async (assetTableUID) => [
+            assetTableUID,
+            await fetchColumnsInfo(assetTableUID),
+        ]));
+        const [columns_info, assetColumnEntries] = await Promise.all([
+            columnsRequest,
+            assetColumnsRequest,
+        ]);
+        const assetColumnsByTableUID = new Map(assetColumnEntries);
+
         if (!columns_info || columns_info.length === 0) {
             console.warn("No column information received.");
             showWarningToast(
@@ -80,29 +107,21 @@ export async function open_add_row_modal(table_uid, table_name) {
             return;
         }
 
-        // 3) Haetaan 1->m-suhteet ja monesta->moneen -liitokset rinnakkain.
-        let [oneToManyRelations, manyToManyInfos] = await Promise.all([
-            fetchOneToManyRelations(table_uid),
-            fetchManyToManyInfos(table_uid),
-        ]);
-
-        if (!oneToManyRelations) oneToManyRelations = [];
-        if (!manyToManyInfos) manyToManyInfos = [];
-
-        // 4) Rakennetaan lomake
+        // 3) Rakennetaan lomake
         const form = await buildMainForm(
             datasetName,
             columns,
             oneToManyRelations,
             manyToManyInfos,
-            modal_form_state
+            modal_form_state,
+            assetColumnsByTableUID
         );
 
-        // 5) Lomakkeen loppuun painikkeet ja submit
+        // 4) Lomakkeen loppuun painikkeet ja submit
         appendFormActions(form, table_uid, columns, modal_form_state, clearState);
         initializeFormSectionNavigator(form);
 
-        // 6) Korvataan lataustila valmiilla lomakkeella.
+        // 5) Korvataan lataustila valmiilla lomakkeella.
         createModal({
             titleDataLangKey: `add_row_${datasetName}`,
             titleDataLangKeyFallback: "add_row",

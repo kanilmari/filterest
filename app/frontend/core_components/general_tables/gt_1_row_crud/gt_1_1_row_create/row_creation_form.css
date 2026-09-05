@@ -16,6 +16,7 @@
 .row-creation-form__section {
     display: flex;
     flex-direction: column;
+    gap: 14px;
     min-width: 0;
 }
 
@@ -50,6 +51,7 @@
 }
 
 .row-creation-form__section .vanilla-dropdown,
+.row-creation-form__section .msd-dropdown,
 .row-creation-form__section input,
 .row-creation-form__section select,
 .row-creation-form__section textarea {

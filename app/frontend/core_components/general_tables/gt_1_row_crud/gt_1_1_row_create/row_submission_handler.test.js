@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
     appendFormActions,
     collectChildRowsForSubmission,
+    collectExistingLinksForSubmission,
     shouldSubmitChildRow,
 } from "./row_submission_handler.js";
 import { initializeFormSectionNavigator } from "../../../../reusable_components/form_section_navigator/form_section_navigator.js";
@@ -64,12 +65,25 @@ describe("shouldSubmitChildRow", () => {
         })).toBe(true);
     });
 
-    test("keeps typed child data for ordinary non-asset child rows", () => {
+    test("refuses typed child data for ordinary non-asset child rows", () => {
         expect(shouldSubmitChildRow({
             datasetName: "contracts_notes",
             data: {
                 title: "Offer sheet",
             },
+        })).toBe(false);
+    });
+
+    test("submits an optional location child only after the user provides location data", () => {
+        expect(shouldSubmitChildRow({
+            datasetName: "service_locations",
+            ownedChildKind: "location",
+            data: { position: "", title: "" },
+        })).toBe(false);
+        expect(shouldSubmitChildRow({
+            datasetName: "service_locations",
+            ownedChildKind: "location",
+            data: { position: "POINT(24.94 60.17)" },
         })).toBe(true);
     });
 
@@ -85,7 +99,42 @@ describe("shouldSubmitChildRow", () => {
     });
 });
 
+describe("collectExistingLinksForSubmission", () => {
+    test("keeps stable relation identifiers and deduplicated row IDs", () => {
+        expect(collectExistingLinksForSubmission([{
+            relationKind: "many_to_many",
+            relationId: "72",
+            rowIds: ["8", 8, "11", "invalid"],
+        }])).toEqual([{
+            relationKind: "many_to_many",
+            relationId: 72,
+            rowIds: [8, 11],
+        }]);
+    });
+
+    test("drops empty and invalid relation selections", () => {
+        expect(collectExistingLinksForSubmission([
+            { relationKind: "one_to_many", relationId: 0, rowIds: [1] },
+            { relationKind: "many_to_many", relationId: 2, rowIds: [] },
+        ])).toEqual([]);
+    });
+});
+
 describe("collectChildRowsForSubmission", () => {
+	test("keeps a filled location child without requiring a file", () => {
+		const { childRowsToSend, childFiles } = collectChildRowsForSubmission([{
+			relationId: 264,
+			datasetName: "app_service_locations",
+			referencingColumn: "service_id",
+			ownedChildKind: "location",
+			data: { position: "POINT(24.94 60.17)" },
+		}]);
+
+		expect(childRowsToSend).toHaveLength(1);
+		expect(childRowsToSend[0].data.position).toBe("POINT(24.94 60.17)");
+		expect(childFiles).toEqual([null]);
+	});
+
     test("expands shared attachment selections into one child row per file", () => {
         const files = [
             new File(["%PDF-1.4"], "offer.pdf", { type: "application/pdf" }),

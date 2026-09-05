@@ -12,22 +12,19 @@ import (
 // Between: Frontend JSON payload -> insertDataAccordingToPayload
 // Why: Defines structure for child row data in the add-row request.
 type ChildRowPayload struct {
-	TableName         string                 `json:"datasetName"`
-	ReferencingColumn string                 `json:"referencingColumn"`
+	RelationID        int64                  `json:"relationId"`
+	TableName         string                 `json:"-"`
+	ReferencingColumn string                 `json:"-"`
 	Data              map[string]interface{} `json:"data"`
 }
 
-// ManyToManyPayload sisältää m2m-liitosta koskevat tiedot
-// Between: Frontend JSON payload -> insertDataAccordingToPayload
-// Why: Defines structure for many-to-many relationship data in the add-row request.
-type ManyToManyPayload struct {
-	LinkTableName      string                 `json:"linkDatasetName"`
-	MainTableFkColumn  string                 `json:"mainDatasetFkColumn"`
-	ThirdTableName     string                 `json:"thirdDatasetName"`
-	ThirdTableFkColumn string                 `json:"thirdDatasetFkColumn"`
-	SelectedValue      interface{}            `json:"selectedValue"`
-	IsNewRow           bool                   `json:"isNewRow"`
-	NewRowData         map[string]interface{} `json:"newRowData,omitempty"`
+// ExistingRelationLinkPayload identifies one server-registered relation and
+// the existing readable rows that should be attached to the new main row.
+// Physical table and column names are intentionally absent from the request.
+type ExistingRelationLinkPayload struct {
+	RelationKind string  `json:"relationKind"`
+	RelationID   int64   `json:"relationId"`
+	RowIDs       []int64 `json:"rowIds"`
 }
 
 // ChildInsertResult kantaa tiedot yhdestä lapsirivistä, jotta tiedämme

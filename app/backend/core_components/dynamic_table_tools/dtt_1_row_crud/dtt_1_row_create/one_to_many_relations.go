@@ -7,16 +7,17 @@ package dtt_1_row_create
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"easelect/backend/core_components/httpresponse"
 
 	backend "easelect/backend/core_components"
 )
 
 // OneToManyRelation edustaa riviä system_foreign_key_relations_1_m -taulussa
 type OneToManyRelation struct {
+	RelationID                int64        `json:"relation_id"`
 	SourceTableUID            string       `json:"source_table_uid"`
 	SourceTableName           string       `json:"source_dataset_name"`
 	SourceColumnName          string       `json:"source_column_name"`
@@ -48,6 +49,7 @@ func GetOneToManyRelationsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 func GetOneToManyRelationsHandler(w http.ResponseWriter, mainTableUID string) error {
 	query := `
                SELECT
+                       fr.id,
                        fr.source_table_uid,
                        s_src.table_name AS source_table_name,
                        fr.source_column_name,
@@ -77,6 +79,7 @@ func GetOneToManyRelationsHandler(w http.ResponseWriter, mainTableUID string) er
 		var sourceInsert sql.NullString
 		var targetInsert sql.NullString
 		if err := rows.Scan(
+			&rel.RelationID,
 			&rel.SourceTableUID,
 			&rel.SourceTableName,
 			&rel.SourceColumnName,

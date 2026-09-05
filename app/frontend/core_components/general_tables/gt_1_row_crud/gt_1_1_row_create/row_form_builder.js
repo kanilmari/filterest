@@ -4,7 +4,11 @@
 // Exists to centralize how row-creation inputs are assembled before submission.
 
 import { buildForeignKeyField, buildRegularField } from "./row_input_builder.js";
-import { buildOneToManySection, buildManyToManySection } from "./row_relation_builder.js";
+import { buildOneToManySection } from "./row_relation_builder.js";
+import {
+    buildExistingRelationFields,
+    manyToManyRelatedDatasetNames,
+} from "./row_existing_relation_builder.js";
 
 const IMAGE_PROFILE_KEY = "image";
 const ATTACHMENT_PROFILE_KEY = "attachment";
@@ -73,15 +77,16 @@ function appendRelationPages(form, relationContainer, startIndex = 0) {
 
 /**
  * Builds a complete row-creation form before the modal is shown.
- * The first page owns base fields and every related element receives its own page.
- * Awaiting relation metadata keeps page order stable and prevents late DOM insertion.
+ * Details owns base fields, one shared page owns existing-row links, and only
+ * explicitly configured asset creation receives additional pages.
  */
 export async function buildMainForm(
     table_name,
     columns,
     oneToManyRelations,
     manyToManyInfos,
-    modal_form_state
+    modal_form_state,
+    assetColumnsByTableUID = new Map()
 ) {
     const form = document.createElement("form");
     form.id = "add_row_form";
@@ -98,32 +103,53 @@ export async function buildMainForm(
     });
     form.appendChild(detailsSection);
 
+    const linkSection = createFormSection({
+        key: "link-existing-data",
+        label: "Link existing data",
+        langKey: "link_existing_data",
+    });
+    const m2mDatasetNames = manyToManyRelatedDatasetNames(manyToManyInfos);
+    let linkControlCount = 0;
+
     for (const column of columns) {
-        if (column.foreign_table_name) {
-            buildForeignKeyField(detailsSection, table_name, column, modal_form_state);
-        } else {
+        const foreignDatasetName = column.foreign_dataset_name || column.foreign_table_name;
+        if (!foreignDatasetName) {
             buildRegularField(detailsSection, table_name, column, modal_form_state);
+            continue;
         }
+
+        // A nullable legacy FK and a true M:M relation can intentionally point
+        // at the same dataset. Showing both makes the user choose between two
+        // representations of the same product action, so the multi-link path
+        // wins. A required FK is never suppressed because the main INSERT
+        // cannot succeed without it.
+        const isRequired = String(column.is_nullable || "").toLowerCase() === "no";
+        if (!isRequired && m2mDatasetNames.has(foreignDatasetName)) {
+            continue;
+        }
+        buildForeignKeyField(linkSection, table_name, column, modal_form_state);
+        linkControlCount += 1;
     }
 
-    const oneToManyContainer = document.createElement("div");
-    const manyToManyContainer = document.createElement("div");
+    linkControlCount += buildExistingRelationFields(
+        linkSection,
+        oneToManyRelations,
+        manyToManyInfos,
+        modal_form_state
+    );
+    if (linkControlCount > 0) {
+        form.appendChild(linkSection);
+    }
+
+    const assetContainer = document.createElement("div");
     modal_form_state["_childRowsArray"] = [];
-    modal_form_state["_manyToManyRows"] = [];
-    await Promise.all([
-        buildOneToManySection(
-            oneToManyContainer,
-            oneToManyRelations,
-            modal_form_state
-        ),
-        buildManyToManySection(
-            manyToManyContainer,
-            manyToManyInfos,
-            modal_form_state
-        ),
-    ]);
-    const nextRelationIndex = appendRelationPages(form, oneToManyContainer);
-    appendRelationPages(form, manyToManyContainer, nextRelationIndex);
+    await buildOneToManySection(
+        assetContainer,
+        oneToManyRelations,
+        modal_form_state,
+        assetColumnsByTableUID
+    );
+    appendRelationPages(form, assetContainer);
 
     return form;
 }

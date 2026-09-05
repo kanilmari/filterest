@@ -24,10 +24,13 @@ let multiselectDropdownSequence = 0;
  * @param {string} [config.excludeTooltip="Exclude this value from results"] - Tooltip for the exclude action
  * @param {string} [config.resetTooltip="Remove the excluded state for this value"] - Tooltip for the reset action
  * @param {boolean} [config.allowExclude=true] - Whether per-row exclude actions are rendered
+ * @param {number|null} [config.maxSelections=null] - Maximum included values; null keeps normal multiselect behavior
  * @param {string} [config.selectedCountLabel="selected"] - Summary label for multiple selected values
  * @param {string} [config.excludedCountLabel="excluded"] - Summary label for multiple excluded values
  * @param {string} [config.noResultsLabel="No results"] - Empty search-result label
  * @param {string} [config.clearLabel="Clear selection"] - Accessible clear-button label
+ * @param {function(string): Promise<Array>|Array} [config.onSearch] - Optional server-backed option search
+ * @param {number} [config.searchDebounceMs=200] - Delay before a server-backed search
  * @param {function} [config.onChange] - Called with { includeValues, excludeValues } on change
  */
 export function createMultiselectDropdown({
@@ -43,10 +46,13 @@ export function createMultiselectDropdown({
 	excludeTooltip = "Exclude this value from results",
 	resetTooltip = "Remove the excluded state for this value",
 	allowExclude = true,
+	maxSelections = null,
 	selectedCountLabel = "selected",
 	excludedCountLabel = "excluded",
 	noResultsLabel = "No results",
 	clearLabel = "Clear selection",
+	onSearch = null,
+	searchDebounceMs = 200,
 	onChange,
 }) {
 	if (!containerElement) {
@@ -59,6 +65,8 @@ export function createMultiselectDropdown({
 	let currentOptions = options || [];
 	let optionStates = new Map();
 	let disabled = false;
+	let searchTimer = null;
+	let searchGeneration = 0;
 	applyState(initialState);
 
 	const instance = {
@@ -146,7 +154,9 @@ export function createMultiselectDropdown({
 		listWrapper.appendChild(searchContainer);
 
 		searchInput.addEventListener('input', () => {
-			renderList(searchInput.value.trim());
+			const searchText = searchInput.value.trim();
+			renderList(searchText);
+			scheduleRemoteSearch(searchText);
 		});
 		searchInput.addEventListener('keydown', (event) => {
 			if (event.key === 'Escape') {
@@ -167,7 +177,7 @@ export function createMultiselectDropdown({
 	optionsList.classList.add('msd-dropdown-options');
 	optionsList.id = `${listWrapper.id}_options`;
 	optionsList.setAttribute('role', 'listbox');
-	optionsList.setAttribute('aria-multiselectable', 'true');
+	optionsList.setAttribute('aria-multiselectable', String(maxSelections !== 1));
 	inputEl.setAttribute('aria-controls', optionsList.id);
 	listWrapper.appendChild(optionsList);
 
@@ -504,10 +514,43 @@ export function createMultiselectDropdown({
 		}
 	}
 
-	function setOptions(newOptions) {
-		currentOptions = newOptions || [];
+	function setOptions(newOptions, options = {}) {
+		const incomingOptions = Array.isArray(newOptions) ? newOptions : [];
+		currentOptions = options.preserveSelected === true
+			? mergeSelectedOptions(currentOptions, incomingOptions, optionStates)
+			: incomingOptions;
 		updateDisplay();
-		renderList("");
+		renderList(options.preserveSearchText === true ? searchInput?.value?.trim() || "" : "");
+	}
+
+	function scheduleRemoteSearch(searchText, { immediate = false } = {}) {
+		if (typeof onSearch !== 'function' || disabled || destroyed) return;
+		if (searchTimer !== null) {
+			window.clearTimeout(searchTimer);
+			searchTimer = null;
+		}
+		const generation = ++searchGeneration;
+		const runSearch = async () => {
+			searchTimer = null;
+			try {
+				const nextOptions = await onSearch(searchText);
+				if (destroyed || generation !== searchGeneration) return;
+				setOptions(nextOptions, {
+					preserveSelected: true,
+					preserveSearchText: true,
+				});
+			} catch (error) {
+				console.warn('multiselect server search failed:', error);
+			}
+		};
+		if (immediate) {
+			void runSearch();
+			return;
+		}
+		const delay = Number.isFinite(searchDebounceMs)
+			? Math.max(0, searchDebounceMs)
+			: 200;
+		searchTimer = window.setTimeout(runSearch, delay);
 	}
 
 	function setDisabled(nextDisabled) {
@@ -534,6 +577,7 @@ export function createMultiselectDropdown({
 			searchInput.focus();
 		}
 		renderList("");
+		scheduleRemoteSearch("", { immediate: true });
 	}
 
 	function close() {
@@ -550,6 +594,11 @@ export function createMultiselectDropdown({
 	function destroy() {
 		if (destroyed) return;
 		destroyed = true;
+		searchGeneration += 1;
+		if (searchTimer !== null) {
+			window.clearTimeout(searchTimer);
+			searchTimer = null;
+		}
 		close();
 		document.removeEventListener('click', handleOutsideClick);
 		ownerView?.removeEventListener(VIEW_DEACTIVATE_EVENT, handleOwnerViewDeactivation);
@@ -592,6 +641,16 @@ export function createMultiselectDropdown({
 		if (state === 'neutral') {
 			optionStates.delete(normalizedValue);
 			return;
+		}
+		if (state === 'include' && Number.isInteger(maxSelections) && maxSelections > 0) {
+			const priorIncludedValues = Array.from(optionStates.entries())
+				.filter(([existingValue, existingState]) => (
+					existingState === 'include' && existingValue !== normalizedValue
+				))
+				.map(([existingValue]) => existingValue);
+			while (priorIncludedValues.length >= maxSelections) {
+				optionStates.delete(priorIncludedValues.shift());
+			}
 		}
 		optionStates.set(normalizedValue, state);
 	}
@@ -670,4 +729,16 @@ function searchableOptionText(option) {
 		option?.groupLabel,
 		...searchTerms,
 	].filter(Boolean).join(" "));
+}
+
+function mergeSelectedOptions(currentOptions, incomingOptions, optionStates) {
+	const nextOptions = [...incomingOptions];
+	const incomingValues = new Set(nextOptions.map((option) => String(option.value)));
+	currentOptions.forEach((option) => {
+		const value = String(option.value);
+		if (optionStates.has(value) && !incomingValues.has(value)) {
+			nextOptions.push(option);
+		}
+	});
+	return nextOptions;
 }

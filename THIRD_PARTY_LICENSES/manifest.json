@@ -402,7 +402,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "29ef5e9a73947fc0400c822490a8260c4cad429456883fb66e3648ffef519b3d"
+    "sha256": "9a5774b9fe55103a5ca88ac9c428a95cbf481026a661add37ef7bae52d5efcb7"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -410,7 +410,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.7.0",
+  "database_version": "9.7.2",
   "dependencies": [
     {
       "binary_targets": [
@@ -837,7 +837,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.2.2",
+  "filterest_app_version": "9.2.3",
   "first_party_components": [
     {
       "assets": [
@@ -860,6 +860,10 @@
         {
           "path": "app/frontend/favicon4SL.png",
           "sha256": "27cbd2030ee927bc1fd7a6a30f907a2200c53315eae4c8dba624a5d95c833706"
+        },
+        {
+          "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-16.png",
+          "sha256": "0b3059f41d718c1a5aa84a556239861d9687af70cc9418c21ee2f35e2ed04300"
         },
         {
           "path": "app/frontend/icons/site_favicons/site-initial-e-v1-16.png",

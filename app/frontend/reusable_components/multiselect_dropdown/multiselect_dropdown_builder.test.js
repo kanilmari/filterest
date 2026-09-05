@@ -100,6 +100,42 @@ describe('createMultiselectDropdown', () => {
         expect(overlay.querySelector('.msd-dropdown-list')).toBeNull();
     });
 
+    test('uses debounced server search and ignores stale responses', async () => {
+        vi.useFakeTimers();
+        const { createMultiselectDropdown } = await import('./multiselect_dropdown_builder.js');
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const resolvers = new Map();
+        const onSearch = vi.fn((query) => new Promise((resolve) => {
+            resolvers.set(query, resolve);
+        }));
+        const dropdown = createMultiselectDropdown({
+            containerElement: container,
+            options: [],
+            onSearch,
+            searchDebounceMs: 25,
+        });
+
+        dropdown.open();
+        const searchInput = document.body.querySelector('.msd-dropdown-search-input');
+        searchInput.value = 'old';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await vi.advanceTimersByTimeAsync(25);
+        searchInput.value = 'new';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await vi.advanceTimersByTimeAsync(25);
+
+        resolvers.get('new')([{ value: '9', label: 'New result' }]);
+        await Promise.resolve();
+        resolvers.get('old')([{ value: '7', label: 'Stale result' }]);
+        await Promise.resolve();
+
+        expect(document.body.querySelector('.msd-dropdown-options').textContent).toContain('New result');
+        expect(document.body.querySelector('.msd-dropdown-options').textContent).not.toContain('Stale result');
+        dropdown.destroy();
+        vi.useRealTimers();
+    });
+
     test('destroys a portalled list when SPA navigation removes its owning view', async () => {
         const { createMultiselectDropdown } = await import('./multiselect_dropdown_builder.js');
         const view = document.createElement('section');
@@ -240,6 +276,30 @@ describe('createMultiselectDropdown', () => {
         checkbox.click();
         expect(dropdown.getState()).toEqual({
             includeValues: [],
+            excludeValues: [],
+        });
+    });
+
+    test('replaces the prior value when configured for one selection', async () => {
+        const { createMultiselectDropdown } = await import('./multiselect_dropdown_builder.js');
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const dropdown = createMultiselectDropdown({
+            containerElement: container,
+            options: [
+                { value: '7', label: 'Service seven' },
+                { value: '9', label: 'Service nine' },
+            ],
+            allowExclude: false,
+            maxSelections: 1,
+        });
+        dropdown.open();
+
+        document.body.querySelectorAll('.msd-option-checkbox')[0].click();
+        document.body.querySelectorAll('.msd-option-checkbox')[1].click();
+
+        expect(dropdown.getState()).toEqual({
+            includeValues: ['9'],
             excludeValues: [],
         });
     });

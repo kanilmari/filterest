@@ -95,6 +95,7 @@ async function fetchDynamicChildren(
   page: import('@playwright/test').Page,
   datasetName: string,
   rowId: number | string,
+  options: { allowMissingParent?: boolean } = {},
 ): Promise<Array<Record<string, unknown>>> {
   const csrfToken = await fetchCsrfToken(page);
   const response = await page.evaluate(
@@ -120,6 +121,9 @@ async function fetchDynamicChildren(
     { csrfToken, datasetName, rowId },
   );
 
+  if (options.allowMissingParent === true && response.status === 404) {
+    return [];
+  }
   expect(response.ok, `Failed to fetch dynamic children for "${datasetName}" row ${rowId}: ${response.body}`).toBe(true);
   const parsed = JSON.parse(response.body);
   return Array.isArray(parsed?.child_tables) ? parsed.child_tables : [];
@@ -240,7 +244,12 @@ test.describe('H6 — File Upload', () => {
         return currentRows.some((row) => String(row.id) === String(createdRowId));
       }, { timeout: 15000 }).toBe(false);
 
-      const childrenAfterDelete = await fetchDynamicChildren(page, datasetName, createdRowId);
+      const childrenAfterDelete = await fetchDynamicChildren(
+        page,
+        datasetName,
+        createdRowId,
+        { allowMissingParent: true },
+      );
       expect(
         childrenAfterDelete.every((child) => !Array.isArray(child.rows) || child.rows.length === 0),
         'Deleting a parent row must cascade its managed image and attachment rows.',

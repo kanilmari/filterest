@@ -17,6 +17,7 @@ func TestSiteFaviconPathUsesSiteNameInitial(t *testing.T) {
 		t.Fatalf("MkdirAll(): %v", err)
 	}
 	for _, fileName := range []string{
+		"site-fintravel-ft-v1-16.png",
 		"site-initial-e-v1-16.png",
 		"site-initial-es-v1-16.png",
 		"site-initial-f-v1-16.png",
@@ -60,6 +61,7 @@ func TestSiteFaviconPathUsesSiteNameInitial(t *testing.T) {
 func TestSiteInitialFaviconAssetsStayPixelSharp(t *testing.T) {
 	assetDir := filepath.Join("..", "..", "..", "frontend", "icons", "site_favicons")
 	for _, fileName := range []string{
+		"site-fintravel-ft-v1-16.png",
 		"site-initial-e-v1-16.png",
 		"site-initial-es-v1-16.png",
 		"site-initial-f-v1-16.png",

@@ -60,7 +60,7 @@ func AddRowMultipartHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 //
 // Tallennuksen logiikka:
 //  1. luo päärivin (RETURNING id -> mainRowID)
-//  2. luo lapsirivit (RETURNING id -> childRowID) ja kerää talteen ChildInsertResult-listaan
+//  2. luo vain sallitut asset-lapsirivit ja liittää valitut olemassa olevat liiketoimintarivit
 //  3. tallentaa tiedostot polkuun: storage/<tableUID>/<mainRowID>/, nimeksi <tableUID>_<mainRowID>_<childRowID>.ext
 //  4. päivittää lapsirivin "filename" (ja mahdolliset cacheTargets) samalle nimelle
 //  5. Jos taulu käyttää embeddingeja ja sillä on erikseen hyväksyttyjä lähdekenttiä,

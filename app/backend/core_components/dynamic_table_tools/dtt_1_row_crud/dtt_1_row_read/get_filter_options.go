@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	auth "easelect/backend/core_components/auth"
 	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
@@ -22,6 +24,12 @@ type filterOption struct {
 	Label string      `json:"label"`
 }
 
+const (
+	defaultFilterOptionLimit = 500
+	maxFilterOptionLimit     = 500
+	maxFilterOptionSearch    = 200
+)
+
 // GetFilterOptionsHandler returns distinct {value, label} pairs from a foreign table.
 // GET /api/get-filter-options?dataset=<foreign_table>
 func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +41,20 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	valueColumn := r.URL.Query().Get("value_column")
 	if valueColumn == "" {
 		valueColumn = "id"
+	}
+	searchText := strings.TrimSpace(r.URL.Query().Get("search"))
+	if len([]rune(searchText)) > maxFilterOptionSearch {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "filter option search is too long")
+		return
+	}
+	resultLimit := defaultFilterOptionLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, parseErr := strconv.Atoi(rawLimit)
+		if parseErr != nil || parsedLimit < 1 || parsedLimit > maxFilterOptionLimit {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, "filter option limit must be between 1 and 500")
+			return
+		}
+		resultLimit = parsedLimit
 	}
 
 	// 1. Auth: get user role for DB connection selection
@@ -127,6 +149,13 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		pq.QuoteIdentifier(displayCol),
 	)
 	queryArgs := []interface{}{}
+	whereClause, queryArgs = appendFilterOptionSearchToWhereClause(
+		valueColumn,
+		displayCol,
+		searchText,
+		whereClause,
+		queryArgs,
+	)
 	whereClause, queryArgs = appendReadPolicyToWhereClause(
 		tableName,
 		userRole,
@@ -136,12 +165,13 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		queryArgs,
 	)
 	query := fmt.Sprintf(
-		"SELECT DISTINCT %s, %s FROM %s%s ORDER BY %s LIMIT 500",
+		"SELECT DISTINCT %s, %s FROM %s%s ORDER BY %s LIMIT %d",
 		pq.QuoteIdentifier(valueColumn),
 		pq.QuoteIdentifier(displayCol),
 		pq.QuoteIdentifier(tableName),
 		whereClause,
 		pq.QuoteIdentifier(displayCol),
+		resultLimit,
 	)
 
 	rows, err := readQuerier.Query(query, queryArgs...)
@@ -167,4 +197,29 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, options)
+}
+
+// appendFilterOptionSearchToWhereClause applies the search before LIMIT, so a
+// remote relation picker searches the full row-policy-visible dataset rather
+// than filtering only a previously downloaded prefix in the browser.
+func appendFilterOptionSearchToWhereClause(
+	valueColumn string,
+	displayColumn string,
+	searchText string,
+	whereClause string,
+	queryArgs []interface{},
+) (string, []interface{}) {
+	if searchText == "" {
+		return whereClause, queryArgs
+	}
+	queryArgs = append(queryArgs, searchText)
+	placeholder := fmt.Sprintf("$%d", len(queryArgs))
+	whereClause += fmt.Sprintf(
+		" AND (POSITION(LOWER(%s) IN LOWER(CAST(%s AS text))) > 0 OR POSITION(LOWER(%s) IN LOWER(CAST(%s AS text))) > 0)",
+		placeholder,
+		pq.QuoteIdentifier(valueColumn),
+		placeholder,
+		pq.QuoteIdentifier(displayColumn),
+	)
+	return whereClause, queryArgs
 }

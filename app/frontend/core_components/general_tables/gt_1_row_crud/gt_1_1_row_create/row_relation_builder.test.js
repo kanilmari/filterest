@@ -4,17 +4,17 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
     applySelectedFileMetadata,
     applyWebImageSelectionMetadata,
-    buildManyToManySection,
     buildOneToManySection,
     buildFileAcceptAttribute,
+    isOptionalLocationRelation,
     isSharedAssetRelation,
+    readRelationCreateSetting,
     resolveAssetKindForSelectedFile,
     resolveFileUploadProfiles,
 } from "./row_relation_builder.js";
 
 vi.mock("./row_api_fetcher.js", () => ({
     fetchColumnsInfo: vi.fn(),
-    fetchReferencedData: vi.fn(),
 }));
 
 vi.mock("./row_input_builder.js", () => ({
@@ -23,10 +23,6 @@ vi.mock("./row_input_builder.js", () => ({
 
 vi.mock("./row_geometry_builder.js", () => ({
     buildChildGeometryField: vi.fn(),
-}));
-
-vi.mock("../../../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js", () => ({
-    createVanillaDropdown: vi.fn(),
 }));
 
 vi.mock("../../../../reusable_components/notifications/toast_notification_printer.js", () => ({
@@ -42,8 +38,7 @@ vi.mock("../../../lang/translation_handler.js", () => ({
     getTranslationForKey: vi.fn(() => ""),
 }));
 
-import { fetchColumnsInfo, fetchReferencedData } from "./row_api_fetcher.js";
-import { createVanillaDropdown } from "../../../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
+import { fetchColumnsInfo } from "./row_api_fetcher.js";
 import { openImageSourcePicker } from "../../../../reusable_components/image_source_picker/image_source_picker.js";
 
 beforeEach(() => {
@@ -220,6 +215,53 @@ describe("isSharedAssetRelation", () => {
     });
 });
 
+describe("owned child relation classification", () => {
+    test("recognizes explicit relation settings and spatial location schemas", () => {
+        expect(readRelationCreateSetting({
+            insert_new_source_with_target: { Bool: true, Valid: true },
+        })).toBe(true);
+        expect(readRelationCreateSetting({
+            insert_new_source_with_target: { Bool: false, Valid: true },
+        })).toBe(false);
+        expect(isOptionalLocationRelation([
+            { column_name: "position", data_type: "USER-DEFINED", udt_name: "geometry" },
+            { column_name: "title", data_type: "text" },
+        ])).toBe(false);
+        expect(isOptionalLocationRelation([
+            { column_name: "position", data_type: "geometry" },
+        ])).toBe(true);
+    });
+
+    test("builds an optional location child page only for an explicitly enabled spatial relation", async () => {
+        fetchColumnsInfo.mockResolvedValue([
+            { column_name: "service_id", data_type: "integer" },
+            { column_name: "id", data_type: "integer" },
+            { column_name: "position", data_type: "geometry" },
+            { column_name: "title", data_type: "text", is_nullable: "YES" },
+        ]);
+        const form = document.createElement("form");
+        const modalFormState = {};
+
+        await buildOneToManySection(form, [{
+            relation_id: 264,
+            source_table_uid: "220",
+            source_dataset_name: "app_service_locations",
+            source_column_name: "service_id",
+            insert_new_source_with_target: { Bool: true, Valid: true },
+            target_insert_specs: "{}",
+        }], modalFormState);
+
+        expect(form.querySelectorAll("fieldset")).toHaveLength(1);
+        expect(modalFormState._childRowsArray).toHaveLength(1);
+        expect(modalFormState._childRowsArray[0]).toMatchObject({
+            ownedChildKind: "location",
+            sharedAssetRelation: false,
+        });
+        expect(form.querySelector('[data-col-name="id"]')).toBeNull();
+        expect(form.querySelector('[data-col-name="title"]')?.required).toBe(false);
+    });
+});
+
 describe("buildOneToManySection", () => {
     test("stores child multilingual input as a language map without a scalar fallback", async () => {
         fetchColumnsInfo.mockResolvedValue([
@@ -231,9 +273,13 @@ describe("buildOneToManySection", () => {
         const modalFormState = {};
 
         await buildOneToManySection(form, [{
+            relation_id: 41,
             source_table_uid: "501",
             source_dataset_name: "article_captions",
             source_column_name: "article_id",
+            target_insert_specs: JSON.stringify({
+                file_upload: { enabled: true },
+            }),
         }], modalFormState);
 
         const multilingualGroup = form.querySelector(
@@ -273,6 +319,7 @@ describe("buildOneToManySection", () => {
         const modalFormState = {};
 
         await buildOneToManySection(form, [{
+            relation_id: 42,
             source_table_uid: "123",
             source_dataset_name: "contracts_assets",
             source_column_name: "contract_id",
@@ -341,6 +388,7 @@ describe("buildOneToManySection", () => {
         const form = document.createElement("form");
         const modalFormState = {};
         await buildOneToManySection(form, [{
+            relation_id: 43,
             source_table_uid: "123",
             source_dataset_name: "article_assets",
             source_column_name: "article_id",
@@ -401,122 +449,5 @@ describe("applyWebImageSelectionMetadata", () => {
             captions: { fi: "Kuva", en: "Photo" },
         });
         expect(state.data).toEqual({});
-    });
-});
-
-describe("buildManyToManySection", () => {
-    test("stores a new related row multilingual value without creating a scalar text input", async () => {
-        fetchColumnsInfo.mockResolvedValue([
-            { column_name: "id", data_type: "integer" },
-            multilingualTextColumn("name"),
-            { column_name: "created", data_type: "timestamp with time zone" },
-            { column_name: "updated", data_type: "timestamp with time zone" },
-        ]);
-        fetchReferencedData.mockResolvedValue([]);
-
-        const form = document.createElement("form");
-        const modalFormState = {};
-
-        await buildManyToManySection(form, [{
-            bridging_dataset_name: "articles_destinations_relation",
-            main_dataset_fk_column: "article_id",
-            third_table_uid: "777",
-            third_dataset_name: "destinations",
-            third_dataset_fk_column: "destination_id",
-        }], modalFormState);
-
-        const newRadio = form.querySelector(
-            'input[name="m2m_mode_destinations"][value="new"]'
-        );
-        newRadio.checked = true;
-        newRadio.dispatchEvent(new Event("change"));
-
-        const multilingualGroup = form.querySelector(
-            '[data-multilingual-column="name"]'
-        );
-        const finnish = multilingualGroup?.querySelector('[data-language-code="fi"]');
-        const english = multilingualGroup?.querySelector('[data-language-code="en"]');
-        const newRowContainer = multilingualGroup?.parentElement;
-
-        expect(multilingualGroup).not.toBeNull();
-        expect(finnish).not.toBeNull();
-        expect(english).not.toBeNull();
-        expect(newRowContainer?.querySelector('input[type="text"]')).toBeNull();
-
-        finnish.value = "Saaristokohde";
-        finnish.dispatchEvent(new Event("input"));
-        english.value = "Archipelago destination";
-        english.dispatchEvent(new Event("input"));
-
-        expect(JSON.parse(modalFormState._m2m_new_destinations.name)).toEqual({
-            fi: "Saaristokohde",
-            en: "Archipelago destination",
-        });
-    });
-
-    test("normalizes backend M2M metadata and stores submission state", async () => {
-        localStorage.setItem("chosen_language", "fi");
-        fetchColumnsInfo.mockResolvedValue([
-            { column_name: "id", data_type: "integer" },
-            { column_name: "riski", data_type: "text" },
-            { column_name: "tila", data_type: "text" },
-            { column_name: "created", data_type: "timestamp with time zone" },
-            { column_name: "updated", data_type: "timestamp with time zone" },
-        ]);
-        fetchReferencedData.mockResolvedValue([
-            {
-                id: 7,
-                display: JSON.stringify({ en: "Data leak risk", fi: "Tietovuotoriski" }),
-            },
-        ]);
-
-        const form = document.createElement("form");
-        const modalFormState = {};
-
-        await buildManyToManySection(form, [{
-            bridging_dataset_name: "palvelukatalogi_riskienhallinta_relation",
-            main_dataset_fk_column: "palvelu_id",
-            third_table_uid: "3156",
-            third_dataset_name: "riskienhallinta",
-            third_dataset_fk_column: "riski_id",
-        }], modalFormState);
-
-        await Promise.resolve();
-        await Promise.resolve();
-
-        expect(fetchColumnsInfo).toHaveBeenCalledWith("3156");
-        expect(fetchReferencedData).toHaveBeenCalledWith("riskienhallinta");
-        expect(createVanillaDropdown).toHaveBeenCalledTimes(1);
-        const relationFieldset = form.querySelector('[data-testid="many-to-many-section-riskienhallinta"]');
-        expect(relationFieldset?.dataset.relationKind).toBe("many-to-many");
-        expect(relationFieldset?.dataset.relationDatasetLangKey).toBe("riskienhallinta");
-
-        const relationState = modalFormState._manyToManyRows[0];
-        expect(relationState).toMatchObject({
-            linkTableName: "palvelukatalogi_riskienhallinta_relation",
-            mainTableFkColumn: "palvelu_id",
-            thirdTableName: "riskienhallinta",
-            thirdTableFkColumn: "riski_id",
-            modeRadioName: "m2m_mode_riskienhallinta",
-        });
-
-        const dropdownConfig = createVanillaDropdown.mock.calls[0][0];
-        expect(dropdownConfig.options).toEqual([{
-            value: 7,
-            label: "7 - Tietovuotoriski",
-        }]);
-        dropdownConfig.onChange("7");
-        expect(relationState.existingHiddenInput.value).toBe("7");
-
-        const newRadio = form.querySelector('input[name="m2m_mode_riskienhallinta"][value="new"]');
-        newRadio.checked = true;
-        newRadio.dispatchEvent(new Event("change"));
-
-        const newInputs = form.querySelectorAll('[data-testid="many-to-many-section-riskienhallinta"] input[type="text"]');
-        newInputs[0].value = "Uusi riski";
-        newInputs[0].dispatchEvent(new Event("input"));
-
-        expect(modalFormState._m2m_new_riskienhallinta).toBe(relationState.newRowState.data);
-        expect(relationState.newRowState.data).toEqual({ riski: "Uusi riski" });
     });
 });

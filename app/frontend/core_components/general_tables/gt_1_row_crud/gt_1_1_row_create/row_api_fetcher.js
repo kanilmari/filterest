@@ -4,6 +4,7 @@
 // Exists to isolate row-creation API reads from form rendering and submission logic.
 
 import { endpoint_router } from "../../../endpoints/endpoint_router.js";
+import { fetchFilterOptions } from "../../../endpoints/endpoint_data_fetcher.js";
 
 var debug = false;
 
@@ -77,6 +78,27 @@ export async function fetchReferencedData(datasetName) {
             `virhe haettaessa dataa taulusta ${datasetName}:`,
             error
         );
+        return [];
+    }
+}
+
+// Add-row relation pickers share the same permission- and row-policy-aware
+// option endpoint as FK filters. This prevents a relation control from listing
+// rows that the current actor cannot otherwise read.
+export async function fetchLinkableRows(datasetName, valueColumn = "id", {
+    search = "",
+    limit = 100,
+} = {}) {
+    try {
+        const data = await fetchFilterOptions({
+            dataset_name: datasetName,
+            value_column: valueColumn,
+            search,
+            limit,
+        });
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        console.warn(`virhe haettaessa linkitettäviä rivejä taulusta ${datasetName}:`, error);
         return [];
     }
 }

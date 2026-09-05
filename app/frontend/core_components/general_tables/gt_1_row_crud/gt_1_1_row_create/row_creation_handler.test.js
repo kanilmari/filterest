@@ -102,7 +102,8 @@ describe("open_add_row_modal", () => {
             [{ column_name: "name", data_type: "text" }],
             [{ source_table_uid: 20 }],
             [{ third_table_uid: 30 }],
-            expect.any(Object)
+            expect.any(Object),
+            expect.any(Map)
         );
         expect(mocks.createModal).toHaveBeenCalledTimes(2);
         expect(mocks.createModal.mock.calls[1][0].contentElements).toEqual([form]);

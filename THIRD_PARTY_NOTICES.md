@@ -9,11 +9,11 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.2.2`
-- Database version: `9.7.0`
+- Filterest app version: `9.2.3`
+- Database version: `9.7.2`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `389d50048b0c14b2b9d0aa3af25cf4c821dc4b7aadb34a12df497e9c4a0393cf`
+- License bundle manifest SHA-256: `df5af555f02d1ab524bfb2ada23e467eb0fa05de5e8d4df25797a42b065af160`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
@@ -23,7 +23,7 @@ Reviewed upstream legal and attribution document bytes are retained under
 - browser bundle build components listed: `3`
 - third-party asset files listed: `80`
 - source files containing third-party icon geometry: `6`
-- first-party asset files recorded: `47`
+- first-party asset files recorded: `48`
 - retained legal and attribution documents: `34`
 - unresolved third-party rows: `0`
 
@@ -95,7 +95,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 
 | Component | Asset files | Author | Rights holder | Publication-rights basis | License |
 | --- | ---: | --- | --- | --- | --- |
-| Filterest brand and fallback images | 10 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
+| Filterest brand and fallback images | 11 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 | Filterest demo placeholder images | 15 | Filterest human project owner | Filterest human project owner | The author created these neutral text placeholders in Microsoft Paint without third-party source imagery and approved their redistribution with Filterest under GPL-2.0-or-later on 2026-08-30; no separate attribution is requested. | GPL-2.0-or-later |
 | Filterest original interface SVGs | 22 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 

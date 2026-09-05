@@ -41,3 +41,18 @@ func TestAddRowColumnsQueryIncludesMultilingualStorageContract(t *testing.T) {
 		}
 	}
 }
+
+func TestAddRowColumnsQueryScopesForeignKeyCatalogToSelectedTable(t *testing.T) {
+	for _, requiredFragment := range []string{
+		"WITH selected_table AS",
+		"JOIN pg_catalog.pg_constraint constraint_info",
+		"constraint_info.conrelid = source_table.oid",
+	} {
+		if !strings.Contains(addRowColumnsWithTypesQuery, requiredFragment) {
+			t.Fatalf("add-row metadata query missing scoped catalog fragment %q", requiredFragment)
+		}
+	}
+	if strings.Contains(addRowColumnsWithTypesQuery, "information_schema.table_constraints") {
+		t.Fatal("add-row metadata must not scan the database-wide information_schema FK view")
+	}
+}

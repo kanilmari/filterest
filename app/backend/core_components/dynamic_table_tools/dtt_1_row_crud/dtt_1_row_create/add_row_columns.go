@@ -19,6 +19,42 @@ import (
 )
 
 const addRowColumnsWithTypesQuery = `
+    WITH selected_table AS (
+        SELECT table_uid, table_name
+        FROM system_db_tables
+        WHERE table_uid = $1
+    ), fk_info AS (
+        SELECT
+            source_column.attname AS column_name,
+            source_table.relname AS column_table_name,
+            foreign_schema.nspname AS foreign_table_schema,
+            foreign_table.relname AS foreign_table_name,
+            foreign_column.attname AS foreign_column_name
+        FROM selected_table selected
+        JOIN pg_catalog.pg_namespace source_schema
+            ON source_schema.nspname = $2
+        JOIN pg_catalog.pg_class source_table
+            ON source_table.relnamespace = source_schema.oid
+            AND source_table.relname = selected.table_name
+        JOIN pg_catalog.pg_constraint constraint_info
+            ON constraint_info.conrelid = source_table.oid
+            AND constraint_info.contype = 'f'
+        JOIN pg_catalog.pg_class foreign_table
+            ON foreign_table.oid = constraint_info.confrelid
+        JOIN pg_catalog.pg_namespace foreign_schema
+            ON foreign_schema.oid = foreign_table.relnamespace
+        CROSS JOIN LATERAL unnest(constraint_info.conkey)
+            WITH ORDINALITY AS source_key(attnum, key_order)
+        JOIN LATERAL unnest(constraint_info.confkey)
+            WITH ORDINALITY AS foreign_key(attnum, key_order)
+            ON foreign_key.key_order = source_key.key_order
+        JOIN pg_catalog.pg_attribute source_column
+            ON source_column.attrelid = source_table.oid
+            AND source_column.attnum = source_key.attnum
+        JOIN pg_catalog.pg_attribute foreign_column
+            ON foreign_column.attrelid = foreign_table.oid
+            AND foreign_column.attnum = foreign_key.attnum
+    )
     SELECT
         c.column_name,
         c.data_type,
@@ -57,25 +93,11 @@ const addRowColumnsWithTypesQuery = `
 				AND sl.review_status = 'approved'
 		) ELSE '[]'::jsonb END AS multilingual_languages
     FROM information_schema.columns c
-    JOIN system_db_tables sdt
-        ON sdt.table_uid = $1 AND sdt.table_name = c.table_name
+    JOIN selected_table sdt
+        ON sdt.table_name = c.table_name
     LEFT JOIN system_column_details scd
         ON scd.table_uid = sdt.table_uid AND scd.column_name = c.column_name
-    LEFT JOIN (
-        SELECT
-            kcu.column_name,
-            kcu.table_name AS column_table_name,
-            ccu.table_schema AS foreign_table_schema,
-            ccu.table_name AS foreign_table_name,
-            ccu.column_name AS foreign_column_name
-        FROM information_schema.table_constraints AS tc
-        JOIN information_schema.key_column_usage AS kcu
-            ON tc.constraint_name = kcu.constraint_name
-        JOIN information_schema.constraint_column_usage AS ccu
-            ON ccu.constraint_name = tc.constraint_name
-        WHERE
-            tc.constraint_type = 'FOREIGN KEY'
-    ) AS fk_info
+    LEFT JOIN fk_info
         ON c.column_name = fk_info.column_name
         AND c.table_name = fk_info.column_table_name
     LEFT JOIN system_foreign_key_relations_1_m fk_rel
@@ -162,17 +184,9 @@ ColLoop:
 			continue
 		}
 
-		// 3) Onko InsertNewTargetWithSource voimassa ja asettunut falseksi?
-		if col.InsertNewTargetWithSource.Valid && !col.InsertNewTargetWithSource.Bool {
-			continue
-		}
-
-		// 4) Onko InsertNewSourceWithTarget voimassa ja asettunut falseksi?
-		if col.InsertNewSourceWithTarget.Valid && !col.InsertNewSourceWithTarget.Bool {
-			continue
-		}
-
-		// Jos kaikki ok, lisätään sarake listalle
+		// Relation create flags govern whether another row may be created in
+		// place. They must not hide this row's own FK selector now that add-row
+		// links only to existing related data.
 		columnsForFrontend = append(columnsForFrontend, col)
 	}
 	columnsForFrontend = filterPilotCreateColumns(tableName, userRole, columnsForFrontend)
@@ -357,6 +371,7 @@ func GetAddRowMetadataHandler(w http.ResponseWriter, tableUID string) error {
 func getOneToManyRelations(mainTableUID string) ([]OneToManyRelation, error) {
 	query := `
     SELECT
+        fr.id,
         fr.source_table_uid,
         s_src.table_name AS source_table_name,
         fr.source_column_name,
@@ -385,6 +400,7 @@ func getOneToManyRelations(mainTableUID string) ([]OneToManyRelation, error) {
 		var sourceInsert sql.NullString
 		var targetInsert sql.NullString
 		if err := rows.Scan(
+			&rel.RelationID,
 			&rel.SourceTableUID,
 			&rel.SourceTableName,
 			&rel.SourceColumnName,
@@ -411,6 +427,7 @@ func getOneToManyRelations(mainTableUID string) ([]OneToManyRelation, error) {
 func getManyToMany(mainTableUID string) ([]ManyToManyInfo, error) {
 	query := `
         SELECT
+            fr.id,
             fr.bridging_table_uid,
             s_br.table_name AS bridging_table_name,
             CASE
@@ -445,6 +462,7 @@ func getManyToMany(mainTableUID string) ([]ManyToManyInfo, error) {
 	for rows.Next() {
 		var info ManyToManyInfo
 		if err := rows.Scan(
+			&info.RelationID,
 			&info.LinkTableUID,
 			&info.LinkTableName,
 			&info.MainTableFkColumn,
