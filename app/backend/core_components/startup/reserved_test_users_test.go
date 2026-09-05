@@ -130,6 +130,111 @@ func TestReconcileReservedTestUsersDevRepairsExistingUsers(t *testing.T) {
 	}
 }
 
+func TestReconcileReservedTestUsersAddsConfiguredAdminWithoutReplacingExistingCredentials(t *testing.T) {
+	t.Setenv(configuredDevAdminUsernameEnv, "adm")
+	t.Setenv(configuredDevAdminPasswordEnv, "protected-dev-password")
+	t.Setenv("BASE_URL", "https://localhost:8100")
+
+	publicStore := &reservedTestUserFakeStore{}
+	confidentialStore := &reservedTestUserFakeStore{}
+
+	for index, groupID := range []int{2, 1, 1} {
+		publicStore.pushQueryRow(groupID)
+		publicStore.pushQueryRow(100 + index)
+		publicStore.pushExecRows(1)
+		publicStore.pushExecRows(1)
+		publicStore.pushExecRows(1)
+	}
+
+	confidentialStore.pushExecRows(1)
+	confidentialStore.pushExecRows(1)
+	confidentialStore.pushQueryRow(102)
+
+	if err := reconcileReservedTestUsers(publicStore, confidentialStore, "dev"); err != nil {
+		t.Fatalf("reconcileReservedTestUsers(configured admin): %v", err)
+	}
+
+	publicCalls := publicStore.snapshotCalls()
+	if countCallsContaining(publicCalls, "UPDATE system_users") != 3 {
+		t.Fatalf("expected three public user updates, got calls: %#v", publicCalls)
+	}
+	if countCallsWithArgument(publicCalls, "adm") == 0 {
+		t.Fatalf("configured adm user was not reconciled: %#v", publicCalls)
+	}
+	confidentialCalls := confidentialStore.snapshotCalls()
+	if countCallsContaining(confidentialCalls, "UPDATE restricted.users_restricted") != 2 {
+		t.Fatalf("configured adm credentials should be preserved, got calls: %#v", confidentialCalls)
+	}
+	if countCallsContaining(confidentialCalls, "SELECT id FROM restricted.users_restricted") != 1 {
+		t.Fatalf("configured adm credential presence was not checked: %#v", confidentialCalls)
+	}
+}
+
+func TestReconcileReservedTestUsersCreatesConfiguredAdminAfterDatabaseRecreation(t *testing.T) {
+	t.Setenv(configuredDevAdminUsernameEnv, "adm")
+	t.Setenv(configuredDevAdminPasswordEnv, "protected-dev-password")
+	t.Setenv("BASE_URL", "https://127.0.0.1:8100")
+
+	publicStore := &reservedTestUserFakeStore{}
+	confidentialStore := &reservedTestUserFakeStore{}
+
+	for index, groupID := range []int{2, 1, 1} {
+		publicStore.pushQueryRow(groupID)
+		publicStore.pushQueryErr(sql.ErrNoRows)
+		publicStore.pushQueryRow(100 + index)
+		publicStore.pushExecRows(0)
+		publicStore.pushExecRows(1)
+		confidentialStore.pushExecRows(0)
+		confidentialStore.pushExecRows(1)
+	}
+
+	if err := reconcileReservedTestUsers(publicStore, confidentialStore, "dev"); err != nil {
+		t.Fatalf("reconcileReservedTestUsers(configured admin recreation): %v", err)
+	}
+
+	publicCalls := publicStore.snapshotCalls()
+	if countCallsContaining(publicCalls, "INSERT INTO system_users") != 3 {
+		t.Fatalf("expected three public user inserts, got calls: %#v", publicCalls)
+	}
+	assertPublicInsertAdminFlag(t, publicCalls, "adm", true)
+	if countCallsContaining(confidentialStore.snapshotCalls(), "INSERT INTO restricted.users_restricted") != 3 {
+		t.Fatalf("configured adm should receive protected credentials after recreation")
+	}
+}
+
+func TestConfiguredDevAdminRequiresProtectedPassword(t *testing.T) {
+	t.Setenv(configuredDevAdminUsernameEnv, "adm")
+	t.Setenv(configuredDevAdminPasswordEnv, "")
+	t.Setenv("BASE_URL", "https://localhost:8100")
+
+	_, err := reservedTestUserFixturesForDevelopment()
+	if err == nil || !strings.Contains(err.Error(), configuredDevAdminPasswordEnv) {
+		t.Fatalf("reservedTestUserFixturesForDevelopment() error = %v", err)
+	}
+}
+
+func TestConfiguredDevAdminRejectsUnsafeUsername(t *testing.T) {
+	t.Setenv(configuredDevAdminUsernameEnv, "../adm")
+	t.Setenv(configuredDevAdminPasswordEnv, "protected-dev-password")
+	t.Setenv("BASE_URL", "https://localhost:8100")
+
+	_, err := reservedTestUserFixturesForDevelopment()
+	if err == nil || !strings.Contains(err.Error(), configuredDevAdminUsernameEnv) {
+		t.Fatalf("reservedTestUserFixturesForDevelopment() error = %v", err)
+	}
+}
+
+func TestConfiguredDevAdminRejectsNonLoopbackTarget(t *testing.T) {
+	t.Setenv(configuredDevAdminUsernameEnv, "adm")
+	t.Setenv(configuredDevAdminPasswordEnv, "protected-dev-password")
+	t.Setenv("BASE_URL", "https://filterest.example")
+
+	_, err := reservedTestUserFixturesForDevelopment()
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("reservedTestUserFixturesForDevelopment() error = %v", err)
+	}
+}
+
 func TestReconcileReservedTestUsersProductionPurgesReservedUsers(t *testing.T) {
 	publicStore := &reservedTestUserFakeStore{}
 	confidentialStore := &reservedTestUserFakeStore{}
@@ -164,6 +269,25 @@ func TestReconcileReservedTestUsersProductionPurgesReservedUsers(t *testing.T) {
 	confidentialCalls := confidentialStore.snapshotCalls()
 	if countCallsContaining(confidentialCalls, "DELETE FROM restricted.users_restricted") != 2 {
 		t.Fatalf("expected both restricted credentials deleted, got calls: %#v", confidentialCalls)
+	}
+}
+
+func TestReconcileReservedTestUsersProductionRejectsConfiguredDevAdmin(t *testing.T) {
+	t.Setenv(configuredDevAdminUsernameEnv, "adm")
+	t.Setenv(configuredDevAdminPasswordEnv, "protected-dev-password")
+
+	publicStore := &reservedTestUserFakeStore{}
+	confidentialStore := &reservedTestUserFakeStore{}
+
+	err := reconcileReservedTestUsers(publicStore, confidentialStore, "production")
+	if err == nil || !strings.Contains(err.Error(), "ENVIRONMENT_TYPE=dev") {
+		t.Fatalf("reconcileReservedTestUsers(production with dev admin) error = %v", err)
+	}
+	if calls := publicStore.snapshotCalls(); len(calls) != 0 {
+		t.Fatalf("did not expect public DB calls after fail-closed rejection, got calls: %#v", calls)
+	}
+	if calls := confidentialStore.snapshotCalls(); len(calls) != 0 {
+		t.Fatalf("did not expect restricted DB calls after fail-closed rejection, got calls: %#v", calls)
 	}
 }
 
@@ -274,6 +398,18 @@ func countCallsContaining(calls []reservedTestUserFakeCall, needle string) int {
 	for _, call := range calls {
 		if strings.Contains(call.query, needle) {
 			count++
+		}
+	}
+	return count
+}
+
+func countCallsWithArgument(calls []reservedTestUserFakeCall, value interface{}) int {
+	count := 0
+	for _, call := range calls {
+		for _, argument := range call.args {
+			if argument == value {
+				count++
+			}
 		}
 	}
 	return count

@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 
@@ -18,12 +20,13 @@ import (
 const reservedTestDefaultPassword = "TestPassword123!"
 
 type reservedTestUserFixture struct {
-	username           string
-	fullName           string
-	email              string
-	groupName          string
-	passwordEnv        string
-	adminAccessAllowed bool
+	username            string
+	fullName            string
+	email               string
+	groupName           string
+	passwordEnv         string
+	adminAccessAllowed  bool
+	preserveCredentials bool
 }
 
 type reservedTestUserExecutor interface {
@@ -58,6 +61,11 @@ var reservedTestUserFixtures = []reservedTestUserFixture{
 	},
 }
 
+const (
+	configuredDevAdminUsernameEnv = "FILTEREST_DEV_ADMIN_USERNAME"
+	configuredDevAdminPasswordEnv = "FILTEREST_DEV_ADMIN_PASSWORD"
+)
+
 // ReconcileReservedTestUsers enforces the reserved test-user policy for the
 // current runtime. Explicit dev mode creates/repairs fixtures; every other mode
 // removes those reserved accounts before the app starts serving requests.
@@ -81,13 +89,24 @@ func reconcileReservedTestUsers(publicStore, confidentialStore reservedTestUserE
 	}
 
 	if isReservedTestUserDevMode(environmentType) {
-		for _, fixture := range reservedTestUserFixtures {
+		fixtures, err := reservedTestUserFixturesForDevelopment()
+		if err != nil {
+			return err
+		}
+		for _, fixture := range fixtures {
 			if err := ensureReservedTestUser(publicStore, confidentialStore, fixture); err != nil {
 				return fmt.Errorf("ensure reserved dev user %q: %w", fixture.username, err)
 			}
 		}
-		log.Printf("[STARTUP] Reserved dev test users reconciled: %s", reservedTestUsernamesForLog())
+		log.Printf("[STARTUP] Reserved dev test users reconciled: %s", reservedTestUsernamesForLog(fixtures))
 		return nil
+	}
+
+	// A named development administrator is intentionally a loopback-only
+	// convenience. Refuse to start rather than silently ignore copied local
+	// credentials in a production-like runtime.
+	if hasConfiguredDevAdminEnvironment() {
+		return fmt.Errorf("%s and %s are permitted only when ENVIRONMENT_TYPE=dev", configuredDevAdminUsernameEnv, configuredDevAdminPasswordEnv)
 	}
 
 	for _, fixture := range reservedTestUserFixtures {
@@ -95,8 +114,79 @@ func reconcileReservedTestUsers(publicStore, confidentialStore reservedTestUserE
 			return fmt.Errorf("purge reserved test user %q: %w", fixture.username, err)
 		}
 	}
-	log.Printf("[STARTUP] Reserved test users purged for production-like environment: %s", reservedTestUsernamesForLog())
+	log.Printf("[STARTUP] Reserved test users purged for production-like environment: %s", reservedTestUsernamesForLog(reservedTestUserFixtures))
 	return nil
+}
+
+func hasConfiguredDevAdminEnvironment() bool {
+	return strings.TrimSpace(os.Getenv(configuredDevAdminUsernameEnv)) != "" ||
+		strings.TrimSpace(os.Getenv(configuredDevAdminPasswordEnv)) != ""
+}
+
+// reservedTestUserFixturesForDevelopment adds one operator-named local admin
+// only when both its username and protected password are explicitly configured.
+// Existing credentials are preserved so assigning the admin group never resets
+// a human's already working local password.
+func reservedTestUserFixturesForDevelopment() ([]reservedTestUserFixture, error) {
+	fixtures := append([]reservedTestUserFixture{}, reservedTestUserFixtures...)
+	username := strings.TrimSpace(os.Getenv(configuredDevAdminUsernameEnv))
+	if username == "" {
+		return fixtures, nil
+	}
+	if !isValidConfiguredDevAdminUsername(username) {
+		return nil, fmt.Errorf("%s must be 3-64 characters and use only letters, digits, dot, dash, or underscore", configuredDevAdminUsernameEnv)
+	}
+	for _, fixture := range fixtures {
+		if fixture.username == username {
+			return nil, fmt.Errorf("%s must differ from the built-in reserved test users", configuredDevAdminUsernameEnv)
+		}
+	}
+	if strings.TrimSpace(os.Getenv(configuredDevAdminPasswordEnv)) == "" {
+		return nil, fmt.Errorf("%s is required when %s is configured", configuredDevAdminPasswordEnv, configuredDevAdminUsernameEnv)
+	}
+	if !isLoopbackConfiguredDevAdminTarget(os.Getenv("BASE_URL")) {
+		return nil, fmt.Errorf("%s is permitted only when BASE_URL is an HTTPS loopback origin", configuredDevAdminUsernameEnv)
+	}
+	fixtures = append(fixtures, reservedTestUserFixture{
+		username:            username,
+		fullName:            "Configured Dev Administrator",
+		email:               username + "@dev.invalid",
+		groupName:           "admins",
+		passwordEnv:         configuredDevAdminPasswordEnv,
+		adminAccessAllowed:  true,
+		preserveCredentials: true,
+	})
+	return fixtures, nil
+}
+
+func isLoopbackConfiguredDevAdminTarget(rawBaseURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawBaseURL))
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
+		return false
+	}
+	if parsed.Path != "" && parsed.Path != "/" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	hostname := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") {
+		return true
+	}
+	address := net.ParseIP(hostname)
+	return address != nil && address.IsLoopback()
+}
+
+func isValidConfiguredDevAdminUsername(value string) bool {
+	if len(value) < 3 || len(value) > 64 {
+		return false
+	}
+	for index, character := range value {
+		isLetter := character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
+		isDigit := character >= '0' && character <= '9'
+		if !isLetter && !isDigit && (index == 0 || character != '.' && character != '-' && character != '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func (e reservedTestUserSQLExecutor) QueryRow(query string, args ...interface{}) reservedTestUserRow {
@@ -116,9 +206,9 @@ func isReservedTestUserReconcileDisabled() bool {
 	return strings.EqualFold(value, "disabled") || strings.EqualFold(value, "off")
 }
 
-func reservedTestUsernamesForLog() string {
-	names := make([]string, 0, len(reservedTestUserFixtures))
-	for _, fixture := range reservedTestUserFixtures {
+func reservedTestUsernamesForLog(fixtures []reservedTestUserFixture) string {
+	names := make([]string, 0, len(fixtures))
+	for _, fixture := range fixtures {
 		names = append(names, fixture.username)
 	}
 	return strings.Join(names, ", ")
@@ -130,7 +220,7 @@ func ensureReservedTestUser(publicStore, confidentialStore reservedTestUserExecu
 		return err
 	}
 
-	userID, err := ensureReservedTestUserPublicRow(publicStore, fixture)
+	userID, existed, err := ensureReservedTestUserPublicRow(publicStore, fixture)
 	if err != nil {
 		return err
 	}
@@ -139,7 +229,7 @@ func ensureReservedTestUser(publicStore, confidentialStore reservedTestUserExecu
 		return err
 	}
 
-	if err := ensureReservedTestUserCredentials(confidentialStore, userID, fixture); err != nil {
+	if err := ensureReservedTestUserCredentials(confidentialStore, userID, fixture, existed); err != nil {
 		return err
 	}
 
@@ -158,7 +248,7 @@ func lookupReservedTestUserGroupID(publicStore reservedTestUserExecutor, groupNa
 	return groupID, nil
 }
 
-func ensureReservedTestUserPublicRow(publicStore reservedTestUserExecutor, fixture reservedTestUserFixture) (int64, error) {
+func ensureReservedTestUserPublicRow(publicStore reservedTestUserExecutor, fixture reservedTestUserFixture) (int64, bool, error) {
 	var userID int64
 	err := publicStore.QueryRow(
 		`SELECT id FROM system_users WHERE username = $1`,
@@ -175,12 +265,12 @@ func ensureReservedTestUserPublicRow(publicStore reservedTestUserExecutor, fixtu
 			WHERE id = $1
 		`, userID, fixture.fullName, fixture.adminAccessAllowed)
 		if err != nil {
-			return 0, fmt.Errorf("update public user row: %w", err)
+			return 0, false, fmt.Errorf("update public user row: %w", err)
 		}
-		return userID, nil
+		return userID, true, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("lookup public user row: %w", err)
+		return 0, false, fmt.Errorf("lookup public user row: %w", err)
 	}
 
 	err = publicStore.QueryRow(`
@@ -197,9 +287,9 @@ func ensureReservedTestUserPublicRow(publicStore reservedTestUserExecutor, fixtu
 		RETURNING id
 	`, fixture.username, fixture.fullName, fixture.adminAccessAllowed).Scan(&userID)
 	if err != nil {
-		return 0, fmt.Errorf("insert public user row: %w", err)
+		return 0, false, fmt.Errorf("insert public user row: %w", err)
 	}
-	return userID, nil
+	return userID, false, nil
 }
 
 func replaceReservedTestUserMembership(publicStore reservedTestUserExecutor, userID int64, groupID int64) error {
@@ -225,7 +315,20 @@ func replaceReservedTestUserMembership(publicStore reservedTestUserExecutor, use
 	return nil
 }
 
-func ensureReservedTestUserCredentials(confidentialStore reservedTestUserExecutor, userID int64, fixture reservedTestUserFixture) error {
+func ensureReservedTestUserCredentials(confidentialStore reservedTestUserExecutor, userID int64, fixture reservedTestUserFixture, publicUserExisted bool) error {
+	if fixture.preserveCredentials && publicUserExisted {
+		var credentialUserID int64
+		err := confidentialStore.QueryRow(
+			`SELECT id FROM restricted.users_restricted WHERE id = $1`,
+			userID,
+		).Scan(&credentialUserID)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("inspect existing restricted credentials: %w", err)
+		}
+	}
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(reservedTestPassword(fixture.passwordEnv)), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash reserved test password: %w", err)
