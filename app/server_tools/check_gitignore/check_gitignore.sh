@@ -5,7 +5,11 @@
 set -uo pipefail        # ei -e, jotta varoitukset eivät pysäytä skriptiä
 
 script_directory_absolute_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-project_root_absolute_path="$(cd "${script_directory_absolute_path}/../.." && pwd)"
+# Filterest keeps maintained source below app/, while .gitignore belongs to the
+# transferable installation root one level above it. Resolving from this
+# script's stable app/server_tools/check_gitignore location keeps the audit
+# correct in both the Easelect-owned source tree and a standalone checkout.
+project_root_absolute_path="$(cd "${script_directory_absolute_path}/../../.." && pwd)"
 gitignore_file_path="${project_root_absolute_path}/.gitignore"
 output_markdown="${script_directory_absolute_path}/missing_gitignore_paths.md"
 

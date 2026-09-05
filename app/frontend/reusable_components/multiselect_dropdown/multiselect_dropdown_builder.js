@@ -5,6 +5,13 @@
 
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { VIEW_DEACTIVATE_EVENT } from '../view_lifecycle_events.js';
+import {
+	ariaCheckedValueForMultiselectState,
+	mergeSelectedMultiselectOptions,
+	normalizeMultiselectSearchText,
+	normalizeMultiselectState,
+	searchableMultiselectOptionText,
+} from './multiselect_dropdown_data.js';
 
 let multiselectDropdownSequence = 0;
 
@@ -305,9 +312,9 @@ export function createMultiselectDropdown({
 	function renderList(filterText = "") {
 		optionsList.replaceChildren();
 
-		const normalizedFilter = normalizeSearchText(filterText);
+		const normalizedFilter = normalizeMultiselectSearchText(filterText);
 		const filtered = currentOptions.filter((option) =>
-			searchableOptionText(option).includes(normalizedFilter)
+			searchableMultiselectOptionText(option).includes(normalizedFilter)
 		);
 
 		if (filtered.length === 0) {
@@ -362,7 +369,7 @@ export function createMultiselectDropdown({
 			checkbox.classList.add('msd-option-checkbox');
 			checkbox.dataset.state = optionState;
 			checkbox.setAttribute('role', 'checkbox');
-			checkbox.setAttribute('aria-checked', ariaCheckedValueForState(optionState));
+			checkbox.setAttribute('aria-checked', ariaCheckedValueForMultiselectState(optionState));
 			checkbox.value = opt.value;
 			checkbox.disabled = disabled;
 			checkbox.setAttribute('aria-label', opt.label);
@@ -517,7 +524,7 @@ export function createMultiselectDropdown({
 	function setOptions(newOptions, options = {}) {
 		const incomingOptions = Array.isArray(newOptions) ? newOptions : [];
 		currentOptions = options.preserveSelected === true
-			? mergeSelectedOptions(currentOptions, incomingOptions, optionStates)
+			? mergeSelectedMultiselectOptions(currentOptions, incomingOptions, optionStates)
 			: incomingOptions;
 		updateDisplay();
 		renderList(options.preserveSearchText === true ? searchInput?.value?.trim() || "" : "");
@@ -623,7 +630,7 @@ export function createMultiselectDropdown({
 
 	function applyState(nextState) {
 		optionStates = new Map();
-		const normalizedState = normalizeState(nextState);
+		const normalizedState = normalizeMultiselectState(nextState);
 		normalizedState.includeValues.forEach((value) => {
 			optionStates.set(String(value), 'include');
 		});
@@ -680,65 +687,4 @@ export function createMultiselectDropdown({
 			.filter(([, state]) => state === targetState)
 			.map(([value]) => value);
 	}
-}
-
-function normalizeState(nextState) {
-	if (Array.isArray(nextState)) {
-		return {
-			includeValues: nextState.map((value) => String(value)),
-			excludeValues: [],
-		};
-	}
-
-	const includeValues = Array.isArray(nextState?.includeValues)
-		? nextState.includeValues.map((value) => String(value))
-		: [];
-	const excludeValues = Array.isArray(nextState?.excludeValues)
-		? nextState.excludeValues.map((value) => String(value))
-		: [];
-
-	return {
-		includeValues,
-		excludeValues,
-	};
-}
-
-function ariaCheckedValueForState(state) {
-	if (state === 'include') return 'true';
-	if (state === 'exclude') return 'mixed';
-	return 'false';
-}
-
-function normalizeSearchText(value) {
-	return String(value ?? "")
-		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.toLocaleLowerCase();
-}
-
-// Option labels stay concise while searchTerms can contain stable IDs and
-// secondary metadata. This keeps feature-specific identity knowledge out of
-// the reusable dropdown and avoids exposing fields the caller did not choose.
-function searchableOptionText(option) {
-	const searchTerms = Array.isArray(option?.searchTerms)
-		? option.searchTerms
-		: [];
-	return normalizeSearchText([
-		option?.label,
-		option?.value,
-		option?.groupLabel,
-		...searchTerms,
-	].filter(Boolean).join(" "));
-}
-
-function mergeSelectedOptions(currentOptions, incomingOptions, optionStates) {
-	const nextOptions = [...incomingOptions];
-	const incomingValues = new Set(nextOptions.map((option) => String(option.value)));
-	currentOptions.forEach((option) => {
-		const value = String(option.value);
-		if (optionStates.has(value) && !incomingValues.has(value)) {
-			nextOptions.push(option);
-		}
-	});
-	return nextOptions;
 }
