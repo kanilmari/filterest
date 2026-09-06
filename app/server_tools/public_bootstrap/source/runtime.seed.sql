@@ -50,7 +50,8 @@ WITH desired_tables (table_name, display_name, description, fk_display_column) A
         ('system_row_group_memberships', 'Row Group Memberships', 'Generic assignments from dataset rows to reusable groups', 'id'),
         ('system_column_field_sets', 'Field Collections', 'Reusable personal and shared dataset field collections', 'name'),
         ('system_column_field_set_members', 'Field Collection Members', 'Ordered columns belonging to reusable field collections', 'column_uid'),
-        ('system_view_field_set_assignments', 'View Field Assignments', 'Personal and site-default field collections selected for dataset views', 'id')
+        ('system_view_field_set_assignments', 'View Field Assignments', 'Personal and site-default field collections selected for dataset views', 'id'),
+        ('system_user_visual_preferences', 'User Visual Preferences', 'Allowlisted account-owned visual preferences', 'theme_mode')
 )
 INSERT INTO public.system_db_tables (
     table_name, description, cached_oid, folder_id, schema_name,
@@ -95,7 +96,8 @@ BEGIN
             'system_row_group_memberships',
             'system_column_field_sets',
             'system_column_field_set_members',
-            'system_view_field_set_assignments'
+            'system_view_field_set_assignments',
+            'system_user_visual_preferences'
         ]) AS table_name
     LOOP
         SELECT table_uid INTO registered_table_uid
@@ -195,6 +197,28 @@ SELECT desired.name, FALSE, now(), now(), 'system_table_tools', FALSE,
 FROM desired_functions AS desired
 WHERE NOT EXISTS (
     SELECT 1 FROM public.system_functions AS existing WHERE existing.name = desired.name
+);
+
+INSERT INTO public.system_functions (
+    name, disabled, created, updated, package, specific_table_related,
+    creation_spec, rate_limit_amount, rate_limit_minutes, url_route_endpoint, ui_only
+)
+SELECT
+    'auth.UserVisualPreferenceHandler',
+    FALSE,
+    now(),
+    now(),
+    'auth',
+    FALSE,
+    'Authenticated-user-owned allowlisted visual preferences.',
+    240,
+    20,
+    '/api/user-visual-preference',
+    FALSE
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.system_functions AS existing
+    WHERE existing.name = 'auth.UserVisualPreferenceHandler'
 );
 
 WITH desired_functions (name, route, creation_spec) AS (
@@ -301,6 +325,9 @@ BEGIN
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'admin_user') THEN
         GRANT SELECT ON TABLE public.system_table_views TO admin_user;
+        GRANT SELECT, INSERT, UPDATE ON TABLE
+            public.system_user_visual_preferences
+        TO admin_user;
         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
             public.system_column_field_sets,
             public.system_column_field_set_members,
@@ -325,7 +352,8 @@ BEGIN
             public.system_view_field_set_assignments
         TO basic_user;
         GRANT SELECT, INSERT, UPDATE ON TABLE
-            public.system_dataset_sort_defaults
+            public.system_dataset_sort_defaults,
+            public.system_user_visual_preferences
         TO basic_user;
         GRANT USAGE, SELECT ON SEQUENCE
             public.system_column_field_sets_id_seq,
@@ -346,6 +374,9 @@ BEGIN
             public.system_column_field_set_members,
             public.system_view_field_set_assignments
         TO guest_user;
+        REVOKE ALL PRIVILEGES ON TABLE
+            public.system_user_visual_preferences
+        FROM guest_user;
     END IF;
 END $$;
 

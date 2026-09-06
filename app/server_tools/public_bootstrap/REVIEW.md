@@ -1,7 +1,7 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `57`
+- Schema tables: `58`
 - Seed tables: `33`
 - Example emails: `0`
 - Manifest format: `2`
@@ -64,6 +64,7 @@ PASS
 - `public.system_transaction_log`
 - `public.system_user_group_memberships`
 - `public.system_user_groups`
+- `public.system_user_visual_preferences`
 - `public.system_users`
 - `public.system_view_field_set_assignments`
 - `public.tiketit`
@@ -124,13 +125,13 @@ PASS
 - `public.system_about`: 1
 - `public.system_column_details`: 47
 - `public.system_config`: 13
-- `public.system_db_tables`: 54
+- `public.system_db_tables`: 55
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
 - `public.system_functions`: 41
 - `public.system_group_table_func_rights`: 24
 - `public.system_lang_key_sources`: 0
-- `public.system_lang_key_translations`: 110
+- `public.system_lang_key_translations`: 140
 - `public.system_lang_keys`: 491
 - `public.system_languages`: 5
 - `public.system_permission_actions`: 7

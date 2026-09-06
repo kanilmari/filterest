@@ -293,7 +293,8 @@ WITH desired_tables (table_name, display_name, description, fk_display_column) A
         ('system_row_group_memberships', 'Row Group Memberships', 'Generic assignments from dataset rows to reusable groups', 'id'),
         ('system_column_field_sets', 'Field Collections', 'Reusable personal and shared dataset field collections', 'name'),
         ('system_column_field_set_members', 'Field Collection Members', 'Ordered columns belonging to reusable field collections', 'column_uid'),
-        ('system_view_field_set_assignments', 'View Field Assignments', 'Personal and site-default field collections selected for dataset views', 'id')
+        ('system_view_field_set_assignments', 'View Field Assignments', 'Personal and site-default field collections selected for dataset views', 'id'),
+        ('system_user_visual_preferences', 'User Visual Preferences', 'Allowlisted account-owned visual preferences', 'theme_mode')
 )
 INSERT INTO public.system_db_tables (
     table_name, description, cached_oid, folder_id, schema_name,
@@ -338,7 +339,8 @@ BEGIN
             'system_row_group_memberships',
             'system_column_field_sets',
             'system_column_field_set_members',
-            'system_view_field_set_assignments'
+            'system_view_field_set_assignments',
+            'system_user_visual_preferences'
         ]) AS table_name
     LOOP
         SELECT table_uid INTO registered_table_uid
@@ -438,6 +440,28 @@ SELECT desired.name, FALSE, now(), now(), 'system_table_tools', FALSE,
 FROM desired_functions AS desired
 WHERE NOT EXISTS (
     SELECT 1 FROM public.system_functions AS existing WHERE existing.name = desired.name
+);
+
+INSERT INTO public.system_functions (
+    name, disabled, created, updated, package, specific_table_related,
+    creation_spec, rate_limit_amount, rate_limit_minutes, url_route_endpoint, ui_only
+)
+SELECT
+    'auth.UserVisualPreferenceHandler',
+    FALSE,
+    now(),
+    now(),
+    'auth',
+    FALSE,
+    'Authenticated-user-owned allowlisted visual preferences.',
+    240,
+    20,
+    '/api/user-visual-preference',
+    FALSE
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.system_functions AS existing
+    WHERE existing.name = 'auth.UserVisualPreferenceHandler'
 );
 
 WITH desired_functions (name, route, creation_spec) AS (
@@ -544,6 +568,9 @@ BEGIN
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'admin_user') THEN
         GRANT SELECT ON TABLE public.system_table_views TO admin_user;
+        GRANT SELECT, INSERT, UPDATE ON TABLE
+            public.system_user_visual_preferences
+        TO admin_user;
         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
             public.system_column_field_sets,
             public.system_column_field_set_members,
@@ -568,7 +595,8 @@ BEGIN
             public.system_view_field_set_assignments
         TO basic_user;
         GRANT SELECT, INSERT, UPDATE ON TABLE
-            public.system_dataset_sort_defaults
+            public.system_dataset_sort_defaults,
+            public.system_user_visual_preferences
         TO basic_user;
         GRANT USAGE, SELECT ON SEQUENCE
             public.system_column_field_sets_id_seq,
@@ -589,6 +617,9 @@ BEGIN
             public.system_column_field_set_members,
             public.system_view_field_set_assignments
         TO guest_user;
+        REVOKE ALL PRIVILEGES ON TABLE
+            public.system_user_visual_preferences
+        FROM guest_user;
     END IF;
 END $$;
 
@@ -1327,6 +1358,12 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('system_column_field_sets', 'Kenttäkokoelmat', 'Field collections', '字段集合', '欄位集合', 'public fixture seed'),
   ('system_column_field_set_members', 'Kenttäkokoelmien kentät', 'Field collection members', '字段集合成员', '欄位集合成員', 'public fixture seed'),
   ('system_view_field_set_assignments', 'Näkymien kenttäkokoelmat', 'View field assignments', '视图字段分配', '檢視欄位指派', 'public fixture seed'),
+  ('system_user_visual_preferences', 'Käyttäjän ulkoasuvalinnat', 'User Visual Preferences', '用户视觉偏好', '用戶視覺偏好', 'Static database-tree label for account-owned visual preferences.'),
+  ('theme_toggle_system', 'Teema: järjestelmän mukaan', 'Theme: system', '主题：跟随系统', '主題：跟隨系統', 'Accessible label for the system theme state.'),
+  ('theme_toggle_dark', 'Teema: tumma', 'Theme: dark', '主题：深色', '主題：深色', 'Accessible label for the dark theme state.'),
+  ('theme_toggle_light', 'Teema: vaalea', 'Theme: light', '主题：浅色', '主題：淺色', 'Accessible label for the light theme state.'),
+  ('theme_toggle_locked_light', 'Teema: lukittu vaaleaksi', 'Theme: locked light', '主题：锁定浅色', '主題：鎖定淺色', 'Accessible label for the site-locked light theme state.'),
+  ('theme_toggle_locked_dark', 'Teema: lukittu tummaksi', 'Theme: locked dark', '主题：锁定深色', '主題：鎖定深色', 'Accessible label for the site-locked dark theme state.'),
   ('edit_site_field_default', 'Muokkaa sivuston oletusta', 'Edit site default', '编辑站点默认字段', '編輯網站預設欄位', 'public fixture seed'),
   ('edit_personal_field_selection', 'Palaa omaan valintaan', 'Return to personal selection', '返回个人字段选择', '返回個人欄位選擇', 'public fixture seed'),
   ('return_to_site_default', 'Palaa sivuston oletukseen', 'Return to site default', '继承站点默认值', '使用網站預設值', 'public fixture seed'),
@@ -1862,6 +1899,36 @@ WITH authored_translations(lang_key, language_code, translation, review_status) 
         ('system_view_field_set_assignments', 'zh-CN', '视图字段分配', 'needs_review'),
         ('system_view_field_set_assignments', 'zh-TW', '檢視欄位指派', 'needs_review'),
         ('system_view_field_set_assignments', 'zh-HK', '檢視欄位指派', 'needs_review'),
+        ('system_user_visual_preferences', 'en', 'User Visual Preferences', 'approved'),
+        ('system_user_visual_preferences', 'fi', 'Käyttäjän ulkoasuvalinnat', 'approved'),
+        ('system_user_visual_preferences', 'zh-CN', '用户视觉偏好', 'needs_review'),
+        ('system_user_visual_preferences', 'zh-TW', '用戶視覺偏好', 'needs_review'),
+        ('system_user_visual_preferences', 'zh-HK', '用戶視覺偏好', 'needs_review'),
+        ('theme_toggle_system', 'en', 'Theme: system', 'approved'),
+        ('theme_toggle_system', 'fi', 'Teema: järjestelmän mukaan', 'approved'),
+        ('theme_toggle_system', 'zh-CN', '主题：跟随系统', 'needs_review'),
+        ('theme_toggle_system', 'zh-TW', '主題：跟隨系統', 'needs_review'),
+        ('theme_toggle_system', 'zh-HK', '主題：跟隨系統', 'needs_review'),
+        ('theme_toggle_dark', 'en', 'Theme: dark', 'approved'),
+        ('theme_toggle_dark', 'fi', 'Teema: tumma', 'approved'),
+        ('theme_toggle_dark', 'zh-CN', '主题：深色', 'needs_review'),
+        ('theme_toggle_dark', 'zh-TW', '主題：深色', 'needs_review'),
+        ('theme_toggle_dark', 'zh-HK', '主題：深色', 'needs_review'),
+        ('theme_toggle_light', 'en', 'Theme: light', 'approved'),
+        ('theme_toggle_light', 'fi', 'Teema: vaalea', 'approved'),
+        ('theme_toggle_light', 'zh-CN', '主题：浅色', 'needs_review'),
+        ('theme_toggle_light', 'zh-TW', '主題：淺色', 'needs_review'),
+        ('theme_toggle_light', 'zh-HK', '主題：淺色', 'needs_review'),
+        ('theme_toggle_locked_light', 'en', 'Theme: locked light', 'approved'),
+        ('theme_toggle_locked_light', 'fi', 'Teema: lukittu vaaleaksi', 'approved'),
+        ('theme_toggle_locked_light', 'zh-CN', '主题：锁定浅色', 'needs_review'),
+        ('theme_toggle_locked_light', 'zh-TW', '主題：鎖定淺色', 'needs_review'),
+        ('theme_toggle_locked_light', 'zh-HK', '主題：鎖定淺色', 'needs_review'),
+        ('theme_toggle_locked_dark', 'en', 'Theme: locked dark', 'approved'),
+        ('theme_toggle_locked_dark', 'fi', 'Teema: lukittu tummaksi', 'approved'),
+        ('theme_toggle_locked_dark', 'zh-CN', '主题：锁定深色', 'needs_review'),
+        ('theme_toggle_locked_dark', 'zh-TW', '主題：鎖定深色', 'needs_review'),
+        ('theme_toggle_locked_dark', 'zh-HK', '主題：鎖定深色', 'needs_review'),
         ('edit_site_field_default', 'en', 'Edit site default', 'approved'),
         ('edit_site_field_default', 'fi', 'Muokkaa sivuston oletusta', 'approved'),
         ('edit_site_field_default', 'zh-CN', '编辑站点默认字段', 'needs_review'),
@@ -1990,6 +2057,28 @@ WHERE keys.lang_key IN (
     'shared',
     'field_set_fields_placeholder',
     'fields_selected'
+)
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
+SET source_low = EXCLUDED.source_low,
+    usage_explanation = EXCLUDED.usage_explanation,
+    last_seen = CURRENT_DATE;
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT keys.id,
+       'code',
+       'frontend/core_components/theme.js',
+       '',
+       'Localized accessible theme-toggle states.',
+       CURRENT_DATE
+FROM public.system_lang_keys AS keys
+WHERE keys.lang_key IN (
+    'theme_toggle_system',
+    'theme_toggle_dark',
+    'theme_toggle_light',
+    'theme_toggle_locked_light',
+    'theme_toggle_locked_dark'
 )
 ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
 SET source_low = EXCLUDED.source_low,

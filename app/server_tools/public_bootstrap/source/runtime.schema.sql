@@ -15,6 +15,39 @@ CREATE TABLE IF NOT EXISTS public.system_schema_migrations (
     applied_at timestamp with time zone DEFAULT now()
 );
 
+-- Account-owned appearance preferences are read during every authenticated
+-- browser bootstrap. Keep this table in the baseline itself because the
+-- matching migration is recorded as already applied on a fresh installation.
+CREATE TABLE IF NOT EXISTS public.system_user_visual_preferences (
+    user_id integer PRIMARY KEY
+        REFERENCES public.system_users(id) ON DELETE CASCADE,
+    theme_mode text,
+    schema_version smallint NOT NULL DEFAULT 1,
+    revision bigint NOT NULL DEFAULT 1,
+    created timestamp with time zone NOT NULL DEFAULT now(),
+    updated timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT ck_system_user_visual_preferences_theme_mode
+        CHECK (theme_mode IS NULL OR theme_mode IN ('system', 'dark', 'light')),
+    CONSTRAINT ck_system_user_visual_preferences_schema_version
+        CHECK (schema_version = 1),
+    CONSTRAINT ck_system_user_visual_preferences_revision
+        CHECK (revision >= 1)
+);
+
+CREATE OR REPLACE FUNCTION public.set_system_user_visual_preferences_updated_timestamp()
+RETURNS trigger AS $$
+BEGIN
+    NEW.updated = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_system_user_visual_preferences_timestamp
+    ON public.system_user_visual_preferences;
+CREATE TRIGGER update_system_user_visual_preferences_timestamp
+BEFORE UPDATE ON public.system_user_visual_preferences
+FOR EACH ROW EXECUTE FUNCTION public.set_system_user_visual_preferences_updated_timestamp();
+
 DO $$
 BEGIN
     IF NOT EXISTS (
