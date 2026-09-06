@@ -412,6 +412,15 @@ CREATE TABLE IF NOT EXISTS public.system_audit_log (
 ALTER TABLE restricted.users_restricted
     ADD COLUMN IF NOT EXISTS authentication_generation bigint NOT NULL DEFAULT 1;
 
+-- A generated bootstrap is already at the schema state represented by the
+-- migration files shipped with it. The matching seed records that immutable
+-- filename baseline so an unrestricted first startup executes only migrations
+-- added after this bootstrap was generated.
+CREATE TABLE IF NOT EXISTS public.system_schema_migrations (
+    filename text PRIMARY KEY,
+    applied_at timestamp with time zone DEFAULT now()
+);
+
 DO $$
 BEGIN
     IF NOT EXISTS (

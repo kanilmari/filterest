@@ -6,6 +6,82 @@
   "schema_source": "testing/essential/generated/schema.sql",
   "seed_source": "testing/essential/generated/seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
+  "migration_ledger_baseline": [
+    "20260307_create_system_comments.sql",
+    "20260717000001_harden_otp_and_add_cantonese.sql",
+    "20260719000001_remove_generic_row_links.sql",
+    "20260720000001_add_image_first_sorting.sql",
+    "20260720000002_organize_filterest_public_table_folders.sql",
+    "20260720000003_seed_filterest_public_metadata_lang_keys.sql",
+    "20260803000001_add_first_run_admin_setup.sql",
+    "20260804000001_add_first_run_environment_and_login_verification.sql",
+    "20260804000002_add_first_run_site_identity.sql",
+    "20260804000003_repair_column_presets_and_user_card_header.sql",
+    "20260805000001_restore_filterest_public_version_head.sql",
+    "20260816000001_seed_calendar_view_lang_keys.sql",
+    "20260816000002_add_external_embedding_policy_queue.sql",
+    "20260816000003_seed_filterbar_heading_lang_keys.sql",
+    "20260817000001_add_dataset_embedding_policy_defaults.sql",
+    "20260817000002_normalize_ui_languages.sql",
+    "20260817000003_simplify_login_privacy_acceptance.sql",
+    "20260817000004_default_card_field_labels_off.sql",
+    "20260817000005_seed_create_table_image_capability_lang_keys.sql",
+    "20260817000006_link_column_metadata_to_dataset.sql",
+    "20260817000007_repair_filterest_admin_schema_permissions.sql",
+    "20260817000008_seed_site_language_settings_permissions.sql",
+    "20260817000009_repair_shared_asset_delete_cascade.sql",
+    "20260818000001_repair_admin_filter_option_permissions.sql",
+    "20260818000002_split_login_privacy_acceptance_link.sql",
+    "20260818000003_seed_normalized_language_table_labels.sql",
+    "20260818000004_deduplicate_project_tab_order.sql",
+    "20260818000005_add_dataset_sort_defaults.sql",
+    "20260819000001_seed_filter_mode_tooltip_lang_keys.sql",
+    "20260819000002_add_dataset_media.sql",
+    "20260819000003_record_dataset_media_db_release.sql",
+    "20260819000004_add_dataset_view_settings.sql",
+    "20260819000005_remove_dataset_view_settings.sql",
+    "20260819000006_enable_admin_owned_registration.sql",
+    "20260819000007_seed_admin_user_authentication_permission.sql",
+    "20260819000008_restrict_system_config_permissions.sql",
+    "20260820000001_add_safe_symbol_registry.sql",
+    "20260820000002_add_admin_ui_feature_flags.sql",
+    "20260820000003_seed_travel_dataset_presentation_defaults.sql",
+    "20260820000004_add_site_presentation_settings.sql",
+    "20260820000005_expand_site_presentation_settings.sql",
+    "20260820000006_seed_fintravel_travel_labels.sql",
+    "20260822000001_create_system_row_groups.sql",
+    "20260822000002_add_site_favicon_setting.sql",
+    "20260822000003_group_common_cross_dataset_tables.sql",
+    "20260822000005_record_compatible_db_release.sql",
+    "20260822000006_normalize_view_field_sets.sql",
+    "20260822000007_finalize_view_field_sets.sql",
+    "20260823000002_record_compatible_db_release.sql",
+    "20260823000003_restrict_guest_view_field_set_writes.sql",
+    "20260824000001_add_user_auth_generation.sql",
+    "20260824000002_repair_row_group_runtime_permissions.sql",
+    "20260824000003_add_production_update_notice.sql",
+    "20260825000001_enable_personal_dataset_sort_defaults.sql",
+    "20260826000002_record_compatible_db_release.sql",
+    "20260826000004_record_compatible_db_release.sql",
+    "20260901000001_harden_system_column_details_identity.sql",
+    "20260902000001_add_group_view_field_set_assignments.sql",
+    "20260902000002_add_row_access_rules.sql",
+    "20260902000004_finalize_row_access_fail_closed_defaults.sql",
+    "20260902000005_add_row_access_principal_picker_copy.sql",
+    "20260902000006_complete_row_access_editor_copy.sql",
+    "20260902000007_add_view_field_assignment_admin_tool.sql",
+    "20260902000008_seed_admin_tree_language_keys.sql",
+    "20260903000001_add_view_field_assignment_priority_help.sql",
+    "20260903000002_refine_mixed_view_field_assignment_copy.sql",
+    "20260905000001_add_row_existing_link_copy.sql",
+    "20260905000002_complete_add_row_form_copy.sql",
+    "20260905000003_complete_add_row_status_and_asset_copy.sql",
+    "20260905000004_repair_owned_child_runtime_permissions.sql",
+    "20260905000005_repair_owned_child_legacy_sequence_permissions.sql",
+    "20260906000002_add_column_view_support_matrix.sql",
+    "20260906000003_add_user_visual_preferences.sql",
+    "20260906000004_add_card_description_line_count_setting.sql"
+  ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
     "public.dokumentaatio",
@@ -50,6 +126,7 @@
     "public.system_row_access_rules",
     "public.system_row_group_memberships",
     "public.system_row_groups",
+    "public.system_schema_migrations",
     "public.system_table_folders",
     "public.system_table_row_view_counts",
     "public.system_table_views",
@@ -90,6 +167,7 @@
     "public.system_languages",
     "public.system_permission_actions",
     "public.system_permission_categories",
+    "public.system_schema_migrations",
     "public.system_table_folders",
     "public.system_table_views",
     "public.system_user_group_memberships",
@@ -124,6 +202,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
+    "public.system_schema_migrations": 74,
     "public.system_table_folders": 14,
     "public.system_table_views": 12,
     "public.system_user_group_memberships": 2,
@@ -134,10 +213,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "64047bf07c8b68640df0bdff760fca3f4044637dbe652b006b5833b9b139b07b"
+      "sha256": "24c26a5e0424144b1fe5bd6cb8a01118595b408e66e2f128c06f32ec67f78b28"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "2c1a02f50b16f097ef404ea9c95f715d9bff00a475db3390f820beb81882423e"
+      "sha256": "f3c2782f7213ff0d5abcacbedc33918a2f308cf65aa0a137e01dc7340a7bb842"
     }
   },
   "source_files": {
@@ -148,7 +227,7 @@
       "sha256": "82959040985b8bcdb4aae30c2a7ebfdf5e29d733dd5d237dba2ba432e1f4aca5"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.schema.sql": {
-      "sha256": "ebcd58932f812718e46bdbae961dedf1ede7a182d9f3044801380a7f91da9e25"
+      "sha256": "55be86c7a548d5f86ece8b0dc1fcfe6dc1bc45ec86a69c93a1148c633fcb01c9"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.seed.sql": {
       "sha256": "94c040a073a799f7f0104e0fc4211e9d3e4c29cfa457d4999b72a8ff70576cfa"
@@ -173,6 +252,228 @@
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/runtime_media.v1.json": {
       "sha256": "d4d15f0f8fe9c1bbc519f78cccc05d9a46382384c0a1f84323d062929fa8dc65"
+    },
+    "filterest/app/server_tools/migrations/20260307_create_system_comments.sql": {
+      "sha256": "976d87065aea9543ff5eb4dd5d03ccf524252a9c9cc76c3af04adfdc236de5b4"
+    },
+    "filterest/app/server_tools/migrations/20260717000001_harden_otp_and_add_cantonese.sql": {
+      "sha256": "96bde0d30bdca94659d6745f705f583cc7291d2bec0fc63edb1f256f06895533"
+    },
+    "filterest/app/server_tools/migrations/20260719000001_remove_generic_row_links.sql": {
+      "sha256": "34c325146f03bddbae822cbf65dcec9cbb83b38ca5b732ab3b0f085f1143cca3"
+    },
+    "filterest/app/server_tools/migrations/20260720000001_add_image_first_sorting.sql": {
+      "sha256": "cfe130ed8567167eefcaf27cf8bc538fa1cd928c94bfe9d7ce6124cdf1d81fc8"
+    },
+    "filterest/app/server_tools/migrations/20260720000002_organize_filterest_public_table_folders.sql": {
+      "sha256": "17a086668468eca23d296bf1ca8b7382603cc13ad61a4ea4014ef64d2bea289d"
+    },
+    "filterest/app/server_tools/migrations/20260720000003_seed_filterest_public_metadata_lang_keys.sql": {
+      "sha256": "e993e6346c1b766b8080fd4a6d7a7850ac0dbd999bebe52849fe8ae895af33eb"
+    },
+    "filterest/app/server_tools/migrations/20260803000001_add_first_run_admin_setup.sql": {
+      "sha256": "247034c7b9f27a20212ea2e50ec042d6615e7a85db07de929a1c88cac6e15553"
+    },
+    "filterest/app/server_tools/migrations/20260804000001_add_first_run_environment_and_login_verification.sql": {
+      "sha256": "b8d28819fd4206554565496a5b6f09ad3e44d74f301274f7f9deeadcba721ba9"
+    },
+    "filterest/app/server_tools/migrations/20260804000002_add_first_run_site_identity.sql": {
+      "sha256": "b96386e966ed8fec82c98825551a425fb497a6e159d41958ae9df02849cf460c"
+    },
+    "filterest/app/server_tools/migrations/20260804000003_repair_column_presets_and_user_card_header.sql": {
+      "sha256": "2f0c2fff0f7ec2bba09d30b7630076ff631ebd7ec08ef654caacbb22e666e360"
+    },
+    "filterest/app/server_tools/migrations/20260805000001_restore_filterest_public_version_head.sql": {
+      "sha256": "be3a9bef50af4ec9cc5f1b780b0421db1ace5ee7afdf0e42cb48bb02d83cdbce"
+    },
+    "filterest/app/server_tools/migrations/20260816000001_seed_calendar_view_lang_keys.sql": {
+      "sha256": "4e6c07018e061eece397a77f825ef63ae7b30c3220b3e4fe0c8ddf2e4bea7875"
+    },
+    "filterest/app/server_tools/migrations/20260816000002_add_external_embedding_policy_queue.sql": {
+      "sha256": "2eb3aa12910085e14dd8e1a4d5ea89904f73caa6598fcffb2510619aeb761217"
+    },
+    "filterest/app/server_tools/migrations/20260816000003_seed_filterbar_heading_lang_keys.sql": {
+      "sha256": "4e955ac735e080bfb92cdd45211f4db5d487a2a494bbc07831526b852812b009"
+    },
+    "filterest/app/server_tools/migrations/20260817000001_add_dataset_embedding_policy_defaults.sql": {
+      "sha256": "a6af0d0b1f39544e351aef316fd889ac4ec00cd6e053afb43253819cbf8f0b05"
+    },
+    "filterest/app/server_tools/migrations/20260817000002_normalize_ui_languages.sql": {
+      "sha256": "6cccb03b85b77969ab6afe2e476569e40d74522e11b2b951afb69c51ca6036a1"
+    },
+    "filterest/app/server_tools/migrations/20260817000003_simplify_login_privacy_acceptance.sql": {
+      "sha256": "695858420d3cda8b9bf71cbca48c02a662d2f018554effc8344d74ff87d47403"
+    },
+    "filterest/app/server_tools/migrations/20260817000004_default_card_field_labels_off.sql": {
+      "sha256": "c27d6e8d4f888adfe88aedf01092aa10a58b13d356b2c296fe9246bfa417d431"
+    },
+    "filterest/app/server_tools/migrations/20260817000005_seed_create_table_image_capability_lang_keys.sql": {
+      "sha256": "24aab2769dacd30a6aa546de78de4485a35862d138d6f5210b2dadcc3e54af0e"
+    },
+    "filterest/app/server_tools/migrations/20260817000006_link_column_metadata_to_dataset.sql": {
+      "sha256": "7d80d60f86b4a18ccf714652a6dc9ec9d089baed7c625501fe90d6e30409b3f3"
+    },
+    "filterest/app/server_tools/migrations/20260817000007_repair_filterest_admin_schema_permissions.sql": {
+      "sha256": "b65e896012385b2d812172f8199084e614ee48de059acc02f13c6325b7a7e853"
+    },
+    "filterest/app/server_tools/migrations/20260817000008_seed_site_language_settings_permissions.sql": {
+      "sha256": "15cd0e8a04f7a96aec5582ec1d2b374a927c0cffea00a0fd150dcf2d93251754"
+    },
+    "filterest/app/server_tools/migrations/20260817000009_repair_shared_asset_delete_cascade.sql": {
+      "sha256": "c09805556308250ecacd055ea0b788fbe25964c12017086a2fe343f84009419d"
+    },
+    "filterest/app/server_tools/migrations/20260818000001_repair_admin_filter_option_permissions.sql": {
+      "sha256": "157546c78ce129755806a5421a5967e6c6527682d36cb1fefeb5bf17fde55a15"
+    },
+    "filterest/app/server_tools/migrations/20260818000002_split_login_privacy_acceptance_link.sql": {
+      "sha256": "b9806b683908cb65bca93d564a6923b6db6d5e2bf692750b77e68fd2dd871b92"
+    },
+    "filterest/app/server_tools/migrations/20260818000003_seed_normalized_language_table_labels.sql": {
+      "sha256": "5a7a3decae2265565439f3793dacea37674225e08832e3b73ec3d2a3093946ed"
+    },
+    "filterest/app/server_tools/migrations/20260818000004_deduplicate_project_tab_order.sql": {
+      "sha256": "68c404775bbba0d12ebd1a9c6ad758799b05be8ef5c2f358ea76b6c5cafc2b7e"
+    },
+    "filterest/app/server_tools/migrations/20260818000005_add_dataset_sort_defaults.sql": {
+      "sha256": "1194a203c9a6f77a4b59088246ab7c2927e0bed2296832f0027ea51e9b7f0af4"
+    },
+    "filterest/app/server_tools/migrations/20260819000001_seed_filter_mode_tooltip_lang_keys.sql": {
+      "sha256": "8352a87faddda2ea00e304cae12aeec8be47308195f3f1ea11f33c10ba62a29b"
+    },
+    "filterest/app/server_tools/migrations/20260819000002_add_dataset_media.sql": {
+      "sha256": "4b566a77bcb551691494f9050718d40b13ae804f78b36cd502a31b2819085048"
+    },
+    "filterest/app/server_tools/migrations/20260819000003_record_dataset_media_db_release.sql": {
+      "sha256": "66a3076be8b7ea8ddd4860fb34942a4754644aa7b4f92e02e07c8cc0dc41598a"
+    },
+    "filterest/app/server_tools/migrations/20260819000004_add_dataset_view_settings.sql": {
+      "sha256": "962bf8e6cf9325c3bde92b2ae7babea406623f4876bd2b06bd02c373e05c8988"
+    },
+    "filterest/app/server_tools/migrations/20260819000005_remove_dataset_view_settings.sql": {
+      "sha256": "d3abd9441e6171e31ec8ad4d35f01cd33e209689a56a82fdb114b81823e9c8f3"
+    },
+    "filterest/app/server_tools/migrations/20260819000006_enable_admin_owned_registration.sql": {
+      "sha256": "d7c68562c37cd6a4272820d6a1592e2033e30ccc82442c19f7bfbbc06dd4544d"
+    },
+    "filterest/app/server_tools/migrations/20260819000007_seed_admin_user_authentication_permission.sql": {
+      "sha256": "9e8bcde032d0fb4954016274acac6bf969d8a669688ed2bd66b04b6ae20b7d2b"
+    },
+    "filterest/app/server_tools/migrations/20260819000008_restrict_system_config_permissions.sql": {
+      "sha256": "17bd789cb9fb2bf4519724865f6c60bfdf6be2a5a4cba64ccc939604748b4a31"
+    },
+    "filterest/app/server_tools/migrations/20260820000001_add_safe_symbol_registry.sql": {
+      "sha256": "4113915778e8cc74c2cfd68c25ca37044b770c9b3f5d4a5f8ab3b2365b5beab6"
+    },
+    "filterest/app/server_tools/migrations/20260820000002_add_admin_ui_feature_flags.sql": {
+      "sha256": "0efef5268c755e57351dcb0b6e4645eb356133c5896d354137f23afbb57519b2"
+    },
+    "filterest/app/server_tools/migrations/20260820000003_seed_travel_dataset_presentation_defaults.sql": {
+      "sha256": "8f67a1aa5e7b35c02a6f80d2c0716bf6c05058de56dc9f5c6c277af2185ab267"
+    },
+    "filterest/app/server_tools/migrations/20260820000004_add_site_presentation_settings.sql": {
+      "sha256": "2ca44b2c83f208b65ae48141c84880ca2c8aaa13f1a2cc330159dcfe2876aa9f"
+    },
+    "filterest/app/server_tools/migrations/20260820000005_expand_site_presentation_settings.sql": {
+      "sha256": "71c2db28cbed108f187e6548ae74514310a6e29d1e58fc3e05994e514ff2773e"
+    },
+    "filterest/app/server_tools/migrations/20260820000006_seed_fintravel_travel_labels.sql": {
+      "sha256": "10c687d629de0a65c5dcf047a8415f13a4b98006806f1ec2c8fdcdc3abc34a41"
+    },
+    "filterest/app/server_tools/migrations/20260822000001_create_system_row_groups.sql": {
+      "sha256": "ac1cffb8cf987291ab303f9d643c0cb884e2677e8cc73b801e3b42b2543c0168"
+    },
+    "filterest/app/server_tools/migrations/20260822000002_add_site_favicon_setting.sql": {
+      "sha256": "4dfae995d44ea612d0c6a86728f82aebf4ad93428ff1ce451c204c36f5a80149"
+    },
+    "filterest/app/server_tools/migrations/20260822000003_group_common_cross_dataset_tables.sql": {
+      "sha256": "7e5473099d4a7c4ba25db5b75d0a5151fb51c2d8108f13ac14552611f9da3865"
+    },
+    "filterest/app/server_tools/migrations/20260822000005_record_compatible_db_release.sql": {
+      "sha256": "9e84ee95dc093114b696aeeff9effa5e51492082c250ddd9adb092aad91432ea"
+    },
+    "filterest/app/server_tools/migrations/20260822000006_normalize_view_field_sets.sql": {
+      "sha256": "809750b15124f87d441cc9a378c028cabc93faaed78b04c7ef5f592263a98118"
+    },
+    "filterest/app/server_tools/migrations/20260822000007_finalize_view_field_sets.sql": {
+      "sha256": "d883156a3fa343c178aeaf8df7dd9b9b1c79ec4d215d37500470d60eba6d5d86"
+    },
+    "filterest/app/server_tools/migrations/20260823000002_record_compatible_db_release.sql": {
+      "sha256": "9840e86c12bf20423bfc917d18dd75a2143cdb29b0c30f0cdeb604843af070e5"
+    },
+    "filterest/app/server_tools/migrations/20260823000003_restrict_guest_view_field_set_writes.sql": {
+      "sha256": "b40ad0173e29b2623299cbaf84387a69898e3a4cdd9416b543e4cf7c6b8e056e"
+    },
+    "filterest/app/server_tools/migrations/20260824000001_add_user_auth_generation.sql": {
+      "sha256": "11ffca0d15c96402c912342e2b8f82af96f60fe645af8afadb8020911126aa69"
+    },
+    "filterest/app/server_tools/migrations/20260824000002_repair_row_group_runtime_permissions.sql": {
+      "sha256": "0604694d0a7543f32762bb8acb963a5badf8d1ea9a5c2a59c94875bbfa45b570"
+    },
+    "filterest/app/server_tools/migrations/20260824000003_add_production_update_notice.sql": {
+      "sha256": "09d772f3a32f1f8b21c14755547d9d13d700454d788bfb0649d7c35963c276ce"
+    },
+    "filterest/app/server_tools/migrations/20260825000001_enable_personal_dataset_sort_defaults.sql": {
+      "sha256": "88f33645282e2c79fefb54d5474367d6bf086ee1a7377a8f3973814692585a0d"
+    },
+    "filterest/app/server_tools/migrations/20260826000002_record_compatible_db_release.sql": {
+      "sha256": "08671a30e11302b9c84889c67ff38c01808d6e4b8fb41cbec694a38904587719"
+    },
+    "filterest/app/server_tools/migrations/20260826000004_record_compatible_db_release.sql": {
+      "sha256": "ff0bdff172be71581c73d590419ab2166ab998f49d4f6d5eab5830c8a3c6fcf2"
+    },
+    "filterest/app/server_tools/migrations/20260901000001_harden_system_column_details_identity.sql": {
+      "sha256": "7215870ec26349c57d5ee525478cbe4701ffd617a4aaba0e20ecfa9e000bfe22"
+    },
+    "filterest/app/server_tools/migrations/20260902000001_add_group_view_field_set_assignments.sql": {
+      "sha256": "0d0f4d53bdc28069fdd066230f24fc6d53efdfd738360433e70245b4706b6b75"
+    },
+    "filterest/app/server_tools/migrations/20260902000002_add_row_access_rules.sql": {
+      "sha256": "77fa2d5e094ae59ab9c2d1f1b272cb06bccbef1a4aabf8c5aa73a04e9726907f"
+    },
+    "filterest/app/server_tools/migrations/20260902000004_finalize_row_access_fail_closed_defaults.sql": {
+      "sha256": "7a23e46e5436bcf43ffbd27b1994fd8b634e735fd13525212d1986ba28b62092"
+    },
+    "filterest/app/server_tools/migrations/20260902000005_add_row_access_principal_picker_copy.sql": {
+      "sha256": "7a3e53aeebff11fef773cc8e7182ffb2b486696752f7f74b763e9beb1d9b0c3a"
+    },
+    "filterest/app/server_tools/migrations/20260902000006_complete_row_access_editor_copy.sql": {
+      "sha256": "ba3aaf210fa4cc7b13985b3f1d1c41982d4762072f61a67f9d495012d9dd3995"
+    },
+    "filterest/app/server_tools/migrations/20260902000007_add_view_field_assignment_admin_tool.sql": {
+      "sha256": "7fade3418c6040de74927fb48d16fc04c60a844113049fb60693bf4b06dbee01"
+    },
+    "filterest/app/server_tools/migrations/20260902000008_seed_admin_tree_language_keys.sql": {
+      "sha256": "1eafe7a60df1ac3fc0d2c9ca7fcc768e53ec35029a80c6c5dc381f2dd90d5ed3"
+    },
+    "filterest/app/server_tools/migrations/20260903000001_add_view_field_assignment_priority_help.sql": {
+      "sha256": "1b1ee0ac2f308cb3e539adaba00b913ab77888b0fc833d6a23ff2b55ce7e8ac5"
+    },
+    "filterest/app/server_tools/migrations/20260903000002_refine_mixed_view_field_assignment_copy.sql": {
+      "sha256": "c5349af6a79188c154ea6cf00bc9ce38348eed1153d394432e30708508fee5a7"
+    },
+    "filterest/app/server_tools/migrations/20260905000001_add_row_existing_link_copy.sql": {
+      "sha256": "10130485405ba4998f2109b85f2bc1903137437cd2214b9ce51ac75e8a91e19b"
+    },
+    "filterest/app/server_tools/migrations/20260905000002_complete_add_row_form_copy.sql": {
+      "sha256": "a8346a70f31246a497c89a8998db40b889af465d4839959671c0c92d6ee736c7"
+    },
+    "filterest/app/server_tools/migrations/20260905000003_complete_add_row_status_and_asset_copy.sql": {
+      "sha256": "9d0fe6b8361611f6f81b0d2fbbc5e62da9404eef83941a525837a5fea64030cd"
+    },
+    "filterest/app/server_tools/migrations/20260905000004_repair_owned_child_runtime_permissions.sql": {
+      "sha256": "159146828895aaef440b6a3d6d3bdf079e4b58960f94dc3dc8b9090a9c09a390"
+    },
+    "filterest/app/server_tools/migrations/20260905000005_repair_owned_child_legacy_sequence_permissions.sql": {
+      "sha256": "727f919ea743f04993b99055a50d149436fd45f9b852f8cdd9e0fd1d21d429c9"
+    },
+    "filterest/app/server_tools/migrations/20260906000002_add_column_view_support_matrix.sql": {
+      "sha256": "01b96bab3fe3b5284eabeb7e175a9683a2a9957a3576b175aff29ff71542e5bf"
+    },
+    "filterest/app/server_tools/migrations/20260906000003_add_user_visual_preferences.sql": {
+      "sha256": "1458c18e171c014c7d1adad8a698b241d8490a5799005e9cac23f66b73f32ca9"
+    },
+    "filterest/app/server_tools/migrations/20260906000004_add_card_description_line_count_setting.sql": {
+      "sha256": "9208c7721e8c0bd6fbcf6b045c69959154599589cc0c75613778b0b429d46644"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

@@ -1,11 +1,11 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `56`
-- Seed tables: `32`
+- Schema tables: `57`
+- Seed tables: `33`
 - Example emails: `0`
 - Manifest format: `2`
-- Manifest source files: `26`
+- Manifest source files: `100`
 - Findings: `0`
 
 ## Verdict
@@ -57,6 +57,7 @@ PASS
 - `public.system_row_access_rules`
 - `public.system_row_group_memberships`
 - `public.system_row_groups`
+- `public.system_schema_migrations`
 - `public.system_table_folders`
 - `public.system_table_row_view_counts`
 - `public.system_table_views`
@@ -98,6 +99,7 @@ PASS
 - `public.system_languages`
 - `public.system_permission_actions`
 - `public.system_permission_categories`
+- `public.system_schema_migrations`
 - `public.system_table_folders`
 - `public.system_table_views`
 - `public.system_user_group_memberships`
@@ -133,6 +135,7 @@ PASS
 - `public.system_languages`: 5
 - `public.system_permission_actions`: 7
 - `public.system_permission_categories`: 4
+- `public.system_schema_migrations`: 74
 - `public.system_table_folders`: 14
 - `public.system_table_views`: 12
 - `public.system_user_group_memberships`: 2
@@ -144,7 +147,7 @@ PASS
 ## Manifest Hash Coverage
 
 - Generated files with hashes: `2`
-- Source files with hashes: `26`
+- Source files with hashes: `100`
 
 ## Email Domains
 

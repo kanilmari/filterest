@@ -11,6 +11,14 @@ seed rows are placeholders for setup and smoke testing, not production data. The
 generated seed is derived from testing fixtures and normalized for public
 Filterest branding and runtime boundaries.
 
+The generated seed also records a migration-ledger baseline for every public
+migration file whose effects are already present in that bootstrap. A fresh
+installation therefore starts from the packaged schema state instead of
+replaying historical migrations. Existing installations do not import a new
+bootstrap during upgrades, so migrations added after their own baseline still
+run normally. The manifest binds this filename list to the exact migration-file
+hashes and the bootstrap audit rejects drift.
+
 The three reviewed walkthrough images and the user-approved service, risk, and
 ticket starter images remain immutable fixture inputs under `source/fixtures/`.
 The runtime-media manifest declares a monotonic materialization revision. On
