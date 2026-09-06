@@ -60,6 +60,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         hero_bottom_fade: 48,
         image_blur: 1,
         card_image_width: 300,
+        card_description_lines: 2,
         active_tab_fade: 25,
         active_tab_max_opacity: 1,
         active_tab_glow_intensity: 0.3,
@@ -85,6 +86,7 @@ const RANGE_CONTROLS = Object.freeze([
     { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'heroLayout' },
     { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', group: 'themeImage' },
     { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
+    { id: 'card-description-lines', key: 'card_description_lines', label: 'cardDescriptionLines', css: 'card-description-lines', min: 1, max: 12, step: 1, unit: '', shared: true, group: 'cardLayout' },
     { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', min: 0, max: 100, step: 1, unit: 'px', shared: true, group: 'navigation' },
     { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
     { id: 'active-tab-glow-intensity', key: 'active_tab_glow_intensity', label: 'activeTabGlowIntensity', css: 'active-tab-glow-intensity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
@@ -106,7 +108,8 @@ const COPY = Object.freeze({
         centerStop: 'Centre stop', midStop: 'Mid stop', edgeStop: 'Edge stop',
         imageOpacity: 'Whole image opacity', heroHeight: 'Hero extra height', heroBottomFade: 'Bottom fade height',
         overlayOpacity: 'Darkening overlay opacity', imageBlur: 'Cover and background blur',
-        cardImageWidth: 'Card image width', activeTabFade: 'Active tab fade width',
+        cardImageWidth: 'Card image width', cardDescriptionLines: 'Card description lines',
+        activeTabFade: 'Active tab fade width',
         activeTabMaxOpacity: 'Active tab edge opacity (reserved)',
         activeTabGlowIntensity: 'Active tab glow intensity', activeTabGlowWidth: 'Active tab glow width',
         activeTabGlowBlur: 'Active tab glow blur', brandColor: 'Site brand colour',
@@ -124,7 +127,8 @@ const COPY = Object.freeze({
         centerStop: 'Keskustan stop-piste', midStop: 'Keskialueen stop-piste', edgeStop: 'Reunan stop-piste',
         imageOpacity: 'Koko kuvan opacity', heroHeight: 'Heron lisäkorkeus', heroBottomFade: 'Alahäivytyksen korkeus',
         overlayOpacity: 'Tummentavan overlayn opacity', imageBlur: 'Kansi- ja taustakuvan blur',
-        cardImageWidth: 'Korttikuvan leveys', activeTabFade: 'Aktiivisen välilehden häivytysleveys',
+        cardImageWidth: 'Korttikuvan leveys', cardDescriptionLines: 'Kortin kuvaustekstin rivit',
+        activeTabFade: 'Aktiivisen välilehden häivytysleveys',
         activeTabMaxOpacity: 'Aktiivisen välilehden reunaopacity (varattu)',
         activeTabGlowIntensity: 'Aktiivisen välilehden hohdon voimakkuus',
         activeTabGlowWidth: 'Aktiivisen välilehden hohdon leveys',
@@ -233,6 +237,10 @@ export function applyDatasetCoverThemeConfig(hero, config) {
         `${config.dark.image_blur}px`
     );
     documentRoot.style.setProperty('--card_image_large_width', `${config.shared.card_image_width}px`);
+    documentRoot.style.setProperty(
+        '--card-description-lines',
+        String(config.shared.card_description_lines)
+    );
     documentRoot.style.setProperty('--navtab-active-fade-width', `${config.shared.active_tab_fade}px`);
     documentRoot.style.setProperty(
         '--navtab-active-max-opacity',

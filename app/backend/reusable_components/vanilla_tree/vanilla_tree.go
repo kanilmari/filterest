@@ -47,6 +47,20 @@ type folderTreeRow struct {
 	IsCurrentProject bool
 }
 
+// unregisteredPublicViewsQuery keeps raw database views in the dedicated
+// Views branch. A view registered in system_db_tables already participates in
+// the ordinary dataset navigation, permissions, and filterbar pipeline, so
+// returning it again here would create a second, less capable navigation node.
+const unregisteredPublicViewsQuery = `
+                SELECT v.table_name, sdt.table_uid
+                FROM information_schema.views v
+                LEFT JOIN system_db_tables sdt
+                  ON sdt.table_name = v.table_name
+                 AND COALESCE(NULLIF(sdt.schema_name, ''), 'public') = v.table_schema
+                WHERE v.table_schema = 'public'
+                  AND sdt.table_uid IS NULL
+                ORDER BY v.table_name`
+
 // buildLegacyOtherTablesFolderRemap identifies erroneous root-level
 // other_tables folders and maps them to the canonical database -> other_tables
 // folder so the tree can hide the duplicate root node and merge its contents.
@@ -367,13 +381,9 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 		DbID:     -1,
 	})
 
-	// Haetaan kaikki public-skeeman näkymät
-	viewRows, err := backend.Db.Query(`
-                SELECT v.table_name, sdt.table_uid
-                FROM information_schema.views v
-                LEFT JOIN system_db_tables sdt ON sdt.table_name = v.table_name
-                WHERE v.table_schema = 'public'
-                ORDER BY v.table_name`)
+	// Registered views already appear above as full datasets. Keep only raw,
+	// unregistered database views in this lightweight Views branch.
+	viewRows, err := backend.Db.Query(unregisteredPublicViewsQuery)
 	if err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "failed to fetch view data")

@@ -153,3 +153,17 @@ func TestNormalizeTableFolderReferenceDefaultsOrphansToCanonicalOtherTables(t *t
 		t.Fatalf("normalized legacy folder = %#v, want valid 150", remapped)
 	}
 }
+
+func TestUnregisteredPublicViewsQueryExcludesRegisteredDatasetViews(t *testing.T) {
+	for _, requiredFragment := range []string{
+		"FROM information_schema.views v",
+		"LEFT JOIN system_db_tables sdt",
+		"COALESCE(NULLIF(sdt.schema_name, ''), 'public') = v.table_schema",
+		"v.table_schema = 'public'",
+		"sdt.table_uid IS NULL",
+	} {
+		if !strings.Contains(unregisteredPublicViewsQuery, requiredFragment) {
+			t.Fatalf("unregisteredPublicViewsQuery missing %q", requiredFragment)
+		}
+	}
+}

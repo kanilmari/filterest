@@ -6,9 +6,10 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { createGoalMock, fetchBoardMock, goalActionMock, languageMock, saveContractMock, startConversationMock, statusActionMock } = vi.hoisted(() => ({
+const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, saveContractMock, startConversationMock, statusActionMock } = vi.hoisted(() => ({
     createGoalMock: vi.fn(),
     fetchBoardMock: vi.fn(),
+    fetchHistoryMock: vi.fn(),
     goalActionMock: vi.fn(),
     languageMock: vi.fn(),
     saveContractMock: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('./workline_observatory_api_adapter.js', () => ({
     applyWorklineReleaseGoalAction: goalActionMock,
     createWorklineReleaseGoal: createGoalMock,
     fetchWorklineObservatoryBoard: fetchBoardMock,
+    fetchWorklineObservatoryReportHistory: fetchHistoryMock,
     saveWorklineReleaseContract: saveContractMock,
 }));
 vi.mock('./workline_observatory_chat_adapter.js', () => ({
@@ -38,6 +40,7 @@ beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
     languageMock.mockReturnValue('en');
+    fetchHistoryMock.mockResolvedValue([]);
     window.confirm = vi.fn(() => true);
 });
 
@@ -98,6 +101,43 @@ describe('workline observatory view', () => {
         await generate_workline_observatory_view(container);
         expect(container.querySelector('.workline-observatory__header p').textContent)
             .toBe('选择一条或多条工作线以更改状态。');
+    });
+
+    test('loads and browses earlier reports for the focused workline', async () => {
+        fetchHistoryMock.mockResolvedValue([
+            {
+                id: 30, title: 'Current implementation', phase_gate: '4-5', current_phase: 4,
+                context: 'Current context.', plain_language: 'Current plain explanation.',
+                technical: 'Current technical explanation.', next_step: 'Current next step.',
+                created_at: '2026-09-06T08:00:00Z', git_workline_changed_paths: [],
+            },
+            {
+                id: 20, title: 'Earlier design', phase_gate: '2-3', current_phase: 2,
+                context: 'Earlier context.', plain_language: 'Earlier plain explanation.',
+                technical: 'Earlier technical explanation.', next_step: 'Earlier next step.',
+                created_at: '2026-09-01T08:00:00Z', git_workline_changed_paths: [],
+            },
+        ]);
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, buildWorklineObservatoryState({
+            worklines: [{
+                id: 34, title: 'Visual styles', status: 'active', current_phase: 4,
+                latest_report: { id: 30, context: 'Current context.' },
+            }],
+        }));
+
+        await vi.waitFor(() => expect(container.querySelector('.workline-observatory__report-history select')).not.toBeNull());
+        expect(fetchHistoryMock).toHaveBeenCalledWith(34);
+        expect(container.textContent).toContain('Current context.');
+        const select = container.querySelector('.workline-observatory__report-history select');
+        expect(select.options).toHaveLength(2);
+        expect(select.options[1].textContent).toContain('Phase 2-3');
+
+        select.value = '20';
+        select.dispatchEvent(new Event('change'));
+
+        expect(container.textContent).toContain('Earlier context.');
+        expect(container.textContent).not.toContain('Current context.');
     });
 
     test('keeps status actions around NOW and makes the full title row selectable', () => {

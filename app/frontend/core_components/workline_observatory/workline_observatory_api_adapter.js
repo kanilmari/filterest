@@ -22,6 +22,14 @@ export function fetchWorklineObservatoryBoard() {
     return endpoint_router(ROUTES.board, { suppressAuthRedirect: true });
 }
 
+export async function fetchWorklineObservatoryReportHistory(worklineId) {
+    const response = await endpoint_router(ROUTES.board, {
+        url_params: `?workline_id=${encodeURIComponent(worklineId)}`,
+        suppressAuthRedirect: true,
+    });
+    return Array.isArray(response?.reports) ? response.reports : [];
+}
+
 export function applyWorklineStatusAction(worklines, targetStatus) {
     return endpoint_router(ROUTES.statusActions, {
         method: 'POST',

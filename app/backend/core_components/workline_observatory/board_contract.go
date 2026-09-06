@@ -37,6 +37,9 @@ type BoardWorklineStatusChange struct {
 type BoardWorklineReport struct {
 	ID                      int64     `json:"id"`
 	Title                   string    `json:"title"`
+	ReportType              string    `json:"report_type"`
+	Outcome                 string    `json:"outcome"`
+	State                   string    `json:"state"`
 	PhaseGate               string    `json:"phase_gate"`
 	CurrentPhase            int       `json:"current_phase"`
 	WorklineStatusSnapshot  string    `json:"workline_status_snapshot"`
@@ -49,6 +52,11 @@ type BoardWorklineReport struct {
 	GitHasOtherChanges      bool      `json:"git_has_other_changes"`
 	GitWorklineChangedPaths []string  `json:"git_workline_changed_paths"`
 	CreatedAt               time.Time `json:"created_at"`
+}
+
+type BoardWorklineReportHistory struct {
+	WorklineID int64                 `json:"workline_id"`
+	Reports    []BoardWorklineReport `json:"reports"`
 }
 
 type BoardReleaseGoal struct {

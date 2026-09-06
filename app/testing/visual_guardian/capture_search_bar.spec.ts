@@ -140,6 +140,25 @@ async function exposeFlatTopbar(page) {
   await expect(topbar).toBeVisible();
 }
 
+async function selectAccountTheme(page, theme: 'system' | 'dark' | 'light') {
+  const body = page.locator('body');
+  const themeButton = page.locator('[data-theme-toggle]:visible, #themeToggleBtn:visible').first();
+  const expectedClass = theme === 'system' ? 'system-mode' : `${theme}-mode`;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await body.evaluate((element, className) => element.classList.contains(className), expectedClass)) {
+      return;
+    }
+    await expect(themeButton).toBeEnabled();
+    // Tablet navigation can place the real control outside the clipped drawer;
+    // invoke that control's own handler without bypassing its product logic.
+    await themeButton.evaluate((button: HTMLButtonElement) => button.click());
+    await expect(themeButton).toBeEnabled();
+  }
+
+  await expect(body).toHaveClass(new RegExp(expectedClass));
+}
+
 async function verifyRowAccessEditor(
   page,
   testInfo,
@@ -183,6 +202,7 @@ async function verifyRowAccessEditor(
 }
 
 test.describe('Visual Guardian - Search Bar Focus', () => {
+  test.describe.configure({ mode: 'serial' });
   test.use({ ignoreHTTPSErrors: true });
   test.afterEach(async ({ page }, testInfo) => {
     await saveVisualGuardianFailureArtifacts(page, testInfo);
@@ -192,10 +212,10 @@ test.describe('Visual Guardian - Search Bar Focus', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.addInitScript(() => {
-      localStorage.setItem('theme', 'light');
       localStorage.setItem('chosen_language', 'fi');
     });
     await loadVisualGuardianApp(page, { datasetName: 'app_service_catalog' });
+    await selectAccountTheme(page, 'light');
     await expect(page.locator('body')).toHaveClass(/light-mode/);
     await verifyRowAccessEditor(
       page,
@@ -226,10 +246,10 @@ test.describe('Visual Guardian - Search Bar Focus', () => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.emulateMedia({ colorScheme: 'light' });
     await page.addInitScript(() => {
-      localStorage.setItem('theme', 'dark');
       localStorage.setItem('chosen_language', 'en');
     });
     await loadVisualGuardianApp(page, { datasetName: 'app_service_catalog' });
+    await selectAccountTheme(page, 'dark');
     await expect(page.locator('body')).toHaveClass(/dark-mode/);
     await verifyRowAccessEditor(
       page,
@@ -255,5 +275,6 @@ test.describe('Visual Guardian - Search Bar Focus', () => {
     await verifyFlatTopbarContainsOnlySearch(page);
 
     await takeGuardianScreenshot(page, testInfo, 'tablet_flat_mode_search_bar');
+    await selectAccountTheme(page, 'system');
   });
 });

@@ -1351,6 +1351,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "9.2.2": {"min_version": "9.7.0", "target_version": "9.7.0"},
         "9.2.3": {"min_version": "9.7.2", "target_version": "9.7.2"},
         "9.2.4": {"min_version": "9.7.2", "target_version": "9.7.2"},
+        "9.3.0": {"min_version": "9.7.3", "target_version": "9.7.3"},
     }
     version_order = {
         "8.40.8": 0,
@@ -1370,6 +1371,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
         "9.2.2": 14,
         "9.2.3": 15,
         "9.2.4": 16,
+        "9.3.0": 17,
     }
     assert all(
         entry.record["app_version"] in expected_databases
@@ -1398,6 +1400,7 @@ def test_repository_ledger_has_exact_append_only_candidate_history() -> None:
                 "9.2.2",
                 "9.2.3",
                 "9.2.4",
+                "9.3.0",
             }
             else "legacy_maintainer_export"
         )

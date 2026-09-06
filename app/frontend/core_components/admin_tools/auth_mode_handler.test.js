@@ -10,6 +10,7 @@ const countThisFunctionMock = vi.fn();
 const fetchAuthModesMock = vi.fn();
 const fetchUserPermissionsMock = vi.fn();
 const hasRoutePermissionMock = vi.fn();
+const synchronizeThemePreferenceForAuthStateMock = vi.fn();
 
 async function loadModule() {
   vi.resetModules();
@@ -23,6 +24,9 @@ async function loadModule() {
   vi.doMock('../route_permission_checker.js', () => ({
     hasRoutePermission: hasRoutePermissionMock,
   }));
+  vi.doMock('../theme.js', () => ({
+    synchronizeThemePreferenceForAuthState: synchronizeThemePreferenceForAuthStateMock,
+  }));
   return import('./auth_mode_handler.js');
 }
 
@@ -34,6 +38,8 @@ describe('auth_mode_handler', () => {
     fetchAuthModesMock.mockReset();
     fetchUserPermissionsMock.mockReset();
     hasRoutePermissionMock.mockReset();
+    synchronizeThemePreferenceForAuthStateMock.mockReset();
+    synchronizeThemePreferenceForAuthStateMock.mockResolvedValue('system');
     vi.restoreAllMocks();
   });
 
@@ -51,6 +57,7 @@ describe('auth_mode_handler', () => {
     expect(countThisFunctionMock).toHaveBeenCalledWith('setAuthModes');
     expect(fetchAuthModesMock).toHaveBeenCalledWith();
     expect(fetchUserPermissionsMock).toHaveBeenCalledWith();
+    expect(synchronizeThemePreferenceForAuthStateMock).toHaveBeenCalledWith(true);
     expect(localStorage.getItem('button_state')).toBe('logout');
     expect(localStorage.getItem('registration_enabled')).toBe('true');
     expect(localStorage.getItem('login_required_for_browse')).toBe('true');
@@ -71,6 +78,7 @@ describe('auth_mode_handler', () => {
     expect(localStorage.getItem('registration_enabled')).toBe('false');
     expect(localStorage.getItem('login_required_for_browse')).toBe(null);
     expect(sessionStorage.getItem('user_permissions')).toBe(null);
+    expect(synchronizeThemePreferenceForAuthStateMock).toHaveBeenCalledWith(false);
   });
 
   test('removes cached permissions when permission fetch is malformed', async () => {

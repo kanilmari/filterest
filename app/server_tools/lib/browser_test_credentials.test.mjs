@@ -113,6 +113,30 @@ describe('protected browser-test runtime contract', () => {
     );
   });
 
+  test('browser tooling accepts the standard protected API automation credential', () => {
+    const easelectRoot = path.join(temporaryRoot(), 'easelect');
+    const applicationRoot = path.join(easelectRoot, 'filterest', 'app');
+    const credentialFile = path.join(temporaryRoot(), 'filterest-agent.env');
+    fs.mkdirSync(path.join(easelectRoot, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    markApplication(applicationRoot);
+    fs.writeFileSync(
+      credentialFile,
+      'FILTEREST_API_BASE_URL=https://localhost:8082\n'
+        + 'FILTEREST_API_USERNAME=filterest_agent\n'
+        + 'FILTEREST_API_PASSWORD=protected-password\n',
+      { mode: 0o600 },
+    );
+
+    expect(loadBrowserTestCredentials({
+      applicationRoot,
+      environment: { FILTEREST_TEST_CREDENTIAL_FILE: credentialFile },
+    })).toEqual({
+      username: 'filterest_agent',
+      password: 'protected-password',
+    });
+  });
+
   test('an explicit wrapper boundary keeps an embedded public invocation standalone', () => {
     const easelectRoot = path.join(temporaryRoot(), 'easelect');
     const installationRoot = path.join(easelectRoot, 'filterest');

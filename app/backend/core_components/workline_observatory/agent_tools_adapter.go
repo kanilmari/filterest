@@ -18,6 +18,7 @@ SELECT w.id, w.title, w.status, w.tags, w.updated,
        w.status_revision, w.status_changed_by,
        COALESCE(status_user.username, ''), w.status_changed_at, w.status_change_source,
        COALESCE(latest.id, 0), COALESCE(latest.title, ''),
+       COALESCE(latest.report_type, ''), COALESCE(latest.outcome, ''), COALESCE(latest.state, ''),
        COALESCE(latest.phase_gate, ''), COALESCE(latest.current_phase, 0),
        COALESCE(latest.workline_status_snapshot, ''),
        COALESCE(latest.context_text, ''), COALESCE(latest.plain_language_text, ''),
@@ -29,7 +30,8 @@ SELECT w.id, w.title, w.status, w.tags, w.updated,
 FROM dev_agent_worklines AS w
 LEFT JOIN system_users AS status_user ON status_user.id = w.status_changed_by
 LEFT JOIN LATERAL (
-    SELECT r.id, r.title, r.phase_gate, r.current_phase, r.workline_status_snapshot, r.context_text,
+    SELECT r.id, r.title, r.report_type, r.outcome, r.state,
+           r.phase_gate, r.current_phase, r.workline_status_snapshot, r.context_text,
            r.plain_language_text, r.technical_text, r.next_step_text,
            r.git_head_commit, r.git_worktree_state, r.git_has_other_changes,
            r.git_workline_changed_paths, r.created
@@ -44,6 +46,20 @@ LEFT JOIN LATERAL (
     WHERE link.workline_id = w.id
 ) AS tasks ON TRUE
 ORDER BY w.updated DESC, w.id DESC`
+
+const boardWorklineReportHistoryQuery = `
+SELECT r.id, r.title, r.report_type, r.outcome, r.state,
+       COALESCE(r.phase_gate, ''), COALESCE(r.current_phase, 0),
+       COALESCE(r.workline_status_snapshot, ''),
+       COALESCE(r.context_text, ''), COALESCE(r.plain_language_text, ''),
+       COALESCE(r.technical_text, ''), COALESCE(r.next_step_text, ''),
+       COALESCE(r.git_head_commit, ''), COALESCE(r.git_worktree_state, ''),
+       COALESCE(r.git_has_other_changes, FALSE),
+       COALESCE(r.git_workline_changed_paths, '{}'::TEXT[]), r.created
+FROM dev_agent_workline_reports AS r
+WHERE r.workline_id = $1
+ORDER BY r.created DESC, r.id DESC
+LIMIT 100`
 
 func loadBoardSnapshot(ctx context.Context, database *sql.DB) (BoardSnapshot, error) {
 	snapshot := BoardSnapshot{GeneratedAt: time.Now().UTC(), Worklines: []BoardWorkline{}}
@@ -94,7 +110,8 @@ func scanBoardWorkline(scanner interface{ Scan(...interface{}) error }) (BoardWo
 		&workline.StatusRevision, &statusChangedBy,
 		&workline.LatestStatusChange.ChangedByUsername, &workline.LatestStatusChange.ChangedAt,
 		&workline.LatestStatusChange.Source,
-		&report.ID, &report.Title, &report.PhaseGate, &report.CurrentPhase,
+		&report.ID, &report.Title, &report.ReportType, &report.Outcome, &report.State,
+		&report.PhaseGate, &report.CurrentPhase,
 		&report.WorklineStatusSnapshot,
 		&report.Context, &report.PlainLanguage, &report.Technical, &report.NextStep,
 		&report.GitHeadCommit, &report.GitWorktreeState, &report.GitHasOtherChanges,
@@ -124,6 +141,36 @@ func scanBoardWorkline(scanner interface{ Scan(...interface{}) error }) (BoardWo
 		workline.LatestReport = &report
 	}
 	return workline, nil
+}
+
+func loadBoardWorklineReportHistory(ctx context.Context, database *sql.DB, worklineID int64) (BoardWorklineReportHistory, error) {
+	history := BoardWorklineReportHistory{WorklineID: worklineID, Reports: []BoardWorklineReport{}}
+	rows, err := database.QueryContext(ctx, boardWorklineReportHistoryQuery, worklineID)
+	if err != nil {
+		return history, fmt.Errorf("query workline report history: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var report BoardWorklineReport
+		if err := rows.Scan(
+			&report.ID, &report.Title, &report.ReportType, &report.Outcome, &report.State,
+			&report.PhaseGate, &report.CurrentPhase, &report.WorklineStatusSnapshot,
+			&report.Context, &report.PlainLanguage, &report.Technical, &report.NextStep,
+			&report.GitHeadCommit, &report.GitWorktreeState, &report.GitHasOtherChanges,
+			pq.Array(&report.GitWorklineChangedPaths), &report.CreatedAt,
+		); err != nil {
+			return history, fmt.Errorf("scan workline report history: %w", err)
+		}
+		if report.GitWorklineChangedPaths == nil {
+			report.GitWorklineChangedPaths = []string{}
+		}
+		history.Reports = append(history.Reports, report)
+	}
+	if err := rows.Err(); err != nil {
+		return history, fmt.Errorf("iterate workline report history: %w", err)
+	}
+	return history, nil
 }
 
 func loadSelectedReleaseGoal(ctx context.Context, database *sql.DB) (*BoardReleaseGoal, error) {

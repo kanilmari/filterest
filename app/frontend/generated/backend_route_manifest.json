@@ -4855,6 +4855,40 @@
       ]
     },
     {
+      "path_pattern": "/api/user-visual-preference",
+      "match_type": "exact",
+      "handler_name": "auth.UserVisualPreferenceHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/view-field-sets",
       "match_type": "exact",
       "handler_name": "system_table_tools.GetViewFieldSetsHandler",
@@ -5565,6 +5599,57 @@
       "handler_name": "symbol_registry.AssetHandler",
       "methods": [
         "GET"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/system/automation-account",
+      "match_type": "exact",
+      "handler_name": "router.systemAutomationAccountHandler",
+      "methods": [
+        "GET",
+        "POST"
       ],
       "method_source": "explicit_stable_contract",
       "scenarios": [

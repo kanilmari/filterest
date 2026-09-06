@@ -148,6 +148,7 @@
     --card_body_gap: 10px;
     --card_image_large_width: 300px;
     --card_image_small_width: 120px;
+    --card-description-lines: 2;
 
     --text_color: var(--text-main);
     --empty_field_text_color: var(--text-muted);

@@ -55,6 +55,7 @@ describe('dataset cover presentation settings', () => {
         settings.dataset_cover_theme.light.image_blur = 2;
         settings.dataset_cover_theme.dark.image_blur = 0;
         settings.dataset_cover_theme.shared.card_image_width = 360;
+        settings.dataset_cover_theme.shared.card_description_lines = 4;
         settings.dataset_cover_theme.shared.active_tab_fade = 32;
         settings.dataset_cover_theme.shared.active_tab_max_opacity = 0.85;
         settings.dataset_cover_theme.shared.active_tab_glow_intensity = 0.2;
@@ -79,6 +80,7 @@ describe('dataset cover presentation settings', () => {
         expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('2px');
         expect(document.documentElement.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
         expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('360px');
+        expect(document.documentElement.style.getPropertyValue('--card-description-lines')).toBe('4');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-fade-width')).toBe('32px');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.85');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-intensity')).toBe('0.2');
@@ -152,7 +154,7 @@ describe('dataset cover presentation settings', () => {
         )).toHaveLength(12);
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(8);
+        )).toHaveLength(9);
         const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
         expect(toolboxes).toHaveLength(6);
         expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(6);
@@ -183,6 +185,11 @@ describe('dataset cover presentation settings', () => {
         const cardWidth = panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-width"]');
         cardWidth.value = '420';
         cardWidth.dispatchEvent(new Event('input', { bubbles: true }));
+        const descriptionLines = panel.querySelector(
+            '[data-testid="dataset-cover-test-palette-card-description-lines"]'
+        );
+        descriptionLines.value = '1';
+        descriptionLines.dispatchEvent(new Event('input', { bubbles: true }));
         const glowIntensity = panel.querySelector(
             '[data-testid="dataset-cover-test-palette-active-tab-glow-intensity"]'
         );
@@ -197,6 +204,7 @@ describe('dataset cover presentation settings', () => {
         brandColor.value = '#00aa77';
         brandColor.dispatchEvent(new Event('input', { bubbles: true }));
         expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('420px');
+        expect(document.documentElement.style.getPropertyValue('--card-description-lines')).toBe('1');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-intensity')).toBe('0.15');
         expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.9');
         expect(document.documentElement.style.getPropertyValue('--brand-hue')).toBe('162');
@@ -213,6 +221,7 @@ describe('dataset cover presentation settings', () => {
         expect(payload.dataset_cover_theme.dark.image_blur).toBe(3);
         expect(payload.dataset_cover_theme.shared.image_blur).toBe(1);
         expect(payload.dataset_cover_theme.shared.card_image_width).toBe(420);
+        expect(payload.dataset_cover_theme.shared.card_description_lines).toBe(1);
         expect(payload.dataset_cover_theme.shared.active_tab_glow_intensity).toBe(0.15);
         expect(payload.dataset_cover_theme.shared.active_tab_max_opacity).toBe(0.9);
         expect(payload.dataset_cover_theme.shared.brand_color).toBe('#00aa77');

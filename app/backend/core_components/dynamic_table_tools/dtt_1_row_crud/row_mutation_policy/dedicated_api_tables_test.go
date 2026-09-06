@@ -22,6 +22,7 @@ func TestRequiresDedicatedMutationAPI(t *testing.T) {
 		"system_permission_actions",
 		"system_row_access_rules",
 		"system_row_access_rule_events",
+		"system_user_visual_preferences",
 	} {
 		if !RequiresDedicatedMutationAPI(tableName) {
 			t.Fatalf("%s must reject generic mutations", tableName)

@@ -20,3 +20,18 @@ func TestBoardOrderingDoesNotGroupByLifecycleStatus(t *testing.T) {
 		t.Fatal("terminal worklines must remain visible as Observatory history")
 	}
 }
+
+func TestReportHistoryIsBoundedAndIncludesEarlierStates(t *testing.T) {
+	if !strings.Contains(boardWorklineReportHistoryQuery, "WHERE r.workline_id = $1") {
+		t.Fatal("report history must be scoped to exactly one workline")
+	}
+	if strings.Contains(boardWorklineReportHistoryQuery, "r.state = 'final'") {
+		t.Fatal("report history must preserve superseded and archived phase evidence")
+	}
+	if !strings.Contains(boardWorklineReportHistoryQuery, "ORDER BY r.created DESC, r.id DESC") {
+		t.Fatal("report history must show the latest immutable report first")
+	}
+	if !strings.Contains(boardWorklineReportHistoryQuery, "LIMIT 100") {
+		t.Fatal("report history must remain bounded")
+	}
+}

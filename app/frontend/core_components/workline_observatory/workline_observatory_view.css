@@ -471,6 +471,25 @@
     white-space: pre-wrap;
 }
 
+.workline-observatory__report-history {
+    margin-bottom: .85rem;
+}
+
+.workline-observatory__report-history:empty {
+    display: none;
+}
+
+.workline-observatory__report-history label {
+    display: grid;
+    gap: .35rem;
+    font-weight: 700;
+}
+
+.workline-observatory__report-history select {
+    width: 100%;
+    font-weight: 400;
+}
+
 .workline-observatory__contract {
     display: grid;
     gap: .5rem;

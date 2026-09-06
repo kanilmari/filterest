@@ -92,20 +92,21 @@ var RouteProfiles = map[string]RouteProfile{
 	// ── Public routes (no auth required) ──────────────────────
 
 	// Static / navigation
-	"router.faviconHandler":              PublicProfile,
-	"router.robotsHandler":               PublicProfile,
-	"router.healthHandler":               PublicProfile,
-	"router.systemHealthHandler":         PublicProfile,
-	"router.systemReadyHandler":          PublicProfile,
-	"router.systemInstanceStatusHandler": PublicProfile,
-	"router.systemDrainHandler":          PublicProfile,
-	"router.systemUpdateNoticeHandler":   PublicProfile,
-	"router.sitemapHandler":              PublicProfile,
-	"router.rootHandler":                 PublicProfile,
-	"router.handleFrontend":              PublicProfile,
-	"router.handleApps":                  PublicProfile,
-	"router.ServeStorage":                StorageProfile,
-	"router.datasetsRedirectHandler":     PublicProfile,
+	"router.faviconHandler":                 PublicProfile,
+	"router.robotsHandler":                  PublicProfile,
+	"router.healthHandler":                  PublicProfile,
+	"router.systemHealthHandler":            PublicProfile,
+	"router.systemReadyHandler":             PublicProfile,
+	"router.systemInstanceStatusHandler":    PublicProfile,
+	"router.systemDrainHandler":             PublicProfile,
+	"router.systemAutomationAccountHandler": PublicProfile,
+	"router.systemUpdateNoticeHandler":      PublicProfile,
+	"router.sitemapHandler":                 PublicProfile,
+	"router.rootHandler":                    PublicProfile,
+	"router.handleFrontend":                 PublicProfile,
+	"router.handleApps":                     PublicProfile,
+	"router.ServeStorage":                   StorageProfile,
+	"router.datasetsRedirectHandler":        PublicProfile,
 
 	// Auth endpoints (must be accessible before login)
 	"auth.LoginHandler":                   PublicProfile,
@@ -145,6 +146,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"auth.CheckTableRightsMultiHandler":             LoginOnlyProfile,
 	"auth.UserProfileFetchHandler":                  LoginOnlyProfile,
 	"auth.UserProfileUpdateHandler":                 LoginOnlyProfile,
+	"auth.UserVisualPreferenceHandler":              LoginOnlyProfile,
 	"auth.UserPermissionsHandler":                   LoginOnlyProfile, // User's own permissions — no table-level check needed
 	"auth.RequestEmailChangeOTPHandler":             LoginOnlyProfile, // Sends OTP for email change; user-owned operation, no table permissions needed
 	"auth.RequestPasswordChangeOTPHandler":          LoginOnlyProfile, // Sends OTP for password change; user-owned operation, no table permissions needed

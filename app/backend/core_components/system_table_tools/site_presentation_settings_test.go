@@ -43,6 +43,9 @@ func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T)
 	if shared.CardImageWidth != 300 || shared.ActiveTabFade != 25 || shared.ActiveTabMaxOpacity != 1 || shared.BrandColor != "#1a8fe6" {
 		t.Fatalf("shared defaults = %#v", shared)
 	}
+	if shared.CardDescriptionLines != 2 {
+		t.Fatalf("card description line default = %d", shared.CardDescriptionLines)
+	}
 	if shared.ActiveTabGlowIntensity != 0.3 || shared.ActiveTabGlowWidth != 1.5 || shared.ActiveTabGlowBlur != 2 {
 		t.Fatalf("shared glow defaults = %#v", shared)
 	}
@@ -188,6 +191,12 @@ func TestAdminSitePresentationSettingsHandlerRejectsIncompleteUnknownAndInvalidV
 	invalidStop := strings.Replace(string(validBody), `"center_stop":39`, `"center_stop":90`, 1)
 	invalidMode := strings.Replace(string(validBody), `"date_time"`, `"relative"`, 1)
 	invalidCardWidth := strings.Replace(string(validBody), `"card_image_width":300`, `"card_image_width":601`, 1)
+	invalidCardDescriptionLines := strings.Replace(
+		string(validBody),
+		`"card_description_lines":2`,
+		`"card_description_lines":0`,
+		1,
+	)
 	invalidThemeBlur := strings.Replace(string(validBody), `"image_blur":1`, `"image_blur":25`, 1)
 	invalidGlowIntensity := strings.Replace(
 		string(validBody),
@@ -204,16 +213,17 @@ func TestAdminSitePresentationSettingsHandlerRejectsIncompleteUnknownAndInvalidV
 	invalidBrandColor := strings.Replace(string(validBody), `"brand_color":"#1a8fe6"`, `"brand_color":"red"`, 1)
 
 	for name, body := range map[string]string{
-		"incomplete":           `{"dataset_cover_theme":{}}`,
-		"unknown":              unknown,
-		"invalid stops":        invalidStop,
-		"invalid mode":         invalidMode,
-		"invalid card width":   invalidCardWidth,
-		"invalid theme blur":   invalidThemeBlur,
-		"invalid glow":         invalidGlowIntensity,
-		"invalid tab opacity":  invalidTabMaxOpacity,
-		"invalid brand colour": invalidBrandColor,
-		"trailing":             string(validBody) + `{}`,
+		"incomplete":                `{"dataset_cover_theme":{}}`,
+		"unknown":                   unknown,
+		"invalid stops":             invalidStop,
+		"invalid mode":              invalidMode,
+		"invalid card width":        invalidCardWidth,
+		"invalid description lines": invalidCardDescriptionLines,
+		"invalid theme blur":        invalidThemeBlur,
+		"invalid glow":              invalidGlowIntensity,
+		"invalid tab opacity":       invalidTabMaxOpacity,
+		"invalid brand colour":      invalidBrandColor,
+		"trailing":                  string(validBody) + `{}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			response := httptest.NewRecorder()

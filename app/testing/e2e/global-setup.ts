@@ -53,7 +53,6 @@ async function globalSetup(_config: FullConfig) {
 
   // Load test credentials
   const { username, password } = loadCredentials();
-  const otpCode = loadOtpCode();
 
   if (!username || !password) {
     throw new Error(
@@ -81,7 +80,8 @@ async function globalSetup(_config: FullConfig) {
     // Open the SPA guest-shell login entry instead of the legacy standalone /login page.
     await openLoginEntry(page, '', baseURL);
 
-    // 2-step AJAX login: Phase 1 (credentials) → Phase 2 (OTP)
+    // Submit credentials first. Accounts with an explicit verification factor
+    // continue to the OTP phase; protected automation accounts finish here.
     await page.locator('[data-testid="login-username"]').fill(username);
     await page.locator('[data-testid="login-password"]').fill(password);
 
@@ -90,9 +90,11 @@ async function globalSetup(_config: FullConfig) {
       await privacy.check();
     }
 
-    await submitCredentialsAndWaitForOtp(page);
-    await page.locator('[data-testid="login-otp"]').fill(otpCode);
-    await page.locator('[data-testid="login-submit"]').click();
+    const otpRequired = await submitCredentialsAndWaitForOtp(page, username);
+    if (otpRequired) {
+      await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
+      await page.locator('[data-testid="login-submit"]').click();
+    }
     await waitForAuthenticatedApp(page, username);
     const sessionIdentity = await readSessionInfo(page);
     if (

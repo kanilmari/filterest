@@ -9,6 +9,7 @@ import {
     applyWorklineReleaseGoalAction,
     createWorklineReleaseGoal,
     fetchWorklineObservatoryBoard,
+    fetchWorklineObservatoryReportHistory,
     saveWorklineReleaseContract,
 } from './workline_observatory_api_adapter.js';
 import { startWorklineConversation } from './workline_observatory_chat_adapter.js';
@@ -26,10 +27,10 @@ import {
     toggleObservatoryWorklineSelection,
 } from './workline_observatory_state_builder.js';
 const COPY = {
-    en: { title: 'Workline observatory', subtitle: 'Select one or more worklines to change their state.', refresh: 'Refresh', now: 'NOW', noGoal: 'No release goal selected', goal: 'Selected release goal', releaseTarget: 'Release target', noReport: 'No canonical report yet.', context: 'Context', plain: 'Plain language', technical: 'Technical', next: 'Next step', git: 'Scoped Git snapshot', tickets: 'Tickets', contract: 'Release contract', unclassified: 'Unclassified', save: 'Save classification', ask: 'Discuss this workline with AI', send: 'Start scoped conversation', phase: 'Phase', loading: 'Loading…', unavailable: 'Observatory unavailable.', locked: 'Locked', draft: 'Draft', newGoal: 'Start next release goal', goalKey: 'Release identity', goalRevision: 'Goal revision', goalTitle: 'Release name', goalOutcome: 'Target outcome', createGoal: 'Create and select goal', lockGoal: 'Lock release goal', mustComplete: 'Must complete', mustRemainIncomplete: 'Must remain incomplete', mustBeInPhase: 'Must be in phase', mustNotStart: 'Must not start', outsideRelease: 'Outside release' },
-    fi: { title: 'Työlinjojen tilannekuva', subtitle: 'Valitse yksi tai useampi työlinja muuttaaksesi niiden tilaa.', refresh: 'Päivitä', now: 'NYT', noGoal: 'Julkaisutavoitetta ei ole valittu', goal: 'Valittu julkaisutavoite', releaseTarget: 'Julkaisutavoite', noReport: 'Kanonista raporttia ei vielä ole.', context: 'Konteksti', plain: 'Selkokielellä', technical: 'Teknisesti', next: 'Seuraava askel', git: 'Rajattu Git-tilanne', tickets: 'Tiketit', contract: 'Julkaisusopimus', unclassified: 'Luokittelematon', save: 'Tallenna luokitus', ask: 'Keskustele tästä työlinjasta AI:n kanssa', send: 'Aloita rajattu keskustelu', phase: 'Vaihe', loading: 'Ladataan…', unavailable: 'Tilannekuvaa ei saatu ladattua.', locked: 'Lukittu', draft: 'Luonnos', newGoal: 'Aloita seuraava julkaisutavoite', goalKey: 'Julkaisun tunniste', goalRevision: 'Tavoitteen versio', goalTitle: 'Julkaisun nimi', goalOutcome: 'Tavoiteltu lopputulos', createGoal: 'Luo ja valitse tavoite', lockGoal: 'Lukitse julkaisutavoite', mustComplete: 'Valmistuttava', mustRemainIncomplete: 'Jätettävä keskeneräiseksi', mustBeInPhase: 'Oltava vaiheessa', mustNotStart: 'Ei aloiteta', outsideRelease: 'Julkaisun ulkopuolella' },
-    ch: { title: '工作线总览', subtitle: '选择一条或多条工作线以更改状态。', refresh: '刷新', now: '现在', noGoal: '未选择发布目标', goal: '所选发布目标', releaseTarget: '发布目标', noReport: '尚无规范报告。', context: '背景', plain: '简明说明', technical: '技术说明', next: '下一步', git: '限定 Git 快照', tickets: '工单', contract: '发布契约', unclassified: '未分类', save: '保存分类', ask: '与 AI 讨论此工作线', send: '开始限定对话', phase: '阶段', loading: '正在加载…', unavailable: '无法加载总览。', locked: '已锁定', draft: '草稿', newGoal: '开始下一个发布目标', goalKey: '发布标识', goalRevision: '目标修订', goalTitle: '发布名称', goalOutcome: '目标结果', createGoal: '创建并选择目标', lockGoal: '锁定发布目标', mustComplete: '必须完成', mustRemainIncomplete: '必须保持未完成', mustBeInPhase: '必须处于阶段', mustNotStart: '不得开始', outsideRelease: '发布范围外' },
-    yue: { title: '工作線總覽', subtitle: '揀一條或多條工作線去更改狀態。', refresh: '重新整理', now: '而家', noGoal: '未揀發佈目標', goal: '已選發佈目標', releaseTarget: '發佈目標', noReport: '未有正式報告。', context: '背景', plain: '簡單說明', technical: '技術說明', next: '下一步', git: '限定 Git 快照', tickets: '工作單', contract: '發佈契約', unclassified: '未分類', save: '儲存分類', ask: '同 AI 討論呢條工作線', send: '開始限定對話', phase: '階段', loading: '載入中…', unavailable: '未能載入總覽。', locked: '已鎖定', draft: '草稿', newGoal: '開始下一個發佈目標', goalKey: '發佈識別', goalRevision: '目標修訂', goalTitle: '發佈名稱', goalOutcome: '目標結果', createGoal: '建立並揀選目標', lockGoal: '鎖定發佈目標', mustComplete: '必須完成', mustRemainIncomplete: '必須保持未完成', mustBeInPhase: '必須處於階段', mustNotStart: '唔可以開始', outsideRelease: '發佈範圍外' },
+    en: { title: 'Workline observatory', subtitle: 'Select one or more worklines to change their state.', refresh: 'Refresh', now: 'NOW', noGoal: 'No release goal selected', goal: 'Selected release goal', releaseTarget: 'Release target', noReport: 'No canonical report yet.', reportHistory: 'Earlier reports and phases', reportHistoryLoading: 'Loading report history…', reportHistoryUnavailable: 'Report history is unavailable.', context: 'Context', plain: 'Plain language', technical: 'Technical', next: 'Next step', git: 'Scoped Git snapshot', tickets: 'Tickets', contract: 'Release contract', unclassified: 'Unclassified', save: 'Save classification', ask: 'Discuss this workline with AI', send: 'Start scoped conversation', phase: 'Phase', loading: 'Loading…', unavailable: 'Observatory unavailable.', locked: 'Locked', draft: 'Draft', newGoal: 'Start next release goal', goalKey: 'Release identity', goalRevision: 'Goal revision', goalTitle: 'Release name', goalOutcome: 'Target outcome', createGoal: 'Create and select goal', lockGoal: 'Lock release goal', mustComplete: 'Must complete', mustRemainIncomplete: 'Must remain incomplete', mustBeInPhase: 'Must be in phase', mustNotStart: 'Must not start', outsideRelease: 'Outside release' },
+    fi: { title: 'Työlinjojen tilannekuva', subtitle: 'Valitse yksi tai useampi työlinja muuttaaksesi niiden tilaa.', refresh: 'Päivitä', now: 'NYT', noGoal: 'Julkaisutavoitetta ei ole valittu', goal: 'Valittu julkaisutavoite', releaseTarget: 'Julkaisutavoite', noReport: 'Kanonista raporttia ei vielä ole.', reportHistory: 'Aiemmat raportit ja vaiheet', reportHistoryLoading: 'Raporttihistoriaa ladataan…', reportHistoryUnavailable: 'Raporttihistoriaa ei saatu ladattua.', context: 'Konteksti', plain: 'Selkokielellä', technical: 'Teknisesti', next: 'Seuraava askel', git: 'Rajattu Git-tilanne', tickets: 'Tiketit', contract: 'Julkaisusopimus', unclassified: 'Luokittelematon', save: 'Tallenna luokitus', ask: 'Keskustele tästä työlinjasta AI:n kanssa', send: 'Aloita rajattu keskustelu', phase: 'Vaihe', loading: 'Ladataan…', unavailable: 'Tilannekuvaa ei saatu ladattua.', locked: 'Lukittu', draft: 'Luonnos', newGoal: 'Aloita seuraava julkaisutavoite', goalKey: 'Julkaisun tunniste', goalRevision: 'Tavoitteen versio', goalTitle: 'Julkaisun nimi', goalOutcome: 'Tavoiteltu lopputulos', createGoal: 'Luo ja valitse tavoite', lockGoal: 'Lukitse julkaisutavoite', mustComplete: 'Valmistuttava', mustRemainIncomplete: 'Jätettävä keskeneräiseksi', mustBeInPhase: 'Oltava vaiheessa', mustNotStart: 'Ei aloiteta', outsideRelease: 'Julkaisun ulkopuolella' },
+    ch: { title: '工作线总览', subtitle: '选择一条或多条工作线以更改状态。', refresh: '刷新', now: '现在', noGoal: '未选择发布目标', goal: '所选发布目标', releaseTarget: '发布目标', noReport: '尚无规范报告。', reportHistory: '过往报告和阶段', reportHistoryLoading: '正在加载报告历史…', reportHistoryUnavailable: '无法加载报告历史。', context: '背景', plain: '简明说明', technical: '技术说明', next: '下一步', git: '限定 Git 快照', tickets: '工单', contract: '发布契约', unclassified: '未分类', save: '保存分类', ask: '与 AI 讨论此工作线', send: '开始限定对话', phase: '阶段', loading: '正在加载…', unavailable: '无法加载总览。', locked: '已锁定', draft: '草稿', newGoal: '开始下一个发布目标', goalKey: '发布标识', goalRevision: '目标修订', goalTitle: '发布名称', goalOutcome: '目标结果', createGoal: '创建并选择目标', lockGoal: '锁定发布目标', mustComplete: '必须完成', mustRemainIncomplete: '必须保持未完成', mustBeInPhase: '必须处于阶段', mustNotStart: '不得开始', outsideRelease: '发布范围外' },
+    yue: { title: '工作線總覽', subtitle: '揀一條或多條工作線去更改狀態。', refresh: '重新整理', now: '而家', noGoal: '未揀發佈目標', goal: '已選發佈目標', releaseTarget: '發佈目標', noReport: '未有正式報告。', reportHistory: '過往報告同階段', reportHistoryLoading: '載入緊報告記錄…', reportHistoryUnavailable: '未能載入報告記錄。', context: '背景', plain: '簡單說明', technical: '技術說明', next: '下一步', git: '限定 Git 快照', tickets: '工作單', contract: '發佈契約', unclassified: '未分類', save: '儲存分類', ask: '同 AI 討論呢條工作線', send: '開始限定對話', phase: '階段', loading: '載入中…', unavailable: '未能載入總覽。', locked: '已鎖定', draft: '草稿', newGoal: '開始下一個發佈目標', goalKey: '發佈識別', goalRevision: '目標修訂', goalTitle: '發佈名稱', goalOutcome: '目標結果', createGoal: '建立並揀選目標', lockGoal: '鎖定發佈目標', mustComplete: '必須完成', mustRemainIncomplete: '必須保持未完成', mustBeInPhase: '必須處於階段', mustNotStart: '唔可以開始', outsideRelease: '發佈範圍外' },
 };
 
 const ACTION_COPY = {
@@ -79,6 +80,31 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
     let activeContextMenuElement = null;
     let removeContextMenuListeners = () => {};
     let toolbarCompact = false;
+    const reportHistoryByWorklineID = new Map();
+    const reportHistoryStatusByWorklineID = new Map();
+    const selectedReportIDByWorklineID = new Map();
+    const ensureReportHistory = async (worklineId) => {
+        if (!worklineId || reportHistoryStatusByWorklineID.has(worklineId)) return;
+        reportHistoryStatusByWorklineID.set(worklineId, 'loading');
+        redraw();
+        try {
+            const reports = await fetchWorklineObservatoryReportHistory(worklineId);
+            reportHistoryByWorklineID.set(worklineId, reports);
+            reportHistoryStatusByWorklineID.set(worklineId, 'ready');
+            if (reports[0] && !selectedReportIDByWorklineID.has(worklineId)) {
+                const latestReportID = state.worklines.find((workline) => workline.id === worklineId)
+                    ?.latest_report?.id;
+                const initialReportID = reports.some((report) => report.id === latestReportID)
+                    ? latestReportID
+                    : reports[0].id;
+                selectedReportIDByWorklineID.set(worklineId, initialReportID);
+            }
+        } catch (_error) {
+            reportHistoryByWorklineID.set(worklineId, []);
+            reportHistoryStatusByWorklineID.set(worklineId, 'error');
+        }
+        if (container.isConnected) redraw();
+    };
     const redraw = () => {
         removeContextMenuListeners();
         removeContextMenuListeners = () => {};
@@ -113,6 +139,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         toolbarCleanupByContainer.set(container, installCompactToolbarObserver(view, (compact) => {
             toolbarCompact = compact;
         }));
+        queueMicrotask(() => void ensureReportHistory(state.selectedWorklineId));
     };
 
     const isSelected = (worklineId) => (state.selectedWorklineIds || []).includes(worklineId);
@@ -163,6 +190,9 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
             selectedIDs,
             focusedID,
         );
+        reportHistoryByWorklineID.clear();
+        reportHistoryStatusByWorklineID.clear();
+        selectedReportIDByWorklineID.clear();
         persistWorklineSelection(state);
     };
 
@@ -482,7 +512,13 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
             notice.textContent = copy.reconciliation;
             body.append(notice);
         }
-        const report = workline.latest_report;
+        const historyStatus = reportHistoryStatusByWorklineID.get(workline.id);
+        const reportHistory = reportHistoryByWorklineID.get(workline.id) || [];
+        const selectedReportID = selectedReportIDByWorklineID.get(workline.id);
+        const report = reportHistory.find((candidate) => candidate.id === selectedReportID)
+            || reportHistory[0]
+            || workline.latest_report;
+        body.append(buildReportHistoryControl(workline, reportHistory, historyStatus, report));
         if (!report) {
             const empty = document.createElement('p'); empty.textContent = copy.noReport; body.append(empty);
         } else {
@@ -497,6 +533,41 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         body.append(buildContractEditor(workline), buildChatPanel(workline));
         detail.append(body);
         return detail;
+    };
+
+    const buildReportHistoryControl = (workline, reports, status, selectedReport) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'workline-observatory__report-history';
+        if (status === 'loading' || !status) {
+            const loading = document.createElement('p'); loading.textContent = copy.reportHistoryLoading;
+            wrapper.append(loading);
+            return wrapper;
+        }
+        if (status === 'error') {
+            const unavailable = document.createElement('p'); unavailable.textContent = copy.reportHistoryUnavailable;
+            wrapper.append(unavailable);
+            return wrapper;
+        }
+        if (reports.length === 0) return wrapper;
+
+        const label = document.createElement('label');
+        const labelText = document.createElement('span'); labelText.textContent = copy.reportHistory;
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', copy.reportHistory);
+        reports.forEach((report) => {
+            const option = document.createElement('option');
+            option.value = String(report.id);
+            option.textContent = formatReportHistoryOption(report, copy);
+            select.append(option);
+        });
+        select.value = String(selectedReport?.id || reports[0].id);
+        select.addEventListener('change', () => {
+            selectedReportIDByWorklineID.set(workline.id, Number(select.value));
+            redraw();
+        });
+        label.append(labelText, select);
+        wrapper.append(label);
+        return wrapper;
     };
 
     const buildGoalPanel = () => {
@@ -725,6 +796,13 @@ function describeStatusChange(change, copy) {
     const parsed = new Date(change.changed_at);
     const changedAt = Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
     return `${actor} · ${source} · ${changedAt}`;
+}
+
+function formatReportHistoryOption(report, copy) {
+    const phase = report.phase_gate || report.current_phase || '—';
+    const parsed = new Date(report.created_at);
+    const createdAt = Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
+    return `${copy.phase} ${phase} · ${createdAt} · ${report.title || `#${report.id}`}`;
 }
 
 function detailLine(labelText, valueText) {

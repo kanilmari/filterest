@@ -49,7 +49,7 @@ func TestBuildReadRowPolicyConditionAddsOwnerFallbackForNonPilot(t *testing.T) {
 	}
 
 	condition, args := buildReadRowPolicyCondition("some_other_table", "basic", 42, policy, 3)
-	want := `public.resolve_effective_row_access($4, "some_other_table"."id", $5, 'read', (("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $3) AND ("some_other_table"."enabled" = TRUE OR "some_other_table"."user_id" = $3)), FALSE)`
+	want := `(("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $3) AND ("some_other_table"."enabled" = TRUE OR "some_other_table"."user_id" = $3)) AND (public.resolve_effective_row_access($4, "some_other_table"."id", $5, 'read', (TRUE), FALSE))`
 	if condition != want {
 		t.Fatalf("condition = %q, want %q", condition, want)
 	}
@@ -68,7 +68,7 @@ func TestBuildReadRowPolicyConditionIgnoresShadowLegacyOwnerColumn(t *testing.T)
 	}
 
 	condition, _ := buildReadRowPolicyCondition("some_other_table", "basic", 42, policy, 1)
-	want := `public.resolve_effective_row_access($2, "some_other_table"."id", $3, 'read', (("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $1)), FALSE)`
+	want := `(("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $1)) AND (public.resolve_effective_row_access($2, "some_other_table"."id", $3, 'read', (TRUE), FALSE))`
 	if condition != want {
 		t.Fatalf("condition = %q, want active owner column to stay user_id", condition)
 	}

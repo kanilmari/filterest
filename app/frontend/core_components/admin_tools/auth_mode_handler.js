@@ -5,6 +5,7 @@
 import { count_this_function } from "../dev_tools/function_counter.js";
 import { fetchAuthModes, fetchUserPermissions } from "../endpoints/stable_endpoint_router.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
+import { synchronizeThemePreferenceForAuthState } from "../theme.js";
 
 export async function setAuthModes() {
     count_this_function("setAuthModes");
@@ -24,6 +25,8 @@ export async function setAuthModes() {
             } else {
                 localStorage.removeItem('login_required_for_browse');
             }
+
+            await synchronizeThemePreferenceForAuthState(data.needs_button === "logout");
 
             // Jos käyttäjä on kirjautunut sisään, haetaan ja talletetaan sallitut reitit
             if (data.needs_button === "logout") {

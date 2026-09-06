@@ -100,6 +100,7 @@ type DatasetCoverSharedValues struct {
 	// ImageBlur remains as a rollback-safe fallback for older application builds.
 	ImageBlur              float64 `json:"image_blur"`
 	CardImageWidth         float64 `json:"card_image_width"`
+	CardDescriptionLines   int     `json:"card_description_lines"`
 	ActiveTabFade          float64 `json:"active_tab_fade"`
 	ActiveTabMaxOpacity    float64 `json:"active_tab_max_opacity"`
 	ActiveTabGlowIntensity float64 `json:"active_tab_glow_intensity"`
@@ -263,7 +264,8 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	}
 	if err := requireExactJSONKeys(themeParts["shared"], []string{
 		"hero_extra_height", "hero_bottom_fade", "image_blur",
-		"card_image_width", "active_tab_fade", "active_tab_max_opacity",
+		"card_image_width", "card_description_lines",
+		"active_tab_fade", "active_tab_max_opacity",
 		"active_tab_glow_intensity", "active_tab_glow_width", "active_tab_glow_blur",
 		"brand_color",
 	}); err != nil {
@@ -378,6 +380,9 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if err := validateRange("shared.card_image_width", config.Shared.CardImageWidth, 30, 600); err != nil {
 		return err
 	}
+	if config.Shared.CardDescriptionLines < 1 || config.Shared.CardDescriptionLines > 12 {
+		return fmt.Errorf("shared.card_description_lines must be between 1 and 12")
+	}
 	if err := validateRange("shared.active_tab_fade", config.Shared.ActiveTabFade, 0, 100); err != nil {
 		return err
 	}
@@ -460,6 +465,7 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 				HeroBottomFade:         48,
 				ImageBlur:              1,
 				CardImageWidth:         300,
+				CardDescriptionLines:   2,
 				ActiveTabFade:          25,
 				ActiveTabMaxOpacity:    1,
 				ActiveTabGlowIntensity: 0.3,

@@ -106,14 +106,17 @@ func buildReadRowPolicyCondition(tableName, userRole string, userID int, policy 
 
 // buildReadRowPolicyConditionForReference applies a dataset's policy while
 // allowing SQL builders to refer to that dataset through an explicit alias.
-// Intelligent-search candidate queries use aliases, but policy applicability
-// must still be decided from the canonical dataset name (not the alias).
+// Mandatory visibility flags stay outside the discretionary exact-row resolver:
+// a direct row allow may widen ordinary ACL access, but it must never bypass an
+// unpublished or otherwise mandatory-hidden row. Intelligent-search candidate
+// queries use aliases, but policy applicability must still be decided from the
+// canonical dataset name (not the alias).
 func buildReadRowPolicyConditionForReference(tableName, tableReference, userRole string, userID int, policy ReadRowPolicy, argStart int) (string, []interface{}) {
 	if userRole == "admin" {
 		return "", nil
 	}
 
-	baseCondition, baseArgs := buildLegacyReadPolicyBaseConditionForReference(
+	mandatoryCondition, mandatoryArgs := buildLegacyReadPolicyBaseConditionForReference(
 		tableName,
 		tableReference,
 		userRole,
@@ -121,19 +124,19 @@ func buildReadRowPolicyConditionForReference(tableName, tableReference, userRole
 		policy,
 		argStart,
 	)
-	if baseCondition == "" {
-		baseCondition = "TRUE"
-	}
 
 	effectiveCondition, effectiveArgs := buildEffectiveRowAccessConditionForReference(
 		tableName,
 		tableReference,
 		userID,
 		"read",
-		baseCondition,
-		argStart+len(baseArgs),
+		"TRUE",
+		argStart+len(mandatoryArgs),
 	)
-	return effectiveCondition, append(baseArgs, effectiveArgs...)
+	if mandatoryCondition != "" {
+		effectiveCondition = fmt.Sprintf("(%s) AND (%s)", mandatoryCondition, effectiveCondition)
+	}
+	return effectiveCondition, append(mandatoryArgs, effectiveArgs...)
 }
 
 func buildLegacyReadPolicyBaseConditionForReference(
@@ -228,9 +231,9 @@ func appendReadPolicyToWhereClause(tableName, userRole string, userID int, polic
 }
 
 // AppendMutationRowPolicyToWhereClause adds the row-eligibility predicate used
-// by generic update/delete paths. Non-pilot datasets reuse the legacy read
-// policy as their compatibility gate. The pilot uses its narrower
-// admin-or-owner write rule instead of its public SELECT policy.
+// by generic update/delete paths. Non-pilot datasets keep mandatory visibility
+// flags outside the discretionary exact-row resolver. The pilot uses its
+// narrower admin-or-owner write rule instead of its public SELECT policy.
 func AppendMutationRowPolicyToWhereClause(
 	q dbutils.Querier,
 	tableName string,
@@ -287,6 +290,7 @@ func appendMutationRowPolicyForAction(
 
 	quotedTable := pq.QuoteIdentifier(tableName)
 	broaderCondition := "TRUE"
+	mandatoryCondition := ""
 	switch {
 	case tableName == rlsPilotTableName:
 		if userID <= 1 {
@@ -307,7 +311,7 @@ func appendMutationRowPolicyForAction(
 		}
 		if policy.Name == rowPolicyAllFlagsTrueUnlessOwner && shouldApplyReadRowPolicy(tableName, userRole, policy) {
 			var baseArgs []interface{}
-			broaderCondition, baseArgs = buildLegacyReadPolicyBaseConditionForReference(
+			mandatoryCondition, baseArgs = buildLegacyReadPolicyBaseConditionForReference(
 				tableName,
 				tableName,
 				userRole,
@@ -315,9 +319,6 @@ func appendMutationRowPolicyForAction(
 				policy,
 				len(args)+1,
 			)
-			if broaderCondition == "" {
-				broaderCondition = "TRUE"
-			}
 			args = append(args, baseArgs...)
 		}
 	}
@@ -331,6 +332,9 @@ func appendMutationRowPolicyForAction(
 		len(args)+1,
 	)
 	args = append(args, effectiveArgs...)
+	if mandatoryCondition != "" {
+		effectiveCondition = fmt.Sprintf("(%s) AND (%s)", mandatoryCondition, effectiveCondition)
+	}
 	if strings.TrimSpace(whereClause) == "" {
 		return " WHERE " + effectiveCondition, args, nil
 	}

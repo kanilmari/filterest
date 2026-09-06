@@ -1,0 +1,15 @@
+/* card_description_lines.css
+ * Applies the site-wide card-description row limit after the legacy card variants.
+ * Bridges the administrator palette setting and every card role named description.
+ * Exists so one semantic value controls truncation while preserving the ellipsis cue.
+ */
+
+.description_value {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--card-description-lines, 2);
+    line-clamp: var(--card-description-lines, 2);
+    max-height: calc(1.5em * var(--card-description-lines, 2));
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

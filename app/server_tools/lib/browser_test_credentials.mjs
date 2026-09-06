@@ -205,11 +205,19 @@ export function loadBrowserTestCredentials({
       values.set(match[1].trim(), match[2].trim());
     }
   }
-  const username = values.get('TEST_ADMIN_USER') || '';
-  const password = values.get('TEST_ADMIN_PASS') || '';
+  const username = (
+    values.get('TEST_ADMIN_USER')
+    || values.get('FILTEREST_API_USERNAME')
+    || ''
+  );
+  const password = (
+    values.get('TEST_ADMIN_PASS')
+    || values.get('FILTEREST_API_PASSWORD')
+    || ''
+  );
   if (!username || !password) {
     throw new Error(
-      'Missing TEST_ADMIN_USER or TEST_ADMIN_PASS in the configured test credential file.',
+      'Missing browser-test username or password in the configured credential file.',
     );
   }
   return { username, password };

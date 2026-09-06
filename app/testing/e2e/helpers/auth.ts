@@ -122,11 +122,14 @@ export async function openLoginEntry(
 }
 
 /**
- * Submits the credential phase and waits for the OTP phase. The SPA login modal
+ * Submits the credential phase and waits for either OTP or authentication. The SPA login modal
  * can be visible a moment before its fragment submit listener is attached, so a
  * short retry keeps E2E setup from losing the first instant click.
  */
-export async function submitCredentialsAndWaitForOtp(page: Page): Promise<void> {
+export async function submitCredentialsAndWaitForOtp(
+  page: Page,
+  expectedUsername = '',
+): Promise<boolean> {
   const submitButton = page.locator('[data-testid="login-submit"]');
   const otpSection = page.locator('[data-testid="login-otp-section"]');
   let lastError: unknown;
@@ -145,11 +148,25 @@ export async function submitCredentialsAndWaitForOtp(page: Page): Promise<void> 
     await responsePromise;
 
     try {
-      await otpSection.waitFor({
-        state: 'visible',
-        timeout: attempt === 1 ? 2500 : 10000,
-      });
-      return;
+      const timeout = attempt === 1 ? 2500 : 10000;
+      const nextStep = await Promise.race([
+        otpSection.waitFor({ state: 'visible', timeout }).then(() => 'otp'),
+        expectedUsername
+          ? page.waitForFunction(
+            async (username) => {
+              const response = await fetch('/api/user-profile', { credentials: 'include' });
+              if (!response.ok) {
+                return false;
+              }
+              const profile = await response.json();
+              return profile?.user_id > 1 && profile?.username === username;
+            },
+            expectedUsername,
+            { timeout },
+          ).then(() => 'authenticated')
+          : new Promise<string>(() => {}),
+      ]);
+      return nextStep === 'otp';
     } catch (error) {
       lastError = error;
       if (attempt < 3) {
@@ -261,8 +278,8 @@ export async function login(page: Page, credentials?: TestCredentials): Promise<
     return;
   }
 
-  // Fallback: session expired or storageState not available — login manually
-  // Uses the 2-step AJAX login: Phase 1 (credentials) → Phase 2 (OTP)
+  // Fallback: session expired or storageState not available — login manually.
+  // Verification-factor accounts use the second phase; automation accounts do not.
   await openLoginEntry(page);
 
   await page.locator('[data-testid="login-username"]').fill(creds.username);
@@ -273,12 +290,12 @@ export async function login(page: Page, credentials?: TestCredentials): Promise<
     await privacyCheckbox.check();
   }
 
-  // Phase 1: submit credentials → OTP section appears
-  await submitCredentialsAndWaitForOtp(page);
-
-  // Phase 2: use the same explicit OTP configuration as the native backend.
-  await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
-  await page.locator('[data-testid="login-submit"]').click();
+  const otpRequired = await submitCredentialsAndWaitForOtp(page, creds.username);
+  if (otpRequired) {
+    // Phase 2: use the same explicit OTP configuration as the native backend.
+    await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
+    await page.locator('[data-testid="login-submit"]').click();
+  }
   await waitForAuthenticatedApp(page, creds.username);
 
   const postLoginSessionInfo = await readSessionInfo(page);
