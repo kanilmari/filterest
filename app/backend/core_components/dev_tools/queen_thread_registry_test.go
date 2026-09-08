@@ -7,6 +7,7 @@ import (
 
 func TestEnsureQueenThreadForStartCreatesThreadAndSeedsRunHistory(t *testing.T) {
 	projectRoot := t.TempDir()
+	t.Setenv("FILTEREST_QUEEN_STATE_ROOT", filepath.Join(t.TempDir(), "queen-state"))
 
 	record, err := ensureQueenThreadForStart(
 		projectRoot,
@@ -39,6 +40,7 @@ func TestEnsureQueenThreadForStartCreatesThreadAndSeedsRunHistory(t *testing.T) 
 
 func TestEnsureQueenThreadForStartAppendsToExistingThread(t *testing.T) {
 	projectRoot := t.TempDir()
+	t.Setenv("FILTEREST_QUEEN_STATE_ROOT", filepath.Join(t.TempDir(), "queen-state"))
 
 	first, err := ensureQueenThreadForStart(
 		projectRoot,
@@ -77,6 +79,8 @@ func TestEnsureQueenThreadForStartAppendsToExistingThread(t *testing.T) {
 
 func TestLoadQueenThreadRunIndexMapsEachRunToThreadMetadata(t *testing.T) {
 	projectRoot := t.TempDir()
+	stateRoot := filepath.Join(t.TempDir(), "operator-selected-queen")
+	t.Setenv("FILTEREST_QUEEN_STATE_ROOT", stateRoot)
 
 	record, err := ensureQueenThreadForStart(
 		projectRoot,
@@ -90,7 +94,7 @@ func TestLoadQueenThreadRunIndexMapsEachRunToThreadMetadata(t *testing.T) {
 		t.Fatalf("ensureQueenThreadForStart returned error: %v", err)
 	}
 
-	index, err := loadQueenThreadRunIndex(filepath.Join(projectRoot, ".queen", "thread_registry"))
+	index, err := loadQueenThreadRunIndex(filepath.Join(stateRoot, "thread_registry"))
 	if err != nil {
 		t.Fatalf("loadQueenThreadRunIndex returned error: %v", err)
 	}

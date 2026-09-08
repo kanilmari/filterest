@@ -863,6 +863,7 @@ func withQueenSessionTestState(t *testing.T) string {
 
 	transcriptDir := t.TempDir()
 	projectRoot := t.TempDir()
+	t.Setenv("FILTEREST_QUEEN_STATE_ROOT", filepath.Join(t.TempDir(), "queen-state"))
 	if err := os.WriteFile(filepath.Join(projectRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
 		t.Fatalf("os.WriteFile main.go returned error: %v", err)
 	}

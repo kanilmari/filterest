@@ -548,7 +548,7 @@
       "sha256": "f96b62b4b0138dd5e312306f609e07f5a4e19139231985a309262d1123fa5c33"
     },
     "filterest/app/server_tools/migrations/20260908000008_restore_column_support_view_registration.sql": {
-      "sha256": "c54278a7a0eb1e27dd24f3a7aa21ad16bb6a8894db1477bde57638c7450e9e39"
+      "sha256": "a2124683670d1e08d7fb0006bde4a456e636d34951c1bae596b4f916a4a7ddb0"
     },
     "filterest/app/server_tools/migrations/20260908000009_seed_article_editor_copy.sql": {
       "sha256": "61268f27fe3fcaeb55dd694f58252172128c1fc244729929cf1efc60f959312d"

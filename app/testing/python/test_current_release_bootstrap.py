@@ -56,3 +56,45 @@ def test_fresh_bootstrap_contains_features_and_repair_is_repeatable(database):
         JOIN system_db_tables tables ON tables.table_uid=rights.target_table_uid
         JOIN system_user_groups groups ON groups.id=rights.user_group_id
         WHERE tables.table_name='system_column_supported_views' AND groups.name<>'admins'""") == "0"
+
+
+def test_upgrade_restores_a_view_omitted_by_an_older_bootstrap(database):
+    database("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    database((BOOTSTRAP / "schema.sql").read_text())
+    database((BOOTSTRAP / "seed_data.sql").read_text())
+    # Older released seed marked migration 9.7.3 applied while omitting the view.
+    database("""
+        DROP VIEW public.system_column_supported_views;
+        DELETE FROM system_group_table_func_rights WHERE target_table_uid IN
+          (SELECT table_uid FROM system_db_tables WHERE table_name='system_column_supported_views');
+        DELETE FROM system_column_details WHERE table_uid IN
+          (SELECT table_uid FROM system_db_tables WHERE table_name='system_column_supported_views');
+        DELETE FROM system_db_tables WHERE table_name='system_column_supported_views';
+    """)
+    assert database("SELECT count(*) FROM system_schema_migrations WHERE filename="
+                    "'20260906000002_add_column_view_support_matrix.sql'") == "1"
+    batch = sorted(MIGRATIONS.glob("202609080000*.sql"))
+    batch = [path for path in batch if path.name[:14] >= "20260908000008"]
+    assert len(batch) == 3
+    for _ in range(2):
+        for migration in batch:
+            database(migration.read_text())
+        assert int(database("SELECT count(*) FROM system_column_supported_views")) > 0
+        assert database("SELECT count(*) FROM system_db_tables WHERE table_name="
+                        "'system_column_supported_views'") == "1"
+    assert database("SELECT count(*) FROM system_db_version WHERE version='9.7.13'") == "1"
+
+
+def test_upgrade_preserves_an_existing_site_view_definition(database):
+    database("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    database((BOOTSTRAP / "schema.sql").read_text())
+    database((BOOTSTRAP / "seed_data.sql").read_text())
+    original = database("SELECT pg_get_viewdef('public.system_column_supported_views', true)")
+    # Keep the same result columns but give this site a distinct view definition.
+    database("CREATE OR REPLACE VIEW public.system_column_supported_views AS "
+             + original.rstrip(";") + " WHERE details.table_uid > 0")
+    before = database("SELECT pg_get_viewdef('public.system_column_supported_views', true)")
+    repair = MIGRATIONS / "20260908000008_restore_column_support_view_registration.sql"
+    for _ in range(2):
+        database(repair.read_text())
+        assert database("SELECT pg_get_viewdef('public.system_column_supported_views', true)") == before
