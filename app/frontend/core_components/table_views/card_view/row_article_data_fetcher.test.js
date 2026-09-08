@@ -85,3 +85,19 @@ test("keeps a local preview that has no stable row identifier", async () => {
     })).resolves.toBe(preview);
     expect(requestRows).not.toHaveBeenCalled();
 });
+
+
+test("keeps article field-set order and never fills hidden fields from an old card", async () => {
+    const row = await fetchPermittedRowArticleData({
+        tableName: "travel_info",
+        rowItem: { id: 7, title: "Old", hidden: "Old hidden value" },
+        requestRows: async () => ({
+            columns: ["description", "title"],
+            data: [{ id: 7, title: "New", description: "Body" }],
+        }),
+    });
+    expect(row.__articleColumns).toEqual(["description", "title"]);
+    expect(row.hidden).toBeUndefined();
+    expect(Object.keys(row)).not.toContain("__articleColumns");
+    expect(ROW_ARTICLE_VIEW_KEY).toBe("article_view");
+});

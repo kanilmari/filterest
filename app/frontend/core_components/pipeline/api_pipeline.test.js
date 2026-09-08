@@ -183,4 +183,65 @@ describe('api_pipeline', () => {
         expect(showWarningToastMock.mock.calls.flat().join(' ')).not.toContain('private runtime detail');
         expect(showErrorToastMock).not.toHaveBeenCalled();
     });
+    test.each([400, 403, 429, 503])('quiet requests still fail for HTTP %s without error or warning toasts', async (status) => {
+        localStorage.setItem('button_state', 'logout');
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Provider unavailable' }, { ok: false, status })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders', suppressErrorToast: true })).rejects.toThrow();
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showWarningToastMock).not.toHaveBeenCalled();
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
+    });
+
+    test.each([400, 429, 503])('ordinary requests retain their HTTP %s notifications', async (status) => {
+        localStorage.setItem('button_state', 'logout');
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Provider unavailable' }, { ok: false, status })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders' })).rejects.toThrow();
+        expect(showErrorToastMock.mock.calls.length + showWarningToastMock.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    test.each([429, 503])('a quiet HTTP %s does not consume the next ordinary notification throttle', async (status) => {
+        localStorage.setItem('button_state', 'logout');
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Busy' }, { ok: false, status })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders', suppressErrorToast: true })).rejects.toThrow();
+        await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders' })).rejects.toThrow();
+        expect(showWarningToastMock).toHaveBeenCalledOnce();
+    });
+
+    test.each([
+        [401, { error: 'Unauthorized' }],
+        [403, { error: 'Unauthorized', auth_failure: true }],
+    ])('quiet error toasts do not suppress HTTP %s authentication redirects', async (status, body) => {
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse(body, { ok: false, status })));
+        const mod = await loadModule();
+        const result = await mod.runApiPipeline({ routeName: 'imageSourcePickerProviders', suppressErrorToast: true });
+        expect(result.abort).toBe(true);
+        expect(requestLoginRedirectMock).toHaveBeenCalledOnce();
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+    });
+
+    test('quiet error toasts retain CSRF retry and request credentials', async () => {
+        const responses = [
+            buildResponse({ csrf_token: 'old-csrf' }),
+            buildResponse({ error: 'missing CSRF token' }, { ok: false, status: 403 }),
+            buildResponse({ csrf_token: 'new-csrf' }),
+            buildResponse({ selection: { provider: 'pexels' } }),
+        ];
+        const fetchMock = vi.fn(async () => responses.shift());
+        vi.stubGlobal('fetch', fetchMock);
+        const mod = await loadModule();
+        const result = await mod.runApiPipeline({
+            routeName: 'imageSourcePickerResolve', method: 'POST',
+            bodyData: { source_url: 'https://www.pexels.com/photo/example-123/' }, suppressErrorToast: true,
+        });
+        expect(result.parsedData.selection.provider).toBe('pexels');
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+        expect(fetchMock.mock.calls[3][1]).toEqual(expect.objectContaining({
+            credentials: 'include', headers: expect.objectContaining({ 'X-CSRF-Token': 'new-csrf' }),
+        }));
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+    });
+
 });

@@ -72,8 +72,14 @@ func buildReq(t *testing.T, store *gorillaSessions.CookieStore, method, target s
 func savedSessionFromResponse(t *testing.T, store *gorillaSessions.CookieStore, target string, rr *httptest.ResponseRecorder) *gorillaSessions.Session {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, target, nil)
-	for _, c := range rr.Result().Cookies() {
-		req.AddCookie(c)
+	// Browsers retain the last Set-Cookie for each name when one response
+	// clears an identity and then establishes a public guest session.
+	latest := map[string]*http.Cookie{}
+	for _, cookie := range rr.Result().Cookies() {
+		latest[cookie.Name] = cookie
+	}
+	for _, cookie := range latest {
+		req.AddCookie(cookie)
 	}
 	sess, err := store.Get(req, e_sessions.SessionName)
 	if err != nil {
@@ -90,6 +96,10 @@ func noopHandler(called *bool) http.HandlerFunc {
 }
 
 type mockConfig struct {
+	adminOnly         bool
+	adminAllowed      bool
+	adminMember       bool
+	policyError       bool
 	loginToBrowse     bool
 	loginToBrowseErr  bool
 	authGeneration    int64
@@ -140,7 +150,19 @@ func (c *mockConn) Query(query string, args []driver.Value) (driver.Rows, error)
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *mockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *mockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "FROM system_config") && len(args) == 1 {
+		if c.cfg.policyError {
+			return nil, fmt.Errorf("policy unavailable")
+		}
+		return mockBoolRow("boolean_value", c.cfg.adminOnly), nil
+	}
+	if strings.Contains(query, "admin_access_allowed IS TRUE") {
+		return &mockRows{cols: []string{"enabled", "admin_access_allowed"}, vals: []driver.Value{true, c.cfg.adminAllowed}}, nil
+	}
+	if strings.Contains(query, "FROM system_user_group_memberships") {
+		return &mockRows{cols: []string{"membership"}, vals: []driver.Value{int64(1)}, done: !c.cfg.adminMember}, nil
+	}
 	if strings.Contains(query, "login_to_browse") {
 		if c.cfg.loginToBrowseErr {
 			return nil, fmt.Errorf("simulated DB error")
@@ -343,5 +365,48 @@ func TestEnsureLoggedIn_AuthenticationGenerationDatabaseErrorFailsClosed(t *test
 
 	if called || rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("database failure result: called=%v status=%d", called, rr.Code)
+	}
+}
+
+func TestAdminOnlyModeDowngradesExistingBasicSessionToPublicGuest(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{adminOnly: true, adminAllowed: false, loginToBrowse: false})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)
+	rr := httptest.NewRecorder()
+	called := false
+	EnsureLoggedIn(noopHandler(&called))(rr, req)
+	if !called {
+		t.Fatal("public browsing stopped after basic sign-in was revoked")
+	}
+	session := savedSessionFromResponse(t, store, "/api/get-results", rr)
+	if session.Values["user_id"] != 1 {
+		t.Fatalf("expected guest principal, got %#v", session.Values["user_id"])
+	}
+	if _, ok := session.Values["authentication_generation"]; ok {
+		t.Fatal("basic authentication generation remains")
+	}
+}
+
+func TestAdminOnlyModePreservesExistingGuestBrowsing(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{adminOnly: true, loginToBrowse: false})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results", 1)
+	rr := httptest.NewRecorder()
+	called := false
+	EnsureLoggedIn(noopHandler(&called))(rr, req)
+	if !called || rr.Code != http.StatusOK {
+		t.Fatalf("guest incorrectly subject to sign-in restriction: %d", rr.Code)
+	}
+}
+
+func TestAuthenticatedSessionFailsClosedOnAdmissionReadFailure(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{policyError: true})
+	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)
+	rr := httptest.NewRecorder()
+	called := false
+	EnsureLoggedIn(noopHandler(&called))(rr, req)
+	if called || rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unverifiable admission passed: %d", rr.Code)
 	}
 }

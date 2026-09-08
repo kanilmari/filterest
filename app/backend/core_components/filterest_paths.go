@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -169,6 +170,42 @@ func filterestHomesOverlap(first string, second string) bool {
 	return pathContainsPath(first, second) || pathContainsPath(second, first)
 }
 
+// readFilterestSourceRoots reads the immutable composition's source directories.
+// It supplies names only to the existing normalized mutable-home overlap guard.
+// Operator path overrides cannot replace missing, linked or unsafe metadata.
+func readFilterestSourceRoots(projectRoot string) ([]string, error) {
+	path := filepath.Join(projectRoot, "filterest.source-roots")
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, fmt.Errorf("filterest.source-roots: required source metadata is missing: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0 || info.Size() > 16384 {
+		return nil, fmt.Errorf("filterest.source-roots: expected a protected regular source file")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	validName := regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+	roots := []string{}
+	seen := map[string]bool{}
+	for _, rawLine := range strings.Split(string(content), "\n") {
+		name := strings.TrimSpace(rawLine)
+		if name == "" || strings.HasPrefix(name, "#") {
+			continue
+		}
+		if !validName.MatchString(name) || seen[name] {
+			return nil, fmt.Errorf("filterest.source-roots: invalid or duplicate source directory")
+		}
+		seen[name] = true
+		roots = append(roots, name)
+	}
+	if len(roots) == 0 {
+		return nil, fmt.Errorf("filterest.source-roots: source directory list must not be empty")
+	}
+	return roots, nil
+}
+
 func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHomes, error) {
 	normalizedRoot, err := resolvePathWithExistingSymlinks(projectRoot)
 	if err != nil {
@@ -181,11 +218,11 @@ func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHom
 	defaultOperationsHome := filepath.Join(normalizedRoot, "filterest_operations")
 	nestedPublicInstall := !privateSource && isNestedFilterestInstallation(normalizedRoot)
 	if privateSource {
-		defaultProjectsHome = filepath.Join(normalizedRoot, "..", "filterest-projects")
-		defaultKeysHome = filepath.Join(normalizedRoot, "..", "filterest_keys")
-		defaultRuntimeDataHome = filepath.Join(normalizedRoot, "..", "filterest-runtime-data")
-		defaultMaintainerToolsHome = filepath.Join(normalizedRoot, "..", "filterest-maintainer-tools")
-		defaultOperationsHome = filepath.Join(normalizedRoot, "..", "filterest-operations")
+		defaultProjectsHome = filepath.Join(normalizedRoot, "projects")
+		defaultKeysHome = filepath.Join(normalizedRoot, "keys")
+		defaultRuntimeDataHome = filepath.Join(normalizedRoot, "data", "runtime-data")
+		defaultMaintainerToolsHome = filepath.Join(normalizedRoot, "data", "maintainer-tools")
+		defaultOperationsHome = filepath.Join(normalizedRoot, "data", "operations")
 	} else if nestedPublicInstall {
 		defaultProjectsHome = filepath.Join(normalizedRoot, "projects")
 		defaultKeysHome = filepath.Join(normalizedRoot, "keys")
@@ -296,8 +333,34 @@ func resolveFilterestHomes(projectRoot string, privateSource bool) (filterestHom
 	if err != nil {
 		return filterestHomes{}, err
 	}
+	if privateSource {
+		// Resolve both sides so mutable homes cannot overlap source ownership
+		// through either direct paths or existing symbolic links.
+		sourceRoots, err := readFilterestSourceRoots(normalizedRoot)
+		if err != nil {
+			return filterestHomes{}, err
+		}
+		for _, owner := range sourceRoots {
+			sourceOwner, err := resolvePathWithExistingSymlinks(filepath.Join(normalizedRoot, owner))
+			if err != nil {
+				return filterestHomes{}, err
+			}
+			for name, home := range map[string]string{
+				"projects_home": projectsHome, "keys_home": keysHome,
+				"runtime_data_home": runtimeDataHome, "maintainer_tools_home": maintainerToolsHome,
+				"operations_home": operationsHome,
+			} {
+				if filterestHomesOverlap(sourceOwner, home) {
+					return filterestHomes{}, fmt.Errorf("%s must stay outside Easelect source owners", name)
+				}
+			}
+		}
+	}
 	if nestedPublicInstall {
-		applicationRoot := filepath.Join(normalizedRoot, "app")
+		applicationRoot, err := resolvePathWithExistingSymlinks(filepath.Join(normalizedRoot, "app"))
+		if err != nil {
+			return filterestHomes{}, err
+		}
 		for name, home := range map[string]string{
 			"projects_home":         projectsHome,
 			"keys_home":             keysHome,

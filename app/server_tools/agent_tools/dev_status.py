@@ -257,7 +257,7 @@ def collect_shared_dev_storage_status(
         or env.get("SHARED_DEV_DB_SSH_KEY_PATH", "").strip()
         or env.get("DOCKER_VPS_SSH_KEY_PATH", "").strip()
         or env.get("DEPLOY_SSH_KEY_PATH", "").strip()
-        or str(Path.home() / ".ssh" / "easelect_key")
+        or str(Path.home() / ".ssh" / "filterest_key")
     )
     strict_host_key_checking = (
         env.get("SHARED_DEV_STORAGE_SSH_STRICT_HOST_KEY_CHECKING", "").strip()

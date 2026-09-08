@@ -86,7 +86,7 @@ describe("view_selector_printer", () => {
         document.body.insertAdjacentHTML(
             "beforeend",
             `
-            <div id="demo_table_card_view_container">
+            <div id="demo_table_article_view_container">
                 <div class="card_view_wrapper big-card-open">
                     <div class="card_container">
                         <article class="active_row_article"></article>
@@ -118,7 +118,7 @@ describe("view_selector_printer", () => {
                 sort: { column: null, direction: null },
                 filters: {},
                 offset: 0,
-                cardView: { collapsed: true, expandedId: 7 },
+                articleView: { collapsed: true, expandedId: 7 },
             })
         );
         const articleToggleSpy = vi.fn();
@@ -134,7 +134,7 @@ describe("view_selector_printer", () => {
         const storedState = JSON.parse(
             localStorage.getItem("demo_table_sorting_and_filtering_specs")
         );
-        expect(storedState.cardView).toEqual(expect.objectContaining({
+        expect(storedState.articleView).toEqual(expect.objectContaining({
             collapsed: false,
             expandedId: null,
             pendingAutoOpenFirstSearchResult: false,
@@ -149,7 +149,7 @@ describe("view_selector_printer", () => {
     test("moves the active highlight immediately on direct view button click", async () => {
         const { createGenericViewSelector } = await loadModule();
         const selector = createGenericViewSelector("demo_table", "card", [
-            { label: "Artikkeli", viewKey: "article" },
+            { label: "Artikkeli", viewKey: "article_view" },
             { label: "Taulu", viewKey: "table" },
             { label: "Kortti", viewKey: "card" },
         ]);
@@ -157,7 +157,7 @@ describe("view_selector_printer", () => {
 
         const tableButton = selector.querySelector('[data-testid="view-btn-table"]');
         const cardButton = selector.querySelector('[data-testid="view-btn-card"]');
-        const articleButton = selector.querySelector('[data-testid="view-btn-article"]');
+        const articleButton = selector.querySelector('[data-testid="view-btn-article_view"]');
 
         expect(cardButton.classList.contains("active")).toBe(true);
         expect(tableButton.classList.contains("active")).toBe(false);
@@ -198,14 +198,14 @@ describe("view_selector_printer", () => {
         const { createGenericViewSelector } = await loadModule();
         const selector = createGenericViewSelector("demo_table", "card", [
             { label: "Kortti", viewKey: "card" },
-            { label: "Artikkeli", viewKey: "article" },
+            { label: "Artikkeli", viewKey: "article_view" },
             { label: "Taulu", viewKey: "table" },
         ]);
         document.body.appendChild(selector);
         document.body.insertAdjacentHTML(
             "beforeend",
             `
-            <div id="demo_table_card_view_container">
+            <div id="demo_table_article_view_container">
                 <div class="card_view_wrapper big-card-open"></div>
             </div>
             `
@@ -217,7 +217,7 @@ describe("view_selector_printer", () => {
         }));
 
         const cardButton = selector.querySelector('[data-testid="view-btn-card"]');
-        const articleButton = selector.querySelector('[data-testid="view-btn-article"]');
+        const articleButton = selector.querySelector('[data-testid="view-btn-article_view"]');
         expect(articleButton.classList.contains("active")).toBe(true);
         expect(articleButton.getAttribute("aria-pressed")).toBe("true");
         expect(cardButton.classList.contains("active")).toBe(false);
@@ -226,6 +226,7 @@ describe("view_selector_printer", () => {
     test("article button targets the first active search result instead of the stale expanded row", async () => {
         getParamsMock.mockReturnValue({ search: "firefox" });
         getCachedSearchResultForRenderMock.mockReturnValue({
+            complete: true,
             data: [
                 { id: 7, title: "Firefox" },
                 { id: 9, title: "Fennec" },
@@ -237,17 +238,17 @@ describe("view_selector_printer", () => {
                 sort: { column: null, direction: null },
                 filters: {},
                 offset: 0,
-                cardView: { collapsed: true, expandedId: 133 },
+                articleView: { collapsed: true, expandedId: 133 },
             })
         );
         const { createGenericViewSelector } = await loadModule();
         const selector = createGenericViewSelector("demo_table", "table", [
-            { label: "Artikkeli", viewKey: "article" },
+            { label: "Artikkeli", viewKey: "article_view" },
             { label: "Taulu", viewKey: "table" },
         ]);
         document.body.appendChild(selector);
 
-        selector.querySelector('[data-testid="view-btn-article"]').click();
+        selector.querySelector('[data-testid="view-btn-article_view"]').click();
 
         await vi.waitFor(() => {
             expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
@@ -257,13 +258,14 @@ describe("view_selector_printer", () => {
         );
         expect(setParamsMock).toHaveBeenCalledWith("demo_table", {
             search: "firefox",
-            view: "article",
+            view: "article_view",
         });
         expect(updateURLMock).toHaveBeenCalledWith("demo_table", {
             search: "firefox",
             view: "table",
         }, undefined, { replace: true });
-        expect(storedState.cardView).toEqual({
+        expect(storedState.articleView).toEqual({
+            returnView: "table",
             collapsed: true,
             expandedId: 7,
             pendingAutoOpenFirstSearchResult: false,
@@ -274,12 +276,12 @@ describe("view_selector_printer", () => {
     test("article button prepares the first rendered row when no active search exists", async () => {
         const { createGenericViewSelector } = await loadModule();
         const selector = createGenericViewSelector("demo_table", "table", [
-            { label: "Artikkeli", viewKey: "article" },
+            { label: "Artikkeli", viewKey: "article_view" },
             { label: "Taulu", viewKey: "table" },
         ]);
         document.body.appendChild(selector);
 
-        selector.querySelector('[data-testid="view-btn-article"]').click();
+        selector.querySelector('[data-testid="view-btn-article_view"]').click();
 
         await vi.waitFor(() => {
             expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
@@ -288,16 +290,29 @@ describe("view_selector_printer", () => {
             localStorage.getItem("demo_table_sorting_and_filtering_specs")
         );
         expect(setParamsMock).toHaveBeenCalledWith("demo_table", {
-            view: "article",
+            view: "article_view",
         });
         expect(updateURLMock).toHaveBeenCalledWith("demo_table", {
             view: "table",
         }, undefined, { replace: true });
-        expect(storedState.cardView).toEqual({
+        expect(storedState.articleView).toEqual({
+            returnView: "table",
             collapsed: true,
             expandedId: null,
             pendingAutoOpenFirstSearchResult: false,
             pendingAutoOpenFirstRenderedResult: true,
         });
     });
+    test("waits for a complete search even when partial rows already exist", async () => {
+        getParamsMock.mockReturnValue({ search: "birds" });
+        getCachedSearchResultForRenderMock.mockReturnValue({ complete: false, data: [{ id: 7 }] });
+        const { createGenericViewSelector } = await loadModule();
+        const selector = createGenericViewSelector("demo_table", "table", [{ viewKey: "article_view" }]);
+        selector.querySelector("button").click();
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
+        const state = JSON.parse(localStorage.getItem("demo_table_sorting_and_filtering_specs"));
+        expect(state.articleView.expandedId).toBeNull();
+        expect(state.articleView.pendingAutoOpenFirstSearchResult).toBe(true);
+    });
+
 });

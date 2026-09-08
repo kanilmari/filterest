@@ -1,15 +1,36 @@
-// Provides pure value builders and navigation guards for the login workflow.
+// Provides value builders, localized errors, and navigation guards for the login workflow.
 // Bridges pre-auth form state, redirect inputs, and browser location metadata.
-// Keeps DOM-free authentication decisions independently testable.
+// Keeps authentication decisions and pre-auth copy independently testable.
 // Exists so login routing and safety rules have one deterministic source.
+import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 
 /**
- * Translate a backend error code into a Finnish user-facing message.
+ * Translate backend login errors, with FI/EN fallback copy for admission-policy failures.
+ * These pre-auth failures must remain readable when policy/database lookup is unavailable.
  *
  * @param {string} code - error code from the API (e.g. 'wrong_credentials')
+ * @param {string} languageCode - current stored/browser language by default
  * @returns {string} translated message, or the code itself if unknown
  */
-export function translateError(code) {
+export function translateError(code, languageCode = getLanguageWithBrowserFallback()) {
+    // Accept an optional transport/error prefix for these exact codes only.
+    // Existing error messages below keep their established copy and fallback behavior.
+    const policyCode = String(code ?? '').match(/(?:^|:\s*)(login_not_allowed|authentication_policy_unavailable)\s*$/)?.[1];
+    const policyMessages = {
+        login_not_allowed: {
+            fi: 'Tällä tilillä ei voi kirjautua tähän palveluun.',
+            en: 'This account is not allowed to sign in to this service.',
+        },
+        authentication_policy_unavailable: {
+            fi: 'Kirjautuminen ei ole juuri nyt käytettävissä. Yritä hetken kuluttua uudelleen.',
+            en: 'Sign-in is temporarily unavailable. Please try again shortly.',
+        },
+    };
+    if (policyCode) {
+        const language = String(languageCode || '').trim().toLowerCase().split(/[-_]/)[0];
+        return policyMessages[policyCode][language === 'fi' ? 'fi' : 'en'];
+    }
+
     const map = {
         'wrong_credentials': 'Väärä käyttäjätunnus tai salasana.',
         'wrong_otp': 'Virheellinen vahvistuskoodi.',

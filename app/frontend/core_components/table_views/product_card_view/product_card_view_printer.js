@@ -288,11 +288,12 @@ async function openProductRowArticle(rowItem, tableName, card) {
         return;
     }
 
-    localStorage.setItem(`${tableName}_view`, "card");
+    localStorage.setItem(`${tableName}_view`, "article_view");
     setUnifiedTableState(tableName, {
-        cardView: {
+        articleView: {
             collapsed: true,
             expandedId: rowId,
+            returnView: "product_card",
         },
     });
 

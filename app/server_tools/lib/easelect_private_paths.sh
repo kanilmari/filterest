@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # easelect_private_paths.sh
-# Resolves Filterest homes plus env and TLS files from protected external paths.
+# Resolves Filterest homes plus env and TLS files from the protected key home.
 # Bridges repo-local tooling with the shared path locator while keeping legacy runtimes local.
 # Exists so Easelect does not need secret-bearing compatibility files or symlinks in repo root.
 
@@ -99,7 +99,7 @@ easelect_prepare_docker_context_boundaries() {
 }
 
 # Resolves the four derived private paths without reading secret-bearing files.
-# Generated runtimes remain root-local until a dynamic keys_home is configured.
+# Easelect defaults to keys/; legacy flat public runtimes retain root-local files.
 easelect_resolve_private_paths() {
     local project_root="$1"
     local development_root=""

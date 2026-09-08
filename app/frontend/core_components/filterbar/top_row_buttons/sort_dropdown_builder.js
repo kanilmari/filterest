@@ -19,6 +19,7 @@ import {
     filterSortableColumns,
     buildSortOptions,
     normalizeSortSelection,
+    NEWEST_SORT_VALUE,
 } from "./sort_dropdown_builder_helpers.js";
 import {
     hasCachedSearchResults,
@@ -44,6 +45,9 @@ export function createSortDropdown(tableName, columns, dataTypes) {
 
     const sortableColumns = filterSortableColumns(columns, dataTypes);
     const options = buildSortOptions(sortableColumns, columns);
+    const contextualOptions = () => options.filter((option) =>
+        option.value !== "" || String(getParams(tableName).search || "").trim()
+    );
     const availableValues = new Set(options.map((option) => option.value));
     const representableValues = new Set(availableValues);
     columns.forEach((column) => {
@@ -70,11 +74,13 @@ export function createSortDropdown(tableName, columns, dataTypes) {
     }
 
     async function applySortSelection(value) {
+        if (!value && !String(getParams(tableName).search || "").trim()) value = NEWEST_SORT_VALUE;
         const st = getUnifiedTableState(tableName);
         if (!st.sort) st.sort = { column: null, direction: null };
         const params = getParams(tableName);
 
         if (!value) {
+            if (st.sort.column && st.sort.direction) st.lastNonSearchSort = { ...st.sort };
             st.sort.column = null;
             st.sort.direction = null;
             delete params.sort_column;
@@ -85,8 +91,10 @@ export function createSortDropdown(tableName, columns, dataTypes) {
             st.sort.direction = dir;
             params.sort_column = col;
             params.sort_order = dir;
+            st.lastNonSearchSort = { ...st.sort };
         }
 
+        st.sortSelectionExplicit = true;
         setUnifiedTableState(tableName, st);
         setParams(tableName, params);
         updateURL(tableName, params, undefined, { replace: true });
@@ -106,7 +114,7 @@ export function createSortDropdown(tableName, columns, dataTypes) {
     let dropdown;
     dropdown = createVanillaDropdown({
         containerElement: dropdownContainer,
-        options,
+        options: contextualOptions(),
         placeholder: "Select...",
         showClearButton: false,
         useSearch: false,
@@ -135,11 +143,12 @@ export function createSortDropdown(tableName, columns, dataTypes) {
             transient: true,
         });
         availableValues.add(value);
-        dropdown.setOptions(options);
+        dropdown.setOptions(contextualOptions());
     };
 
     const unsubscribeSortSelection = subscribeDatasetSortSelection(tableName, (value) => {
         ensureSelectedOptionExists(value);
+        dropdown.setOptions(contextualOptions());
         dropdown.setValue(value || "");
     });
 

@@ -32,7 +32,8 @@ type createTableState struct {
 	queries []queuedCreateQuery
 	execs   []queuedCreateExec
 
-	execCalls []string
+	execCalls  []string
+	queryCalls []string
 }
 
 type createTableDriver struct {
@@ -73,9 +74,10 @@ func (c *createTableConn) Query(query string, args []driver.Value) (driver.Rows,
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *createTableConn) QueryContext(_ context.Context, _ string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *createTableConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
+	c.state.queryCalls = append(c.state.queryCalls, query)
 
 	if len(c.state.queries) == 0 {
 		return nil, errors.New("unexpected query")
@@ -393,5 +395,27 @@ func TestInsertNewTablesReturnsNonConflictInsertErrors(t *testing.T) {
 	}
 	if len(state.execCalls) != 1 {
 		t.Fatalf("exec calls = %d, want fail-fast after 1", len(state.execCalls))
+	}
+}
+
+// The catalog query must leave independent media metadata behind its dedicated API.
+// A disposable PostgreSQL regression also executes this exact query over real tables.
+func TestInsertNewTablesExcludesOnlyPublicIndependentMediaRegistries(t *testing.T) {
+	db, state := openCreateTableDB(t, []queuedCreateQuery{
+		{cols: []string{"id"}, rows: [][]driver.Value{{int64(41)}}},
+		{cols: []string{"id"}, rows: [][]driver.Value{{int64(150)}}},
+		{cols: []string{"oid", "schema_name", "table_name"}},
+	}, nil)
+	if err := InsertNewTables(db); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, query := range state.queryCalls {
+		if strings.Contains(query, "FROM pg_class c") {
+			found = strings.Contains(query, "NOT (n.nspname = 'public' AND c.relname IN ('system_media_assets', 'system_media_asset_usages'))")
+		}
+	}
+	if !found || len(state.execCalls) != 0 {
+		t.Fatal("internal media registries must be excluded before insertion")
 	}
 }

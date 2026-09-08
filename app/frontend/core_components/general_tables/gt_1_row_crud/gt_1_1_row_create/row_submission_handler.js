@@ -3,6 +3,8 @@
 // Bridges modal UI events, endpoint submission, translations, and dataset refresh behavior.
 // Exists to keep row-creation submit/cancel behavior out of the form-building layer.
 
+import { mediaLibraryText } from "../../../../reusable_components/media_library_picker/media_library_picker.js";
+import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { hideModal } from "../../../../reusable_components/modal/modal_builder.js";
 import { refreshTableUnified } from "../gt_1_2_row_read/table_refresh_unified.js";
 import { endpoint_router } from "../../../endpoints/endpoint_router.js";
@@ -69,6 +71,9 @@ async function submit_new_row(table_uid, form, columns, modal_form_state, clearS
         mainData["_childRows"] = childRowsToSend;
     }
 
+    const existingImages = collectExistingImagesForSubmission(modal_form_state["_childRowsArray"]);
+    if (existingImages.length > 0) mainData._existingImages = existingImages;
+
     const existingLinks = collectExistingLinksForSubmission(
         modal_form_state._existingRelationLinks
     );
@@ -104,8 +109,9 @@ async function submit_new_row(table_uid, form, columns, modal_form_state, clearS
         });
     } catch (error) {
         console.warn("virhe uuden rivin lisäämisessä (multipart):", error);
+        const reuseError = String(error?.message || "").includes("media_reuse");
         showWarningToast(
-            error?.message
+            (reuseError ? mediaLibraryText("unavailable", getLanguageWithBrowserFallback, getTranslationForKey) : error?.message)
             || getTranslationForKey("failed_to_save")
             || "The row could not be saved. Check every required language."
         );
@@ -207,4 +213,17 @@ function readSelectedFiles(child) {
         return [child._actualFileObject];
     }
     return [];
+}
+
+
+// Stored image selections are IDs only; no caller-provided path can bypass the
+// server's source authorization and same-dataset audience check.
+export function collectExistingImagesForSubmission(children = []) {
+    if (!Array.isArray(children)) return [];
+    return children.flatMap((child) => {
+        const selected = child?._existingImage;
+        if (!Number.isSafeInteger(selected?.relation_id) || selected.relation_id <= 0 ||
+            !Number.isSafeInteger(selected?.source_row_id) || selected.source_row_id <= 0) return [];
+        return [{ relation_id: selected.relation_id, source_row_id: selected.source_row_id }];
+    });
 }

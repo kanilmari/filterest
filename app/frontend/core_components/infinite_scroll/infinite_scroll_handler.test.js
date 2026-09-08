@@ -224,4 +224,19 @@ describe("initializeInfiniteScroll", () => {
 
         disconnectInfiniteScroll("grouped_orders");
     });
+
+    test("article result navigation uses its independent container and state", async () => {
+        document.body.innerHTML = `<div id="articles_article_view_container"><div class="article_view_wrapper card_view_wrapper"><div class="card_container"></div></div></div>`;
+        localStorage.setItem("articles_view", "article_view");
+        localStorage.setItem("articles_columns", JSON.stringify(["title"]));
+        getUnifiedTableStateMock.mockReturnValue({ offset: 0, filters: {}, articleView: { collapsed: true }, cardView: { collapsed: false } });
+        const { appendDataToView, initializeInfiniteScroll, disconnectInfiniteScroll } = await import("./infinite_scroll_handler.js");
+        initializeInfiniteScroll("articles");
+        const list = document.querySelector(".card_container");
+        expect(intersectionObservers[0].options.root).toBe(list);
+        appendDataToView("articles", [{ id: 1, title: "One" }]);
+        expect(appendDataToCardViewMock).toHaveBeenCalledWith(list, ["title"], [{ id: 1, title: "One" }], "articles");
+        disconnectInfiniteScroll("articles");
+    });
+
 });

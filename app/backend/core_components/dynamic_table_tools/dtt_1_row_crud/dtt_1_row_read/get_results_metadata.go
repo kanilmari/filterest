@@ -210,10 +210,10 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 	return fetchInformationSchemaColumnDefaults(tableName, db)
 }
 
-// The article projection intentionally ignores saved list/card field sets.
-// It still passes through GetResults' row and column permission intersection.
+// Every registered view, including article_view, resolves its own field set.
+// GetResults still intersects that presentation choice with row/column permissions.
 func resultsViewUsesFieldSetAssignment(viewKey string) bool {
-	return viewKey != "article"
+	return true
 }
 
 func personalFieldSetAssignmentUser(userID int) sql.NullInt64 {
@@ -263,6 +263,15 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 		return nil, fmt.Errorf("getColumnDataTypesWithFK: checking card_detail_capitalization column failed: %v", err)
 	}
 
+	hasLabelValueLayout, err := columnExistsInTable(db, "system_column_details", "label_value_layout")
+	if err != nil {
+		return nil, fmt.Errorf("getColumnDataTypesWithFK: checking label_value_layout failed: %v", err)
+	}
+	labelValueLayoutExpr := `NULL::varchar AS label_value_layout`
+	if hasLabelValueLayout {
+		labelValueLayoutExpr = `scd.label_value_layout`
+	}
+
 	cardDetailIconExpr := `''::text AS card_detail_icon_svg`
 	if hasCardDetailIconSVG {
 		cardDetailIconExpr = `COALESCE(scd.card_detail_icon_svg, '') AS card_detail_icon_svg`
@@ -303,6 +312,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
             %s,
             %s,
             %s,
+            %s,
             %s
         FROM information_schema.columns c
         LEFT JOIN (
@@ -337,7 +347,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 		  AND COALESCE(scd.hide_everywhere, false) = false
 		  AND COALESCE(scd.client_delivery_mode, 'include') = 'include'
 		  AND c.column_name NOT IN ('embedding_vector', 'search_vector_simple')
-    `, cardDetailIconExpr, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, cardDetailLabelModeExpr)
+    `, cardDetailIconExpr, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, cardDetailLabelModeExpr, labelValueLayoutExpr)
 	rows, err := db.Query(query, tableName)
 	if err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
@@ -359,6 +369,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 		var cardDetailIconKey string
 		var cardDetailCapitalization bool
 		var cardDetailLabelMode string
+		var labelValueLayout *string
 
 		if err := rows.Scan(
 			&columnName,
@@ -381,6 +392,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 			&cardDetailIconKey,
 			&cardDetailCapitalization,
 			&cardDetailLabelMode,
+			&labelValueLayout,
 		); err != nil {
 			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			return nil, fmt.Errorf("getColumnDataTypesWithFK: %v", err)
@@ -404,6 +416,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 			"card_detail_icon_key":       cardDetailIconKey,
 			"card_detail_capitalization": cardDetailCapitalization,
 			"card_detail_label_mode":     normalizeCardDetailLabelMode(cardDetailLabelMode),
+			"label_value_layout":         labelValueLayout,
 		}
 		if foreignTableName.Valid && foreignColumnName.Valid {
 			columnInfo["foreign_table"] = foreignTableName.String

@@ -42,6 +42,7 @@ describe('endpoint_router', () => {
       stream: true,
       returnResponse: true,
       suppressAuthRedirect: true,
+      suppressErrorToast: true,
     });
 
     expect(result).toEqual({ ok: true });
@@ -54,6 +55,7 @@ describe('endpoint_router', () => {
       stream: true,
       returnResponse: true,
       suppressAuthRedirect: true,
+      suppressErrorToast: true,
     });
   });
 
@@ -71,4 +73,14 @@ describe('endpoint_router', () => {
 
     await expect(mod.endpoint_router('failingRoute')).rejects.toThrow('Request aborted: auth_redirect');
   });
+  test('leaves automatic error notifications enabled by default', async () => {
+    runApiPipeline.mockResolvedValue({ parsedData: { ok: true } });
+    const mod = await loadModule();
+    await mod.endpoint_router('ordinaryRoute');
+    expect(runApiPipeline).toHaveBeenCalledWith(expect.objectContaining({
+      suppressErrorToast: false,
+      suppressAuthRedirect: false,
+    }));
+  });
+
 });

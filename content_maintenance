@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# content_maintenance
+# Runs the public, metadata-driven content maintenance command.
+# Connects the installation root to the existing HTTP API client and operator files.
+# Keeps datasets and authored content out of the executable command.
+set -euo pipefail
+INSTALLATION_ROOT="$(cd "$(dirname "$0")" && pwd -P)"
+export PYTHONPYCACHEPREFIX="$INSTALLATION_ROOT/data/runtime/python-cache"
+exec python3 "$INSTALLATION_ROOT/app/server_tools/agent_tools/content_maintenance.py" "$@"

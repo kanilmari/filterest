@@ -2,7 +2,7 @@
 // Bridges representative auth inputs with the helper module's normalized outputs.
 // Covers redirect boundaries without requiring a browser or live authentication.
 // Exists to prevent unsafe return targets and auth-loop regressions.
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, afterEach } from 'vitest';
 import {
     translateError,
     pickLang,
@@ -20,6 +20,34 @@ import {
 // translateError
 // ---------------------------------------------------------------------------
 describe('translateError', () => {
+    afterEach(() => {
+        localStorage.removeItem('chosen_language');
+    });
+
+    test.each([
+        ['fi', 'login_not_allowed', 'Tällä tilillä ei voi kirjautua tähän palveluun.'],
+        ['en', 'login_not_allowed', 'This account is not allowed to sign in to this service.'],
+        ['fi', 'authentication_policy_unavailable', 'Kirjautuminen ei ole juuri nyt käytettävissä. Yritä hetken kuluttua uudelleen.'],
+        ['en', 'authentication_policy_unavailable', 'Sign-in is temporarily unavailable. Please try again shortly.'],
+    ])('shows localized %s policy failure %s from the shared language preference', (language, code, expected) => {
+        localStorage.setItem('chosen_language', language);
+        expect(translateError(code)).toBe(expected);
+        expect(translateError(code)).not.toContain(code);
+    });
+
+    test.each([
+        ['HTTP 403: login_not_allowed', 'fi-FI', 'Tällä tilillä ei voi kirjautua tähän palveluun.'],
+        ['POST /api/login failed: HTTP 503: authentication_policy_unavailable', 'en-US', 'Sign-in is temporarily unavailable. Please try again shortly.'],
+    ])('normalizes a transport prefix for %s without exposing the code', (code, language, expected) => {
+        expect(translateError(code, language)).toBe(expected);
+    });
+
+    test('preserves unknown and existing codes while unsupported languages use English policy copy', () => {
+        expect(translateError('not_login_not_allowed', 'en')).toBe('not_login_not_allowed');
+        expect(translateError('wrong_credentials', 'en')).toBe('Väärä käyttäjätunnus tai salasana.');
+        expect(translateError('login_not_allowed', 'sv')).toBe('This account is not allowed to sign in to this service.');
+    });
+
     test('translates known error codes', () => {
         expect(translateError('wrong_credentials')).toBe('Väärä käyttäjätunnus tai salasana.');
         expect(translateError('wrong_otp')).toBe('Virheellinen vahvistuskoodi.');

@@ -101,7 +101,8 @@ func loadAndSetEnvironmentVariablesFromRoot(projectRoot string) (string, error) 
 
 // resolveProjectPrivatePaths separates the private Easelect source checkout
 // from generated Filterest and deployed runtimes. Easelect derives all four
-// files from one external key root; other runtimes keep root-local files.
+// files from its protected key home (keys/ by default); legacy flat public
+// runtimes retain root-local files unless a key home is configured.
 func resolveProjectPrivatePaths(projectRoot string) ([]string, string, string, error) {
 	isPrivateSource, err := isPrivateEaselectSourceCheckout(projectRoot)
 	if err != nil {

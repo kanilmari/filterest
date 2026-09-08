@@ -5,7 +5,7 @@
  */
 
 :root {
-  --chat-user-bg: hsl(207deg 100% 40%);
+  --chat-user-bg: hsl(var(--brand-hue) 100% 40%);
   --chat-assistant-bg: hsl(0deg 0% 27%);
   --chat-error-bg: hsl(0deg 40% 20%);
   --chat-panel-bg: transparent;
@@ -43,7 +43,7 @@ body.light-mode {
 }
 
 body.dark-mode {
-  --chat-user-bg: hsl(207deg 100% 40%);
+  --chat-user-bg: hsl(var(--brand-hue) 100% 40%);
   --chat-assistant-bg: hsl(0deg 0% 27%);
   --chat-error-bg: hsl(0deg 40% 20%);
   --chat-panel-bg: transparent;

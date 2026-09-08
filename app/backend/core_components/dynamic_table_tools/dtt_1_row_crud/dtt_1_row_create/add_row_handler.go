@@ -5,6 +5,7 @@
 package dtt_1_row_create
 
 import (
+	"easelect/backend/core_components/media_library"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -105,6 +106,12 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 		return
 	}
 
+	selections, selectionErr := media_library.TakeSelections(payload)
+	if selectionErr != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "media_reuse_not_allowed")
+		return
+	}
+
 	// 1) Lisätään data kantaan (pää, lapsirivit, M2M) -> saamme mainRowID + lapsirivien tiedot
 	mainRowID, childInsertResults, err := insertDataAccordingToPayload(w, r, tableName, tableUID, payload, tx)
 	if err != nil {
@@ -114,6 +121,12 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 
 	// 2) Tallennetaan tiedostot
 	if err := saveUploadedFiles(r.Context(), tx, w, r.MultipartForm.File, currentUploadStorageRoot(), tableName, tableUID, mainRowID, childInsertResults); err != nil {
+		return
+	}
+
+	// Existing image uses join the same transaction as the new parent.
+	if err := media_library.ApplySelections(r, tableName, mainRowID, selections); err != nil {
+		httpresponse.RespondWithError(w, http.StatusConflict, "media_reuse_not_supported_for_permissions")
 		return
 	}
 

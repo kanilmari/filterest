@@ -295,3 +295,12 @@ func TestViewFieldSetGroupVariantsReadbackRequiresExactFieldSetsPrioritiesAndCol
 		t.Fatal("priority mismatch must fail readback")
 	}
 }
+
+func TestLegacyArticleFieldSetTargetsUseCanonicalDimension(t *testing.T) {
+	for _, key := range []string{"article", "big_card", "row_article", "article_view"} {
+		dataset, view, err := validateViewFieldSetTarget("orders", key)
+		if err != nil || dataset != "orders" || view != "article_view" {
+			t.Fatalf("%q resolved to %q/%q: %v", key, dataset, view, err)
+		}
+	}
+}

@@ -197,7 +197,13 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 	switch category {
 	case 1:
 		// Orvot system_db_tables-rivit: poistetaan rivi (taulu ei enää ole PostgreSQL:ssä)
-		_, execErr := q.Exec("DELETE FROM system_db_tables WHERE table_name = $1", identifier)
+		_, execErr := q.Exec(`DELETE FROM system_db_tables sdt
+            WHERE sdt.table_name = $1 AND NOT EXISTS (
+                SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relname = sdt.table_name
+                  AND n.nspname = COALESCE(NULLIF(sdt.schema_name, ''), 'public')
+                  AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+            )`, identifier)
 		return execErr
 	case 2:
 		// Rekisteröimättömät taulut: pudota taulu tai rekisteröi system-tauluihin
@@ -217,6 +223,12 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 		`, identifier).Scan(&schemaName)
 		if schemaErr != nil {
 			return fmt.Errorf("schema not found for table %s: %v", identifier, schemaErr)
+		}
+
+		// These physical registries intentionally have no generic dataset metadata.
+		// Reject crafted repair requests as well as omitting them from the issue list.
+		if schemaName == "public" && (identifier == "system_media_assets" || identifier == "system_media_asset_usages") {
+			return fmt.Errorf("internal media registry requires its dedicated API")
 		}
 
 		switch action {

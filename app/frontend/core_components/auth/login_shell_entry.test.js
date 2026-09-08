@@ -44,6 +44,15 @@ describe("login_shell_entry", () => {
         expect(window.location.hash).toBe("#section");
     });
 
+    test("explicit administrator login still opens when visitor login is hidden", async () => {
+        localStorage.setItem('show_login_button', 'false');
+        localStorage.setItem('only_admin_can_login', 'true');
+        history.replaceState({}, '', '/?login-entry=1');
+        const mod = await loadModule();
+        expect(await mod.handleLoginShellEntry()).toBe(true);
+        expect(showLoginModalMock).toHaveBeenCalledWith('');
+    });
+
     test("shouldAutoOpenForcedLoginModal is true only for the explicit query marker", async () => {
         const mod = await loadModule();
 

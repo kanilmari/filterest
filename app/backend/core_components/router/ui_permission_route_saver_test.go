@@ -108,7 +108,7 @@ func (tx *uiPermissionRouteTestTx) Rollback() error {
 }
 
 func TestCanonicalUIPermissionRoutesAreUniqueAndComplete(t *testing.T) {
-	if got, want := len(canonicalUIPermissionRoutes), 31; got != want {
+	if got, want := len(canonicalUIPermissionRoutes), 33; got != want {
 		t.Fatalf("canonical UI route count = %d, want %d", got, want)
 	}
 

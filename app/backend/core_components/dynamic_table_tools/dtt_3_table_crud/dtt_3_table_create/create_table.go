@@ -192,6 +192,7 @@ func InsertNewTables(q dbutils.Querier) error {
             AND has_schema_privilege(n.nspname, 'USAGE')
             AND has_table_privilege(c.oid, 'SELECT')
             AND n.nspname NOT IN ('restricted', 'postgis')
+            AND NOT (n.nspname = 'public' AND c.relname IN ('system_media_assets', 'system_media_asset_usages'))
             AND NOT EXISTS (
                 SELECT 1
                 FROM system_db_tables s

@@ -3,6 +3,7 @@
 // Bridges metadata-driven label/icon settings and the card detail DOM structure.
 // Exists so database-held legacy SVG can never enter the DOM rendering path.
 
+import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
 import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
@@ -162,7 +163,9 @@ export function renderSingleLineCardDetails(containerElement, detailEntries, dat
             row.appendChild(label);
         }
 
-        row.appendChild(createSingleLineCardDetailValue(detailEntry));
+        const valueElement = createSingleLineCardDetailValue(detailEntry);
+        row.appendChild(valueElement);
+        applyLabelValueLayout(row, label.parentNode === row ? label : null, valueElement, labelMeta?.label_value_layout);
         containerElement.appendChild(row);
     });
 }

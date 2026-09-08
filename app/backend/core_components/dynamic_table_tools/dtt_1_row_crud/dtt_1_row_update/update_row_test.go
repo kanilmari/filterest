@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -621,4 +622,52 @@ func buildUpdateRowSessionRequestForActor(t *testing.T, method, target, body str
 		req.AddCookie(cookie)
 	}
 	return req
+}
+
+func TestConvertValueExplicitNullPreservesSQLNull(t *testing.T) {
+	for _, dataType := range []string{"integer", "bigint", "smallint", "boolean", "text", "character varying", "jsonb", "date", "timestamp with time zone", "numeric"} {
+		t.Run(dataType, func(t *testing.T) {
+			value, err := convertValue(nil, dataType)
+			if err != nil || value != nil {
+				t.Fatalf("explicit null = %v, %v; want nil, nil", value, err)
+			}
+		})
+	}
+}
+
+func TestUpdateRequestRequiresExplicitValueWhenClearing(t *testing.T) {
+	for _, payload := range []string{
+		`{"id":7,"column":"title","value":null}`,
+		`{"id":7,"updates":[{"column":"previous_id","value":null}]}`,
+	} {
+		var request updateRowRequest
+		if err := json.Unmarshal([]byte(payload), &request); err != nil {
+			t.Fatalf("explicit null rejected: %v", err)
+		}
+		updates, err := normalizeUpdateOperations(request)
+		if err != nil || len(updates) != 1 || updates[0].Value != nil {
+			t.Fatalf("explicit null lost: %#v, %v", updates, err)
+		}
+	}
+	for _, payload := range []string{
+		`{"id":7,"column":"title"}`,
+		`{"id":7,"updates":[{"column":"previous_id"}]}`,
+		`{"id":7,"updates":[{"column":"title","value":"valid"},{"column":"enabled"}]}`,
+	} {
+		var request updateRowRequest
+		if err := json.Unmarshal([]byte(payload), &request); err == nil {
+			t.Fatalf("missing value accepted: %s", payload)
+		}
+	}
+}
+
+func TestUpdateRequestKeepsFalseZeroAndEmptyString(t *testing.T) {
+	var request updateRowRequest
+	if err := json.Unmarshal([]byte(`{"id":7,"updates":[{"column":"enabled","value":false},{"column":"count","value":0},{"column":"title","value":""}]}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	updates, err := normalizeUpdateOperations(request)
+	if err != nil || len(updates) != 3 || updates[0].Value != false || updates[1].Value != float64(0) || updates[2].Value != "" {
+		t.Fatalf("explicit values changed: %#v, %v", updates, err)
+	}
 }

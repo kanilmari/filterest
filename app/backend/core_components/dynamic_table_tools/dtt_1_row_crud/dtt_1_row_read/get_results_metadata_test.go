@@ -1,7 +1,18 @@
+// get_results_metadata_test.go
+// Verifies result metadata and optional column layout transport.
+// Connects supported schema shapes to safe client-visible metadata.
+// Preserves inheritance and hidden-field delivery restrictions.
 package dtt_1_row_read
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"io"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -145,7 +156,7 @@ func TestResolveOwnerColumnFromMetadataKeepsLegacyFallbackOrder(t *testing.T) {
 }
 
 func TestNormalizeResultsViewKeyKeepsSafeViewDimensions(t *testing.T) {
-	for _, viewKey := range []string{"table", "card", "calendar", "product_card", "article"} {
+	for _, viewKey := range []string{"table", "card", "calendar", "product_card", "article_view"} {
 		if got := normalizeResultsViewKey(viewKey); got != viewKey {
 			t.Fatalf("normalizeResultsViewKey(%q) = %q", viewKey, got)
 		}
@@ -157,9 +168,9 @@ func TestNormalizeResultsViewKeyKeepsSafeViewDimensions(t *testing.T) {
 	}
 }
 
-func TestArticleResultsIgnoreSavedFieldSetAssignments(t *testing.T) {
-	if resultsViewUsesFieldSetAssignment("article") {
-		t.Fatal("article projection must not inherit a list/card field-set assignment")
+func TestArticleResultsUseIndependentFieldSetAssignments(t *testing.T) {
+	if !resultsViewUsesFieldSetAssignment("article_view") {
+		t.Fatal("article projection must resolve its own field-set assignment")
 	}
 	for _, viewKey := range []string{"table", "card", "calendar", "product_card"} {
 		if !resultsViewUsesFieldSetAssignment(viewKey) {
@@ -183,5 +194,112 @@ func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
 				t.Fatalf("assignment user = %#v, want %#v", got, test.want)
 			}
 		})
+	}
+}
+
+type layoutMetadataDriver struct {
+	present bool
+	value   driver.Value
+	query   *string
+}
+type layoutMetadataConn struct{ state *layoutMetadataDriver }
+type layoutMetadataRows struct {
+	values   []driver.Value
+	consumed bool
+}
+
+func (d *layoutMetadataDriver) Open(string) (driver.Conn, error) {
+	return &layoutMetadataConn{state: d}, nil
+}
+func (*layoutMetadataConn) Prepare(string) (driver.Stmt, error) {
+	return nil, fmt.Errorf("unexpected prepare")
+}
+func (*layoutMetadataConn) Close() error              { return nil }
+func (*layoutMetadataConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("unexpected mutation") }
+func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "SELECT EXISTS") {
+		present := true
+		if args[1].Value == "label_value_layout" {
+			present = c.state.present
+		}
+		return &layoutMetadataRows{values: []driver.Value{present}}, nil
+	}
+	*c.state.query = query
+	value := c.state.value
+	if !c.state.present {
+		value = nil
+	}
+	return &layoutMetadataRows{values: []driver.Value{
+		"url", "text", nil, nil, "details_link", true, true, false, false, false, false, false, false,
+		int64(1), int64(1), false, "", "", true, "label", value,
+	}}, nil
+}
+func (r *layoutMetadataRows) Columns() []string {
+	columns := make([]string, len(r.values))
+	for index := range columns {
+		columns[index] = fmt.Sprint(index)
+	}
+	return columns
+}
+func (*layoutMetadataRows) Close() error { return nil }
+func (r *layoutMetadataRows) Next(dest []driver.Value) error {
+	if r.consumed {
+		return io.EOF
+	}
+	copy(dest, r.values)
+	r.consumed = true
+	return nil
+}
+
+func TestColumnMetadataCarriesOptionalLayoutWithoutExposingHiddenFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		present bool
+		value   driver.Value
+	}{
+		{"older schema", false, nil}, {"inherited", true, nil}, {"inline", true, "inline"}, {"auto", true, "auto"}, {"stacked", true, "stacked"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := ""
+			name := "wl52-layout-" + t.Name()
+			sql.Register(name, &layoutMetadataDriver{present: tt.present, value: tt.value, query: &query})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			metadata, err := getColumnDataTypesWithFK("example", db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(metadata)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result map[string]map[string]interface{}
+			if err = json.Unmarshal(encoded, &result); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(result["url"]["label_value_layout"], tt.value) {
+				t.Fatalf("layout %s", encoded)
+			}
+			for _, guard := range []string{"COALESCE(scd.hide_everywhere, false) = false", "COALESCE(scd.client_delivery_mode, 'include') = 'include'"} {
+				if !strings.Contains(query, guard) {
+					t.Fatalf("missing delivery guard %s", guard)
+				}
+			}
+			if !tt.present && !strings.Contains(query, "NULL::varchar AS label_value_layout") {
+				t.Fatal("old schema must remain readable")
+			}
+		})
+	}
+}
+
+func TestLegacyArticleViewKeysRemainCompatible(t *testing.T) {
+	for _, key := range []string{"article", "big_card", "row_article", " ARTICLE "} {
+		if got := normalizeResultsViewKey(key); got != "article_view" {
+			t.Fatalf("%q resolved to %q", key, got)
+		}
 	}
 }

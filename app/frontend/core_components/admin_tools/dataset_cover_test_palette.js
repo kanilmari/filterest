@@ -96,7 +96,7 @@ const RANGE_CONTROLS = Object.freeze([
 
 const COPY = Object.freeze({
     en: Object.freeze({
-        button: 'Open cover image palette', title: 'Cover image settings', close: 'Close cover image settings',
+        button: 'Open appearance palette', title: 'Appearance settings', close: 'Close appearance settings',
         notice: 'Changes preview immediately. Save stores both light and dark theme values.',
         light: 'Light', dark: 'Dark', coverVisible: 'Show cover photo', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
         themeGroup: 'Selected theme', sharedGroup: 'Shared by both themes',
@@ -115,7 +115,7 @@ const COPY = Object.freeze({
         activeTabGlowBlur: 'Active tab glow blur', brandColor: 'Site brand colour',
     }),
     fi: Object.freeze({
-        button: 'Avaa kansikuvan paletti', title: 'Kansikuvan asetukset', close: 'Sulje kansikuvan asetukset',
+        button: 'Avaa ulkoasun paletti', title: 'Ulkoasun asetukset', close: 'Sulje ulkoasun asetukset',
         notice: 'Muutokset näkyvät heti. Tallennus säilyttää vaalean ja tumman teeman arvot.',
         light: 'Vaalea', dark: 'Tumma', coverVisible: 'Näytä kansikuva', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
         themeGroup: 'Valittu teema', sharedGroup: 'Molemmille teemoille yhteiset',
@@ -641,10 +641,8 @@ export async function mountDatasetCoverTestPalette(hero, datasetName, {
     }
     applyDatasetCoverThemeConfig(hero, settings.dataset_cover_theme);
 
-    // Background-only datasets still need the public theme variables, but the
-    // cover-specific editing button stays hidden when no cover asset exists.
-    if (!hero.classList.contains('filterbar-inline-hero--has-cover')) return null;
-
+    // Shared brand, card and background controls remain useful without a cover.
+    // Access still requires both the route permission and the protected feature flag.
     if (!permissionCheck(DATASET_HEADER_CONFIG_PERMISSION)) return null;
     if (hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')) return null;
     try {

@@ -56,7 +56,7 @@ class FilterestHomes:
 
     @property
     def projects_apps_home(self) -> Path:
-        """Return the preferred external application collection without creating it."""
+        """Return the operator-owned application collection without creating it."""
 
         return self.projects_home / "apps"
 
@@ -168,6 +168,33 @@ def _paths_overlap(first: Path, second: Path) -> bool:
         return False
 
 
+def _read_source_roots(project_root: Path) -> tuple[str, ...]:
+    """Read immutable composition roots for the existing mutable-home guard.
+
+    The fixed source file is separate from operator path overrides. Missing,
+    linked, writable or malformed metadata fails before any home is accepted.
+    """
+
+    path = project_root / "filterest.source-roots"
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise ValueError("filterest.source-roots: required source metadata is missing") from error
+    if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o022 or info.st_size > 16384:
+        raise ValueError("filterest.source-roots: expected a protected regular source file")
+    roots: list[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        name = raw_line.strip()
+        if not name or name.startswith("#"):
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", name) or name in roots:
+            raise ValueError("filterest.source-roots: invalid or duplicate source directory")
+        roots.append(name)
+    if not roots:
+        raise ValueError("filterest.source-roots: source directory list must not be empty")
+    return tuple(roots)
+
+
 def resolve_filterest_homes(
     project_root: Path | str,
     environment: Mapping[str, str] | None = None,
@@ -180,20 +207,20 @@ def resolve_filterest_homes(
     nested_public_install = not private_source and is_nested_filterest_installation(root)
 
     defaults = {
-        "projects_home": str(root.parent / "filterest-projects") if private_source else "filterest_projects",
-        "keys_home": str(root.parent / "filterest_keys") if private_source else "filterest_keys",
+        "projects_home": "projects" if private_source else "filterest_projects",
+        "keys_home": "keys" if private_source else "filterest_keys",
         "runtime_data_home": (
-            str(root.parent / "filterest-runtime-data")
+            "data/runtime-data"
             if private_source
             else "filterest_runtime_data"
         ),
         "maintainer_tools_home": (
-            str(root.parent / "filterest-maintainer-tools")
+            "data/maintainer-tools"
             if private_source
             else "filterest_maintainer_tools"
         ),
         "operations_home": (
-            str(root.parent / "filterest-operations")
+            "data/operations"
             if private_source
             else "filterest_operations"
         ),
@@ -301,6 +328,14 @@ def resolve_filterest_homes(
         "maintainer_tools_home": maintainer_tools_home,
         "operations_home": operations_home,
     }
+    if private_source:
+        # Private homes contain mutable state, never any of the three source
+        # owners. Resolve both sides so a link cannot bypass that boundary.
+        for owner in _read_source_roots(root):
+            source_owner = (root / owner).resolve(strict=False)
+            for name, home in resolved_homes.items():
+                if _paths_overlap(source_owner, home):
+                    raise ValueError(f"{name} must stay outside Easelect source owners")
     if nested_public_install:
         immutable_app = (root / "app").resolve(strict=False)
         for name, home in resolved_homes.items():

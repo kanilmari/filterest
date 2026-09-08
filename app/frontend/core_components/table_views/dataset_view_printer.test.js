@@ -397,10 +397,11 @@ describe('generate_table', () => {
         expect(createCardViewMock).toHaveBeenCalledWith(
             ['id', 'title'],
             [{ id: 1, title: 'Brave' }],
-            'demo_dataset'
+            'demo_dataset',
+            { viewKey: 'article_view', stateKey: 'articleView' }
         );
-        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
-        expect(activeContainer.id).toBe('demo_dataset_card_view_container');
+        expect(localStorage.getItem('demo_dataset_view')).toBe('article_view');
+        expect(activeContainer.id).toBe('demo_dataset_article_view_container');
     });
 
     test('falls back from stale non-renderable view keys', async () => {

@@ -241,6 +241,16 @@ SET yue = CASE lang_key
     ELSE COALESCE(NULLIF(yue, ''), en)
 END
 WHERE yue IS NULL OR yue = '';
+
+-- Separate public sign-in visibility from server-enforced administrator-only access.
+INSERT INTO public.system_config (key, boolean_value, json_value, text_value, value_type, creation_spec)
+SELECT defaults.key, defaults.enabled, jsonb_build_object('value', defaults.enabled),
+       defaults.enabled::text, 2, defaults.description
+FROM (VALUES
+    ('show_login_button', TRUE, 'Show visitor sign-in entry points. Direct /login remains available when hidden.'),
+    ('only_admin_can_login', FALSE, 'Allow sign-in only for enabled administrators with administrator access; also disables effective self-registration.')
+) AS defaults(key, enabled, description)
+WHERE NOT EXISTS (SELECT 1 FROM public.system_config AS existing WHERE existing.key = defaults.key);
 -- runtime.seed.sql
 -- Seeds only the public runtime identity and version rows needed on first use.
 -- Bridges generated release metadata and the reduced public-safe runtime schema.
@@ -624,7 +634,7 @@ BEGIN
 END $$;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.7.3', 'Filterest generated public bootstrap');
+VALUES ('9.7.13', 'Filterest generated public bootstrap');
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -2527,6 +2537,756 @@ ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
 SET source_low = EXCLUDED.source_low,
     usage_explanation = EXCLUDED.usage_explanation,
     last_seen = CURRENT_DATE;
+-- Seeds field-collection ownership and inheritance copy before the first view opens.
+-- Connects the field selector to reviewed Finnish/English and existing legacy fallbacks.
+-- Preserves nonempty site-authored translations and records each key's actual UI source.
+-- Shared by fresh public bootstrap and the matching additive upgrade migration.
+
+WITH authored_keys(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES
+        ('field_set_owner_personal', 'Henkilökohtainen', 'Personal', '个人', '個人', 'Labels a field collection owned only by the current user.'),
+        ('field_set_source_personal', 'Henkilökohtainen ohitus on käytössä', 'Personal override in use', '正在使用个人覆盖设置', '正在使用個人覆寫設定', 'Explains that the user''s personal field selection overrides inherited defaults.'),
+        ('field_set_source_group', 'Ryhmäkohtainen oletus on käytössä', 'Group default in use', '正在使用组默认设置', '正在使用群組預設設定', 'Explains that the effective field selection comes from a user-group default.'),
+        ('field_set_source_site', 'Sivuston oletus on käytössä', 'Site default in use', '正在使用站点默认设置', '正在使用網站預設設定', 'Explains that the effective field selection comes from the site default.'),
+        ('field_set_source_metadata', 'Metadatan oletus on käytössä', 'Metadata default in use', '正在使用元数据默认设置', '正在使用中繼資料預設設定', 'Explains that the effective field selection comes from column metadata.'),
+        ('field_set_editing_site_default', 'Muokataan sivuston oletusta (vain jaetut kenttäjoukot)', 'Editing site default (shared collections only)', '正在编辑站点默认设置（仅限共享集合）', '正在編輯網站預設設定（只限共用集合）', 'Explains why only shared field collections are editable as the site default.'),
+        ('field_set_assignment_unavailable', 'Tallennettu kenttäjoukkovalinta ei ole käytettävissä. Palvelimen turvallinen kenttävalinta on edelleen käytössä.', 'The saved field collection is unavailable. The server''s safe field selection remains in use.', '已保存的字段集合不可用。服务器的安全字段选择仍在使用。', '已儲存嘅欄位集合用唔到。伺服器嘅安全欄位選擇仍然使用中。', 'Explains that the server keeps a safe field selection when a saved collection is unavailable.'),
+        ('use_site_default', 'Käytä sivuston oletusta', 'Use site default', '使用站点默认设置', '使用網站預設設定', 'Restores inherited site defaults after removing a personal field selection.'),
+        ('use_metadata_default', 'Käytä metadatan oletusta', 'Use metadata default', '使用元数据默认设置', '使用中繼資料預設設定', 'Restores column-metadata defaults when no site field selection exists.'),
+        ('field_set_inheritance_restored', 'Oma ohitus poistettiin', 'Personal override removed', '已移除个人覆盖设置', '已移除個人覆寫設定', 'Confirms that a personal field-selection override was removed.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec)
+SELECT lang_key, fi, en, ch, yue, creation_spec FROM authored_keys
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    ch = CASE WHEN NULLIF(btrim(system_lang_keys.ch), '') IS NULL THEN EXCLUDED.ch ELSE system_lang_keys.ch END,
+    yue = CASE WHEN NULLIF(btrim(system_lang_keys.yue), '') IS NULL THEN EXCLUDED.yue ELSE system_lang_keys.yue END,
+    creation_spec = CASE WHEN NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL THEN EXCLUDED.creation_spec ELSE system_lang_keys.creation_spec END,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.ch), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.yue), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL;
+
+-- Only reviewed locales are published into the normalized translation catalog.
+-- Existing Chinese/Cantonese fallbacks remain in their legacy fields; this change
+-- does not claim a new locale review or map Cantonese to an unreviewed region.
+WITH selected_keys AS (
+    SELECT id, fi, en
+    FROM public.system_lang_keys
+    WHERE lang_key IN (
+        'field_set_owner_personal',
+        'field_set_source_personal',
+        'field_set_source_group',
+        'field_set_source_site',
+        'field_set_source_metadata',
+        'field_set_editing_site_default',
+        'field_set_assignment_unavailable',
+        'use_site_default',
+        'use_metadata_default',
+        'field_set_inheritance_restored'
+    )
+), authored_translations AS (
+    SELECT keys.id AS lang_key_id, copy.language_code, copy.translation
+    FROM selected_keys AS keys
+    CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en))
+        AS copy(language_code, translation)
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT lang_key_id, language_code, translation, 'manual', 'approved'
+FROM authored_translations
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation,
+    source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT keys.id,
+       'code',
+       'frontend/core_components/filterbar/filter_list/column_view_preset_builder.js',
+       '',
+       keys.creation_spec,
+       CURRENT_DATE
+FROM public.system_lang_keys AS keys
+WHERE keys.lang_key IN (
+    'field_set_owner_personal',
+    'field_set_source_personal',
+    'field_set_source_group',
+    'field_set_source_site',
+    'field_set_source_metadata',
+    'field_set_editing_site_default',
+    'field_set_assignment_unavailable',
+    'use_site_default',
+    'use_metadata_default',
+    'field_set_inheritance_restored'
+)
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
+SET last_seen = CURRENT_DATE;
+-- Seeds the shared field label/value layout editor in Finnish and English.
+-- Connects fresh public installations to the matching additive schema migration.
+-- Preserves nonempty site translations and records the actual editor source.
+-- Keeps this seven-key capability separate from field-collection inheritance copy.
+
+-- BEGIN label/value layout language seed (shared with fresh bootstrap).
+WITH authored_keys(lang_key, fi, en, creation_spec) AS (
+    VALUES
+    ('label_value_layout', 'Kentän otsikon ja arvon asettelu', 'Field label and value layout', 'Names the shared column label/value default, separately from field placement.'),
+    ('label_value_layout_inherit', 'Nykyinen oletus', 'Current default', 'Restores each renderer''s existing behavior without an explicit column layout.'),
+    ('label_value_layout_auto', 'Automaattinen', 'Automatic', 'Lets the configured field pair wrap according to text and available space.'),
+    ('label_value_layout_inline', 'Rinnakkain', 'Side by side', 'Keeps the label and value in adjacent areas while allowing text to wrap.'),
+    ('label_value_layout_stacked', 'Allekkain', 'Stacked', 'Places the field value below its label.'),
+    ('label_value_layout_help', 'Otsikon ja arvon asettelu on sarakkeen yhteinen oletus korttien ja artikkelien tietokentille. Se ei muuta kentän paikkaa tai näkyvyyttä. Nykyinen oletus säilyttää näkymän aiemman toiminnan.', 'Label and value layout is the shared column default for card and article detail fields. It does not change field placement or visibility. Current default preserves the previous behavior of each view.', 'Explains the shared default and the unchanged placement, visibility and inherited behavior.'),
+    ('label_value_layout_readback_failed', 'Asetuksen tallennusta ei voitu varmistaa. Lataa asetukset uudelleen.', 'The saved setting could not be verified. Reload the settings.', 'Reports a mismatch when reading the saved field layout back through the API.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, creation_spec)
+SELECT lang_key, fi, en, creation_spec FROM authored_keys
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    creation_spec = CASE WHEN NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL THEN EXCLUDED.creation_spec ELSE system_lang_keys.creation_spec END,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL;
+
+INSERT INTO public.system_lang_key_translations
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM public.system_lang_keys keys
+CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en)) AS copy(language_code, translation)
+WHERE keys.lang_key IN ('label_value_layout', 'label_value_layout_inherit', 'label_value_layout_auto', 'label_value_layout_inline', 'label_value_layout_stacked', 'label_value_layout_help', 'label_value_layout_readback_failed')
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status, updated = now()
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT id, 'code', 'frontend/core_components/admin_tools/card_visibility_view.js',
+       '', creation_spec, CURRENT_DATE
+FROM public.system_lang_keys
+WHERE lang_key IN ('label_value_layout', 'label_value_layout_inherit', 'label_value_layout_auto', 'label_value_layout_inline', 'label_value_layout_stacked', 'label_value_layout_help', 'label_value_layout_readback_failed')
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
+-- END label/value layout language seed.
+-- article_view.seed.sql
+-- Includes reviewed public feature metadata in a fresh installation.
+-- Mirrors the corresponding incremental migration without importing runtime data.
+-- Keeps clean installs and upgraded databases on the same feature contract.
+
+-- 20260908000004_add_article_view_and_field_settings.sql
+-- Registers an independent article view and the clear field-settings route.
+-- Bridges existing view assignments and permissions with compatible UI names.
+-- Preserves existing card choices, legacy assignments, and administrator translations.
+-- VERSION_DB: 9.7.7
+
+-- Retain a legacy article dimension's identity and all FK-backed settings.
+UPDATE public.system_table_views
+SET view_key = 'article_view'
+WHERE id = (
+    SELECT id FROM public.system_table_views
+    WHERE view_key IN ('article', 'big_card', 'row_article')
+    ORDER BY CASE view_key WHEN 'article' THEN 0 WHEN 'big_card' THEN 1 ELSE 2 END, id
+    LIMIT 1
+)
+AND NOT EXISTS (SELECT 1 FROM public.system_table_views WHERE view_key = 'article_view');
+
+INSERT INTO public.system_table_views (name, view_key, status)
+VALUES ('article_view', 'article_view', 'active')
+ON CONFLICT (view_key) DO NOTHING;
+
+-- If several old aliases existed, retain their records and fill only missing
+-- canonical targets. Explicit article settings take precedence over aliases.
+INSERT INTO public.system_view_field_set_assignments
+    (user_id, group_id, table_uid, view_id, field_set_id, group_priority, created_by, created, updated)
+SELECT old.user_id, old.group_id, old.table_uid, canonical.id,
+       old.field_set_id, old.group_priority, old.created_by, old.created, old.updated
+FROM public.system_view_field_set_assignments old
+JOIN public.system_table_views legacy ON legacy.id = old.view_id
+CROSS JOIN public.system_table_views canonical
+WHERE legacy.view_key IN ('article', 'big_card', 'row_article')
+  AND canonical.view_key = 'article_view'
+ORDER BY CASE legacy.view_key WHEN 'article' THEN 0 WHEN 'big_card' THEN 1 ELSE 2 END, old.id
+ON CONFLICT DO NOTHING;
+
+WITH desired(name, route) AS (
+    VALUES ('ui.view.article_view', '/ui/view/article_view'),
+           ('ui.admin.view_field_settings', '/ui/admin/view_field_settings')
+)
+INSERT INTO public.system_functions
+    (name, package, disabled, specific_table_related, url_route_endpoint, ui_only,
+     rate_limit_amount, rate_limit_minutes, creation_spec)
+SELECT name, 'frontend', FALSE, FALSE, route, TRUE, 200, 20,
+       'Independent article presentation and compatible field-settings navigation.'
+FROM desired
+ON CONFLICT (name) DO NOTHING;
+
+-- Preserve exactly the existing route audience, including target scoping.
+-- Old routes remain available to saved bookmarks and permission integrations.
+INSERT INTO public.system_group_table_func_rights
+    (user_group_id, function_id, target_schema_name, target_table_uid, creation_spec)
+SELECT rights.user_group_id, current_route.id, rights.target_schema_name,
+       rights.target_table_uid, 'Preserved audience for the canonical article/settings route.'
+FROM public.system_group_table_func_rights rights
+JOIN public.system_functions old_route ON old_route.id = rights.function_id
+JOIN public.system_functions current_route ON current_route.name = CASE old_route.name
+    WHEN 'ui.view.card' THEN 'ui.view.article_view'
+    WHEN 'ui.admin.view_field_assignments' THEN 'ui.admin.view_field_settings' END
+WHERE old_route.name IN ('ui.view.card', 'ui.admin.view_field_assignments')
+  AND NOT EXISTS (
+      SELECT 1 FROM public.system_group_table_func_rights existing
+      WHERE existing.user_group_id = rights.user_group_id
+        AND existing.function_id = current_route.id
+        AND existing.target_schema_name IS NOT DISTINCT FROM rights.target_schema_name
+        AND existing.target_table_uid IS NOT DISTINCT FROM rights.target_table_uid
+  )
+ON CONFLICT DO NOTHING;
+
+WITH authored(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES ('view_field_settings', 'Näkymien kenttäasetukset', 'View field settings',
+            '视图字段设置', '檢視欄位設定', 'Canonical navigation title for per-view field settings.'),
+           ('view_article', 'Artikkeli', 'Article', '文章', '文章',
+            'Independent article presentation with its own field settings.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec)
+SELECT lang_key, fi, en, ch, yue, creation_spec FROM authored
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    ch = CASE WHEN NULLIF(btrim(system_lang_keys.ch), '') IS NULL THEN EXCLUDED.ch ELSE system_lang_keys.ch END,
+    yue = CASE WHEN NULLIF(btrim(system_lang_keys.yue), '') IS NULL THEN EXCLUDED.yue ELSE system_lang_keys.yue END
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.ch), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.yue), '') IS NULL;
+
+INSERT INTO public.system_lang_key_translations
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM public.system_lang_keys keys
+-- Legacy ch/yue fields remain intact; they are not normalized language codes.
+CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en))
+    AS copy(language_code, translation)
+WHERE keys.lang_key IN ('view_field_settings', 'view_article')
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+-- column_supported_views.seed.sql
+-- Includes reviewed public feature metadata in a fresh installation.
+-- Mirrors the corresponding incremental migration without importing runtime data.
+-- Keeps clean installs and upgraded databases on the same feature contract.
+
+INSERT INTO public.system_db_tables (
+    table_name,
+    description,
+    cached_oid,
+    folder_id,
+    schema_name,
+    fk_display_column,
+    filterbar_visible_by_default,
+    is_removable,
+    display_name,
+    sql_dump_policy,
+    default_view_id
+)
+SELECT
+    'system_column_supported_views',
+    'Read-only filterable matrix of registered columns and supported views',
+    classes.oid::INTEGER,
+    (
+        SELECT metadata.folder_id
+        FROM public.system_db_tables AS metadata
+        WHERE metadata.table_name = 'system_table_views'
+          AND COALESCE(NULLIF(metadata.schema_name, ''), 'public') = 'public'
+        LIMIT 1
+    ),
+    'public',
+    'column_name',
+    TRUE,
+    FALSE,
+    'Column Supported Views',
+    'none',
+    (
+        SELECT id
+        FROM public.system_table_views
+        WHERE view_key = 'table'
+        LIMIT 1
+    )
+FROM pg_class AS classes
+JOIN pg_namespace AS schemas
+  ON schemas.oid = classes.relnamespace
+ AND schemas.nspname = 'public'
+WHERE classes.relname = 'system_column_supported_views'
+  AND classes.relkind = 'v'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_db_tables AS existing
+      WHERE existing.table_name = 'system_column_supported_views'
+        AND COALESCE(NULLIF(existing.schema_name, ''), 'public') = 'public'
+  );
+
+UPDATE public.system_db_tables AS target
+SET description = 'Read-only filterable matrix of registered columns and supported views',
+    cached_oid = classes.oid::INTEGER,
+    folder_id = COALESCE(target.folder_id, (
+        SELECT metadata.folder_id
+        FROM public.system_db_tables AS metadata
+        WHERE metadata.table_name = 'system_table_views'
+          AND COALESCE(NULLIF(metadata.schema_name, ''), 'public') = 'public'
+        LIMIT 1
+    )),
+    schema_name = 'public',
+    fk_display_column = 'column_name',
+    filterbar_visible_by_default = TRUE,
+    is_removable = FALSE,
+    display_name = 'Column Supported Views',
+    sql_dump_policy = 'none',
+    default_view_id = COALESCE(target.default_view_id, (
+        SELECT id
+        FROM public.system_table_views
+        WHERE view_key = 'table'
+        LIMIT 1
+    )),
+    updated = now()
+FROM pg_class AS classes
+JOIN pg_namespace AS schemas
+  ON schemas.oid = classes.relnamespace
+ AND schemas.nspname = 'public'
+WHERE target.table_name = 'system_column_supported_views'
+  AND COALESCE(NULLIF(target.schema_name, ''), 'public') = 'public'
+  AND classes.relname = 'system_column_supported_views'
+  AND classes.relkind = 'v';
+
+DO $$
+DECLARE
+    matrix_table_uid INTEGER;
+BEGIN
+    SELECT table_uid
+    INTO matrix_table_uid
+    FROM public.system_db_tables
+    WHERE table_name = 'system_column_supported_views'
+      AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
+    LIMIT 1;
+
+    IF matrix_table_uid IS NULL THEN
+        RAISE EXCEPTION 'column support matrix registration failed';
+    END IF;
+
+    INSERT INTO public.system_column_details (
+        table_uid,
+        column_name,
+        data_type,
+        co_number,
+        editable_in_ui,
+        is_multilingual,
+        created,
+        updated
+    )
+    SELECT
+        matrix_table_uid,
+        columns.column_name,
+        columns.data_type,
+        columns.ordinal_position,
+        FALSE,
+        FALSE,
+        now(),
+        now()
+    FROM information_schema.columns AS columns
+    WHERE columns.table_schema = 'public'
+      AND columns.table_name = 'system_column_supported_views'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM public.system_column_details AS existing
+          WHERE existing.table_uid = matrix_table_uid
+            AND existing.column_name = columns.column_name
+      )
+    ORDER BY columns.ordinal_position;
+
+    UPDATE public.system_column_details
+    SET editable_in_ui = FALSE,
+        is_multilingual = FALSE,
+        hide_everywhere = FALSE,
+        hide_in_filter_panel = FALSE,
+        client_delivery_mode = 'include',
+        updated = now()
+    WHERE table_uid = matrix_table_uid;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'readeronly') THEN
+        GRANT SELECT ON TABLE public.system_column_supported_views TO readeronly;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'admin_user') THEN
+        GRANT SELECT ON TABLE public.system_column_supported_views TO admin_user;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'basic_user') THEN
+        GRANT SELECT ON TABLE public.system_column_supported_views TO basic_user;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'guest_user') THEN
+        GRANT SELECT ON TABLE public.system_column_supported_views TO guest_user;
+    END IF;
+END $$;
+
+INSERT INTO public.system_group_table_func_rights (
+    user_group_id,
+    function_id,
+    target_schema_name,
+    creation_spec,
+    target_table_uid
+)
+SELECT
+    groups.id,
+    functions.id,
+    'public',
+    'Filterest DB 9.7.3 administrator column support matrix read access',
+    matrix.table_uid
+FROM public.system_user_groups AS groups
+JOIN public.system_functions AS functions
+  ON functions.name IN (
+      'dtt_1_row_read.GetResultsHandlerWrapper',
+      'dtt_1_row_read.GetRowCountHandlerWrapper',
+      'dtt_1_row_read.GetFilterOptionsHandler',
+      'dtt_3_table_read.GetTableViewHandlerWrapper',
+      'dtt_2_column_crud.GetTableColumnsHandler'
+  )
+JOIN public.system_db_tables AS matrix
+  ON matrix.table_name = 'system_column_supported_views'
+ AND COALESCE(NULLIF(matrix.schema_name, ''), 'public') = 'public'
+WHERE groups.name = 'admins'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.system_group_table_func_rights AS existing
+      WHERE existing.user_group_id = groups.id
+        AND existing.function_id = functions.id
+        AND existing.target_table_uid = matrix.table_uid
+        AND COALESCE(NULLIF(existing.target_schema_name, ''), 'public') = 'public'
+  );
+
+WITH authored_keys(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES
+        ('system_column_supported_views', 'Sarakkeiden tuetut näkymät', 'Column Supported Views', '列支持的视图', '欄位支援的檢視', 'Dataset title for the read-only column-to-view support matrix.'),
+        ('view_key', 'Näkymäavain', 'View key', '视图键', '檢視鍵', 'Stable registered view identifier in the support matrix.'),
+        ('view_status', 'Näkymän tila', 'View status', '视图状态', '檢視狀態', 'Registered view lifecycle status in the support matrix.'),
+        ('is_supported', 'Tuettu näkymässä', 'Supported in view', '在视图中受支持', '喺檢視中支援', 'Effective column support flag in the support matrix.'),
+        ('support_state', 'Tuen tila', 'Support state', '支持状态', '支援狀態', 'Deterministic reason behind the effective support flag.'),
+        ('is_filterable', 'Suodatettavissa', 'Filterable', '可筛选', '可篩選', 'Whether the column is available to the ordinary filter panel.'),
+        ('supported', 'Tuettu', 'Supported', '受支持', '支援', 'Support-matrix state for a client-visible column.'),
+        ('server_only', 'Vain palvelimella', 'Server only', '仅限服务器', '只限伺服器', 'Support-matrix state for data intentionally withheld from client projections.'),
+        ('hidden_everywhere', 'Piilotettu kaikkialla', 'Hidden everywhere', '全局隐藏', '全域隱藏', 'Support-matrix state for globally hidden presentation metadata.'),
+        ('hidden_on_card', 'Piilotettu korteissa', 'Hidden on cards', '在卡片中隐藏', '喺卡片中隱藏', 'Support-matrix state for columns hidden by the card default.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec)
+SELECT lang_key, fi, en, ch, yue, creation_spec
+FROM authored_keys
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = EXCLUDED.fi,
+    en = EXCLUDED.en,
+    ch = EXCLUDED.ch,
+    yue = EXCLUDED.yue,
+    creation_spec = EXCLUDED.creation_spec,
+    updated = now();
+
+WITH selected_keys AS (
+    SELECT id, lang_key, fi, en, ch, yue
+    FROM public.system_lang_keys
+    WHERE lang_key IN (
+        'system_column_supported_views',
+        'view_key',
+        'view_status',
+        'is_supported',
+        'support_state',
+        'is_filterable',
+        'supported',
+        'server_only',
+        'hidden_everywhere',
+        'hidden_on_card'
+    )
+), authored_translations AS (
+    SELECT selected.id AS lang_key_id,
+           translations.language_code,
+           translations.translation,
+           translations.review_status
+    FROM selected_keys AS selected
+    CROSS JOIN LATERAL (
+        VALUES
+            ('fi', selected.fi, 'approved'),
+            ('en', selected.en, 'approved'),
+            ('zh-CN', selected.ch, 'needs_review'),
+            ('zh-TW', selected.yue, 'needs_review'),
+            ('zh-HK', selected.yue, 'needs_review')
+    ) AS translations(language_code, translation, review_status)
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT lang_key_id, language_code, translation, 'manual', review_status
+FROM authored_translations
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation,
+    review_status = EXCLUDED.review_status,
+    source_kind = EXCLUDED.source_kind,
+    updated = now();
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT keys.id,
+       'migration',
+       'server_tools/migrations/20260906000002_add_column_view_support_matrix.sql',
+       '',
+       'Column-to-supported-view matrix dataset and field labels.',
+       CURRENT_DATE
+FROM public.system_lang_keys AS keys
+WHERE keys.lang_key IN (
+    'system_column_supported_views',
+    'view_key',
+    'view_status',
+    'is_supported',
+    'support_state',
+    'is_filterable',
+    'supported',
+    'server_only',
+    'hidden_everywhere',
+    'hidden_on_card'
+)
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
+SET source_low = EXCLUDED.source_low,
+    usage_explanation = EXCLUDED.usage_explanation,
+    last_seen = CURRENT_DATE;
+-- media_library.lang_keys.sql
+-- Includes reviewed public feature metadata in a fresh installation.
+-- Mirrors the corresponding incremental migration without importing runtime data.
+-- Keeps clean installs and upgraded databases on the same feature contract.
+
+
+WITH authored_keys(lang_key, fi, en, creation_spec) AS (
+    VALUES
+    ('media_library_choose', 'Käytä olemassa olevaa kuvaa', 'Use an existing image', 'Existing-image reuse: choose.'),
+    ('media_library_close', 'Sulje kuvalista', 'Close image list', 'Existing-image reuse: close.'),
+    ('media_library_clear', 'Poista valinta', 'Clear selection', 'Existing-image reuse: clear.'),
+    ('media_library_next', 'Lisää kuvia', 'More images', 'Existing-image reuse: next.'),
+    ('media_library_loading', 'Ladataan kuvia…', 'Loading images…', 'Existing-image reuse: loading.'),
+    ('media_library_scope', 'Valitse saman aineiston kuva. Kuva ja sen nykyiset kuvatekstit liitetään, kun tallennat rivin.', 'Choose an image from this dataset. Its current captions are copied when you save the row.', 'Existing-image reuse: scope.'),
+    ('media_library_unavailable', 'Kuvaa ei voi käyttää uudelleen näillä oikeuksilla.', 'This image cannot be reused with these permissions.', 'Existing-image reuse: unavailable.'),
+    ('media_library_empty', 'Uudelleenkäytettäviä kuvia ei löytynyt.', 'No reusable images were found.', 'Existing-image reuse: empty.'),
+    ('media_library_selected', 'Valittu kuva', 'Selected image', 'Existing-image reuse: selected.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, creation_spec)
+SELECT lang_key, fi, en, creation_spec FROM authored_keys
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    creation_spec = CASE WHEN NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL THEN EXCLUDED.creation_spec ELSE system_lang_keys.creation_spec END,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL;
+
+INSERT INTO public.system_lang_key_translations
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM public.system_lang_keys keys
+CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en)) AS copy(language_code, translation)
+WHERE keys.lang_key IN ('media_library_choose', 'media_library_close', 'media_library_clear', 'media_library_next', 'media_library_loading', 'media_library_scope', 'media_library_unavailable', 'media_library_empty', 'media_library_selected')
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status, updated = now()
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT id, 'code', 'frontend/reusable_components/media_library_picker/media_library_picker.js',
+       '', creation_spec, CURRENT_DATE
+FROM public.system_lang_keys
+WHERE lang_key IN ('media_library_choose', 'media_library_close', 'media_library_clear', 'media_library_next', 'media_library_loading', 'media_library_scope', 'media_library_unavailable', 'media_library_empty', 'media_library_selected')
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
+-- Supplies reviewed web-image picker copy for existing and fresh installations.
+-- Connects the picker URL, clipboard help and original-page link to the language catalog.
+-- Preserves nonempty site-authored copy while seeding missing Finnish and English text.
+-- Shared by the incremental migration and the independent public bootstrap.
+
+WITH authored_keys(lang_key, fi, en, creation_spec) AS (
+    VALUES
+        ('image_source_picker_help', 'Liitä Unsplash-, Pexels- tai Pixabay-kuvasivun osoite. Kuva ja sen lähdetieto tallennetaan vain tälle uudelle riville.', 'Paste an Unsplash, Pexels, or Pixabay photo-page URL. The image and its credit will be saved only with this new row.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_source_url', 'Kuvasivun osoite', 'Image page URL', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('see_original_page', 'Katso alkuperäinen sivu', 'See original page', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('paste_and_preview', 'Liitä ja esikatsele', 'Paste & preview', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_clipboard_help', 'Voit liittää osoitteen suoraan kenttään. Selain voi pyytää erillisen Liitä-vahvistuksen, kun käytät painiketta.', 'You can paste the URL directly into the field. Your browser may ask for a separate Paste confirmation when using the button.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_clipboard_unavailable', 'Leikepöytää ei voitu lukea. Liitä kuvasivun osoite kenttään ja valitse Esikatsele.', 'The clipboard could not be read. Paste the photo-page URL into the field and choose Preview.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_clipboard_empty', 'Leikepöydällä ei ole osoitetta. Kopioi kuvasivun osoite tai kirjoita se kenttään.', 'The clipboard is empty. Copy a photo-page URL or enter it in the field.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_source_url_invalid', 'Anna kokonainen HTTPS-kuvasivun osoite.', 'Enter a complete HTTPS photo-page URL.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_preview_failed', 'Kuvan esikatselu epäonnistui. Tarkista kuvasivun osoite ja yritä uudelleen.', 'The image preview failed. Check the photo-page URL and try again.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_provider_unsupported', 'Tätä kuvapalvelua ei tueta. Käytä yllä mainittua kuvapalvelua.', 'This image provider is not supported. Use one of the providers listed above.', 'Web-image picker URL, clipboard action, or preview feedback.'),
+        ('image_provider_unavailable', 'Kuvapalvelu ei ole juuri nyt käytettävissä. Voit yrittää myöhemmin uudelleen.', 'The image provider is not available right now. Please try again later.', 'Web-image picker URL, clipboard action, or preview feedback.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, creation_spec)
+SELECT lang_key, fi, en, creation_spec FROM authored_keys
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    creation_spec = CASE WHEN NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL THEN EXCLUDED.creation_spec ELSE system_lang_keys.creation_spec END,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL;
+
+WITH selected_keys AS (
+    SELECT id, fi, en FROM public.system_lang_keys
+    WHERE lang_key IN (
+        'image_source_picker_help',
+        'image_source_url',
+        'see_original_page',
+        'paste_and_preview',
+        'image_clipboard_help',
+        'image_clipboard_unavailable',
+        'image_clipboard_empty',
+        'image_source_url_invalid',
+        'image_preview_failed',
+        'image_provider_unsupported',
+        'image_provider_unavailable'
+    )
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM selected_keys AS keys
+CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en)) AS copy(language_code, translation)
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status, updated = now()
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT keys.id, 'code',
+       'frontend/reusable_components/image_source_picker/image_source_picker.js', '',
+       keys.creation_spec, CURRENT_DATE
+FROM public.system_lang_keys AS keys
+WHERE keys.lang_key IN (
+    'image_source_picker_help',
+    'image_source_url',
+    'see_original_page',
+    'paste_and_preview',
+    'image_clipboard_help',
+    'image_clipboard_unavailable',
+    'image_clipboard_empty',
+    'image_source_url_invalid',
+    'image_preview_failed',
+    'image_provider_unsupported',
+    'image_provider_unavailable'
+)
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
+-- Seeds the notice explaining automatic text-search results without selected filters.
+-- Connects the common search presentation to reviewed Finnish and English copy.
+-- Preserves every existing nonempty site translation and never changes user data.
+-- Shared by the public bootstrap and the corresponding additive upgrade migration.
+
+INSERT INTO public.system_lang_keys (lang_key, fi, en, creation_spec)
+VALUES (
+    'search_results_without_filters',
+    'Valituilla suodattimilla ei löytynyt tekstiosumia. Näytetään tulokset ilman suodattimia. Valinnat säilyvät seuraavaa hakua varten.',
+    'No text matches with the selected filters. Showing results without filters. Your selections are kept for the next search.',
+    'Explains that authorized text results are shown without optional filters while retaining the selected filters for the next query.'
+)
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    creation_spec = CASE WHEN NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL THEN EXCLUDED.creation_spec ELSE system_lang_keys.creation_spec END,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL;
+
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM public.system_lang_keys AS keys
+CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en)) AS copy(language_code, translation)
+WHERE keys.lang_key = 'search_results_without_filters'
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status, updated = now()
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT id, 'code', 'frontend/core_components/filterbar/text_search/dataset_search_executor.js',
+       '', creation_spec, CURRENT_DATE
+FROM public.system_lang_keys
+WHERE lang_key = 'search_results_without_filters'
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
+-- article_editor.lang_keys.sql
+-- Supplies reviewed copy for one multilingual article content field.
+-- Connects existing sites and the fresh public bootstrap to the same editor labels.
+-- Preserves all nonempty site-authored translations and review metadata.
+
+WITH authored_keys(lang_key, fi, en, creation_spec) AS (
+    VALUES
+        ('article_edit_languages', 'Muokkaa kieliversioita', 'Edit language versions', 'One-field multilingual article editor with preserved drafts and translations.'),
+        ('article_language_field', 'Kenttä', 'Field', 'One-field multilingual article editor with preserved drafts and translations.'),
+        ('article_language_help', 'Muokkaa yhtä kenttää eri kielillä. Voit säätää tekstialueen korkeutta alareunasta vetämällä. Muiden kielten tekstit säilyvät.', 'Edit one field across languages. Drag the lower edge of a text area to resize it. Other languages are preserved.', 'One-field multilingual article editor with preserved drafts and translations.'),
+        ('article_language_save_failed', 'Tallennus epäonnistui. Muutoksesi ovat yhä tässä; yritä uudelleen tai peru.', 'Saving failed. Your changes are still here; retry or cancel.', 'One-field multilingual article editor with preserved drafts and translations.'),
+        ('article_language_load_failed', 'Kenttää ei voitu ladata. Yritä uudelleen.', 'The field could not be loaded. Try again.', 'One-field multilingual article editor with preserved drafts and translations.')
+)
+INSERT INTO public.system_lang_keys (lang_key, fi, en, creation_spec)
+SELECT lang_key, fi, en, creation_spec FROM authored_keys
+ON CONFLICT (lang_key) DO UPDATE
+SET fi = CASE WHEN NULLIF(btrim(system_lang_keys.fi), '') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+    en = CASE WHEN NULLIF(btrim(system_lang_keys.en), '') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+    creation_spec = CASE WHEN NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL THEN EXCLUDED.creation_spec ELSE system_lang_keys.creation_spec END,
+    updated = now()
+WHERE NULLIF(btrim(system_lang_keys.fi), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.en), '') IS NULL
+   OR NULLIF(btrim(system_lang_keys.creation_spec), '') IS NULL;
+
+WITH selected_keys AS (
+    SELECT id, fi, en FROM public.system_lang_keys
+    WHERE lang_key IN (
+        'article_edit_languages',
+        'article_language_field',
+        'article_language_help',
+        'article_language_save_failed',
+        'article_language_load_failed'
+    )
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM selected_keys AS keys
+CROSS JOIN LATERAL (VALUES ('fi', keys.fi), ('en', keys.en)) AS copy(language_code, translation)
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind,
+    review_status = EXCLUDED.review_status, updated = now()
+WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources (
+    lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen
+)
+SELECT keys.id, 'code',
+       'frontend/core_components/table_views/article_view/article_language_editor.js', '',
+       keys.creation_spec, CURRENT_DATE
+FROM public.system_lang_keys AS keys
+WHERE keys.lang_key IN (
+        'article_edit_languages',
+        'article_language_field',
+        'article_language_help',
+        'article_language_save_failed',
+        'article_language_load_failed'
+)
+ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
 
 -- Generated migration-ledger baseline. These migrations are already embodied by this bootstrap.
 INSERT INTO public.system_schema_migrations (filename) VALUES
@@ -2603,5 +3363,15 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260905000005_repair_owned_child_legacy_sequence_permissions.sql'),
   ('20260906000002_add_column_view_support_matrix.sql'),
   ('20260906000003_add_user_visual_preferences.sql'),
-  ('20260906000004_add_card_description_line_count_setting.sql')
+  ('20260906000004_add_card_description_line_count_setting.sql'),
+  ('20260908000001_seed_field_settings_language_keys.sql'),
+  ('20260908000002_add_public_site_login_policy.sql'),
+  ('20260908000003_add_column_label_value_layout.sql'),
+  ('20260908000004_add_article_view_and_field_settings.sql'),
+  ('20260908000005_seed_search_filter_fallback_language_key.sql'),
+  ('20260908000006_add_media_asset_registry.sql'),
+  ('20260908000007_seed_image_picker_copy.sql'),
+  ('20260908000008_restore_column_support_view_registration.sql'),
+  ('20260908000009_seed_article_editor_copy.sql'),
+  ('20260908000010_restrict_media_registry_and_restore_support_view.sql')
 ON CONFLICT (filename) DO NOTHING;

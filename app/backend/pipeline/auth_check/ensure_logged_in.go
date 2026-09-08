@@ -31,7 +31,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 		user_id_val, ok := session.Values["user_id"]
 		if ok {
 			if userID, isInteger := user_id_val.(int); isInteger && userID > 1 {
-				generationMatches, generationErr := auth_generation.Matches(r.Context(), backend.DbConfidential, session, userID)
+				generationMatches, generationErr := backend.AuthenticatedSessionMatches(r.Context(), backend.DbConfidential, session, userID)
 				if generationErr != nil {
 					log.Printf("\033[31m[EnsureLoggedIn] authentication state unavailable for user %d: %v\033[0m", userID, generationErr)
 					httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "authentication state unavailable")

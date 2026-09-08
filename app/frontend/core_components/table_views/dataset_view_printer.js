@@ -5,6 +5,7 @@
 
 import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
 import { create_card_view } from "./card_view/card_view_printer.js";
+import { create_article_view } from "./article_view/article_view_printer.js";
 // import { applySavedColumnVisibility } from '../general_tables/gt_toolbar/column_visibility_dropdown.js';
 import {
     initializeInfiniteScroll,
@@ -98,6 +99,7 @@ function toggleDatasetSearchAndFilter(tableName) {
 }
 
 const DATASET_VIEW_RENDERERS = {
+    article_view: { create: (tableName, columns, data) => create_article_view(columns, data, tableName) },
     table: {
         create: (table_name, columns, data, data_types) => {
             const tableElement = create_table_element(

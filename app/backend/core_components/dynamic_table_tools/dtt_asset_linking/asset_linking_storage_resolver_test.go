@@ -253,3 +253,17 @@ func TestResolveSharedAssetParentStorageContextSkipsLegacyImageRelations(t *test
 		t.Fatalf("context = %#v, want empty context for legacy relation", context)
 	}
 }
+
+// Independent media is deliberately excluded from parent-owned file moves.
+func TestCollectSharedAssetFileMovesRetainsReusedImages(t *testing.T) {
+	specs, _ := json.Marshal(BuildTargetInsertSpecs(BuildImageFileUploadConfig("services", 10, []string{"png"})))
+	db := openStorageResolverDB(t, []storageQueuedQuery{
+		{cols: []string{"parent", "fk", "specs"}, rows: [][]driver.Value{{"services", "services_id", specs}}},
+		{cols: []string{"table_uid"}, rows: [][]driver.Value{{"104"}}},
+		{cols: []string{"services_id", "filename"}, rows: [][]driver.Value{{int64(41), "/storage/media/174668a1-2efa-45a6-aa6c-d8a4ee8ec069/original/image.png"}, {int64(41), "104_41_9.png"}}},
+	})
+	moves, err := CollectSharedAssetFileMoves(db, "services_media", []int64{8, 9})
+	if err != nil || len(moves) != 1 || moves[0].Filename != "104_41_9.png" {
+		t.Fatalf("unexpected moves: %#v %v", moves, err)
+	}
+}

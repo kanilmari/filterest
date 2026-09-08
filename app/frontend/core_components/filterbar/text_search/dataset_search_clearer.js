@@ -10,9 +10,11 @@ import {
     updateURL,
 } from "../../navigation/nav_engine/query_params.js";
 import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation_handler_helpers.js";
-import { refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
+import { getUnifiedTableState, setUnifiedTableState, refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { datasetSearchState } from "./dataset_search_state_reader.js";
 import { ongoingSearchResults } from "./dataset_search_executor.js";
+
+import { resolveSortSelection } from "../top_row_buttons/sort_sync_state_helpers.js";
 
 export const DATASET_COMMITTED_SEARCH_CHANGED_EVENT =
     "dataset-committed-search-changed";
@@ -28,7 +30,7 @@ function getSearchClearingUrlOptions(tableName) {
 }
 
 function removeDatasetSearchArtifacts(tableName) {
-    for (const viewName of ["table", "card"]) {
+    for (const viewName of ["table", "card", "article_view"]) {
         const viewContainer = document.getElementById(
             `${tableName}_${viewName}_view_container`
         );
@@ -83,6 +85,10 @@ export function clearCommittedDatasetSearch(tableName) {
     }
 
     delete params.search;
+    const [column, direction] = resolveSortSelection(params, getUnifiedTableState(tableName)).split(":");
+    params.sort_column = column;
+    params.sort_order = direction;
+    setUnifiedTableState(tableName, { sort: { column, direction } });
     setParams(tableName, params);
     updateURL(
         tableName,

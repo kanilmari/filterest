@@ -28,19 +28,20 @@ describe("dataset_view_registry", () => {
             .toBe("demo_dataset_card_view_container");
         expect(getDatasetViewContainerId("price_chart", "demo_dataset"))
             .toBe("demo_dataset_price_chart_view_container");
-        expect(getDatasetViewContainerId("article", "demo_dataset")).toBe("");
+        expect(getDatasetViewContainerId("article", "demo_dataset")).toBe("demo_dataset_article_view_container");
     });
 
-    test("keeps article as a selector alias for card view", () => {
-        expect(isDatasetViewSelectorAlias("article")).toBe(true);
-        expect(resolveDatasetViewSelectionTarget("article")).toBe("card");
+    test("normalizes old article bookmarks to their own renderer", () => {
+        expect(isDatasetViewSelectorAlias("article_view")).toBe(false);
+        expect(resolveDatasetViewSelectionTarget("article")).toBe("article_view");
+        expect(resolveDatasetViewSelectionTarget("big_card")).toBe("article_view");
         expect(resolveDatasetViewSelectionTarget("table")).toBe("table");
     });
 
     test("returns canonical selector groups in UI order", () => {
         expect(getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_DIRECT)
             .map((option) => option.viewKey))
-            .toEqual(["card", "article", "table", "normal", "transposed"]);
+            .toEqual(["card", "article_view", "table", "normal", "transposed"]);
 
         expect(getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_MORE)
             .map((option) => option.viewKey))
@@ -89,6 +90,7 @@ describe("dataset_view_registry", () => {
     test("exports the existing permission route map from view metadata", () => {
         expect(DATASET_VIEW_PERMISSION_ROUTES).toEqual({
             card: "/ui/view/card",
+            article_view: "/ui/view/article_view",
             table: "/ui/view/table",
             normal: "/ui/view/list",
             transposed: "/ui/view/transposed",

@@ -64,6 +64,7 @@ async function loadModule() {
     vi.doMock("../../../route_permission_checker.js", () => ({
         primeDatasetPermissions: primeDatasetPermissionsMock,
     }));
+    vi.doMock("../../../config_fetcher.js", () => ({ getDefaultDatasetSortSync: vi.fn(() => ({ column: "__newest", direction: "DESC" })) }));
     vi.doMock("./table_refresh_unified_helpers.js", () => ({
         mergeStateWithOptions: mergeStateWithOptionsMock,
         computeNextSortState: computeNextSortStateMock,
@@ -334,7 +335,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         expect(openRowArticleViewMock).toHaveBeenCalledWith(
             { id: 7, title: "Firefox" },
             "app_service_catalog",
-            null
+            null,
+            expect.objectContaining({ isCurrent: expect.any(Function) }),
         );
     });
 
@@ -370,4 +372,35 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         expect(generateTableMock).toHaveBeenCalledTimes(2);
         expect(applyColumnVisibilityMock).toHaveBeenCalledTimes(1);
     });
+    test("waits for current article search instead of opening an ordinary list row", async () => {
+        localStorage.setItem("tasks_view", "article_view");
+        getParamsMock.mockReturnValue({ search: "waiting" });
+        getUnifiedTableStateMock.mockReturnValue({
+            sort: { column: "id", direction: "ASC" }, filters: {}, offset: 0,
+            articleView: { collapsed: true, expandedId: null, pendingAutoOpenFirstSearchResult: true },
+        });
+        getCachedSearchResultForRenderMock.mockReturnValue(null);
+        fetchDatasetDataMock.mockResolvedValue({ columns: ["id"], data: [{ id: 404 }], types: {}, row_count: 1 });
+        generateTableMock.mockResolvedValue(document.createElement("div"));
+        const mod = await loadModule();
+        await mod.refreshTableUnified("tasks", { skipUrlParams: true });
+        expect(generateTableMock.mock.calls.at(-1)[2]).toEqual([]);
+        expect(openRowArticleViewMock).not.toHaveBeenCalled();
+        expect(getCachedSearchResultForRenderMock).toHaveBeenCalledWith("tasks", { query: "waiting" });
+    });
+
+    test("ignores a delayed ordinary response after the committed query changes", async () => {
+        let release;
+        getParamsMock.mockReturnValue({ search: "old" });
+        fetchDatasetDataMock.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        const mod = await loadModule();
+        const old = mod.refreshTableUnified("tasks", { skipUrlParams: true });
+        await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+        getParamsMock.mockReturnValue({ search: "new" });
+        release({ columns: ["id"], data: [{ id: 404 }], types: {}, row_count: 1 });
+        await old;
+        expect(generateTableMock).not.toHaveBeenCalled();
+        expect(openRowArticleViewMock).not.toHaveBeenCalled();
+    });
+
 });

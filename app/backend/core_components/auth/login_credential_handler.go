@@ -136,6 +136,9 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
 		return
 	}
+	if !enforceLoginAccess(w, r, session, userID) {
+		return
+	}
 	log.Printf("[login-json] credentials OK for user %s (id=%d) 🔑", req.Username, userID)
 
 	switch verification.Method {
@@ -217,6 +220,9 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 	userID, ok := session.Values["otp_pending_user_id"].(int)
 	if !ok || userID == 0 {
 		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "no_pending_otp"})
+		return
+	}
+	if !enforceLoginAccess(w, r, session, userID) {
 		return
 	}
 	username, _ := session.Values["otp_pending_username"].(string)
@@ -304,6 +310,9 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 
 // completeLoginJSON regenerates and persists an authenticated session after all configured checks pass.
 func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, username, fingerprint string, authenticationGeneration int64) {
+	if !enforceLoginAccess(w, r, session, userID) {
+		return
+	}
 	session.Options.MaxAge = -1
 	if err := session.Save(r, w); err != nil {
 		log.Printf("session invalidation warning: %s", err.Error())

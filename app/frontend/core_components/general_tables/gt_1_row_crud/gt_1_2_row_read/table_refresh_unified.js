@@ -22,6 +22,10 @@ import {
 // Re-export state functions for backward compatibility (17 importers use this path)
 export { getUnifiedTableState, setUnifiedTableState };
 
+import { resolveDatasetViewSelectionTarget } from "../../../table_views/dataset_view_registry.js";
+
+const refreshGenerations = new Map();
+
 const DATASET_VIEW_PERMISSION_ROUTES = Object.freeze([
     '/api/add-row-multipart',
     '/api/comment-counts',
@@ -41,7 +45,7 @@ async function getActiveCachedSearchRenderResult(tableName) {
     const {
         getCachedSearchResultForRender,
     } = await import("../../../filterbar/text_search/dataset_search_executor.js");
-    return getCachedSearchResultForRender(tableName);
+    return getCachedSearchResultForRender(tableName, { query: committedSearchTerm });
 }
 
 function getFirstRenderableRowId(rows = []) {
@@ -66,6 +70,11 @@ function getFirstRenderableRowId(rows = []) {
 // refresh_table_unified.js
 
 export async function refreshTableUnified(tableName, options = {}) {
+    const generation = (refreshGenerations.get(tableName) || 0) + 1;
+    refreshGenerations.set(tableName, generation);
+    const query = String(getParams(tableName)?.search || "").trim();
+    const isCurrent = () => refreshGenerations.get(tableName) === generation
+        && String(getParams(tableName)?.search || "").trim() === query;
     // console.log('refreshTableUnified tableName and options: ', tableName, options);
     try {
         // 1) Haetaan ensin localStoragen nykyinen unified-tila
@@ -75,10 +84,12 @@ export async function refreshTableUnified(tableName, options = {}) {
         if (!options.skipUrlParams) {
             const parsed = parseTableQueryString(window.location.search);
             currentState.filters = parsed.filters;
-            currentState.sort = resolveRouteSort(
-                parsed.sort,
-                getDefaultDatasetSortSync(tableName)
-            );
+            currentState.sort = parsed.sort?.column && parsed.sort?.direction
+                ? resolveRouteSort(parsed.sort)
+                : query ? currentState.sort : resolveRouteSort(
+                    currentState.sort?.column ? currentState.sort : currentState.lastNonSearchSort,
+                    getDefaultDatasetSortSync(tableName)
+                );
             currentState.offset = parsed.offset;
         }
 
@@ -99,13 +110,15 @@ export async function refreshTableUnified(tableName, options = {}) {
 
         // 6) Haetaan localStoragesta tuore offset uudelleen
         currentState = getUnifiedTableState(tableName);
-        const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+        const currentView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || "table");
+        const stateKey = currentView === "article_view" ? "articleView" : "cardView";
 
         // Start the common dataset permission batch before data/render work so
         // the filter bar and card controls do not each trigger their own late check.
         void primeDatasetPermissions(tableName, DATASET_VIEW_PERMISSION_ROUTES);
 
-        const cachedSearchRenderResult = await getActiveCachedSearchRenderResult(tableName);
+        let cachedSearchRenderResult = await getActiveCachedSearchRenderResult(tableName);
+        if (!isCurrent()) return;
 
         // 7) Haetaan data fetchDatasetData-funktiolla (nyt varmasti offset=0, ellei override)
         const result = await fetchDatasetData({
@@ -115,10 +128,13 @@ export async function refreshTableUnified(tableName, options = {}) {
             sort_order: currentState.sort.direction,
             filters: currentState.filters,
             callerName: 'refreshTableUnified',
-            include_card_support: ["card", "product_card"].includes(currentView),
+            include_card_support: ["card", "article_view", "product_card"].includes(currentView),
             include_map_support: currentView === "map",
             view_key: currentView,
         });
+        if (!isCurrent()) return;
+        if (query) cachedSearchRenderResult = await getActiveCachedSearchRenderResult(tableName);
+        if (!isCurrent()) return;
         if (!result) {
             console.warn(`fetchDatasetData palautti tyhjän vastauksen taululle: ${tableName}`);
             return;
@@ -126,7 +142,10 @@ export async function refreshTableUnified(tableName, options = {}) {
         const data = result.data || [];
         const columns = result.columns || [];
         const data_types = result.types || {};
-        const hasCachedSearchRenderResult = Boolean(cachedSearchRenderResult);
+        const hasCachedSearchRenderResult = Boolean(query);
+        // Metadata may come from the ordinary list, but its rows are never
+        // substitutes while the current text-search response is still pending.
+        if (query && !cachedSearchRenderResult) cachedSearchRenderResult = { data: [], row_count: 0, complete: false };
         const renderData = hasCachedSearchRenderResult
             ? cachedSearchRenderResult.data || []
             : data;
@@ -161,29 +180,31 @@ export async function refreshTableUnified(tableName, options = {}) {
 			result.dataset_presentation,
             hasCachedSearchRenderResult ? null : result.row_group_facets
         );
+        if (!isCurrent() || cachedSearchRenderResult?.isCurrent?.() === false) return;
         if (hasCachedSearchRenderResult) {
             disconnectInfiniteScroll(tableName);
         }
-        const renderedView = localStorage.getItem(`${tableName}_view`) || currentView;
+        const renderedView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || currentView);
         if (renderedView !== currentView) {
             await refreshTableUnified(tableName, { skipUrlParams: true });
             return;
         }
 
         let stateAfterBuild = getUnifiedTableState(tableName);
-        const cardStateAfterBuild = stateAfterBuild.cardView || {};
+        const cardStateAfterBuild = stateAfterBuild[stateKey] || {};
         const shouldAutoOpenFirstResult =
             cardStateAfterBuild.collapsed === true
             && cardStateAfterBuild.expandedId == null
             && (
                 cardStateAfterBuild.pendingAutoOpenFirstRenderedResult === true
-                || cardStateAfterBuild.pendingAutoOpenFirstSearchResult === true
+                || (cardStateAfterBuild.pendingAutoOpenFirstSearchResult === true
+                    && cachedSearchRenderResult?.complete === true)
             );
         if (shouldAutoOpenFirstResult) {
             const firstRowId = getFirstRenderableRowId(renderData);
             if (firstRowId != null) {
                 setUnifiedTableState(tableName, {
-                    cardView: {
+                    [stateKey]: {
                         ...cardStateAfterBuild,
                         expandedId: firstRowId,
                         pendingAutoOpenFirstRenderedResult: false,
@@ -194,11 +215,11 @@ export async function refreshTableUnified(tableName, options = {}) {
             }
         }
 
-        if (stateAfterBuild.cardView?.collapsed && stateAfterBuild.cardView?.expandedId != null) {
-            const expandedId = stateAfterBuild.cardView.expandedId;
+        if (stateAfterBuild[stateKey]?.collapsed && stateAfterBuild[stateKey]?.expandedId != null) {
+            const expandedId = stateAfterBuild[stateKey].expandedId;
             let rowItem = renderData.find(r => String(r.id) === String(expandedId));
             let cardElem = document.querySelector(
-                `#${tableName}_card_view_container .card[data-id='${expandedId}']`
+                `#${tableName}_${currentView}_view_container .card[data-id='${expandedId}']`
             );
 
             // If the row is not in the current page of results (deep link),
@@ -209,7 +230,7 @@ export async function refreshTableUnified(tableName, options = {}) {
                         dataset_name: tableName,
                         filters: { id: expandedId },
                         callerName: 'deep_link_big_card',
-                        include_card_support: ["card", "product_card"].includes(currentView),
+                        include_card_support: ["card", "article_view", "product_card"].includes(currentView),
                         view_key: currentView,
                     });
                     const singleData = singleResult?.data || singleResult?.rows || [];
@@ -221,14 +242,17 @@ export async function refreshTableUnified(tableName, options = {}) {
                 }
             }
 
-            if (rowItem) {
-                openRowArticleView(rowItem, tableName, cardElem || null);
+            if (rowItem && isCurrent()) {
+                openRowArticleView(rowItem, tableName, cardElem || null, {
+                    isCurrent: () => isCurrent() && cachedSearchRenderResult?.isCurrent?.() !== false && resolveDatasetViewSelectionTarget(localStorage.getItem(tableName + "_view") || currentView) === currentView,
+                });
             }
         }
 
         // 10) Sarakenäkyvyys (uusi)
         applyColumnVisibility(tableName);
     } catch (err) {
+        if (!isCurrent()) return;
         /* virhe-tulostus ohjeittesi mukaisena */
         console.warn('Error refreshing table:', err);
         const lowerMessage = String(err?.message || err || '').toLowerCase();

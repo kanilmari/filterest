@@ -56,41 +56,41 @@ describe('resolveSortSelection', () => {
     });
 
     test('returns empty string when neither has sort info', () => {
-        expect(resolveSortSelection({}, {})).toBe('');
+        expect(resolveSortSelection({}, {})).toBe('__newest:DESC');
     });
 
     test('returns empty string when params have column but no order', () => {
         const params = { sort_column: 'name' };
-        expect(resolveSortSelection(params, {})).toBe('');
+        expect(resolveSortSelection(params, {})).toBe('__newest:DESC');
     });
 
     test('returns empty string when params have order but no column', () => {
         const params = { sort_order: 'asc' };
-        expect(resolveSortSelection(params, {})).toBe('');
+        expect(resolveSortSelection(params, {})).toBe('__newest:DESC');
     });
 
     test('returns empty string when state sort has column but no direction', () => {
         const params = {};
         const state = { sort: { column: 'name' } };
-        expect(resolveSortSelection(params, state)).toBe('');
+        expect(resolveSortSelection(params, state)).toBe('__newest:DESC');
     });
 
     test('returns empty string when state sort has direction but no column', () => {
         const params = {};
         const state = { sort: { direction: 'asc' } };
-        expect(resolveSortSelection(params, state)).toBe('');
+        expect(resolveSortSelection(params, state)).toBe('__newest:DESC');
     });
 
     test('returns empty string when state.sort is null', () => {
         const params = {};
         const state = { sort: null };
-        expect(resolveSortSelection(params, state)).toBe('');
+        expect(resolveSortSelection(params, state)).toBe('__newest:DESC');
     });
 
     test('returns empty string when state.sort is undefined', () => {
         const params = {};
         const state = {};
-        expect(resolveSortSelection(params, state)).toBe('');
+        expect(resolveSortSelection(params, state)).toBe('__newest:DESC');
     });
 
     test('uppercases direction from state', () => {
@@ -98,4 +98,14 @@ describe('resolveSortSelection', () => {
         const state = { sort: { column: 'x', direction: 'Asc' } };
         expect(resolveSortSelection(params, state)).toBe('x:ASC');
     });
+});
+
+test("relevance belongs only to a committed text search", () => {
+    expect(resolveSortSelection({ search: "cloud" }, {})).toBe("");
+    expect(resolveSortSelection({ search: " " }, {})).toBe("__newest:DESC");
+});
+test("restores ordinary selection after leaving relevance", () => {
+    const state = { sort: { column: null, direction: null }, lastNonSearchSort: { column: "title", direction: "ASC" } };
+    expect(resolveSortSelection({ search: "cloud" }, state)).toBe("");
+    expect(resolveSortSelection({}, state)).toBe("title:ASC");
 });

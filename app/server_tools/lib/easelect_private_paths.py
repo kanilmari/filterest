@@ -1,8 +1,8 @@
 """Resolve Easelect/Filterest private env and TLS paths from a dynamic key home.
 
 Bridges Python developer tools with the same source/runtime boundary used by
-shell, Node, and Go startup. Existing runtimes remain root-local until an
-explicit dynamic keys_home is configured.
+shell, Node, and Go startup. Easelect defaults to its ignored keys/ directory;
+legacy flat public runtimes retain their existing root-local file layout.
 """
 
 from __future__ import annotations

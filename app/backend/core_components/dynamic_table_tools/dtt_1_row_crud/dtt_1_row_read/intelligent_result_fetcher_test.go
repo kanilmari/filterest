@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -394,4 +396,33 @@ func (r *intelligentFetcherTestRows) Next(dest []driver.Value) error {
 	copy(dest, r.rows[r.index])
 	r.index++
 	return nil
+}
+
+func TestFullTextSearchFiltersBeforeLimitSoRankElevenCanBeReturned(t *testing.T) {
+	db, state := openIntelligentFetcherTestDB(t, intelligentFetcherTestState{
+		headerExists: true, vectorExists: true,
+		queryableColumns: []string{"header", "status"},
+		finalRows:        [][]driver.Value{{int64(11), "Matching item outside unfiltered first ten", float64(0.1)}},
+	})
+	defer db.Close()
+	authorization := intelligentSearchAuthorization{
+		userFilters:   url.Values{"status": {"closed"}},
+		filterColumns: map[string]dtt_models.ColumnInfo{"status": {ColumnName: "status", DataType: "text"}},
+		filterTypes:   map[string]interface{}{"status": map[string]interface{}{"data_type": "text"}},
+	}
+	rows, err := fetchFullTextRows(db, "search_fixture", "shared", authorization)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filterAt := strings.Index(state.finalQuery, "\"src\".\"status\"")
+	limitAt := strings.Index(state.finalQuery, "LIMIT 10")
+	if filterAt < 0 || limitAt < filterAt || !strings.Contains(state.finalQuery, "$2") {
+		t.Fatalf("optional filter must be in candidate WHERE before LIMIT: %s", state.finalQuery)
+	}
+	if len(rows) != 1 || rows[0].RowID != 11 {
+		t.Fatalf("filtered candidate11 lost: %#v", rows)
+	}
+	if len(state.finalArgs) != 4 || state.finalArgs[3].Value != "%closed%" {
+		t.Fatalf("filter value not bound independently: %#v", state.finalArgs)
+	}
 }

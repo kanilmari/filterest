@@ -5,6 +5,7 @@
 package middlewares
 
 import (
+	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"encoding/json"
@@ -13,6 +14,11 @@ import (
 // CheckRegistrationEnabled queries system_config for the 'registration_enabled' boolean flag.
 // Returns false by default when the key does not exist.
 func CheckRegistrationEnabled() bool {
+	onlyAdmin, policyErr := backend.ReadOnlyAdminCanLogin(context.Background(), backend.Db)
+	if policyErr != nil || onlyAdmin {
+		return false
+	}
+
 	var enabled sql.NullBool
 	var jsonValue []byte
 	err := backend.Db.QueryRow(`

@@ -22,6 +22,8 @@ const {
     setParamsMock: vi.fn(),
 }));
 
+vi.mock("../article_view/article_language_editor.js", () => ({ createArticleLanguageEditor: vi.fn(() => null) }));
+
 vi.mock("../../endpoints/endpoint_router.js", () => ({
     endpoint_router: vi.fn(),
 }));
@@ -144,6 +146,7 @@ vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
     fetchCurrentUserProfile: vi.fn(() => Promise.resolve({ user_id: 1 })),
 }));
 
+import { createArticleLanguageEditor } from "../article_view/article_language_editor.js";
 import { openRowArticleView } from "./big_card_opener.js";
 import {
     collectCardUpdates,
@@ -179,6 +182,9 @@ describe("openRowArticleView", () => {
         document.body.innerHTML = "";
         window.history.replaceState({}, "", "/");
         localStorage.clear();
+        ["events", "services", "service_catalog", "tickets", "app_service_catalog"].forEach((table) => localStorage.setItem(`${table}_view`, "article_view"));
+        vi.mocked(createArticleLanguageEditor).mockReset();
+        vi.mocked(createArticleLanguageEditor).mockReturnValue(null);
         closeRowArticleMock.mockClear();
         dispatchCardArticleToggleMock.mockClear();
         fetchPermittedRowArticleDataMock.mockReset();
@@ -236,7 +242,7 @@ describe("openRowArticleView", () => {
 
     test("uses the selected card wrapper and preserves editing after a failed save", async () => {
         document.body.innerHTML = `
-            <div id="events_card_view_container">
+            <div id="events_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -288,7 +294,7 @@ describe("openRowArticleView", () => {
 
     test("resolves the current result card before composing direct article media", async () => {
         document.body.innerHTML = `
-            <div id="events_card_view_container">
+            <div id="events_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="41"></div>
@@ -320,7 +326,7 @@ describe("openRowArticleView", () => {
 
     test("uses the active-language header for the article avatar and URL slug", async () => {
         document.body.innerHTML = `
-            <div id="services_card_view_container">
+            <div id="services_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -361,7 +367,7 @@ describe("openRowArticleView", () => {
 
     test("preserves active search params and marks row URLs as article view", async () => {
         document.body.innerHTML = `
-            <div id="events_card_view_container">
+            <div id="events_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -380,16 +386,16 @@ describe("openRowArticleView", () => {
         );
 
         expect(window.location.pathname).toBe("/events/42");
-        expect(window.location.search).toBe("?search=firefox&view=article");
+        expect(window.location.search).toBe("?search=firefox&view=article_view");
         expect(setParamsMock).toHaveBeenCalledWith("events", {
             search: "firefox",
-            view: "article",
+            view: "article_view",
         });
     });
 
     test("canonicalizes an already-current row path without adding a history entry", async () => {
         document.body.innerHTML = `
-            <div id="events_card_view_container">
+            <div id="events_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -399,7 +405,7 @@ describe("openRowArticleView", () => {
             </div>
         `;
         window.history.replaceState({}, "", "/events/42-old-title");
-        getParamsMock.mockReturnValue({ view: "article" });
+        getParamsMock.mockReturnValue({ view: "article_view" });
         const pushStateSpy = vi.spyOn(window.history, "pushState");
         const replaceStateSpy = vi.spyOn(window.history, "replaceState");
         const selectedCard = document.querySelector(".card[data-id='42']");
@@ -412,22 +418,23 @@ describe("openRowArticleView", () => {
 
         expect(pushStateSpy).not.toHaveBeenCalled();
         expect(replaceStateSpy).toHaveBeenCalledWith(
-            { bigCard: true, dataset: "events", rowId: "42" },
+            { bigCard: true, dataset: "events", rowId: "42", articleReturnAvailable: false },
             "",
-            "/events/42?view=article",
+            "/events/42?view=article_view",
         );
         expect(window.location.pathname).toBe("/events/42");
-        expect(window.location.search).toBe("?view=article");
+        expect(window.location.search).toBe("?view=article_view");
         expect(window.history.state).toEqual({
             bigCard: true,
             dataset: "events",
             rowId: "42",
+            articleReturnAvailable: false,
         });
     });
 
     test("uses selected-card data types before stored data types", async () => {
         document.body.innerHTML = `
-            <div id="service_catalog_card_view_container">
+            <div id="service_catalog_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -466,7 +473,7 @@ describe("openRowArticleView", () => {
 
     test("falls back from public dataset alias to canonical stored data types", async () => {
         document.body.innerHTML = `
-            <div id="service_catalog_card_view_container">
+            <div id="service_catalog_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -502,7 +509,7 @@ describe("openRowArticleView", () => {
 
     test("passes parent image-role values to the gallery even without an image child relation", async () => {
         document.body.innerHTML = `
-            <div id="tickets_card_view_container">
+            <div id="tickets_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="2"></div>
@@ -554,7 +561,7 @@ describe("openRowArticleView", () => {
 
     test("does not resurrect a deleted cached image after the authoritative child gallery refreshes", async () => {
         document.body.innerHTML = `
-            <div id="tickets_card_view_container">
+            <div id="tickets_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="2"></div>
@@ -614,7 +621,7 @@ describe("openRowArticleView", () => {
 
     test("keeps service-catalog inline cached image and suppresses duplicate gallery hero", async () => {
         document.body.innerHTML = `
-            <div id="app_service_catalog_card_view_container">
+            <div id="app_service_catalog_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -681,7 +688,7 @@ describe("openRowArticleView", () => {
 
     test("keeps service-catalog inline cached image visible when gallery has no hero image", async () => {
         document.body.innerHTML = `
-            <div id="app_service_catalog_card_view_container">
+            <div id="app_service_catalog_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -728,4 +735,49 @@ describe("openRowArticleView", () => {
         expect(inlineImage.dataset.serviceCatalogInlineImageSuppressed).toBe("false");
         expect(inlineImage.dataset.serviceCatalogInlineImagePrimary).toBe("false");
     });
+
+    test("a superseded article fetch cannot write DOM or history", async () => {
+        document.body.innerHTML = `<div id="events_article_view_container"><div class="card_view_wrapper"><div class="card_container"></div><div class="row_article_placeholder"></div></div></div>`;
+        let resolveRow;
+        let current = true;
+        fetchPermittedRowArticleDataMock.mockImplementationOnce(() => new Promise((resolve) => { resolveRow = resolve; }));
+        const opening = openRowArticleView({ id: 42 }, "events", null, { isCurrent: () => current });
+        current = false;
+        resolveRow({ id: 42, title: "Stale" });
+        await opening;
+        expect(document.querySelector(".active_row_article")).toBeNull();
+        expect(window.location.pathname).toBe("/");
+        expect(dispatchCardArticleToggleMock).not.toHaveBeenCalled();
+        expect(buildRowArticleContent).not.toHaveBeenCalled();
+    });
+
+    test("article content follows its assigned field order", async () => {
+        document.body.innerHTML = `<div id="events_article_view_container"><div class="card_view_wrapper"><div class="card_container"></div><div class="row_article_placeholder"></div></div></div>`;
+        const row = { id: 42, title: "Title", description: "Body" };
+        Object.defineProperty(row, "__articleColumns", { value: ["description", "title"] });
+        fetchPermittedRowArticleDataMock.mockResolvedValueOnce(row);
+        await openRowArticleView(row, "events");
+        expect(buildRowArticleContent.mock.calls[0][3]).toEqual(["description", "title"]);
+    });
+
+    test("integrates the language editor and excludes simultaneous whole-article editing", async () => {
+        document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper"><div class="card_container"><div class="card" data-id="42"></div></div><div class="row_article_placeholder"></div></div></div>';
+        vi.mocked(hasDatasetPermission).mockImplementation((route) => Promise.resolve(route === "/api/update-row"));
+        const controller = { button: document.createElement("button"), panel: document.createElement("section"), setDisabled: vi.fn() };
+        vi.mocked(createArticleLanguageEditor).mockReturnValue(controller);
+        await openRowArticleView({ id: 42, title: '{"en":"Test"}' }, "events", document.querySelector(".card"));
+        expect(controller.panel.isConnected).toBe(true);
+        expect(controller.button.isConnected).toBe(true);
+        const options = vi.mocked(createArticleLanguageEditor).mock.calls[0][0];
+        expect(options).toMatchObject({ tableName: "events", canUpdateRow: true, row: { id: 42 } });
+        const edit = document.querySelector('[data-testid="big-card-edit-button"]');
+        options.onActiveChange(true);
+        expect(edit.disabled).toBe(true);
+        options.onActiveChange(false);
+        edit.click();
+        expect(controller.setDisabled).toHaveBeenCalledWith(true);
+        document.querySelector('[data-testid="big-card-cancel-button"]').click();
+        expect(controller.setDisabled).toHaveBeenLastCalledWith(false);
+    });
+
 });

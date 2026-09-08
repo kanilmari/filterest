@@ -153,6 +153,37 @@ function closestExistingPath(candidatePath) {
   return current;
 }
 
+/**
+ * Reads source-owned composition metadata for mutable-home isolation.
+ * Operator path settings cannot replace this fixed, protected source file.
+ * Invalid or absent metadata fails closed instead of disabling the guard.
+ */
+function readSourceRoots(projectRoot) {
+  const filename = path.join(projectRoot, 'filterest.source-roots');
+  let info;
+  try {
+    info = fs.lstatSync(filename);
+  } catch {
+    throw new Error('filterest.source-roots: required source metadata is missing');
+  }
+  if (!info.isFile() || (info.mode & 0o022) !== 0 || info.size > 16384) {
+    throw new Error('filterest.source-roots: expected a protected regular source file');
+  }
+  const roots = [];
+  for (const rawLine of fs.readFileSync(filename, 'utf8').split(/\r?\n/)) {
+    const name = rawLine.trim();
+    if (!name || name.startsWith('#')) continue;
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) || roots.includes(name)) {
+      throw new Error('filterest.source-roots: invalid or duplicate source directory');
+    }
+    roots.push(name);
+  }
+  if (roots.length === 0) {
+    throw new Error('filterest.source-roots: source directory list must not be empty');
+  }
+  return roots;
+}
+
 export function resolveFilterestHomes(projectRoot, environment = process.env) {
   const normalizedProjectRoot = fs.realpathSync.native(path.resolve(projectRoot));
   const privateSource = isPrivateEaselectSourceCheckout(normalizedProjectRoot);
@@ -161,19 +192,19 @@ export function resolveFilterestHomes(projectRoot, environment = process.env) {
   );
   const values = {
     projects_home: privateSource
-      ? path.resolve(normalizedProjectRoot, '..', 'filterest-projects')
+      ? 'projects'
       : 'filterest_projects',
     keys_home: privateSource
-      ? path.resolve(normalizedProjectRoot, '..', 'filterest_keys')
+      ? 'keys'
       : 'filterest_keys',
     runtime_data_home: privateSource
-      ? path.resolve(normalizedProjectRoot, '..', 'filterest-runtime-data')
+      ? 'data/runtime-data'
       : 'filterest_runtime_data',
     maintainer_tools_home: privateSource
-      ? path.resolve(normalizedProjectRoot, '..', 'filterest-maintainer-tools')
+      ? 'data/maintainer-tools'
       : 'filterest_maintainer_tools',
     operations_home: privateSource
-      ? path.resolve(normalizedProjectRoot, '..', 'filterest-operations')
+      ? 'data/operations'
       : 'filterest_operations',
   };
   if (nestedPublicInstall) {
@@ -301,8 +332,19 @@ export function resolveFilterestHomes(projectRoot, environment = process.env) {
     ['maintainer_tools_home', maintainerToolsHome],
     ['operations_home', operationsHome],
   ];
+  if (privateSource) {
+    // Local state must not contain, or live inside, maintained source owners.
+    for (const owner of readSourceRoots(normalizedProjectRoot)) {
+      const sourceOwner = resolveHome(normalizedProjectRoot, owner, 'source owner');
+      for (const [name, home] of homes) {
+        if (pathContainsPath(sourceOwner, home) || pathContainsPath(home, sourceOwner)) {
+          throw new Error(`${name} must stay outside Easelect source owners`);
+        }
+      }
+    }
+  }
   if (nestedPublicInstall) {
-    const immutableApp = path.join(normalizedProjectRoot, 'app');
+    const immutableApp = resolveHome(normalizedProjectRoot, 'app', 'immutable app');
     for (const [name, home] of homes) {
       if (pathContainsPath(immutableApp, home)) {
         throw new Error(`${name} must stay outside the immutable app directory`);

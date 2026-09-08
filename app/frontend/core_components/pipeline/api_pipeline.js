@@ -107,6 +107,9 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     adminRowGroups: 'system_table_tools.AdminRowGroupsHandler',
     adminRowGroupMemberships: 'system_table_tools.AdminRowGroupMembershipsHandler',
     adminRowAccessRules: 'system_table_tools.AdminRowAccessRulesHandler',
+    mediaLibraryList: 'media_library.ListHandler',
+    mediaLibraryAttach: 'media_library.AttachHandler',
+    mediaLibraryDetach: 'media_library.DetachHandler',
     imageSourcePickerProviders: 'image_source_picker.ProvidersHandler',
     imageSourcePickerResolve: 'image_source_picker.ResolveHandler',
     imageSourcePickerFile: 'image_source_picker.FileHandler',
@@ -454,7 +457,7 @@ async function rateLimitHandlerStage(ctx) {
     if (ctx.response.status !== 429) return;
 
     const now = Date.now();
-    if (shouldThrottleRateLimitToast(_rateLimitLastToastTime, _RATE_LIMIT_TOAST_WINDOW_MS, now)) {
+    if (!ctx.suppressErrorToast && shouldThrottleRateLimitToast(_rateLimitLastToastTime, _RATE_LIMIT_TOAST_WINDOW_MS, now)) {
         _rateLimitLastToastTime = now;
         showWarningToast(`Liian monta pyyntöä — odota hetki`, 6000);
     }
@@ -474,7 +477,7 @@ async function serviceUnavailableHandlerStage(ctx) {
     if (ctx.response.status !== 503) return;
 
     const now = Date.now();
-    if (shouldThrottleRateLimitToast(
+    if (!ctx.suppressErrorToast && shouldThrottleRateLimitToast(
         _serviceUnavailableLastToastTime,
         _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS,
         now
@@ -494,13 +497,16 @@ async function serviceUnavailableHandlerStage(ctx) {
  * Shows an error toast automatically so callers don't need to handle display.
  * Strips ANSI color codes from error messages for browser console readability.
  * Callers can still catch the thrown error for custom recovery logic.
+ * suppressErrorToast only delegates notifications to the caller; error and security handling stay active.
  */
 async function errorHandlerStage(ctx) {
     if (ctx.response.ok) return;
     let errorText = await ctx.response.text();
     errorText = stripAnsiCodes(errorText);
     const userMessage = truncateErrorText(errorText);
-    showErrorToast(`${ctx.routeName}: ${userMessage}`);
+    if (!ctx.suppressErrorToast) {
+        showErrorToast(`${ctx.routeName}: ${userMessage}`);
+    }
     console.debug('api_pipeline error response:', errorText);
     throw new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);
 }
@@ -554,6 +560,7 @@ const apiRequestStages = [
  *   urlParams?: string,    // appended to URL e.g. '?id=1'
  *   headers?: Object,      // extra request headers
  *   stream?: boolean,      // return raw response (for SSE/streaming)
+ *   suppressErrorToast?: boolean, // caller owns error/warning display; defaults to false
  *   returnResponse?: boolean, // return raw Response object
  * }
  *

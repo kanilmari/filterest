@@ -31,10 +31,12 @@ vi.mock("./sort_dropdown_builder.js", () => ({
 }));
 vi.mock("./sort_sync_state.js", () => ({ emitDatasetSortSelection: vi.fn() }));
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
+    getUnifiedTableState: vi.fn(() => ({ sort: { column: "name", direction: "ASC" } })),
     setUnifiedTableState: vi.fn(),
     refreshTableUnified: vi.fn(),
 }));
 vi.mock("../../navigation/nav_engine/query_params.js", () => ({
+    getParams: vi.fn(() => ({ search: "old", status: "open", view: "table" })),
     setParams: vi.fn(),
     updateURL: vi.fn(),
 }));
@@ -47,6 +49,8 @@ vi.mock("../../route_permission_checker.js", () => ({
 vi.mock("../../../ui_config.js", () => ({
     show_filterbar_search_basic_controls_section: true,
 }));
+
+vi.mock("../text_search/dataset_search_executor.js", () => ({ ongoingSearchResults: {} }));
 
 describe("buildTopRow", () => {
     beforeEach(() => {
@@ -74,4 +78,14 @@ describe("buildTopRow", () => {
             queryContent.querySelector("[data-temporary-filters-toggle-for]")
         ).toBeNull();
     });
+});
+
+test("reset preserves explicit sorting and its control while clearing only query controls", async () => {
+    const { clearAllFilters } = await import("./top_row_builder.js");
+    const { setParams } = await import("../../navigation/nav_engine/query_params.js");
+    document.body.innerHTML = '<div class="sort-dropdown-wrapper"><input value="Name"></div><input id="query" value="old">';
+    clearAllFilters("orders", document.body);
+    expect(setParams).toHaveBeenCalledWith("orders", { sort_column: "name", sort_order: "ASC", view: "table" });
+    expect(document.querySelector(".sort-dropdown-wrapper input").value).toBe("Name");
+    expect(document.querySelector("#query").value).toBe("");
 });

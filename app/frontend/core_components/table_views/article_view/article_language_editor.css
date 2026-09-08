@@ -1,0 +1,51 @@
+/* article_language_editor.css
+ * Styles one multilingual content field without overriding the selected application theme.
+ * Connects article controls and resizable language panes to shared theme tokens.
+ * Keeps long translated drafts readable on narrow screens and in light or dark mode.
+ */
+.article-language-editor {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    margin-block: 1rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius);
+    color: var(--text_color);
+    background: var(--bg_color_2);
+}
+.article-language-editor[hidden] { display: none; }
+.article-language-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+    gap: 1rem;
+}
+.article-language-editor label {
+    display: grid;
+    gap: 0.4rem;
+    min-width: 0;
+}
+.article-language-editor textarea,
+.article-language-editor select {
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--text_color);
+    background: var(--input_bg_color);
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small);
+    padding: 0.65rem;
+    font: inherit;
+}
+.article-language-editor textarea {
+    resize: vertical;
+    min-height: 8rem;
+    line-height: 1.5;
+}
+.article-language-editor-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.article-language-editor-status {
+    min-height: 1.5em;
+    margin: 0;
+}

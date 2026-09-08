@@ -27,6 +27,8 @@ vi.mock("../../navigation/nav_engine/history_navigation_handler_helpers.js", () 
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
     refreshTableUnified: refreshTableUnifiedMock,
+    getUnifiedTableState: vi.fn(() => ({ sort: { column: null, direction: null }, lastNonSearchSort: { column: "title", direction: "DESC" } })),
+    setUnifiedTableState: vi.fn(),
 }));
 
 vi.mock("./dataset_search_state_reader.js", () => ({
@@ -121,4 +123,12 @@ describe("clearCommittedDatasetSearch", () => {
         expect(datasetSearchStateSetMock).not.toHaveBeenCalled();
         expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
     });
+});
+
+test("clearing relevance restores the prior ordinary sort and retains filters", async () => {
+    const params = { search: "cloud", status: "open", view: "card" };
+    getParamsMock.mockReturnValue(params);
+    const { clearCommittedDatasetSearch } = await import("./dataset_search_clearer.js");
+    clearCommittedDatasetSearch("tasks");
+    expect(params).toEqual({ status: "open", view: "card", sort_column: "title", sort_order: "DESC" });
 });

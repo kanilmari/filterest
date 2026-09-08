@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "rows": [
+    {
+      "ref": "introduction",
+      "match": {
+        "slug": "introduction"
+      },
+      "create": true,
+      "values": {
+        "title": {
+          "fi": "Esittely",
+          "en": "Introduction"
+        },
+        "description": {
+          "fi": "Tarkistettu esittelyteksti.",
+          "en": "Reviewed introduction text."
+        }
+      }
+    },
+    {
+      "ref": "contact",
+      "match": {
+        "slug": "contact"
+      },
+      "create": true,
+      "values": {
+        "title": {
+          "fi": "Yhteystiedot",
+          "en": "Contact"
+        },
+        "description": {
+          "fi": "Tarkistettu yhteysteksti.",
+          "en": "Reviewed contact text."
+        }
+      }
+    }
+  ],
+  "order": {
+    "field": "previous_entry_id",
+    "refs": [
+      "introduction",
+      "contact"
+    ]
+  }
+}

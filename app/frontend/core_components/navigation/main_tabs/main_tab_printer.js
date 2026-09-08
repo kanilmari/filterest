@@ -405,6 +405,10 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
     }
 
     container.replaceChildren();
+    // New SVG buttons start rectangular. A preloaded admin view can return
+    // before openNavTab recomputes the shape, so clear the old rounded overlap
+    // along with its buttons. Normal dataset activation restores its own offset.
+    container.style.right = "0px";
     ensureNavTabTextLayoutObserver(container);
 
     // Determine auth state: "login" means user is NOT logged in
@@ -586,6 +590,11 @@ function renderNavbarAuthActions({ isLoggedIn }) {
             },
         ];
 
+    // Hiding the public entry does not hide account/logout controls or disable /login.
+    if (!isLoggedIn && localStorage.getItem('show_login_button') === 'false') {
+        actions.length = 0;
+    }
+    container.hidden = actions.length === 0;
     container.classList.toggle("navbar-auth-actions--solo", actions.length === 1);
 
     actions.forEach((action) => {

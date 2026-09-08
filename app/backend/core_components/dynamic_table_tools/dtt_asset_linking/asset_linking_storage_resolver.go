@@ -143,6 +143,10 @@ func CollectSharedAssetFileMoves(q dbutils.Querier, childTable string, childRowI
 		if strings.TrimSpace(filename) == "" {
 			continue
 		}
+		// Independent shared media must survive parent and usage deletion.
+		if strings.HasPrefix(strings.TrimSpace(filename), "/storage/media/") || strings.HasPrefix(strings.TrimSpace(filename), "media/") {
+			continue
+		}
 		storageTableUID, storageRowID, normalizedFilename := resolveSharedAssetStorageLocation(
 			filename,
 			parentTableUID,

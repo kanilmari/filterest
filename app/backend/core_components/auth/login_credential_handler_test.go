@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +26,10 @@ import (
 )
 
 type credentialMockConfig struct {
+	adminOnly          bool
+	adminAllowed       bool
+	disabled           bool
+	policyError        bool
 	userLookupOK       bool
 	userID             int
 	hashedPassword     string
@@ -75,9 +80,16 @@ func (c *credentialMockConn) Query(query string, args []driver.Value) (driver.Ro
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *credentialMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *credentialMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
-	case strings.Contains(query, "FROM system_users WHERE username"):
+	case strings.Contains(query, "FROM system_config") && len(args) == 1:
+		if c.cfg.policyError {
+			return nil, errors.New("policy unavailable")
+		}
+		return &credentialMockRows{cols: []string{"boolean_value"}, vals: []driver.Value{c.cfg.adminOnly}}, nil
+	case strings.Contains(query, "admin_access_allowed IS TRUE"):
+		return &credentialMockRows{cols: []string{"enabled", "admin_access_allowed"}, vals: []driver.Value{!c.cfg.disabled, c.cfg.adminAllowed}}, nil
+	case strings.Contains(query, "FROM system_users") && strings.Contains(query, "username"):
 		if !c.cfg.userLookupOK {
 			return &credentialMockRows{cols: []string{"id"}, done: true}, nil
 		}
@@ -99,6 +111,8 @@ func (c *credentialMockConn) QueryContext(_ context.Context, query string, _ []d
 			cols: []string{"password", "login_verification_method", "fixed_pin_hash", "totp_secret", "email", "authentication_generation"},
 			vals: []driver.Value{passwordHash, method, c.cfg.fixedPINHash, c.cfg.totpSecret, "", generation},
 		}, nil
+	case strings.Contains(query, "SELECT password"):
+		return &credentialMockRows{cols: []string{"password"}, vals: []driver.Value{c.cfg.hashedPassword}}, nil
 	case strings.Contains(query, "SELECT ur.authentication_generation"):
 		generation := c.cfg.authGeneration
 		if generation == 0 {
@@ -129,9 +143,12 @@ func openCredentialMockDB(t *testing.T, cfg credentialMockConfig) *sql.DB {
 	if err != nil {
 		t.Fatalf("sql.Open mock: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
+	if backend.Db == nil {
+		originalPolicyDB := backend.Db
+		backend.Db = db
+		t.Cleanup(func() { backend.Db = originalPolicyDB })
+	}
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 

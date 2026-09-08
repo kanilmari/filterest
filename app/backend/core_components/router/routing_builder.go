@@ -33,7 +33,7 @@ import (
 var (
 	configuredSiteNameReader            = backend.ConfiguredSiteName
 	configuredFaviconReader             = backend.ConfiguredFaviconFile
-	rootAuthenticationGenerationMatches = auth_generation.Matches
+	rootAuthenticationGenerationMatches = backend.AuthenticatedSessionMatches
 )
 
 type indexTemplateData struct {

@@ -55,7 +55,7 @@ KNOWN_LEGACY=(
     "frontend/core_components/navigation/main_tabs/main_tab_printer.js"
     "frontend/core_components/table_views/card_view/big_card_attachment_list.js"
     "frontend/core_components/table_views/card_view/big_card_image_gallery.js"
-    "frontend/core_components/table_views/card_view/big_card_opener.js"
+    "frontend/core_components/table_views/card_view/article_view_opener.js"
     "frontend/core_components/table_views/card_view/big_card_opener.test.js"
     "frontend/core_components/table_views/card_view/card_view_printer.js"
     "frontend/core_components/table_views/card_view/cards.css"

@@ -133,6 +133,9 @@ func handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		showLoginForm(w, r, "Väärä käyttäjätunnus tai salasana.")
 		return
 	}
+	if !enforceLoginAccess(w, r, session, userID) {
+		return
+	}
 	log.Println("password verification OK 🔑")
 
 	verification, err := loadLoginVerificationRecord(userID)

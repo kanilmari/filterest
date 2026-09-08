@@ -1,3 +1,7 @@
+<!-- Core_Workflows.md
+Explains the product's shared data, permission, navigation, and authentication workflows.
+Connects operator settings and user actions to their common API and browser boundaries.
+Keeps feature setup and access behavior understandable across standalone installations. -->
 # Core Workflows
 
 This document consolidates information regarding Filterest's core workflows, including adding rows, refreshing embeddings, and API features.
@@ -69,3 +73,42 @@ The permissions view supports selecting multiple tables. Shared rights are shown
 ### Navigation
 -   **URL State**: Changing tabs or filters updates the URL (`/{name}?param=value`).
 -   **Persistence**: Refreshing restores the tab and parameters. Tabs remember their own filters.
+
+
+### Public browsing and administrator sign-in
+
+Administrators configure these independent booleans in `system_config` through
+the existing administrative dataset UI or its validated row API:
+
+| Key | Default for the new settings | Meaning |
+| --- | --- | --- |
+| `show_login_button` | `true` | Show visitor sign-in entry points. Setting it to `false` hides the navigation login button and sign-in recovery offer. It does not disable the direct `/login` route or hide account/logout controls from an authenticated administrator. |
+| `only_admin_can_login` | `false` | Admit only enabled users who have the canonical administrator role and `admin_access_allowed=true`. The server checks this after credentials, before completing verification, and when validating existing signed sessions. |
+| `registration_enabled` | Existing site value retained | Controls self-registration. Administrator-only sign-in suppresses effective registration, including the direct registration API, without overwriting the saved registration preference. |
+| `login_to_browse` | Existing site value retained | Whether browsing requires authentication. It is independent of login-button visibility and sign-in eligibility. |
+
+For a public catalogue with administration through `/login`, set
+`show_login_button=false`, `only_admin_can_login=true`,
+`registration_enabled=false`, and `login_to_browse=false`. Also grant the guest
+principal only the intended dataset, row and media read permissions; these
+settings do not grant data access by themselves.
+
+Enabling administrator-only sign-in invalidates a non-administrator's existing
+authenticated identity on the next checked server request. Guest browsing
+continues according to the site's existing permissions. Changing either login
+setting does not delete users or modify their group memberships. Turning
+administrator-only mode off restores normal account eligibility and the stored
+registration setting takes effect again.
+
+Keep at least one enabled administrator with administrator access before
+restricting sign-in. Use the existing protected administrator recovery workflow
+if a site has lost all eligible administrators. The First Run workflow remains
+limited to an uninitialized installation; hiding a login button does not reopen
+setup or replace administrator recovery.
+
+The additive migration and fresh public bootstrap use the same defaults. The
+migration creates missing keys only and preserves existing values. Missing keys
+use compatible runtime defaults; malformed configured values or a failed
+policy read do not silently bypass a sign-in restriction. Temporary development
+access restrictions are operator state and should not rewrite public About
+content describing the intended service.

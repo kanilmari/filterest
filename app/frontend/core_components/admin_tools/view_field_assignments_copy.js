@@ -7,7 +7,7 @@ import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_
 
 const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
     en: Object.freeze({
-        title: "View field assignments",
+        title: "View field settings",
         description: "Choose a dataset and view, then set the shared field order for the site or selected user groups.",
         instructions: "Select a dataset from the tree to load its view fields.",
         view: "View",
@@ -45,7 +45,7 @@ const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
         restored: "Inheritance restored and verified",
     }),
     fi: Object.freeze({
-        title: "Näkymien kenttäkohdistukset",
+        title: "Näkymien kenttäasetukset",
         description: "Valitse datasetti ja näkymä, ja määritä sitten yhteinen kenttäjärjestys koko sivustolle tai valituille käyttäjäryhmille.",
         instructions: "Valitse datasetti puurakenteesta ladataksesi sen näkymäkentät.",
         view: "Näkymä",
@@ -83,7 +83,7 @@ const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
         restored: "Perintä palautettu ja varmistettu",
     }),
     ch: Object.freeze({
-        title: "视图字段分配",
+        title: "视图字段设置",
         description: "选择数据集和视图，然后为整个站点或所选用户组设置共享字段顺序。",
         instructions: "从树中选择数据集以加载其视图字段。",
         view: "视图", groups: "用户组", groupPlaceholder: "选择用户组", groupSearch: "搜索用户组",
@@ -103,7 +103,7 @@ const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
         saved: "字段分配已保存并验证", restored: "继承已恢复并验证",
     }),
     yue: Object.freeze({
-        title: "檢視欄位分配",
+        title: "檢視欄位設定",
         description: "揀選資料集同檢視，然後為全站或所選用戶群組設定共用欄位次序。",
         instructions: "請喺樹狀清單揀選資料集，以載入檢視欄位。",
         view: "檢視", groups: "用戶群組", groupPlaceholder: "揀選用戶群組", groupSearch: "搜尋用戶群組",

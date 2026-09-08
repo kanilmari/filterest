@@ -48,6 +48,8 @@ describe('auth_mode_handler', () => {
       needs_button: 'logout',
       registration_enabled: true,
       login_required_for_browse: true,
+      show_login_button: false,
+      only_admin_can_login: true,
     });
     fetchUserPermissionsMock.mockResolvedValue({ endpoints: ['/ui/view/table', '/ui/admin/permissions'] });
     const mod = await loadModule();
@@ -61,6 +63,8 @@ describe('auth_mode_handler', () => {
     expect(localStorage.getItem('button_state')).toBe('logout');
     expect(localStorage.getItem('registration_enabled')).toBe('true');
     expect(localStorage.getItem('login_required_for_browse')).toBe('true');
+    expect(localStorage.getItem('show_login_button')).toBe('false');
+    expect(localStorage.getItem('only_admin_can_login')).toBe('true');
     expect(sessionStorage.getItem('user_permissions')).toBe(
       JSON.stringify(['/ui/view/table', '/ui/admin/permissions'])
     );
@@ -69,6 +73,8 @@ describe('auth_mode_handler', () => {
   test('clears cached permissions for guest mode', async () => {
     sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/table']));
     localStorage.setItem('login_required_for_browse', 'true');
+    localStorage.setItem('show_login_button', 'false');
+    localStorage.setItem('only_admin_can_login', 'true');
     fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', registration_enabled: false });
     const mod = await loadModule();
 
@@ -77,6 +83,8 @@ describe('auth_mode_handler', () => {
     expect(localStorage.getItem('button_state')).toBe('login');
     expect(localStorage.getItem('registration_enabled')).toBe('false');
     expect(localStorage.getItem('login_required_for_browse')).toBe(null);
+    expect(localStorage.getItem('show_login_button')).toBe('true');
+    expect(localStorage.getItem('only_admin_can_login')).toBe('false');
     expect(sessionStorage.getItem('user_permissions')).toBe(null);
     expect(synchronizeThemePreferenceForAuthStateMock).toHaveBeenCalledWith(false);
   });

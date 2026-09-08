@@ -37,6 +37,13 @@ func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, user
 	if session == nil {
 		return fmt.Errorf("session is nil")
 	}
+	allowed, err := backend.UserLoginAllowed(context.Background(), backend.Db, userID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return backend.ErrLoginNotAllowed
+	}
 	userRole, err := backend.ResolveUserRole(userID)
 	if err != nil {
 		return err

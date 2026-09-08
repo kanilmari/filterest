@@ -66,7 +66,7 @@ Verdicts:
 
 Examples:
   ${humanQaDisplayCommand} computer-use-test 837 --url /service_catalog --prompt-profile ux-audit --check "Firefox card shows one media surface"
-  ${humanQaDisplayCommand} computer-use-test 834 --file ../filterest/app/docs/publication/PUBLICATION_CHECKLIST.md --dry-run`;
+  ${humanQaDisplayCommand} computer-use-test 834 --file "${path.join(repoRoot, "docs/publication/PUBLICATION_CHECKLIST.md")}" --dry-run`;
 }
 
 // Reads the resolved runtime env into process.env without logging secrets.

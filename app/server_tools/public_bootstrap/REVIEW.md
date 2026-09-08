@@ -1,11 +1,11 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `58`
-- Seed tables: `33`
+- Schema tables: `60`
+- Seed tables: `34`
 - Example emails: `0`
 - Manifest format: `2`
-- Manifest source files: `100`
+- Manifest source files: `122`
 - Findings: `0`
 
 ## Verdict
@@ -51,6 +51,8 @@ PASS
 - `public.system_lang_keys`
 - `public.system_lang_keys_archive`
 - `public.system_languages`
+- `public.system_media_asset_usages`
+- `public.system_media_assets`
 - `public.system_permission_actions`
 - `public.system_permission_categories`
 - `public.system_row_access_rule_events`
@@ -106,6 +108,7 @@ PASS
 - `public.system_user_group_memberships`
 - `public.system_user_groups`
 - `public.system_users`
+- `public.system_view_field_set_assignments`
 - `public.tiketit`
 - `public.tiketit_assets`
 
@@ -124,31 +127,32 @@ PASS
 - `public.riskienhallinta_tiketit_relation`: 1
 - `public.system_about`: 1
 - `public.system_column_details`: 47
-- `public.system_config`: 13
-- `public.system_db_tables`: 55
+- `public.system_config`: 15
+- `public.system_db_tables`: 57
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
-- `public.system_functions`: 41
+- `public.system_functions`: 43
 - `public.system_group_table_func_rights`: 24
 - `public.system_lang_key_sources`: 0
-- `public.system_lang_key_translations`: 140
-- `public.system_lang_keys`: 491
+- `public.system_lang_key_translations`: 153
+- `public.system_lang_keys`: 552
 - `public.system_languages`: 5
 - `public.system_permission_actions`: 7
 - `public.system_permission_categories`: 4
-- `public.system_schema_migrations`: 74
+- `public.system_schema_migrations`: 84
 - `public.system_table_folders`: 14
-- `public.system_table_views`: 12
+- `public.system_table_views`: 13
 - `public.system_user_group_memberships`: 2
 - `public.system_user_groups`: 3
 - `public.system_users`: 2
+- `public.system_view_field_set_assignments`: 0
 - `public.tiketit`: 1
 - `public.tiketit_assets`: 1
 
 ## Manifest Hash Coverage
 
 - Generated files with hashes: `2`
-- Source files with hashes: `100`
+- Source files with hashes: `122`
 
 ## Email Domains
 

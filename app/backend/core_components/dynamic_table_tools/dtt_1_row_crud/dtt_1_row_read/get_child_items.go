@@ -593,6 +593,7 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 			continue
 		}
 
+		FilterIndependentMediaRows(readQuerier, actor, table_rows)
 		relatedTablesList = append(relatedTablesList, RelatedTableResult{
 			Table_name:         fk_row.Referencing_table,
 			Column_name:        fk_row.Referencing_column,
@@ -785,6 +786,7 @@ func fetchOutgoingReferencedTableResults(
 			continue
 		}
 
+		FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), tableRows)
 		relatedTables = append(relatedTables, RelatedTableResult{
 			Table_name:         fk.ReferencedTable,
 			Column_name:        fk.ReferencedColumn,

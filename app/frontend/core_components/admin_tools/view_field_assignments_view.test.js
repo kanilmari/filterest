@@ -86,7 +86,7 @@ async function createLoadedView(response = baseResponse) {
     document.dispatchEvent(new CustomEvent("checkboxSelectionChanged", {
         detail: { selectedCategories: ["orders-node"] },
     }));
-    await vi.waitFor(() => expect(mocks.get).toHaveBeenCalledWith("orders", "card"));
+    await vi.waitFor(() => expect(mocks.get).toHaveBeenCalledWith("orders", response.view_key));
     await vi.waitFor(() => expect(container.querySelectorAll(
         ".view-field-assignments__field-row"
     )).toHaveLength(2));
@@ -165,7 +165,7 @@ describe("view_field_assignments_view", () => {
         await vi.waitFor(() => expect(mocks.get).toHaveBeenCalledWith("orders", "table"));
         await vi.waitFor(() => expect(mocks.pickerConfigs).toHaveLength(2));
         expect(mocks.pickerConfigs[1].initialState).toEqual({ includeValues: ["2"] });
-        expect(JSON.parse(sessionStorage.getItem("view_field_assignments_admin_session_v1")))
+        expect(JSON.parse(sessionStorage.getItem("view_field_settings_admin_session_v1")))
             .toMatchObject({ viewKey: "table", selectedGroupIDs: ["2"] });
     });
 
@@ -283,4 +283,15 @@ describe("view_field_assignments_view", () => {
             .toBe(false);
         expect(mocks.save).not.toHaveBeenCalled();
     });
+
+    test("offers a distinct article settings dimension and preserves old tool-session choices", async () => {
+        sessionStorage.setItem("view_field_assignments_admin_session_v1", JSON.stringify({ viewKey: "article", selectedGroupIDs: ["2"] }));
+        const container = await createLoadedView({ ...baseResponse, view_key: "article_view" });
+        const select = container.querySelector('[data-testid="view-field-assignments-view"]');
+        expect(select.value).toBe("article_view");
+        expect(mocks.get).toHaveBeenCalledWith("orders", "article_view");
+        expect(Array.from(select.options).filter((option) => option.value === "article_view")).toHaveLength(1);
+        expect(container.querySelector("h2").textContent).toBe("View field settings");
+    });
+
 });

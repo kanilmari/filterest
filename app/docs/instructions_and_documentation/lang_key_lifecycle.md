@@ -1,3 +1,8 @@
+<!--
+What: Explains the creation, translation, provenance, and retirement of language keys.
+Between: Connects public bootstrap, migrations, language APIs, and frontend rendering.
+Why: Keeps translated interface copy available before use and maintenance out of user messages.
+-->
 # Lang Key Lifecycle
 
 > How lang keys are created, tracked, translated, renamed, deleted, scanned, and marked as orphans.
@@ -225,9 +230,24 @@ Returns all translations as `{lang_key: translation}` for the requested language
 
 Returns all language translations for a single key: `{fi: "...", en: "...", ch: "..."}`.
 
-### DEV_MODE Orphan Overlay
+### Development diagnostics
 
-In development mode, `GetTranslationsHandler` also returns a list of orphan key names via `fetchOrphanLangKeyNames()`. This allows the frontend to visually flag keys that are no longer referenced by any source — a development-time tool that doesn't run in production.
+In development mode, `GetTranslationsHandler` also returns orphan key names
+through `fetchOrphanLangKeyNames()`. Missing-key discovery, its success or
+failure, and orphan-key warnings go to the browser console. They do not create
+user-facing toasts, even in the development application. Readable fallback copy
+remains available while a developer reviews the missing translations.
+
+New product copy must ship with reviewed language rows in a public migration
+and the public bootstrap source before the view is first opened. The field
+collection selector's ownership and inheritance keys are maintained in
+`app/server_tools/public_bootstrap/source/field_settings.lang_keys.sql`.
+Their upgrade migration fills missing values while preserving nonempty
+site-authored translations. Finnish and English are recorded as reviewed;
+legacy Chinese/Cantonese fallbacks do not constitute approval of new locales.
+
+Explicit user actions, such as saving an edited translation or restoring a
+personal field selection, keep their normal success/error notifications.
 
 ### Locating an exact UI string safely
 

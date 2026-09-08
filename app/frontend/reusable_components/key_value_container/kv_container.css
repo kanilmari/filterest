@@ -6,6 +6,8 @@
  * Exists to display structured key-value data in a readable grid format.
  */
 
+@import url("./label_value_layout.css");
+
 :root {
     --color-bg: #111;
     --color-fg: #f4f4f4;

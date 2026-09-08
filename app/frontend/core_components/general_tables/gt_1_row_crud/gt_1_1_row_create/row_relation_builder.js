@@ -3,6 +3,7 @@
 // Between the row creation form, asset metadata, and the DOM.
 // Exists to keep the allowed file-asset exception separate from business-row links.
 
+import { appendMediaLibraryPicker } from "../../../../reusable_components/media_library_picker/media_library_picker.js";
 import { fetchColumnsInfo } from "./row_api_fetcher.js";
 import { get_input_type } from "./row_input_builder.js";
 import { buildChildGeometryField } from "./row_geometry_builder.js";
@@ -405,6 +406,13 @@ function buildFileUploadField(fieldset, fileUploadSpec, childObjectState, option
     }
     group.appendChild(helpText);
     group.appendChild(selectedFiles);
+    if (canPickImageFromWeb(fileUploadSpec, childObjectState) && childObjectState.relationId > 0) {
+        appendMediaLibraryPicker(group, {
+            relationId: childObjectState.relationId, state: childObjectState,
+            fileInput, selectedFiles, endpointRouter: endpoint_router,
+            getLanguage: getLanguageWithBrowserFallback, getTranslation: getTranslationForKey,
+        });
+    }
     fieldset.appendChild(group);
 }
 
@@ -562,6 +570,7 @@ function supportsMultipleFileSelection(fileUploadSpec, childObjectState) {
 }
 
 function updateSelectedFilesState(childObjectState, fileUploadSpec, incomingFiles, options = {}) {
+    childObjectState._clearExistingImage?.();
     const append = options.append === true;
     const replace = options.replace === true;
     const existingFiles = append

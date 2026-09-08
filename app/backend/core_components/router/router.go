@@ -5,6 +5,7 @@
 package router
 
 import (
+	"easelect/backend/core_components/media_library"
 	"fmt"
 	"log"
 	"net/http"
@@ -128,6 +129,9 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/symbol-assets/", symbol_registry.AssetHandler, "symbol_registry.AssetHandler")
 	functionRegisterHandler("/apps/", handleApps, "router.handleApps")
 	functionRegisterHandler("/storage/", ServeStorage, "router.ServeStorage")
+	functionRegisterHandler("/api/media-library/list", media_library.ListHandler, "media_library.ListHandler")
+	functionRegisterHandler("/api/media-library/attach", media_library.AttachHandler, "media_library.AttachHandler")
+	functionRegisterHandler("/api/media-library/detach", media_library.DetachHandler, "media_library.DetachHandler")
 	functionRegisterHandler("/robots.txt", robotsHandler, "router.robotsHandler")
 	functionRegisterHandler("/health", healthHandler, "router.healthHandler")
 	functionRegisterHandler("/system/health", systemHealthHandler, "router.systemHealthHandler")

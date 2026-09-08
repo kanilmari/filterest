@@ -6,7 +6,6 @@ import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { renderAllowedHtml } from '../../reusable_components/dom_container_builder.js';
 import { refreshCardLanguages } from '../table_views/card_view/card_view_printer.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
-import { showToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { initDevLangKeyEditor } from './dev_lang_key_editor.js';
 import {
     appendAltContext,
@@ -155,17 +154,20 @@ function getLocalTranslationFallback(baseKey, chosen_language) {
 // Näytetäänkö debug-viestejä konsolissa
 var debug = false;
 
-// Ympäristön tunnistus: dev-tilassa näytetään verbose-ilmoituksia AI-käännöksistä
+// Development diagnostics belong in the browser console, never in user notifications.
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 
-// Dev-tilan ilmoitukset käyttävät nyt yhteistä toast-järjestelmää.
-// Tuotannossa ei kutsuta (IS_DEV_MODE-tarkistus kutsukohdissa).
+/**
+ * Records development-only language maintenance diagnostics in the browser console.
+ * Connects missing/orphan key discovery to developer diagnostics, not user toasts.
+ * Keeps readable fallback copy usable while reviewed translations are prepared.
+ */
 function _showDevTranslationNotice(message, level = 'info') {
-    showToast({
-        message: `🔤 ${message}`,
-        level,
-        duration: 4000,
-    });
+    if (!IS_DEV_MODE) return;
+    const log = level === 'error' ? console.error
+        : level === 'warning' ? console.warn
+        : console.info;
+    log.call(console, `[Translation diagnostics] ${message}`);
 }
 
 // Pidämme kirjaa kaikista puuttuvista avaimista, myös DOM-muutoksissa
@@ -440,9 +442,8 @@ function observeDomChanges() {
                         return;
                     }
 
-                    // Verbose-lokitus: konsoli kertoo haun heti. Käyttäjälle näytetään
-                    // vain yksi lopputulosilmoitus, jotta Fetching + 0/x ei näytä
-                    // kahdelta erilliseltä virheeltä.
+                    // Missing-key discovery and its outcome stay in developer diagnostics.
+                    // The page keeps its readable fallback while maintenance is pending.
                     if (IS_DEV_MODE) console.log(`[AI Translation] Fetching ${aiEligibleMissing.length} missing key(s) for lang="${currentChosenLang}":`, aiEligibleMissing);
 
                     endpoint_router('generateTranslations', {

@@ -19,7 +19,8 @@ const scrollState = new Map();
 let articleToggleListenerInstalled = false;
 
 function isRowArticleOpen(tableName) {
-    const wrapper = document.querySelector(`#${tableName}_card_view_container .card_view_wrapper`);
+    const view = localStorage.getItem(`${tableName}_view`) === "article_view" ? "article" : "card";
+    const wrapper = document.querySelector(`#${tableName}_${view}_view_container .card_view_wrapper`);
     return wrapper?.classList.contains("big-card-open") === true;
 }
 
@@ -95,7 +96,7 @@ function ensureArticleToggleListener() {
         }
 
         const currentView = localStorage.getItem(`${tableName}_view`) || "table";
-        if (currentView === "card") {
+        if (["card", "article_view"].includes(currentView)) {
             initializeInfiniteScroll(tableName, getScrollState(tableName).orientation || "vertical");
         }
     });
@@ -168,7 +169,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     ensureArticleToggleListener();
     const datasetName = tableName;
     const currentView = localStorage.getItem(`${datasetName}_view`) || "table";
-    const containerId = `${tableName}_${currentView}_view_container`;
+    const containerId = `${tableName}_${currentView === "article_view" ? "article" : currentView}_view_container`;
     const container = document.getElementById(containerId);
 
     if (!container) {
@@ -197,11 +198,11 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     let observerRoot = container;
     let sentinelParent = container;
 
-    if (currentView === "card") {
+    if (["card", "article_view"].includes(currentView)) {
         const cardContainer = container.querySelector(".card_container");
         if (cardContainer) {
             sentinelParent = cardContainer;
-            const collapsed = getUnifiedTableState(tableName)?.cardView?.collapsed;
+            const collapsed = getUnifiedTableState(tableName)?.[currentView === "article_view" ? "articleView" : "cardView"]?.collapsed;
             observerRoot = collapsed ? cardContainer : container;
         }
     }
@@ -241,7 +242,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
             state.fillScreenIntervalId = null;
             return;
         }
-        if (currentView === "card" && isRowArticleOpen(tableName)) {
+        if (["card", "article_view"].includes(currentView) && isRowArticleOpen(tableName)) {
             clearInterval(fillScreenInterval);
             state.fillScreenIntervalId = null;
             return;
@@ -292,7 +293,7 @@ async function fetchMoreData(tableName, options = {}) {
     try {
         const tableState = getUnifiedTableState(tableName);
         const currentView = localStorage.getItem(`${tableName}_view`) || "table";
-        if (isInfiniteScroll && currentView === "card" && isRowArticleOpen(tableName)) {
+        if (isInfiniteScroll && ["card", "article_view"].includes(currentView) && isRowArticleOpen(tableName)) {
             if (scrollSt.observer) {
                 scrollSt.observer.disconnect();
                 scrollSt.observer = null;
@@ -315,7 +316,7 @@ async function fetchMoreData(tableName, options = {}) {
                 isInfiniteScroll ? "infinite scroll" : "search"
             })`,
             row_count: isInfiniteScroll ? scrollSt.lastRowCount : null,
-            include_card_support: currentView === "card",
+            include_card_support: ["card", "article_view"].includes(currentView),
             view_key: currentView,
         });
         setResultsCount(tableName, result.row_count);
@@ -371,13 +372,13 @@ export function appendDataToView(tableName, data, append = true) {
         }
         appendDataToTable(table, data, columns, dataTypes, tableName);
         syncTableInfiniteScrollSentinelWidth(tableName);
-    } else if (currentView === "card") {
+    } else if (["card", "article_view"].includes(currentView)) {
         const cardContainer = document.querySelector(
-            `#${tableName}_card_view_container .card_container`
+            `#${tableName}_${currentView === "article_view" ? "article" : "card"}_view_container .card_container`
         );
         if (!cardContainer) {
             console.warn(
-                `Korttinäkymän kontainer puuttuu: #${tableName}_card_view_container .card_container`
+                `Korttinäkymän kontainer puuttuu: #${tableName}_${currentView === "article_view" ? "article" : "card"}_view_container .card_container`
             );
             return;
         }
@@ -393,7 +394,7 @@ export function appendDataToView(tableName, data, append = true) {
         }
         appendDataToCardView(cardContainer, columns, data, tableName);
     } else if (["normal", "transposed", "ticket"].includes(currentView)) {
-        const containerId = `${tableName}_${currentView}_view_container`;
+        const containerId = `${tableName}_${currentView === "article_view" ? "article" : currentView}_view_container`;
         const container = document.getElementById(containerId);
         if (!container) {
             console.warn(`Kontainer puuttuu: #${containerId}`);

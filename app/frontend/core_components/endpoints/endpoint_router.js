@@ -28,6 +28,7 @@ export function get_endpoint_url(routeName) {
  * @param {Object} [options.headers]        - Additional request headers
  * @param {boolean}[options.stream]         - Return raw Response (for SSE streams)
  * @param {boolean}[options.returnResponse] - Return raw Response object
+ * @param {boolean}[options.suppressErrorToast] - Let the caller display errors; all HTTP/auth/CSRF handling stays active
  * @param {boolean}[options.suppressAuthRedirect] - Don't navigate to /login on 401/403; throw instead
  * @returns {Promise<any>} Parsed response data, or raw Response if stream/returnResponse
  */
@@ -39,6 +40,7 @@ export async function endpoint_router(route_name, {
     stream = false,
     returnResponse = false,
     suppressAuthRedirect = false,
+    suppressErrorToast = false,
 } = {}) {
     const context = {
         routeName: route_name,
@@ -49,6 +51,7 @@ export async function endpoint_router(route_name, {
         stream,
         returnResponse,
         suppressAuthRedirect,
+        suppressErrorToast,
     };
 
     const result = await runApiPipeline(context);

@@ -109,8 +109,9 @@ export async function load_tables(options = {}) {
             // If a deep-linked row ID is present, pre-set cardView state
             // so table_refresh_unified auto-opens the big card after data loads
             if (deepLinkedRowId) {
+                localStorage.setItem(`${resolved_table_name}_view`, "article_view");
                 setUnifiedTableState(resolved_table_name, {
-                    cardView: { collapsed: true, expandedId: deepLinkedRowId }
+                    articleView: { collapsed: true, expandedId: deepLinkedRowId, returnView: "card" }
                 });
             }
             // Persist initial query params for consumers (e.g., deep link filters)

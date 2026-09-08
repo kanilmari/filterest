@@ -161,4 +161,27 @@ describe("dataset_sort_default_controller", () => {
         expect(mocks.endpointRouter).not.toHaveBeenCalled();
         expect(dropdown.setValue).not.toHaveBeenCalled();
     });
+    test("late default loading preserves the user's intervening sort choice", async () => {
+        let release;
+        mocks.endpointRouter.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        const dropdown = { setValue: vi.fn() };
+        const pending = applyDatasetSortDefault("late_default_fixture", dropdown, new Set(["__newest:DESC"]));
+        mocks.getParams.mockReturnValue({ sort_column: "title", sort_order: "ASC" });
+        release({ configured: true, value: "__newest:DESC" });
+        await pending;
+        expect(dropdown.setValue).not.toHaveBeenCalled();
+    });
+
+    test("late defaults cannot replace explicitly selected relevance either", async () => {
+        let release;
+        mocks.endpointRouter.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        const dropdown = { setValue: vi.fn() };
+        const pending = applyDatasetSortDefault("late_relevance_fixture", dropdown, new Set(["__newest:DESC"]));
+        const { setUnifiedTableState } = await import("../../state_stores/table_state_store.js");
+        setUnifiedTableState("late_relevance_fixture", { sortSelectionExplicit: true, sort: { column: null, direction: null } });
+        release({ configured: true, value: "__newest:DESC" });
+        await pending;
+        expect(dropdown.setValue).not.toHaveBeenCalled();
+    });
+
 });

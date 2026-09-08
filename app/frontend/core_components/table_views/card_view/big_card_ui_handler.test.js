@@ -229,3 +229,34 @@ describe("dispatchCardArticleToggle", () => {
         });
     });
 });
+
+describe("article shared field layout", () => {
+    test.each([null, "auto", "inline", "stacked"])(
+        "preserves raw values, navigation and hidden labels for %s", (layout) => {
+            const metadata = { label_value_layout: layout };
+            const text = createRowArticleKeyValueElement("Note", "Original text", "note", false,
+                "big_card_detail_value", true, null, "raw text", metadata);
+            const link = createRowArticleLinkTwoLine("Website", "https://example.test", "website",
+                false, true, null, "raw link", metadata);
+            const navigation = createRowArticleNavigableElement({
+                label: "Related", value: "Related row", column: "related", href: "/example/7",
+                storedRawValue: "7", labelMeta: metadata,
+            });
+            const hidden = createRowArticleKeyValueElement("Hidden label", "Visible value", "hidden", false,
+                "big_card_detail_value", false, null, "raw hidden", metadata);
+            for (const element of [text, link, navigation, hidden]) {
+                expect(element.dataset.labelValueLayout).toBe(layout || undefined);
+            }
+            expect(text.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("raw text");
+            expect(text.textContent).toContain("Original text");
+            expect(link.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("raw link");
+            expect(link.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
+            expect(link.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+            expect(navigation.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("7");
+            expect(navigation.querySelector("a")?.getAttribute("href")).toBe("/example/7");
+            expect(hidden.querySelector(".two_line_label")).toBeNull();
+            expect(hidden.children).toHaveLength(1);
+            expect(hidden.textContent).toBe("Visible value");
+        },
+    );
+});

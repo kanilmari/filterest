@@ -347,6 +347,24 @@ describe("initTabs", () => {
         expect(document.querySelector('.navtablinks[data-id="system_about"]')).toBeNull();
     });
 
+    test.each(['light', 'dark'])("hides visitor login in %s theme while preserving content and signed-in controls", async (theme) => {
+        document.documentElement.dataset.theme = theme;
+        localStorage.setItem('show_login_button', 'false');
+        localStorage.setItem('registration_enabled', 'false');
+        vi.mocked(getButtonState).mockReturnValue('login');
+        const { initTabs } = await import('./main_tab_printer.js');
+        await initTabs();
+        expect(document.querySelector('[data-testid="navbar-auth-login"]')).toBeNull();
+        expect(document.querySelector('[data-testid="tab-register"]')).toBeNull();
+        expect(document.getElementById('navbarAuthActions').hidden).toBe(true);
+        expect(document.querySelector('.navtablinks[data-id="app_service_catalog"]')).not.toBeNull();
+        vi.mocked(getButtonState).mockReturnValue('logout');
+        await initTabs();
+        expect(document.querySelector('[data-testid="navbar-auth-logout"]')).not.toBeNull();
+        expect(document.querySelector('[data-testid="navbar-auth-user"]')).not.toBeNull();
+        expect(document.getElementById('navbarAuthActions').hidden).toBe(false);
+    });
+
     test("routes login tab through centralized auth redirect handling", async () => {
         const { openNavTab } = await import("./main_tab_printer.js");
 
@@ -636,4 +654,27 @@ describe("initTabs", () => {
         expect(document.querySelectorAll('.navtablinks[data-id="travel_deals"]')).toHaveLength(1);
         expect(document.querySelectorAll('.navtablinks[data-id="system_users"]')).toHaveLength(1);
     });
+    test("resets a former rounded overlap when tabs rebuild around a preloaded admin view", async () => {
+        Object.defineProperty(window, "innerWidth", { configurable: true, value: 1920 });
+        localStorage.setItem("app_service_catalog_view", "card");
+        const { initTabs, openNavTab } = await import("./main_tab_printer.js");
+        await initTabs();
+        await openNavTab("app_service_catalog");
+        const container = document.querySelector(".navtabs");
+        expect(container.style.right).toBe("-2px");
+
+        vi.mocked(getSelectedDataset).mockReturnValue("view_field_settings");
+        await initTabs({ dataAlreadyLoaded: true });
+
+        expect(Array.from(container.querySelectorAll(".navtablinks"), (tab) => tab.dataset.tabPresentation))
+            .toEqual(expect.arrayContaining(["button-inactive"]));
+        expect(container.style.right).toBe("0px");
+        expect(document.querySelector(".navtablinks.active")).toBeNull();
+
+        // Returning to an ordinary wide card dataset retains its intended overlap.
+        await openNavTab("app_service_catalog");
+        expect(container.style.right).toBe("-2px");
+        expect(document.querySelector(".navtablinks.active").dataset.tabPresentation).toBe("tab-active");
+    });
+
 });

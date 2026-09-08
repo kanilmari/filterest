@@ -20,6 +20,7 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "nav_tree_ui", URLRouteEndpoint: "/ui/nav_tree", SpecificTableRelated: false},
 	{Name: "ui.table_view_style_buttons", URLRouteEndpoint: "/ui/table-view-style-buttons", SpecificTableRelated: true},
 
+	{Name: "ui.view.article_view", URLRouteEndpoint: "/ui/view/article_view", SpecificTableRelated: false},
 	{Name: "ui.view.card", URLRouteEndpoint: "/ui/view/card", SpecificTableRelated: false},
 	{Name: "ui.view.table", URLRouteEndpoint: "/ui/view/table", SpecificTableRelated: false},
 	{Name: "ui.view.list", URLRouteEndpoint: "/ui/view/list", SpecificTableRelated: false},
@@ -42,6 +43,7 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "ui.admin.fix_media_subfolders", URLRouteEndpoint: "/ui/admin/fix_media_subfolders", SpecificTableRelated: false},
 	{Name: "ui.admin.fk_cache_triggers", URLRouteEndpoint: "/ui/admin/fk_cache_triggers", SpecificTableRelated: false},
 	{Name: "ui.admin.card_visibility", URLRouteEndpoint: "/ui/admin/card_visibility", SpecificTableRelated: false},
+	{Name: "ui.admin.view_field_settings", URLRouteEndpoint: "/ui/admin/view_field_settings", SpecificTableRelated: false},
 	{Name: "ui.admin.view_field_assignments", URLRouteEndpoint: "/ui/admin/view_field_assignments", SpecificTableRelated: false},
 	{Name: "ui.admin.asset_linking", URLRouteEndpoint: "/ui/admin/asset_linking", SpecificTableRelated: false},
 	{Name: "ui.admin.child_tab_config", URLRouteEndpoint: "/ui/admin/child_tab_config", SpecificTableRelated: false},

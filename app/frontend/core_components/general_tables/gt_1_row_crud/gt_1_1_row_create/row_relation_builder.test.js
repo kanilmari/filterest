@@ -405,6 +405,10 @@ describe("buildOneToManySection", () => {
         }], modalFormState);
 
         expect(form.querySelectorAll('[data-testid="child-image-source-picker-open"]')).toHaveLength(1);
+        expect(form.querySelectorAll('[data-testid="existing-image-picker-open"]')).toHaveLength(1);
+        const pendingImageState = modalFormState._childRowsArray.find((row) => row.fileUploadSpec?.profile_key === "image");
+        pendingImageState._existingImage = { relation_id: 43, source_row_id: 9 };
+
         form.querySelector('[data-testid="child-image-source-picker-open"]').click();
         expect(openImageSourcePicker).toHaveBeenCalledOnce();
 
@@ -426,6 +430,7 @@ describe("buildOneToManySection", () => {
         const imageState = modalFormState._childRowsArray.find((row) => row.fileUploadSpec?.profile_key === "image");
         const attachmentState = modalFormState._childRowsArray.find((row) => row.fileUploadSpec?.profile_key === "attachment");
         expect(imageState._actualFileObjects).toEqual([file]);
+        expect(imageState._existingImage).toBeUndefined();
         expect(attachmentState._actualFileObjects).toBeUndefined();
         expect(JSON.parse(imageState.data.description)).toEqual({
             fi: "Kuva: Tekijä / Pexels.",

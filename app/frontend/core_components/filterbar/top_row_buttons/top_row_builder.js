@@ -12,10 +12,12 @@ import {
 import { createSortDropdown } from "./sort_dropdown_builder.js";
 import { emitDatasetSortSelection } from "./sort_sync_state.js";
 import {
+    getUnifiedTableState,
     setUnifiedTableState,
     refreshTableUnified,
 } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import {
+    getParams,
     setParams,
     updateURL,
 } from "../../navigation/nav_engine/query_params.js";
@@ -24,21 +26,33 @@ import { hasDatasetPermission } from "../../route_permission_checker.js";
 import { buildFilterbarDisclosureSection } from "../filterbar_section_heading_builder.js";
 import { show_filterbar_search_basic_controls_section } from "../../../ui_config.js";
 
+import { resolveSortSelection } from "./sort_sync_state_helpers.js";
+import { ongoingSearchResults } from "../text_search/dataset_search_executor.js";
+
+/** Reset query filters while preserving the chosen ordinary ordering and view. */
 export function clearAllFilters(tableName, filterBar) {
+    const state = getUnifiedTableState(tableName);
+    const oldParams = getParams(tableName);
+    const selection = resolveSortSelection({ ...oldParams, search: "" }, state);
+    const [column, direction] = selection.split(":");
+    const params = { sort_column: column, sort_order: direction };
+    if (oldParams.view) params.view = oldParams.view;
+    ongoingSearchResults[tableName] = null;
     setUnifiedTableState(tableName, {
-        sort: { column: null, direction: null },
+        sort: { column, direction },
         filters: {},
         offset: 0,
     });
     clearOpenedFilters(tableName);
     datasetSearchState.set(tableName, "", "clear-all-filters");
     datasetSearchLocationState.set(tableName, false, "clear-all-filters");
-    localStorage.removeItem(`int_search_draft_${tableName}`);
+    localStorage.setItem(`int_search_draft_${tableName}`, "");
     localStorage.setItem(`int_search_use_location_${tableName}`, "false");
-    setParams(tableName, {});
-    updateURL(tableName, {});
-    emitDatasetSortSelection(tableName, "");
+    setParams(tableName, params);
+    updateURL(tableName, params);
+    emitDatasetSortSelection(tableName, selection);
     filterBar.querySelectorAll("input, select").forEach((el) => {
+        if (el.closest(".sort-dropdown-wrapper")) return;
         if (el.type === "checkbox" || el.type === "radio") {
             el.checked = false;
         } else {

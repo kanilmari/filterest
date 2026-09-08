@@ -14,6 +14,8 @@ export interface AuthModesResponse {
     needs_button: string;
     registration_enabled: boolean;
     login_required_for_browse: boolean;
+    show_login_button: boolean;
+    only_admin_can_login: boolean;
 }
 
 export interface UserPermissionsResponse {
@@ -90,6 +92,7 @@ export interface CardVisibilityColumn {
     hide_everywhere_lock_reason: string;
     client_delivery_mode: string;
     client_delivery_mode_locked: boolean;
+    label_value_layout?: string;
     card_element: string;
     card_detail_label_mode: string;
     card_detail_icon_svg: string;

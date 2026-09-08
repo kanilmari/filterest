@@ -1,8 +1,14 @@
-"""Verify dynamic Filterest external homes and their safety boundaries."""
+"""Verify portable Filterest and self-contained Easelect home boundaries.
+
+Connects temporary checkout fixtures with path configuration and export guards.
+Preserves mutable data isolation while permitting ignored homes inside Easelect.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import os
 import subprocess
 import sys
 
@@ -28,6 +34,9 @@ def _checkout(tmp_path: Path, *, private: bool = False) -> Path:
     if private:
         (root / ".git").mkdir()
         (root / "VERSION_EASELECT").write_text("test\n", encoding="utf-8")
+        (root / "filterest.source-roots").write_text(
+            "filterest\nfilterest_private\nfilterest_candidates\n", encoding="utf-8"
+        )
     else:
         (root / "VERSION_APP").write_text("test\n", encoding="utf-8")
     return root
@@ -36,11 +45,12 @@ def _checkout(tmp_path: Path, *, private: bool = False) -> Path:
 def test_private_and_public_project_defaults_remain_distinct(tmp_path: Path) -> None:
     private_root = _checkout(tmp_path, private=True)
     private_homes = resolve_filterest_homes(private_root, {})
-    assert private_homes.projects_home == tmp_path / "filterest-projects"
-    assert private_homes.runtime_data_home == tmp_path / "filterest-runtime-data"
-    assert private_homes.maintainer_tools_home == tmp_path / "filterest-maintainer-tools"
-    assert private_homes.operations_home == tmp_path / "filterest-operations"
-    assert private_homes.projects_apps_home == tmp_path / "filterest-projects/apps"
+    assert private_homes.projects_home == private_root / "projects"
+    assert private_homes.keys_home == private_root / "keys"
+    assert private_homes.runtime_data_home == private_root / "data/runtime-data"
+    assert private_homes.maintainer_tools_home == private_root / "data/maintainer-tools"
+    assert private_homes.operations_home == private_root / "data/operations"
+    assert private_homes.projects_apps_home == private_root / "projects/apps"
 
     public_root = tmp_path / "public-checkout"
     public_root.mkdir()
@@ -79,6 +89,77 @@ def test_nested_install_uses_one_folder_defaults_and_config(tmp_path: Path) -> N
     configured = resolve_filterest_homes(root, {})
     assert configured.projects_home == external_projects
     assert configured.projects_home_configured
+
+
+@pytest.mark.parametrize("layout", ("private", "nested-public", "flat-public"))
+def test_python_node_and_shell_agree_after_root_relocation(tmp_path: Path, layout: str) -> None:
+    """A moved root derives every home and private file without sibling state."""
+    root = _checkout(tmp_path, private=layout == "private")
+    if layout == "nested-public":
+        (root / "app").mkdir()
+        (root / "app/go.mod").write_text("module easelect\n", encoding="utf-8")
+        (root / "app/VERSION_APP").write_text("test\n", encoding="utf-8")
+    moved = tmp_path / "moved workspace"
+    root.rename(moved)
+    homes = resolve_filterest_homes(moved, {})
+    expected = [str(getattr(homes, key)) for key in (
+        "projects_home", "keys_home", "runtime_data_home", "maintainer_tools_home", "operations_home"
+    )]
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.startswith(("FILTEREST_", "EASELECT_"))}
+    node = subprocess.run(
+        ["node", "--input-type=module", "-e", """
+import { pathToFileURL } from 'node:url';
+const { resolveFilterestHomes } = await import(pathToFileURL(process.argv[1]));
+const h = resolveFilterestHomes(process.argv[2], {});
+console.log(JSON.stringify([h.projectsHome,h.keysHome,h.runtimeDataHome,h.maintainerToolsHome,h.operationsHome]));
+""", str(PUBLIC_SOURCE_ROOT / "server_tools/lib/easelect_private_paths.mjs"), str(moved)],
+        env=environment, check=True, capture_output=True, text=True,
+    )
+    assert json.loads(node.stdout) == expected
+    shell = subprocess.run(
+        ["bash", "-c", """
+source "$1"
+easelect_resolve_private_paths "$2" || exit 1
+printf '%s\n' "$FILTEREST_PROJECTS_HOME" "$FILTEREST_KEYS_HOME" "$FILTEREST_RUNTIME_DATA_HOME" "$FILTEREST_MAINTAINER_TOOLS_HOME" "$FILTEREST_OPERATIONS_HOME" "$EASELECT_RUNTIME_ENV_FILE"
+""", "paths-test", str(PUBLIC_SOURCE_ROOT / "server_tools/lib/easelect_private_paths.sh"), str(moved)],
+        env=environment, check=True, capture_output=True, text=True,
+    )
+    assert shell.stdout.splitlines()[:5] == expected
+    expected_env = (
+        moved / ".env" if layout == "flat-public" else
+        homes.keys_home / ("easelect_development" if layout == "private" else "filterest_runtime") / "runtime_environment.env"
+    )
+    assert shell.stdout.splitlines()[5] == str(expected_env)
+    assert not homes.keys_home.exists()
+
+
+@pytest.mark.parametrize("source_owner", ("filterest", "filterest_private", "filterest_candidates"))
+@pytest.mark.parametrize("through_link", (False, True))
+def test_private_homes_reject_source_owners(tmp_path: Path, source_owner: str, through_link: bool) -> None:
+    root = _checkout(tmp_path, private=True)
+    (root / source_owner).mkdir()
+    candidate = source_owner
+    if through_link:
+        (root / "source-link").symlink_to(root / source_owner, target_is_directory=True)
+        candidate = "source-link"
+    for setting in ("PROJECTS", "KEYS", "RUNTIME_DATA", "MAINTAINER_TOOLS", "OPERATIONS"):
+        with pytest.raises(ValueError, match="outside Easelect source owners"):
+            resolve_filterest_homes(root, {f"FILTEREST_{setting}_HOME": f"{candidate}/local-data"})
+
+
+def test_shell_environment_wrapper_propagates_invalid_home(tmp_path: Path) -> None:
+    root = _checkout(tmp_path, private=True)
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.startswith(("FILTEREST_", "EASELECT_"))}
+    environment.update(PROJECT_ROOT=str(root), FILTEREST_KEYS_HOME=".git/keys")
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1"', "paths-test",
+         str(PUBLIC_SOURCE_ROOT / "server_tools/ctl/lib/resolve_env.sh")],
+        env=environment, capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "inside .git" in result.stderr
 
 
 def test_nested_paths_example_preserves_one_folder_contract(tmp_path: Path) -> None:
@@ -578,3 +659,48 @@ def test_cli_diagnostics_append_runtime_and_target_apps_without_reordering_legac
         str(root / "filterest_operations"),
         "0",
     ]
+
+
+@pytest.mark.parametrize("content", ("", "# empty\n", "private/child\n", "../private\n",
+                                    "/private\n", "private\nprivate\n", "private;run\n"))
+def test_private_source_metadata_rejects_unsafe_lists(tmp_path: Path, content: str) -> None:
+    root = _checkout(tmp_path, private=True)
+    (root / "filterest.source-roots").write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match="filterest.source-roots"):
+        resolve_filterest_homes(root, {"FILTEREST_SOURCE_ROOTS": "safe"})
+
+
+@pytest.mark.parametrize("kind", ("missing", "symlink", "writable", "directory"))
+def test_private_source_metadata_cannot_be_disabled_or_redirected(tmp_path: Path, kind: str) -> None:
+    root = _checkout(tmp_path, private=True)
+    metadata = root / "filterest.source-roots"
+    metadata.unlink()
+    if kind == "symlink":
+        target = tmp_path / "operator-metadata"
+        target.write_text("safe\n", encoding="utf-8")
+        metadata.symlink_to(target)
+    elif kind == "writable":
+        metadata.write_text("safe\n", encoding="utf-8")
+        metadata.chmod(0o666)
+    elif kind == "directory":
+        metadata.mkdir()
+    with pytest.raises(ValueError, match="filterest.source-roots"):
+        resolve_filterest_homes(root, {})
+
+
+def test_source_metadata_supports_generic_composition_names(tmp_path: Path) -> None:
+    root = _checkout(tmp_path, private=True)
+    (root / "filterest.source-roots").write_text(
+        "# Composition-owned source, not operator settings.\nproduct\ncompanion\nincubator\n",
+        encoding="utf-8",
+    )
+    for name in ("product", "companion", "incubator"):
+        with pytest.raises(ValueError, match="outside Easelect source owners"):
+            resolve_filterest_homes(root, {"FILTEREST_KEYS_HOME": f"{name}/keys"})
+    assert resolve_filterest_homes(root, {}).keys_home == root / "keys"
+
+
+def test_public_installation_does_not_need_private_composition_metadata(tmp_path: Path) -> None:
+    root = _checkout(tmp_path)
+    (root / "filterest.source-roots").write_text("../invalid\n", encoding="utf-8")
+    assert resolve_filterest_homes(root, {}).keys_home == root / "filterest_keys"

@@ -165,7 +165,7 @@ _print_shared_dev_db_tunnel_hint() {
         ssh_key="$(_read_local_env_value "DOCKER_VPS_SSH_KEY_PATH" "$db_env_file")"
     fi
     if [[ -z "$ssh_key" ]]; then
-        ssh_key="$(_read_local_env_value "DEPLOY_SSH_KEY_PATH" "$db_env_file" "$HOME/.ssh/easelect_key")"
+        ssh_key="$(_read_local_env_value "DEPLOY_SSH_KEY_PATH" "$db_env_file" "$HOME/.ssh/filterest_key")"
     fi
 
     echo "   Shared-dev DB tunnel may be down."

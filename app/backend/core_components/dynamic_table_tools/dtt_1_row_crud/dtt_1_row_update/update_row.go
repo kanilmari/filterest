@@ -54,6 +54,44 @@ type updateRowRequest struct {
 	Updates []updateRowFieldUpdate `json:"updates"`
 }
 
+// UnmarshalJSON distinguishes an explicit SQL NULL request from a missing value.
+func (update *updateRowFieldUpdate) UnmarshalJSON(data []byte) error {
+	type plainUpdate updateRowFieldUpdate
+	var decoded plainUpdate
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if _, present := fields["value"]; !present {
+		return errors.New("Value is required; use explicit null to clear a nullable field")
+	}
+	*update = updateRowFieldUpdate(decoded)
+	return nil
+}
+
+// UnmarshalJSON keeps the same explicit-value boundary for the legacy single-field shape.
+func (request *updateRowRequest) UnmarshalJSON(data []byte) error {
+	type plainRequest updateRowRequest
+	var decoded plainRequest
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if strings.TrimSpace(decoded.Column) != "" {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(data, &fields); err != nil {
+			return err
+		}
+		if _, present := fields["value"]; !present {
+			return errors.New("Value is required; use explicit null to clear a nullable field")
+		}
+	}
+	*request = updateRowRequest(decoded)
+	return nil
+}
+
 func normalizeUpdateOperations(request updateRowRequest) ([]updateRowFieldUpdate, error) {
 	if request.ID == 0 {
 		return nil, errors.New("ID is required")
@@ -438,6 +476,11 @@ func getSessionUsernameOrUnknown(request *http.Request) string {
 
 // convertValue muuntaa pyynnön arvon sarakkeen data_type:n perusteella
 func convertValue(value interface{}, dataType string) (interface{}, error) {
+	// Keep NULL as a bound SQL parameter. PostgreSQL still enforces NOT NULL,
+	// foreign keys and other constraints through the existing authorized UPDATE.
+	if value == nil {
+		return nil, nil
+	}
 	normalizedDataType := strings.ToLower(strings.TrimSpace(dataType))
 	switch {
 	case strings.Contains(normalizedDataType, "integer"), strings.Contains(normalizedDataType, "bigint"), strings.Contains(normalizedDataType, "smallint"):

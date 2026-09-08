@@ -1,6 +1,6 @@
 // row_article_ui_handler.js
-// Exposes article-view UI helper names on top of the legacy big-card UI module.
-// Bridges newer row_article imports with the existing big-card interaction utilities.
+// Exposes article-view UI helper names from the canonical article_view UI module.
+// Bridges newer row_article imports with the canonical article_view interaction utilities.
 // Exists to let callers migrate naming safely without breaking older big_card imports.
 
 export {
@@ -20,4 +20,4 @@ export {
     saveScrollBeforeBigCard,
     saveScrollBeforeRowArticle,
     updateHighlightedCard,
-} from "./big_card_ui_handler.js";
+} from "./article_view_ui_handler.js";

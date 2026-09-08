@@ -20,6 +20,11 @@ function sessionAccessPromptIsOpen() {
 
 function resolveCopy(languageCode = getLanguageWithBrowserFallback(), reason = 'session-ended') {
     const loggedOutInAnotherTab = reason === OTHER_TAB_LOGOUT_NOTICE;
+    if (localStorage.getItem('show_login_button') === 'false') {
+        return String(languageCode).toLowerCase().startsWith('fi')
+            ? { title: 'Sisältö ei ole käytettävissä', message: 'Tätä sisältöä ei voi näyttää. Voit palata etusivulle.', home: 'Etusivulle', register: 'Rekisteröidy' }
+            : { title: 'Content unavailable', message: 'This content cannot be displayed. You can return to the home page.', home: 'Home', register: 'Register' };
+    }
     if (String(languageCode).toLowerCase().startsWith('fi')) {
         return {
             title: 'Kirjautuminen tarvitaan',
@@ -90,9 +95,12 @@ export function requestSessionAccessPrompt({ reason = 'session-ended' } = {}) {
     });
     loginButton.dataset.testid = 'session-access-login';
 
-    actions.append(homeButton, loginButton);
+    actions.append(homeButton);
+    if (localStorage.getItem('show_login_button') !== 'false') {
+        actions.append(loginButton);
+    }
 
-    if (localStorage.getItem('registration_enabled') === 'true') {
+    if (localStorage.getItem('registration_enabled') === 'true' && localStorage.getItem('only_admin_can_login') !== 'true') {
         const registerButton = createActionButton(copy.register, ['fw-btn--ghost'], () => {
             clearDatasetSelectionState();
             hideModal();
@@ -100,7 +108,7 @@ export function requestSessionAccessPrompt({ reason = 'session-ended' } = {}) {
             window.location.assign('/register');
         });
         registerButton.dataset.testid = 'session-access-register';
-        actions.insertBefore(registerButton, loginButton);
+        actions.insertBefore(registerButton, loginButton.parentNode === actions ? loginButton : null);
     }
 
     createModal({

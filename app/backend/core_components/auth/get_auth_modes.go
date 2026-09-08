@@ -19,19 +19,26 @@ import (
 	gorillaSessions "github.com/gorilla/sessions"
 )
 
-var authModesAuthenticationGenerationMatches = auth_generation.Matches
+var authModesAuthenticationGenerationMatches = backend.AuthenticatedSessionMatches
 
 // AuthModesResponse keeps the public auth bootstrap payload stable for typed frontend callers.
 type AuthModesResponse struct {
 	NeedsButton            string `json:"needs_button"`
 	RegistrationEnabled    bool   `json:"registration_enabled"`
 	LoginRequiredForBrowse bool   `json:"login_required_for_browse"`
+	ShowLoginButton        bool   `json:"show_login_button"`
+	OnlyAdminCanLogin      bool   `json:"only_admin_can_login"`
 }
 
 // GetAuthModesHandler tallentaa käyttäjän roolin sessioon
 func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		httpresponse.RespondWithError(response_writer, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+	loginSettings, policyErr := backend.ReadLoginAccessSettings(request.Context(), backend.Db)
+	if policyErr != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusServiceUnavailable, "authentication_policy_unavailable")
 		return
 	}
 	fmt.Printf("\033[32mGetAuthModesHandler\033[0m\n")
@@ -51,6 +58,8 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 				NeedsButton:            "login",
 				RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
 				LoginRequiredForBrowse: loginToBrowse,
+				ShowLoginButton:        loginSettings.ShowLoginButton,
+				OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
 			}
 			if encodeErr := json.NewEncoder(response_writer).Encode(responseData); encodeErr != nil {
 				log.Printf("\033[31mvirhe: %s\033[0m\n", encodeErr.Error())
@@ -92,6 +101,8 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 				NeedsButton:            "login",
 				RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
 				LoginRequiredForBrowse: loginToBrowse,
+				ShowLoginButton:        loginSettings.ShowLoginButton,
+				OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
 			}
 			if encodeErr := json.NewEncoder(response_writer).Encode(responseData); encodeErr != nil {
 				log.Printf("\033[31mvirhe: %s\033[0m\n", encodeErr.Error())
@@ -123,6 +134,8 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 			NeedsButton:            "login",
 			RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
 			LoginRequiredForBrowse: loginToBrowse,
+			ShowLoginButton:        loginSettings.ShowLoginButton,
+			OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
 		}
 		if encodeErr := json.NewEncoder(response_writer).Encode(responseData); encodeErr != nil {
 			log.Printf("\033[31mvirhe: %s\033[0m\n", encodeErr.Error())
@@ -164,6 +177,8 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 		NeedsButton:            buttonState,
 		RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
 		LoginRequiredForBrowse: loginToBrowse,
+		ShowLoginButton:        loginSettings.ShowLoginButton,
+		OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
 	}
 	if err := json.NewEncoder(response_writer).Encode(responseData); err != nil {
 		log.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())

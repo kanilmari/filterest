@@ -47,8 +47,16 @@ const CLIENT_DELIVERY_MODE_OPTIONS = [
     { value: 'server_only', labelKey: 'client_delivery_server_only' },
 ];
 
+const LABEL_VALUE_LAYOUT_OPTIONS = [
+    { value: '', labelKey: 'label_value_layout_inherit', fi: 'Nykyinen oletus', en: 'Current default' },
+    { value: 'auto', labelKey: 'label_value_layout_auto', fi: 'Automaattinen', en: 'Automatic' },
+    { value: 'inline', labelKey: 'label_value_layout_inline', fi: 'Rinnakkain', en: 'Side by side' },
+    { value: 'stacked', labelKey: 'label_value_layout_stacked', fi: 'Allekkain', en: 'Stacked' },
+];
+
 const VISIBILITY_FLAGS = [
     { key: 'card_element',               type: 'select', options: CARD_ELEMENT_OPTIONS },
+    { key: 'label_value_layout', type: 'select', width: '12rem', options: LABEL_VALUE_LAYOUT_OPTIONS },
     { key: 'card_detail_capitalization', type: 'checkbox' },
     { key: 'show_key_on_card',           type: 'checkbox' },
     { key: 'show_value_on_card',         type: 'checkbox' },
@@ -102,7 +110,7 @@ function buildEditorColumns() {
             return {
                 value: option.value,
                 label: option.labelKey
-                    ? getTranslationForKey(option.labelKey) || option.value
+                    ? (option.fi ? getCardVisibilityUiText(option.labelKey, option.fi, option.en) : getTranslationForKey(option.labelKey) || option.value)
                     : option.label || option.value,
             };
         }
@@ -122,7 +130,9 @@ function buildEditorColumns() {
         },
         ...VISIBILITY_FLAGS.map((flag) => ({
             key: flag.key,
-            label: getTranslationForKey(flag.key) || flag.key,
+            label: flag.key === 'label_value_layout'
+                ? getCardVisibilityUiText('label_value_layout', 'Kentän otsikon ja arvon asettelu', 'Field label and value layout')
+                : getTranslationForKey(flag.key) || flag.key,
             type: flag.type,
             width: flag.width || (flag.type === 'select' ? '8.5rem' : '6.25rem'),
             minWidth: flag.width || (flag.type === 'select' ? '8.5rem' : '6.25rem'),
@@ -131,6 +141,27 @@ function buildEditorColumns() {
                 ? normalizeSelectOptions(flag.options)
                 : [],
             isCellDisabled: flag.isCellDisabled,
+            formatReadOnly: flag.key === 'label_value_layout'
+                ? (value) => normalizeSelectOptions(LABEL_VALUE_LAYOUT_OPTIONS).find(
+                    (option) => option.value === (value ?? '')
+                )?.label || '' : undefined,
+            renderEditableCell: flag.key === 'label_value_layout'
+                ? ({ value, column, updateValue, isDisabled }) => {
+                    const select = document.createElement('select');
+                    select.className = 'vct-input-select';
+                    select.setAttribute('aria-label', column.label);
+                    select.dataset.testid = 'label-value-layout-select';
+                    normalizeSelectOptions(LABEL_VALUE_LAYOUT_OPTIONS).forEach((option) => {
+                        const node = document.createElement('option');
+                        node.value = option.value;
+                        node.textContent = option.label;
+                        select.appendChild(node);
+                    });
+                    select.value = value ?? '';
+                    select.disabled = isDisabled;
+                    select.addEventListener('change', () => updateValue(select.value || null));
+                    return select;
+                } : undefined,
         })),
     ];
 }
@@ -329,14 +360,31 @@ export async function generate_card_visibility_form(container) {
     ) {
         if (!currentTableName) return;
 
+        const priorError = matrixContainer.querySelector('[data-testid="card-visibility-save-error"]');
+        if (priorError) priorError.hidden = true;
         const normalizedLayout = normalizeClientCardDetailsLayout(nextLayout);
         const normalizedStyleVariant = normalizeClientCardStyleVariant(nextStyleVariant);
+        const targetDataset = currentTableName;
         const response = await saveCardVisibility({
-            table_name: currentTableName,
+            table_name: targetDataset,
             card_details_layout: normalizedLayout,
             card_style_variant: normalizedStyleVariant,
             columns: nextRows,
         });
+        const configuredRows = nextRows.filter((row) => Object.hasOwn(row, 'label_value_layout'));
+        if (configuredRows.length) {
+            const readback = await fetchCardVisibility(targetDataset);
+            const returnedColumns = Array.isArray(readback) ? readback : readback?.columns;
+            const values = new Map((returnedColumns || []).map((row) => [row.column_uid, row.label_value_layout]));
+            if ((!Array.isArray(readback) && readback?.table_name && readback.table_name !== targetDataset)
+                || configuredRows.some((row) => !values.has(row.column_uid)
+                    || values.get(row.column_uid) !== row.label_value_layout)) {
+                throw new Error(getCardVisibilityUiText('label_value_layout_readback_failed',
+                    'Asetuksen tallennusta ei voitu varmistaa. Lataa asetukset uudelleen.',
+                    'The saved setting could not be verified. Reload the settings.'));
+            }
+        }
+        if (currentTableName !== targetDataset) return;
         columnsData = cloneColumnsData(nextRows);
         originalData = cloneColumnsData(nextRows);
         cardDetailsLayout = normalizedLayout;
@@ -429,6 +477,18 @@ export async function generate_card_visibility_form(container) {
         const tableHost = document.createElement('div');
         tableHost.classList.add('cv-column-settings-table');
         matrixContainer.appendChild(layoutPanel);
+        const layoutHelp = document.createElement('p');
+        layoutHelp.className = 'cv-layout-help';
+        layoutHelp.dataset.langKey = 'label_value_layout_help';
+        layoutHelp.textContent = getCardVisibilityUiText('label_value_layout_help',
+            'Otsikon ja arvon asettelu on sarakkeen yhteinen oletus korttien ja artikkelien tietokentille. Se ei muuta kentän paikkaa tai näkyvyyttä. Nykyinen oletus säilyttää näkymän aiemman toiminnan.',
+            'Label and value layout is the shared column default for card and article detail fields. It does not change field placement or visibility. Current default preserves the previous behavior of each view.');
+        matrixContainer.appendChild(layoutHelp);
+        const saveError = document.createElement('p');
+        saveError.dataset.testid = 'card-visibility-save-error';
+        saveError.setAttribute('role', 'alert');
+        saveError.hidden = true;
+        matrixContainer.appendChild(saveError);
         matrixContainer.appendChild(tableHost);
 
         checkboxTable = createVanillaCheckboxTable({
@@ -448,6 +508,12 @@ export async function generate_card_visibility_form(container) {
         });
 
         addCardVisibilityTestIds(matrixContainer);
+        // Route this editor through its guarded save so rejected readback keeps the draft.
+        matrixContainer.querySelector('[data-testid="card-visibility-save-button"]')
+            ?.addEventListener('click', (event) => {
+                event.stopImmediatePropagation();
+                void doSave();
+            }, true);
     }
 
     async function doSave() {
@@ -471,6 +537,13 @@ export async function generate_card_visibility_form(container) {
             return didSave || !hasPendingChanges();
         } catch (err) {
             console.warn('card_visibility_view: save failed', err);
+            const notice = matrixContainer.querySelector('[data-testid="card-visibility-save-error"]');
+            if (notice) {
+                notice.textContent = getCardVisibilityUiText('label_value_layout_readback_failed',
+                    'Asetuksen tallennusta ei voitu varmistaa. Lataa asetukset uudelleen.',
+                    'The saved setting could not be verified. Reload the settings.');
+                notice.hidden = false;
+            }
             return false;
         }
     }

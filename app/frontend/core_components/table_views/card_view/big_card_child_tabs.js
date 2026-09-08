@@ -580,8 +580,9 @@ async function openRelatedRecord({
 
     closeCurrentBigCard(parentDataset, parentRowId, relatedTabsContainer);
 
+    localStorage.setItem(`${relatedDataset}_view`, "article_view");
     setUnifiedTableState(relatedDataset, {
-        cardView: { collapsed: true, expandedId: relatedId },
+        articleView: { collapsed: true, expandedId: relatedId, returnView: "card" },
     });
 
     await handle_all_navigation(relatedDataset, custom_views, {

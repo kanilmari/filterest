@@ -183,4 +183,27 @@ describe("renderKeyValuePairs", () => {
                 .toContain("column_orders_status");
         });
     });
+    test.each(["conditional", "stacked", "inline"])(
+        "honors per-column layouts inside legacy %s mode without changing values or visibility", (layoutMode) => {
+            const kvContainer = document.createElement("div");
+            document.body.append(kvContainer);
+            const settings = [null, "auto", "inline", "stacked"];
+            renderKeyValuePairs(kvContainer, settings.map((setting, index) => ({
+                key: "website" + index, labelText: "Website " + index,
+                value: "https://example.test/" + index, isLink: true,
+                columnClass: "column_orders_website" + index,
+                labelMeta: { label_value_layout: setting },
+            })), { layoutMode });
+            settings.forEach((setting, index) => {
+                const pair = kvContainer.querySelector(".column_orders_website" + index);
+                expect(pair).not.toBeNull();
+                expect(pair.dataset.labelValueLayout).toBe(setting || undefined);
+                expect(pair.querySelector("a")?.getAttribute("href")).toBe("https://example.test/" + index);
+                expect(pair.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+                expect(pair.textContent).toContain("Website " + index);
+                if (setting) expect(pair.querySelector(".kv-dropped")).toBeNull();
+            });
+        },
+    );
+
 });

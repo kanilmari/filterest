@@ -6,7 +6,9 @@
 package dtt_1_row_read
 
 import (
+	"easelect/backend/core_components/dbutils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -65,6 +67,10 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET accepted")
 		return
 	}
+	if _, err := parseIntelligentSearchFilters(r.URL.Query().Get("filters")); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid search filters")
+		return
+	}
 	if _, err := normalizeRowGroupFilterSlug(r.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
@@ -74,7 +80,7 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 	if r.URL.Query().Get("stream") == "1" {
 		if err := queryIntelligentResultsStream(w, r); err != nil {
 			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal error")
+			respondIntelligentSearchError(w, err)
 		}
 		return
 	}
@@ -82,7 +88,7 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 	// Vanha, blokkaava versio (muuttumaton)
 	if err := queryIntelligentResults(w, r); err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal error")
+		respondIntelligentSearchError(w, err)
 	}
 }
 
@@ -127,6 +133,10 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
+	authorization, err = withIntelligentSearchFilters(currentDb, tableName, r.URL.Query().Get("filters"), lang, authorization)
+	if err != nil {
+		return err
+	}
 
 	textHits, err := fetchFullTextRows(readQuerier, tableName, userQuery, authorization)
 	if err != nil {
@@ -159,11 +169,13 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	// 2. Lähetä ensimmäinen paketti (stage="text")
 	//------------------------------------------------
 	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), textRows)
 	first := map[string]interface{}{
-		"stage":   "text",
-		"columns": textCols,
-		"data":    textRows,
-		"types":   types,
+		"stage":           "text",
+		"filters_applied": true,
+		"columns":         textCols,
+		"data":            textRows,
+		"types":           types,
 	}
 	if err := json.NewEncoder(w).Encode(first); err != nil {
 		return err
@@ -212,11 +224,13 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 						if len(cols) == 0 {
 							cols = textCols
 						}
+						FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), aiRows)
 						aiPacket := map[string]interface{}{
-							"stage":   "ai",
-							"columns": cols,
-							"data":    aiRows,
-							"types":   types,
+							"stage":           "ai",
+							"filters_applied": true,
+							"columns":         cols,
+							"data":            aiRows,
+							"types":           types,
 						}
 						if err := json.NewEncoder(w).Encode(aiPacket); err != nil {
 							return err
@@ -302,6 +316,10 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		userID,
 		r.URL.Query().Get(rowGroupFilterQueryKey),
 	)
+	if err != nil {
+		return err
+	}
+	authorization, err = withIntelligentSearchFilters(currentDb, tableName, r.URL.Query().Get("filters"), lang, authorization)
 	if err != nil {
 		return err
 	}
@@ -440,6 +458,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	//------------------------------------------------
 	// 7. JSON-vastaus
 	//------------------------------------------------
+	FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), rowsJSON)
 	respJSON := map[string]interface{}{
 		"columns":        resultColumns,
 		"data":           rowsJSON,
@@ -494,4 +513,13 @@ func writeEmptyResultJSON(w http.ResponseWriter) error {
 		"resultsPerLoad": 0,
 	}
 	return json.NewEncoder(w).Encode(empty)
+}
+
+// Invalid optional filters are a request error, never an instruction to retry without them.
+func respondIntelligentSearchError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errInvalidIntelligentSearchFilters) {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid search filters")
+		return
+	}
+	httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal error")
 }

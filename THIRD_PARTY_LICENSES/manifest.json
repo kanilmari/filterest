@@ -383,12 +383,12 @@
       ],
       "embedded_sources": [
         {
-          "path": "app/frontend/core_components/table_views/card_view/big_card_ui_handler.js",
-          "sha256": "476ac2c9cf63799164d701c9c3c3decaf5e455284cadf5c7ed1a7a7ee48713f7"
+          "path": "app/frontend/core_components/table_views/card_view/article_view_ui_handler.js",
+          "sha256": "eb77216e84f8082163484e51edc2a855f79257aefd340792df9fdfb6d9cf003d"
         },
         {
-          "path": "app/frontend/reusable_components/key_value_container/kv_container_printer.js",
-          "sha256": "4c86b38fbaa52f1bdbced3d50242fdf35aba6a5c9485855012313be658bdfe3e"
+          "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
+          "sha256": "84871599f69947db7834b3499983c6d620ab7f09b0433183844f7c8335345129"
         },
         {
           "path": "app/frontend/reusable_components/vanilla_tree/van_tr_components/tree_icon_creator.js",
@@ -402,7 +402,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "9a5774b9fe55103a5ca88ac9c428a95cbf481026a661add37ef7bae52d5efcb7"
+    "sha256": "467cdca80b23cbf511a37c9a45e221f3450d9863e21a86400008a7978fddc074"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -410,7 +410,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.7.3",
+  "database_version": "9.7.13",
   "dependencies": [
     {
       "binary_targets": [
@@ -837,7 +837,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.3.1",
+  "filterest_app_version": "9.3.2",
   "first_party_components": [
     {
       "assets": [

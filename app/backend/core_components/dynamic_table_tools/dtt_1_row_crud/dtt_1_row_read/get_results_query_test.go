@@ -6,6 +6,7 @@ package dtt_1_row_read
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
@@ -283,5 +284,51 @@ func testColumnDataTypes() map[string]interface{} {
 		"status": map[string]interface{}{
 			"data_type": "text",
 		},
+	}
+}
+
+// Real column suffixes win before optional operators; operator keys can still
+// refer to those columns by appending a further suffix.
+func TestBuildWhereClauseResolvesRealSuffixColumnsBeforeOperators(t *testing.T) {
+	columns := map[string]dtt_models.ColumnInfo{}
+	types := map[string]interface{}{}
+	for _, name := range []string{"valid", "valid_from", "valid_to", "ship", "ship_to", "status", "status_exclude", "age"} {
+		columns[name] = dtt_models.ColumnInfo{ColumnName: name, DataType: "text"}
+		types[name] = map[string]interface{}{"data_type": "text"}
+	}
+	for _, tc := range []struct {
+		key, column, operator string
+	}{
+		{"valid_from", "valid_from", "ILIKE"},
+		{"tasks_valid_from", "valid_from", "ILIKE"},
+		{"ship_to", "ship_to", "ILIKE"},
+		{"status_exclude", "status_exclude", "ILIKE"},
+		{"age_from", "age", ">="},
+		{"age_to", "age", "<="},
+		{"valid_from_from", "valid_from", ">="},
+		{"valid_to_from", "valid_to", ">="},
+		{"ship_to_to", "ship_to", "<="},
+		{"valid_from_exclude", "valid_from", "<>"},
+		{"status_exclude_exclude", "status_exclude", "<>"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			where, args, err := buildWhereClause(url.Values{tc.key: {"sample"}}, "tasks", columns, nil, types)
+			target := "\"tasks\".\"" + tc.column + "\""
+			if err != nil || len(args) != 1 || !strings.Contains(where, target) || !strings.Contains(where, tc.operator) {
+				t.Fatalf("filter %s resolved incorrectly: %s %#v %v", tc.key, where, args, err)
+			}
+		})
+	}
+}
+
+func TestBuildWhereClauseDoesNotRetargetKnownForbiddenSuffixColumn(t *testing.T) {
+	columns := map[string]dtt_models.ColumnInfo{"ship": {ColumnName: "ship", DataType: "text"}}
+	types := map[string]interface{}{
+		"ship":    map[string]interface{}{"data_type": "text"},
+		"ship_to": map[string]interface{}{"data_type": "text"},
+	}
+	where, args, err := buildWhereClause(url.Values{"ship_to": {"hidden"}}, "tasks", columns, nil, types)
+	if err != nil || where != "" || len(args) != 0 {
+		t.Fatalf("forbidden exact field became an allowed range: %s %#v %v", where, args, err)
 	}
 }

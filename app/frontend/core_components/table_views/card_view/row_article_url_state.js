@@ -8,7 +8,7 @@ import { getParams, setParams } from "../../navigation/nav_engine/query_params.j
 export function buildRowArticleQueryString(tableName) {
     const params = {
         ...getParams(tableName),
-        view: "article",
+        view: "article_view",
     };
     setParams(tableName, params);
 

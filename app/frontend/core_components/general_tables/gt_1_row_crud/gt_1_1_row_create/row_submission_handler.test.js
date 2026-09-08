@@ -5,6 +5,7 @@ import {
     appendFormActions,
     collectChildRowsForSubmission,
     collectExistingLinksForSubmission,
+    collectExistingImagesForSubmission,
     shouldSubmitChildRow,
 } from "./row_submission_handler.js";
 import { initializeFormSectionNavigator } from "../../../../reusable_components/form_section_navigator/form_section_navigator.js";
@@ -196,5 +197,17 @@ describe("collectChildRowsForSubmission", () => {
         expect(childRowsToSend).toHaveLength(2);
         expect(childRowsToSend[0].data.asset_kind).toBe("pdf");
         expect(childRowsToSend[1].data.asset_kind).toBe("document");
+    });
+});
+
+
+describe("existing image submission", () => {
+    test("sends only server identities and no pretend upload or source path", () => {
+        const child = { sharedAssetRelation: true, _existingImage: { relation_id: 17, source_row_id: 9, url: "/private" } };
+        expect(collectExistingImagesForSubmission([child])).toEqual([{ relation_id: 17, source_row_id: 9 }]);
+        expect(collectChildRowsForSubmission([child])).toEqual({ childRowsToSend: [], childFiles: [] });
+    });
+    test("skips invalid or cleared selections", () => {
+        expect(collectExistingImagesForSubmission([{}, { _existingImage: { relation_id: -1, source_row_id: 9 } }])).toEqual([]);
     });
 });

@@ -17,6 +17,7 @@ export function getUnifiedTableState(tableName) {
         },
         filters: {},
         offset: 0,
+        articleView: { collapsed: false, expandedId: null },
         cardView: {
             collapsed: false,
             expandedId: null
@@ -29,7 +30,15 @@ export function getUnifiedTableState(tableName) {
     }
     try {
         const parsed = JSON.parse(raw);
-        return { ...defaultState, ...parsed };
+        // Only old article aliases migrate the former card detail state.
+        // Ordinary card settings remain untouched and independent.
+        const storedView = localStorage.getItem(`${datasetName}_view`);
+        const articleView = parsed.articleView || (
+            ["article", "big_card", "row_article"].includes(storedView)
+                ? { ...parsed.cardView }
+                : defaultState.articleView
+        );
+        return { ...defaultState, ...parsed, articleView };
     } catch (err) {
         console.warn(`Virhe parsing localStorage avaimella ${storageKey}:`, err);
         return defaultState;
@@ -49,6 +58,12 @@ export function setUnifiedTableState(tableName, partialState) {
         ...currentState,
         ...partialState
     };
+    if (partialState.articleView) {
+        newState.articleView = {
+            ...currentState.articleView,
+            ...partialState.articleView,
+        };
+    }
     if (partialState.cardView) {
         newState.cardView = {
             ...currentState.cardView,

@@ -6,6 +6,7 @@ package dtt_1_row_read
 
 import (
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,10 @@ var resultsViewKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func normalizeResultsViewKey(raw string) string {
 	viewKey := strings.ToLower(strings.TrimSpace(raw))
+	switch viewKey {
+	case "article", "big_card", "row_article":
+		viewKey = "article_view"
+	}
 	if resultsViewKeyPattern.MatchString(viewKey) {
 		return viewKey
 	}
@@ -359,6 +364,8 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 	}
+
+	FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), query_results)
 
 	// Kootaan vastaus
 	response_data := map[string]interface{}{

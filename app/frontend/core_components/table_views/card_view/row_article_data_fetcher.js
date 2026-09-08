@@ -4,7 +4,7 @@
 // Exists so card field choices never remove permitted article fields such as description.
 import { fetchDatasetData } from "../../endpoints/endpoint_data_fetcher.js";
 
-export const ROW_ARTICLE_VIEW_KEY = "article";
+export const ROW_ARTICLE_VIEW_KEY = "article_view";
 
 /**
  * Re-fetch one row through get-results before rendering the expanded article.
@@ -39,6 +39,12 @@ export async function fetchPermittedRowArticleData({
     const authorizedRow = rows.find((candidate) => String(candidate?.id) === String(rowID));
     if (!authorizedRow) {
         throw new Error("row article is no longer available");
+    }
+    if (Array.isArray(response.columns)) {
+        Object.defineProperty(authorizedRow, "__articleColumns", {
+            value: response.columns.filter((column) => Object.hasOwn(authorizedRow, column)),
+            configurable: true,
+        });
     }
     return authorizedRow;
 }

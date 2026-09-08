@@ -44,7 +44,7 @@ type savePersonalDatasetSortDefaultRequest struct {
 	Value   string `json:"value"`
 }
 
-var datasetSortAuthenticationGenerationMatches = auth_generation.Matches
+var datasetSortAuthenticationGenerationMatches = backend.AuthenticatedSessionMatches
 var datasetSortDefaultSave = saveDatasetSortDefault
 
 // GetDatasetSortDefaultHandler returns the current user's override when one exists,

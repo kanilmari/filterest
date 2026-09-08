@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-// Locks public cover settings plus the administrator light/dark editor contract.
+// Verifies public appearance settings and the protected light/dark palette editor.
+// Connects optional cover images, shared card controls and persisted site settings.
+// Preserves authorization while datasets without images gain the same editor.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
@@ -107,24 +109,78 @@ describe('dataset cover presentation settings', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('1px');
     });
 
-    test('applies background blur variables without exposing a cover palette when no cover exists', async () => {
+    test('opens shared appearance controls without a cover and preserves settings on save', async () => {
         const hero = document.createElement('section');
         hero.classList.add('filterbar-inline-hero');
         document.body.appendChild(hero);
         const settings = createSettings();
         settings.dataset_cover_theme.light.image_blur = 5;
         settings.dataset_cover_theme.dark.image_blur = 0;
-        const flagRequest = vi.fn();
-
-        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
-            requestFn: flagRequest,
-            settingsRequestFn: vi.fn(async () => settings),
-        }))).resolves.toBeNull();
+        const options = createMountOptions({ settingsRequestFn: vi.fn(async () => settings) });
+        const control = await mountDatasetCoverTestPalette(hero, 'demo', options);
 
         expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('5px');
         expect(document.documentElement.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
-        expect(flagRequest).not.toHaveBeenCalled();
+        expect(options.requestFn).toHaveBeenCalledOnce();
+        expect(control).not.toBeNull();
+        expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(false);
+        control.button.click();
+        expect(control.panel.hidden).toBe(false);
+        const cardWidth = control.panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-width"]');
+        const cardLines = control.panel.querySelector('[data-testid="dataset-cover-test-palette-card-description-lines"]');
+        const brandColor = control.panel.querySelector('input[type="color"]');
+        expect(cardWidth).not.toBeNull();
+        expect(cardLines).not.toBeNull();
+        expect(brandColor.value).toBe(settings.dataset_cover_theme.shared.brand_color);
+        cardWidth.value = '365';
+        cardWidth.dispatchEvent(new Event('input', { bubbles: true }));
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
+        await Promise.resolve();
+        await Promise.resolve();
+        const saved = options.saveRequestFn.mock.calls[0][0];
+        expect(saved.dataset_cover_theme.shared.card_image_width).toBe(365);
+        expect(saved.dataset_cover_theme.light.image_blur).toBe(5);
+        expect(saved.dataset_cover_theme.dark.image_blur).toBe(0);
+        expect(saved.row_article_timestamp_display_mode).toBe('date_only');
+        expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(false);
+        control.destroy();
+    });
+
+    test.each([true, false])('keeps permission and feature-flag guards with cover=%s', async (cover) => {
+        const hero = createCoverHero();
+        hero.classList.toggle('filterbar-inline-hero--has-cover', cover);
+        const denied = createMountOptions({ permissionCheck: vi.fn(() => false) });
+        await expect(mountDatasetCoverTestPalette(hero, 'demo', denied)).resolves.toBeNull();
+        expect(denied.permissionCheck).toHaveBeenCalledWith('/ui/admin/dataset_header_config');
+        expect(denied.requestFn).not.toHaveBeenCalled();
+        for (const requestFn of [
+            vi.fn(async () => ({})),
+            vi.fn(async () => ({ view_admin_cover_image_test_palette: false })),
+            vi.fn(async () => ({ view_admin_cover_image_test_palette: 'true' })),
+            vi.fn(async () => { throw new Error('unavailable'); }),
+        ]) {
+            await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({ requestFn }))).resolves.toBeNull();
+        }
         expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
+    });
+
+    test.each([
+        ['fi', 'Avaa ulkoasun paletti', 'Ulkoasun asetukset'],
+        ['en', 'Open appearance palette', 'Appearance settings'],
+    ])('names the shared controls in %s and avoids duplicate palettes', async (language, label, title) => {
+        const priorLanguage = localStorage.getItem('chosen_language');
+        localStorage.setItem('chosen_language', language);
+        const hero = document.createElement('section');
+        hero.className = 'filterbar-inline-hero';
+        document.body.append(hero);
+        const control = await mountDatasetCoverTestPalette(hero, 'demo', createMountOptions());
+        expect(control.button.getAttribute('aria-label')).toBe(label);
+        expect(control.panel.textContent).toContain(title);
+        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions())).resolves.toBeNull();
+        expect(hero.querySelectorAll('[data-testid="dataset-cover-test-palette-button"]')).toHaveLength(1);
+        control.destroy();
+        if (priorLanguage === null) localStorage.removeItem('chosen_language');
+        else localStorage.setItem('chosen_language', priorLanguage);
     });
 
     test('keeps the palette admin-only and fails closed when its protected flag is absent', async () => {

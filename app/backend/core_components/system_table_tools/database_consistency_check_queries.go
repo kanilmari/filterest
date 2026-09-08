@@ -26,9 +26,9 @@ func checkOrphanSystemDbTableRows() CategoryResult {
 			SELECT 1
 			FROM pg_class c
 			JOIN pg_namespace n ON n.oid = c.relnamespace
-			WHERE n.nspname = sdt.schema_name
+			WHERE n.nspname = COALESCE(NULLIF(sdt.schema_name, ''), 'public')
 			  AND c.relname = sdt.table_name
-			  AND c.relkind = 'r'
+			  AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
 		)
 		ORDER BY sdt.table_name
 	`
@@ -73,6 +73,7 @@ func checkUnregisteredTables() CategoryResult {
 		  AND n.nspname NOT LIKE 'pg_%'
 		  AND n.nspname <> 'information_schema'
 		  AND n.nspname NOT IN ('restricted', 'postgis')
+		  AND NOT (n.nspname = 'public' AND c.relname IN ('system_media_assets', 'system_media_asset_usages'))
 		  AND has_schema_privilege(n.nspname, 'USAGE')
 		  AND has_table_privilege(c.oid, 'SELECT')
 		  AND NOT EXISTS (

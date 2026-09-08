@@ -1,3 +1,7 @@
+// table_state_store.test.js
+// Verifies independent persisted presentation state and legacy article aliases.
+// Bridges localStorage state reads and partial updates for card and article views.
+// Prevents one presentation from overwriting the preferences of another.
 import { describe, test, expect, beforeEach } from 'vitest';
 import { getUnifiedTableState, setUnifiedTableState } from './table_state_store.js';
 
@@ -11,6 +15,7 @@ describe('table_state_store', () => {
     filters: {},
     offset: 0,
     cardView: { collapsed: false, expandedId: null },
+    articleView: { collapsed: false, expandedId: null },
   };
 
   describe('getUnifiedTableState', () => {
@@ -63,4 +68,21 @@ describe('table_state_store', () => {
       expect(state.filters).toEqual({ name: 'test' });
     });
   });
+});
+
+
+test("article settings never modify the card state", () => {
+    localStorage.clear();
+    setUnifiedTableState("demo", { cardView: { expandedId: 1, returnView: "table" } });
+    setUnifiedTableState("demo", { articleView: { expandedId: 2, returnView: "calendar" } });
+    setUnifiedTableState("demo", { articleView: { collapsed: true } });
+    expect(getUnifiedTableState("demo").cardView).toEqual({ collapsed: false, expandedId: 1, returnView: "table" });
+    expect(getUnifiedTableState("demo").articleView).toEqual({ collapsed: true, expandedId: 2, returnView: "calendar" });
+});
+
+test.each(["article", "big_card", "row_article"])("preserves old %s bookmarks and their detail selection", (view) => {
+    localStorage.clear();
+    localStorage.setItem("demo_view", view);
+    localStorage.setItem("demo_sorting_and_filtering_specs", JSON.stringify({ cardView: { expandedId: 42, collapsed: true } }));
+    expect(getUnifiedTableState("demo").articleView).toEqual({ expandedId: 42, collapsed: true });
 });

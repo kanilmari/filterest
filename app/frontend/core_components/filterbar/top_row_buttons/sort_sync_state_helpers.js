@@ -1,6 +1,9 @@
 // sort_sync_state_helpers.js
 // Pure helper functions extracted from sort_sync_state.js for testability.
-// Zero DOM access — all functions are pure input→output.
+// Bridges stored selections and query context without DOM access.
+// Keeps relevance confined to text searches while ordinary sorting survives clearing.
+
+import { NEWEST_SORT_VALUE } from "./sort_dropdown_builder_helpers.js";
 
 /**
  * Format a column name and direction into a sort selection string.
@@ -31,5 +34,9 @@ export function resolveSortSelection(params, state) {
         return formatSortSelection(state.sort.column, state.sort.direction);
     }
 
-    return "";
+    if (String(params.search || "").trim()) return "";
+    const remembered = state.lastNonSearchSort;
+    return remembered?.column && remembered?.direction
+        ? formatSortSelection(remembered.column, remembered.direction)
+        : NEWEST_SORT_VALUE;
 }

@@ -523,9 +523,9 @@ async function openCalendarEventArticle(event, state, button) {
     }
 
     const returnView = localStorage.getItem(`${state.tableName}_view`) || "calendar";
-    localStorage.setItem(`${state.tableName}_view`, "card");
+    localStorage.setItem(`${state.tableName}_view`, "article_view");
     setUnifiedTableState(state.tableName, {
-        cardView: {
+        articleView: {
             collapsed: true,
             expandedId: rowId,
             returnView,

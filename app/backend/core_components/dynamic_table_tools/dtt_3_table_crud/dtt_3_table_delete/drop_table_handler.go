@@ -124,6 +124,8 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": fmt.Sprintf("Taulu %s poistettu", sanitizedTableName)})
 }
 
+// A registered view is a live dataset, even though it is not an ordinary table.
+// Catalog existence, not the current actor's SELECT grants, controls metadata removal.
 func DeleteRemovedTables(q dbutils.Querier) error {
 	deleteQuery := `
 WITH removed_tables AS (
@@ -137,13 +139,11 @@ WITH removed_tables AS (
                 FROM pg_class c
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE
-                        n.nspname = sdt.schema_name
+                        n.nspname = COALESCE(NULLIF(sdt.schema_name, ''), 'public')
                         AND c.relname = sdt.table_name
-                        AND c.relkind = 'r'
+                        AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
                         AND n.nspname NOT LIKE 'pg_%'
                         AND n.nspname <> 'information_schema'
-                        AND has_schema_privilege(n.nspname, 'USAGE')
-                        AND has_table_privilege(c.oid, 'SELECT')
                         AND n.nspname NOT IN ('restricted', 'postgis')
         )
 ), removed_rights AS (

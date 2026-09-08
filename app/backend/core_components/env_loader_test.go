@@ -193,6 +193,7 @@ func TestLoadAndSetEnvironmentVariablesReadsExternalKeyRootWithoutCompatibilityF
 	if err := os.WriteFile(filepath.Join(projectRoot, "VERSION_EASELECT"), []byte("test\n"), 0o644); err != nil {
 		t.Fatalf("write source marker: %v", err)
 	}
+	writeSourceRootsFixture(t, projectRoot)
 	if err := os.WriteFile(
 		filepath.Join(developmentRoot, "runtime_environment.env"),
 		[]byte("ENVIRONMENT_TYPE=prod\n"),
@@ -261,6 +262,34 @@ func TestResolveProjectPrivatePathsKeepsGeneratedRuntimeLocal(t *testing.T) {
 	}
 	if tlsCertFile != "" || tlsKeyFile != "" {
 		t.Fatalf("generated TLS defaults = %q, %q; want main.go root-local fallbacks", tlsCertFile, tlsKeyFile)
+	}
+}
+
+func TestResolveProjectPrivatePathsDefaultsToInternalEaselectKeys(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.Mkdir(filepath.Join(projectRoot, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectRoot, "VERSION_EASELECT"), []byte("test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeSourceRootsFixture(t, projectRoot)
+	t.Setenv("EASELECT_KEY_ROOT", "")
+	t.Setenv("FILTEREST_KEYS_HOME", "")
+	files, certificate, privateKey, err := resolveProjectPrivatePaths(projectRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	developmentRoot := filepath.Join(projectRoot, "keys", "easelect_development")
+	if len(files) != 2 ||
+		files[0] != filepath.Join(developmentRoot, "development_environment.env") ||
+		files[1] != filepath.Join(developmentRoot, "runtime_environment.env") ||
+		certificate != filepath.Join(developmentRoot, "local_tls_certificate", "localhost_certificate.crt") ||
+		privateKey != filepath.Join(developmentRoot, "local_tls_certificate", "localhost_private_key.key") {
+		t.Fatalf("unexpected internal private paths: %v, %s, %s", files, certificate, privateKey)
+	}
+	if _, err := os.Stat(developmentRoot); !os.IsNotExist(err) {
+		t.Fatal("path resolution unexpectedly created key data")
 	}
 }
 

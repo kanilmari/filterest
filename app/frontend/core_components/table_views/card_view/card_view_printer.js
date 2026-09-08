@@ -1152,10 +1152,11 @@ async function createSingleCard(
 
 /* ----------------------------------------------------------- */
 
-export async function create_card_view(columns, data, table_name) {
+export async function create_card_view(columns, data, table_name, { viewKey = "card", stateKey = "cardView" } = {}) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("card_view_wrapper");
     wrapper.dataset.tableName = table_name;
+    wrapper.dataset.viewKey = viewKey;
     const useExperimentalStyle = isExperimentalFreeLayoutStyleActive(table_name);
 
     const card_sidebar_panel = document.createElement("div");
@@ -1188,7 +1189,7 @@ export async function create_card_view(columns, data, table_name) {
     let data_types =
         JSON.parse(localStorage.getItem(`${table_name}_dataTypes`)) || {};
 
-    const collapsed = getUnifiedTableState(table_name)?.cardView?.collapsed;
+    const collapsed = getUnifiedTableState(table_name)?.[stateKey]?.collapsed;
     const renderContext = await resolveCardRenderContext(
         table_name,
         columns,

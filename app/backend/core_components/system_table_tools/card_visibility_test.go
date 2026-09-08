@@ -1,7 +1,13 @@
+// card_visibility_test.go
+// Verifies authorized column settings and optional layout updates.
+// Connects JSON presence, enum validation and parameterized metadata writes.
+// Protects inheritance and existing field-delivery boundaries.
 package system_table_tools
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -295,5 +301,91 @@ func TestFieldViewOrderQueryStaysDatasetScopedWithoutReorderingSavedCollections(
 	}
 	if strings.Contains(updateFieldViewColumnOrderQuery, "system_column_field_set_members") {
 		t.Fatal("global metadata order must not overwrite a user's saved field collection order")
+	}
+}
+
+func TestColumnLayoutJSONPreservesOmissionAndExplicitNull(t *testing.T) {
+	tests := []struct {
+		name, body string
+		supplied   bool
+		value      *string
+	}{
+		{"old client", "{" + "\"column_uid\":9,\"client_delivery_mode\":\"include\"" + "}", false, nil},
+		{"restore inherited", "{" + "\"column_uid\":9,\"client_delivery_mode\":\"include\",\"label_value_layout\":null" + "}", true, nil},
+		{"explicit", "{" + "\"column_uid\":9,\"client_delivery_mode\":\"include\",\"label_value_layout\":\"inline\"" + "}", true, layoutString("inline")},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			var column CardVisibilityColumn
+			if err := json.Unmarshal([]byte(testCase.body), &column); err != nil {
+				t.Fatal(err)
+			}
+			if column.labelValueLayoutProvided != testCase.supplied || !reflect.DeepEqual(column.LabelValueLayout, testCase.value) {
+				t.Fatalf("unexpected layout presence/value: %+v", column)
+			}
+			normalized, err := normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "url"}}, []CardVisibilityColumn{column})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if normalized[0].labelValueLayoutProvided != testCase.supplied {
+				t.Fatal("normalization lost presence")
+			}
+			query := buildCardVisibilityUpdateQuery(true, true, testCase.supplied)
+			if strings.Contains(query, "label_value_layout =") != testCase.supplied {
+				t.Fatal("omitted field would be written")
+			}
+			args := buildCardVisibilityUpdateArgs(column, true, true, testCase.supplied)
+			if testCase.supplied {
+				value, err := driver.DefaultParameterConverter.ConvertValue(args[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if testCase.value == nil && value != nil {
+					t.Fatalf("explicit null parameter = %#v", value)
+				}
+				if testCase.value != nil && value != *testCase.value {
+					t.Fatalf("layout parameter = %#v", value)
+				}
+			}
+		})
+	}
+}
+
+func layoutString(value string) *string { return &value }
+
+func TestColumnLayoutRejectsUnknownValuesBeforeMutation(t *testing.T) {
+	for _, value := range []string{"", "INLINE", "unknown", "inline;DROP TABLE x"} {
+		_, err := normalizeFieldViewColumns(
+			[]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "url"}},
+			[]CardVisibilityColumn{{ColumnUID: 9, ClientDeliveryMode: "include", LabelValueLayout: &value}},
+		)
+		if err == nil {
+			t.Fatalf("accepted invalid enum %q", value)
+		}
+	}
+	for _, value := range []string{"auto", "inline", "stacked"} {
+		if err := validateLabelValueLayout(&value); err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+	}
+	for _, raw := range []string{"4", "true", "{}", "[]"} {
+		var column CardVisibilityColumn
+		body := "{\"label_value_layout\":" + raw + "}"
+		if err := json.Unmarshal([]byte(body), &column); err == nil {
+			t.Fatalf("accepted non-string %s", raw)
+		}
+	}
+}
+
+func TestColumnLayoutDoesNotBypassDatasetOwnershipOrClientDelivery(t *testing.T) {
+	_, err := normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "id"}},
+		[]CardVisibilityColumn{{ColumnUID: 99, ClientDeliveryMode: "include", LabelValueLayout: layoutString("inline")}})
+	if err == nil {
+		t.Fatal("foreign column was accepted")
+	}
+	_, err = normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "id"}},
+		[]CardVisibilityColumn{{ColumnUID: 9, ClientDeliveryMode: "server_only", LabelValueLayout: layoutString("stacked")}})
+	if err == nil {
+		t.Fatal("layout bypassed protected id delivery")
 	}
 }

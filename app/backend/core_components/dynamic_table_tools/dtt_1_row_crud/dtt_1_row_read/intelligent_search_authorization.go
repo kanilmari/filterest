@@ -5,7 +5,9 @@
 package dtt_1_row_read
 
 import (
+	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -14,11 +16,14 @@ import (
 )
 
 type intelligentSearchAuthorization struct {
-	userRole     string
-	userID       int
-	readPolicy   ReadRowPolicy
-	tableUID     int64
-	rowGroupSlug string
+	userRole      string
+	userID        int
+	readPolicy    ReadRowPolicy
+	tableUID      int64
+	rowGroupSlug  string
+	userFilters   url.Values
+	filterColumns map[string]dtt_models.ColumnInfo
+	filterTypes   map[string]interface{}
 }
 
 func resolveIntelligentSearchAuthorization(
@@ -106,6 +111,18 @@ func appendIntelligentSearchAuthorizationCondition(
 			slugPlaceholder,
 		))
 		queryArgs = append(queryArgs, authorization.tableUID, authorization.rowGroupSlug)
+	}
+
+	if len(authorization.userFilters) > 0 {
+		clause, filterArgs, err := buildWhereClause(authorization.userFilters, tableReference, authorization.filterColumns, nil, authorization.filterTypes, len(queryArgs))
+		if err != nil {
+			return "", nil, err
+		}
+		clause = strings.TrimSpace(strings.TrimPrefix(clause, " WHERE "))
+		if clause != "" {
+			conditions = append(conditions, "("+clause+")")
+			queryArgs = append(queryArgs, filterArgs...)
+		}
 	}
 
 	return strings.Join(conditions, " AND "), queryArgs, nil

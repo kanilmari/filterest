@@ -7,6 +7,8 @@ package row_mutation_policy
 import "strings"
 
 var dedicatedMutationAPITables = map[string]struct{}{
+	"system_media_assets":               {},
+	"system_media_asset_usages":         {},
 	"dev_agent_worklines":               {},
 	"dev_agent_workline_reports":        {},
 	"dev_agent_workline_tasks":          {},

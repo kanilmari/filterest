@@ -113,7 +113,7 @@ func UpdateOidsAndTableNames(
                        WHERE
                                 n.nspname NOT LIKE 'pg_%'
                                 AND n.nspname <> 'information_schema'
-                                AND c.relkind = 'r'
+                                AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
                                 AND has_schema_privilege(n.nspname, 'USAGE')
                                 AND has_table_privilege(c.oid, 'SELECT')
                                 AND n.nspname NOT IN ('restricted', 'postgis')
@@ -145,7 +145,7 @@ func UpdateOidsAndTableNames(
                         WHERE
                                 n.nspname NOT LIKE 'pg_%'
                                 AND n.nspname <> 'information_schema'
-                                AND c.relkind = 'r'
+                                AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
                                 AND has_schema_privilege(n.nspname, 'USAGE')
                                 AND has_table_privilege(c.oid, 'SELECT')
                                 AND n.nspname NOT IN ('restricted', 'postgis')
@@ -179,7 +179,7 @@ func UpdateOidsAndTableNames(
                         WHERE
                                 n.nspname NOT LIKE 'pg_%'
                                 AND n.nspname <> 'information_schema'
-                                AND c.relkind = 'r'
+                                AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
                                 AND has_schema_privilege(n.nspname, 'USAGE')
                                 AND has_table_privilege(c.oid, 'SELECT')
                                 AND n.nspname NOT IN ('restricted', 'postgis')

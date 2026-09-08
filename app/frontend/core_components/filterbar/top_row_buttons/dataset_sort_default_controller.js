@@ -9,6 +9,7 @@ import {
     savePersonalDatasetSortDefault,
 } from "../../endpoints/stable_endpoint_router.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { hasRoutePermission } from "../../route_permission_checker.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
@@ -91,6 +92,11 @@ export async function applyDatasetSortDefault(tableName, dropdown, availableValu
     try {
         const response = await fetchDatasetSortDefault(tableName);
         if (!response?.configured) return;
+        // A late settings response must not overwrite a choice made while it loaded.
+        if (getUnifiedTableState(tableName).sortSelectionExplicit) return;
+        const latestParams = getParams(tableName);
+        if (latestParams.sort_column && latestParams.sort_order) return;
+        if (!response.value && !String(latestParams.search || "").trim()) return;
         const responseValue = normalizeStoredDatasetSortValue(response.value);
         if (!availableValues.has(responseValue)) return;
         dropdown.setValue(responseValue, true);

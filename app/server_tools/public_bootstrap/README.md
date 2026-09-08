@@ -8,8 +8,10 @@ It contains a curated schema skeleton plus small synthetic seed rows so a
 local Filterest checkout can bootstrap its own database instead of borrowing a
 running non-public release-source backend or non-public bootstrap archive. The
 seed rows are placeholders for setup and smoke testing, not production data. The
-generated seed is derived from testing fixtures and normalized for public
-Filterest branding and runtime boundaries.
+generated seed is assembled only from the reviewed SQL and fixture files in
+this directory. No external test fixture, private source, or live database is
+an input. The base schema and seed were retained from the already reviewed
+public package when their source ownership moved here.
 
 The generated seed also records a migration-ledger baseline for every public
 migration file whose effects are already present in that bootstrap. A fresh
@@ -63,3 +65,30 @@ installation flow and does not define production authentication behavior.
 
 Before a public GitHub release, review the schema boundary and seed contents
 against the publication checklist.
+
+## Rebuild from the public checkout
+
+From a standalone Filterest root, run:
+
+    python3 app/server_tools/public_bootstrap/generate_bootstrap.py
+    python3 app/server_tools/public_slice_export/audit_public_bootstrap.py --target .
+
+The command reads app/VERSION_APP and app/VERSION_DB by default. For release
+assembly, --target, --app-version and --db-version select a staging root and
+explicit planned versions. It writes schema.sql, seed_data.sql and manifest.json;
+it does not initialize or modify a database. Every recorded source-file hash
+resolves to a file shipped in the same public checkout. The historical
+filterest/ prefix in manifest evidence keys identifies canonical source
+ownership; remove that prefix when locating a file in a standalone checkout.
+
+Maintain base.schema.sql and base.seed.sql alongside the smaller companion SQL
+sources. A new migration may be recorded in the bootstrap baseline only after
+its resulting schema or seed behavior is included in these reviewed inputs.
+
+Third-party notices can also be rebuilt entirely from this public checkout
+after installing its dependencies and building its browser assets:
+
+    python3 app/server_tools/public_slice_export/generate_third_party_notices.py --target .
+
+That tool inventories the public module, package and asset sources. No private
+release script or sibling checkout is required.

@@ -38,7 +38,7 @@ function applyParsedUrlState(datasetName, parsed) {
 
 function clearClosedArticleState(datasetName) {
     setUnifiedTableState(datasetName, {
-        cardView: {
+        articleView: {
             collapsed: false,
             expandedId: null,
             pendingAutoOpenFirstRenderedResult: false,
@@ -68,8 +68,8 @@ async function restoreDatasetBasePathState(datasetName) {
 }
 
 function getArticleReturnView(datasetName) {
-    const returnView = getUnifiedTableState(datasetName)?.cardView?.returnView;
-    return typeof returnView === 'string' && returnView && returnView !== 'card'
+    const returnView = getUnifiedTableState(datasetName)?.articleView?.returnView;
+    return typeof returnView === 'string' && returnView && returnView !== ARTICLE_VIEW_KEY
         ? returnView
         : null;
 }
@@ -82,7 +82,7 @@ async function restoreArticleReturnView(datasetName) {
 
     localStorage.setItem(`${datasetName}_view`, returnView);
     setUnifiedTableState(datasetName, {
-        cardView: {
+        articleView: {
             collapsed: false,
             expandedId: null,
             returnView: null,
@@ -154,8 +154,9 @@ window.addEventListener('popstate', async () => {
 
     // Pre-set cardView state to auto-open big card after data loads
     if (deepLinkedRowId) {
+        localStorage.setItem(`${name}_view`, ARTICLE_VIEW_KEY);
         setUnifiedTableState(name, {
-            cardView: { collapsed: true, expandedId: deepLinkedRowId }
+            articleView: { collapsed: true, expandedId: deepLinkedRowId }
         });
     } else {
         clearClosedArticleState(name);

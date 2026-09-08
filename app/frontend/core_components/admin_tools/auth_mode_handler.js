@@ -15,6 +15,11 @@ export async function setAuthModes() {
         if (data && typeof data.needs_button === "string") {
             localStorage.setItem("button_state", data.needs_button);
 
+            // These flags describe site policy, not whether this browser is signed in.
+            // Missing fields from an older server reset stale values to compatible defaults.
+            localStorage.setItem('show_login_button', String(data.show_login_button !== false));
+            localStorage.setItem('only_admin_can_login', String(data.only_admin_can_login === true));
+
             // Store registration_enabled flag for tab visibility
             if (typeof data.registration_enabled === 'boolean') {
                 localStorage.setItem('registration_enabled', String(data.registration_enabled));

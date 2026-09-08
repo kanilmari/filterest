@@ -30,6 +30,35 @@ func stripTablePrefix(param, tableName string) string {
 	return param
 }
 
+// resolveFilterColumn gives real metadata names priority over optional filter suffixes.
+// The WHERE builder and text-search validator share this interpretation so a
+// selectable valid_from/ship_to/status_exclude field cannot be dropped or retargeted.
+func resolveFilterColumn(name string, knownColumn func(string) bool) (column string, exclude bool, rangeOperator string) {
+	if knownColumn(name) {
+		return name, false, ""
+	}
+	logicalName := name
+	exclude = strings.HasSuffix(logicalName, "_exclude")
+	if exclude {
+		logicalName = strings.TrimSuffix(logicalName, "_exclude")
+		if knownColumn(logicalName) {
+			return logicalName, true, ""
+		}
+	}
+	base := ""
+	if strings.HasSuffix(logicalName, "_from") {
+		base = strings.TrimSuffix(logicalName, "_from")
+		rangeOperator = ">="
+	} else if strings.HasSuffix(logicalName, "_to") {
+		base = strings.TrimSuffix(logicalName, "_to")
+		rangeOperator = "<="
+	}
+	if base != "" && knownColumn(base) {
+		return base, exclude, rangeOperator
+	}
+	return "", false, ""
+}
+
 func sanitizeLanguageParam(lang string) string {
 	for _, r := range lang {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
@@ -48,11 +77,16 @@ func buildWhereClause(
 	columnsByName map[string]dtt_models.ColumnInfo,
 	columnExpressions map[string]string,
 	columnDataTypes map[string]interface{},
+	argumentOffsets ...int,
 ) (string, []interface{}, error) {
 
 	var whereClauses []string
 	var args []interface{}
 	argIdx := 1
+	// Search queries already bind rank/authorization parameters before optional filters.
+	if len(argumentOffsets) > 0 {
+		argIdx += argumentOffsets[0]
+	}
 	lang := sanitizeLanguageParam(queryParams.Get("lang"))
 
 	for param, values := range queryParams {
@@ -66,24 +100,17 @@ func buildWhereClause(
 
 		rawValue := values[0]
 		plainParamName := stripTablePrefix(param, tableName)
-		isExcludeFilter := strings.HasSuffix(plainParamName, "_exclude")
-		logicalParamName := plainParamName
-		if isExcludeFilter {
-			logicalParamName = strings.TrimSuffix(plainParamName, "_exclude")
-		}
+		logicalParamName, isExcludeFilter, rangeOperator := resolveFilterColumn(plainParamName, func(name string) bool {
+			_, columnKnown := columnsByName[name]
+			_, expressionKnown := columnExpressions[name]
+			_, metadataKnown := columnDataTypes[name]
+			return columnKnown || expressionKnown || metadataKnown
+		})
 
-		// -------- 1) *_from / *_to  (>= / <=) ----------------------------
-		if strings.HasSuffix(logicalParamName, "_from") || strings.HasSuffix(logicalParamName, "_to") {
-			var op string
-			var colBase string
-
-			if strings.HasSuffix(logicalParamName, "_from") {
-				op = ">="
-				colBase = strings.TrimSuffix(logicalParamName, "_from")
-			} else {
-				op = "<="
-				colBase = strings.TrimSuffix(logicalParamName, "_to")
-			}
+		// -------- 1) *_from / *_to  (>= / <=) ----------------------------
+		if rangeOperator != "" {
+			op := rangeOperator
+			colBase := logicalParamName
 
 			// varmista että sarake on sallittu
 			if _, ok := columnsByName[colBase]; !ok {

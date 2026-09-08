@@ -47,6 +47,19 @@ describe('session access prompt', () => {
         });
     });
 
+    test.each([['fi', 'Sisältö ei ole käytettävissä'], ['en', 'Content unavailable']])('does not offer login on a public site in %s', async (language, title) => {
+        localStorage.setItem('chosen_language', language);
+        localStorage.setItem('show_login_button', 'false');
+        localStorage.setItem('only_admin_can_login', 'true');
+        localStorage.setItem('registration_enabled', 'true');
+        const mod = await import('./session_access_prompt.js');
+        mod.requestSessionAccessPrompt();
+        expect(document.querySelector('[data-testid="session-access-home"]')).not.toBeNull();
+        expect(document.querySelector('[data-testid="session-access-login"]')).toBeNull();
+        expect(document.querySelector('[data-testid="session-access-register"]')).toBeNull();
+        expect(document.body.textContent).toContain(title);
+    });
+
     test('can be shown again after the shared close button dismisses it', async () => {
         const mod = await import('./session_access_prompt.js');
         mod.requestSessionAccessPrompt();

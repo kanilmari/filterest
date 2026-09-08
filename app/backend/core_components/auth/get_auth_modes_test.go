@@ -86,6 +86,10 @@ func savedAuthModesSessionFromResponse(t *testing.T, store *gorillaSessions.Cook
 }
 
 type authModesMockConfig struct {
+	hideLogin          bool
+	adminOnly          bool
+	adminAllowed       bool
+	policyError        bool
 	loginToBrowse      bool
 	registrationEnable bool
 	userExists         bool
@@ -156,8 +160,18 @@ func (c *authModesMockConn) Query(query string, args []driver.Value) (driver.Row
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *authModesMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *authModesMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "FROM system_config") && len(args) == 1:
+		if c.cfg.policyError {
+			return nil, fmt.Errorf("policy unavailable")
+		}
+		if args[0].Value == "show_login_button" {
+			return authModesBoolRow("boolean_value", !c.cfg.hideLogin), nil
+		}
+		return authModesBoolRow("boolean_value", c.cfg.adminOnly), nil
+	case strings.Contains(query, "admin_access_allowed IS TRUE"):
+		return &authModesMockRows{cols: []string{"enabled", "admin_access_allowed"}, vals: []driver.Value{c.cfg.userExists, c.cfg.adminAllowed}}, nil
 	case strings.Contains(query, "login_to_browse"):
 		return authModesBoolRow("boolean_value", c.cfg.loginToBrowse), nil
 	case strings.Contains(query, "registration_enabled"):
@@ -387,5 +401,55 @@ func TestGetAuthModesHandler_GuestBrowsingAllowedCreatesGuestSession(t *testing.
 	}
 	if role := sess.Values["user_role"]; role != "guest" {
 		t.Fatalf("expected guest session user_role=guest, got %#v", role)
+	}
+}
+
+func TestAuthModesKeepsLoginStateIndependentOfButtonVisibility(t *testing.T) {
+	for _, onlyAdmin := range []bool{false, true} {
+		t.Run(fmt.Sprint(onlyAdmin), func(t *testing.T) {
+			store := setupAuthModesTestStore(t)
+			setupAuthModesMockDB(t, authModesMockConfig{hideLogin: true, adminOnly: onlyAdmin, registrationEnable: true})
+			req := buildAuthModesReq(t, store, "/api/auth-modes", nil)
+			rr := httptest.NewRecorder()
+			GetAuthModesHandler(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status=%d", rr.Code)
+			}
+			var body AuthModesResponse
+			if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.NeedsButton != "login" || body.ShowLoginButton || body.OnlyAdminCanLogin != onlyAdmin || body.LoginRequiredForBrowse {
+				t.Fatalf("visibility altered state or guest access: %+v", body)
+			}
+			if body.RegistrationEnabled == onlyAdmin {
+				t.Fatalf("effective registration policy incorrect: %+v", body)
+			}
+			session := savedAuthModesSessionFromResponse(t, store, "/api/auth-modes", rr)
+			if session.Values["user_id"] != 1 {
+				t.Fatalf("guest principal lost: %#v", session.Values["user_id"])
+			}
+		})
+	}
+}
+
+func TestAdminOnlyModeBlocksBothDirectRegistrationRoutes(t *testing.T) {
+	setupAuthModesMockDB(t, authModesMockConfig{adminOnly: true, registrationEnable: true})
+	for _, handler := range []http.HandlerFunc{RegisterHandler, RegisterAPIHandler} {
+		req := httptest.NewRequest(http.MethodPost, "/api/register_ndYOyXV0INOK3F", nil)
+		rr := httptest.NewRecorder()
+		handler(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("direct registration bypassed admin-only policy: %d", rr.Code)
+		}
+	}
+}
+
+func TestAuthModesPolicyReadFailureDoesNotPublishPermissiveDefaults(t *testing.T) {
+	setupAuthModesMockDB(t, authModesMockConfig{policyError: true})
+	rr := httptest.NewRecorder()
+	GetAuthModesHandler(rr, httptest.NewRequest(http.MethodGet, "/api/auth-modes", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("policy failure returned %d", rr.Code)
 	}
 }

@@ -9,7 +9,12 @@ import { datasetSupportsTreeView } from "./dataset_tree_availability_checker.js"
 export const DATASET_VIEW_SELECTOR_GROUP_DIRECT = "direct";
 export const DATASET_VIEW_SELECTOR_GROUP_MORE = "more";
 export const CARD_VIEW_KEY = "card";
-export const ARTICLE_VIEW_KEY = "article";
+export const ARTICLE_VIEW_KEY = "article_view";
+
+/** Resolves legacy article names without reusing the card presentation dimension. */
+export function normalizeDatasetViewKey(viewKey) {
+    return ["article", "big_card", "row_article"].includes(viewKey) ? ARTICLE_VIEW_KEY : viewKey;
+}
 
 export const DATASET_VIEW_SELECTOR_TEXT = Object.freeze({
     heading: Object.freeze({
@@ -53,7 +58,9 @@ const DATASET_VIEW_DEFINITION_LIST = [
     },
     {
         viewKey: ARTICLE_VIEW_KEY,
-        targetViewKey: CARD_VIEW_KEY,
+        rendererKey: ARTICLE_VIEW_KEY,
+        containerSuffix: "article_view_container",
+        permissionRoute: "/ui/view/article_view",
         langKey: "view_article",
         labelFallback: "Artikkeli",
         translations: {
@@ -278,17 +285,17 @@ export const DATASET_VIEW_PERMISSION_ROUTES = Object.freeze(
  * Exists so callers do not duplicate object lookups or fallback behavior.
  */
 export function getDatasetViewDefinition(viewKey) {
-    return DATASET_VIEW_REGISTRY[viewKey] || null;
+    return DATASET_VIEW_REGISTRY[normalizeDatasetViewKey(viewKey)] || null;
 }
 
 /**
  * Returns the concrete renderer view key for a selector option.
  * Operates between alias-like UI entries and renderable view definitions.
- * Exists to preserve the article button as a UI alias for card view.
+ * Exists to preserve old article/big_card bookmarks without sharing card state.
  */
 export function resolveDatasetViewSelectionTarget(viewKey) {
     const definition = getDatasetViewDefinition(viewKey);
-    return definition?.targetViewKey || viewKey;
+    return definition?.targetViewKey || definition?.viewKey || viewKey;
 }
 
 /**

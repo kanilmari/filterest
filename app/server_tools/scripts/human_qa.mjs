@@ -59,7 +59,7 @@ Options:
 
 Examples:
   ${humanQaDisplayCommand} open 837 --url /service_catalog --new "Firefox card media was fixed" --easier "The exact service catalog route opens ready for acceptance" --how "Inspect the Firefox card in card view" --check "Firefox card shows one logo"
-  ${humanQaDisplayCommand} prep 834 --file ../filterest/app/docs/publication/PUBLICATION_CHECKLIST.md --new "Filterest release checklist is ready" --easier "The exact checklist file opens in the browser" --how "Review every unchecked row" --check "License row is approved"`;
+  ${humanQaDisplayCommand} prep 834 --file "${path.join(repoRoot, "docs/publication/PUBLICATION_CHECKLIST.md")}" --new "Filterest release checklist is ready" --easier "The exact checklist file opens in the browser" --how "Review every unchecked row" --check "License row is approved"`;
 }
 
 function parseArgs(argv) {

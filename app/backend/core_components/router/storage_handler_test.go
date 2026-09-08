@@ -529,3 +529,40 @@ func TestOpenContainedStorageFileRejectsIntermediateSymlink(t *testing.T) {
 		t.Fatal("openContainedStorageFile returned nil error for intermediate symlink")
 	}
 }
+
+// Every media variant uses the same current authorization and protected cache
+// headers; a retained physical file alone never bypasses revoked permissions.
+func TestReusedMediaOriginalAndVariantsShareAuthorization(t *testing.T) {
+	setupStorageHandlerTest(t)
+	storageCheckLoginToBrowse = func() (bool, error) { return false, nil }
+	saved := storageAuthorizeMediaRead
+	t.Cleanup(func() { storageAuthorizeMediaRead = saved })
+	allow := true
+	storageAuthorizeMediaRead = func(q dbutils.Querier, actor dbutils.RequestActorContext, id, file string) bool {
+		if id != "174668a1-2efa-45a6-aa6c-d8a4ee8ec069" || file != "image.png" {
+			t.Fatal("wrong identity")
+		}
+		return allow
+	}
+	for _, variant := range []string{"original", "300", "1000", "2160"} {
+		rel := "media/174668a1-2efa-45a6-aa6c-d8a4ee8ec069/" + variant + "/image.png"
+		target := filepath.Join(localStorageDir, rel)
+		os.MkdirAll(filepath.Dir(target), 0750)
+		os.WriteFile(target, []byte("image"), 0600)
+		for _, authorized := range []bool{true, false} {
+			allow = authorized
+			r := httptest.NewRequest("GET", "/storage/"+rel, nil)
+			w := httptest.NewRecorder()
+			ServeStorage(w, r)
+			if authorized && w.Code != 200 {
+				t.Fatalf("variant %s status %d", variant, w.Code)
+			}
+			if !authorized && w.Code != 404 {
+				t.Fatalf("revoked variant %s status %d", variant, w.Code)
+			}
+			if w.Header().Get("Cache-Control") != "private, no-store" {
+				t.Fatal("shared cache permitted")
+			}
+		}
+	}
+}

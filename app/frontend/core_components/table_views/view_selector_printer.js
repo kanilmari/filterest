@@ -121,14 +121,18 @@ function prepareArticleViewTarget(tableName, selectedViewKey, previousViewKey) {
                 const { getCachedSearchResultForRender } = await import(
                     "../filterbar/text_search/dataset_search_executor.js"
                 );
-                firstSearchRowId = getFirstRenderableSearchRowId(
-                    getCachedSearchResultForRender(tableName)
-                );
+                const searchResult = getCachedSearchResultForRender(tableName, { query: committedSearchTerm });
+                if (searchResult?.complete === true && searchResult?.isCurrent?.() !== false) {
+                    firstSearchRowId = getFirstRenderableSearchRowId(searchResult);
+                }
             } catch (error) {
                 console.warn("view selector search target sync failed:", error);
             }
         }
 
+        // A later click or query edit owns the UI now; stale preparation is inert.
+        if (localStorage.getItem(`${tableName}_view`) !== ARTICLE_VIEW_KEY
+            || String(getParams(tableName)?.search || "").trim() !== committedSearchTerm) return;
         const currentState = getUnifiedTableState(tableName);
         if (previousViewKey) {
             rememberDatasetViewUrlState(tableName, previousViewKey, {
@@ -138,8 +142,9 @@ function prepareArticleViewTarget(tableName, selectedViewKey, previousViewKey) {
         }
         rememberDatasetViewUrlState(tableName, ARTICLE_VIEW_KEY, { pushUrl: false });
         setUnifiedTableState(tableName, {
-            cardView: {
-                ...(currentState.cardView || {}),
+            articleView: {
+                ...(currentState.articleView || {}),
+                returnView: previousViewKey === ARTICLE_VIEW_KEY ? currentState.articleView?.returnView || "card" : previousViewKey,
                 collapsed: true,
                 expandedId: firstSearchRowId,
                 pendingAutoOpenFirstSearchResult: Boolean(committedSearchTerm) && firstSearchRowId == null,
@@ -152,8 +157,8 @@ function prepareArticleViewTarget(tableName, selectedViewKey, previousViewKey) {
 function clearRowArticleState(tableName) {
     const currentState = getUnifiedTableState(tableName);
     setUnifiedTableState(tableName, {
-        cardView: {
-            ...(currentState.cardView || {}),
+        articleView: {
+            ...(currentState.articleView || {}),
             collapsed: false,
             expandedId: null,
             pendingAutoOpenFirstSearchResult: false,
@@ -173,7 +178,7 @@ function clearRowArticleState(tableName) {
  */
 export function closeRowArticleBeforeViewSwitch(tableName) {
     const wrapper = document.querySelector(
-        `#${tableName}_card_view_container .card_view_wrapper.big-card-open`
+        `#${tableName}_article_view_container .card_view_wrapper.big-card-open`
     );
     const rowArticle = wrapper?.querySelector(".active_row_article, .active_big_card");
     const cardContainer = wrapper?.querySelector(".card_container");
@@ -198,6 +203,7 @@ export function closeRowArticleBeforeViewSwitch(tableName) {
  * onko kyse "normal"/"ticket"/"transposed" vai "table"/"card"/"tree".
  */
 function createGenericViewButton(label, viewKey, tableName, currentView, langKey = "") {
+    viewKey = resolveDatasetViewSelectionTarget(viewKey);
     const btn = document.createElement("button");
     btn.textContent = label || getDatasetViewLabelFallback(viewKey);
     btn.dataset.testid = `view-btn-${viewKey}`;
@@ -243,7 +249,7 @@ function createGenericViewButton(label, viewKey, tableName, currentView, langKey
         const articlePreparation = prepareArticleViewTarget(tableName, viewKey, previousViewKey);
         if (articlePreparation) {
             void articlePreparation.finally(() => {
-                refreshTableUnified(tableName);
+                if (localStorage.getItem(`${tableName}_view`) === ARTICLE_VIEW_KEY) refreshTableUnified(tableName);
             });
             return;
         }
@@ -256,7 +262,7 @@ function createGenericViewButton(label, viewKey, tableName, currentView, langKey
 
 function isRowArticleOpenForTable(tableName) {
     return Boolean(document.querySelector(
-        `#${tableName}_card_view_container .card_view_wrapper.big-card-open`
+        `#${tableName}_article_view_container .card_view_wrapper.big-card-open`
     ));
 }
 

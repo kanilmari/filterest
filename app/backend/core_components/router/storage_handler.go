@@ -5,6 +5,7 @@
 package router
 
 import (
+	"easelect/backend/core_components/media_library"
 	"fmt"
 	"log"
 	"mime"
@@ -47,7 +48,7 @@ var protectedStorageVariants = map[string]struct{}{
 var storageAuthorizeRead = dtt_1_row_read.AuthorizeStorageRead
 var storageAuthorizeDatasetMediaRead = dtt_1_row_read.AuthorizeDatasetMediaStorageRead
 var storageCheckLoginToBrowse = middlewares.CheckLoginToBrowse
-var storageAuthenticationGenerationMatches = auth_generation.Matches
+var storageAuthenticationGenerationMatches = backend.AuthenticatedSessionMatches
 
 type storageAuthorizationDecision uint8
 
@@ -220,7 +221,26 @@ func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *
 	}
 }
 
+var storageAuthorizeMediaRead = media_library.AuthorizeStorageRead
+
 func authorizeStorageRequest(w http.ResponseWriter, r *http.Request, cleanRel string) storageAuthorizationDecision {
+	// Reused images retain the existing protected response and contained-open path.
+	if strings.HasPrefix(cleanRel, "media/") {
+		id, _, filename, ok := media_library.ParseStoragePath(cleanRel)
+		if !ok {
+			return storageAuthorizationNotFound
+		}
+		actor, decision := storageRequestActor(w, r)
+		if decision != storageAuthorizationAllowed {
+			return decision
+		}
+		roleDB := backend.GetRequestDBForRole(actor.UserRole)
+		if roleDB == nil || !storageAuthorizeMediaRead(roleDB, actor, id, filename) {
+			return storageAuthorizationNotFound
+		}
+		return storageAuthorizationAllowed
+	}
+
 	if isPublicStoragePath(cleanRel) {
 		return storageAuthorizationAllowed
 	}

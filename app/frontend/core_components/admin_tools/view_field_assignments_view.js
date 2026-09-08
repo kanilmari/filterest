@@ -8,6 +8,7 @@ import {
     resetSharedViewFieldSet,
     saveSiteViewFieldSet,
 } from "../endpoints/stable_endpoint_router.js";
+import { resolveDatasetViewSelectionTarget } from "../table_views/dataset_view_registry.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 import { render_tree } from "../../reusable_components/vanilla_tree/vanilla_tree_builder.js";
 import { createMultiselectDropdown } from "../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js";
@@ -45,22 +46,30 @@ import {
     visibleColumnsFromRows,
 } from "./view_field_assignments_state.js";
 
-const VIEW_FIELD_ASSIGNMENTS_SESSION_KEY = "view_field_assignments_admin_session_v1";
+const VIEW_FIELD_ASSIGNMENTS_SESSION_KEY = "view_field_settings_admin_session_v1";
+const LEGACY_SESSION_KEY = "view_field_assignments_admin_session_v1";
 const MAX_REMEMBERED_FIELD_ORDERS = 40;
 
 function readRememberedAdminState() {
     try {
-        const parsed = JSON.parse(sessionStorage.getItem(VIEW_FIELD_ASSIGNMENTS_SESSION_KEY) || "{}");
+        const parsed = JSON.parse(sessionStorage.getItem(VIEW_FIELD_ASSIGNMENTS_SESSION_KEY) || sessionStorage.getItem(LEGACY_SESSION_KEY) || "{}");
         const hasGroupSelection = Object.prototype.hasOwnProperty.call(parsed, "selectedGroupIDs");
+        const fieldOrders = parsed?.fieldOrders && typeof parsed.fieldOrders === "object"
+            ? { ...parsed.fieldOrders } : {};
+        for (const [key, value] of Object.entries(fieldOrders)) {
+            const parts = key.split("|");
+            if (parts.length !== 3) continue;
+            parts[1] = resolveDatasetViewSelectionTarget(parts[1]);
+            const canonicalKey = parts.join("|");
+            if (!Object.hasOwn(fieldOrders, canonicalKey)) fieldOrders[canonicalKey] = value;
+        }
         return {
-            viewKey: String(parsed?.viewKey || ""),
+            viewKey: resolveDatasetViewSelectionTarget(String(parsed?.viewKey || "")),
             hasGroupSelection,
             selectedGroupIDs: hasGroupSelection && Array.isArray(parsed.selectedGroupIDs)
                 ? parsed.selectedGroupIDs.map(String)
                 : [],
-            fieldOrders: parsed?.fieldOrders && typeof parsed.fieldOrders === "object"
-                ? { ...parsed.fieldOrders }
-                : {},
+            fieldOrders,
         };
     } catch {
         return {

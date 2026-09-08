@@ -1,6 +1,6 @@
 // easelect_private_paths.test.mjs
 // Verifies the canonical Node resolver for embedded Easelect and standalone Filterest paths.
-// Bridges temporary checkout markers with the one EASELECT_KEY_ROOT override contract.
+// Bridges temporary checkout markers with local defaults and optional legacy overrides.
 // Exists to prevent tooling from recreating or depending on root compatibility links.
 
 import fs from 'fs';
@@ -21,6 +21,19 @@ function temporaryRoot() {
   return root;
 }
 
+function writeSourceRoots(root) {
+  fs.writeFileSync(path.join(root, 'filterest.source-roots'),
+    'filterest\nfilterest_private\nfilterest_candidates\n', { mode: 0o644 });
+}
+
+function privateMetadataRoot() {
+  const root = temporaryRoot();
+  fs.mkdirSync(path.join(root, '.git'));
+  fs.writeFileSync(path.join(root, 'VERSION_EASELECT'), 'test\n');
+  writeSourceRoots(root);
+  return root;
+}
+
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
@@ -35,6 +48,7 @@ describe('resolveFilterestProjectBoundary', () => {
     const applicationRoot = path.join(installationRoot, 'app');
     fs.mkdirSync(applicationRoot, { recursive: true });
     fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    writeSourceRoots(easelectRoot);
 
     expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(
       installationRoot,
@@ -56,12 +70,45 @@ describe('resolveFilterestProjectBoundary', () => {
 });
 
 describe('resolveEaselectPrivatePaths', () => {
+  test('derives internal private keys after moving the complete root', () => {
+    const root = temporaryRoot();
+    const original = path.join(root, 'original');
+    const moved = path.join(root, 'moved workspace');
+    fs.mkdirSync(path.join(original, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(original, 'VERSION_EASELECT'), 'test\n');
+    writeSourceRoots(original);
+    fs.renameSync(original, moved);
+    const resolved = resolveEaselectPrivatePaths(moved, {});
+    expect(resolved.runtimeEnvFile).toBe(path.join(moved, 'keys/easelect_development/runtime_environment.env'));
+    expect(resolved.tlsPrivateKeyFile).toBe(path.join(moved, 'keys/easelect_development/local_tls_certificate/localhost_private_key.key'));
+    expect(fs.existsSync(path.join(moved, 'keys'))).toBe(false);
+  });
+
+  test('rejects mutable homes inside each private source owner, including links', () => {
+    const root = temporaryRoot();
+    fs.mkdirSync(path.join(root, '.git'));
+    fs.writeFileSync(path.join(root, 'VERSION_EASELECT'), 'test\n');
+    writeSourceRoots(root);
+    for (const owner of ['filterest', 'filterest_private', 'filterest_candidates']) {
+      fs.mkdirSync(path.join(root, owner));
+      fs.symlinkSync(path.join(root, owner), path.join(root, `${owner}-link`), 'dir');
+      for (const candidate of [owner, `${owner}-link`]) {
+        for (const setting of ['PROJECTS', 'KEYS', 'RUNTIME_DATA', 'MAINTAINER_TOOLS', 'OPERATIONS']) {
+          expect(() => resolveFilterestHomes(root, {
+            [`FILTEREST_${setting}_HOME`]: `${candidate}/local-data`,
+          })).toThrow(/outside Easelect source owners/);
+        }
+      }
+    }
+  });
+
   test('resolves a private source checkout outside the repo', () => {
     const root = temporaryRoot();
     const projectRoot = path.join(root, 'easelect');
     const keyRoot = path.join(root, 'protected-keys');
     fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(projectRoot, 'VERSION_EASELECT'), 'test\n');
+    writeSourceRoots(projectRoot);
 
     const resolved = resolveEaselectPrivatePaths(projectRoot, {
       EASELECT_KEY_ROOT: keyRoot,
@@ -111,20 +158,21 @@ describe('resolveEaselectPrivatePaths', () => {
     }
   });
 
-  test('keeps the Easelect sibling and portable Filterest subfolder defaults distinct', () => {
+  test('keeps private local homes and legacy flat public defaults distinct', () => {
     const root = temporaryRoot();
     const privateRoot = path.join(root, 'easelect');
     fs.mkdirSync(path.join(privateRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(privateRoot, 'VERSION_EASELECT'), 'test\n');
+    writeSourceRoots(privateRoot);
 
     const privateHomes = resolveFilterestHomes(privateRoot, {});
-    expect(privateHomes.projectsHome).toBe(path.join(root, 'filterest-projects'));
-    expect(privateHomes.projectsAppsHome).toBe(path.join(root, 'filterest-projects', 'apps'));
-    expect(privateHomes.runtimeDataHome).toBe(path.join(root, 'filterest-runtime-data'));
+    expect(privateHomes.projectsHome).toBe(path.join(privateRoot, 'projects'));
+    expect(privateHomes.projectsAppsHome).toBe(path.join(privateRoot, 'projects', 'apps'));
+    expect(privateHomes.runtimeDataHome).toBe(path.join(privateRoot, 'data', 'runtime-data'));
     expect(privateHomes.maintainerToolsHome).toBe(
-      path.join(root, 'filterest-maintainer-tools'),
+      path.join(privateRoot, 'data', 'maintainer-tools'),
     );
-    expect(privateHomes.operationsHome).toBe(path.join(root, 'filterest-operations'));
+    expect(privateHomes.operationsHome).toBe(path.join(privateRoot, 'data', 'operations'));
 
     const publicRoot = path.join(root, 'filterest');
     fs.mkdirSync(publicRoot);
@@ -326,6 +374,7 @@ describe('resolveEaselectPrivatePaths', () => {
     const projectRoot = path.join(temporaryRoot(), 'easelect');
     fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(projectRoot, 'VERSION_EASELECT'), 'test\n');
+    writeSourceRoots(projectRoot);
 
     expect(() => resolveEaselectPrivatePaths(projectRoot, {
       EASELECT_KEY_ROOT: 'relative/keys',
@@ -333,5 +382,51 @@ describe('resolveEaselectPrivatePaths', () => {
     expect(() => resolveEaselectPrivatePaths(projectRoot, {
       EASELECT_KEY_ROOT: path.join(projectRoot, 'private'),
     })).toThrow(/EASELECT_KEY_ROOT/);
+  });
+});
+
+describe('immutable composition source metadata', () => {
+  test.each(['', '# empty\n', 'private/child\n', '../private\n', '/private\n',
+    'private\nprivate\n', 'private;run\n'])('rejects unsafe list %j', (content) => {
+    const root = privateMetadataRoot();
+    fs.writeFileSync(path.join(root, 'filterest.source-roots'), content);
+    expect(() => resolveFilterestHomes(root, { FILTEREST_SOURCE_ROOTS: 'safe' }))
+      .toThrow(/filterest.source-roots/);
+  });
+
+  test.each(['missing', 'symlink', 'writable', 'directory'])(
+    'cannot disable or redirect metadata: %s', (kind) => {
+      const root = privateMetadataRoot();
+      const metadata = path.join(root, 'filterest.source-roots');
+      fs.unlinkSync(metadata);
+      if (kind === 'symlink') {
+        const target = path.join(root, 'operator-copy');
+        fs.writeFileSync(target, 'safe\n');
+        fs.symlinkSync(target, metadata);
+      } else if (kind === 'writable') {
+        fs.writeFileSync(metadata, 'safe\n');
+        fs.chmodSync(metadata, 0o666);
+      } else if (kind === 'directory') {
+        fs.mkdirSync(metadata);
+      }
+      expect(() => resolveFilterestHomes(root, {})).toThrow(/filterest.source-roots/);
+    },
+  );
+
+  test('uses generic composition names and retains ordinary homes', () => {
+    const root = privateMetadataRoot();
+    fs.writeFileSync(path.join(root, 'filterest.source-roots'),
+      '# Source-owned names\nproduct\ncompanion\nincubator\n');
+    for (const owner of ['product', 'companion', 'incubator']) {
+      expect(() => resolveFilterestHomes(root, { FILTEREST_KEYS_HOME: owner + '/keys' }))
+        .toThrow(/outside Easelect source owners/);
+    }
+    expect(resolveFilterestHomes(root, {}).keysHome).toBe(path.join(root, 'keys'));
+  });
+
+  test('standalone public roots do not read private composition metadata', () => {
+    const root = temporaryRoot();
+    fs.writeFileSync(path.join(root, 'filterest.source-roots'), '../invalid\n');
+    expect(resolveFilterestHomes(root, {}).keysHome).toBe(path.join(root, 'filterest_keys'));
   });
 });

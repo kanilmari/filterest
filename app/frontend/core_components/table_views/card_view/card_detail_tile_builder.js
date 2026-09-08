@@ -3,6 +3,7 @@
 // Bridges table read metadata, per-column icon keys, and the modern card variant DOM.
 // Exists so the opt-in modern card layout can stay separate from legacy detail renderers.
 
+import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
 import {
     appendConfiguredCardDetailIcon,
     normalizeClientCardDetailLabelMode,
@@ -167,6 +168,7 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
             textElement.appendChild(labelElement);
         }
         textElement.appendChild(valueElement);
+        applyLabelValueLayout(textElement, labelElement, valueElement, labelMeta?.label_value_layout);
         tile.appendChild(iconElement);
         tile.appendChild(textElement);
         containerElement.appendChild(tile);

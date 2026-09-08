@@ -64,5 +64,5 @@ export PROJECT_ROOT
 # an embedding product overrides PROJECT_ROOT for its runtime composition.
 _RESOLVE_ENV_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 source "$_RESOLVE_ENV_SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
-easelect_resolve_private_paths "$PROJECT_ROOT"
+easelect_resolve_private_paths "$PROJECT_ROOT" || return 1
 unset _RESOLVE_ENV_SOURCE_ROOT

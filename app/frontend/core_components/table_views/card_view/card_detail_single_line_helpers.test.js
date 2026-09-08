@@ -167,4 +167,25 @@ describe("card_detail_single_line_helpers", () => {
         expect(container.querySelector(".card_detail_row_value")?.classList.contains("kv-empty")).toBe(true);
         expect(container.querySelector(".card_detail_row_value")?.textContent).toBe("—");
     });
+    test.each([null, "auto", "inline", "stacked"])(
+        "uses source-column layout %s and retains values, links and field order", (layout) => {
+            const container = document.createElement("div");
+            const entries = [
+                { column: "display_name", sourceColumn: "website", label: "Website", rawValue: "https://example.test", isLink: true },
+                { column: "note", label: "Note", rawValue: "Unchanged" },
+            ];
+            const before = JSON.stringify(entries);
+            renderSingleLineCardDetails(container, entries, {
+                website: { label_value_layout: layout, card_detail_label_mode: "both" },
+            });
+            const pairs = container.querySelectorAll(".card_detail_row_single_line");
+            expect(pairs[0].dataset.labelValueLayout).toBe(layout || undefined);
+            expect(pairs[1].dataset.labelValueLayout).toBeUndefined();
+            expect(pairs[0].querySelector("a")?.getAttribute("href")).toBe("https://example.test");
+            expect(pairs[0].querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+            expect(pairs[1].textContent).toContain("Unchanged");
+            expect(JSON.stringify(entries)).toBe(before);
+        },
+    );
+
 });

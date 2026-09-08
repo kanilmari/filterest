@@ -27,7 +27,7 @@ export function createViewFieldAssignmentsLayout(
         "h2",
         "view-field-assignments__title",
         text.title,
-        "view_field_assignments"
+        "view_field_settings"
     );
     const description = createTextElement(
         "p",

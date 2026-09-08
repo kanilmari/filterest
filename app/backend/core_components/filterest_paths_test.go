@@ -1,3 +1,7 @@
+// filterest_paths_test.go
+// Verifies layout-aware mutable homes and source isolation.
+// Connects Go startup resolution with the Python, Node, and shell path contract.
+// Keeps Easelect relocatable without changing standalone Filterest defaults.
 package backend
 
 import (
@@ -7,26 +11,38 @@ import (
 	"testing"
 )
 
+func writeSourceRootsFixture(t *testing.T, root string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, "filterest.source-roots"),
+		[]byte("filterest\nfilterest_private\nfilterest_candidates\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveFilterestHomesKeepsPrivateAndPublicDefaultsDistinct(t *testing.T) {
 	projectRoot := t.TempDir()
 
+	writeSourceRootsFixture(t, projectRoot)
 	privateHomes, err := resolveFilterestHomes(projectRoot, true)
 	if err != nil {
 		t.Fatalf("resolve private homes: %v", err)
 	}
-	wantPrivate := filepath.Clean(filepath.Join(projectRoot, "..", "filterest-projects"))
+	wantPrivate := filepath.Clean(filepath.Join(projectRoot, "projects"))
 	if privateHomes.ProjectsHome != wantPrivate {
 		t.Fatalf("private ProjectsHome = %q, want %q", privateHomes.ProjectsHome, wantPrivate)
 	}
-	wantPrivateRuntime := filepath.Clean(filepath.Join(projectRoot, "..", "filterest-runtime-data"))
+	if privateHomes.KeysHome != filepath.Join(projectRoot, "keys") {
+		t.Fatalf("private KeysHome = %q, want root-local keys", privateHomes.KeysHome)
+	}
+	wantPrivateRuntime := filepath.Clean(filepath.Join(projectRoot, "data", "runtime-data"))
 	if privateHomes.RuntimeDataHome != wantPrivateRuntime {
 		t.Fatalf("private RuntimeDataHome = %q, want %q", privateHomes.RuntimeDataHome, wantPrivateRuntime)
 	}
-	wantPrivateMaintainer := filepath.Clean(filepath.Join(projectRoot, "..", "filterest-maintainer-tools"))
+	wantPrivateMaintainer := filepath.Clean(filepath.Join(projectRoot, "data", "maintainer-tools"))
 	if privateHomes.MaintainerToolsHome != wantPrivateMaintainer {
 		t.Fatalf("private MaintainerToolsHome = %q, want %q", privateHomes.MaintainerToolsHome, wantPrivateMaintainer)
 	}
-	wantPrivateOperations := filepath.Clean(filepath.Join(projectRoot, "..", "filterest-operations"))
+	wantPrivateOperations := filepath.Clean(filepath.Join(projectRoot, "data", "operations"))
 	if privateHomes.OperationsHome != wantPrivateOperations {
 		t.Fatalf("private OperationsHome = %q, want %q", privateHomes.OperationsHome, wantPrivateOperations)
 	}
@@ -78,6 +94,56 @@ func TestResolveFilterestHomesUsesOneFolderDefaultsForNestedInstall(t *testing.T
 	}
 	if homes.ProjectsHomeConfigured || homes.KeysHomeConfigured || homes.RuntimeDataHomeConfigured {
 		t.Fatalf("nested defaults unexpectedly marked configured: %#v", homes)
+	}
+}
+
+func TestResolveFilterestHomesKeepsPrivateDefaultsRelativeAfterMove(t *testing.T) {
+	parent := t.TempDir()
+	original := filepath.Join(parent, "original")
+	moved := filepath.Join(parent, "moved workspace")
+	if err := os.Mkdir(original, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSourceRootsFixture(t, original)
+	if err := os.Rename(original, moved); err != nil {
+		t.Fatal(err)
+	}
+	homes, err := resolveFilterestHomes(moved, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if homes.ProjectsHome != filepath.Join(moved, "projects") ||
+		homes.KeysHome != filepath.Join(moved, "keys") ||
+		homes.RuntimeDataHome != filepath.Join(moved, "data", "runtime-data") ||
+		homes.MaintainerToolsHome != filepath.Join(moved, "data", "maintainer-tools") ||
+		homes.OperationsHome != filepath.Join(moved, "data", "operations") {
+		t.Fatalf("moved private homes = %#v", homes)
+	}
+	if _, err := os.Stat(homes.KeysHome); !os.IsNotExist(err) {
+		t.Fatal("resolving homes unexpectedly created key data")
+	}
+}
+
+func TestResolveFilterestHomesRejectsPrivateSourceOwners(t *testing.T) {
+	projectRoot := t.TempDir()
+	writeSourceRootsFixture(t, projectRoot)
+	for _, owner := range []string{"filterest", "filterest_private", "filterest_candidates"} {
+		if err := os.Mkdir(filepath.Join(projectRoot, owner), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join(projectRoot, owner), filepath.Join(projectRoot, owner+"-link")); err != nil {
+			t.Fatal(err)
+		}
+		for _, candidate := range []string{owner, owner + "-link"} {
+			for _, setting := range []string{"PROJECTS", "KEYS", "RUNTIME_DATA", "MAINTAINER_TOOLS", "OPERATIONS"} {
+				t.Run(candidate+"/"+setting, func(t *testing.T) {
+					t.Setenv("FILTEREST_"+setting+"_HOME", filepath.Join(candidate, "local-data"))
+					if _, err := resolveFilterestHomes(projectRoot, true); err == nil || !strings.Contains(err.Error(), "outside Easelect source owners") {
+						t.Fatalf("expected source-owner rejection, got %v", err)
+					}
+				})
+			}
+		}
 	}
 }
 
@@ -292,5 +358,80 @@ func TestResolveFilterestHomesRejectsWritableLocalLocator(t *testing.T) {
 
 	if _, err := resolveFilterestHomes(projectRoot, false); err == nil {
 		t.Fatal("resolveFilterestHomes() error = nil, want writable-locator rejection")
+	}
+}
+
+func TestSourceRootsMetadataRejectsUnsafeInput(t *testing.T) {
+	for _, content := range []string{"", "# empty\n", "private/child\n", "../private\n",
+		"/private\n", "private\nprivate\n", "private;run\n"} {
+		t.Run(content, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "filterest.source-roots"), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("FILTEREST_SOURCE_ROOTS", "safe")
+			if _, err := resolveFilterestHomes(root, true); err == nil || !strings.Contains(err.Error(), "filterest.source-roots") {
+				t.Fatalf("unsafe metadata accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestSourceRootsMetadataCannotBeDisabledOrRedirected(t *testing.T) {
+	for _, kind := range []string{"missing", "symlink", "writable", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			metadata := filepath.Join(root, "filterest.source-roots")
+			switch kind {
+			case "symlink":
+				target := filepath.Join(root, "operator-copy")
+				if err := os.WriteFile(target, []byte("safe\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(target, metadata); err != nil {
+					t.Fatal(err)
+				}
+			case "writable":
+				if err := os.WriteFile(metadata, []byte("safe\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(metadata, 0o666); err != nil {
+					t.Fatal(err)
+				}
+			case "directory":
+				if err := os.Mkdir(metadata, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := resolveFilterestHomes(root, true); err == nil || !strings.Contains(err.Error(), "filterest.source-roots") {
+				t.Fatalf("unsafe metadata accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestSourceRootsMetadataSupportsGenericNamesAndPublicIndependence(t *testing.T) {
+	root := t.TempDir()
+	metadata := filepath.Join(root, "filterest.source-roots")
+	if err := os.WriteFile(metadata, []byte("# Source owners\nproduct\ncompanion\nincubator\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, owner := range []string{"product", "companion", "incubator"} {
+		t.Run(owner, func(t *testing.T) {
+			t.Setenv("FILTEREST_KEYS_HOME", filepath.Join(owner, "keys"))
+			if _, err := resolveFilterestHomes(root, true); err == nil || !strings.Contains(err.Error(), "outside Easelect source owners") {
+				t.Fatalf("owner accepted: %v", err)
+			}
+		})
+	}
+	homes, err := resolveFilterestHomes(root, true)
+	if err != nil || homes.KeysHome != filepath.Join(root, "keys") {
+		t.Fatalf("ordinary home rejected: %v", err)
+	}
+	if err := os.WriteFile(metadata, []byte("../invalid\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveFilterestHomes(root, false); err != nil {
+		t.Fatalf("public install read private metadata: %v", err)
 	}
 }

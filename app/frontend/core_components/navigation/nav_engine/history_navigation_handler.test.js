@@ -42,7 +42,7 @@ vi.mock("./navigation_handler.js", () => ({
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
     getUnifiedTableState: (tableName) => tableStates.get(tableName) || {
-        cardView: {
+        articleView: {
             collapsed: false,
             expandedId: null,
         },
@@ -55,9 +55,9 @@ vi.mock("../../table_views/card_view/row_article_ui_handler.js", () => ({
 }));
 
 vi.mock("../../table_views/dataset_view_registry.js", () => ({
-    ARTICLE_VIEW_KEY: "article",
+    ARTICLE_VIEW_KEY: "article_view",
     resolveDatasetViewSelectionTarget: (viewKey) => (
-        viewKey === "article" ? "card" : viewKey
+        viewKey === "article" ? "article_view" : viewKey
     ),
 }));
 
@@ -102,7 +102,7 @@ describe("history_navigation_handler", () => {
 
     test("restores calendar view when browser Back closes a calendar-opened article", async () => {
         tableStates.set("events", {
-            cardView: {
+            articleView: {
                 collapsed: true,
                 expandedId: 7,
                 returnView: "calendar",
@@ -138,7 +138,7 @@ describe("history_navigation_handler", () => {
         );
         expect(localStorage.getItem("events_view")).toBe("calendar");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", {
-            cardView: {
+            articleView: {
                 collapsed: false,
                 expandedId: null,
                 returnView: null,
@@ -178,7 +178,7 @@ describe("history_navigation_handler", () => {
         });
         expect(localStorage.getItem("events_view")).toBe("table");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", {
-            cardView: {
+            articleView: {
                 collapsed: false,
                 expandedId: null,
                 pendingAutoOpenFirstRenderedResult: false,

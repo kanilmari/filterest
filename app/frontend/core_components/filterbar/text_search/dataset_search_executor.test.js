@@ -34,6 +34,8 @@ const {
     setUnifiedTableStateMock: vi.fn(),
 }));
 
+vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: vi.fn((_key, { fallback }) => fallback) }));
+
 vi.mock("../../infinite_scroll/infinite_scroll_handler.js", () => ({
     appendDataToView: appendDataToViewMock,
     disconnectInfiniteScroll: disconnectInfiniteScrollMock,
@@ -57,6 +59,7 @@ vi.mock("../../../reusable_components/results_count/results_count_printer.js", (
 
 vi.mock("./dataset_search_state_reader.js", () => ({
     getActiveFiltersSnapshot: getActiveFiltersSnapshotMock,
+    RESERVED_PARAM_KEYS: new Set(["search", "view", "sort_column", "sort_order", "offset", "lang"]),
 }));
 
 vi.mock("../filter_list/row_group_facet_printer.js", () => ({
@@ -293,7 +296,7 @@ describe("do_intelligent_search", () => {
             renderedOnce: true,
         };
 
-        expect(getCachedSearchResultForRender("app_service_catalog")).toEqual({
+        expect(getCachedSearchResultForRender("app_service_catalog")).toMatchObject({
             columns: ["id", "title"],
             data: [
                 { id: 7, title: "Firefox" },
@@ -367,7 +370,225 @@ describe("do_intelligent_search", () => {
         expect(openRowArticleViewMock).toHaveBeenCalledWith(
             { id: 7, title: "Firefox" },
             "app_service_catalog",
-            null
+            null,
+            expect.objectContaining({ isCurrent: expect.any(Function) }),
         );
     });
+    test.each(["fi", "en"])("shows authorized results without filters in %s and retains selections for the next text", async (language) => {
+        localStorage.setItem("chosen_language", language);
+        const selected = { status: "closed" };
+        getActiveFiltersSnapshotMock.mockReturnValue(selected);
+        endpointRouterMock.mockImplementation(() => Promise.resolve(createNdjsonStreamResponse([
+            { stage: "text", filters_applied: true, columns: ["id", "status"], data: [{ id: 1, status: "open" }], types: {} },
+        ])));
+        endpointRouterMock.mockResolvedValueOnce(createNdjsonStreamResponse([{ stage: "text", filters_applied: true, columns: ["id", "status"], data: [], types: {} }]));
+        const { do_intelligent_search, ongoingSearchResults, getCachedSearchResultForRender } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "first");
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "first" }).data).toEqual([{ id: 1, status: "open" }]);
+        expect(selected).toEqual({ status: "closed" });
+        const notice = document.querySelector('[data-lang-key="search_results_without_filters"]');
+        expect(notice?.textContent).toContain(language === "fi" ? "Valinnat säilyvät" : "selections are kept");
+        expect(document.querySelector('[data-lang-key="text_search_no_results"]')).toBeNull();
+
+        endpointRouterMock.mockResolvedValueOnce(createNdjsonStreamResponse([
+            { stage: "text", filters_applied: true, columns: ["id", "status"], data: [{ id: 2, status: "closed" }], types: {} },
+        ]));
+        await do_intelligent_search("dev_agent_tasks", "second");
+        expect(ongoingSearchResults.dev_agent_tasks.fallbackWithoutFilters).toBe(false);
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "second" }).data).toEqual([{ id: 2, status: "closed" }]);
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "first" })).toBeNull();
+        expect(document.querySelector('[data-lang-key="search_results_without_filters"]')).toBeNull();
+    });
+
+    test("removes only the optional row-group classification in the second authorized request", async () => {
+        const selected = { row_group: "news", status: "closed" };
+        getActiveFiltersSnapshotMock.mockReturnValue(selected);
+        endpointRouterMock
+            .mockResolvedValueOnce(createNdjsonStreamResponse([{ stage: "text", columns: ["id", "status"], data: [], types: {} }]))
+            .mockResolvedValueOnce(createNdjsonStreamResponse([{ stage: "text", columns: ["id", "status"], data: [{ id: 8, status: "open" }], types: {} }]));
+        const { do_intelligent_search, getCachedSearchResultForRender } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "hello", { useLocation: true, gps: { lat: 60, lon: 24 } });
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
+        const [first, second] = endpointRouterMock.mock.calls;
+        expect(first[0]).toBe("getIntelligentResultsStream");
+        expect(second[0]).toBe(first[0]);
+        expect(first[1].url_params).toContain("&row_group=news");
+        const firstParams = new URLSearchParams(first[1].url_params);
+        const secondParams = new URLSearchParams(second[1].url_params);
+        firstParams.delete("row_group"); firstParams.delete("filters");
+        expect(secondParams.toString()).toBe(firstParams.toString());
+        expect(selected).toEqual({ row_group: "news", status: "closed" });
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "hello" }).data[0].id).toBe(8);
+    });
+
+    test("does not claim a fallback or open a semantic row when neither text search has matches", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({ row_group: "news" });
+        endpointRouterMock.mockImplementation(() => Promise.resolve(createNdjsonStreamResponse([
+            { stage: "text", columns: ["id"], data: [], types: {} },
+            { stage: "ai", columns: ["id"], data: [{ id: 77 }], types: {} },
+        ])));
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "absent");
+        expect(document.querySelector('[data-lang-key="search_results_without_filters"]')).toBeNull();
+        expect(document.querySelector('[data-lang-key="text_search_no_results"]')).not.toBeNull();
+        expect(openRowArticleViewMock).not.toHaveBeenCalled();
+    });
+
+    test("discards an obsolete unfiltered response when a new query completes first", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({ row_group: "news" });
+        let releaseFallback;
+        endpointRouterMock
+            .mockResolvedValueOnce(createNdjsonStreamResponse([{ stage: "text", data: [], types: {} }]))
+            .mockImplementationOnce(() => new Promise((resolve) => { releaseFallback = resolve; }))
+            .mockResolvedValueOnce(createNdjsonStreamResponse([{ stage: "text", columns: ["id"], data: [{ id: 2 }], types: {} }]));
+        const { do_intelligent_search, getCachedSearchResultForRender } = await import("./dataset_search_executor.js");
+        const old = do_intelligent_search("dev_agent_tasks", "old");
+        await vi.waitFor(() => expect(releaseFallback).toBeTypeOf("function"));
+        await do_intelligent_search("dev_agent_tasks", "new");
+        releaseFallback(createNdjsonStreamResponse([{ stage: "text", columns: ["id"], data: [{ id: 99 }], types: {} }]));
+        await old;
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "new" }).data).toEqual([{ id: 2 }]);
+    });
+
+    test("sorting the current results can return to their original relevance order", async () => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: "id", direction: "ASC" } });
+        endpointRouterMock.mockResolvedValueOnce(createNdjsonStreamResponse([
+            { stage: "text", columns: ["id"], data: [{ id: 9 }, { id: 2 }], types: { id: "integer" } },
+        ]));
+        const { do_intelligent_search, getCachedSearchResultForRender, sortCachedSearchResults, ongoingSearchResults } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "ranked");
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "ranked" }).data.map((row) => row.id)).toEqual([2, 9]);
+        expect(ongoingSearchResults.dev_agent_tasks.data.map((row) => row.id)).toEqual([9, 2]);
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: null, direction: null } });
+        await sortCachedSearchResults("dev_agent_tasks");
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "ranked" }).data.map((row) => row.id)).toEqual([9, 2]);
+    });
+
+    test("reserved query and view keys never trigger a filter fallback", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({ search: "word", view: "card", lang: "fi", sort_column: "id" });
+        endpointRouterMock.mockResolvedValueOnce(createNdjsonStreamResponse([
+            { stage: "text", columns: ["id"], data: [{ id: 7 }], types: {} },
+        ]));
+        const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "word");
+        expect(ongoingSearchResults.dev_agent_tasks.fallbackWithoutFilters).toBe(false);
+        expect(document.querySelector('[data-lang-key="search_results_without_filters"]')).toBeNull();
+    });
+
+    test("accepts a server-filtered rank-11 match and does not start a false fallback", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({ status: "closed" });
+        endpointRouterMock.mockResolvedValueOnce(createNdjsonStreamResponse([
+            { stage: "text", filters_applied: true, columns: ["id"], data: [{ id: 11 }], types: { id: "integer" } },
+        ]));
+        const { do_intelligent_search, getCachedSearchResultForRender } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "shared");
+        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
+        expect(new URLSearchParams(endpointRouterMock.mock.calls[0][1].url_params).get("filters")).toBe('{"status":"closed"}');
+        expect(getCachedSearchResultForRender("dev_agent_tasks", { query: "shared" }).data).toEqual([{ id: 11 }]);
+        expect(document.querySelector('[data-lang-key="search_results_without_filters"]')).toBeNull();
+    });
+
+    test("invalid or forbidden filters stop the search without an unfiltered retry", async () => {
+        getActiveFiltersSnapshotMock.mockReturnValue({ password: "forbidden" });
+        endpointRouterMock.mockRejectedValueOnce(new Error("HTTP400 invalid search filters"));
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "shared");
+        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
+        expect(document.querySelector('[data-lang-key="search_results_without_filters"]')).toBeNull();
+    });
+
+});
+
+
+describe("filter fallback notice placement", () => {
+    beforeEach(() => {
+        vi.resetModules();
+        vi.clearAllMocks();
+        localStorage.clear();
+        document.body.replaceChildren();
+    });
+
+    test.each(["table", "card", "article_view"])(
+        "explains broadened results before the first %s result in its real host",
+        async (view) => {
+            const tableName = "app_service_catalog";
+            localStorage.setItem(tableName + "_view", view);
+            const primaryCount = document.createElement("div");
+            primaryCount.id = tableName + "_results_count";
+            primaryCount.textContent = "2 results";
+            document.body.append(primaryCount);
+
+            // These are the registry's real container IDs, including the
+            // article_view key's single article_view_container suffix.
+            const viewContainer = document.createElement("div");
+            viewContainer.id = tableName + "_" + (view === "article_view" ? "article" : view) + "_view_container";
+            document.body.append(viewContainer);
+            let stage = viewContainer;
+            let primary;
+            let firstResult;
+            let sidebarCount;
+            if (view === "table") {
+                primary = document.createElement("table");
+                const body = document.createElement("tbody");
+                firstResult = document.createElement("tr");
+                const cell = document.createElement("td");
+                cell.textContent = "Firefox";
+                firstResult.append(cell);
+                body.append(firstResult);
+                primary.append(body);
+            } else {
+                stage = document.createElement("div");
+                stage.className = "card_sidebar_panel";
+                viewContainer.append(stage);
+                const header = document.createElement("div");
+                header.className = "card_sidebar_header";
+                sidebarCount = document.createElement("div");
+                sidebarCount.className = "results_count card_sidebar_results_count";
+                sidebarCount.dataset.resultsCountFor = tableName;
+                sidebarCount.textContent = "2 results";
+                header.append(sidebarCount);
+                stage.append(header);
+                primary = document.createElement("div");
+                primary.className = "card_container";
+                firstResult = document.createElement("article");
+                firstResult.className = "card";
+                firstResult.textContent = "Firefox";
+                primary.append(firstResult);
+            }
+            stage.append(primary);
+            const aiHost = document.createElement(view === "table" ? "table" : "div");
+            aiHost.id = tableName + (view === "table" ? "_search_ai_table" : "_search_ai_cards");
+            stage.append(aiHost);
+
+            const { insertNotice } = await import("./dataset_search_executor.js");
+            const runtime = await import("./dataset_search_runtime_state.js");
+            expect(runtime.getSearchViewContainer(tableName)).toBe(viewContainer);
+            expect(runtime.getSearchStageContainer(tableName)).toBe(stage);
+            if (view !== "table") expect(runtime.getPrimaryCardContainer(tableName)).toBe(primary);
+
+            insertNotice(tableName, "search_results_without_filters", "Showing results without filters.");
+            insertNotice(tableName, "search_results_without_filters", "Showing results without filters.");
+            const explanation = stage.querySelector('[data-lang-key="search_results_without_filters"]');
+            expect(explanation).not.toBeNull();
+            expect(stage.firstElementChild).toBe(explanation);
+            expect(explanation.getAttribute("role")).toBe("status");
+            expect(explanation.compareDocumentPosition(firstResult) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            if (sidebarCount) {
+                expect(explanation.compareDocumentPosition(sidebarCount) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            }
+            expect(stage.querySelectorAll('[data-lang-key="search_results_without_filters"]')).toHaveLength(1);
+
+            // Ordinary stage messages still divide text hits from AI hits.
+            insertNotice(tableName, "ai_search_results", "AI results");
+            const stageNotice = stage.querySelector('[data-lang-key="ai_search_results"]');
+            expect(primary.compareDocumentPosition(stageNotice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            expect(stageNotice.nextElementSibling).toBe(aiHost);
+            expect(stage.firstElementChild).toBe(explanation);
+
+            runtime.removeSearchNotice(tableName, "search_results_without_filters");
+            expect(stage.querySelector('[data-lang-key="search_results_without_filters"]')).toBeNull();
+            expect(stage.contains(firstResult)).toBe(true);
+            expect(stage.contains(stageNotice)).toBe(true);
+        },
+    );
 });

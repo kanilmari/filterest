@@ -39,6 +39,10 @@ func validateViewFieldSetTarget(rawDataset, rawViewKey string) (string, string, 
 		return "", "", fmt.Errorf("invalid dataset")
 	}
 	viewKey := strings.ToLower(strings.TrimSpace(rawViewKey))
+	switch viewKey {
+	case "article", "big_card", "row_article":
+		viewKey = "article_view"
+	}
 	if !stableViewKeyPattern.MatchString(viewKey) {
 		return "", "", fmt.Errorf("invalid view_key")
 	}

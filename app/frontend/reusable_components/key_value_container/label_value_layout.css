@@ -1,0 +1,71 @@
+/* label_value_layout.css
+ * Arranges configured field pairs while inheriting existing theme surfaces and typography.
+ * Connects the shared column default to standard/modern cards and article details.
+ * Keeps explicit inline/stacked choices stable and lets auto reflow with text and width.
+ */
+.label-value-layout[data-label-value-layout] {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    align-items: start;
+    gap: 0.35rem 0.65rem;
+}
+.label-value-layout[data-label-value-layout]::after {
+    display: none;
+}
+.label-value-layout[data-label-value-layout="inline"] {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+.label-value-layout[data-label-value-layout="stacked"] {
+    display: flex;
+    flex-direction: column;
+}
+.label-value-layout[data-label-value-layout="auto"] {
+    display: flex;
+    flex-flow: row wrap;
+}
+.label-value-layout[data-label-value-layout] > .label-value-layout__label,
+.label-value-layout[data-label-value-layout] > .label-value-layout__value {
+    position: static;
+    flex: 0 1 auto;
+    white-space: normal;
+    float: none;
+    clear: none;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding-inline: 0;
+    overflow-wrap: anywhere;
+    grid-column: auto;
+}
+.label-value-layout[data-label-value-layout="auto"] > .label-value-layout__label {
+    flex: 0 1 auto;
+}
+.label-value-layout[data-label-value-layout="auto"] > .label-value-layout__value {
+    flex: 1 1 16ch;
+}
+.label-value-layout[data-label-value-layout] > .label-value-layout__value {
+    display: block;
+    max-height: none;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+}
+.label-value-layout[data-label-value-layout] .kv-link-group {
+    margin-inline: 0;
+}
+.label-value-layout[data-label-value-layout].label-value-layout--value-only {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* Existing compact card rules clamp nested text; explicit pair layout may wrap it. */
+.label-value-layout[data-label-value-layout] .card_detail_row_label_text {
+    white-space: normal;
+    overflow: visible;
+}
+.label-value-layout[data-label-value-layout] > .label-value-layout__value > a {
+    display: inline;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+}

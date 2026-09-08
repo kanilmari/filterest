@@ -86,6 +86,10 @@ var AdminProfile = RouteProfile{
 
 // RouteProfiles is the single source of truth for per-route pipeline configuration.
 var RouteProfiles = map[string]RouteProfile{
+	// Handlers enforce canonical dataset, row and field rights inside the request transaction.
+	"media_library.ListHandler":    LoginOnlyProfile,
+	"media_library.AttachHandler":  LoginOnlyProfile,
+	"media_library.DetachHandler":  LoginOnlyProfile,
 	"symbol_registry.AssetHandler": PublicProfile,
 	"symbol_registry.AdminHandler": AdminProfile,
 
