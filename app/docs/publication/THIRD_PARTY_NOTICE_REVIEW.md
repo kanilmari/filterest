@@ -1,7 +1,7 @@
 # Filterest Third-Party Notice Review
 
-- Target: `generated Filterest export tree`
-- Filterest app version: `9.3.2`
+- Target: `maintained standalone Filterest source tree`
+- Filterest app version: `9.3.3`
 - Database version: `9.7.13`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
@@ -23,7 +23,7 @@ PASS
 
 ## Findings
 
-- Dependency identities, asset provenance, notice rendering, and every retained legal/attribution document hash match the generated release tree.
+- Dependency identities, asset provenance, notice rendering, and every retained legal/attribution document hash match the maintained Filterest release source tree.
 
 ## Human Review Boundary
 

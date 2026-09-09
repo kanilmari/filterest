@@ -1,38 +1,45 @@
-# Filterest Publication Evidence
+# Filterest 9.3.3 publication evidence
 
-This file is generated from the Filterest public-slice candidate flow.
-It is evidence for review, not approval to publish.
+This release is assembled directly from the independently maintained Filterest
+repository. This file records source and metadata checks; successful remote
+publication is established by the GitHub release and its uploaded files.
 
-- Generated at: `2026-09-08T21:58:37Z`
-- Release source commit used by the generator: `ca9efa85377a9ee4bc7f4cd227d7a3557b700b64`
-- Generated Filterest commit: this repository commit; run `git log -1 --oneline`
-- Filterest app version: `9.3.2`
-- Database version: `9.7.13`
+- Reviewed source commit: `d9402094628ab4f496c74980d66ac559e6f46318`.
+- Application version: **9.3.3**.
+- Compatible database version: **9.7.13**.
+- Source model: `public_first`.
+- The final `v9.3.3` tag identifies the release commit containing these derived
+  files; it follows the reviewed source commit without reconstructing source.
 
-## Automated Evidence Included In This Commit
+## Verified source and metadata
 
-| Gate | Evidence |
-| --- | --- |
-| Public bootstrap content review | `app/server_tools/public_bootstrap/REVIEW.md` |
-| Public demo/media asset review | `app/server_tools/public_bootstrap/DEMO_ASSET_REVIEW.md` |
-| Launch-facing public docs wording review | `app/docs/publication/PUBLICATION_DOCS_REVIEW.md` |
-| Publication governance docs review | `app/docs/publication/PUBLICATION_GOVERNANCE_REVIEW.md` |
-| Ownership and trademark notice | `NOTICE`; the governance review verifies the accepted Filterest Oy ownership, distinct-name, and allowed-use boundaries. |
-| Public source license | `LICENSE` and package metadata declare GPL version 2 or later / `GPL-2.0-or-later`; binaries that include Apache-2.0 components are conveyed under GPL version 3 or later. |
-| Third-party notice inventory | `THIRD_PARTY_NOTICES.md` |
-| Third-party notice inventory review | `app/docs/publication/THIRD_PARTY_NOTICE_REVIEW.md` |
-| Public app/DB compatibility | `app/server_tools/versioning/app_db_compatibility.jsonl` and `app/server_tools/versioning/schema_snapshots/db-9.7.13.sql` |
-| Private source boundary | Candidate contract requires private app/tool paths to be absent before this commit is created. |
-| Secret/private-material scan | Candidate contract runs the tracked-file public-slice audit before this commit is accepted. |
-| Public build posture | Candidate generation runs Go builds, route-manifest check, npm install, and npm build before this commit is accepted. |
+- The development setup, portable launchers, bootstrap contract and release
+  ledger pass 54 targeted Python tests in Filterest's own environment.
+- The ledger retains every byte of the prior 133-record published history and
+  appends one new release identity derived from the reviewed source commit.
+- The application/database compatibility validator and public bootstrap audit
+  pass. Bootstrap SQL and the DB 9.7.13 schema snapshot are unchanged.
+- The selected Git changes contain no operator-state directories or installed
+  third-party dependency trees. Added-line private-key/token pattern checks
+  found no matches; these checks do not claim to prove the absence of every
+  possible secret format.
+- The approved product Constitution is preserved. Applicable source, binary,
+  dependency and asset terms remain described by `LICENSE`, `NOTICE`,
+  `THIRD_PARTY_NOTICES.md`, the retained legal texts and the asset register.
 
-## Still Not Publication Approval
+The [dependency review](THIRD_PARTY_NOTICE_REVIEW.md) records the current notice
+inventory. The [release notes](RELEASE_NOTES.md) describe the shipped changes.
 
-The following gates are intentionally not resolved by this generated evidence:
+## Final assembly and delivery
 
-- production-readiness approval beyond the current Filterest release;
-- human/project approval of third-party notices and public bootstrap strategy;
-- owner approval of the browser/runtime proof target and final local proof chain;
-- semantic public docs/screenshot wording review beyond the deterministic media audit;
-- fresh Computer Use release-readiness pass after material blockers are remediated;
-- final manual GitHub repository creation and remote push.
+Build Linux amd64 and arm64 administrator binaries from the final release
+commit, validate their Go module inventory and glibc boundary, and generate
+checksums for both binaries and the five license/notice files or bundles.
+The fourteen uploaded files and their hashes must match the local build receipt.
+
+The maintainer retains exact local runtime checks, final Git commit, Actions
+policy audit, binary manifests and remote readback in an ignored release receipt.
+A changed receipt or artifact must be rechecked before publication. These
+installation-specific records are not copied into the public repository.
+
+This release does not introduce database migrations or deploy customer sites.
