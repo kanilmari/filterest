@@ -1,68 +1,37 @@
+<!-- Defines the enduring product principles of Filterest. -->
+<!-- Connects application behavior, architecture, data handling and documentation. -->
+<!-- Exists to keep the product coherent, maintainable and dependable as it evolves. -->
+
 # The Constitution of Filterest
 
-**Version 1.0**
+This is the constitution for Filterest. It defines durable product principles. Technical guides, design guidance and contribution instructions explain how to apply them. Maintain these principles here once and link to them elsewhere.
 
-This document serves as the primary source of truth for the public Filterest
-repository. It defines the product's core philosophy, architectural principles,
-and design standards for the exported open platform surface.
+## 1. Build a dependable, understandable product
 
-## Core Philosophy
+Prefer clarity, maintainability and useful capability. Avoid multiple sources of truth and unnecessary moving parts. Centralize complexity when doing so makes the rest of the system simpler.
 
-> "What we build today determines how efficiently we can move tomorrow."
+Design complete features with predictable behavior, clear language and consistent interaction. Preserve supported languages, accessibility, and the application's explicit light and dark themes. Keep detailed visual rules in the design guide and reusable code patterns in the reference implementations.
 
-Filterest prioritizes clarity, maintainability, and scalability. Rules exist to
-protect future velocity, not to create ceremony.
+## 2. Keep one authoritative source and manage the whole data lifecycle
 
-## Engineering Standard
+Maintain one authoritative implementation for each capability and one authoritative definition for each setting. Store mutable user and administrator behavior in validated, permission-checked runtime configuration with stable identities. Keep immutable protocols, migrations and safe bootstrap defaults in source.
 
-Filterest should be durable without being crude and advanced without becoming
-fragile. Public releases should favor dependable setup paths, honest release
-notes, clear compatibility boundaries, and reusable implementation patterns.
+Before implementing a capability, decide how it is configured, migrated, disabled, restored, replaced and removed, including old data and fallback behavior. Application data changes use supported APIs; schema changes use versioned migrations. Backups and recovery must preserve the data and permissions needed to restore a working installation. Verify the new state before retiring an obsolete one.
 
-- Build the durable path first; cleverness is welcome only when it improves
-  long-term usefulness.
-- Let the feature list grow, but tune every feature until it feels intentional,
-  reliable, and complete.
-- Centralize complexity where it belongs so the rest of the system can stay
-  simple.
+Keep credentials and machine-specific configuration separate from application source. Protect personal data and enforce access permissions throughout the data lifecycle.
 
-## Architecture & Structure
+## 3. Make changes traceable and verify the actual result
 
-- **Single Source of Truth**: The filesystem is the base of the repository
-  structure.
-- **Golden Samples**: When in doubt, follow the patterns in
-  `app/docs/reference_implementations/`.
-- **Ticket-Based Workflow**: Every meaningful creation, modification, and
-  deletion should be traceable through an issue, ticket, or reviewed change.
-- **DB-Backed Runtime Configuration**: User-visible workflow defaults,
-  filter/search presets, status catalogs, field sets, routing aliases, and other
-  mutable app lists should live in validated runtime configuration instead of
-  hardcoded frontend or backend arrays.
+Make meaningful changes traceable to the problem they solve. Record decisions that future maintenance depends on, and keep the relevant documentation aligned with the implementation.
 
-## Documentation & Comments
+Match verification to the changed behavior and its real risk. Test security and data boundaries, verify behavior in the intended running application, and distinguish observed results from assumptions. Do not claim completion or compatibility without evidence.
 
-- Keep documentation current whenever behavior, structure, or workflows change.
-- Prefer canonical source files for values, toggles, and thresholds; use prose to
-  explain meaning, constraints, and workflow.
-- Phrase important rules so humans and automation can verify them.
-- New and touched source files should start with a short English header
-  explaining what the file does, which components it connects, and why it
-  exists.
+## 4. Keep documentation and releases truthful
 
-## Design & Visuals
+Give each lasting rule or topic one canonical home. Explain purpose and constraints in documentation and refer to the source that owns changing values. Update the relevant guide when behavior changes.
 
-The visual language is defined in the design constitution under
-`app/docs/constitution/design/`.
+Code should explain its purpose, important connections and non-obvious constraints. Keep detailed comment conventions in the development guide and avoid repetitive comments for trivial code.
 
-- **Consistency**: Use a unified design system for a coherent user experience.
-- **Visual Guardian**: Important visual rules should be testable and reviewed.
+Releases must identify their version, database compatibility, upgrade requirements and applicable license. Include the intended application files and properly attributed assets. Credentials, personal data and installation-specific backups must never enter public release packages.
 
-## Release Integrity
-
-Public Filterest releases must preserve a clear boundary between public source,
-synthetic bootstrap data, generated evidence, and non-public maintainer
-materials. Publication readiness is a verified release decision, not a side
-effect of a successful local export.
-
----
-*This Constitution is a living document. Update it as the public project learns and grows.*
+If a rule creates work without protecting the product, explain the concrete problem and propose a simpler replacement. Keep the rule and its implementation consistent.

@@ -487,10 +487,10 @@ def test_lifecycle_scripts_use_source_and_install_roots_by_responsibility() -> N
     assert 'git -C "$INSTALLATION_ROOT" merge --ff-only "$TARGET_COMMIT"' in updater
     assert '${TARGET_COMMIT}:${GIT_SOURCE_PREFIX}go.mod' in updater
     assert 'NODE_DEPENDENCY_ROOT="$RUNTIME_ROOT/node"' in setup
-    assert 'npm --prefix "$NODE_DEPENDENCY_ROOT" ci --silent' in setup
+    assert 'filterest_install_node_dependencies "$FILTEREST_BUILD_ROOT" "$RUNTIME_ROOT" "$NODE_DEPENDENCY_ROOT"' in setup
     assert 'ensure_nested_node_dependency_bridge' not in setup
     assert 'ln -s "$bridge_target"' not in setup
-    assert ".filterest-source-manifests.cksum" in setup
+    assert ".filterest-source-manifests.sha256" in dependency_installer
     assert 'filterest_download_go_modules "$FILTEREST_SOURCE_ROOT" "$RUNTIME_ROOT"' in setup
     assert 'GOFLAGS=-mod=readonly' in dependency_installer
     assert 'GOMODCACHE="$runtime_root/go/module-cache"' in dependency_installer

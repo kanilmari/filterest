@@ -1,6 +1,6 @@
-<!-- README.md: product README for the canonical Filterest source and its public mirror. -->
+<!-- README.md: product README for the maintained Filterest repository. -->
 <!-- It connects users and developers with the platform, setup path, and public project boundaries. -->
-<!-- It travels unchanged with copied source folders and generated public releases. -->
+<!-- It travels with source installations and public releases. -->
 <!-- Keep claims limited to capabilities and workflows that Filterest currently ships. -->
 
 # Filterest
@@ -111,10 +111,15 @@ This repository contains the Filterest application platform. Releases remain
 subject to the compatibility and upgrade policy documented in this repository;
 review release notes and backups before upgrading important installations.
 
-This repository is the deterministic public mirror of the canonical maintained
-`filterest/app/` source tree and its portable installation shell. Its
-public-safe history starts with a reviewed Filterest release and excludes
-non-public maintainer history.
+This repository is the maintained source for Filterest and its development
+tools. Application code, migrations, tests and product documentation live under
+`app/`; the installation root contains the portable launchers. Make product
+changes in this repository and retain its existing public history.
+
+[The Filterest Constitution](app/docs/constitution/constitution.md) defines the
+product principles. Suggestions and reproducible reports are best opened as
+[GitHub Issues](https://github.com/kanilmari/filterest/issues); see
+[CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
 
 ## One Portable Filterest Folder
 
@@ -240,7 +245,7 @@ proxy peer addresses. Do not configure the protected trusted-proxy peer setting
 until the edge overwrites forwarded client identity instead of appending or
 passing through request-supplied headers.
 
-The generated repository ships the two canonical nginx boundaries:
+The repository ships the two canonical nginx boundaries:
 
 - `app/server_tools/nginx/filterest_cloudflare_real_ip.conf` accepts
   `CF-Connecting-IP` only from official Cloudflare source networks.
@@ -295,8 +300,28 @@ carry forward only the five operator-owned directories after taking a backup.
 ./filterest asset-linking status  # inspect shared media-linking readiness
 ```
 
-The development profile installs Node dependencies and tool caches under
-`data/runtime/node/`. The root commands bind Vite, Vitest, Playwright, and the
+For an existing installation, install or refresh development dependencies
+without reconfiguring its database, credentials or running services:
+
+```bash
+./filterest setup --profile development --dependencies-only --yes
+```
+
+This mode installs the declared Node and Go packages, the Python test environment
+and Playwright Chromium. It does not mark database setup complete. Use `./ctl`
+with an already configured runtime; a new installation uses full setup above.
+The host needs Python virtual-environment support and Chromium's system libraries;
+full development setup installs these host prerequisites too.
+
+Track Filterest-owned tools and the dependency definitions (`package.json`,
+`package-lock.json`, `go.mod`, `go.sum`, and Python requirements). Downloaded
+third-party repositories, packages, virtual environments, toolchains, browser
+binaries and caches remain outside Git. Internal Filterest tools are maintained
+in `app/`; do not install another copy of this repository as a dependency.
+
+The development profile installs Node dependencies under `data/runtime/node/`,
+Go caches under `data/runtime/go/`, Python tests under `data/runtime/python/`,
+and browser binaries under `data/runtime/playwright/`. The root commands bind Vite, Vitest, Playwright, and the
 other Node tools to that mutable location without creating a compatibility link
 or cache below immutable `app/`. The browser-administration profile does not
 install or use the source-development dependency tree.
@@ -321,10 +346,15 @@ runtime or credentials merely because they exist in the caller's shell.
 Keep user-facing features multilingual. Use the existing translation and
 language-key workflows instead of hardcoding one-language UI text.
 
-The repository-specific setup and governance guides live at the repository
-root. A deliberately limited set of technical documents shared byte-for-byte
-with the non-public development source lives under `app/docs/`; see
-`app/docs/README.md` for the naming and support boundary.
+Product source and development tools are maintained directly in this repository.
+The root launchers use this installation's own dependencies and configuration;
+they do not require a parent or sibling development repository. A development
+installation needs its own completed dependency setup before build and test
+commands can run. PostgreSQL may be managed by the host or another service;
+its location is an installation setting, not a source-repository dependency.
+
+The product principles, technical guides, design proposals, and release records
+live under `app/docs/`; see [the documentation index](app/docs/README.md).
 
 ## Project And Contribution Model
 
@@ -333,11 +363,18 @@ bugs, setup problems, documentation corrections, and focused feedback. Public
 pull requests are not the routine operating model unless a maintainer requests
 one.
 
-This public repository is generated from a maintainer release source. Accepted
-durable changes are incorporated there and exported into later public releases.
-Private operational details, customer-specific apps, credentials, deployment
-history, DB-native development records, and non-public data remain outside this
-repository.
+Contributors can clone this repository normally for a new working checkout.
+Once a checkout is the project's authoritative working repository, develop and
+commit there. Never regenerate it from another repository or replace it with a
+fresh clone, an old checkout, or a release copy. Bring reviewed changes through
+Git while preserving its history and local work.
+
+Ordinary source commits and pushes are separate from publishing a versioned
+release or deploying a site. Maintainer release automation is still being
+adapted to this directly maintained repository; see
+[Publishing Filterest](app/docs/publication/PUBLISHING.md). Credentials,
+customer data, runtime project files, deployment records, and database-backed
+development records remain outside the tracked public source.
 
 See `CONTRIBUTING.md` for the contribution boundary and `SECURITY.md` for the
 private vulnerability-reporting channel.

@@ -1056,34 +1056,7 @@ echo ""
 if [[ "$SETUP_PROFILE" == "development" ]]; then
     echo -e "${BLUE}Installing source-development dependencies...${NC}"
 
-    INSTALL_NODE_DEPENDENCIES=false
-    NODE_MANIFEST_MARKER=""
-    NODE_MANIFEST_SIGNATURE=""
-    if [[ "$NODE_DEPENDENCY_ROOT" != "$FILTEREST_BUILD_ROOT" ]]; then
-        mkdir -p "$NODE_DEPENDENCY_ROOT"
-        NODE_MANIFEST_MARKER="$NODE_DEPENDENCY_ROOT/.filterest-source-manifests.cksum"
-        NODE_MANIFEST_SIGNATURE="$(
-            cksum "$FILTEREST_SOURCE_ROOT/package.json" "$FILTEREST_SOURCE_ROOT/package-lock.json"
-        )"
-        if [[ ! -d "$NODE_DEPENDENCY_ROOT/node_modules" ]] || \
-            [[ ! -f "$NODE_MANIFEST_MARKER" ]] || \
-            [[ "$(cat "$NODE_MANIFEST_MARKER")" != "$NODE_MANIFEST_SIGNATURE" ]]; then
-            INSTALL_NODE_DEPENDENCIES=true
-        fi
-    elif [[ ! -d "$NODE_DEPENDENCY_ROOT/node_modules" ]]; then
-        INSTALL_NODE_DEPENDENCIES=true
-    fi
-
-    if [[ "$INSTALL_NODE_DEPENDENCIES" == "true" ]]; then
-        echo "  Running npm ci..."
-        if [[ "$NODE_DEPENDENCY_ROOT" != "$FILTEREST_BUILD_ROOT" ]]; then
-            cp "$FILTEREST_SOURCE_ROOT/package.json" "$FILTEREST_SOURCE_ROOT/package-lock.json" "$NODE_DEPENDENCY_ROOT/"
-        fi
-        npm --prefix "$NODE_DEPENDENCY_ROOT" ci --silent 2>&1 | tail -3
-        if [[ -n "$NODE_MANIFEST_MARKER" ]]; then
-            printf '%s\n' "$NODE_MANIFEST_SIGNATURE" > "$NODE_MANIFEST_MARKER"
-        fi
-    fi
+    filterest_install_node_dependencies "$FILTEREST_BUILD_ROOT" "$RUNTIME_ROOT" "$NODE_DEPENDENCY_ROOT"
     echo "  Running go mod download..."
     filterest_download_go_modules "$FILTEREST_SOURCE_ROOT" "$RUNTIME_ROOT"
 else

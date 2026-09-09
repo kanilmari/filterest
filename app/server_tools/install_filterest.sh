@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install_filterest.sh
-# Installs a generated Filterest checkout for browser administration or development.
+# Installs a maintained Filterest checkout for browser administration or development.
 # Bridges host packages, protected local configuration, database bootstrap, and runtime startup.
 # Exists so a new administrator can reach the first-run form through one resumable command.
 
@@ -43,6 +43,7 @@ PROFILE=""
 ASSUME_YES=0
 DRY_RUN=0
 NO_START=0
+DEPENDENCIES_ONLY=0
 BINARY_SOURCE="${FILTEREST_BINARY_SOURCE:-}"
 RELEASE_REPOSITORY="${FILTEREST_RELEASE_REPOSITORY:-kanilmari/filterest}"
 POSTGRESQL_MAJOR="${FILTEREST_POSTGRESQL_MAJOR:-16}"
@@ -63,6 +64,8 @@ Options:
   --yes                  Accept the displayed installation plan without another confirmation.
   --dry-run              Show the plan without changing the machine, database, or files.
   --no-start             Complete installation without starting Filterest.
+  --dependencies-only    Development tools and packages only; preserve databases,
+                         protected settings, running services and full-setup status.
   --binary-source PATH   Use a reviewed local Filterest binary instead of a GitHub Release asset.
   -h, --help             Show this help.
 
@@ -113,6 +116,10 @@ parse_arguments() {
                 NO_START=1
                 shift
                 ;;
+            --dependencies-only)
+                DEPENDENCIES_ONLY=1
+                shift
+                ;;
             --binary-source)
                 [[ "$#" -ge 2 ]] || die "--binary-source requires a file path"
                 BINARY_SOURCE="$2"
@@ -151,6 +158,13 @@ choose_profile() {
 }
 
 show_plan() {
+    if [[ "$DEPENDENCIES_ONLY" -eq 1 ]]; then
+        printf '\nFilterest development dependency plan\n'
+        printf '  Install declared Go, Node, Python test packages and Playwright Chromium.\n'
+        printf '  Downloaded packages and caches: %s\n' "$RUNTIME_ROOT"
+        printf '  No database, protected settings, service or full-setup changes.\n\n'
+        return
+    fi
     printf '\nFilterest installation plan\n'
     printf '  Profile: %s\n' "$PROFILE"
     printf '  Common runtime: PostgreSQL %s, PostGIS, pgvector, local configuration, demo database\n' "$POSTGRESQL_MAJOR"
@@ -201,7 +215,7 @@ install_host_packages() {
         "postgresql-${POSTGRESQL_MAJOR}-postgis-3-scripts"
         "postgresql-${POSTGRESQL_MAJOR}-pgvector"
     )
-    local development_packages=(build-essential git xz-utils)
+    local development_packages=(build-essential git xz-utils python3-venv)
     local required_packages=("${common_packages[@]}" "${database_packages[@]}")
     local missing_packages=()
     local package=""
@@ -830,19 +844,19 @@ bootstrap_database_and_dependencies() {
         2>/dev/null | tr -d '[:space:]' || true)"
 
     if [[ "$completed_profile" == "$PROFILE" && "$core_ready" == "t" ]]; then
-        printf '✓ Database bootstrap and %s dependencies are already complete.\n' "$PROFILE"
-        return
+        printf '✓ Database bootstrap is already complete; checking current dependencies.\n'
+    else
+        if [[ "$core_ready" == "t" ]]; then
+            setup_args+=(--resume-existing)
+        elif [[ "$relation_count" =~ ^[0-9]+$ && "$relation_count" -gt 0 ]]; then
+            setup_args+=(--force)
+            export ALLOW_INCOMPLETE_LOCAL_SETUP_RECREATE=1
+        fi
+        "$SOURCE_ROOT/server_tools/setup_local_dev_environment.sh" "${setup_args[@]}"
     fi
-    if [[ "$core_ready" == "t" ]]; then
-        setup_args+=(--resume-existing)
-    elif [[ "$relation_count" =~ ^[0-9]+$ && "$relation_count" -gt 0 ]]; then
-        setup_args+=(--force)
-        export ALLOW_INCOMPLETE_LOCAL_SETUP_RECREATE=1
-    fi
-    "$SOURCE_ROOT/server_tools/setup_local_dev_environment.sh" "${setup_args[@]}"
     if [[ "$PROFILE" == "development" ]]; then
-        printf 'Installing the Chromium browser used by automated UI tests...\n'
-        npm exec --prefix "$NODE_DEPENDENCY_ROOT" -- playwright install --with-deps chromium
+        source "$SOURCE_ROOT/server_tools/lib/source_dependency_installer.sh"
+        filterest_install_development_dependencies "$SOURCE_ROOT" "$RUNTIME_ROOT" 1
     fi
     mkdir -p "$(dirname "$completion_marker")"
     printf 'profile=%s\napp_version=%s\ndb_version=%s\n' \
@@ -876,10 +890,26 @@ start_installed_filterest() {
 main() {
     parse_arguments "$@"
     choose_profile
+    if [[ "$DEPENDENCIES_ONLY" -eq 1 && "$PROFILE" != "development" ]]; then
+        die "--dependencies-only requires --profile development"
+    fi
     show_plan
     confirm_plan
     if [[ "$DRY_RUN" -eq 0 ]]; then
         is_generated_filterest_checkout || die "full installation must run from a generated Filterest checkout containing VERSION_APP"
+    fi
+
+    if [[ "$DEPENDENCIES_ONLY" -eq 1 ]]; then
+        install_go_toolchain_if_needed
+        install_node_toolchain_if_needed
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            printf '  [dry-run] install tracked development dependencies under %s\n' "$RUNTIME_ROOT"
+        else
+            source "$SOURCE_ROOT/server_tools/lib/source_dependency_installer.sh"
+            filterest_install_development_dependencies "$SOURCE_ROOT" "$RUNTIME_ROOT"
+        fi
+        printf '\nFilterest development dependencies ready; existing installation preserved.\n'
+        return
     fi
 
     install_host_packages

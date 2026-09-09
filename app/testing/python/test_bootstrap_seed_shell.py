@@ -117,11 +117,12 @@ class BootstrapSeedShellTests(unittest.TestCase):
             PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(
-            'npm --prefix "$NODE_DEPENDENCY_ROOT" ci --silent',
-            setup_script,
-        )
-        self.assertNotIn("npm install --silent", setup_script)
+        dependency_installer = (
+            PUBLIC_SOURCE_ROOT / "server_tools/lib/source_dependency_installer.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('filterest_install_node_dependencies ', setup_script)
+        self.assertIn('npm --prefix "$dependency_root" ci --no-audit --no-fund', dependency_installer)
+        self.assertNotIn("npm install --silent", setup_script + dependency_installer)
 
     def test_normal_setup_leaves_first_admin_to_guarded_browser_form(self) -> None:
         setup_script = (

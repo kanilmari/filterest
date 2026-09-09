@@ -1,137 +1,103 @@
 # Publishing Filterest
 
-Filterest is intentionally local-first. Its complete canonical public source is
-maintained under the `filterest/` subtree in the maintainer workspace; the release generator mirrors those
-bytes into the standalone GitHub repository while preserving that repository's
-own `.git` history. Generation never creates a remote or pushes.
+## Maintained source
 
-Maintain durable public code and documentation in the canonical Filterest
-source tree. The standalone sibling and GitHub repository are mirrors, while
-release identity, dependency notices, compatibility snapshots, and publication
-review reports remain derived artifacts.
+This Git repository is the maintained source for Filterest and its development
+tools. Application code, migrations, tests, product documentation, and version
+contracts live under `app/`; the root contains portable launchers and project
+policies. No parent or sibling source repository is required for development.
 
-## Local Review
+A new contributor may clone the public repository normally. Once a checkout is
+the project's authoritative working repository, make durable changes and
+commits there. Never regenerate or replace that checkout from another
+repository, a fresh clone, an old working folder, or a release copy. Apply
+reviewed changes through Git while preserving existing history and local work.
+Moving the containing directory does not change GitHub repository identity.
+
+## Ordinary source development
+
+Use the [development commands](../../../README.md#development) after the
+installation's development dependencies are ready. Review the actual diff and
+run checks appropriate to the changed behavior:
 
 ```bash
 git status --short
-git log --oneline --max-count=3
-cat app/VERSION_APP
-cat app/VERSION_DB
+git diff --check
+git diff
 ```
 
-Review `app/docs/publication/PUBLICATION_CHECKLIST.md` before publishing. Every
-Filterest update must come from a clean maintainer release-source commit and a
-reviewed sibling-repo commit.
+Commit an understood, bounded set of changes. Before pushing, verify the target
+remote and branch and reconcile newer remote commits normally; do not rewrite
+published history to hide a local directory move. Contributor submission
+follows [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
-From the maintainer workspace, use the release wrapper:
+An ordinary source commit or push does not create a version tag, replace
+published release assets, or deploy a site. It need not change the application
+or database version when the version contract does not call for one.
+Operator-owned `config/`, `keys/`, `projects/`, `data/`, and `backups/` remain
+outside tracked source. A source checkout is not a database backup.
 
-```bash
-./filterest_release status
-./filterest_release generate
-./filterest_release verify
-```
+## Versioned releases
 
-`generate` regenerates the sibling repository and runs the candidate checks.
-`verify` repeats the checks against the current artifact without regenerating
-it. Ordinary source commits only mark the release pending.
+Release assembly must read the reviewed Filterest commit directly. Generated
+binaries, frontend bundles, checksums, dependency notices, compatibility
+snapshots, and review reports are outputs of that source; generating them must
+not reconstruct or replace the maintained repository.
 
-For candidate-to-published promotion, the normal sequence is:
+A versioned release binds the application and supported database versions to
+the exact source commit and distributed files. Validate relevant upgrade and
+recovery behavior, dependency notices, asset rights, public-source boundaries,
+and the resulting runtime before publishing those files. Preserve existing
+version tags and release records rather than silently moving or rewriting them.
 
-```bash
-./filterest_release generate
-# Review the fully checked candidate.
-./filterest_release promote
-# Commit and push the promotion-only source-ledger change and its exact test update.
-./filterest_release fast-patch
-# Run final runtime, browser, and Actions-policy proof, then record the human
-# release owner's named UI checks in a human-acceptance JSON artifact.
-./filterest_release attest-final <exact-evidence-options>
-./filterest_release publish --yes
-```
+Builds and release checks run locally. GitHub stores source, tags, and reviewed
+release files; this workflow does not require GitHub Actions.
 
-Successful full generation records a clone-local marker for the exact candidate
-commit, build identity, source-evidence commit, and committed `app/frontend/dist`
-tree. `fast-patch` accepts only that marker plus exactly one promotion-only
-source commit. It reuses the committed bundles, regenerates the final
-third-party notices and review from the complete final file set, performs
-focused identity/root/notice checks, and creates one local published-export
-commit. It performs no push. Any drift requires another full `generate`, and
-successful Fast Patch records an owner-only candidate-to-final assembly marker.
-`attest-final` then requires the exact accepted `THIRD_PARTY_NOTICES.md`
-SHA-256 and a structured human UI-acceptance record bound to the candidate
-source and final frontend tree, hashes every named final proof, and writes a
-second owner-only local Phase 6 readiness marker. A ticket and Computer Use are
-not part of this runtime contract.
-`publish --yes` always reruns the full publication gate and revalidates those
-bytes before each remote mutation.
+## Maintainer automation status
 
-Treat the standalone sibling checkout and its preview database as release-review
-surfaces. Make durable code, schema, seed, environment-scaffold, language-key,
-setup, and maintained-document fixes in that canonical `filterest/` subtree, then regenerate
-the mirror. Direct edits in the sibling mirror are temporary unless ported back
-to that canonical public source.
+The maintainer release automation is being adapted to build and publish from
+this directly maintained repository. It is not yet a complete standalone
+release command shipped here. Ordinary local development and Git commits do
+not depend on finishing that automation.
 
-## GitHub Publication
+Older release records, including [publication evidence](PUBLICATION_EVIDENCE.md)
+and the release-specific [publication checklist](PUBLICATION_CHECKLIST.md), may
+refer to a producer repository, generated candidates, source/export pairs, or
+old promotion commands. Those descriptions explain historical releases; they
+are not instructions to restore that source-authority model. Do not run an
+old generator against the current authoritative checkout.
 
-The approved Filterest repository is `kanilmari/filterest`. Standing owner
-authorization permits the source-repository publication action after every
-required local and manual-final evidence gate passes:
+The maintained [release checklist](PUBLICATION_CHECKLIST.md) and
+[release notes](RELEASE_NOTES.md) describe the current direct-source process.
+Until the standalone release command is complete, a maintainer may perform
+the same steps with the verified build tools and ordinary Git/GitHub CLI,
+recording the exact source commit, final release commit and asset hashes.
+Optional external build orchestration must read this source directly.
 
-```bash
-./filterest_release publish --yes
-```
+A future supported release command must identify the exact current source,
+keep build output separate from maintained files and operator state, and report
+what will be pushed or uploaded. Until that command is verified, do not treat
+an older wrapper documented elsewhere as proof that the new release workflow
+is ready.
 
-The approved publish command builds Linux `amd64` and `arm64` binaries plus
-SHA-256 checksum files on the maintainer machine, pushes the reviewed `main`
-commit and matching version tag derived from `app/VERSION_APP`, and uploads those reviewed local
-assets directly to GitHub Release storage. GitHub Actions must remain disabled;
-GitHub stores the release but does not execute it. Do not create or move these
-version tags by hand.
+## Binary and dependency compatibility
 
-The command re-verifies both clean repositories, source evidence, the approved
-`origin/main` contract, the local cross-compilation toolchain, and the account
-Actions-disable policy before pushing Filterest. No generation command adds,
-replaces, or pushes a remote.
+Published Linux administrator binaries retain WebP support and the reviewed
+host glibc/libm boundary. The current binary contract requires glibc 2.34 or
+newer; its checks must cover the embedded Go version and module set for each
+distributed architecture. Development toolchains and cross-compilers are
+build prerequisites, not source repositories.
 
-The maintainer machine needs Go, `gcc`, and the ARM64 cross-compiler. On
-Ubuntu-family systems the one-time ARM64 prerequisite is:
-
-```bash
-sudo apt install gcc-aarch64-linux-gnu
-```
-
-The resulting binaries keep WebP support and dynamically link only the
-reviewed host glibc/libm surface. The builder rejects binaries requiring newer
-than glibc 2.34, verifies both architectures' embedded Go version and module
-set against the `filterest` target in the retained third-party manifest, and
-the admin installer checks the same glibc floor before using a prebuilt binary.
-The notice generator separately inventories the tagged release server, the
-untagged container server, and the container's `filterest-admin-recovery`
-binary. Shared modules retain one license row with explicit binary membership;
-the recovery-only terminal dependency cannot be hidden by the server's graph.
-
-## Updating Later Releases
-
-Regenerate with `./filterest_release generate`, inspect the resulting commit,
-and run `verify`. When the next source commit is strictly the published-identity
-promotion, `fast-patch` may assemble the final identity without rebuilding the
-already audited bundles. Use `publish --yes` only after every gate passes; do not ask
-for a second publication confirmation. Keep private apps, config, runtime data, and unclear media outside the
-public history.
-
-## Release Source Boundary
-
-The canonical `filterest/` subtree is the durable public-source owner.
-Its containing maintainer-workspace Git history and private DB-native development records do
-not transfer into the standalone publication repository.
-
-Filterest is mirrored into its own repository without copying non-public
-maintainer-workspace history. The active standalone checkout is `../filterest`.
+Dependency notices cover the release server, container server, and container
+administrator-recovery binary. Shared modules retain explicit binary membership
+so a dependency used only by a recovery tool is still included in the notice
+inventory. See [the retained third-party review](THIRD_PARTY_NOTICE_REVIEW.md)
+for the release-specific evidence.
 
 ## Public Asset Rights Boundary
 
-The reviewed asset-provenance register at
-`app/server_tools/licenses/asset_provenance.json` classifies every distributed
+The reviewed [asset-provenance register](../../server_tools/licenses/asset_provenance.json)
+classifies every distributed
 image and every source file that embeds third-party icon geometry. A public
 candidate fails if an asset is absent from the register, its bytes change, or a
 component uses the former generic first-party label without an explicit author,
@@ -146,7 +112,6 @@ Third-party SVG sources retain their own component names, licenses, upstream
 links, and exact legal-document bytes in the release license bundle.
 
 Auth-tour screenshots are currently excluded from both source and built public
-trees. The dormant gallery implementation and private capture utility remain
-available, but captures go only to the ignored review area. Reintroducing any
-screenshot requires a separate content-and-provenance review before the public
-candidate can pass.
+trees. Any proposed capture belongs in an ignored review area until its content
+and publication rights have been reviewed. Reintroducing screenshots must not
+publish user data, credentials, or another installation's private material.

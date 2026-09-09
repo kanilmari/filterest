@@ -1,7 +1,9 @@
 # Defines local-only paths for canonical and public Filterest source checkouts.
 # Separates runtime data, protected settings, caches, and generated test output.
 # Keeps a copied folder safe to initialize as Git without exposing local secrets.
-# Public bootstrap fixture exceptions are added by the release generator when needed.
+# Track dependency manifests and Filterest-owned tools, not downloaded packages.
+# Third-party packages, toolchains and browser binaries belong under ignored
+# data/runtime/. These additional patterns protect conventional local installs.
 node_modules/
 /config/
 /keys/
