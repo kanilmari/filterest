@@ -5,14 +5,12 @@
 
 import { createPipeline, createStage } from './frontend_pipeline.js';
 import { requestLoginRedirect } from '../auth/login_redirect_handler.js';
-import { requestSessionAccessPrompt } from '../auth/session_access_prompt.js';
-import { showErrorToast, showWarningToast } from '../../reusable_components/notifications/toast_notification_printer.js';
+import { showErrorToast, showWarningToast, showAccessDeniedToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import {
     isMutatingMethod,
     resolveEndpointUrl,
     buildFetchOptions,
     isAuthFailure403,
-    isGuestFunctionAccessDenied403,
     isCsrfFailureResponse,
     createAuthError,
     createRateLimitError,
@@ -391,7 +389,8 @@ async function csrfRecoveryStage(ctx) {
  * authRedirectStage — handles auth redirects for 401/403 responses.
  * 401 always redirects to login (unless ctx.suppressAuthRedirect is set).
  * 403 redirects only when the backend sets auth_failure=true (via RespondWithAuthFailure).
- * All other 403s flow to errorHandlerStage for user-visible toasts.
+ * All other 403s remain permission denials, independent of cached login state.
+ * The error stage shows localized permission feedback unless the caller owns it.
  *
  * When ctx.suppressAuthRedirect is true, the stage still detects auth failures
  * and aborts the pipeline, but does NOT navigate to /login. This allows callers
@@ -401,7 +400,7 @@ async function authRedirectStage(ctx) {
     const status = ctx.response.status;
     if (status === 401) {
         if (!ctx.suppressAuthRedirect) {
-            requestLoginRedirect();
+            requestLoginRedirect({ authenticationFailure: true });
         }
         return {
             abort: true,
@@ -421,7 +420,7 @@ async function authRedirectStage(ctx) {
 
     if (isAuthFailure403(bodyText)) {
         if (!ctx.suppressAuthRedirect) {
-            requestLoginRedirect();
+            requestLoginRedirect({ authenticationFailure: true });
         }
         return {
             abort: true,
@@ -430,17 +429,7 @@ async function authRedirectStage(ctx) {
         };
     }
 
-    const isGuestShell = localStorage.getItem('button_state') !== 'logout';
-    if (!isGuestShell || !isGuestFunctionAccessDenied403(bodyText)) {
-        return;
-    }
 
-    requestSessionAccessPrompt();
-    return {
-        abort: true,
-        reason: 'session_access_prompt',
-        error: createAuthError(status, ctx.routeName),
-    };
 }
 
 /**
@@ -505,10 +494,16 @@ async function errorHandlerStage(ctx) {
     errorText = stripAnsiCodes(errorText);
     const userMessage = truncateErrorText(errorText);
     if (!ctx.suppressErrorToast) {
-        showErrorToast(`${ctx.routeName}: ${userMessage}`);
+        if (ctx.response.status === 403) {
+            showAccessDeniedToast(ctx.routeName);
+        } else {
+            showErrorToast(`${ctx.routeName}: ${userMessage}`);
+        }
     }
     console.debug('api_pipeline error response:', errorText);
-    throw new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);
+    const error = new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);
+    error.status = ctx.response.status;
+    throw error;
 }
 
 /**

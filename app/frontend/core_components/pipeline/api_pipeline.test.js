@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 const requestLoginRedirectMock = vi.fn();
 const requestSessionAccessPromptMock = vi.fn();
 const showErrorToastMock = vi.fn();
+const showAccessDeniedToastMock = vi.fn();
 const showWarningToastMock = vi.fn();
 
 async function loadModule() {
@@ -21,6 +22,7 @@ async function loadModule() {
     }));
     vi.doMock('../../reusable_components/notifications/toast_notification_printer.js', () => ({
         showErrorToast: showErrorToastMock,
+        showAccessDeniedToast: showAccessDeniedToastMock,
         showWarningToast: showWarningToastMock,
     }));
     return import('./api_pipeline.js');
@@ -47,7 +49,9 @@ function buildResponse(body, { ok = true, status = 200, statusText = 'OK', conte
 
 describe('api_pipeline', () => {
     beforeEach(() => {
+        localStorage.clear();
         requestLoginRedirectMock.mockReset();
+        showAccessDeniedToastMock.mockReset();
         requestSessionAccessPromptMock.mockReset();
         showErrorToastMock.mockReset();
         showWarningToastMock.mockReset();
@@ -143,22 +147,66 @@ describe('api_pipeline', () => {
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
             }],
         ]);
-        expect(showErrorToastMock).toHaveBeenCalledTimes(1);
+        expect(showAccessDeniedToastMock).toHaveBeenCalledWith('updateRow');
+        expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 
-    test('replaces a guest function-level 403 toast with one session prompt', async () => {
-        localStorage.setItem('button_state', 'login');
+    test.each(['login', 'logout'])('keeps a %s shell on the public page after a permission-only 403', async (buttonState) => {
+        localStorage.setItem('button_state', buttonState);
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(
             { error: '403 - Forbidden (function-level)', code: 403 },
             { ok: false, status: 403, statusText: 'Forbidden' }
         )));
         const mod = await loadModule();
 
-        const result = await mod.runApiPipeline({ routeName: 'datasetNames' });
+        await expect(mod.runApiPipeline({ routeName: 'datasetNames' })).rejects.toMatchObject({ status: 403 });
 
-        expect(result.abort).toBe(true);
-        expect(result.reason).toBe('session_access_prompt');
-        expect(requestSessionAccessPromptMock).toHaveBeenCalledTimes(1);
+        expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
+        expect(showAccessDeniedToastMock).toHaveBeenCalledWith('datasetNames');
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(localStorage.getItem('button_state')).toBe(buttonState);
+    });
+
+    test.each(['login', 'logout'])('keeps optional alias denials silent in the %s shell', async (buttonState) => {
+        localStorage.setItem('button_state', buttonState);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(
+            { error: '403 - Forbidden (function-level)', code: 403 },
+            { ok: false, status: 403 }
+        )));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'datasetAliases', suppressAuthRedirect: true, suppressErrorToast: true }))
+            .rejects.toMatchObject({ status: 403 });
+        expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showAccessDeniedToastMock).not.toHaveBeenCalled();
+    });
+
+    test.each([
+        [401, { error: 'Unauthorized' }],
+        [403, { error: 'Session ended', auth_failure: true }],
+    ])('reports only an explicit HTTP %s auth failure to login recovery', async (status, body) => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(body, { ok: false, status })));
+        const mod = await loadModule();
+        const result = await mod.runApiPipeline({ routeName: 'getResults' });
+        expect(result).toMatchObject({ abort: true, reason: 'auth_redirect', error: { status } });
+        expect(requestLoginRedirectMock).toHaveBeenCalledWith({ authenticationFailure: true });
+        expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showAccessDeniedToastMock).not.toHaveBeenCalled();
+    });
+
+    test.each([
+        [401, { error: 'Unauthorized' }],
+        [403, { error: 'Session ended', auth_failure: true }],
+    ])('leaves optional HTTP %s auth failure recovery to its caller', async (status, body) => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(body, { ok: false, status })));
+        const mod = await loadModule();
+        const result = await mod.runApiPipeline({ routeName: 'datasetAliases', suppressAuthRedirect: true, suppressErrorToast: true });
+        expect(result).toMatchObject({ abort: true, reason: 'auth_redirect', error: { status } });
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
+        expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
         expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 

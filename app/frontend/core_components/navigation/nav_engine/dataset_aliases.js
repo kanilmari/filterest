@@ -16,7 +16,6 @@ const DATASET_ALIAS_REFRESH_TTL_MS = 60 * 1000;
 const DATASET_ALIAS_REFRESH_TS_KEY = 'easelect_dataset_alias_refresh_at';
 
 let datasetAliasRegistry = buildAliasRegistry(FALLBACK_RAW_TO_ALIAS);
-let datasetAliasAutoRefreshStarted = false;
 let datasetAliasRefreshPromise = null;
 let datasetAliasLastRefreshAt = 0;
 
@@ -166,6 +165,7 @@ function normalizeAliasRegistryResponse(payload) {
 async function requestDedicatedAliasRegistry() {
     const response = await endpoint_router('datasetAliases', {
         suppressAuthRedirect: true,
+        suppressErrorToast: true,
     });
     return normalizeAliasRegistryResponse(response);
 }
@@ -174,6 +174,7 @@ async function requestDatasetNamesAliasFallback() {
     const response = await endpoint_router('datasetNames', {
         url_params: '?with_aliases=1',
         suppressAuthRedirect: true,
+        suppressErrorToast: true,
     });
     const { names, aliasRegistry } = normalizeDatasetNamesResponse(response);
     if (aliasRegistry) {
@@ -216,32 +217,6 @@ async function loadDatasetAliasRegistry() {
     return datasetAliasRegistry;
 }
 
-function queueDatasetAliasRegistryRefresh() {
-    if (isKnownGuestShell() || !canReadDatasetAliases()) {
-        return Promise.resolve(datasetAliasRegistry);
-    }
-
-    if (isAliasRegistryFresh()) {
-        return Promise.resolve(datasetAliasRegistry);
-    }
-
-    if (!datasetAliasRefreshPromise && !datasetAliasAutoRefreshStarted) {
-        datasetAliasAutoRefreshStarted = true;
-        datasetAliasRefreshPromise = (async () => {
-            try {
-                datasetAliasRegistry = await loadDatasetAliasRegistry();
-                rememberAliasRefreshTimestamp(Date.now());
-            } finally {
-                datasetAliasRefreshPromise = null;
-            }
-
-            return datasetAliasRegistry;
-        })();
-    }
-
-    return datasetAliasRefreshPromise;
-}
-
 /**
  * Refresh the dataset alias registry from the dedicated backend alias surface.
  *
@@ -260,7 +235,6 @@ export async function refreshDatasetAliasRegistry() {
         return datasetAliasRefreshPromise;
     }
 
-    datasetAliasAutoRefreshStarted = true;
     datasetAliasRefreshPromise = (async () => {
         try {
             datasetAliasRegistry = await loadDatasetAliasRegistry();
@@ -277,6 +251,8 @@ export async function refreshDatasetAliasRegistry() {
 
 /**
  * Resolve the public URL segment for a raw internal dataset name.
+ * Reads are side-effect free: bootstrap refreshes aliases after verifying auth.
+ * Persisted login/permission caches must never start requests during page setup.
  *
  * @param {string|null|undefined} datasetName - Raw dataset/table name
  * @returns {string|null|undefined} Alias when known, otherwise the original name
@@ -284,9 +260,6 @@ export async function refreshDatasetAliasRegistry() {
 export function getPublicDatasetName(datasetName) {
     if (!datasetName) {
         return datasetName;
-    }
-    if (!datasetAliasRefreshPromise && !isKnownGuestShell() && canReadDatasetAliases()) {
-        void queueDatasetAliasRegistryRefresh();
     }
     return datasetAliasRegistry.rawToPublic[datasetName] || datasetName;
 }
@@ -300,9 +273,6 @@ export function getPublicDatasetName(datasetName) {
 export function getInternalDatasetName(datasetName) {
     if (!datasetName) {
         return datasetName;
-    }
-    if (!datasetAliasRefreshPromise && !isKnownGuestShell() && canReadDatasetAliases()) {
-        void queueDatasetAliasRegistryRefresh();
     }
     return datasetAliasRegistry.publicToRaw[datasetName] || datasetName;
 }

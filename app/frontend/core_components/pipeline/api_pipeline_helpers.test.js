@@ -9,7 +9,6 @@ import {
     resolveEndpointUrl,
     buildFetchOptions,
     isAuthFailure403,
-    isGuestFunctionAccessDenied403,
     isCsrfFailureResponse,
     createAuthError,
     createRateLimitError,
@@ -184,18 +183,6 @@ describe('isAuthFailure403', () => {
     test('returns false when auth_failure is truthy but not boolean true', () => {
         expect(isAuthFailure403('{"auth_failure": 1}')).toBe(false);
         expect(isAuthFailure403('{"auth_failure": "true"}')).toBe(false);
-    });
-});
-
-describe('isGuestFunctionAccessDenied403', () => {
-    test('recognizes only the legacy function-level guest denial', () => {
-        expect(isGuestFunctionAccessDenied403(
-            '{"error":"403 - Forbidden (function-level)","code":403}'
-        )).toBe(true);
-        expect(isGuestFunctionAccessDenied403(
-            '{"error":"403 - Forbidden (single table)","code":403}'
-        )).toBe(false);
-        expect(isGuestFunctionAccessDenied403('{"auth_failure":true}')).toBe(false);
     });
 });
 

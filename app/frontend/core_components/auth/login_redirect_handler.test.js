@@ -133,4 +133,31 @@ describe('requestLoginRedirect', () => {
         await mod.requestLoginRedirect({ userInitiated: true });
         expect(assignSpy).not.toHaveBeenCalled();
     });
+    test('redirects an explicit expired session to login with a fixed notice and return path on a public site', async () => {
+        localStorage.setItem('login_required_for_browse', 'false');
+        window.location.pathname = '/service_catalog';
+        window.location.search = '?search=example';
+        const mod = await loadModule();
+        await mod.requestLoginRedirect({ authenticationFailure: true });
+        expect(assignSpy).toHaveBeenCalledWith('/login?redirect=%2Fservice_catalog%3Fsearch%3Dexample&auth_notice=session-ended');
+        expect(clearDatasetSelectionStateMock).toHaveBeenCalledOnce();
+        expect(showLoginModalMock).not.toHaveBeenCalled();
+    });
+
+    test('adds the session explanation on a login-required site', async () => {
+        localStorage.setItem('login_required_for_browse', 'true');
+        const mod = await loadModule();
+        await mod.requestLoginRedirect({ authenticationFailure: true });
+        expect(assignSpy).toHaveBeenCalledWith('/login?auth_notice=session-ended');
+    });
+
+    test('schedules one hard navigation for concurrent authentication failures', async () => {
+        const mod = await loadModule();
+        await Promise.all([
+            mod.requestLoginRedirect({ authenticationFailure: true }),
+            mod.requestLoginRedirect({ authenticationFailure: true }),
+        ]);
+        expect(assignSpy).toHaveBeenCalledOnce();
+    });
+
 });

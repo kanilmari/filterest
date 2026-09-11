@@ -54,6 +54,7 @@ describe('dataset_aliases', () => {
         expect(getPublicDatasetName('system_users')).toBe('system_users');
         expect(endpointRouterMock).toHaveBeenCalledWith('datasetAliases', {
             suppressAuthRedirect: true,
+            suppressErrorToast: true,
         });
     });
 
@@ -84,10 +85,12 @@ describe('dataset_aliases', () => {
         expect(getInternalDatasetName('customers')).toBe('customers');
         expect(endpointRouterMock).toHaveBeenNthCalledWith(1, 'datasetAliases', {
             suppressAuthRedirect: true,
+            suppressErrorToast: true,
         });
         expect(endpointRouterMock).toHaveBeenNthCalledWith(2, 'datasetNames', {
             url_params: '?with_aliases=1',
             suppressAuthRedirect: true,
+            suppressErrorToast: true,
         });
     });
 
@@ -188,4 +191,27 @@ describe('dataset_aliases', () => {
 
         expect(endpointRouterMock).toHaveBeenCalledTimes(1);
     });
+    test('does not trust persisted login and permission hints while resolving initial routes', async () => {
+        localStorage.setItem('button_state', 'logout');
+        hasRoutePermissionMock.mockReturnValue(true);
+        const { getPublicDatasetName, getInternalDatasetName, buildDatasetPath } = await loadModule();
+        expect(getPublicDatasetName('app_service_catalog')).toBe('service_catalog');
+        expect(getInternalDatasetName('service_catalog')).toBe('app_service_catalog');
+        expect(buildDatasetPath('app_service_catalog')).toBe('/service_catalog');
+        await Promise.resolve();
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+    });
+
+    test('retains usable aliases if permissions change after auth bootstrap', async () => {
+        localStorage.setItem('button_state', 'logout');
+        endpointRouterMock.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
+        const { refreshDatasetAliasRegistry, getInternalDatasetName } = await loadModule();
+        await refreshDatasetAliasRegistry();
+        expect(getInternalDatasetName('service_catalog')).toBe('app_service_catalog');
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
+        for (const [, options] of endpointRouterMock.mock.calls) {
+            expect(options).toMatchObject({ suppressAuthRedirect: true, suppressErrorToast: true });
+        }
+    });
+
 });
