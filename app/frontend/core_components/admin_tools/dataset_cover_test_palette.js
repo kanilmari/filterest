@@ -11,6 +11,7 @@ import {
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
+import { DATASET_COVER_PALETTE_COPY as COPY } from './dataset_cover_palette_copy.js';
 
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
@@ -94,54 +95,14 @@ const RANGE_CONTROLS = Object.freeze([
     { id: 'active-tab-glow-blur', key: 'active_tab_glow_blur', label: 'activeTabGlowBlur', css: 'active-tab-glow-blur', min: 0, max: 12, step: 0.5, unit: 'px', shared: true, group: 'navigation' },
 ]);
 
-const COPY = Object.freeze({
-    en: Object.freeze({
-        button: 'Open appearance palette', title: 'Appearance settings', close: 'Close appearance settings',
-        notice: 'Changes preview immediately. Save stores both light and dark theme values.',
-        light: 'Light', dark: 'Dark', coverVisible: 'Show cover photo', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
-        themeGroup: 'Selected theme', sharedGroup: 'Shared by both themes',
-        themeImage: 'Image and overlay', ovalGeometry: 'Oval shape', ovalGradient: 'Oval gradient',
-        heroLayout: 'Hero image and transition', cardLayout: 'Card layout', navigation: 'Dataset tabs',
-        save: 'Save settings', saving: 'Saving…', saved: 'Settings saved.', saveFailed: 'Saving failed.',
-        ovalX: 'Oval width', ovalY: 'Oval height', ovalPositionY: 'Oval vertical position',
-        centerOpacity: 'Centre opacity', midOpacity: 'Mid opacity', edgeOpacity: 'Edge opacity',
-        centerStop: 'Centre stop', midStop: 'Mid stop', edgeStop: 'Edge stop',
-        imageOpacity: 'Whole image opacity', heroHeight: 'Hero extra height', heroBottomFade: 'Bottom fade height',
-        overlayOpacity: 'Darkening overlay opacity', imageBlur: 'Cover and background blur',
-        cardImageWidth: 'Card image width', cardDescriptionLines: 'Card description lines',
-        activeTabFade: 'Active tab fade width',
-        activeTabMaxOpacity: 'Active tab edge opacity (reserved)',
-        activeTabGlowIntensity: 'Active tab glow intensity', activeTabGlowWidth: 'Active tab glow width',
-        activeTabGlowBlur: 'Active tab glow blur', brandColor: 'Site brand colour',
-    }),
-    fi: Object.freeze({
-        button: 'Avaa ulkoasun paletti', title: 'Ulkoasun asetukset', close: 'Sulje ulkoasun asetukset',
-        notice: 'Muutokset näkyvät heti. Tallennus säilyttää vaalean ja tumman teeman arvot.',
-        light: 'Vaalea', dark: 'Tumma', coverVisible: 'Näytä kansikuva', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
-        themeGroup: 'Valittu teema', sharedGroup: 'Molemmille teemoille yhteiset',
-        themeImage: 'Kuva ja tummennus', ovalGeometry: 'Ovaalin muoto', ovalGradient: 'Ovaalin liukuväri',
-        heroLayout: 'Herokuva ja häivytys', cardLayout: 'Korttien asettelu', navigation: 'Dataset-välilehdet',
-        save: 'Tallenna asetukset', saving: 'Tallennetaan…', saved: 'Asetukset tallennettu.', saveFailed: 'Tallennus epäonnistui.',
-        ovalX: 'Ovaalin leveys', ovalY: 'Ovaalin korkeus', ovalPositionY: 'Ovaalin pystysijainti',
-        centerOpacity: 'Keskustan opacity', midOpacity: 'Keskialueen opacity', edgeOpacity: 'Reunan opacity',
-        centerStop: 'Keskustan stop-piste', midStop: 'Keskialueen stop-piste', edgeStop: 'Reunan stop-piste',
-        imageOpacity: 'Koko kuvan opacity', heroHeight: 'Heron lisäkorkeus', heroBottomFade: 'Alahäivytyksen korkeus',
-        overlayOpacity: 'Tummentavan overlayn opacity', imageBlur: 'Kansi- ja taustakuvan blur',
-        cardImageWidth: 'Korttikuvan leveys', cardDescriptionLines: 'Kortin kuvaustekstin rivit',
-        activeTabFade: 'Aktiivisen välilehden häivytysleveys',
-        activeTabMaxOpacity: 'Aktiivisen välilehden reunaopacity (varattu)',
-        activeTabGlowIntensity: 'Aktiivisen välilehden hohdon voimakkuus',
-        activeTabGlowWidth: 'Aktiivisen välilehden hohdon leveys',
-        activeTabGlowBlur: 'Aktiivisen välilehden hohdon sumennus', brandColor: 'Sivuston brändiväri',
-    }),
-});
+
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
 function getCopy() {
-    const language = String(getLanguageWithBrowserFallback() || 'en').toLowerCase();
+    const language = String(document.documentElement.lang.trim() || getLanguageWithBrowserFallback() || 'en').toLowerCase();
     return COPY[language] || COPY[language.split('-')[0]] || COPY.en;
 }
 
@@ -336,11 +297,12 @@ function createPaletteToolbox(title, {
     controls.classList.add('dataset-cover-test-palette__controls');
     content.appendChild(controls);
     toolbox.append(summary, content);
-    return { toolbox, content, controls };
+    return { toolbox, content, controls, label };
 }
 
 function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) {
-    const copy = getCopy();
+    let copy = getCopy();
+    let statusKey = '';
     let savedSettings = clone(initialSettings);
     let draftSettings = clone(initialSettings);
     let activeTheme = 'light';
@@ -407,17 +369,16 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     const maskInput = document.createElement('input');
     maskInput.type = 'checkbox';
     maskInput.dataset.testid = 'dataset-cover-test-palette-mask-enabled';
-    maskLabel.append(maskInput, document.createTextNode(copy.maskEnabled));
+    const maskText = document.createTextNode(copy.maskEnabled);
+    maskLabel.append(maskInput, maskText);
 
     const coverVisibilityLabel = document.createElement('label');
     coverVisibilityLabel.classList.add('dataset-cover-test-palette__toggle');
     const coverVisibilityInput = document.createElement('input');
     coverVisibilityInput.type = 'checkbox';
     coverVisibilityInput.dataset.testid = 'dataset-cover-test-palette-cover-visible';
-    coverVisibilityLabel.append(
-        coverVisibilityInput,
-        document.createTextNode(copy.coverVisible)
-    );
+    const coverVisibilityText = document.createTextNode(copy.coverVisible);
+    coverVisibilityLabel.append(coverVisibilityInput, coverVisibilityText);
 
     const themeToolboxes = document.createElement('section');
     themeToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
@@ -470,7 +431,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         });
         row.append(labelText, output, input);
         toolboxByGroup.get(control.group).controls.appendChild(row);
-        return { ...control, input, output };
+        return { ...control, input, output, labelText };
     });
 
     const brandColorLabel = document.createElement('label');
@@ -505,6 +466,35 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     status.setAttribute('role', 'status');
     status.dataset.testid = 'dataset-cover-test-palette-status';
     actions.append(resetButton, saveButton, status);
+
+    function setStatus(key) {
+        statusKey = key;
+        status.textContent = key ? getCopy()[key] : '';
+    }
+
+    // Update text nodes in place so switching language never rebuilds or saves a draft.
+    function syncCopy() {
+        copy = getCopy();
+        button.title = copy.button;
+        button.setAttribute('aria-label', copy.button);
+        heading.textContent = copy.title;
+        closeButton.title = copy.close;
+        closeButton.setAttribute('aria-label', copy.close);
+        notice.textContent = copy.notice;
+        tabButtons.forEach((tab) => { tab.textContent = copy[tab.dataset.theme]; });
+        maskText.textContent = copy.maskEnabled;
+        coverVisibilityText.textContent = copy.coverVisible;
+        toolboxByGroup.forEach(({ label }, groupName) => { label.textContent = copy[groupName]; });
+        rangeControls.forEach((control) => {
+            control.labelText.textContent = copy[control.label];
+            control.input.setAttribute('aria-label', copy[control.label]);
+        });
+        brandColorText.textContent = copy.brandColor;
+        brandColorInput.setAttribute('aria-label', copy.brandColor);
+        resetButton.textContent = copy.reset;
+        saveButton.textContent = copy.save;
+        setStatus(statusKey);
+    }
 
     function syncControls() {
         const theme = draftSettings.dataset_cover_theme[activeTheme];
@@ -557,12 +547,12 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         draftSettings = clone(savedSettings);
         applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
         syncControls();
-        status.textContent = '';
+        setStatus('');
         dragControls.resetGeometry();
     }
     async function saveSettings() {
         saveButton.disabled = true;
-        status.textContent = copy.saving;
+        setStatus('saving');
         try {
             // Preserve a single light-theme fallback for rollback to builds that
             // predate theme-specific blur while new builds use the theme values.
@@ -573,9 +563,9 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             draftSettings = clone(savedSettings);
             applyDatasetCoverThemeConfig(hero, savedSettings.dataset_cover_theme);
             syncControls();
-            status.textContent = copy.saved;
+            setStatus('saved');
         } catch (_error) {
-            status.textContent = copy.saveFailed;
+            setStatus('saveFailed');
         } finally {
             saveButton.disabled = false;
         }
@@ -608,12 +598,15 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     hero.appendChild(button);
     document.body.appendChild(panel);
     syncControls();
+    const languageObserver = new MutationObserver(syncCopy);
+    languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 
     return {
         button,
         panel,
         resetPreview,
         destroy() {
+            languageObserver.disconnect();
             resetPreview();
             dragControls.destroy();
             document.removeEventListener('pointerdown', handleDocumentPointerDown);

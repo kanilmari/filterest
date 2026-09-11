@@ -5,6 +5,7 @@
 
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { VIEW_DEACTIVATE_EVENT } from '../view_lifecycle_events.js';
+import { createMultiselectLabelUpdater } from './multiselect_dropdown_labels.js';
 import {
 	ariaCheckedValueForMultiselectState,
 	mergeSelectedMultiselectOptions,
@@ -62,6 +63,8 @@ export function createMultiselectDropdown({
 	searchDebounceMs = 200,
 	onChange,
 }) {
+	const labels = { placeholder, searchPlaceholder, excludeLabel, resetLabel, excludeTooltip,
+		resetTooltip, selectedCountLabel, excludedCountLabel, noResultsLabel, clearLabel };
 	if (!containerElement) {
 		throw new Error("containerElement is required.");
 	}
@@ -101,7 +104,7 @@ export function createMultiselectDropdown({
 
 	const inputEl = document.createElement('input');
 	inputEl.type = 'text';
-	inputEl.placeholder = placeholder;
+	inputEl.placeholder = labels.placeholder;
 	inputEl.readOnly = true;
 	inputEl.classList.add('msd-dropdown-input');
 	inputEl.setAttribute('role', 'combobox');
@@ -121,8 +124,8 @@ export function createMultiselectDropdown({
 	clearBtn.type = 'button';
 	clearBtn.classList.add('msd-clear-btn');
 	clearBtn.textContent = "×";
-	clearBtn.title = clearLabel;
-	clearBtn.setAttribute('aria-label', clearLabel);
+	clearBtn.title = labels.clearLabel;
+	clearBtn.setAttribute('aria-label', labels.clearLabel);
 	clearBtn.style.display = "none";
 	inputRow.appendChild(clearBtn);
 
@@ -153,8 +156,8 @@ export function createMultiselectDropdown({
 
 		searchInput = document.createElement('input');
 		searchInput.type = 'text';
-		searchInput.placeholder = searchPlaceholder;
-		searchInput.setAttribute('aria-label', searchPlaceholder);
+		searchInput.placeholder = labels.searchPlaceholder;
+		searchInput.setAttribute('aria-label', labels.searchPlaceholder);
 		searchInput.classList.add('msd-dropdown-search-input');
 
 		searchContainer.appendChild(searchInput);
@@ -320,7 +323,7 @@ export function createMultiselectDropdown({
 		if (filtered.length === 0) {
 			const noResults = document.createElement('div');
 			noResults.classList.add('msd-no-results');
-			noResults.textContent = noResultsLabel;
+			noResults.textContent = labels.noResultsLabel;
 			optionsList.appendChild(noResults);
 			return;
 		}
@@ -419,8 +422,8 @@ export function createMultiselectDropdown({
 				actionButton.disabled = disabled;
 				actionButton.classList.add('msd-option-action');
 				const isExcluded = optionState === 'exclude';
-				const actionLabel = isExcluded ? resetLabel : excludeLabel;
-				const actionTooltip = isExcluded ? resetTooltip : excludeTooltip;
+				const actionLabel = isExcluded ? labels.resetLabel : labels.excludeLabel;
+				const actionTooltip = isExcluded ? labels.resetTooltip : labels.excludeTooltip;
 				actionButton.dataset.action = isExcluded ? 'reset' : 'exclude';
 				actionButton.dataset.langKey = isExcluded ? 'reset' : 'exclude';
 				actionButton.dataset.titleLangKey = isExcluded ? 'reset_filter_option' : 'exclude_filter_option';
@@ -478,10 +481,10 @@ export function createMultiselectDropdown({
 		} else {
 			const parts = [];
 			if (includeLabels.length > 0) {
-				parts.push(`${includeLabels.length} ${selectedCountLabel}`);
+				parts.push(`${includeLabels.length} ${labels.selectedCountLabel}`);
 			}
 			if (excludeLabels.length > 0) {
-				parts.push(`${excludeLabels.length} ${excludedCountLabel}`);
+				parts.push(`${excludeLabels.length} ${labels.excludedCountLabel}`);
 			}
 			inputEl.value = parts.join(", ");
 			clearBtn.style.display = "inline-block";
@@ -623,9 +626,12 @@ export function createMultiselectDropdown({
 		}
 	}
 
+	instance.setLabels = createMultiselectLabelUpdater({
+		labels, input: inputEl, searchInput, clearButton: clearBtn, optionsList,
+		updateDisplay, isDestroyed: () => destroyed,
+	});
 	renderList("");
 	updateDisplay();
-
 	return instance;
 
 	function applyState(nextState) {

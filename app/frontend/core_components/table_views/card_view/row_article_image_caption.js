@@ -3,7 +3,7 @@
 // Bridges shared asset rows with ordinary and image-first article presentations.
 // Exists so image credits never leak into compact cards and change with the UI language.
 
-import { setLocalizedDatasetText } from "../dataset_value_localizer.js";
+import { bindDatasetLanguageRenderer, resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
 import { resolveImagePath } from "./row_article_content_builder_helpers.js";
 import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 
@@ -25,16 +25,144 @@ function resolveInlineImagePath(container) {
     }
 }
 
+const captionInteractionRoots = new WeakSet();
+const CREDIT_LABELS = {
+    fi: { photo: "Kuva", illustration: "Kuvituskuva" },
+    en: { photo: "Photo", illustration: "Illustration" },
+    ch: { photo: "图片", illustration: "示意图" },
+    yue: { photo: "相片", illustration: "示意圖" },
+    traditional: { photo: "圖片", illustration: "示意圖" },
+};
+const PROVIDERS = { unsplash: "Unsplash", pexels: "Pexels", pixabay: "Pixabay" };
+
+// Credits are untrusted dataset content. Only explicit web URLs become links;
+// HTML, executable schemes, embedded credentials and relative URLs never do.
+function resolveCreditUrl(value) {
+    if (typeof value !== "string" || !/^https?:\/\//i.test(value)
+        || /[\u0000-\u0020\u007f]/.test(value)) return null;
+    try {
+        const url = new URL(value);
+        return url.username || url.password ? null : url;
+    } catch {
+        return null;
+    }
+}
+
+function resolveProviderName(url, provider = "") {
+    const normalized = String(provider).toLowerCase();
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    return PROVIDERS[normalized]
+        || Object.entries(PROVIDERS).find(([key]) => host === key + ".com")?.[1]
+        || "";
+}
+
+function resolveImageCredit(imageRow, description) {
+    let metadata = imageRow?.metadata_json;
+    if (typeof metadata === "string") {
+        try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+    }
+    const source = metadata?.image_source;
+    const sourceUrl = resolveCreditUrl(source?.source_page_url);
+    if (sourceUrl) {
+        const creator = String(source.creator_name || "").trim();
+        const provider = resolveProviderName(sourceUrl, source.provider);
+        if (creator || provider) {
+            const generatedCaption = /^(?:Kuva|Photo)\s*:\s*/i.test(description)
+                && description.replace(/^(?:Kuva|Photo)\s*:\s*/i, "").replace(/\.$/, "")
+                    === [creator, provider].filter(Boolean).join(" / ");
+            return { url: sourceUrl, creator, provider, illustration: false,
+                description: generatedCaption ? "" : description };
+        }
+    }
+
+    // Historical illustration imports stored only a Markdown photographer link.
+    // Recognize the whole credit so ordinary authored captions retain their prose.
+    const legacy = description.match(
+        /^(Kuvituskuva|Illustration(?: image)?|Kuva|Photo)\s*[:–—-]\s*\[([^\]\r\n]+)\]\((\S+)\)\.?$/i,
+    );
+    const legacyUrl = resolveCreditUrl(legacy?.[3]);
+    if (!legacyUrl) return null;
+    return { url: legacyUrl, creator: legacy[2].trim(), provider: resolveProviderName(legacyUrl),
+        illustration: /^(Kuvituskuva|Illustration)/i.test(legacy[1]), description: "" };
+}
+
+function appendCreditLink(host, label, url) {
+    const anchor = document.createElement("a");
+    anchor.textContent = label;
+    anchor.href = url.href;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    host.appendChild(anchor);
+}
+
+function appendCaptionText(host, description) {
+    let cursor = 0;
+    // Named links may contain balanced URL parentheses. Never turn a truncated
+    // destination into a link, and never interpret arbitrary Markdown or HTML.
+    for (const match of description.matchAll(/\[([^\]\r\n]+)\]\(/g)) {
+        if (match.index < cursor) continue;
+        const urlStart = match.index + match[0].length;
+        let end = urlStart;
+        let depth = 1;
+        for (; end < description.length && depth > 0; end += 1) {
+            if (description[end] === "(") depth += 1;
+            if (description[end] === ")") depth -= 1;
+        }
+        if (depth !== 0) continue;
+        host.append(document.createTextNode(description.slice(cursor, match.index)));
+        const url = resolveCreditUrl(description.slice(urlStart, end - 1));
+        if (url) appendCreditLink(host, match[1], url);
+        else host.append(document.createTextNode(match[1]));
+        cursor = end;
+    }
+    host.append(document.createTextNode(description.slice(cursor)));
+}
+
+function resolveCreditLabels(language) {
+    const locale = String(language).toLowerCase().replaceAll("_", "-");
+    if (/^zh-(?:tw|hk|hant)(?:-|$)/.test(locale)) return CREDIT_LABELS.traditional;
+    if (locale === "zh" || locale.startsWith("zh-")) return CREDIT_LABELS.ch;
+    return CREDIT_LABELS[locale.split("-")[0]] || CREDIT_LABELS.en;
+}
+
+function isolateCaptionInteractions(caption) {
+    if (captionInteractionRoots.has(caption)) return;
+    captionInteractionRoots.add(caption);
+    for (const name of ["click", "auxclick", "pointerdown", "pointerup", "touchstart", "touchend"]) {
+        caption.addEventListener(name, (event) => event.stopPropagation());
+    }
+    caption.addEventListener("keydown", (event) => {
+        // Preserve ordinary tab navigation and the modal's Escape-to-close behavior.
+        if (["Enter", " ", "ArrowLeft", "ArrowRight"].includes(event.key)) event.stopPropagation();
+    });
+}
+
 /**
- * Writes one image-row description and hides the caption when no text exists.
- * Missing column metadata intentionally uses the conservative multilingual-value heuristic.
+ * Renders one localized caption with safe photographer/provider links.
+ * Both article layouts share this boundary; language and image changes rebuild the credit.
  */
 export function setRowArticleImageCaption(captionElement, imageRow) {
     if (!(captionElement instanceof HTMLElement)) return;
-    setLocalizedDatasetText(captionElement, imageRow?.description, null, {
-        afterRender: (renderedValue) => {
-            captionElement.hidden = String(renderedValue || "").trim() === "";
-        },
+    isolateCaptionInteractions(captionElement);
+    bindDatasetLanguageRenderer(captionElement, (language) => {
+        const description = resolveDatasetDisplayValue(imageRow?.description, null, language).trim();
+        const credit = resolveImageCredit(imageRow, description);
+        captionElement.replaceChildren();
+        if (credit) {
+            if (credit.description) {
+                appendCaptionText(captionElement, credit.description);
+                captionElement.append(document.createTextNode(" — "));
+            }
+            const labels = resolveCreditLabels(language);
+            captionElement.append(document.createTextNode(
+                (credit.illustration ? labels.illustration : labels.photo) + ": ",
+            ));
+            appendCreditLink(captionElement,
+                [credit.creator, credit.provider].filter(Boolean).join(" / "), credit.url);
+        } else {
+            appendCaptionText(captionElement, description);
+        }
+        captionElement.hidden = !captionElement.textContent.trim();
     });
 }
 

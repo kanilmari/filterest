@@ -142,13 +142,44 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
         picker = createMultiselectDropdown({
             containerElement: pickerWrapper,
             options: fieldOptions,
-            placeholder: t("field_set_fields_placeholder", "Kentät kenttäjoukossa"),
-            searchPlaceholder: t("search_fields", "Etsi kenttiä"),
+            ...pickerLabels(),
             allowExclude: false,
-            selectedCountLabel: t("fields_selected", "kenttää"),
             initialState: { includeValues: initialSelection },
             onChange: ({ includeValues }) => applyVisibleColumns(includeValues),
         });
+    }
+
+    function pickerLabels() {
+        return {
+            placeholder: t("field_set_fields_placeholder", "Kentät kenttäjoukossa"),
+            searchPlaceholder: t("search_fields", "Etsi kenttiä"),
+            selectedCountLabel: t("fields_selected", "kenttää"),
+            noResultsLabel: t("no_results", "Ei tuloksia"),
+            clearLabel: t("clear_selection", "Tyhjennä valinta"),
+        };
+    }
+
+    // Refresh only copy: keep native options, popup focus and unsaved fields intact.
+    function refreshLanguage() {
+        if (destroyed) return;
+        for (const element of [modeButton, sourceStatus, assignmentDiagnostic,
+            saveButton, updateButton, resetButton, deleteButton]) {
+            if (element.dataset.langKey) {
+                element.textContent = t(element.dataset.langKey, element.textContent);
+            }
+        }
+        for (const option of select.options) {
+            const fieldSet = fieldSets.find((set) => String(set.id) === option.value);
+            if (!fieldSet) {
+                option.textContent = `— ${t("select_field_set", "Valitse kenttäjoukko")} —`;
+                continue;
+            }
+            const ownerLabel = fieldSet.scope === "shared"
+                ? t("shared", "jaettu")
+                : t("field_set_owner_personal", "henkilökohtainen");
+            option.textContent = `${fieldSet.name} (${ownerLabel})`;
+        }
+        picker?.setLabels?.(pickerLabels());
     }
 
     function applyVisibleColumns(visibleColumns = []) {
@@ -185,6 +216,9 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
         sourceStatus.hidden = !serverCollectionsAvailable;
         select.hidden = !serverCollectionsAvailable || !canEditPersonal;
         actions.hidden = !serverCollectionsAvailable || (!canEditPersonal && !editingSiteDefault);
+        modeButton.dataset.langKey = editingSiteDefault
+            ? "edit_personal_field_selection"
+            : "edit_site_field_default";
         modeButton.textContent = editingSiteDefault
             ? t("edit_personal_field_selection", "Palaa omaan valintaan")
             : t("edit_site_field_default", "Muokkaa sivuston oletusta");
@@ -429,8 +463,15 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
 
     render();
 
+    const languageObserver = new MutationObserver(refreshLanguage);
+    languageObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["lang"],
+    });
+
     row.destroy = () => {
         destroyed = true;
+        languageObserver.disconnect();
         picker?.destroy?.();
         listenerCleanups.forEach((cleanup) => cleanup());
         disclosureDestroy?.();

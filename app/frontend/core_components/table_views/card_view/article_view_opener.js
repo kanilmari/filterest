@@ -14,16 +14,7 @@ import {
     enableEditing,
     sendCardUpdates,
 } from "./card_field_formatter.js";
-import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
-import { buildRowArticleImageGallery } from "./row_article_image_gallery.js";
-import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js";
-import {
-    filterRowArticleNonMediaChildTables,
-    resolveRowArticleAttachmentListChild,
-    resolveRowArticleDynamicAssetChildren,
-    resolveRowArticleImageGalleryChild,
-    resolveRowArticleParentImageRows,
-} from "./row_article_asset_resolver.js";
+import { resolveRowArticleParentImageRows } from "./row_article_asset_resolver.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
@@ -43,12 +34,6 @@ import { resolveRowArticleDataTypes } from "./row_article_data_types_resolver.js
 import { show_related_items_on_big_cards } from "../../../ui_config.js";
 import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { hydrateRowArticleTaskProgressSection } from "./row_article_task_progress_hydrator.js";
-import { syncServiceCatalogInlineCachedImageVisibility } from "./row_article_service_catalog_image_syncer.js";
-import {
-    wrapRowArticleAttachmentSection,
-    wrapRowArticleImageGallerySection,
-    wrapRowArticleRelatedRowsSection,
-} from "./row_article_tool_section_wrapper.js";
 import {
     closeRowArticle,
     dispatchCardArticleToggle,
@@ -61,9 +46,8 @@ import { refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_r
 import { buildConfirmationMessage } from "../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
-import { syncRowArticleInlineImageCaptions } from "./row_article_image_caption.js";
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
+import { createRowArticleMediaHydrator } from "./row_article_media_hydrator.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
 import { buildRowArticleQueryString } from "./row_article_url_state.js";
 import { fetchPermittedRowArticleData } from "./row_article_data_fetcher.js";
@@ -208,220 +192,21 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         });
 
         let linkedTaskChildCount = 0;
-        let refreshMediaSections = async () => {};
-        const hydrateRelatedSections = async () => {
-            if (!canCommit() || !rowArticleElement.isConnected || !show_related_items_on_big_cards || !row_item.id) {
-                return;
-            }
-
-            try {
-                const buildMediaState = async (childTables = []) => {
-                    const { imagesChild, assetsChild } = resolveRowArticleDynamicAssetChildren(childTables);
-                    const [imageLinking, attachmentLinking] = await Promise.all([
-                        rowArticleLoadSession.fetchImageLinking(),
-                        rowArticleLoadSession.fetchAttachmentLinking(),
-                    ]);
-
-                    return {
-                        attachmentChildForList: resolveRowArticleAttachmentListChild(
-                            table_name,
-                            attachmentLinking,
-                            assetsChild,
-                        ),
-                        attachmentLinking,
-                        imageChildForGallery: resolveRowArticleImageGalleryChild(
-                            table_name,
-                            table_has_image_role,
-                            imageLinking,
-                            imagesChild,
-                            assetsChild,
-                        ),
-                        imageLinking,
-                    };
-                };
-
-                const upsertMediaSection = (selector, nextElement, anchorSelector = null) => {
-                    if (!rowArticleElement.isConnected) {
-                        return;
-                    }
-
-                    const oldElement = rowArticleContentElement.querySelector(selector);
-                    if (oldElement && nextElement) {
-                        oldElement.replaceWith(nextElement);
-                        return;
-                    }
-                    if (oldElement && !nextElement) {
-                        oldElement.remove();
-                        return;
-                    }
-                    if (!nextElement) {
-                        return;
-                    }
-                    const anchor = anchorSelector
-                        ? rowArticleContentElement.querySelector(anchorSelector)
-                        : null;
-                    rowArticleContentElement.insertBefore(nextElement, anchor || null);
-                };
-
-                const renderGallery = async (imgChild) => {
-                    const imageDataset = imgChild?.dataset || "";
-                    if (imageDataset) {
-                        void primeDatasetPermissions(imageDataset, [
-                            "/api/add-row-multipart",
-                            "/api/delete-rows",
-                            "/api/update-row",
-                        ]);
-                    }
-                    const [
-                        canUpload,
-                        canDelete,
-                        canUpdate,
-                    ] = imageDataset
-                        ? await Promise.all([
-                            hasDatasetPermission("/api/add-row-multipart", imageDataset),
-                            hasDatasetPermission("/api/delete-rows", imageDataset),
-                            hasDatasetPermission("/api/update-row", imageDataset),
-                        ])
-                        : [false, false, false];
-
-                    const galleryPermissions = {
-                        canUpload,
-                        canDelete,
-                        canSetPrimary: canUpdate,
-                        canEditMetadata: canUpdate,
-                        // Once the related image dataset has resolved, its rows are
-                        // authoritative. Reusing the parent row's cached image here
-                        // would resurrect a just-deleted asset until the next F5.
-                        parentImageRows: imgChild ? [] : parent_row_image_rows,
-                        imageFirstContext: {
-                            rowItem: row_item,
-                            tableName: table_name,
-                            selectedCard,
-                            rowLabel: row_presentation_label,
-                        },
-                    };
-                    const captionRows = resolveRowArticleImageRows(
-                        imgChild?.rows || [],
-                        imgChild ? [] : parent_row_image_rows,
-                    );
-                    syncRowArticleInlineImageCaptions(
-                        rowArticleContentElement,
-                        captionRows,
-                    );
-                    return buildRowArticleImageGallery(
-                        table_name,
-                        row_item.id,
-                        imgChild,
-                        refreshMediaSections,
-                        galleryPermissions
-                    );
-                };
-
-                const renderAttachments = async (assetChild, attachmentLinking) => {
-                    return buildRowArticleAttachmentList(
-                        table_name,
-                        row_item.id,
-                        assetChild,
-                        refreshMediaSections,
-                        { linkingStatus: attachmentLinking },
-                    );
-                };
-
-                refreshMediaSections = async () => {
-                    try {
-                        const fresh = await rowArticleLoadSession.fetchDynamicChildren({
-                            forceRefresh: true,
-                        });
-                        if (!rowArticleElement.isConnected) {
-                            return;
-                        }
-                        const freshMediaState = await buildMediaState(fresh?.child_tables || []);
-                        const freshGalleryElement = await renderGallery(freshMediaState.imageChildForGallery);
-                        syncServiceCatalogInlineCachedImageVisibility(
-                            rowArticleContentElement,
-                            table_name,
-                            freshGalleryElement
-                        );
-                        upsertMediaSection(
-                            ".row_article_image_gallery_section",
-                            wrapRowArticleImageGallerySection(freshGalleryElement),
-                            ".row_article_attachment_list_section, .row_article_related_items_section",
-                        );
-                        upsertMediaSection(
-                            ".row_article_attachment_list_section",
-                            wrapRowArticleAttachmentSection(await renderAttachments(
-                                freshMediaState.attachmentChildForList,
-                                freshMediaState.attachmentLinking,
-                            )),
-                            ".row_article_related_items_section",
-                        );
-                    } catch (refreshErr) {
-                        console.warn("big-card media refresh error:", refreshErr?.message || refreshErr);
-                    }
-                };
-
-                const dyn = await rowArticleLoadSession.fetchDynamicChildren();
-                if (!rowArticleElement.isConnected || !dyn?.child_tables) {
-                    return;
-                }
-
-                // fetchDynamicChildren keeps the legacy child_tables envelope,
-                // but each related-tab entry uses `column` as the FK key name.
-                const linkedTaskChildTable = dyn.child_tables.find(
-                    c => c.dataset === 'dev_agent_tasks' && c.column === 'parent_id'
-                ) || null;
-                const linkedTaskRowCount = Number.parseInt(
-                    String(linkedTaskChildTable?.row_count ?? ''),
-                    10
-                );
-                linkedTaskChildCount = Number.isFinite(linkedTaskRowCount)
-                    ? linkedTaskRowCount
-                    : Array.isArray(linkedTaskChildTable?.rows)
-                        ? linkedTaskChildTable.rows.length
-                        : 0;
-
-                const initialMediaState = await buildMediaState(dyn.child_tables);
-                const galleryElement = await renderGallery(initialMediaState.imageChildForGallery);
-                syncServiceCatalogInlineCachedImageVisibility(
-                    rowArticleContentElement,
-                    table_name,
-                    galleryElement
-                );
-                if (galleryElement) {
-                    rowArticleContentElement.appendChild(
-                        wrapRowArticleImageGallerySection(galleryElement)
-                    );
-                }
-
-                const attachmentList = await renderAttachments(
-                    initialMediaState.attachmentChildForList,
-                    initialMediaState.attachmentLinking,
-                );
-                if (attachmentList) {
-                    rowArticleContentElement.appendChild(
-                        wrapRowArticleAttachmentSection(attachmentList)
-                    );
-                }
-
-                const tabsEl = await buildRowArticleRelatedTabs(
-                    filterRowArticleNonMediaChildTables(dyn.child_tables),
-                    table_name,
-                    row_item.id,
-                    current_user_id,
-                    null,
-                    {
-                        fetchDynamicChildren: rowArticleLoadSession.fetchDynamicChildren,
-                    }
-                );
-                if (tabsEl && rowArticleElement.isConnected) {
-                    rowArticleContentElement.appendChild(
-                        wrapRowArticleRelatedRowsSection(tabsEl)
-                    );
-                }
-            } catch (err) {
-                console.warn("virhe: %s", err.message);
-            }
-        };
+        const { hydrateRelatedSections, refreshMediaSections } = createRowArticleMediaHydrator({
+            rowArticleElement,
+            rowArticleContentElement,
+            rowArticleLoadSession,
+            rowItem: row_item,
+            tableName: table_name,
+            selectedCard,
+            rowLabel: row_presentation_label,
+            parentImageRows: parent_row_image_rows,
+            tableHasImageRole: table_has_image_role,
+            currentUserId: current_user_id,
+            showRelatedItems: show_related_items_on_big_cards,
+            canCommit,
+            onLinkedTaskChildCountChange: (count) => { linkedTaskChildCount = count; },
+        });
 
         /* -------------------------------------------------- *
          * 8. RESOLVE WRAPPER & CARD CONTAINER (needed by action bar)

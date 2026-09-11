@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// dataset_cover_test_palette.test.js
 // Verifies public appearance settings and the protected light/dark palette editor.
 // Connects optional cover images, shared card controls and persisted site settings.
 // Preserves authorization while datasets without images gain the same editor.
@@ -41,11 +42,13 @@ function createMountOptions(overrides = {}) {
 describe('dataset cover presentation settings', () => {
     beforeEach(() => {
         document.body.innerHTML = '';
+        document.documentElement.removeAttribute('lang');
         history.replaceState({}, '', '/demo?view=card');
     });
 
     afterEach(() => {
         document.documentElement.removeAttribute('style');
+        document.documentElement.removeAttribute('lang');
         vi.restoreAllMocks();
     });
 
@@ -181,6 +184,120 @@ describe('dataset cover presentation settings', () => {
         control.destroy();
         if (priorLanguage === null) localStorage.removeItem('chosen_language');
         else localStorage.setItem('chosen_language', priorLanguage);
+    });
+
+    test('updates mounted copy with the document language without changing the open draft', async () => {
+        localStorage.setItem('chosen_language', 'en');
+        document.documentElement.lang = 'fi-FI';
+        const hero = createCoverHero();
+        const options = createMountOptions();
+        const control = await mountDatasetCoverTestPalette(hero, 'demo', options);
+        control.button.click();
+        const { panel } = control;
+        const field = (name) => panel.querySelector(`[data-testid="dataset-cover-test-palette-${name}"]`);
+        expect(control.button.title).toBe('Avaa ulkoasun paletti');
+        field('tab-dark').click();
+        field('image-opacity').value = '0.65';
+        field('image-opacity').dispatchEvent(new Event('input', { bubbles: true }));
+        field('mask-enabled').checked = true;
+        field('mask-enabled').dispatchEvent(new Event('change', { bubbles: true }));
+        field('brand-color').value = '#00aa77';
+        field('brand-color').dispatchEvent(new Event('input', { bubbles: true }));
+        field('card-image-width').value = '425';
+        field('card-image-width').dispatchEvent(new Event('input', { bubbles: true }));
+        const toolboxes = [...panel.querySelectorAll('details')];
+        toolboxes.forEach((toolbox, index) => { toolbox.open = index % 2 === 0; });
+        panel.style.cssText = 'left: 42px; top: 73px; right: auto; width: 490px; height: 680px;';
+        const geometry = panel.style.cssText;
+        const heroStyle = hero.style.cssText;
+        const rootStyle = document.documentElement.style.cssText;
+        const controls = [...panel.querySelectorAll('input')];
+        const values = controls.map((input) => [input.value, input.checked]);
+        const expanded = toolboxes.map((toolbox) => toolbox.open);
+
+        for (const [language, openLabel, opacityLabel, title] of [
+            ['en', 'Open appearance palette', 'Whole image opacity', 'Appearance settings'],
+            ['fi', 'Avaa ulkoasun paletti', 'Koko kuvan peittävyys', 'Ulkoasun asetukset'],
+        ]) {
+            document.documentElement.lang = language;
+            await Promise.resolve();
+            expect(control.button.title).toBe(openLabel);
+            expect(control.button.getAttribute('aria-label')).toBe(openLabel);
+            expect(panel.querySelector('strong').textContent).toBe(title);
+            expect(field('image-opacity').getAttribute('aria-label')).toBe(opacityLabel);
+            expect(field('image-opacity').parentElement.querySelector('span').textContent).toBe(opacityLabel);
+            expect(field('close').title).toBe(language === 'fi' ? 'Sulje ulkoasun asetukset' : 'Close appearance settings');
+            expect(field('close').getAttribute('aria-label')).toBe(field('close').title);
+            expect(field('save').textContent).toBe(language === 'fi' ? 'Tallenna asetukset' : 'Save settings');
+            expect(field('reset').textContent).toBe(language === 'fi' ? 'Palauta tallennetut arvot' : 'Reset to saved values');
+            expect(panel.hidden).toBe(false);
+            expect(control.button.getAttribute('aria-expanded')).toBe('true');
+            expect(field('tab-dark').getAttribute('aria-selected')).toBe('true');
+            expect([...panel.querySelectorAll('input')]).toEqual(controls);
+            expect(controls.map((input) => [input.value, input.checked])).toEqual(values);
+            expect(toolboxes.map((toolbox) => toolbox.open)).toEqual(expanded);
+            expect(panel.style.cssText).toBe(geometry);
+            expect(hero.style.cssText).toBe(heroStyle);
+            expect(document.documentElement.style.cssText).toBe(rootStyle);
+        }
+        expect(panel.textContent).toContain('Aineistovälilehdet');
+        expect(panel.textContent).toContain('Kansikuva ja häivytys');
+        expect(panel.textContent).toContain('Liukuvärin keskustan kohta');
+        expect(panel.textContent).toContain('Tummennuskerroksen peittävyys');
+        expect(panel.textContent).toContain('Kansi- ja taustakuvan sumennus');
+        expect(panel.textContent).not.toMatch(/opacity|stop-piste|overlay|blur|hero|dataset/i);
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
+        expect(options.settingsRequestFn).toHaveBeenCalledOnce();
+        expect(options.requestFn).toHaveBeenCalledOnce();
+        control.destroy();
+        localStorage.removeItem('chosen_language');
+    });
+
+    test.each([true, false])('keeps pending and completed save status translated, success=%s', async (succeeds) => {
+        document.documentElement.lang = 'fi';
+        let finishSave;
+        let failSave;
+        const options = createMountOptions({
+            saveRequestFn: vi.fn(() => new Promise((resolve, reject) => {
+                finishSave = resolve;
+                failSave = reject;
+            })),
+        });
+        const control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        control.button.click();
+        const save = control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]');
+        const status = control.panel.querySelector('[role="status"]');
+        save.click();
+        expect(status.textContent).toBe('Tallennetaan…');
+        document.documentElement.lang = 'en';
+        await Promise.resolve();
+        expect(status.textContent).toBe('Saving…');
+        expect(save.disabled).toBe(true);
+        if (succeeds) finishSave(options.saveRequestFn.mock.calls[0][0]);
+        else failSave(new Error('Save unavailable'));
+        await vi.waitFor(() => expect(save.disabled).toBe(false));
+        expect(status.textContent).toBe(succeeds ? 'Settings saved.' : 'Saving failed.');
+        document.documentElement.lang = 'fi';
+        await Promise.resolve();
+        expect(status.textContent).toBe(succeeds ? 'Asetukset tallennettu.' : 'Tallennus epäonnistui.');
+        expect(options.saveRequestFn).toHaveBeenCalledOnce();
+        control.destroy();
+    });
+
+    test('disconnects language observation when the palette is destroyed', async () => {
+        document.documentElement.lang = 'fi';
+        const options = createMountOptions();
+        const control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect');
+        const heading = control.panel.querySelector('strong');
+        control.destroy();
+        expect(disconnect).toHaveBeenCalledOnce();
+        document.documentElement.lang = 'en';
+        await Promise.resolve();
+        expect(heading.textContent).toBe('Ulkoasun asetukset');
+        expect(control.button.getAttribute('aria-label')).toBe('Avaa ulkoasun paletti');
+        expect(control.panel.isConnected).toBe(false);
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
     });
 
     test('keeps the palette admin-only and fails closed when its protected flag is absent', async () => {

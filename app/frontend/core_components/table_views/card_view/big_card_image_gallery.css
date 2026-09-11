@@ -28,6 +28,18 @@
     color: var(--text_color_secondary, var(--text_color));
     font-size: 0.95rem;
     line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.row_article_image_caption a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.row_article_image_caption a:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: 3px;
 }
 
 .row_article_inline_image_caption {
@@ -41,8 +53,9 @@
     position: absolute;
     z-index: 3;
     inset-inline-start: 50%;
-    inset-block-end: clamp(1.25rem, 4vh, 3rem);
-    width: min(90vw, 900px);
+    inset-block-end: max(4rem, env(safe-area-inset-bottom));
+    width: max-content;
+    max-width: min(90vw, 900px);
     margin: 0;
     padding: 0.7rem 1rem;
     transform: translateX(-50%);
@@ -53,7 +66,7 @@
     color: var(--text_color);
     text-align: center;
     text-shadow: 0 1px 3px color-mix(in srgb, var(--bg_color_extreme) 85%, transparent);
-    pointer-events: none;
+    pointer-events: auto;
     backdrop-filter: blur(8px);
 }
 

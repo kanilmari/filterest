@@ -12,6 +12,7 @@ const {
     fetchPermittedRowArticleDataMock,
     getParamsMock,
     setParamsMock,
+    articleUiSettings,
 } = vi.hoisted(() => ({
     closeRowArticleMock: vi.fn((_wrapper, _cardContainer, rowArticleElement) => {
         rowArticleElement.remove();
@@ -20,6 +21,7 @@ const {
     fetchPermittedRowArticleDataMock: vi.fn(async ({ rowItem }) => rowItem),
     getParamsMock: vi.fn(() => ({})),
     setParamsMock: vi.fn(),
+    articleUiSettings: { showRelatedItems: true },
 }));
 
 vi.mock("../article_view/article_language_editor.js", () => ({ createArticleLanguageEditor: vi.fn(() => null) }));
@@ -88,7 +90,7 @@ vi.mock("./row_article_opener_helpers.js", () => ({
 }));
 
 vi.mock("../../../ui_config.js", () => ({
-    show_related_items_on_big_cards: true,
+    get show_related_items_on_big_cards() { return articleUiSettings.showRelatedItems; },
 }));
 
 vi.mock("./row_article_content_builder.js", () => ({
@@ -154,7 +156,7 @@ import {
     parseRoleString,
     sendCardUpdates,
 } from "./card_field_formatter.js";
-import { hasDatasetPermission } from "../../route_permission_checker.js";
+import { hasDatasetPermission, primeDatasetPermissions } from "../../route_permission_checker.js";
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
 import { buildRowArticleImageGallery } from "./row_article_image_gallery.js";
 import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js";
@@ -182,6 +184,9 @@ describe("openRowArticleView", () => {
         document.body.innerHTML = "";
         window.history.replaceState({}, "", "/");
         localStorage.clear();
+        articleUiSettings.showRelatedItems = true;
+        vi.mocked(primeDatasetPermissions).mockClear();
+        vi.mocked(hasDatasetPermission).mockClear();
         ["events", "services", "service_catalog", "tickets", "app_service_catalog"].forEach((table) => localStorage.setItem(`${table}_view`, "article_view"));
         vi.mocked(createArticleLanguageEditor).mockReset();
         vi.mocked(createArticleLanguageEditor).mockReturnValue(null);
@@ -505,6 +510,103 @@ describe("openRowArticleView", () => {
             expect.any(Number),
             { selectedCard },
         );
+    });
+
+    function prepareInlineCaptionArticle({ parentRows = [], childRows = [] } = {}) {
+        document.body.innerHTML = `<div id="tickets_article_view_container"><div class="card_view_wrapper"><div class="card_container"><div class="card" data-id="2"></div></div><div class="row_article_placeholder"></div></div></div>`;
+        const content = document.createElement("div");
+        const inlineImage = document.createElement("div");
+        inlineImage.className = "big_card_image";
+        inlineImage.dataset.rowArticleImageColumn = "cached_image";
+        const image = document.createElement("img");
+        image.src = "/storage/10_2_1.webp";
+        inlineImage.appendChild(image);
+        content.appendChild(inlineImage);
+        vi.mocked(buildRowArticleContent).mockResolvedValueOnce({ rowArticleContentElement: content });
+        vi.mocked(resolveRowArticleParentImageRows).mockReturnValueOnce(parentRows);
+        const child = { dataset: "tickets_assets", column: "tickets_id", rows: childRows };
+        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReturnValue({ assetsChild: child });
+        vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValue(child);
+        const session = {
+            fetchDynamicChildren: vi.fn(async () => ({ child_tables: [child] })),
+            fetchImageLinking: vi.fn(async () => ({ child_table: "tickets_assets" })),
+            fetchAttachmentLinking: vi.fn(async () => null),
+        };
+        vi.mocked(createRowArticleLoadSession).mockReturnValueOnce(session);
+        return { inlineImage, session, selectedCard: document.querySelector(".card") };
+    }
+
+    test("loads classic image credits without optional related sections or editing permission checks", async () => {
+        articleUiSettings.showRelatedItems = false;
+        const { inlineImage, session, selectedCard } = prepareInlineCaptionArticle({
+            childRows: [{ filename: "10_2_1.webp", description: "Child photo credit" }],
+        });
+        await openRowArticleView({ id: 2, cached_image: "10_2_1.webp" }, "tickets", selectedCard);
+        await flushRowArticleHydration();
+
+        expect(inlineImage.querySelector(".row_article_inline_image_caption")?.textContent).toBe("Child photo credit");
+        expect(session.fetchDynamicChildren).toHaveBeenCalledTimes(1);
+        expect(session.fetchImageLinking).toHaveBeenCalledTimes(1);
+        expect(session.fetchAttachmentLinking).not.toHaveBeenCalled();
+        expect(buildRowArticleImageGallery).not.toHaveBeenCalled();
+        expect(buildRowArticleAttachmentList).not.toHaveBeenCalled();
+        expect(buildRowArticleRelatedTabs).not.toHaveBeenCalled();
+        expect(primeDatasetPermissions).not.toHaveBeenCalledWith("tickets_assets", expect.anything());
+        expect(hasDatasetPermission.mock.calls.some(([, dataset]) => dataset === "tickets_assets")).toBe(false);
+    });
+
+    test.each([
+        ["missing response", undefined],
+        ["missing child tables", {}],
+        ["failed request", new Error("Unavailable")],
+    ])("keeps permitted parent credits when child loading has a %s", async (_label, response) => {
+        articleUiSettings.showRelatedItems = false;
+        const { inlineImage, session, selectedCard } = prepareInlineCaptionArticle({
+            parentRows: [{ filename: "10_2_1.webp", description: "Parent photo credit" }],
+        });
+        session.fetchDynamicChildren.mockImplementationOnce(async () => {
+            if (response instanceof Error) throw response;
+            return response;
+        });
+        await openRowArticleView({ id: 2, cached_image: "10_2_1.webp" }, "tickets", selectedCard);
+        await flushRowArticleHydration();
+
+        expect(inlineImage.querySelector(".row_article_inline_image_caption")?.textContent).toBe("Parent photo credit");
+        expect(buildRowArticleImageGallery).not.toHaveBeenCalled();
+    });
+
+    test("clears stale parent credits when the authoritative child has no images", async () => {
+        articleUiSettings.showRelatedItems = false;
+        const { inlineImage, selectedCard } = prepareInlineCaptionArticle({
+            parentRows: [{ filename: "10_2_1.webp", description: "Deleted photo credit" }],
+            childRows: [],
+        });
+        await openRowArticleView({ id: 2, cached_image: "10_2_1.webp" }, "tickets", selectedCard);
+        await flushRowArticleHydration();
+        expect(inlineImage.querySelector(".row_article_inline_image_caption")).toBeNull();
+    });
+
+    test.each(["superseded", "disconnected"])("does not hydrate captions after the article becomes %s", async (state) => {
+        articleUiSettings.showRelatedItems = false;
+        const { inlineImage, session, selectedCard } = prepareInlineCaptionArticle({
+            childRows: [{ filename: "10_2_1.webp", description: "Late photo credit" }],
+        });
+        let resolveLinking;
+        let current = true;
+        session.fetchImageLinking.mockImplementationOnce(() => new Promise((resolve) => { resolveLinking = resolve; }));
+        await openRowArticleView(
+            { id: 2, cached_image: "10_2_1.webp" }, "tickets", selectedCard,
+            { isCurrent: () => current },
+        );
+        await flushRowArticleHydration();
+        expect(session.fetchImageLinking).toHaveBeenCalledTimes(1);
+        if (state === "superseded") current = false;
+        else document.querySelector(".active_row_article").remove();
+        resolveLinking({ child_table: "tickets_assets" });
+        await flushRowArticleHydration();
+
+        expect(inlineImage.querySelector(".row_article_inline_image_caption")).toBeNull();
+        expect(buildRowArticleImageGallery).not.toHaveBeenCalled();
     });
 
     test("passes parent image-role values to the gallery even without an image child relation", async () => {

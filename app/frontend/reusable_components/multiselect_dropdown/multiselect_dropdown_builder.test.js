@@ -542,3 +542,74 @@ describe('createMultiselectDropdown', () => {
         expect(document.activeElement).toBe(trigger);
     });
 });
+
+
+test("updates copy without replacing focused options, reopening or emitting selection/search callbacks", async () => {
+    const { createMultiselectDropdown } = await import('./multiselect_dropdown_builder.js');
+    const container = document.createElement("div");
+    document.body.append(container);
+    const onChange = vi.fn();
+    const onSearch = vi.fn(async () => [
+        { value: "a", label: "Alpha" }, { value: "b", label: "Beta" }, { value: "c", label: "Gamma" },
+    ]);
+    const dropdown = createMultiselectDropdown({
+        containerElement: container,
+        options: [{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }, { value: "c", label: "Gamma" }],
+        initialState: { includeValues: ["a", "b"], excludeValues: ["c"] },
+        onChange, onSearch,
+    });
+    dropdown.open();
+    await Promise.resolve();
+    const popup = document.getElementById(container.querySelector("input").getAttribute("aria-controls")).parentElement;
+    const search = popup.querySelector(".msd-dropdown-search-input");
+    const action = popup.querySelector('[data-option-value="c"] .msd-option-action');
+    action.focus();
+    const searchCount = onSearch.mock.calls.length;
+    const state = dropdown.getState();
+    dropdown.setLabels({
+        placeholder: "Kentät kenttäjoukossa", searchPlaceholder: "Etsi kenttiä",
+        selectedCountLabel: "valittu", excludedCountLabel: "poissuljettu",
+        noResultsLabel: "Ei tuloksia", clearLabel: "Tyhjennä valinta",
+        excludeLabel: "Sulje pois", resetLabel: "Palauta",
+        excludeTooltip: "Sulje arvo pois", resetTooltip: "Poista poissulku",
+    });
+    expect(container.querySelector(".msd-dropdown-input").value).toBe("2 valittu, 1 poissuljettu");
+    expect(container.querySelector(".msd-dropdown-input").placeholder).toBe("Kentät kenttäjoukossa");
+    expect(search.placeholder).toBe("Etsi kenttiä");
+    expect(search.getAttribute("aria-label")).toBe("Etsi kenttiä");
+    expect(container.querySelector(".msd-clear-btn").getAttribute("aria-label")).toBe("Tyhjennä valinta");
+    expect(action.textContent).toBe("Palauta");
+    expect(action.title).toBe("Poista poissulku");
+    expect(action.getAttribute("aria-label")).toBe("Palauta Gamma");
+    expect(popup.querySelector('[data-option-value="a"] .msd-option-action').textContent).toBe("Sulje pois");
+    expect(document.activeElement).toBe(action);
+    expect(popup.style.display).toBe("flex");
+    expect(dropdown.getState()).toEqual(state);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onSearch).toHaveBeenCalledTimes(searchCount);
+    dropdown.destroy();
+    const finalPlaceholder = search.placeholder;
+    dropdown.setLabels({ searchPlaceholder: "Should not update" });
+    expect(search.placeholder).toBe(finalPlaceholder);
+    container.remove();
+});
+
+test("updates existing empty results and keeps its search and popup nodes", async () => {
+    const { createMultiselectDropdown } = await import('./multiselect_dropdown_builder.js');
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dropdown = createMultiselectDropdown({ containerElement: container, options: [] });
+    dropdown.open();
+    const popup = document.getElementById(container.querySelector("input").getAttribute("aria-controls")).parentElement;
+    const empty = popup.querySelector(".msd-no-results");
+    const search = popup.querySelector(".msd-dropdown-search-input");
+    search.value = "missing";
+    dropdown.setLabels({ noResultsLabel: "Ei tuloksia", searchPlaceholder: "Etsi kenttiä" });
+    expect(popup.querySelector(".msd-no-results")).toBe(empty);
+    expect(empty.textContent).toBe("Ei tuloksia");
+    expect(search.value).toBe("missing");
+    expect(document.activeElement).toBe(search);
+    expect(popup.style.display).toBe("flex");
+    dropdown.destroy();
+    container.remove();
+});
