@@ -1,23 +1,19 @@
 # Filterest release notes
 
-## 9.3.4
+## 9.3.5
 
 Database compatibility: **9.7.13**. No database migration is introduced.
 
-- Expired sessions open the localized sign-in flow and clear stale navigation
-  aliases. Ordinary permission denials preserve the current guest view.
-- Filterest now provides its own candidate preparation, Linux asset building,
-  candidate promotion and GitHub publication commands. Preparation and
-  publication plan their changes by default.
-- Release verification binds all fourteen files to the reviewed source, checks
-  dependency notices and binary compatibility, and verifies remote asset bytes
-  before a draft can become a published release.
-- Linux builds pin baseline processor requirements and refuse inherited
-  machine-specific optimizations. The glibc 2.34 compatibility boundary remains.
-- Development setup verifies the declared Go toolchain and uses the
-  installation's isolated Python and other development dependencies.
-- Transitional Easelect maintenance workspaces follow the same application
-  release number. Standalone Filterest does not require that workspace.
+- Both article layouts show clickable photographer and provider credits leading
+  to the original photo page. Legacy Markdown credits and newer image-picker
+  metadata are supported. Image-first captions fit their content, and ordinary
+  article captions appear below the main image independently of related sections.
+- The open field-selection panel updates its controls when the interface language
+  changes while preserving the current selection and editing state.
+- The appearance palette updates its labels when the interface language changes
+  without resetting preview values or saving changes. Finnish labels use clear
+  Finnish terminology.
 
-Existing installations retain their data and settings. Preparing this candidate
-and pushing its source do not update a running customer site.
+This release also carries the unreleased 9.3.4 candidate improvements: clearer
+expired-session handling and independent release preparation, verification and
+publication tools. Existing installations retain their data and settings.
