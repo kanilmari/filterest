@@ -62,9 +62,20 @@ read-only prerequisite check from an actual clean-source release build.
 
 The standalone `./filterest release prepare` command plans and applies candidate
 version, build identity and dependency-notice metadata. Its [preparation contract](../../server_tools/release/PREPARING_RELEASES.md) requires a clean reviewed source
-commit for writes and preserves existing release history. Candidate promotion
-and publication automation remain incomplete. Ordinary local development and
-Git commits do not depend on finishing that automation.
+commit for writes and preserves existing release history.
+
+The standalone [promotion command](../../server_tools/release/PROMOTING_RELEASES.md)
+verifies the clean candidate commit and its complete asset set before planning
+published metadata. Commit that metadata separately, then rebuild the final
+assets so their embedded Git identity matches the final release commit.
+
+The standalone [publication command](../../server_tools/release/PUBLISHING_RELEASES.md)
+plans by default. Its explicit apply mode audits the account's GitHub Actions
+settings, pushes the exact source and tag, uploads a draft, downloads and verifies
+every asset, and then publishes it. Existing releases and tags are preserved.
+These commands have isolated automated coverage; an actual publication still
+requires a reviewed version, authenticated maintainer and a verified publication
+receipt. Ordinary development and source commits remain separate operations.
 
 Older release records, including [publication evidence](PUBLICATION_EVIDENCE.md)
 and the release-specific [publication checklist](PUBLICATION_CHECKLIST.md), may
@@ -75,16 +86,11 @@ old generator against the current authoritative checkout.
 
 The maintained [release checklist](PUBLICATION_CHECKLIST.md) and
 [release notes](RELEASE_NOTES.md) describe the current direct-source process.
-Until candidate promotion and publication commands are complete, a maintainer
-may perform those later steps with the standalone builder and ordinary Git/GitHub CLI,
-recording the exact source commit, final release commit and asset hashes.
-Optional external build orchestration must read this source directly.
-
-A future preparation/publication command must identify the exact current source,
-keep build output separate from maintained files and operator state, and report
-what will be pushed or uploaded. Until that command is verified, do not treat
-an older wrapper documented elsewhere as proof that the new release workflow
-is ready.
+Follow the preparation, candidate build, promotion, final rebuild and publication
+sequence above. Build outputs must stay outside the maintained checkout and
+operator state. A local published identity does not establish remote success;
+retain the publication command's verified receipt. External orchestration must
+read this source directly and preserve the same boundaries.
 
 ## Binary and dependency compatibility
 

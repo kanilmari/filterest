@@ -48,6 +48,7 @@ def test_release_binary_metadata_must_match_the_notice_manifest() -> None:
 \tbuild\t-tags=netgo,osusergo
 \tbuild\tCGO_ENABLED=1
 \tbuild\tGOARCH=amd64
+\tbuild\tGOAMD64=v1
 \tbuild\tGOOS=linux
 """
 
@@ -64,6 +65,7 @@ def test_release_binary_metadata_must_match_the_notice_manifest() -> None:
 \tdep\tgolang.org/x/term\tv0.33.0\th1:term=
 \tbuild\tCGO_ENABLED=1
 \tbuild\tGOARCH=amd64
+\tbuild\tGOAMD64=v1
 \tbuild\tGOOS=linux
 """
     verify_binary_manifest.verify_metadata(
@@ -72,6 +74,14 @@ def test_release_binary_metadata_must_match_the_notice_manifest() -> None:
         "amd64",
         "filterest-admin-recovery",
     )
+
+    for target_architecture, baseline_key, baseline, higher in (
+        ("amd64", "GOAMD64", "v1", "v3"), ("arm64", "GOARM64", "v8.0", "v9.0"),
+    ):
+        architecture_metadata = metadata.replace("GOARCH=amd64", "GOARCH=" + target_architecture).replace("GOAMD64=v1", baseline_key + "=" + baseline)
+        verify_binary_manifest.verify_metadata(manifest, architecture_metadata, target_architecture, "filterest")
+        with pytest.raises(verify_binary_manifest.BinaryManifestError, match=baseline_key):
+            verify_binary_manifest.verify_metadata(manifest, architecture_metadata.replace(baseline_key + "=" + baseline, baseline_key + "=" + higher), target_architecture, "filterest")
 
     changed_metadata = metadata.replace("v4.5.6", "v4.5.7")
     with pytest.raises(
@@ -122,6 +132,7 @@ def test_built_admin_recovery_binary_matches_its_notice_target(
         **os.environ,
         "CGO_ENABLED": "1",
         "GOARCH": "amd64",
+        "GOAMD64": "v1",
         "GOOS": "linux",
         "GOWORK": "off",
     }

@@ -32,9 +32,11 @@ new source mirror, a disposable clone, or a private parent repository.
 - Verify the release in the intended local runtime. Match additional browser,
   upgrade and recovery checks to the changes; record observations without
   presenting historical results as new tests.
-- Commit the derived release files separately from the reviewed source. Verify
-  that this final commit adds only the intended release metadata and build
-  outputs, and that the worktree is clean.
+- Commit candidate metadata separately from the reviewed source, including
+  generated frontend files in the reviewed source before preparation. Build and
+  verify the candidate, then use the [promotion command](../../server_tools/release/PROMOTING_RELEASES.md).
+  Commit only the promoted identity and appended ledger row as the final release
+  commit. Rebuild final assets from that clean commit so both binaries identify it.
 
 ## Publish and verify remotely
 
@@ -42,8 +44,10 @@ new source mirror, a disposable clone, or a private parent repository.
   maintainer's GitHub Actions policy before pushing. Builds run locally.
 - Use the owner's authorization for this named release; do not ask for a
   duplicate confirmation when its scope is already authorized.
-- Fast-forward the branch, tag the final release commit, and upload the exact
-  verified files. Never force an existing tag or overwrite different assets.
+- Inspect the [publication command's plan](../../server_tools/release/PUBLISHING_RELEASES.md)
+  before applying it. It fast-forwards the branch, tags the final release commit,
+  uploads and verifies a draft, then makes it public. Never force an existing tag
+  or overwrite different assets.
 - Read back the remote commit, tag, release version and complete asset hashes.
   Keep a local receipt of the final commit, source commit and uploaded bytes.
   A local ledger entry by itself does not prove publication succeeded.

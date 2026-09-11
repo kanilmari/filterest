@@ -367,7 +367,11 @@ The maintained builder and binary-license verifier live under
 `app/server_tools/release/`. For the clean-source requirement, supported build
 toolchains and actual package assembly, see
 [Building Linux release assets](app/server_tools/release/BUILDING_LINUX_ASSETS.md).
-Release preparation, publication and deployment remain separate operations.
+The [release workflow](app/docs/publication/PUBLISHING.md) also provides
+standalone candidate preparation, promotion and GitHub publication commands.
+Each metadata or publication command plans by default and requires explicit
+apply mode for writes. Product release and site deployment remain separate
+operations.
 
 The product principles, technical guides, design proposals, and release records
 live under `app/docs/`; see [the documentation index](app/docs/README.md).

@@ -33,8 +33,12 @@ changes are forbidden, and default Go caches live under the target installation'
 ignored `data/runtime/go/`. Explicit cache overrides remain supported. No parent
 source repository or private Python module is required.
 
-A real build checks both Linux architectures, the allowed glibc/libm dynamic
-library boundary, maximum required GLIBC symbol version 2.34, and the exact Go
+Release builds pin baseline processor levels (amd64 v1 and arm64 v8.0), disable
+persisted Go settings and normalize Cgo flags so machine-specific optimizations
+cannot silently raise the processor requirement.
+
+A real build checks both Linux architectures, the recorded processor baseline,
+the allowed glibc/libm dynamic library boundary, maximum required GLIBC symbol version 2.34, and the exact Go
 version and compiled module set recorded in `THIRD_PARTY_LICENSES/manifest.json`.
 A compiler whose output requires newer glibc is rejected; command availability
 alone does not prove compiler compatibility. Use a matching build environment,
@@ -59,4 +63,6 @@ After all release checks, retain verified output and build receipts in the
 installation's ignored `data/release/<version>/` area. Uploading those assets is a
 separate operation bound to the reviewed Git commit and release identity.
 Candidate metadata is prepared by [`./filterest release prepare`](PREPARING_RELEASES.md).
-Candidate promotion and publication remain separate future work.
+Continue with [candidate promotion](PROMOTING_RELEASES.md), rebuild final assets
+from the committed published identity, then inspect the
+[publication plan](PUBLISHING_RELEASES.md) before applying it.

@@ -115,6 +115,17 @@ build_architecture() {
     printf 'Building %s locally with %s...\n' "$asset" "$compiler"
     (
         cd "$target_abs"
+        # Generic assets must not inherit a maintainer CPU target.
+        # Pin both the Go ISA and Cgo flags; ignore persisted Go settings.
+        GOENV=off \
+        GOEXPERIMENT= \
+        GOAMD64=v1 \
+        GOARM64=v8.0 \
+        CGO_CFLAGS='-O2 -g' \
+        CGO_CPPFLAGS= \
+        CGO_CXXFLAGS='-O2 -g' \
+        CGO_FFLAGS='-O2 -g' \
+        CGO_LDFLAGS='-O2 -g' \
         CGO_ENABLED=1 \
         GOOS=linux \
         GOARCH="$architecture" \

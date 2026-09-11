@@ -53,6 +53,8 @@ Developer commands:
   build [arguments]             Build frontend assets without app-local caches
   release prepare [arguments]   Plan or prepare candidate release metadata
   release build [arguments]     Assemble verified Linux release assets locally
+  release promote [arguments]   Verify a candidate and plan published metadata
+  release publish [arguments]   Plan or publish verified assets to GitHub
   qa [arguments]                Run the broader source quality suite
   test-unit [arguments]         Run Vitest frontend and Node unit tests
   database [arguments]          Run a read-only database inspection
@@ -303,8 +305,14 @@ case "$command_name" in
             build)
                 exec "$CANONICAL_FILTEREST_ROOT/server_tools/release/build_assets.sh" "$@"
                 ;;
+            promote)
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/release/promote_release.py" "$@"
+                ;;
+            publish)
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/release/publish_release.py" "$@"
+                ;;
             *)
-                printf 'error: release requires prepare or build\n' >&2
+                printf 'error: release requires prepare, build, promote or publish\n' >&2
                 exit 2
                 ;;
         esac

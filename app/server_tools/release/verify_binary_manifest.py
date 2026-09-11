@@ -144,6 +144,11 @@ def verify_metadata(
         "GOARCH": expected_architecture,
         "GOOS": "linux",
     }
+    baseline_settings = {"amd64": ("GOAMD64", "v1"), "arm64": ("GOARM64", "v8.0")}
+    if expected_architecture not in baseline_settings:
+        raise BinaryManifestError("unsupported release architecture")
+    baseline_key, baseline_value = baseline_settings[expected_architecture]
+    required_settings[baseline_key] = baseline_value
     for key, expected_value in required_settings.items():
         if build_settings.get(key) != expected_value:
             raise BinaryManifestError(

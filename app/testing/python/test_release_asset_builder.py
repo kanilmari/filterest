@@ -44,15 +44,17 @@ def release_fixture(tmp_path):
 import json, os, pathlib, sys
 if sys.argv[1] == "build":
     destination = pathlib.Path(sys.argv[sys.argv.index("-o") + 1])
-    destination.write_text("fixture binary " + os.environ["GOARCH"])
+    destination.write_text(json.dumps({key: os.environ.get(key) for key in ["GOAMD64", "GOARM64"]}))
     with open(os.environ["FIXTURE_EVENTS"], "a") as output:
-        output.write(json.dumps({key: os.environ.get(key) for key in ["GOARCH", "GOWORK", "GOFLAGS", "GOMODCACHE", "GOCACHE"]}) + "\n")
+        output.write(json.dumps({key: os.environ.get(key) for key in ["GOARCH", "GOWORK", "GOFLAGS", "GOMODCACHE", "GOCACHE", "GOAMD64", "GOARM64", "GOENV", "GOEXPERIMENT", "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS", "CGO_LDFLAGS"]}) + "\n")
 elif sys.argv[1:3] == ["version", "-m"]:
     arch = "arm64" if sys.argv[3].endswith("arm64") else "amd64"
     version = os.environ.get("FIXTURE_MODULE_VERSION", "v1.2.3")
     print(sys.argv[3] + ": go1.26.5")
     print("\tdep\texample.invalid/alpha\t" + version + "\th1:fixture=")
-    for key, value in {"-tags": "netgo,osusergo", "CGO_ENABLED": "1", "GOARCH": arch, "GOOS": "linux"}.items():
+    baseline_key = "GOAMD64" if arch == "amd64" else "GOARM64"
+    baseline_value = json.loads(pathlib.Path(sys.argv[3]).read_text())[baseline_key]
+    for key, value in {"-tags": "netgo,osusergo", "CGO_ENABLED": "1", "GOARCH": arch, "GOOS": "linux", baseline_key: os.environ.get("FIXTURE_CPU_BASELINE", baseline_value)}.items():
         print("\tbuild\t" + key + "=" + value)
 else:
     raise SystemExit(91)
@@ -96,7 +98,7 @@ def test_check_only_never_creates_output_or_runs_compiler(release_fixture):
 
 def test_full_assembly_keeps_fourteen_assets_and_standalone_go_boundary(release_fixture):
     source, output, environment = release_fixture
-    result = run_builder(release_fixture)
+    result = run_builder(release_fixture, updates={"GOAMD64": "v4", "GOARM64": "v9.5", "GOENV": "/missing/persisted-go-env", "CGO_CFLAGS": "-O3 -march=native", "CGO_CPPFLAGS": "-march=native", "GOEXPERIMENT": "unreviewed"})
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(list(output.iterdir())) == 14
     checksums = list(output.glob("*.sha256"))
@@ -106,6 +108,8 @@ def test_full_assembly_keeps_fourteen_assets_and_standalone_go_boundary(release_
     assert [event["GOARCH"] for event in events] == ["amd64", "arm64"]
     assert all(event["GOWORK"] == "off" and event["GOFLAGS"] == "-mod=readonly" for event in events)
     assert all(event["GOMODCACHE"] == str(source / "data/runtime/go/module-cache") for event in events)
+    assert all(event["GOAMD64"] == "v1" and event["GOARM64"] == "v8.0" and event["GOENV"] == "off" for event in events)
+    assert all(event["CGO_CFLAGS"] == "-O2 -g" and event["CGO_CPPFLAGS"] == "" and event["GOEXPERIMENT"] == "" for event in events)
 
 
 def test_dirty_source_refuses_release_binaries(release_fixture):
@@ -127,6 +131,7 @@ def test_output_inside_source_is_rejected(release_fixture):
 @pytest.mark.parametrize("updates, message", [
     ({"FIXTURE_GLIBC": "2.35"}, "GLIBC_2.34-compatible"),
     ({"FIXTURE_MODULE_VERSION": "v9.9.9"}, "module set does not match manifest"),
+    ({"FIXTURE_CPU_BASELINE": "v4"}, "GOAMD64"),
 ])
 def test_binary_contract_failure_cannot_produce_complete_asset_set(release_fixture, updates, message):
     result = run_builder(release_fixture, updates=updates)
