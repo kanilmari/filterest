@@ -1,19 +1,20 @@
-# Filterest release notes
+# Filterest 9.3.6
 
-## 9.3.5
+Database compatibility: 9.7.13. This application update does not require a database migration.
 
-Database compatibility: **9.7.13**. No database migration is introduced.
+## Added
 
-- Both article layouts show clickable photographer and provider credits leading
-  to the original photo page. Legacy Markdown credits and newer image-picker
-  metadata are supported. Image-first captions fit their content, and ordinary
-  article captions appear below the main image independently of related sections.
-- The open field-selection panel updates its controls when the interface language
-  changes while preserving the current selection and editing state.
-- The appearance palette updates its labels when the interface language changes
-  without resetting preview values or saving changes. Finnish labels use clear
-  Finnish terminology.
+- Dataset creation now includes a translated card-role selector for each column. The form has more room on wide screens and stacks its controls on smaller screens.
+- Site administrators can choose cropped cover images, complete images, or complete images over a blurred copy with a background tint matching the active theme.
 
-This release also carries the unreleased 9.3.4 candidate improvements: clearer
-expired-session handling and independent release preparation, verification and
-publication tools. Existing installations retain their data and settings.
+## Improved
+
+- Dataset creation and the existing card-field editor use the same supported role catalogue. New title, description and keyword roles omit redundant field labels; detail fields retain their own labels.
+- The filter-sidebar and main-menu opening buttons stay reachable in their corresponding viewport corners. Settings and appearance controls remain accessible beside them.
+- Search inputs and their buttons share one border, background, shadow and focus treatment.
+- Article details retain individual field labels without an extra generic Details heading.
+- Image-first articles can be closed from the empty background beside their text. Dragging or selecting text does not accidentally close the article.
+- Multilingual article field metadata supports the graphical language editor.
+- The application no longer adds top and bottom outer borders on very wide screens. The right filter sidebar uses a two-pixel separator from adjacent content.
+
+Existing dataset roles and authored content are preserved. Automatic role suggestions and automatic translation during dataset creation are not included in this release.
