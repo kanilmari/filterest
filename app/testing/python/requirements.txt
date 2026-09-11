@@ -1,2 +1,3 @@
-# Dependencies needed to collect and run testing/python with the project venv.
+# Development tools and Python tests share the installation-owned virtualenv.
+-r ../../server_tools/requirements.txt
 pytest>=8,<10

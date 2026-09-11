@@ -55,10 +55,16 @@ release files; this workflow does not require GitHub Actions.
 
 ## Maintainer automation status
 
-The maintainer release automation is being adapted to build and publish from
-this directly maintained repository. It is not yet a complete standalone
-release command shipped here. Ordinary local development and Git commits do
-not depend on finishing that automation.
+The standalone `./filterest release build` command now assembles Linux server
+binaries, notices and checksums from this repository. Its [build contract and
+commands](../../server_tools/release/BUILDING_LINUX_ASSETS.md) distinguish a
+read-only prerequisite check from an actual clean-source release build.
+
+The standalone `./filterest release prepare` command plans and applies candidate
+version, build identity and dependency-notice metadata. Its [preparation contract](../../server_tools/release/PREPARING_RELEASES.md) requires a clean reviewed source
+commit for writes and preserves existing release history. Candidate promotion
+and publication automation remain incomplete. Ordinary local development and
+Git commits do not depend on finishing that automation.
 
 Older release records, including [publication evidence](PUBLICATION_EVIDENCE.md)
 and the release-specific [publication checklist](PUBLICATION_CHECKLIST.md), may
@@ -69,12 +75,12 @@ old generator against the current authoritative checkout.
 
 The maintained [release checklist](PUBLICATION_CHECKLIST.md) and
 [release notes](RELEASE_NOTES.md) describe the current direct-source process.
-Until the standalone release command is complete, a maintainer may perform
-the same steps with the verified build tools and ordinary Git/GitHub CLI,
+Until candidate promotion and publication commands are complete, a maintainer
+may perform those later steps with the standalone builder and ordinary Git/GitHub CLI,
 recording the exact source commit, final release commit and asset hashes.
 Optional external build orchestration must read this source directly.
 
-A future supported release command must identify the exact current source,
+A future preparation/publication command must identify the exact current source,
 keep build output separate from maintained files and operator state, and report
 what will be pushed or uploaded. Until that command is verified, do not treat
 an older wrapper documented elsewhere as proof that the new release workflow

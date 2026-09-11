@@ -895,6 +895,10 @@ def test_fresh_nested_development_layout_runs_root_node_commands_without_app_bri
         SOURCE_ROOT / "server_tools/lib/python_bytecode_cache.sh",
         app_root / "server_tools/lib/python_bytecode_cache.sh",
     )
+    shutil.copy2(
+        SOURCE_ROOT / "server_tools/lib/project_python_venv.sh",
+        app_root / "server_tools/lib/project_python_venv.sh",
+    )
     (app_root / "package.json").write_text(
         json.dumps(
             {

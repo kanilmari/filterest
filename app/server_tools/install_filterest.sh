@@ -297,16 +297,27 @@ install_go_toolchain_if_needed() {
     temp_dir="$(mktemp -d)"
     archive="go${required_version}.linux-${arch}.tar.gz"
     target="$LOCAL_TOOLCHAIN_ROOT/go-${required_version}"
-    curl --fail --location --retry 3 -o "$temp_dir/$archive" "https://go.dev/dl/$archive"
-    curl --fail --location --retry 3 -o "$temp_dir/$archive.sha256" "https://go.dev/dl/$archive.sha256"
-    printf '%s  %s\n' "$(tr -d '[:space:]' < "$temp_dir/$archive.sha256")" "$temp_dir/$archive" | sha256sum -c -
-    mkdir -p "$LOCAL_TOOLCHAIN_ROOT" "$LOCAL_BIN_DIR"
-    tar -xzf "$temp_dir/$archive" -C "$temp_dir"
-    rm -rf "$target"
-    mv "$temp_dir/go" "$target"
-    ln -sfn "$target/bin/go" "$LOCAL_BIN_DIR/go"
+    # Go publishes archive checksums in its release JSON, not .sha256 sidecars.
+    # Verify the exact module-selected release before extracting or replacing Go.
+    # Keep cleanup in a subshell so failures cannot leave downloaded toolchains behind.
+    (
+        trap 'rm -rf -- "$temp_dir"' EXIT
+        curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+            --connect-timeout 20 --max-time 120 -o "$temp_dir/releases.json" \
+            'https://go.dev/dl/?mode=json&include=all' || exit 1
+        checksum="$(python3 "$SCRIPT_DIR/lib/go_release_checksum_reader.py" \
+            "$temp_dir/releases.json" "$required_version" "$arch")" || exit 1
+        curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+            --connect-timeout 20 --max-time 600 -o "$temp_dir/$archive" \
+            "https://go.dev/dl/$archive" || exit 1
+        printf '%s  %s\n' "$checksum" "$temp_dir/$archive" | sha256sum -c - || exit 1
+        tar -xzf "$temp_dir/$archive" -C "$temp_dir" || exit 1
+        mkdir -p "$LOCAL_TOOLCHAIN_ROOT" "$LOCAL_BIN_DIR" || exit 1
+        rm -rf "$target" || exit 1
+        mv "$temp_dir/go" "$target" || exit 1
+        ln -sfn "$target/bin/go" "$LOCAL_BIN_DIR/go" || exit 1
+    ) || return 1
     export PATH="$LOCAL_BIN_DIR:$PATH"
-    rm -rf "$temp_dir"
     printf '✓ Installed verified Go %s.\n' "$required_version"
 }
 

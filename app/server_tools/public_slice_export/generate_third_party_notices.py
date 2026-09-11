@@ -354,12 +354,18 @@ def warm_go_module_cache(target: pathlib.Path) -> dict[tuple[str, str], pathlib.
         restore_go_manifest_files(snapshot)
 
 
-def collect_go_modules(target: pathlib.Path) -> tuple[list[Dependency], str]:
+def collect_go_modules(
+    target: pathlib.Path, *, readonly: bool = False,
+) -> tuple[list[Dependency], str]:
     if not (target / "go.mod").is_file():
         raise InventoryCollectionError("go.mod is missing")
 
-    download_dirs = warm_go_module_cache(target)
+    # Preparation must not edit go.mod/go.sum, even temporarily: a parallel
+    # editor owns those bytes. Missing dependencies fail closed in readonly mode.
+    download_dirs = {} if readonly else warm_go_module_cache(target)
     environment = standalone_go_environment()
+    if readonly:
+        environment["GOFLAGS"] = "-mod=readonly"
     environment.update({"CGO_ENABLED": "1", "GOARCH": "amd64", "GOOS": "linux"})
     dependencies: dict[tuple[str, str, str], Dependency] = {}
     vendored_roots: dict[
@@ -1158,8 +1164,11 @@ def build_manifest(
     browser_bundle_dependencies: list[Dependency],
     browser_bundle_source: str,
     assets: list[Asset],
+    *,
+    bundle_dir: pathlib.Path | None = None,
 ) -> dict:
-    bundle_dir = target / "THIRD_PARTY_LICENSES"
+    # Release preparation stages retained documents away from maintained source.
+    bundle_dir = bundle_dir if bundle_dir is not None else target / "THIRD_PARTY_LICENSES"
     if bundle_dir.exists():
         shutil.rmtree(bundle_dir)
     bundle_dir.mkdir(parents=True)

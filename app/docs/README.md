@@ -31,3 +31,12 @@ repository. Normal development must not depend on a separate maintainer
 repository. New contributors may clone the public repository; an established
 authoritative checkout must retain its own history and local work rather than
 being regenerated or replaced by another copy.
+
+Development setup uses the Go version declared in `app/go.mod`. If that version
+is absent from `PATH`, it reads the matching Linux archive checksum from the
+[official Go release metadata](https://go.dev/dl/?mode=json&include=all), verifies
+the downloaded archive, and only then installs the user-owned toolchain. Missing
+or inconsistent release metadata and failed checksums stop setup without
+replacing an existing toolchain. After correcting a network problem, rerun
+`./filterest setup --profile development --dependencies-only --yes` to complete
+development dependencies while preserving settings, databases and services.

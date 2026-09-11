@@ -16,6 +16,16 @@ fi
 source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
 filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
 
+# Development commands use the same interpreter that setup populated. Merely
+# naming the venv does not activate it; an unrelated shell Python must not win.
+# Admin-only installs retain their host Python and distro-provided dependencies.
+# shellcheck source=server_tools/lib/project_python_venv.sh
+source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/project_python_venv.sh"
+FILTEREST_COMMAND_PYTHON=python3
+if [[ -x "$FILTEREST_PROJECT_PYTHON" ]]; then
+    FILTEREST_COMMAND_PYTHON="$FILTEREST_PROJECT_PYTHON"
+fi
+
 cd "$CANONICAL_FILTEREST_ROOT"
 
 usage() {
@@ -41,6 +51,8 @@ Everyday commands:
 
 Developer commands:
   build [arguments]             Build frontend assets without app-local caches
+  release prepare [arguments]   Plan or prepare candidate release metadata
+  release build [arguments]     Assemble verified Linux release assets locally
   qa [arguments]                Run the broader source quality suite
   test-unit [arguments]         Run Vitest frontend and Node unit tests
   database [arguments]          Run a read-only database inspection
@@ -224,7 +236,7 @@ case "$command_name" in
         ;;
     status)
         resolve_environment
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/dev_status.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/dev_status.py" "$@"
         ;;
     manager-key)
         manager_key_action="${1:-}"
@@ -232,7 +244,7 @@ case "$command_name" in
         case "$manager_key_action" in
             generate)
                 resolve_environment
-                exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/system_manager_token_creator.py" \
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/system_manager_token_creator.py" \
                     generate \
                     --env-file "$EASELECT_RUNTIME_ENV_FILE" \
                     "$@"
@@ -245,19 +257,19 @@ case "$command_name" in
         ;;
     data)
         resolve_environment
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/api_crud.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/api_crud.py" "$@"
         ;;
     language)
         resolve_environment
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/api_lang.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/api_lang.py" "$@"
         ;;
     asset-linking)
         resolve_environment
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/api_asset_linking.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/api_asset_linking.py" "$@"
         ;;
     database)
         resolve_environment
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/db.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/db.py" "$@"
         ;;
     maintenance)
         maintenance_name="${1:-}"
@@ -265,10 +277,10 @@ case "$command_name" in
         resolve_environment
         case "$maintenance_name" in
             logs)
-                exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/db_log_retention.py" "$@"
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/db_log_retention.py" "$@"
                 ;;
             data)
-                exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/db_data_retention.py" "$@"
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/db_data_retention.py" "$@"
                 ;;
             *)
                 printf 'error: maintenance requires logs or data\n' >&2
@@ -279,7 +291,23 @@ case "$command_name" in
     mcp)
         resolve_environment
         export FILTEREST_MCP_DISPLAY_COMMAND="${FILTEREST_MCP_DISPLAY_COMMAND:-$0 mcp}"
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/easelect_mcp_server.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/easelect_mcp_server.py" "$@"
+        ;;
+    release)
+        release_action="${1:-}"
+        [[ "$#" -eq 0 ]] || shift
+        case "$release_action" in
+            prepare)
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/release/prepare_release.py" "$@"
+                ;;
+            build)
+                exec "$CANONICAL_FILTEREST_ROOT/server_tools/release/build_assets.sh" "$@"
+                ;;
+            *)
+                printf 'error: release requires prepare or build\n' >&2
+                exit 2
+                ;;
+        esac
         ;;
     build)
         exec npm --prefix "$CANONICAL_FILTEREST_ROOT" run build -- "$@"
@@ -329,10 +357,10 @@ case "$command_name" in
         esac
         ;;
     timestamp)
-		exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/scripts/timestamp.py" "$@"
+		exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/scripts/timestamp.py" "$@"
         ;;
     codesize)
-        exec python3 "$CANONICAL_FILTEREST_ROOT/server_tools/scripts/codesize.py" "$@"
+        exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/scripts/codesize.py" "$@"
         ;;
     fix-go-imports)
         exec node "$CANONICAL_FILTEREST_ROOT/server_tools/scripts/fix_go_imports.js" "$@"

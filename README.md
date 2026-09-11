@@ -307,8 +307,12 @@ without reconfiguring its database, credentials or running services:
 ./filterest setup --profile development --dependencies-only --yes
 ```
 
-This mode installs the declared Node and Go packages, the Python test environment
-and Playwright Chromium. It does not mark database setup complete. Use `./ctl`
+This mode installs the declared Node and Go packages, the Python maintenance and
+test environment, and Playwright Chromium. Python tool dependencies are maintained
+in `app/server_tools/requirements.txt`, which the Python test requirements include.
+Commands such as `./filterest database --local "SELECT 1"` use this installed
+interpreter automatically; no manual virtual-environment activation is needed.
+This mode does not mark database setup complete. Use `./ctl`
 with an already configured runtime; a new installation uses full setup above.
 The host needs Python virtual-environment support and Chromium's system libraries;
 full development setup installs these host prerequisites too.
@@ -320,7 +324,7 @@ binaries and caches remain outside Git. Internal Filterest tools are maintained
 in `app/`; do not install another copy of this repository as a dependency.
 
 The development profile installs Node dependencies under `data/runtime/node/`,
-Go caches under `data/runtime/go/`, Python tests under `data/runtime/python/`,
+Go caches under `data/runtime/go/`, Python tools and tests under `data/runtime/python/`,
 and browser binaries under `data/runtime/playwright/`. The root commands bind Vite, Vitest, Playwright, and the
 other Node tools to that mutable location without creating a compatibility link
 or cache below immutable `app/`. The browser-administration profile does not
@@ -352,6 +356,18 @@ they do not require a parent or sibling development repository. A development
 installation needs its own completed dependency setup before build and test
 commands can run. PostgreSQL may be managed by the host or another service;
 its location is an installation setting, not a source-repository dependency.
+
+Validate the local Linux release-packaging inputs from this repository with:
+
+```bash
+./filterest release build --output-dir /tmp/filterest-release-build --check-only
+```
+
+The maintained builder and binary-license verifier live under
+`app/server_tools/release/`. For the clean-source requirement, supported build
+toolchains and actual package assembly, see
+[Building Linux release assets](app/server_tools/release/BUILDING_LINUX_ASSETS.md).
+Release preparation, publication and deployment remain separate operations.
 
 The product principles, technical guides, design proposals, and release records
 live under `app/docs/`; see [the documentation index](app/docs/README.md).

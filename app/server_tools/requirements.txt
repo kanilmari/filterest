@@ -1,0 +1,4 @@
+# Python dependencies for local development and maintenance commands.
+# The development setup installs these into the installation-owned virtualenv.
+# Binary wheels are development dependencies, not shipped application binaries.
+psycopg2-binary==2.9.13
