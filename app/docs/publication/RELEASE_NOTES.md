@@ -1,6 +1,12 @@
-# Filterest 9.3.6
+# Filterest 9.3.7
 
 Database compatibility: 9.7.13. This application update does not require a database migration.
+
+## Fixed
+
+- The production Docker build now includes the shared card-role catalogue in its backend build stage. This fixes the Docker image build failure in 9.3.6.
+
+The following improvements from 9.3.6 are included.
 
 ## Added
 
