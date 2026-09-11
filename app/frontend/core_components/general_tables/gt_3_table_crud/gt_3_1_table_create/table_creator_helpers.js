@@ -3,6 +3,8 @@
 // Converts form snapshot values into validation outcomes and API payload pieces.
 // Stays free of DOM and network access so Vitest can cover the core logic.
 
+import { isValidCardRole } from '../../../table_views/card_view/card_role_catalog.js';
+
 import { isValidIdentifier } from '../../../../reusable_components/dom_container_builder_helpers.js';
 
 function trimToEmpty(value) {
@@ -17,8 +19,10 @@ function createTableCreationFailure(warningKey, warningFallback) {
     };
 }
 
-function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths = [] }) {
+function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths = [], cardRoles }) {
     const columns = {};
+    const roles = {};
+    const names = new Set();
 
     for (let i = 0; i < columnNames.length; i++) {
         const colName = trimToEmpty(columnNames[i]);
@@ -41,6 +45,17 @@ function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths =
             );
         }
 
+        if (names.has(colName.toLowerCase())) {
+            return createTableCreationFailure('duplicate_column_name', 'Column names must be unique.');
+        }
+        names.add(colName.toLowerCase());
+        if (cardRoles !== undefined) {
+            const role = trimToEmpty(cardRoles[i]) || 'details';
+            if (!isValidCardRole(role) || role.length > 255) {
+                return createTableCreationFailure('invalid_card_role', 'Choose a supported card role.');
+            }
+            roles[colName] = role;
+        }
         columns[colName] = dataType === 'VARCHAR' && length ? `${dataType}(${length})` : dataType;
     }
 
@@ -54,6 +69,7 @@ function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths =
     return {
         ok: true,
         columns,
+        roles,
     };
 }
 
@@ -120,6 +136,7 @@ export function buildTableCreationRequestData({
     columnNames,
     dataTypes,
     lengths,
+    cardRoles,
     referencingColumns,
     referencedTables,
     referencedColumns,
@@ -149,6 +166,7 @@ export function buildTableCreationRequestData({
         columnNames,
         dataTypes,
         lengths,
+        cardRoles,
     });
     if (!columnsResult.ok) {
         return columnsResult;
@@ -167,6 +185,7 @@ export function buildTableCreationRequestData({
     const requestData = {
         dataset_name: normalizedTableName,
         columns: columnsResult.columns,
+        ...(cardRoles !== undefined ? { column_card_roles: columnsResult.roles } : {}),
         foreign_keys: foreignKeys,
         grant_users_read: Boolean(grantUsersRead),
         grant_guests_read: Boolean(grantGuestsRead),

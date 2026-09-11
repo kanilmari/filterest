@@ -241,4 +241,37 @@ describe('translatePage', () => {
         expect(refreshCardLanguages).toHaveBeenLastCalledWith('en');
         expect(refreshLocalizedDatasetValues).toHaveBeenLastCalledWith('en');
     });
+    test('keeps the article details heading readable across languages when its key is absent', async () => {
+        const { buildRowArticleDisclosureSection } = await import('../table_views/card_view/row_article_disclosure_section_builder.js');
+        const section = buildRowArticleDisclosureSection({
+            titleLangKey: 'row_article_section_details',
+            titleText: 'Details',
+            contentElement: document.createElement('div'),
+        });
+        document.body.appendChild(section);
+        window.translationPromises.ch = Promise.resolve({});
+        const { translatePage } = await import('./translation_handler.js');
+        for (const [language, expected] of [
+            ['fi', 'Tiedot'], ['en', 'Details'], ['ch', '详细信息'], ['yue', '詳細資料'], ['fi', 'Tiedot'],
+        ]) {
+            await translatePage(language);
+            expect(section.querySelector('.animated-disclosure-title').textContent).toBe(expected);
+        }
+        expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
+    test('prefers reviewed runtime article headings over the missing-key fallback', async () => {
+        const label = document.createElement('span');
+        label.dataset.langKey = 'row_article_section_details';
+        document.body.appendChild(label);
+        window.translationPromises.fi = Promise.resolve({ row_article_section_details: 'Lisätiedot' });
+        window.translationPromises.en = Promise.resolve({ row_article_section_details: 'More details' });
+        const { translatePage } = await import('./translation_handler.js');
+        await translatePage('fi');
+        expect(label.textContent).toBe('Lisätiedot');
+        await translatePage('en');
+        expect(label.textContent).toBe('More details');
+        expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
 });

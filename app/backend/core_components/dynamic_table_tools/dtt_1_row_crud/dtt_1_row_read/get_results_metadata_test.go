@@ -198,9 +198,10 @@ func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
 }
 
 type layoutMetadataDriver struct {
-	present bool
-	value   driver.Value
-	query   *string
+	editable bool
+	present  bool
+	value    driver.Value
+	query    *string
 }
 type layoutMetadataConn struct{ state *layoutMetadataDriver }
 type layoutMetadataRows struct {
@@ -231,7 +232,7 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 	}
 	return &layoutMetadataRows{values: []driver.Value{
 		"url", "text", nil, nil, "details_link", true, true, false, false, false, false, false, false,
-		int64(1), int64(1), false, "", "", true, "label", value,
+		int64(1), int64(1), false, c.state.editable, "", "", true, "label", value,
 	}}, nil
 }
 func (r *layoutMetadataRows) Columns() []string {
@@ -301,5 +302,41 @@ func TestLegacyArticleViewKeysRemainCompatible(t *testing.T) {
 		if got := normalizeResultsViewKey(key); got != "article_view" {
 			t.Fatalf("%q resolved to %q", key, got)
 		}
+	}
+}
+
+// The article language editor requires an explicit true value; omitting this
+// field hides every otherwise editable multilingual header and description.
+func TestColumnMetadataCarriesExplicitEditability(t *testing.T) {
+	for _, editable := range []bool{false, true} {
+		t.Run(fmt.Sprint(editable), func(t *testing.T) {
+			query := ""
+			name := "wl61-editability-" + t.Name()
+			sql.Register(name, &layoutMetadataDriver{editable: editable, query: &query})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			metadata, err := getColumnDataTypesWithFK("example", db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(metadata)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result map[string]map[string]interface{}
+			if err = json.Unmarshal(encoded, &result); err != nil {
+				t.Fatal(err)
+			}
+			got, explicit := result["url"]["editable_in_ui"].(bool)
+			if !explicit || got != editable {
+				t.Fatalf("explicit editable_in_ui = %#v, want %t", result["url"]["editable_in_ui"], editable)
+			}
+			if !strings.Contains(query, "COALESCE(scd.editable_in_ui, false) AS editable_in_ui") {
+				t.Fatal("missing metadata must remain noneditable")
+			}
+		})
 	}
 }

@@ -1,0 +1,38 @@
+/* card_image_presentation.css
+ * Renders the site's raster-card choice without changing card geometry or article media.
+ * Uses the application's active theme colour for the decorative blurred-image scrim.
+ */
+.card_photo_presentation {
+    --card-photo-object-fit: contain;
+    isolation: isolate;
+}
+
+[data-card-image-presentation="cover"] .card_photo_presentation {
+    --card-photo-object-fit: cover;
+}
+
+.card_photo_presentation::before {
+    content: "";
+    display: none;
+    position: absolute;
+    inset: -20px;
+    z-index: 0;
+    background-image:
+        linear-gradient(
+            color-mix(in srgb, var(--bg_color) 58%, transparent),
+            color-mix(in srgb, var(--bg_color) 58%, transparent)
+        ),
+        var(--card-photo-source, none);
+    background-position: center;
+    background-size: cover;
+    filter: blur(16px);
+    pointer-events: none;
+}
+
+[data-card-image-presentation="contain_blur"] .card_photo_presentation::before {
+    display: block;
+}
+
+.card_image .card_photo_presentation > img {
+    z-index: 1;
+}

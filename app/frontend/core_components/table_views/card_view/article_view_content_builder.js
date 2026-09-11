@@ -37,12 +37,9 @@ import {
 } from "./card_image_render_options.js";
 import { resolveRowArticleRelationDetailEntries } from "./relation_detail_helpers.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
-import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
 import { resolveRowArticleTimestampDisplayOptions } from "./row_article_presentation_settings.js";
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { splitKeywordRoleValue } from "./card_keyword_value_helpers.js";
-
-const DETAILS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
 
 function resolveRowArticleLabelMetadata(dataTypes = {}, detailEntry = {}) {
     return dataTypes[
@@ -523,7 +520,7 @@ export async function buildRowArticleContent(
     /* -- details ----------------------------------- */
     if (expandedDetailsEntries.length) {
         const detailsContainer = document.createElement("div");
-        detailsContainer.classList.add("big_card_details_container");
+        detailsContainer.classList.add("big_card_details_container", "row_article_details_section");
 
         expandedDetailsEntries.forEach((d) => {
             if (d.isLink) {
@@ -564,16 +561,7 @@ export async function buildRowArticleContent(
                 )
             );
         });
-        rowArticleContentElement.appendChild(
-            buildRowArticleDisclosureSection({
-                titleLangKey: "row_article_section_details",
-                titleText: "Details",
-                iconPath: DETAILS_ICON_PATH,
-                contentElement: detailsContainer,
-                startOpen: true,
-                sectionClassNames: "row_article_details_section",
-            })
-        );
+        rowArticleContentElement.appendChild(detailsContainer);
     }
 
     return {

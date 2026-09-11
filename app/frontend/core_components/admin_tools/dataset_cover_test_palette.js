@@ -12,6 +12,8 @@ import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { DATASET_COVER_PALETTE_COPY as COPY } from './dataset_cover_palette_copy.js';
+import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
+import { CARD_IMAGE_PRESENTATIONS, normalizeCardImagePresentation, applyCardImagePresentationSetting } from '../table_views/card_view/card_image_presentation.js';
 
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
@@ -61,6 +63,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         hero_bottom_fade: 48,
         image_blur: 1,
         card_image_width: 300,
+        card_image_presentation: 'contain',
         card_description_lines: 2,
         active_tab_fade: 25,
         active_tab_max_opacity: 1,
@@ -151,6 +154,8 @@ function isValidThemeConfig(config) {
         if (typeof theme.oval_enabled !== 'boolean') return false;
         if (!numericKeys.every((control) => Number.isFinite(Number(theme[control.key])))) return false;
     }
+    if (config.shared.card_image_presentation !== undefined
+        && !CARD_IMAGE_PRESENTATIONS.includes(config.shared.card_image_presentation)) return false;
     return RANGE_CONTROLS.filter((control) => control.shared)
         .every((control) => Number.isFinite(Number(config.shared[control.key])))
         && /^#[0-9a-f]{6}$/i.test(String(config.shared.brand_color || ''));
@@ -160,6 +165,9 @@ function normalizePresentationSettings(payload) {
     const datasetCoverTheme = isValidThemeConfig(payload?.dataset_cover_theme)
         ? clone(payload.dataset_cover_theme)
         : clone(DEFAULT_DATASET_COVER_THEME);
+    datasetCoverTheme.shared.card_image_presentation = normalizeCardImagePresentation(
+        datasetCoverTheme.shared.card_image_presentation
+    );
     const timestampMode = ['date_time', 'date_only'].includes(payload?.row_article_timestamp_display_mode)
         ? payload.row_article_timestamp_display_mode
         : 'date_time';
@@ -189,6 +197,7 @@ export function applyDatasetCoverThemeConfig(hero, config) {
         setThemeVariable(hero, 'shared', control, config.shared[control.key]);
     });
     const documentRoot = document.documentElement;
+    applyCardImagePresentationSetting(config.shared.card_image_presentation);
     documentRoot.style.setProperty(
         '--dataset-background-light-image-blur',
         `${config.light.image_blur}px`
@@ -401,6 +410,11 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         });
     toolboxByGroup.get('ovalGeometry').content.prepend(maskLabel);
     toolboxByGroup.get('themeImage').content.prepend(coverVisibilityLabel);
+    const cardImageControl = buildCardImagePresentationControl(copy, (value) => {
+        draftSettings.dataset_cover_theme.shared.card_image_presentation = value;
+        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+    });
+    toolboxByGroup.get('cardLayout').controls.appendChild(cardImageControl.element);
     const rangeControls = RANGE_CONTROLS.map((control) => {
         const row = document.createElement('label');
         row.classList.add('dataset-cover-test-palette__range');
@@ -489,6 +503,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             control.labelText.textContent = copy[control.label];
             control.input.setAttribute('aria-label', copy[control.label]);
         });
+        cardImageControl.setCopy(copy);
         brandColorText.textContent = copy.brandColor;
         brandColorInput.setAttribute('aria-label', copy.brandColor);
         resetButton.textContent = copy.reset;
@@ -513,6 +528,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             control.input.value = String(source[control.key]);
             control.output.value = renderControlValue(control.input.value, control.unit);
         });
+        cardImageControl.setValue(draftSettings.dataset_cover_theme.shared.card_image_presentation);
         brandColorInput.value = draftSettings.dataset_cover_theme.shared.brand_color;
     }
 

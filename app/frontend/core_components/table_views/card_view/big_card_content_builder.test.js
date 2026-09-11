@@ -265,6 +265,31 @@ describe('big_card_content_builder', () => {
         );
     });
 
+    test('keeps detail field labels and values visible without a generic Details heading', async () => {
+        createRowArticleKeyValueElementMock.mockImplementation((label, value, column, _lang, _class, showKey) => {
+            const field = document.createElement('div');
+            field.dataset.column = column;
+            field.textContent = showKey ? label + ': ' + value : String(value);
+            return field;
+        });
+        const built = await buildRowArticleContent(
+            { id: 7, location: 'Helsinki' },
+            'travel_info',
+            {
+                id: { card_element: 'details', show_key_on_card: true },
+                location: { card_element: 'details', show_key_on_card: true },
+            },
+            ['id', 'location'], 'seed-1', 'T', false,
+        );
+        const content = built.rowArticleContentElement;
+        const details = content.querySelector(':scope > .row_article_details_section');
+        expect(details.textContent).toBe('id: 7location: Helsinki');
+        expect(details.querySelectorAll('[data-column]')).toHaveLength(2);
+        expect(content.querySelector('[data-lang-key="row_article_section_details"]')).toBeNull();
+        expect(details.querySelector('button, summary')).toBeNull();
+        expect(details.hidden).toBe(false);
+    });
+
     test('prepends the dataset icon to the row article header', async () => {
         localStorage.setItem(
             'app_service_catalog_tableMeta',

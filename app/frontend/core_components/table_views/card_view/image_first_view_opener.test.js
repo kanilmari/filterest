@@ -145,4 +145,83 @@ describe("openImageFirstView", () => {
         expect(modalOptions.contentElement.firstElementChild.classList)
             .toContain("row_article_image_first_stage");
     });
+    test("closes from the text gutter through the current modal close lifecycle", async () => {
+        await openImageFirstView({
+            imageSrc: "/storage/hero.png",
+            imageRows: [{ id: 11, asset_kind: "image", filename: "hero.png" }],
+            rowItem: { id: 3, title: "Example", description: "Body" },
+            tableName: "examples",
+        });
+        const view = document.querySelector('[data-testid="image-first-view"]');
+        const closeView = openImageModalContentMock.mock.results[0].value.close;
+
+        view.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        view.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+
+        expect(closeView).toHaveBeenCalledOnce();
+    });
+
+    test("keeps article text, links, disclosure buttons and editors interactive", async () => {
+        await openImageFirstView({
+            imageSrc: "/storage/hero.png",
+            imageRows: [{ id: 11, asset_kind: "image", filename: "hero.png" }],
+            rowItem: { id: 3, title: "Example", description: "Body" },
+            tableName: "examples",
+        });
+        const view = document.querySelector('[data-testid="image-first-view"]');
+        const article = view.querySelector(".image_first_view_article_content");
+        const closeView = openImageModalContentMock.mock.results[0].value.close;
+        const link = document.createElement("a");
+        link.href = "https://example.test/original-photo";
+        const linkAction = vi.fn((event) => event.preventDefault());
+        link.addEventListener("click", linkAction);
+        const disclosure = document.createElement("button");
+        const disclosureAction = vi.fn();
+        disclosure.addEventListener("click", disclosureAction);
+        const input = document.createElement("input");
+        input.value = "Unsaved title";
+        const editor = document.createElement("div");
+        editor.contentEditable = "true";
+        editor.textContent = "Unsaved article";
+        article.append(link, disclosure, input, editor);
+
+        for (const target of [article, ...article.children]) {
+            target.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+            target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1, cancelable: true }));
+        }
+
+        expect(closeView).not.toHaveBeenCalled();
+        expect(linkAction).toHaveBeenCalledOnce();
+        expect(disclosureAction).toHaveBeenCalledOnce();
+        expect(input.value).toBe("Unsaved title");
+        expect(editor.textContent).toBe("Unsaved article");
+        // Releasing a text-selection drag in the gutter must not dismiss it.
+        editor.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        view.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+        expect(closeView).not.toHaveBeenCalled();
+        // A subsequent intentional background click still closes normally.
+        view.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        view.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+        expect(closeView).toHaveBeenCalledOnce();
+    });
+
+    test("keeps gutter closing connected after an existing image-first record transition", async () => {
+        const closeView = vi.fn();
+        transitionImageFirstModalContentMock.mockImplementation(({ contentElement }) => {
+            document.body.appendChild(contentElement);
+            return { modal: document.createElement("div"), close: closeView };
+        });
+        await openImageFirstView({
+            imageSrc: "/storage/hero.png",
+            imageRows: [{ id: 11, asset_kind: "image", filename: "hero.png" }],
+            rowItem: { id: 4, title: "Next example", description: "Body" },
+            tableName: "examples",
+        });
+        const view = document.querySelector('[data-testid="image-first-view"]');
+        view.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        view.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+        expect(closeView).toHaveBeenCalledOnce();
+        expect(openImageModalContentMock).not.toHaveBeenCalled();
+    });
+
 });

@@ -1,76 +1,86 @@
 /*
  * create_table_admin.css
- *
- * Form styling for the admin table creation view.
- * Bridges the table creation form (#table_creation_form) and the admin UI.
- * Exists to lay out labels, inputs, and submit controls for new table setup.
+ * Gives dataset authoring room for per-column card roles on wide screens.
+ * Container queries stack the native controls when the available pane is narrow.
  */
 #table_creation_form {
+    max-width: 968px;
+    width: 100%;
+    box-sizing: border-box;
     margin-top: 20px;
+    container-type: inline-size;
 }
-
-/* Labelit pinoavat sisällön selkeästi */
 #table_creation_form label {
     display: block;
+    min-width: 0;
     margin-bottom: 10px;
 }
-
-.table-capabilities-section {
-    display: grid;
-    gap: 8px;
-    padding: 10px;
-    border: 1px solid var(--table_border_color);
-    border-radius: var(--border_radius_small);
+#table_creation_form label > span { display: block; margin-bottom: 4px; }
+#table_creation_form input:not([type="checkbox"]),
+#table_creation_form select {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--text_color);
+    background: var(--input_bg_color);
 }
-
-.table-capabilities-section label {
-    margin-bottom: 0 !important;
-}
-
+.table-capabilities-section,
 .table-folder-section {
     display: grid;
     gap: 10px;
     padding: 10px;
     border: 1px solid var(--table_border_color);
     border-radius: var(--border_radius_small);
-    margin-bottom: 10px;
 }
-
-.table-folder-section-title {
-    font-weight: 600;
-}
-
+.table-capabilities-section label { margin-bottom: 0 !important; }
+.table-folder-section { margin-bottom: 10px; }
+.table-folder-section-title { font-weight: 600; }
 .table-folder-inline-fields {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
     gap: 10px;
 }
-
 .table-folder-hint {
     margin: 0;
     color: var(--text_color_secondary, var(--text_color));
     font-size: 0.92rem;
 }
-
-/* Yksittäinen "row" sarakkeelle:
-   Käytetään display: grid -asettelua taulukkomaisesti */
-.column-field {
+#table_creation_form .column-field {
     display: grid;
-    grid-template-columns: 200px 200px 100px auto; /* Voit muokata leveyksiä */
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 10px; /* pientä tilaa riveille */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 80px minmax(0, 1.15fr) auto;
+    align-items: end;
+    gap: 8px;
+    margin-bottom: 10px;
     border: 1px solid var(--table_border_color);
-    padding: 7px;
+    padding: 10px;
 }
-
-/* Pienet marginaalit kentille */
-.column-field input,
-.column-field select {
-    margin-right: 5px;
+#table_creation_form .column-field label { margin: 0; }
+#table_creation_form .column-field input,
+#table_creation_form .column-field select,
+#table_creation_form .column-field button {
+    margin: 0;
+    min-height: 40px;
+    box-sizing: border-box;
 }
-
-/* Poista-painikkeen pientä marginaalia */
-.column-field button {
-    margin-left: 5px;
+#table_creation_form .column-field button {
+    color: var(--button_text_color);
+    background: var(--button_bg_color);
+}
+#table_creation_form .column-field button:hover {
+    color: var(--button_hover_text_color);
+    background: var(--button_hover_bg_color);
+}
+#table_creation_form .foreign-key-field {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+@container (max-width: 740px) {
+    #table_creation_form .column-field { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #table_creation_form .column-field:not(.column-field--varchar) .column-field__length { display: none; }
+    #table_creation_form .column-field__remove { justify-self: start; }
+}
+@container (max-width: 440px) {
+    #table_creation_form .column-field,
+    #table_creation_form .foreign-key-field { grid-template-columns: minmax(0, 1fr); }
 }

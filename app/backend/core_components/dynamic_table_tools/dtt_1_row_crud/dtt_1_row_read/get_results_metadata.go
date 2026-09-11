@@ -309,6 +309,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
             COALESCE(scd.co_number, 0) AS co_number,
             COALESCE(scd.fco_number, scd.co_number, 0) AS fco_number,
             COALESCE(scd.is_multilingual, false) AS is_multilingual,
+            COALESCE(scd.editable_in_ui, false) AS editable_in_ui,
             %s,
             %s,
             %s,
@@ -365,6 +366,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 		var coNumber int
 		var fcoNumber int
 		var isMultilingual bool
+		var editableInUI bool
 		var cardDetailIconSVG string
 		var cardDetailIconKey string
 		var cardDetailCapitalization bool
@@ -388,6 +390,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 			&coNumber,
 			&fcoNumber,
 			&isMultilingual,
+			&editableInUI,
 			&cardDetailIconSVG,
 			&cardDetailIconKey,
 			&cardDetailCapitalization,
@@ -412,6 +415,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 			"co_number":                  coNumber,
 			"fco_number":                 fcoNumber,
 			"is_multilingual":            isMultilingual,
+			"editable_in_ui":             editableInUI,
 			"card_detail_icon_svg":       cardDetailIconSVG,
 			"card_detail_icon_key":       cardDetailIconKey,
 			"card_detail_capitalization": cardDetailCapitalization,

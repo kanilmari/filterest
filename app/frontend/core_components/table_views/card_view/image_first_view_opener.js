@@ -256,6 +256,19 @@ export async function openImageFirstView({
     const shell = document.createElement("div");
     shell.classList.add("image_first_view");
     shell.dataset.testid = "image-first-view";
+    // The centered article leaves real background beside its text, outside the
+    // image stage. Close only on that shell, never through article controls or
+    // a text-selection drag that began inside the content.
+    let pointerStartedOnBackground = false;
+    shell.addEventListener("pointerdown", (event) => {
+        pointerStartedOnBackground = event.target === shell;
+    });
+    shell.addEventListener("click", (event) => {
+        if (event.target === shell && (event.detail === 0 || pointerStartedOnBackground)) {
+            closeImageFirstView?.();
+        }
+        pointerStartedOnBackground = false;
+    });
 
     let rowNavigation = null;
     if (enable_experimental_row_article_row_navigation) {

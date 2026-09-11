@@ -100,6 +100,7 @@ type DatasetCoverSharedValues struct {
 	// ImageBlur remains as a rollback-safe fallback for older application builds.
 	ImageBlur              float64 `json:"image_blur"`
 	CardImageWidth         float64 `json:"card_image_width"`
+	CardImagePresentation  string  `json:"card_image_presentation"`
 	CardDescriptionLines   int     `json:"card_description_lines"`
 	ActiveTabFade          float64 `json:"active_tab_fade"`
 	ActiveTabMaxOpacity    float64 `json:"active_tab_max_opacity"`
@@ -264,7 +265,7 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	}
 	if err := requireExactJSONKeys(themeParts["shared"], []string{
 		"hero_extra_height", "hero_bottom_fade", "image_blur",
-		"card_image_width", "card_description_lines",
+		"card_image_width", "card_image_presentation", "card_description_lines",
 		"active_tab_fade", "active_tab_max_opacity",
 		"active_tab_glow_intensity", "active_tab_glow_width", "active_tab_glow_blur",
 		"brand_color",
@@ -380,6 +381,9 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if err := validateRange("shared.card_image_width", config.Shared.CardImageWidth, 30, 600); err != nil {
 		return err
 	}
+	if config.Shared.CardImagePresentation != "cover" && config.Shared.CardImagePresentation != "contain" && config.Shared.CardImagePresentation != "contain_blur" {
+		return errors.New("unsupported card image presentation")
+	}
 	if config.Shared.CardDescriptionLines < 1 || config.Shared.CardDescriptionLines > 12 {
 		return fmt.Errorf("shared.card_description_lines must be between 1 and 12")
 	}
@@ -465,6 +469,7 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 				HeroBottomFade:         48,
 				ImageBlur:              1,
 				CardImageWidth:         300,
+				CardImagePresentation:  "contain",
 				CardDescriptionLines:   2,
 				ActiveTabFade:          25,
 				ActiveTabMaxOpacity:    1,

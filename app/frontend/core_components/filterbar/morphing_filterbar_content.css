@@ -422,12 +422,8 @@
   background: transparent;
 }
 
-.filterbar-panel-body .filterbar-text-search-row .dataset-search-input,
-.filterbar-panel-body .filterbar-text-search-row .dataset-search-submit-button {
-  height: 34px !important;
-}
-
 .filterbar-panel-body .filterbar-text-search-row .dataset-search-input-row {
+  --dataset-search-control-height: 34px;
   --dataset-search-placeholder-fade-left: var(--fw-space-3);
 }
 

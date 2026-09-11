@@ -40,6 +40,47 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(activeScrollable.children[1]?.classList.contains('filterbar-inline-hero')).toBe(true);
     });
 
+    test('keeps canonical sidebar and menu actions across hero, clipped hero and shared toolbar hosts', async () => {
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        const navbar = await import('../navigation/menu_button/navbar_visibility_handler.js');
+        const topbarRules = await import('./shared_topbar_builder.js');
+        document.getElementById('navbar').classList.add('collapsed');
+        const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
+        const hero = document.querySelector('.filterbar-inline-hero');
+        const scrollable = document.getElementById('demo_card_view_container');
+        const opener = document.querySelector('[data-testid="filterbar-toggle"]');
+        const hide = panel.querySelector('.hide_filter_bar_button');
+        let top = 0;
+        hero.getBoundingClientRect = () => ({ top, bottom: top + 300, height: 300 });
+        scrollable.getBoundingClientRect = () => ({ top: 0, bottom: 800, height: 800 });
+        scrollable.dispatchEvent(new Event('scroll'));
+        hide.click();
+        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(true);
+        expect(hero.contains(opener)).toBe(true);
+        expect(opener.dataset.cornerOwner).toBe('hero');
+        const menu = hero.querySelector('[data-testid="hero-menu-button"]');
+        expect(menu.tabIndex).toBe(0);
+        menu.click();
+        expect(navbar.toggleNavbarVisibility).toHaveBeenCalledTimes(1);
+        opener.click();
+        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
+        expect(opener.tabIndex).toBe(-1);
+        hide.click();
+        top = -40;
+        scrollable.dispatchEvent(new Event('scroll'));
+        expect(opener.dataset.cornerOwner).toBe('fallback');
+        expect(menu.tabIndex).toBe(-1);
+        expect(document.getElementById('showMenuButton').classList.contains('shared-topbar-menu-source-hidden')).toBe(false);
+        topbarRules.shouldShowSharedTopBar.mockReturnValue(true);
+        top = -400;
+        scrollable.dispatchEvent(new Event('scroll'));
+        expect(opener.dataset.cornerOwner).toBe('topbar');
+        expect(opener.parentElement.classList.contains('dataset-shared-topbar__slot--end')).toBe(true);
+        opener.click();
+        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
+        expect(document.querySelectorAll('[data-testid="filterbar-toggle"]')).toHaveLength(1);
+    });
+
     test('mounts the dataset header settings action in an authorized admin hero', async () => {
         sessionStorage.setItem(
             'user_permissions',

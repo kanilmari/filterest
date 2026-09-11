@@ -11,6 +11,7 @@ import {
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { isCardStackViewport } from "../../../ui_config.js";
 import { appendImageWithSvgPresentation } from "./svg_image_presentation.js";
+import { prepareCardImagePresentation } from "./card_image_presentation.js";
 
 const SERVICE_CATALOG_TABLE_NAME = "app_service_catalog";
 const SERVICE_CATALOG_ROUTE_ALIAS = "service_catalog";
@@ -214,6 +215,7 @@ export function createImageElement(
         logoPlan: serviceCatalogLogoPlan,
     });
     wrapper.classList.add('wrapper');
+    prepareCardImagePresentation(wrapper, foregroundImg);
 
     return wrapper;
 }

@@ -19,22 +19,13 @@ import {
     normalizeClientCardDetailsLayout,
     normalizeClientCardStyleVariant,
 } from '../table_views/card_view/card_detail_layout_options.js';
+import { getCardRoleOptions } from '../table_views/card_view/card_role_catalog.js';
 import { getCardDetailIconOptions } from '../table_views/card_view/card_detail_icon_builder.js';
 
 /** @typedef {import('../../generated/go_contract_types').CardVisibilityColumn} CardVisibilityColumn */
 /** @typedef {import('../../generated/go_contract_types').CardVisibilityResponse} CardVisibilityResponse */
 
-const CARD_ELEMENT_OPTIONS = [
-    'details',
-    'header',
-    'header+lang_key',
-    'image',
-    'details_link',
-    'description1',
-    'description1+lang_key',
-    'description2',
-    'description2+lang_key',
-];
+const CARD_ELEMENT_OPTIONS = getCardRoleOptions({ includeLegacyVariants: true });
 
 const CARD_DETAIL_LABEL_MODE_OPTIONS = [
     'label',

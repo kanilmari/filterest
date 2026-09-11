@@ -62,13 +62,12 @@ body {
     contain: paint;
 }
 
-/* The 2560px application shell stops growing on ultra-wide displays. Only
-   then paint a complete structural edge around the HTML surface, including
-   the menu and filter panel. Because the edge belongs to their shared
-   containing block, hiding either panel cannot remove or relocate it. */
+/* The 2560px application shell stops growing on ultra-wide displays. Keep
+   its side edges visible around the shared menu and filter-panel container.
+   The top and bottom remain open; interior section dividers are separate. */
 @media (width >= 2562px) {
     .body_content {
-        border: 1px solid var(--border_color);
+        border-inline: 1px solid var(--border_color);
     }
 }
 

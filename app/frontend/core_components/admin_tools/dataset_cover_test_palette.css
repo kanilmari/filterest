@@ -267,3 +267,23 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+.dataset-cover-test-palette__select {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 6px;
+    min-width: 0;
+}
+.dataset-cover-test-palette__select select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+    color: var(--text_color);
+    background: var(--bg_color);
+    border: 1px solid var(--filter_panel_border);
+    border-radius: var(--border_radius_small);
+}
+.dataset-cover-test-palette__select small {
+    color: var(--text_color_secondary, var(--text_color));
+}

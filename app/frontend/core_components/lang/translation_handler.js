@@ -23,8 +23,21 @@ import {
 // Globaalisti tallennetaan englanninkieliset käännökset
 let defaultTranslations = {};
 
+import { getCardRoleTranslationFallbacks } from '../table_views/card_view/card_role_catalog.js';
+import { TABLE_CREATION_TRANSLATION_FALLBACKS } from '../general_tables/gt_3_table_crud/gt_3_1_table_create/table_creation_translation_fallbacks.js';
+
 const LOCAL_TRANSLATION_FALLBACKS = {
+    ...getCardRoleTranslationFallbacks(),
+    ...TABLE_CREATION_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),
+    // Existing installations or cached responses may predate this bootstrap
+    // key. Reviewed runtime translations still take priority over these labels.
+    row_article_section_details: {
+        fi: "Tiedot",
+        en: "Details",
+        ch: "详细信息",
+        yue: "詳細資料",
+    },
     field_set_owner_personal: {
         fi: "Henkilökohtainen",
         en: "Personal",

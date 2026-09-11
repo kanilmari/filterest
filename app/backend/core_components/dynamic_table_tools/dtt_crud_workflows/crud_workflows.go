@@ -32,6 +32,7 @@ import (
 type CreateTableRequest struct {
 	TableName       string            `json:"dataset_name"`
 	Columns         map[string]string `json:"columns"`
+	ColumnCardRoles map[string]string `json:"column_card_roles,omitempty"`
 	ForeignKeys     []ForeignKeyDef   `json:"foreign_keys"`
 	GrantUsersRead  bool              `json:"grant_users_read"`
 	GrantGuestsRead bool              `json:"grant_guests_read"`
@@ -227,6 +228,11 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		sanitizedColumns[sColName] = colType
 	}
 
+	if err := validateCreationCardRoles(req.ColumnCardRoles, sanitizedColumns); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	var sanitizedForeignKeys []dtt_3_table_create.ForeignKeyDefinition
 	for _, fk := range req.ForeignKeys {
 		sRefCol, err := security.SanitizeIdentifier(fk.ReferencingColumn)
@@ -296,6 +302,12 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		_ = tx.Rollback()
 		log.Printf("\033[31merror: [CreateTableHandler] metadata refresh failed for %s: %v\033[0m", tableName, metaErr)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but metadata refresh failed: %v", metaErr))
+		return
+	}
+
+	if err := applyCreationCardRoles(tx, tableName, req.ColumnCardRoles); err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "card role assignment failed")
 		return
 	}
 

@@ -1,0 +1,46 @@
+/* Button-only surface slots. The existing panels and toolbar keep their layout. */
+.dataset-corner-controls {
+  position: absolute;
+  top: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dataset-corner-controls[hidden] { display: none; }
+.dataset-corner-controls--start { left: 12px; }
+.dataset-corner-controls--end { right: 12px; }
+/* The existing 1px scroll sentinel precedes the hero. Compensate that
+   leading space so both buttons retain the canonical viewport top inset. */
+.filterbar-scroll-sentinel + .filterbar-inline-hero > .dataset-corner-controls {
+  top: calc(12px - 1px);
+}
+/* Keep the toolbar opener in its canonical right corner. Move the gear
+   and its centered palette together to the left only while that slot is used. */
+.filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) > .filterbar-inline-hero__config-button {
+  right: 64px;
+}
+.filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) > .filterbar-inline-hero__cover-palette-button {
+  right: 69px;
+}
+.filterbar-fixed-toggle.filterbar-fixed-toggle--hosted {
+  position: static;
+  flex: 0 0 44px;
+  z-index: auto;
+  box-sizing: border-box;
+}
+.dataset-corner-controls-topbar-end { gap: 8px; }
+/* Narrow shared bars use 10px content padding. Offset only their buttons
+   to preserve the canonical 12px corner inset without changing bar layout. */
+.dataset-corner-controls-topbar-end > .filterbar-fixed-toggle--hosted {
+  position: relative;
+  top: auto;
+  right: calc(12px - var(--dataset-shared-topbar-padding-inline, 12px));
+}
+.dataset-shared-topbar__menu-slot > .dataset-shared-topbar__menu-button {
+  left: calc(12px - var(--dataset-shared-topbar-padding-inline, 12px));
+}
+/* The opener now occupies its actual flex slot instead of a fixed overlay. */
+.tab_parts_container:has(.filterbar-fixed-toggle--hosted) .dataset-shared-topbar__article-close:not([hidden]) {
+  margin-right: 0;
+}

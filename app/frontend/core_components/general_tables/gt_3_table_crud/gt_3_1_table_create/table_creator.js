@@ -15,7 +15,8 @@ import { fetch_columns_for_table } from '../../../endpoints/endpoint_column_fetc
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../../../lang/translation_handler.js';
 import { showSuccessToast, showWarningToast } from '../../../../reusable_components/notifications/toast_notification_printer.js';
-import { getDatasetRouteUniquenessHint } from '../../../navigation/nav_engine/dataset_aliases.js';
+import { addColumnField } from './table_creation_column_builder.js';
+import { createCreationLabel, setCreationText } from './table_creation_labels.js';
 import { initializeTreeCallAdmin } from '../../../vanilla_tree/van_tr_components/admin_tree_builder.js';
 import { buildTableCreationRequestData } from './table_creator_helpers.js';
 import {
@@ -43,8 +44,7 @@ export async function generate_table_creation_view(container) {
     form.style.padding = '10px';
 
     // Taulun nimi
-    const tableNameLabel = document.createElement('label');
-    tableNameLabel.textContent = getTranslationForKey('table_name') || 'Taulun nimi: ';
+    const tableNameLabel = createCreationLabel('table_name');
     const tableNameInput = document.createElement('input');
     tableNameInput.type = 'text';
     tableNameInput.id = 'table_name';
@@ -57,7 +57,7 @@ export async function generate_table_creation_view(container) {
     const datasetRouteHint = document.createElement('p');
     datasetRouteHint.className = 'table-name-route-hint';
     datasetRouteHint.dataset.testid = 'create-table-route-hint';
-    datasetRouteHint.textContent = getDatasetRouteUniquenessHint();
+    setCreationText(datasetRouteHint, 'create_dataset_route_hint');
     Object.assign(datasetRouteHint.style, {
         margin: '0',
         fontSize: '0.9em',
@@ -70,11 +70,10 @@ export async function generate_table_creation_view(container) {
 
     const folderSectionTitle = document.createElement('div');
     folderSectionTitle.className = 'table-folder-section-title';
-    folderSectionTitle.textContent = getTranslationForKey('folder') || 'Kansio';
+    setCreationText(folderSectionTitle, 'folder');
     folderSection.appendChild(folderSectionTitle);
 
-    const existingFolderLabel = document.createElement('label');
-    existingFolderLabel.textContent = getTranslationForKey('select_folder') || 'Valitse olemassa oleva kansio';
+    const existingFolderLabel = createCreationLabel('select_folder');
     const existingFolderSelect = document.createElement('select');
     existingFolderSelect.id = 'table_folder_id';
     existingFolderSelect.name = 'table_folder_id';
@@ -84,15 +83,13 @@ export async function generate_table_creation_view(container) {
 
     const folderHint = document.createElement('p');
     folderHint.className = 'table-folder-hint';
-    folderHint.textContent = getTranslationForKey('table_folder_hint')
-        || 'Voit valita taululle kansion tai luoda uuden. Oletuksena taulu sijoitetaan kansioon database / other_tables, ei juureen.';
+    setCreationText(folderHint, 'table_folder_hint');
     folderSection.appendChild(folderHint);
 
     const newFolderFields = document.createElement('div');
     newFolderFields.className = 'table-folder-inline-fields';
 
-    const newFolderNameLabel = document.createElement('label');
-    newFolderNameLabel.textContent = getTranslationForKey('new_folder_name') || 'Uuden kansion nimi';
+    const newFolderNameLabel = createCreationLabel('new_folder_name');
     const newFolderNameInput = document.createElement('input');
     newFolderNameInput.type = 'text';
     newFolderNameInput.id = 'create_table_new_folder_name';
@@ -101,8 +98,7 @@ export async function generate_table_creation_view(container) {
     newFolderNameLabel.appendChild(newFolderNameInput);
     newFolderFields.appendChild(newFolderNameLabel);
 
-    const newFolderParentLabel = document.createElement('label');
-    newFolderParentLabel.textContent = getTranslationForKey('parent_folder') || 'Yläkansio uudelle kansiolle';
+    const newFolderParentLabel = createCreationLabel('parent_folder');
     const newFolderParentSelect = document.createElement('select');
     newFolderParentSelect.id = 'create_table_new_folder_parent_id';
     newFolderParentSelect.name = 'create_table_new_folder_parent_id';
@@ -112,6 +108,10 @@ export async function generate_table_creation_view(container) {
 
     folderSection.appendChild(newFolderFields);
     form.appendChild(folderSection);
+
+    const cardRoleHint = setCreationText(document.createElement('p'), 'card_role_hint');
+    cardRoleHint.className = 'table-folder-hint';
+    form.appendChild(cardRoleHint);
 
     // Sarakkeet container
     const columnsContainer = document.createElement('div');
@@ -124,7 +124,7 @@ export async function generate_table_creation_view(container) {
     // Lisää sarake -painike
     const addColumnButton = document.createElement('button');
     addColumnButton.type = 'button';
-    addColumnButton.textContent = getTranslationForKey('add_column') || 'Lisää sarake';
+    setCreationText(addColumnButton, 'add_column');
     addColumnButton.classList.add('modal-button', 'secondary', 'saturate_on_hover');
     addColumnButton.addEventListener('click', () => addColumnField(columnsContainer));
     form.appendChild(addColumnButton);
@@ -140,7 +140,7 @@ export async function generate_table_creation_view(container) {
     // Lisää vierasavain -painike
     const addForeignKeyButton = document.createElement('button');
     addForeignKeyButton.type = 'button';
-    addForeignKeyButton.textContent = getTranslationForKey('add_foreign_key') || 'Lisää vierasavain';
+    setCreationText(addForeignKeyButton, 'add_foreign_key');
     addForeignKeyButton.classList.add('modal-button', 'secondary', 'saturate_on_hover');
     addForeignKeyButton.addEventListener('click', async () => {
         await addForeignKeyField(foreignKeysContainer);
@@ -155,7 +155,7 @@ export async function generate_table_creation_view(container) {
     permissionsContainer.style.gap = '5px';
 
     const permissionsTitle = document.createElement('div');
-    permissionsTitle.textContent = getTranslationForKey('default_permissions') || 'Oletusoikeudet:';
+    setCreationText(permissionsTitle, 'default_permissions');
     permissionsTitle.style.fontWeight = 'bold';
     permissionsContainer.appendChild(permissionsTitle);
 
@@ -169,7 +169,7 @@ export async function generate_table_creation_view(container) {
     usersReadCheckbox.id = 'grant_users_read';
     usersReadCheckbox.name = 'grant_users_read';
     usersReadLabel.appendChild(usersReadCheckbox);
-    usersReadLabel.appendChild(document.createTextNode(getTranslationForKey('grant_users_read') || 'Anna lukuoikeus käyttäjille (Users)'));
+    usersReadLabel.appendChild(setCreationText(document.createElement('span'), 'grant_users_read'));
     permissionsContainer.appendChild(usersReadLabel);
 
     // Guests read access
@@ -182,7 +182,7 @@ export async function generate_table_creation_view(container) {
     guestsReadCheckbox.id = 'grant_guests_read';
     guestsReadCheckbox.name = 'grant_guests_read';
     guestsReadLabel.appendChild(guestsReadCheckbox);
-    guestsReadLabel.appendChild(document.createTextNode(getTranslationForKey('grant_guests_read') || 'Anna lukuoikeus vieraille (Guests)'));
+    guestsReadLabel.appendChild(setCreationText(document.createElement('span'), 'grant_guests_read'));
     permissionsContainer.appendChild(guestsReadLabel);
 
     // Prevent deletion
@@ -197,7 +197,7 @@ export async function generate_table_creation_view(container) {
     preventDeletionLabel.appendChild(preventDeletionCheckbox);
     const preventDeletionText = document.createElement('span');
     preventDeletionText.dataset.langKey = 'prevent_table_deletion_hosting_request';
-    preventDeletionText.textContent = getTranslationForKey('prevent_table_deletion_hosting_request') || 'Prevent table deletion - table can only be removed by hosting upon valid request';
+    setCreationText(preventDeletionText, 'prevent_table_deletion_hosting_request');
     preventDeletionLabel.appendChild(preventDeletionText);
     permissionsContainer.appendChild(preventDeletionLabel);
 
@@ -220,8 +220,7 @@ export async function generate_table_creation_view(container) {
     enableImagesCheckbox.dataset.testid = 'create-table-enable-images';
     const enableImagesText = document.createElement('span');
     enableImagesText.dataset.langKey = 'create_table_enable_images';
-    enableImagesText.textContent = getTranslationForKey('create_table_enable_images')
-        || 'Enable image uploads for this table';
+    setCreationText(enableImagesText, 'create_table_enable_images');
     enableImagesLabel.append(enableImagesCheckbox, enableImagesText);
     capabilitiesContainer.appendChild(enableImagesLabel);
     form.appendChild(capabilitiesContainer);
@@ -229,7 +228,7 @@ export async function generate_table_creation_view(container) {
     // Lähetä-painike
     const submitButton = document.createElement('button');
     submitButton.type = 'submit';
-    submitButton.textContent = getTranslationForKey('create_table') || 'Luo Taulu';
+    setCreationText(submitButton, 'create_table');
     submitButton.dataset.testid = 'create-table-submit';
     submitButton.dataset.langKey = 'create_table';
     submitButton.classList.add('modal-button', 'primary', 'saturate_on_hover');
@@ -253,10 +252,10 @@ export async function generate_table_creation_view(container) {
     window.allTables = await fetchTableNames();
     const folderOptions = await fetchFolderOptions();
     populateFolderSelect(existingFolderSelect, folderOptions, {
-        placeholder: getTranslationForKey('select_folder') || '-- Valitse kansio --',
+        placeholderKey: 'select_folder',
     });
     populateFolderSelect(newFolderParentSelect, folderOptions, {
-        placeholder: getTranslationForKey('root_folder') || '-- Luo juureen --',
+        placeholderKey: 'root_folder',
         includeRoot: true,
     });
     const initialFolderDefaults = resolveFolderSelectionDefaults(folderOptions);
@@ -323,12 +322,12 @@ async function fetchFolderOptions({ forceRefresh = false } = {}) {
     return buildFolderOptionsFromNodes(nodes);
 }
 
-function populateFolderSelect(selectElement, folderOptions, { placeholder, includeRoot = false } = {}) {
+function populateFolderSelect(selectElement, folderOptions, { placeholderKey, includeRoot = false } = {}) {
     selectElement.replaceChildren();
 
     const placeholderOption = document.createElement('option');
     placeholderOption.value = '';
-    placeholderOption.textContent = placeholder || '--';
+    setCreationText(placeholderOption, placeholderKey || 'select_folder');
     selectElement.appendChild(placeholderOption);
 
     if (includeRoot) {
@@ -344,94 +343,6 @@ function populateFolderSelect(selectElement, folderOptions, { placeholder, inclu
 
 }
 
-function addColumnField(container, initialName = '', initialType = '') {
-    const columnDiv = document.createElement('div');
-    columnDiv.className = 'column-field';
-
-    // Sarakenimi
-    const columnNameLabel = document.createElement('label');
-    columnNameLabel.textContent = getTranslationForKey('column_name') || 'Sarakenimi: ';
-    const columnNameInput = document.createElement('input');
-    columnNameInput.type = 'text';
-    columnNameInput.name = 'column_name';
-    columnNameInput.required = false;
-    columnNameInput.value = initialName;
-    columnNameLabel.appendChild(columnNameInput);
-    columnDiv.appendChild(columnNameLabel);
-
-    // Tietotyyppi
-    const dataTypeLabel = document.createElement('label');
-    dataTypeLabel.textContent = getTranslationForKey('data_type') || ' Tietotyyppi: ';
-    const dataTypeSelect = document.createElement('select');
-    dataTypeSelect.name = 'data_type';
-    dataTypeSelect.required = false;
-    const dataTypes = [
-        { value: '', text: getTranslationForKey('select_data_type') || 'Valitse tietotyyppi' },
-        { value: 'SERIAL', text: 'SERIAL' },
-        { value: 'INTEGER', text: 'INTEGER' },
-        { value: 'VARCHAR', text: 'VARCHAR' },
-        { value: 'TEXT', text: 'TEXT' },
-        { value: 'BOOLEAN', text: 'BOOLEAN' },
-        { value: 'DATE', text: 'DATE' },
-        { value: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', text: 'TIMESTAMPTZ (auto)' },
-        { value: 'JSONB', text: 'JSONB' }
-    ];
-
-    dataTypes.forEach(type => {
-        const option = document.createElement('option');
-        option.value = type.value;
-        option.textContent = type.text;
-        dataTypeSelect.appendChild(option);
-    });
-
-    dataTypeSelect.value = initialType || '';
-    dataTypeLabel.appendChild(dataTypeSelect);
-    columnDiv.appendChild(dataTypeLabel);
-
-    // Pituus (vain VARCHAR)
-    const lengthLabel = document.createElement('label');
-    lengthLabel.textContent = getTranslationForKey('length') || ' Pituus: ';
-    const lengthInput = document.createElement('input');
-    lengthInput.type = 'number';
-    lengthInput.name = 'length';
-    lengthInput.min = '1';
-    lengthInput.style.display = 'none'; // Piilotetaan oletuksena
-    lengthLabel.appendChild(lengthInput);
-    columnDiv.appendChild(lengthLabel);
-
-    // Poista-painike
-    const removeButton = document.createElement('button');
-    removeButton.type = 'button';
-    removeButton.textContent = getTranslationForKey('delete') || 'Poista';
-    removeButton.style.backgroundColor = 'var(--button_bg_color)';
-    removeButton.style.color = 'var(--button_text_color)';
-    removeButton.addEventListener('mouseenter', () => {
-        removeButton.style.backgroundColor = 'var(--button_hover_bg_color)';
-        removeButton.style.color = 'var(--button_hover_text_color)';
-    });
-    removeButton.addEventListener('mouseleave', () => {
-        removeButton.style.backgroundColor = 'var(--button_bg_color)';
-        removeButton.style.color = 'var(--button_text_color)';
-    });
-    removeButton.addEventListener('click', () => {
-        container.removeChild(columnDiv);
-    });
-    columnDiv.appendChild(removeButton);
-
-    dataTypeSelect.addEventListener('change', () => {
-        if (dataTypeSelect.value === 'VARCHAR') {
-            lengthInput.style.display = 'inline-block';
-            lengthInput.required = true;
-        } else {
-            lengthInput.style.display = 'none';
-            lengthInput.required = false;
-            lengthInput.value = '';
-        }
-    });
-
-    container.appendChild(columnDiv);
-}
-
 async function addForeignKeyField(container) {
     if(!window.allTables) {
         window.allTables = await fetchTableNames();
@@ -439,15 +350,12 @@ async function addForeignKeyField(container) {
 
     const fkDiv = document.createElement('div');
     fkDiv.className = 'foreign-key-field';
-    fkDiv.style.display = 'grid';
-    fkDiv.style.gridTemplateColumns = 'auto auto';
     fkDiv.style.alignItems = 'center';
     fkDiv.style.border = '1px solid var(--table_border_color)';
     fkDiv.style.padding = '5px';
 
     // Referoiva sarake
-    const referencingColumnLabel = document.createElement('label');
-    referencingColumnLabel.textContent = getTranslationForKey('referencing_column') || 'Referoiva sarake: ';
+    const referencingColumnLabel = createCreationLabel('referencing_column');
     const referencingColumnSelect = document.createElement('select');
     referencingColumnSelect.name = 'fk_referencing_column';
     referencingColumnSelect.required = true;
@@ -455,8 +363,7 @@ async function addForeignKeyField(container) {
     fkDiv.appendChild(referencingColumnLabel);
 
     // Viitattava taulu
-    const referencedTableLabel = document.createElement('label');
-    referencedTableLabel.textContent = getTranslationForKey('referenced_table') || 'Viitattava taulu: ';
+    const referencedTableLabel = createCreationLabel('referenced_table');
     const referencedTableSelect = document.createElement('select');
     referencedTableSelect.name = 'fk_referenced_table';
     referencedTableSelect.required = true;
@@ -470,8 +377,7 @@ async function addForeignKeyField(container) {
     fkDiv.appendChild(referencedTableLabel);
 
     // Viitattava sarake
-    const referencedColumnLabel = document.createElement('label');
-    referencedColumnLabel.textContent = getTranslationForKey('referenced_column') || 'Viitattava sarake: ';
+    const referencedColumnLabel = createCreationLabel('referenced_column');
     const referencedColumnSelect = document.createElement('select');
     referencedColumnSelect.name = 'fk_referenced_column';
     referencedColumnSelect.required = true;
@@ -481,7 +387,7 @@ async function addForeignKeyField(container) {
     // Poista vierasavain -painike
     const removeFkButton = document.createElement('button');
     removeFkButton.type = 'button';
-    removeFkButton.textContent = getTranslationForKey('delete') || 'Poista';
+    setCreationText(removeFkButton, 'delete');
     removeFkButton.style.backgroundColor = 'var(--button_bg_color)';
     removeFkButton.style.color = 'var(--button_text_color)';
     removeFkButton.addEventListener('mouseenter', () => {
@@ -512,7 +418,7 @@ function updateReferencingColumnsDropdown(selectElement) {
     selectElement.replaceChildren();
     const emptyOption = document.createElement('option');
     emptyOption.value = '';
-    emptyOption.textContent = getTranslationForKey('select_column') || '-- Valitse sarake --';
+    setCreationText(emptyOption, 'select_column');
     selectElement.appendChild(emptyOption);
     columnInputs.forEach(input => {
         const trimmedVal = input.value.trim();
@@ -529,7 +435,7 @@ async function updateReferencedColumnsDropdown(tableName, selectElement) {
     selectElement.replaceChildren();
     const emptyOption = document.createElement('option');
     emptyOption.value = '';
-    emptyOption.textContent = getTranslationForKey('select_column') || '-- Valitse sarake --';
+    setCreationText(emptyOption, 'select_column');
     selectElement.appendChild(emptyOption);
 
     try {
@@ -558,6 +464,7 @@ async function submitTableCreationForm(form) {
         columnNames: formData.getAll('column_name'),
         dataTypes: formData.getAll('data_type'),
         lengths: formData.getAll('length'),
+        cardRoles: formData.getAll('card_role'),
         referencingColumns: formData.getAll('fk_referencing_column'),
         referencedTables: formData.getAll('fk_referenced_table'),
         referencedColumns: formData.getAll('fk_referenced_column'),
@@ -611,10 +518,10 @@ async function submitTableCreationForm(form) {
         fkContainer.replaceChildren();
         const refreshedFolderOptions = await fetchFolderOptions({ forceRefresh: true });
         populateFolderSelect(document.getElementById('table_folder_id'), refreshedFolderOptions, {
-            placeholder: getTranslationForKey('select_folder') || '-- Valitse kansio --',
+            placeholderKey: 'select_folder',
         });
         populateFolderSelect(document.getElementById('create_table_new_folder_parent_id'), refreshedFolderOptions, {
-            placeholder: getTranslationForKey('root_folder') || '-- Luo juureen --',
+            placeholderKey: 'root_folder',
             includeRoot: true,
         });
         const refreshedFolderSelect = document.getElementById('table_folder_id');

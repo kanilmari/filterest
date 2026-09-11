@@ -31,6 +31,7 @@
 @import url("../core_components/table_views/card_view/big_card_thumbnail_gallery.css");
 @import url("../core_components/table_views/card_view/big_card_attachment_list.css");
 @import url("../core_components/table_views/card_view/cards.css");
+@import url("../core_components/table_views/card_view/card_image_presentation.css");
 @import url("../core_components/table_views/card_view/card_description_lines.css");
 @import url("../core_components/table_views/experimental_free_layout_card/experimental_free_layout_card.css");
 @import url("../core_components/table_views/product_card_view/product_card_view.css");
@@ -51,6 +52,7 @@
 @import url("../core_components/admin_tools/admin_update_notice.css");
 @import url("../core_components/filterbar/text_search/text_search.css");
 @import url("../core_components/filterbar/morphing_filterbar_content.css");
+@import url("../core_components/filterbar/dataset_corner_controls.css");
 @import url("../core_components/filterbar/dataset_cover_theme.css");
 @import url("../core_components/admin_tools/dataset_cover_test_palette.css");
 @import url("../core_components/filterbar/filter_list/favefox_style_filters_container/favefox_style_filter_bar.css");

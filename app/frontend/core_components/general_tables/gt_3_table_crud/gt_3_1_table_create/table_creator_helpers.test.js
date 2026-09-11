@@ -214,3 +214,25 @@ describe('buildTableCreationRequestData', () => {
         });
     });
 });
+
+describe('card role request validation', () => {
+    const base = { tableName:'demo', columnNames:['id','title'], dataTypes:['SERIAL','TEXT'] };
+    test('includes only named columns and keeps roles aligned across blank rows', () => {
+        const result = buildTableCreationRequestData({
+            ...base, columnNames:['id','','title'], dataTypes:['SERIAL','','TEXT'],
+            cardRoles:['details','image','header'],
+        });
+        expect(result.requestData.column_card_roles).toEqual({id:'details',title:'header'});
+    });
+    test('rejects unsupported roles before building a request', () => {
+        expect(buildTableCreationRequestData({...base,cardRoles:['details','arbitrary']}).warningKey).toBe('invalid_card_role');
+    });
+    test('rejects duplicate names that PostgreSQL would fold to the same column', () => {
+        expect(buildTableCreationRequestData({
+            ...base,columnNames:['Name','name'],cardRoles:['header','description'],
+        }).warningKey).toBe('duplicate_column_name');
+    });
+    test('keeps the old payload contract when callers omit roles', () => {
+        expect(buildTableCreationRequestData(base).requestData).not.toHaveProperty('column_card_roles');
+    });
+});

@@ -1,5 +1,8 @@
-/* morphing_filterbar_search.css */
-/* Search panel and input styling for all three filterbar containers */
+/* text_search.css
+ * Gives native search inputs and buttons one shared visual surface.
+ * Connects hero, sidebar and search-only layouts without changing their behavior.
+ * Keeps borders, shadows and focus feedback from overlapping at the join.
+ */
 
 /* ============================================
    SEARCH PANEL BASE STYLES
@@ -20,6 +23,7 @@
   border: none !important;
   padding: 0 !important;
   margin-bottom: 0;
+  --dataset-search-control-height: 44px;
   --dataset-search-focus-border-color: var(--primary_color);
   --dataset-search-focus-ring: 0 0 0 4px color-mix(in srgb, var(--primary_color), transparent 80%);
   --dataset-search-active-button-bg: color-mix(in srgb, var(--dataset-search-focus-border-color) 18%, var(--input_bg_color) 82%);
@@ -48,8 +52,13 @@
 
 .dataset-search-input-row {
   position: relative;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border_color);
   border-radius: var(--fw-radius-lg);
-  transition: box-shadow 0.3s ease;
+  background: var(--input_bg_color);
+  box-shadow: var(--fw-shadow-soft);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .dataset-search-input-shell {
@@ -61,10 +70,12 @@
 
 .dataset-search-input {
   flex: 1;
-  height: 44px;
+  height: calc(var(--dataset-search-control-height) - 2px);
+  min-width: 0;
   box-sizing: border-box;
-  background: var(--input_bg_color) !important;
-  border: 1px solid var(--border_color) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
   color: var(--text_color) !important;
   border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
   padding: 0 20px !important;
@@ -72,13 +83,32 @@
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
-/* Search submit button flush against input */
+/* Only the shared wrapper owns an outer border and shadow. The button's
+   single inset separator remains inside that uninterrupted surface. */
 .dataset-search-submit-button {
-  border-radius: 0 var(--fw-radius-lg) var(--fw-radius-lg) 0 !important;
-  border-left: none !important;
-  height: 44px;
+  flex: 0 0 auto;
+  height: calc(var(--dataset-search-control-height) - 2px) !important;
+  min-height: 0;
   box-sizing: border-box;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+  border: none !important;
+  border-inline-start: 1px solid var(--border_color) !important;
+  border-radius: 0 calc(var(--fw-radius-lg) - 1px) calc(var(--fw-radius-lg) - 1px) 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dataset-search-submit-button:hover:not(:disabled),
+.dataset-search-submit-button:active:not(:disabled) {
+  background: var(--dataset-search-active-button-bg) !important;
+  color: var(--dataset-search-active-button-color) !important;
+}
+
+/* Keep keyboard focus distinguishable inside the group, without an outer
+   button outline or shadow crossing the input/button seam. */
+.dataset-search-submit-button:focus-visible {
+  outline: 2px solid var(--primary_color);
+  outline-offset: -4px;
 }
 
 .dataset-search-submit-icon {
@@ -120,23 +150,21 @@
 }
 
 .dataset-search-input-row:focus-within {
-  box-shadow: var(--dataset-search-focus-ring);
-}
-
-.dataset-search-input-row:focus-within .dataset-search-input {
-  background: var(--bg_color_extreme) !important;
-  border-color: var(--dataset-search-focus-border-color) !important;
-}
-
-.dataset-search-input-row:focus-within .dataset-search-submit-button {
-  background: var(--dataset-search-active-button-bg) !important;
-  border-color: var(--dataset-search-focus-border-color) !important;
-  color: var(--dataset-search-active-button-color) !important;
+  border-color: var(--dataset-search-focus-border-color);
+  box-shadow: var(--fw-shadow-soft), var(--dataset-search-focus-ring);
 }
 
 .dataset-search-input:focus {
-  outline: none;
-  box-shadow: none !important;
+  /* Override the generic input:focus outline only for this shared surface. */
+  outline: none !important;
+}
+
+/* High-contrast modes suppress shadows, so keep group focus visible there. */
+@media (forced-colors: active) {
+  .dataset-search-input-row:focus-within {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }
 
 .dataset-search-location-row {
@@ -174,16 +202,6 @@
 
 .filterbar-panel--compact .dataset-search-input {
   padding: 0 16px !important;
-  border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
-}
-
-.filterbar-panel--compact .dataset-search-submit-button {
-  border-radius: 0 var(--fw-radius-lg) var(--fw-radius-lg) 0 !important;
-}
-
-.filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-input,
-.filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-submit-button {
-  height: 44px;
 }
 
 .filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-input {
@@ -209,32 +227,18 @@
 
 .filterbar-search-only .dataset-search-input-row {
   --dataset-search-placeholder-fade-left: 16px;
+  backdrop-filter: blur(10px);
 }
 
 .filterbar-search-only .dataset-search-input {
-  background: var(--input_bg_color) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border_color) !important;
   padding: 0 16px !important;
-  height: 44px !important;
-  border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
   font-size: 0.9rem;
-  box-shadow: var(--fw-shadow-soft);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dataset-search-placeholder-fade {
     animation-duration: 0ms;
   }
-}
-
-.filterbar-search-only .dataset-search-submit-button {
-  border-radius: 0 var(--fw-radius-lg) var(--fw-radius-lg) 0 !important;
-  height: 44px;
-}
-
-.filterbar-search-only .dataset-search-input:focus {
-  background: var(--bg_color_extreme) !important;
 }
 
 /* The narrow clear action is overlaid inside the text field so it does not
