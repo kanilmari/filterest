@@ -25,6 +25,10 @@ new source mirror, a disposable clone, or a private parent repository.
 
 - Build from this repository into an ignored output directory. Never reconstruct
   or replace the maintained checkout while assembling a release.
+- Build the complete application Docker image before publication when Go imports,
+  embedded assets or Docker build inputs change. A native binary build cannot
+  verify the files copied into an isolated Docker build stage. From the standalone
+  root, use `docker build --file app/docker/Dockerfile app`.
 - Verify the Linux binaries for every published architecture, including the
   declared Go module set, WebP support and glibc compatibility boundary.
 - Include applicable license texts and dependency notices. Generate and verify

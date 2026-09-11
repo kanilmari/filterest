@@ -29,6 +29,7 @@ RUN go mod download
 
 COPY main.go ./
 COPY backend/ ./backend/
+COPY frontend/shared/ ./frontend/shared/
 COPY server_tools/admin_credential_recovery/ ./server_tools/admin_credential_recovery/
 
 RUN CGO_ENABLED=1 GOOS=linux go build \
