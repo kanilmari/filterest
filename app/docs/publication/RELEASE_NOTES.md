@@ -1,25 +1,23 @@
 # Filterest release notes
 
-## 9.3.3
+## 9.3.4
 
 Database compatibility: **9.7.13**. No database migration is introduced.
 
-- Filterest is maintained directly in its own repository and can install its
-  development dependencies without a parent development workspace.
-- The development setup installs Node packages, Go caches, Python test tools
-  and Playwright browsers under ignored runtime storage. Owned scripts and
-  dependency manifests remain in source control.
-- `./filterest setup --profile development --dependencies-only --yes`
-  reconciles development dependencies on an already configured host without
-  changing its database, credentials or running services.
-- Repeated installation reuses verified matching Node dependencies. The
-  dependency receipt follows the selected build manifests, including composed
-  development builds.
-- Playwright is pinned to 1.60.0 to fix browser installation with the current
-  Node development toolchain.
-- The approved product Constitution, contribution guidance and publication
-  checklist now describe the independently maintained Filterest product.
+- Expired sessions open the localized sign-in flow and clear stale navigation
+  aliases. Ordinary permission denials preserve the current guest view.
+- Filterest now provides its own candidate preparation, Linux asset building,
+  candidate promotion and GitHub publication commands. Preparation and
+  publication plan their changes by default.
+- Release verification binds all fourteen files to the reviewed source, checks
+  dependency notices and binary compatibility, and verifies remote asset bytes
+  before a draft can become a published release.
+- Linux builds pin baseline processor requirements and refuse inherited
+  machine-specific optimizations. The glibc 2.34 compatibility boundary remains.
+- Development setup verifies the declared Go toolchain and uses the
+  installation's isolated Python and other development dependencies.
+- Transitional Easelect maintenance workspaces follow the same application
+  release number. Standalone Filterest does not require that workspace.
 
-Existing installations retain their data and settings. The Linux administrator
-binaries require glibc 2.34 or newer. Host tools and operating-system prerequisites
-remain installation requirements; they are not bundled into the source repository.
+Existing installations retain their data and settings. Preparing this candidate
+and pushing its source do not update a running customer site.
