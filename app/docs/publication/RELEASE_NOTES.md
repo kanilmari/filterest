@@ -1,26 +1,12 @@
-# Filterest 9.3.7
+# Filterest 9.3.8
 
-Database compatibility: 9.7.13. This application update does not require a database migration.
+This candidate pairs application 9.3.8 with database schema 9.7.15. Existing installations must run the reviewed migrations before this application version becomes ready.
 
-## Fixed
+- Cards use one shared renderer with ordinary and glowy styles. Site defaults and dataset overrides have separate palette controls and saves; NULL inherits the site value. The service catalog follows the same metadata path as other datasets. Detail columns, image borders and a single translucent card background follow the selected presentation.
+- Classic and image-first articles have explicit navigation state. Returning to a list preserves its URL and scroll container; explicit article links retain their requested view. Administrators can configure initial article sections per dataset, and card labels preserve explicit choices while supporting role-based inheritance.
+- The coding-agent entry is administrator-only. The boolean system setting coding_agent_dev_only defaults to true; false permits production access when the separately configured runner is available. Production execution uses a persistent Git workspace, isolated jobs and fixed maintenance commands. Installing and authenticating that runner remains an operator action.
+- Automation authentication uses a protected API-only account flag and signed session channel. API tooling identifies itself explicitly; browser HTML access and untrusted channel claims are denied. Revocation advances the authentication generation without changing normal user account policy.
+- Workline Observatory shows workline numbers, and reporting phases apply to the complete agreed workline scope. Dataset creation and removal guards, shared field settings, supplemental search and theme contrast receive the integrated corrections.
+- Runtime status reports explicit application resources independently of a particular container orchestrator. Frontend directory ownership is documented as a plan: content views belong under the content area, while toolbar folders own their selection controls. This release does not move the frontend directory tree.
 
-- The production Docker build now includes the shared card-role catalogue in its backend build stage. This fixes the Docker image build failure in 9.3.6.
-
-The following improvements from 9.3.6 are included.
-
-## Added
-
-- Dataset creation now includes a translated card-role selector for each column. The form has more room on wide screens and stacks its controls on smaller screens.
-- Site administrators can choose cropped cover images, complete images, or complete images over a blurred copy with a background tint matching the active theme.
-
-## Improved
-
-- Dataset creation and the existing card-field editor use the same supported role catalogue. New title, description and keyword roles omit redundant field labels; detail fields retain their own labels.
-- The filter-sidebar and main-menu opening buttons stay reachable in their corresponding viewport corners. Settings and appearance controls remain accessible beside them.
-- Search inputs and their buttons share one border, background, shadow and focus treatment.
-- Article details retain individual field labels without an extra generic Details heading.
-- Image-first articles can be closed from the empty background beside their text. Dragging or selecting text does not accidentally close the article.
-- Multilingual article field metadata supports the graphical language editor.
-- The application no longer adds top and bottom outer borders on very wide screens. The right filter sidebar uses a two-pixel separator from adjacent content.
-
-Existing dataset roles and authored content are preserved. Automatic role suggestions and automatic translation during dataset creation are not included in this release.
+Validation includes the full frontend and Go backend suites, production frontend build, lint and generated-contract checks, isolated migration/fresh-bootstrap tests, a complete native database backup and restore, native palette persistence and API-channel checks. This candidate does not deploy production sites or publish platform release assets.
