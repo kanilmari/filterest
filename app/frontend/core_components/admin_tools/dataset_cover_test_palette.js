@@ -4,16 +4,22 @@
 // Exists so live visual tuning and durable saves share one validated configuration shape.
 
 import {
-    fetchAdminUIFeatureFlags,
+    fetchAdminUIFeatureFlags, fetchCardVisibility, saveDatasetCardPresentation,
     fetchSitePresentationSettings,
     saveAdminSitePresentationSettings,
 } from '../endpoints/stable_endpoint_router.js';
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
+import { showToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { DATASET_COVER_PALETTE_COPY as COPY } from './dataset_cover_palette_copy.js';
+import { buildDatasetCardPaletteControl, buildCardStyleControl } from './dataset_card_palette_control.js';
 import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
-import { CARD_IMAGE_PRESENTATIONS, normalizeCardImagePresentation, applyCardImagePresentationSetting } from '../table_views/card_view/card_image_presentation.js';
+import {
+    DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
+    getSitePresentationState,
+} from './site_presentation_state.js';
+export { DEFAULT_DATASET_COVER_THEME } from './site_presentation_state.js';
 
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
@@ -25,53 +31,6 @@ const TOOLBOX_ICON_PATHS = Object.freeze({
     heroLayout: '/frontend/icons/symbols/layers.svg',
     cardLayout: '/frontend/icons/symbols/grid_view.svg',
     navigation: '/frontend/icons/symbols/settings.svg',
-});
-
-export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
-    light: Object.freeze({
-        oval_enabled: true,
-        oval_width: 32,
-        oval_height: 67,
-        oval_position_y: 56,
-        center_opacity: 0.4,
-        mid_opacity: 0.7,
-        edge_opacity: 1,
-        center_stop: 39,
-        mid_stop: 55,
-        edge_stop: 80,
-        image_opacity: 1,
-        overlay_opacity: 0,
-        image_blur: 1,
-    }),
-    dark: Object.freeze({
-        oval_enabled: false,
-        oval_width: 32,
-        oval_height: 67,
-        oval_position_y: 56,
-        center_opacity: 0.4,
-        mid_opacity: 0.7,
-        edge_opacity: 1,
-        center_stop: 39,
-        mid_stop: 55,
-        edge_stop: 80,
-        image_opacity: 0.3,
-        overlay_opacity: 0,
-        image_blur: 1,
-    }),
-    shared: Object.freeze({
-        hero_extra_height: 40,
-        hero_bottom_fade: 48,
-        image_blur: 1,
-        card_image_width: 300,
-        card_image_presentation: 'contain',
-        card_description_lines: 2,
-        active_tab_fade: 25,
-        active_tab_max_opacity: 1,
-        active_tab_glow_intensity: 0.3,
-        active_tab_glow_width: 1.5,
-        active_tab_glow_blur: 2,
-        brand_color: '#1a8fe6',
-    }),
 });
 
 const RANGE_CONTROLS = Object.freeze([
@@ -90,6 +49,7 @@ const RANGE_CONTROLS = Object.freeze([
     { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'heroLayout' },
     { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', group: 'themeImage' },
     { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
+    { id: 'card-detail-columns', key: 'card_detail_columns', label: 'cardDetailColumns', hint: 'cardDetailColumnsHint', css: 'card-detail-columns', min: 1, max: 4, step: 1, unit: '', shared: true, group: 'cardLayout' },
     { id: 'card-description-lines', key: 'card_description_lines', label: 'cardDescriptionLines', css: 'card-description-lines', min: 1, max: 12, step: 1, unit: '', shared: true, group: 'cardLayout' },
     { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', min: 0, max: 100, step: 1, unit: 'px', shared: true, group: 'navigation' },
     { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
@@ -99,6 +59,47 @@ const RANGE_CONTROLS = Object.freeze([
 ]);
 
 
+
+let cardFieldsControlCount = 0;
+
+function buildCardFieldsControl(copy, onChange) {
+    const group = document.createElement('div');
+    group.className = 'dataset-cover-test-palette__select dataset-cover-test-palette__card-fields';
+    group.setAttribute('role', 'radiogroup');
+    group.dataset.testid = 'dataset-cover-test-palette-card-fields';
+    const heading = document.createElement('span');
+    group.appendChild(heading);
+    const name = `card-fields-${++cardFieldsControlCount}`;
+    const choices = [false, true].map((value) => {
+        const label = document.createElement('label');
+        label.className = 'dataset-cover-test-palette__toggle';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = name;
+        input.value = String(value);
+        input.dataset.testid = `dataset-cover-test-palette-card-fields-${value ? 'all' : 'values'}`;
+        const text = document.createElement('span');
+        const info = document.createElement('small');
+        info.id = `${name}-${value}-info`;
+        input.setAttribute('aria-describedby', info.id);
+        input.addEventListener('change', () => { if (input.checked) onChange(value); });
+        label.append(input, text);
+        group.append(label, info);
+        return { input, text, info, value };
+    });
+    function setCopy(nextCopy) {
+        heading.textContent = nextCopy.cardFields;
+        group.setAttribute('aria-label', nextCopy.cardFields);
+        choices.forEach(({ text, info, value }) => {
+            text.textContent = value ? nextCopy.cardFieldsAll : nextCopy.cardFieldsWithValues;
+            info.textContent = value ? nextCopy.cardFieldsAllInfo : nextCopy.cardFieldsWithValuesInfo;
+        });
+    }
+    setCopy(copy);
+    return { element: group, setCopy, setValue(value) {
+        choices.forEach(({ input, value: choice }) => { input.checked = choice === value; });
+    } };
+}
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -117,72 +118,12 @@ function renderControlValue(value, unit) {
     return `${displayValue}${unit}`;
 }
 
-function applySiteBrandColor(documentRoot, hexColor) {
-    const channels = String(hexColor).slice(1).match(/.{2}/g)?.map((part) => (
-        Number.parseInt(part, 16) / 255
-    ));
-    if (!channels || channels.length !== 3 || channels.some((channel) => !Number.isFinite(channel))) {
-        return false;
-    }
-    const [red, green, blue] = channels;
-    const maximum = Math.max(red, green, blue);
-    const minimum = Math.min(red, green, blue);
-    const delta = maximum - minimum;
-    const lightness = (maximum + minimum) / 2;
-    let hue = 0;
-    if (delta > 0) {
-        if (maximum === red) hue = 60 * (((green - blue) / delta) % 6);
-        else if (maximum === green) hue = 60 * (((blue - red) / delta) + 2);
-        else hue = 60 * (((red - green) / delta) + 4);
-    }
-    if (hue < 0) hue += 360;
-    const saturation = delta === 0
-        ? 0
-        : delta / (1 - Math.abs((2 * lightness) - 1));
-    documentRoot.style.setProperty('--brand-hue', String(Number(hue.toFixed(2))));
-    documentRoot.style.setProperty('--brand-sat', `${Number((saturation * 100).toFixed(2))}%`);
-    documentRoot.style.setProperty('--brand-light', `${Number((lightness * 100).toFixed(2))}%`);
-    return true;
-}
-
-function isValidThemeConfig(config) {
-    const themeKeys = ['light', 'dark'];
-    const numericKeys = RANGE_CONTROLS.filter((control) => !control.shared);
-    if (!config || !config.shared || !themeKeys.every((key) => config[key])) return false;
-    for (const themeName of themeKeys) {
-        const theme = config[themeName];
-        if (typeof theme.oval_enabled !== 'boolean') return false;
-        if (!numericKeys.every((control) => Number.isFinite(Number(theme[control.key])))) return false;
-    }
-    if (config.shared.card_image_presentation !== undefined
-        && !CARD_IMAGE_PRESENTATIONS.includes(config.shared.card_image_presentation)) return false;
-    return RANGE_CONTROLS.filter((control) => control.shared)
-        .every((control) => Number.isFinite(Number(config.shared[control.key])))
-        && /^#[0-9a-f]{6}$/i.test(String(config.shared.brand_color || ''));
-}
-
-function normalizePresentationSettings(payload) {
-    const datasetCoverTheme = isValidThemeConfig(payload?.dataset_cover_theme)
-        ? clone(payload.dataset_cover_theme)
-        : clone(DEFAULT_DATASET_COVER_THEME);
-    datasetCoverTheme.shared.card_image_presentation = normalizeCardImagePresentation(
-        datasetCoverTheme.shared.card_image_presentation
-    );
-    const timestampMode = ['date_time', 'date_only'].includes(payload?.row_article_timestamp_display_mode)
-        ? payload.row_article_timestamp_display_mode
-        : 'date_time';
-    return {
-        dataset_cover_theme: datasetCoverTheme,
-        row_article_timestamp_display_mode: timestampMode,
-    };
-}
-
 function setThemeVariable(hero, themeName, control, value) {
     const prefix = control.shared ? '' : `${themeName}-`;
     hero.style.setProperty(`--dataset-cover-${prefix}${control.css}`, `${value}${control.unit}`);
 }
 
-export function applyDatasetCoverThemeConfig(hero, config) {
+export function applyDatasetCoverThemeConfig(hero, config, { applyGlobals = true } = {}) {
     if (!(hero instanceof HTMLElement) || !isValidThemeConfig(config)) return false;
     ['light', 'dark'].forEach((themeName) => {
         RANGE_CONTROLS.filter((control) => !control.shared).forEach((control) => {
@@ -196,40 +137,7 @@ export function applyDatasetCoverThemeConfig(hero, config) {
     RANGE_CONTROLS.filter((control) => control.shared).forEach((control) => {
         setThemeVariable(hero, 'shared', control, config.shared[control.key]);
     });
-    const documentRoot = document.documentElement;
-    applyCardImagePresentationSetting(config.shared.card_image_presentation);
-    documentRoot.style.setProperty(
-        '--dataset-background-light-image-blur',
-        `${config.light.image_blur}px`
-    );
-    documentRoot.style.setProperty(
-        '--dataset-background-dark-image-blur',
-        `${config.dark.image_blur}px`
-    );
-    documentRoot.style.setProperty('--card_image_large_width', `${config.shared.card_image_width}px`);
-    documentRoot.style.setProperty(
-        '--card-description-lines',
-        String(config.shared.card_description_lines)
-    );
-    documentRoot.style.setProperty('--navtab-active-fade-width', `${config.shared.active_tab_fade}px`);
-    documentRoot.style.setProperty(
-        '--navtab-active-max-opacity',
-        String(config.shared.active_tab_max_opacity)
-    );
-    documentRoot.style.setProperty(
-        '--navtab-active-glow-intensity',
-        String(config.shared.active_tab_glow_intensity)
-    );
-    documentRoot.style.setProperty(
-        '--navtab-active-glow-width',
-        `${config.shared.active_tab_glow_width}px`
-    );
-    documentRoot.style.setProperty(
-        '--navtab-active-glow-blur',
-        `${config.shared.active_tab_glow_blur}px`
-    );
-    applySiteBrandColor(documentRoot, config.shared.brand_color);
-    window.dispatchEvent(new Event('dataset-cover-presentation-changed'));
+    if (applyGlobals) applySitePresentationGlobals(config);
     return true;
 }
 
@@ -281,10 +189,15 @@ function createPaletteToolbox(title, {
     iconPath = TOOLBOX_ICON_PATHS.themeImage,
     open = false,
     testid = '',
+    storageKey = '',
 } = {}) {
     const toolbox = document.createElement('details');
     toolbox.classList.add('dataset-cover-test-palette__group');
     toolbox.open = open;
+    if (storageKey) {
+        try { toolbox.open = localStorage.getItem(storageKey) === 'true'; }
+        catch { /* A blocked local store keeps the closed default usable. */ }
+    }
     if (testid) toolbox.dataset.testid = testid;
     const summary = document.createElement('summary');
     summary.classList.add('dataset-cover-test-palette__group-title');
@@ -306,15 +219,39 @@ function createPaletteToolbox(title, {
     controls.classList.add('dataset-cover-test-palette__controls');
     content.appendChild(controls);
     toolbox.append(summary, content);
+    // Native summary activation covers pointer, touch and keyboard clicks.
+    // Initialization and programmatic openings do not become remembered user choices.
+    let userTogglePending = false;
+    summary.addEventListener('click', (event) => {
+        if (!event.defaultPrevented) userTogglePending = true;
+    });
+    toolbox.addEventListener('toggle', () => {
+        if (!userTogglePending || !storageKey) return;
+        userTogglePending = false;
+        try { localStorage.setItem(storageKey, String(toolbox.open)); }
+        catch { /* Persistence is optional; the user's visible toggle still works. */ }
+    });
     return { toolbox, content, controls, label };
 }
 
-function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) {
+function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, state, datasetOptions) {
     let copy = getCopy();
     let statusKey = '';
-    let savedSettings = clone(initialSettings);
+    let statusToast = null;
+    let statusMessage = null;
+    const previewOwner = {};
+    let destroyed = false;
+    let draftRevision = 0;
     let draftSettings = clone(initialSettings);
     let activeTheme = 'light';
+    function renderHero() {
+        applyDatasetCoverThemeConfig(hero, state.effectiveSettings().dataset_cover_theme, { applyGlobals: false });
+    }
+    function previewDraft() {
+        draftRevision += 1;
+        state.setPreview(previewOwner, draftSettings);
+        renderHero();
+    }
     const lastVisibleImageOpacity = {
         light: Number(initialSettings.dataset_cover_theme.light.image_opacity) > 0
             ? Number(initialSettings.dataset_cover_theme.light.image_opacity)
@@ -397,10 +334,10 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     sharedToolboxes.dataset.testid = 'dataset-cover-test-palette-shared-controls';
     const toolboxByGroup = new Map();
     ['themeImage', 'ovalGeometry', 'ovalGradient', 'heroLayout', 'cardLayout', 'navigation']
-        .forEach((groupName, index) => {
+        .forEach((groupName) => {
             const toolbox = createPaletteToolbox(copy[groupName], {
                 iconPath: TOOLBOX_ICON_PATHS[groupName],
-                open: index < 2,
+                storageKey: `dataset_cover_palette_section_${groupName}`,
             });
             toolboxByGroup.set(groupName, toolbox);
             const parent = ['themeImage', 'ovalGeometry', 'ovalGradient'].includes(groupName)
@@ -410,11 +347,33 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         });
     toolboxByGroup.get('ovalGeometry').content.prepend(maskLabel);
     toolboxByGroup.get('themeImage').content.prepend(coverVisibilityLabel);
+    const cardScope = document.createElement('fieldset');
+    cardScope.className = 'dataset-cover-test-palette__card-scope';
+    cardScope.dataset.testid = 'site-card-palette-settings';
+    const cardScopeLegend = document.createElement('legend');
+    cardScopeLegend.textContent = copy.siteCardDefaults;
+    cardScope.appendChild(cardScopeLegend);
+    const datasetControl = datasetOptions.canEdit ? buildDatasetCardPaletteControl({
+        datasetName, copy, requestFn: datasetOptions.requestFn, saveRequestFn: datasetOptions.saveRequestFn,
+        onStatus: setStatus,
+    }) : null;
+    if (datasetControl) toolboxByGroup.get('cardLayout').controls.appendChild(datasetControl.element);
+    toolboxByGroup.get('cardLayout').controls.appendChild(cardScope);
+    const cardStyleControl = buildCardStyleControl(copy, (value) => {
+        draftSettings.dataset_cover_theme.shared.card_style_variant = value;
+        previewDraft();
+    });
+    cardScope.appendChild(cardStyleControl.element);
     const cardImageControl = buildCardImagePresentationControl(copy, (value) => {
         draftSettings.dataset_cover_theme.shared.card_image_presentation = value;
-        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        previewDraft();
     });
     toolboxByGroup.get('cardLayout').controls.appendChild(cardImageControl.element);
+    const cardFieldsControl = buildCardFieldsControl(copy, (value) => {
+        draftSettings.dataset_cover_theme.shared.card_show_all_fields = value;
+        previewDraft();
+    });
+    toolboxByGroup.get('cardLayout').controls.appendChild(cardFieldsControl.element);
     const rangeControls = RANGE_CONTROLS.map((control) => {
         const row = document.createElement('label');
         row.classList.add('dataset-cover-test-palette__range');
@@ -441,11 +400,20 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
                 }
             }
             output.value = renderControlValue(input.value, control.unit);
-            applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+            previewDraft();
         });
         row.append(labelText, output, input);
-        toolboxByGroup.get(control.group).controls.appendChild(row);
-        return { ...control, input, output, labelText };
+        const hintText = control.hint ? document.createElement('small') : null;
+        if (hintText) {
+            hintText.textContent = copy[control.hint];
+            hintText.style.gridColumn = '1 / -1';
+            input.setAttribute('aria-description', copy[control.hint]);
+            row.appendChild(hintText);
+        }
+        const controlParent = control.key === 'card_detail_columns'
+            ? cardScope : toolboxByGroup.get(control.group).controls;
+        controlParent.appendChild(row);
+        return { ...control, input, output, labelText, hintText };
     });
 
     const brandColorLabel = document.createElement('label');
@@ -458,7 +426,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     brandColorInput.setAttribute('aria-label', copy.brandColor);
     brandColorInput.addEventListener('input', () => {
         draftSettings.dataset_cover_theme.shared.brand_color = brandColorInput.value;
-        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        previewDraft();
     });
     brandColorLabel.append(brandColorText, brandColorInput);
     toolboxByGroup.get('navigation').content.appendChild(brandColorLabel);
@@ -475,15 +443,21 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     saveButton.classList.add('dataset-cover-test-palette__save', 'fw-btn');
     saveButton.dataset.testid = 'dataset-cover-test-palette-save';
     saveButton.textContent = copy.save;
-    const status = document.createElement('span');
-    status.classList.add('dataset-cover-test-palette__status');
-    status.setAttribute('role', 'status');
-    status.dataset.testid = 'dataset-cover-test-palette-status';
-    actions.append(resetButton, saveButton, status);
+    actions.append(resetButton, saveButton);
 
     function setStatus(key) {
         statusKey = key;
-        status.textContent = key ? getCopy()[key] : '';
+        statusToast?.dismiss({ immediate: true });
+        statusToast = null;
+        statusMessage = null;
+        if (!key) return;
+        statusMessage = document.createElement('span');
+        statusMessage.textContent = getCopy()[key];
+        statusToast = showToast({
+            content: statusMessage,
+            level: ['saved', 'datasetSaved'].includes(key) ? 'success' : ['saveFailed', 'datasetSaveFailed'].includes(key) ? 'error' : 'info',
+            autoClose: !['saving', 'datasetSaving'].includes(key),
+        });
     }
 
     // Update text nodes in place so switching language never rebuilds or saves a draft.
@@ -502,13 +476,21 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         rangeControls.forEach((control) => {
             control.labelText.textContent = copy[control.label];
             control.input.setAttribute('aria-label', copy[control.label]);
+            if (control.hintText) {
+                control.hintText.textContent = copy[control.hint];
+                control.input.setAttribute('aria-description', copy[control.hint]);
+            }
         });
         cardImageControl.setCopy(copy);
+        cardFieldsControl.setCopy(copy);
+        cardStyleControl.setCopy(copy);
+        cardScopeLegend.textContent = copy.siteCardDefaults;
+        datasetControl?.setCopy(copy);
         brandColorText.textContent = copy.brandColor;
         brandColorInput.setAttribute('aria-label', copy.brandColor);
         resetButton.textContent = copy.reset;
         saveButton.textContent = copy.save;
-        setStatus(statusKey);
+        if (statusMessage) statusMessage.textContent = copy[statusKey];
     }
 
     function syncControls() {
@@ -529,12 +511,14 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             control.output.value = renderControlValue(control.input.value, control.unit);
         });
         cardImageControl.setValue(draftSettings.dataset_cover_theme.shared.card_image_presentation);
+        cardFieldsControl.setValue(draftSettings.dataset_cover_theme.shared.card_show_all_fields);
+        cardStyleControl.setValue(draftSettings.dataset_cover_theme.shared.card_style_variant);
         brandColorInput.value = draftSettings.dataset_cover_theme.shared.brand_color;
     }
 
     maskInput.addEventListener('change', () => {
         draftSettings.dataset_cover_theme[activeTheme].oval_enabled = maskInput.checked;
-        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        previewDraft();
     });
     coverVisibilityInput.addEventListener('change', () => {
         const theme = draftSettings.dataset_cover_theme[activeTheme];
@@ -546,7 +530,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
             theme.image_opacity = lastVisibleImageOpacity[activeTheme]
                 || DEFAULT_DATASET_COVER_THEME[activeTheme].image_opacity;
         }
-        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        previewDraft();
         syncControls();
     });
     tabButtons.forEach((tab) => tab.addEventListener('click', () => {
@@ -560,8 +544,10 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         button.setAttribute('aria-expanded', 'false');
     }
     function resetPreview() {
-        draftSettings = clone(savedSettings);
-        applyDatasetCoverThemeConfig(hero, draftSettings.dataset_cover_theme);
+        draftRevision += 1;
+        state.releasePreview(previewOwner);
+        draftSettings = state.savedSettings();
+        renderHero();
         syncControls();
         setStatus('');
         dragControls.resetGeometry();
@@ -569,21 +555,25 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
     async function saveSettings() {
         saveButton.disabled = true;
         setStatus('saving');
+        const savingRevision = draftRevision;
         try {
             // Preserve a single light-theme fallback for rollback to builds that
             // predate theme-specific blur while new builds use the theme values.
             draftSettings.dataset_cover_theme.shared.image_blur =
                 draftSettings.dataset_cover_theme.light.image_blur;
-            const response = await saveRequestFn(clone(draftSettings));
-            savedSettings = normalizePresentationSettings(response);
-            draftSettings = clone(savedSettings);
-            applyDatasetCoverThemeConfig(hero, savedSettings.dataset_cover_theme);
-            syncControls();
+            const savedSettings = await state.saveSettings(draftSettings, saveRequestFn);
+            if (destroyed) return;
+            if (draftRevision === savingRevision) {
+                state.releasePreview(previewOwner);
+                draftSettings = savedSettings;
+                renderHero();
+                syncControls();
+            }
             setStatus('saved');
         } catch (_error) {
-            setStatus('saveFailed');
+            if (!destroyed) setStatus('saveFailed');
         } finally {
-            saveButton.disabled = false;
+            if (!destroyed) saveButton.disabled = false;
         }
     }
     function handleDocumentPointerDown(event) {
@@ -622,8 +612,11 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn) 
         panel,
         resetPreview,
         destroy() {
+            destroyed = true;
             languageObserver.disconnect();
-            resetPreview();
+            datasetControl?.destroy();
+            setStatus('');
+            state.releasePreview(previewOwner);
             dragControls.destroy();
             document.removeEventListener('pointerdown', handleDocumentPointerDown);
             document.removeEventListener('keydown', handleDocumentKeyDown);
@@ -637,18 +630,19 @@ export async function mountDatasetCoverTestPalette(hero, datasetName, {
     requestFn = fetchAdminUIFeatureFlags,
     settingsRequestFn = fetchSitePresentationSettings,
     saveRequestFn = saveAdminSitePresentationSettings,
+    datasetSettingsRequestFn = fetchCardVisibility,
+    datasetSaveRequestFn = saveDatasetCardPresentation,
     permissionCheck = hasRoutePermission,
+    canCommit = () => true,
 } = {}) {
     const normalizedDatasetName = String(datasetName || '').trim();
     if (!(hero instanceof HTMLElement) || !normalizedDatasetName) return null;
 
-    let settings = normalizePresentationSettings(null);
-    try {
-        settings = normalizePresentationSettings(await settingsRequestFn());
-    } catch (_error) {
-        // Canonical in-source defaults keep the public hero usable during a transient API failure.
-    }
-    applyDatasetCoverThemeConfig(hero, settings.dataset_cover_theme);
+    const state = getSitePresentationState(settingsRequestFn);
+    await state.loadSettings();
+    if (!canCommit()) return null;
+    state.paint();
+    applyDatasetCoverThemeConfig(hero, state.effectiveSettings().dataset_cover_theme, { applyGlobals: false });
 
     // Shared brand, card and background controls remain useful without a cover.
     // Access still requires both the route permission and the protected feature flag.
@@ -656,9 +650,12 @@ export async function mountDatasetCoverTestPalette(hero, datasetName, {
     if (hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')) return null;
     try {
         const flags = await requestFn();
-        if (flags?.view_admin_cover_image_test_palette !== true) return null;
+        if (!canCommit() || flags?.view_admin_cover_image_test_palette !== true) return null;
     } catch (_error) {
         return null;
     }
-    return buildPaletteControl(hero, normalizedDatasetName, settings, saveRequestFn);
+    return buildPaletteControl(hero, normalizedDatasetName, state.savedSettings(), saveRequestFn, state, {
+        requestFn: datasetSettingsRequestFn, saveRequestFn: datasetSaveRequestFn,
+        canEdit: permissionCheck('/ui/admin/card_visibility'),
+    });
 }

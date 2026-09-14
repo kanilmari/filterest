@@ -380,5 +380,30 @@ BEGIN
     END IF;
 END $$;
 
+-- Administrator-only reversible dataset visibility; preserves all existing rights.
+INSERT INTO public.system_functions
+ (name, package, disabled, specific_table_related, url_route_endpoint, ui_only,
+  rate_limit_amount, rate_limit_minutes, creation_spec)
+VALUES ('system_table_tools.AdminDatasetUIVisibilityHandler', 'system_table_tools', FALSE, FALSE,
+ '/api/admin/dataset-ui-visibility', FALSE, 200, 20, 'Administrator dataset UI hide and restore.')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.system_group_table_func_rights
+ (user_group_id, function_id, target_schema_name, target_table_uid, creation_spec)
+SELECT 1, id, 'public', NULL, 'Administrator dataset UI hide and restore.'
+FROM public.system_functions f
+WHERE f.name = 'system_table_tools.AdminDatasetUIVisibilityHandler'
+ AND NOT EXISTS (
+  SELECT 1 FROM public.system_group_table_func_rights rights
+  WHERE rights.user_group_id = 1 AND rights.function_id = f.id
+   AND rights.target_schema_name = 'public' AND rights.target_table_uid IS NULL
+ )
+ON CONFLICT DO NOTHING;
+
 INSERT INTO public.system_db_version (version, description)
 VALUES ('__FILTEREST_DB_VERSION__', 'Filterest generated public bootstrap');
+
+-- Administrator coding agents require an explicit production opt-in.
+INSERT INTO public.system_config (key, value_type, boolean_value, text_value, json_value)
+VALUES ('coding_agent_dev_only', 2, TRUE, 'true', '{"value":true}'::jsonb)
+ON CONFLICT (key) DO NOTHING;

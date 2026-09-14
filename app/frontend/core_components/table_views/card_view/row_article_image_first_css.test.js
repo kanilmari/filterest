@@ -6,6 +6,34 @@ import { describe, expect, test } from "vitest";
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
 describe("image-first article CSS contract", () => {
+    test("centers the caption with a separate adjacent cue and stacks safely on narrow screens", () => {
+        const css = fs.readFileSync(path.join(directory, "big_card_image_gallery.css"), "utf8");
+        expect(css).toMatch(/\.row_article_image_first_bottom_controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, max-content\) minmax\(0, 1fr\)/s);
+        expect(css).toMatch(/\.row_article_image_first_caption\s*\{[^}]*grid-column:\s*2;[^}]*padding:\s*calc\(0\.7rem - 2px\) calc\(1rem - 2px\)/s);
+        expect(css).toMatch(/\.image_first_view_modal \.row_article_image_first_caption\s*\{[^}]*margin:\s*0;/s);
+        expect(css).toMatch(/\.row_article_image_first_scroll_hint\s*\{[^}]*grid-column:\s*3;/s);
+        expect(css).toMatch(/\.row_article_image_first_caption\[hidden\] \+ \.row_article_image_first_scroll_hint\s*\{[^}]*grid-column:\s*2;/s);
+        expect(css).toMatch(/@media \(width <= 600px\)\s*\{[\s\S]*?flex-direction:\s*column;/s);
+        expect(css).toMatch(/\.row_article_inline_image_caption\s*\{[^}]*width:\s*100%;[^}]*padding:\s*0\.7rem 0 0;/s);
+    });
+
+    test("keeps IFAV fading above the global theme rule and disables it for reduced motion", () => {
+        const css = fs.readFileSync(path.join(directory, "big_card_image_gallery.css"), "utf8");
+        const selector = /body \.image_modal\.image_first_view_modal :is\(([^)]+)\)\s*\{([^}]+)\}/g;
+        const rules = [...css.matchAll(selector)];
+        expect(rules).toHaveLength(2);
+        for (const [, selectors] of rules) {
+            for (const name of ["modal_close_button", "row_article_image_first_arrow",
+                "row_article_row_navigation_button", "row_article_image_first_scroll_hint"]) {
+                expect(selectors).toContain("." + name);
+            }
+        }
+        expect(rules[0][2]).toContain("backdrop-filter: blur(8px)");
+        expect(rules[0][2]).toMatch(/transition:\s*opacity/);
+        expect(rules[1][2]).toContain("transition: none");
+        expect(css.indexOf("@media (prefers-reduced-motion: reduce)")).toBeLessThan(rules[1].index);
+    });
+
     test("keeps the active media viewport-height and the article at 800 pixels", () => {
         const galleryCss = fs.readFileSync(
             path.join(directory, "big_card_image_gallery.css"),

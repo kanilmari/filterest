@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from test_release_preparation import candidate, commit_fixture, snapshot, write
+from test_release_preparation import candidate, commit_fixture, snapshot, write, reviewed_db_transition
 from server_tools.release import asset_verifier as assets
 from server_tools.release import prepare_release as preparation
 from server_tools.release import promote_release as promotion
@@ -37,8 +37,10 @@ def refresh_checksum(output, name):
 
 
 @pytest.fixture
-def release_candidate(candidate, tmp_path, monkeypatch):
+def release_candidate(candidate, tmp_path, monkeypatch, request):
     root, prepare_args = candidate
+    if getattr(request, "param", None) == "database_transition":
+        reviewed_db_transition(root, prepare_args)
     for relative in ("LICENSE", "NOTICE", "app/server_tools/licenses/GPL-3.0.txt"):
         write(root, relative, "Fixture source legal document " + relative + "\n")
     dependency_license = tmp_path / "dependency-LICENSE"
@@ -255,6 +257,62 @@ def test_candidate_cannot_rewrite_compatibility_history(release_candidate, row_i
     rows = [json.loads(line) for line in path.read_text().splitlines()]
     rows[row_index][field] = value
     path.write_bytes(b"".join(preparation.canonical_json_line(row) for row in rows))
+    args.candidate_commit = commit_fixture(root)
+    state["vcs"] = args.candidate_commit
+    with pytest.raises(promotion.PromotionError, match=message):
+        promotion.promote(args)
+
+
+@pytest.mark.parametrize("release_candidate", ["database_transition"], indirect=True)
+def test_database_transition_complete_source_candidate_published_history(release_candidate):
+    root, args, state = release_candidate
+    source_ledger = promotion.show(root, args.reviewed_source_commit, preparation.LEDGER)
+    source_identity = json.loads(promotion.show(root, args.reviewed_source_commit, preparation.IDENTITY))
+    assert source_identity["database"]["target_version"] == "2.0.0"
+    assert promotion.show(root, args.reviewed_source_commit, "app/VERSION_DB") == b"2.0.1\n"
+    with pytest.raises(promotion.PromotionError, match="versions disagree"):
+        promotion.read_identity(root, args.reviewed_source_commit)
+    candidate = promotion.read_identity(root, args.candidate_commit)[0]
+    assert candidate["database"] == {"min_version": "2.0.1", "target_version": "2.0.1"}
+    args.apply = True
+    promotion.promote(args)
+    final = commit_fixture(root)
+    history = promotion.validate_published_source(root, final)
+    assert history["published_identity"]["database"] == candidate["database"]
+    assert (root / preparation.LEDGER).read_bytes().startswith(source_ledger)
+    assert promotion.changed_paths(root, args.candidate_commit, final) == promotion.PROMOTION_PATHS
+    state["vcs"] = final
+    assert assets.verify_assets(root, args.assets_dir, final)["source_commit"] == final
+
+
+@pytest.mark.parametrize("release_candidate", ["database_transition"], indirect=True)
+@pytest.mark.parametrize("change,message", [
+    ("min_lowered", "changed reviewed database compatibility"),
+    ("target_changed", "versions disagree"),
+    ("snapshot_changed", "does not match its reviewed source"),
+    ("historical_notes", "previous compatibility history"),
+    ("schema_changed", "outside preparation outputs"),
+])
+def test_database_transition_candidate_cannot_change_reviewed_contract(release_candidate, change, message):
+    root, args, state = release_candidate
+    if change in ("min_lowered", "target_changed"):
+        entries = preparation.validate_ledger_bytes((root / preparation.LEDGER).read_bytes())
+        record = dict(entries[-1].record)
+        record["database"] = dict(record["database"])
+        record["database"]["min_version" if change == "min_lowered" else "target_version"] = "2.0.0" if change == "min_lowered" else "2.0.2"
+        ledger = b"".join(preparation.canonical_json_line(entry.record) for entry in entries[:-1]) + preparation.canonical_json_line(record)
+        write(root, preparation.LEDGER, ledger)
+        identity = preparation.build_identity_from_entry(preparation.validate_ledger_bytes(ledger)[-1])
+        write(root, preparation.IDENTITY, preparation.canonical_json_line(identity))
+    elif change in ("snapshot_changed", "historical_notes"):
+        rows = [json.loads(line) for line in (root / preparation.COMPATIBILITY).read_bytes().splitlines()]
+        if change == "snapshot_changed":
+            rows[-1]["schema_snapshot_path"] = "server_tools/versioning/schema_snapshots/db-2.0.0.sql"
+        else:
+            rows[0]["notes"] = "rewritten old history"
+        write(root, preparation.COMPATIBILITY, b"".join(preparation.canonical_json_line(row) for row in rows))
+    else:
+        write(root, "app/server_tools/public_bootstrap/schema.sql", "new unreviewed schema")
     args.candidate_commit = commit_fixture(root)
     state["vcs"] = args.candidate_commit
     with pytest.raises(promotion.PromotionError, match=message):

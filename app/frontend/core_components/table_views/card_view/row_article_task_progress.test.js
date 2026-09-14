@@ -29,6 +29,13 @@ describe("row_article_task_progress", () => {
         expect(endpointRouterMock).not.toHaveBeenCalled();
     });
 
+    test("honors an initially closed progress section while keeping its lights", async () => {
+        endpointRouterMock.mockResolvedValue({ total: 2, completed: 1, percent: 50, lit_segments: 5 });
+        const section = await buildRowArticleTaskProgressSection("dev_agent_tasks", 42, { startOpen: false });
+        expect(section?.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
+        expect(section?.querySelectorAll(".row_article_task_progress_light.is-lit")).toHaveLength(5);
+    });
+
     test("renders percent, ratio, and whole-ten lights for task todos", async () => {
         endpointRouterMock.mockResolvedValue({
             total: 130,

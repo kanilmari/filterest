@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
     appendFormActions,
     collectChildRowsForSubmission,
@@ -10,7 +10,74 @@ import {
 } from "./row_submission_handler.js";
 import { initializeFormSectionNavigator } from "../../../../reusable_components/form_section_navigator/form_section_navigator.js";
 
-describe("appendFormActions", () => {
+
+vi.mock("../../../endpoints/endpoint_router.js", () => ({endpoint_router:vi.fn(async () => ({}))}));
+vi.mock("./row_api_fetcher.js", () => ({getDatasetNameByUID:() => "tickets"}));
+vi.mock("../gt_1_2_row_read/table_refresh_unified.js", () => ({refreshTableUnified:vi.fn()}));
+vi.mock("../../../../reusable_components/modal/modal_builder.js", () => ({hideModal:vi.fn()}));
+vi.mock("../../../../reusable_components/notifications/toast_notification_printer.js", () => ({showSuccessToast:vi.fn(),showWarningToast:vi.fn()}));
+import {endpoint_router} from "../../../endpoints/endpoint_router.js";
+
+describe("required foreign-key submission", () => {
+ test("returns to the required chooser instead of sending an empty FK", async () => {
+  endpoint_router.mockClear();
+  const form=document.createElement("form");
+  form.innerHTML='<section data-form-section data-section-key="relations"><fieldset><input name="status" type="hidden"><div id="tickets-status-input"><input role="combobox"></div></fieldset></section><section data-form-section data-section-key="images"></section>';
+  document.body.append(form);
+  const columns=[{column_name:"status",data_type:"text",is_nullable:"NO",foreign_table_name:"statuses",foreign_column_name:"slug"}];
+  appendFormActions(form,"uid",columns,{},()=>{});
+  const nav=initializeFormSectionNavigator(form);
+  nav.goTo(1);
+  form.dispatchEvent(new SubmitEvent("submit",{bubbles:true,cancelable:true,submitter:form.querySelector('[type=submit]')}));
+  await Promise.resolve();
+  expect(endpoint_router).not.toHaveBeenCalled();
+  expect(form.querySelector('[data-section-key=relations]').hidden).toBe(false);
+  expect(document.activeElement).toBe(form.querySelector('[role=combobox]'));
+  nav.destroy(); form.remove();
+ });
+});
+
+
+describe("valid foreign-key payload", () => {
+    test.each(["new", "in_progress"])("sends selected status %s and skips empty attachments", async (status) => {
+        endpoint_router.mockClear();
+        const form = document.createElement("form");
+        form.innerHTML = '<input name="status" type="hidden"><input name="parent_id" type="hidden">';
+        form.elements.status.value = status;
+        const columns = [
+            { column_name: "status", data_type: "text", is_nullable: "NO", foreign_table_name: "statuses", foreign_column_name: "slug" },
+            { column_name: "parent_id", data_type: "integer", is_nullable: "YES", foreign_table_name: "tickets", foreign_column_name: "id" },
+        ];
+        appendFormActions(form, "uid", columns, { _childRowsArray: [] }, () => {});
+        form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true, submitter: form.querySelector("[type=submit]") }));
+        await Promise.resolve();
+        expect(endpoint_router).toHaveBeenCalledTimes(1);
+        const request = endpoint_router.mock.calls[0][1];
+        expect(JSON.parse(request.body_data.get("jsonPayload"))).toEqual({ status, parent_id: "" });
+        expect([...request.body_data.keys()]).toEqual(["jsonPayload"]);
+    });
+});
+
+
+describe("server-filled actor relations", () => {
+    test.each([
+        ["user_id", '{"user_id":"currentUser"}'],
+        ["cached_username", '{"cached_username":"currentUserName"}'],
+        ["user_id", '{"user_id":"currentUser","other":null}'],
+    ])("allows supported missing %s to reach server-side actor filling", async (column_name, source_insert_specs) => {
+        endpoint_router.mockClear();
+        const form = document.createElement("form");
+        const input = document.createElement("input");
+        input.type = "hidden"; input.name = column_name; form.appendChild(input);
+        const columns = [{ column_name, source_insert_specs, data_type: "text", is_nullable: "NO", foreign_table_name: "users", foreign_column_name: "id" }];
+        appendFormActions(form, "uid", columns, {}, () => {});
+        form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true, submitter: form.querySelector("[type=submit]") }));
+        await Promise.resolve();
+        expect(endpoint_router).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("appendFormActions" , () => {
     test("shows Add only on the final form page while Next advances to it", () => {
         const form = document.createElement("form");
         form.dataset.formSectionNavigator = "";

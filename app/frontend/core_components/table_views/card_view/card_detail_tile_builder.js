@@ -10,7 +10,9 @@ import {
 } from "./card_detail_single_line_helpers.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
-const MODERN_CARD_DETAIL_DESKTOP_COLUMNS = 2;
+import { DEFAULT_CARD_DETAIL_COLUMNS, normalizeCardDetailColumns } from "./card_detail_layout_options.js";
+
+const MODERN_CARD_DETAIL_DESKTOP_COLUMNS = DEFAULT_CARD_DETAIL_COLUMNS;
 const MODERN_CARD_DETAIL_LABEL_MIN_CH = 4;
 const MODERN_CARD_DETAIL_LABEL_MAX_CH = 32;
 
@@ -95,7 +97,35 @@ function setModernCardDetailLabelColumnWidth(containerElement, maxVisibleLabelLe
     );
 }
 
-export function renderModernCardDetails(containerElement, detailEntries, dataTypes = {}) {
+/** Prepare all width bands once. CSS changes layout without replacing live field/link nodes. */
+function prepareResponsiveCardDetailLayouts(container, entryCount, requestedColumns) {
+    const columns = normalizeCardDetailColumns(requestedColumns);
+    const layouts = [1, 2, 3, 4].map(limit => {
+        const count = Math.min(columns, limit);
+        const rows = Math.max(1, Math.ceil(entryCount / count));
+        return { limit, count, rows, slots: entryCount ? count * rows : 0 };
+    });
+    container.classList.add("card_details_modern_tiles--responsive");
+    container.querySelectorAll(".card_detail_tile--placeholder").forEach(tile => tile.remove());
+    const maximumSlots = Math.max(...layouts.map(layout => layout.slots));
+    for (let index = entryCount; index < maximumSlots; index += 1) {
+        const tile = document.createElement("div");
+        tile.className = "card_detail_tile card_detail_tile--placeholder";
+        tile.setAttribute("aria-hidden", "true");
+        container.append(tile);
+    }
+    layouts.forEach(({ limit, count, rows, slots }) => {
+        container.style.setProperty("--card-details-columns-" + limit, String(count));
+        container.style.setProperty("--card-details-rows-" + limit, String(rows));
+        [...container.children].forEach((tile, index) => {
+            tile.style.setProperty("--card-detail-display-" + limit, index < slots ? "grid" : "none");
+            tile.style.setProperty("--card-detail-top-" + limit, index % rows > 0 ? "1px" : "0px");
+            tile.style.setProperty("--card-detail-left-" + limit, Math.floor(index / rows) > 0 ? "1px" : "0px");
+        });
+    });
+}
+
+export function renderModernCardDetails(containerElement, detailEntries, dataTypes = {}, { columns } = {}) {
     const entries = Array.isArray(detailEntries) ? detailEntries : [];
     const desktopRowCount = getModernCardDetailDesktopRowCount(entries);
     let maxVisibleLabelLength = 0;
@@ -187,4 +217,6 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
     }
 
     setModernCardDetailLabelColumnWidth(containerElement, maxVisibleLabelLength);
+    // Article-side summaries omit the option and keep their existing two-column/mobile CSS.
+    if (columns !== undefined) prepareResponsiveCardDetailLayouts(containerElement, entries.length, columns);
 }

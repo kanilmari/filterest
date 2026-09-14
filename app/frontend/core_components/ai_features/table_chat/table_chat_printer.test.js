@@ -1143,6 +1143,7 @@ describe("create_chat_ui", () => {
             expect(endpointRouterMock).toHaveBeenCalledWith("aiChatCodexQuery", {
                 method: "POST",
                 body_data: {
+                    request_id: expect.any(String),
                     dataset: "app_service_catalog",
                     query: "Miksi user_id-haku ei löydä serlog-palvelua?",
                     lang: "en",

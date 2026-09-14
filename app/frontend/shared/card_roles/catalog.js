@@ -1,6 +1,7 @@
 // Canonical immutable card renderer protocol, shared by native ES modules and Go.
 // JSON-shaped export only: the colocated Go package embeds and validates this data.
 // Mutable column assignments live in system_column_details.card_element.
+// Inherited field-label defaults belong to public.resolve_card_label_visibility.
 export default {
   "description": "Immutable renderer protocol. Dataset column assignments remain in system_column_details.card_element; translated labels are display copy, never role identifiers.",
   "roles": [
@@ -13,8 +14,7 @@ export default {
         "en": "Additional information",
         "ch": "补充信息",
         "yue": "補充資料"
-      },
-      "initial_show_key": true
+      }
     },
     {
       "id": "header",
@@ -25,8 +25,7 @@ export default {
         "en": "Title",
         "ch": "标题",
         "yue": "標題"
-      },
-      "initial_show_key": false
+      }
     },
     {
       "id": "description",
@@ -37,8 +36,7 @@ export default {
         "en": "Description",
         "ch": "描述",
         "yue": "描述"
-      },
-      "initial_show_key": false
+      }
     },
     {
       "id": "image",
@@ -60,8 +58,7 @@ export default {
         "en": "Link",
         "ch": "链接",
         "yue": "連結"
-      },
-      "initial_show_key": true
+      }
     },
     {
       "id": "keywords",
@@ -72,8 +69,7 @@ export default {
         "en": "Keywords",
         "ch": "关键词",
         "yue": "關鍵詞"
-      },
-      "initial_show_key": false
+      }
     },
     {
       "id": "username",

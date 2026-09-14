@@ -52,9 +52,10 @@
     transform: none;
 }
 
-#showMenuButton:hover {
-    background: var(--button_hover_bg_color);
-    border-color: rgb(0 255 136 / 0.3);
+#showMenuButton:hover,
+#showMenuButton:focus-visible {
+    background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
+    border-color: var(--color-brand);
     transform: translateX(0);
 }
 
@@ -81,9 +82,10 @@
     position: relative;
 }
 
-#hideMenuButton:hover {
-    background: var(--button_hover_bg_color);
-    border-color: rgb(0 255 136 / 0.3);
+#hideMenuButton:hover,
+#hideMenuButton:focus-visible {
+    background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
+    border-color: var(--color-brand);
 }
 
 .inset {
@@ -132,4 +134,10 @@
 
 .environment-badge--qa {
     right: 3px;
+}
+
+#showMenuButton:focus-visible,
+#hideMenuButton:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
 }

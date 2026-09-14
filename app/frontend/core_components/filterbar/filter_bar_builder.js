@@ -63,6 +63,7 @@ import {
     shouldShowSharedTopBar,
 } from "./shared_topbar_builder.js";
 import { createDatasetCornerControls, isHeroControlAreaVisible } from "./dataset_corner_controls.js";
+import { createHeroDatasetTabs } from "../navigation/main_tabs/hero_dataset_tabs.js";
 import { buildFilterbarDisclosureSection } from "./filterbar_section_heading_builder.js";
 import { setupFilterbarSectionOrdering } from "./filterbar_section_order_handler.js";
 import { buildAdminVersionInfoIndicator } from "../admin_tools/admin_version_info_indicator.js";
@@ -518,11 +519,13 @@ function createInlineHeroContent(tableName, {
     dataTypes = {},
     resetTargetElement = null,
     coverImagePath = "",
+    allowDatasetManagement = true,
+    sortOptions = {},
 } = {}) {
     const inlineHeroHost = document.createElement("div");
     inlineHeroHost.classList.add("filterbar-inline-hero");
     inlineHeroHost.dataset.filterbarInlineHeroFor = tableName;
-	const configButton = createDatasetHeaderConfigHeroButton(tableName);
+	const configButton = allowDatasetManagement ? createDatasetHeaderConfigHeroButton(tableName) : null;
 	if (configButton) {
 		inlineHeroHost.appendChild(configButton);
 	}
@@ -537,6 +540,8 @@ function createInlineHeroContent(tableName, {
 
     const heroInner = document.createElement("div");
     heroInner.classList.add("filter-content-inner");
+    const heroDatasetTabs = createHeroDatasetTabs(tableName);
+    heroInner.appendChild(heroDatasetTabs.element);
     heroInner.appendChild(
         buildFilterbarHeroHeader(tableName, {
             headerTitleOverride,
@@ -559,7 +564,10 @@ function createInlineHeroContent(tableName, {
         "dataset-filter-primary-actions--query",
         "filterbar-inline-hero-sort-row"
     );
-    heroSortRow.appendChild(createSortDropdown(tableName, columns, dataTypes));
+    const heroSortDropdown = createSortDropdown(tableName, columns, dataTypes, {
+        ...sortOptions, allowPersistentDefault: allowDatasetManagement,
+    });
+    heroSortRow.appendChild(heroSortDropdown);
 
     const heroFilterActions = document.createElement("div");
     heroFilterActions.classList.add(
@@ -584,7 +592,7 @@ function createInlineHeroContent(tableName, {
     inlineHeroHost.appendChild(heroInner);
     let paletteControl = null;
     let isDestroyed = false;
-    void mountDatasetCoverTestPalette(inlineHeroHost, tableName)
+    if (allowDatasetManagement) void mountDatasetCoverTestPalette(inlineHeroHost, tableName, { canCommit: () => !isDestroyed })
         .then((control) => {
             if (isDestroyed) {
                 control?.destroy?.();
@@ -596,16 +604,20 @@ function createInlineHeroContent(tableName, {
     inlineHeroHost.destroy = () => {
         isDestroyed = true;
         paletteControl?.destroy?.();
+        heroDatasetTabs.destroy();
+        heroSortDropdown.destroy?.();
         searchPanel.destroy?.();
     };
     return inlineHeroHost;
 }
 
-function buildTextSearchFilterSection(tableName, {
+export function buildTextSearchFilterSection(tableName, {
     placeholder = undefined,
     showLocationCheckbox = false,
     columns = [],
     dataTypes = {},
+    allowPersistentDefault = true,
+    sortOptions = {},
 } = {}) {
     const row = document.createElement("div");
     row.classList.add("row-container", "filterbar-text-search-row");
@@ -631,7 +643,7 @@ function buildTextSearchFilterSection(tableName, {
         "dataset-filter-row-spread",
         "filterbar-text-search-controls"
     );
-    const sortDropdown = createSortDropdown(tableName, columns, dataTypes);
+    const sortDropdown = createSortDropdown(tableName, columns, dataTypes, { ...sortOptions, allowPersistentDefault });
     const resetSearchBtn = document.createElement("button");
     resetSearchBtn.classList.add("reset-search-button", "fw-btn");
     resetSearchBtn.dataset.testid = "btn-reset-search-filter-stack";
@@ -827,7 +839,8 @@ export function create_filter_bar(
     dataTypes,
     rowCount = null,
     hasGeo = false,
-    currentView
+    currentView,
+    surfaceOptions = {},
 ) {
     const WIDE_MODE_ENTER_THRESHOLD_PX = 8;
     const COMPACT_MODE_ENTER_THRESHOLD_PX = 48;
@@ -837,7 +850,9 @@ export function create_filter_bar(
     const COMPACT_BODY_SCROLLED_MIN_STAY_RANGE_PX = 64;
     const tablePartsContainer = ensureTableContainers(tableName);
     const tableSpecs = getAllSpecs();
-    const tableSpec = tableSpecs[tableName] || {};
+    // Explicit extension metadata belongs to this mounted surface, never the global SQL catalog.
+    const tableSpec = surfaceOptions.metadata || tableSpecs[tableName] || {};
+    const allowDatasetManagement = surfaceOptions.allowDatasetManagement !== false;
     const datasetIconKey = resolveDatasetIconKey(tableName, tableSpec);
     const initialResponsivePanelState = buildInitialResponsivePanelState({
         storedVisibility: getStoredVisibility(tableName),
@@ -981,9 +996,9 @@ export function create_filter_bar(
     );
     panel.appendChild(datasetTitleRow);
 
-    const chatDock = appendChatUIIfAllowed(tableName, null, {
+    const chatDock = allowDatasetManagement ? appendChatUIIfAllowed(tableName, null, {
         tableDisplayName: headerTitleOverride,
-    });
+    }) : null;
 
     // Clock bar — compact-mode footer inside the same unified panel.
     const clockBar = buildClockBar();
@@ -1008,6 +1023,8 @@ export function create_filter_bar(
             columns,
             dataTypes,
             resetTargetElement: tablePartsContainer,
+            allowDatasetManagement,
+            sortOptions: surfaceOptions.sortOptions,
 			coverImagePath: typeof tableSpec.dataset_cover_image_path === "string"
 				? tableSpec.dataset_cover_image_path.trim()
 				: "",
@@ -1926,6 +1943,11 @@ export function create_filter_bar(
     }
 
     panel.__syncSharedTopBar = syncSharedTopBar;
+    panel.__syncActiveView = () => {
+        if (destroyed) return;
+        attachToActiveView();
+        syncSharedTopBar();
+    };
     panel.destroy = destroyFilterBar;
     return panel;
 }

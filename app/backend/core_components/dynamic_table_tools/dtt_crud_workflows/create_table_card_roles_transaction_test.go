@@ -63,7 +63,7 @@ func (tx *roleTx) Rollback() error              { tx.state.rollbacks++; tx.state
 
 func (c *roleTxConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	compact := strings.Join(strings.Fields(query), " ")
-	if strings.HasPrefix(compact, "CREATE TABLE IF NOT EXISTS sample") {
+	if strings.HasPrefix(compact, "CREATE TABLE sample") {
 		c.state.created = true
 		c.state.schemaPending = true
 	}

@@ -100,15 +100,6 @@ func normalizeCardDetailsLayout(value string) string {
 	}
 }
 
-func normalizeCardStyleVariant(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "modern":
-		return "modern"
-	default:
-		return "standard"
-	}
-}
-
 // fetchUserColumnSettingsOrDefaults resolves personal > group > site > metadata
 // defaults for one stable view key. GetResults still intersects these preferences
 // with real SELECT rights, so hiding a field is never treated as authorization.
@@ -298,7 +289,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
             fk_info.foreign_table_name,
             fk_info.foreign_column_name,
             COALESCE(scd.card_element, '') AS card_element,
-            COALESCE(scd.show_key_on_card, false)  AS show_key_on_card,
+            public.resolve_card_label_visibility(scd.show_key_on_card, scd.card_element) AS show_key_on_card,
             COALESCE(scd.show_value_on_card, false) AS show_value_on_card,
             COALESCE(scd.hide_in_filter_panel, false) AS hide_in_filter_panel,
             COALESCE(scd.hide_everywhere, false) AS hide_everywhere,
@@ -443,7 +434,6 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta, error) {
 	meta := dtt_models.TableReadMeta{
 		CardDetailsLayout: "conditional_multiline",
-		CardStyleVariant:  "standard",
 	}
 
 	hasCardDetailsLayout, err := columnExistsInTable(db, "system_db_tables", "card_details_layout")
@@ -454,7 +444,11 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 	if err != nil {
 		return meta, fmt.Errorf("fetchTableReadMeta: checking card_style_variant column failed: %v", err)
 	}
-	if !hasCardDetailsLayout && !hasCardStyleVariant {
+	hasCardDetailColumns, err := columnExistsInTable(db, "system_db_tables", "card_detail_columns")
+	if err != nil {
+		return meta, fmt.Errorf("fetchTableReadMeta: checking card_detail_columns column failed: %v", err)
+	}
+	if !hasCardDetailsLayout && !hasCardStyleVariant && !hasCardDetailColumns {
 		return meta, nil
 	}
 
@@ -463,19 +457,25 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 		cardDetailsLayoutExpr = `COALESCE(card_details_layout, 'conditional_multiline') AS card_details_layout`
 	}
 
-	cardStyleVariantExpr := `'standard'::varchar AS card_style_variant`
+	cardStyleVariantExpr := `NULL::varchar AS card_style_variant`
 	if hasCardStyleVariant {
-		cardStyleVariantExpr = `COALESCE(card_style_variant, 'standard') AS card_style_variant`
+		cardStyleVariantExpr = `card_style_variant`
+	}
+
+	cardDetailColumnsExpr := `NULL::integer AS card_detail_columns`
+	if hasCardDetailColumns {
+		cardDetailColumnsExpr = `card_detail_columns`
 	}
 
 	var layout sql.NullString
-	var styleVariant sql.NullString
+	var styleVariant *string
+	var detailColumns *int
 	err = db.QueryRow(fmt.Sprintf(`
-		SELECT %s, %s
+		SELECT %s, %s, %s
 		FROM system_db_tables
 		WHERE table_name = $1
 		LIMIT 1
-	`, cardDetailsLayoutExpr, cardStyleVariantExpr), tableName).Scan(&layout, &styleVariant)
+	`, cardDetailsLayoutExpr, cardStyleVariantExpr, cardDetailColumnsExpr), tableName).Scan(&layout, &styleVariant, &detailColumns)
 	if err == sql.ErrNoRows {
 		return meta, nil
 	}
@@ -484,7 +484,8 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 	}
 
 	meta.CardDetailsLayout = normalizeCardDetailsLayout(layout.String)
-	meta.CardStyleVariant = normalizeCardStyleVariant(styleVariant.String)
+	meta.CardStyleVariant = styleVariant
+	meta.CardDetailColumns = detailColumns
 	return meta, nil
 }
 

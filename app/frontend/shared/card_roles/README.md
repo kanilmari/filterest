@@ -23,8 +23,16 @@ Existing numbered description/details/details_link/hidden roles, comma-separated
 combinations and +lang_key / +lang-key modifiers remain valid. The basic creation
 picker offers existing base roles; advanced metadata remains compatible.
 
-Explicit new-column roles also initialize show_key_on_card: additional information
-and links show their keys; title, description and keywords hide them. Other roles
-keep the database default. In mixed role combinations a primary role's hidden
-label takes priority. This initialization never rewrites existing datasets and
-does not change older API callers that omit column_card_roles.
+Field-label visibility inherits the current policy in
+`public.resolve_card_label_visibility(override boolean, role text)`.
+The catalog defines valid role syntax and authoring labels only. Assigning a role
+never records an explicit label override. New metadata stores SQL NULL;
+existing explicit booleans are preserved. The administrator API exposes the
+stored nullable `show_key_on_card_override` separately from the effective
+`show_key_on_card` boolean. Dataset-specific moderation overlays remain explicit
+product behavior outside this general default policy.
+
+Without an explicit override, additional-information and link roles show keys;
+header, description and keyword roles hide keys and take precedence in mixed
+roles. Empty and unknown roles hide keys. The database resolver recognizes the
+existing numbered roles and language-key modifiers.

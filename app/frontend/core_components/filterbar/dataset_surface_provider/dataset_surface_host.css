@@ -1,0 +1,29 @@
+/* dataset_surface_host.css
+ * Contains extension-owned results inside the shared hero/sidebar layout.
+ * Between the generic dataset grid and result renderers with intrinsic minimum widths.
+ * Prevents card-specific centering and flex shrink from clipping a long result surface's hero.
+ */
+.dataset-query-surface {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.dataset-query-surface > .tab-content-area {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.dataset-query-surface .tab-content-body > .scrollable_content {
+    display: block;
+    min-width: 0;
+}
+
+.dataset-query-surface [data-testid="dataset-surface-results"] {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* The primary count is the shared mirror's data source, never a second label. */
+.dataset-query-surface .results_count[hidden] {
+    display: none;
+}

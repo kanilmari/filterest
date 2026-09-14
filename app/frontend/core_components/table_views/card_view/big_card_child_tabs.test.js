@@ -126,7 +126,7 @@ describe("buildRelatedTabs related-record navigation", () => {
         expect(mocks.setUnifiedTableState).toHaveBeenCalledWith(
             "dev_agent_tasks",
             {
-                cardView: { collapsed: true, expandedId: 853 },
+                articleView: { collapsed: true, expandedId: 853, returnView: "card" },
             },
         );
         expect(mocks.closeRowArticle).toHaveBeenCalled();

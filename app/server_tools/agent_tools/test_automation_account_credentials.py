@@ -39,6 +39,7 @@ def ready_record(*, created: bool, generation: int = 1) -> dict[str, object]:
         "user_id": 44,
         "username": AUTOMATION_ACCOUNT_USERNAME,
         "enabled": True,
+        "api_only": True,
         "admin_group_member": True,
         "admin_access_allowed": True,
         "privileged": False,
@@ -207,6 +208,96 @@ class AutomationAccountCredentialsTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertNotIn(TEST_PASSWORD, stdout.getvalue())
         self.assertIn("action=created", stdout.getvalue())
+
+    def _seed_credentials(self, target="https://filterest.example", username=AUTOMATION_ACCOUNT_USERNAME):
+        self.credentials_file.write_text(
+            f"FILTEREST_API_BASE_URL={target}\n"
+            f"FILTEREST_API_USERNAME={username}\n"
+            f"FILTEREST_API_PASSWORD={TEST_PASSWORD}\n", encoding="utf-8",
+        )
+        os.chmod(self.credentials_file, 0o600)
+
+    def test_revoke_uses_only_manager_action_and_preserves_secret_file(self):
+        self._seed_credentials()
+        before = self.credentials_file.read_bytes()
+        revoked = ready_record(created=False, generation=6)
+        revoked.update(ready=False, enabled=False)
+        with patch.object(credential_module, "_manager_request", return_value=revoked) as request:
+            with patch.object(credential_module, "_verify_api_login") as login:
+                result = credential_module.revoke_automation_credentials(
+                    api_base_url="https://filterest.example",
+                    manager_base_url="http://127.0.0.1:18182",
+                    manager_environment_file=self.manager_environment,
+                    credentials_file=self.credentials_file,
+                )
+        self.assertEqual(result.action, "revoked")
+        self.assertEqual(result.authentication_generation, 6)
+        self.assertEqual(request.call_args_list[0].kwargs, {"payload": {"action": "revoke"}})
+        self.assertEqual([c.args[2] for c in request.call_args_list], ["POST", "GET"])
+        self.assertEqual(self.credentials_file.read_bytes(), before)
+        login.assert_not_called()
+
+    def test_revoke_rejects_unproved_or_raced_readback(self):
+        self._seed_credentials()
+        good = ready_record(created=False, generation=6)
+        good.update(ready=False, enabled=False)
+        for changed in [{"enabled": True}, {"api_only": False}, {"ready": True},
+                        {"user_id": 45}, {"authentication_generation": 7}]:
+            with self.subTest(changed=changed):
+                bad = dict(good, **changed)
+                with patch.object(credential_module, "_manager_request", side_effect=[good, bad]):
+                    with self.assertRaises(AutomationCredentialError):
+                        credential_module.revoke_automation_credentials(
+                            api_base_url="https://filterest.example",
+                            manager_base_url="http://127.0.0.1:18182",
+                            manager_environment_file=self.manager_environment,
+                            credentials_file=self.credentials_file,
+                        )
+
+    def test_rotate_and_revoke_validate_existing_target_before_network(self):
+        for action in ("rotate", "revoke"):
+            for target, username in [("https://other.example", AUTOMATION_ACCOUNT_USERNAME),
+                                     ("https://filterest.example", "human")]:
+                self._seed_credentials(target, username)
+                with patch.object(credential_module, "_manager_request") as request:
+                    with self.assertRaises(AutomationCredentialError):
+                        options = dict(
+                            api_base_url="https://filterest.example",
+                            manager_base_url="http://127.0.0.1:18182",
+                            manager_environment_file=self.manager_environment,
+                            credentials_file=self.credentials_file,
+                        )
+                        if action == "rotate":
+                            ensure_automation_credentials(**options, rotate=True)
+                        else:
+                            credential_module.revoke_automation_credentials(**options)
+                    request.assert_not_called()
+
+    def test_readiness_requires_api_only(self):
+        for value in (None, False, "true"):
+            record = ready_record(created=False)
+            record["api_only"] = value
+            with self.assertRaises(AutomationCredentialError):
+                credential_module._validate_ready_record(record)
+
+    def test_revoke_cli_is_explicit_and_reports_no_secret(self):
+        args = [
+            "--api-base-url", "https://filterest.example",
+            "--manager-environment-file", str(self.manager_environment),
+            "--credentials-file", str(self.credentials_file), "--revoke",
+        ]
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(args + ["--rotate"])
+        result = AutomationCredentialResult("revoked", "https://filterest.example",
+                                           AUTOMATION_ACCOUNT_USERNAME, 44, 6)
+        output = io.StringIO()
+        with patch.object(credential_module, "revoke_automation_credentials", return_value=result):
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(main(args), 0)
+        self.assertIn("credentials revoked:", output.getvalue())
+        self.assertNotIn(TEST_PASSWORD, output.getvalue())
+        self.assertNotIn(MANAGER_TOKEN, output.getvalue())
 
 
 if __name__ == "__main__":

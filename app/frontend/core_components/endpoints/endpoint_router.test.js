@@ -84,3 +84,13 @@ describe('endpoint_router', () => {
   });
 
 });
+
+test('passes an opt-in cancellation signal without changing default request context', async () => {
+  const mod = await loadModule();
+  runApiPipeline.mockResolvedValue({ parsedData: 'ok' });
+  const signal = new AbortController().signal;
+  await mod.endpoint_router('fetchSomething', { signal });
+  expect(runApiPipeline).toHaveBeenLastCalledWith(expect.objectContaining({ signal }));
+  await mod.endpoint_router('fetchSomething');
+  expect(runApiPipeline.mock.calls.at(-1)[0]).not.toHaveProperty('signal');
+});

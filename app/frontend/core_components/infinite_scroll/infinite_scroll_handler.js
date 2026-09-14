@@ -31,6 +31,7 @@ function getScrollState(tableName) {
     if (!scrollState.has(tableName)) {
         scrollState.set(tableName, {
             isLoading: false,
+            generation: 0,
             observer: null,
             sentinel: null,
             lastRowCount: null,
@@ -109,6 +110,7 @@ function ensureArticleToggleListener() {
  */
 export function disconnectInfiniteScroll(tableName) {
     const state = getScrollState(tableName);
+    state.generation += 1;
     clearFillScreenTimers(tableName);
     if (state.observer) {
         state.observer.disconnect();
@@ -131,6 +133,8 @@ export function resetOffset(tableName) {
     // Nollataan cachettu rivimäärä jotta seuraava erä tekee uuden COUNT(*)
     const scrollSt = getScrollState(tableName);
     scrollSt.lastRowCount = null;
+    scrollSt.generation += 1;
+    scrollSt.isLoading = false;
 }
 
 /**
@@ -177,6 +181,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
         return;
     }
 
+    disconnectInfiniteScroll(tableName);
     const state = getScrollState(tableName);
     state.orientation = orientation;
     clearFillScreenTimers(tableName);
@@ -289,6 +294,7 @@ async function fetchMoreData(tableName, options = {}) {
     const scrollSt = getScrollState(tableName);
     if (scrollSt.isLoading) return;
     scrollSt.isLoading = true;
+    const generation = scrollSt.generation;
 
     try {
         const tableState = getUnifiedTableState(tableName);
@@ -319,6 +325,8 @@ async function fetchMoreData(tableName, options = {}) {
             include_card_support: ["card", "article_view"].includes(currentView),
             view_key: currentView,
         });
+        if (scrollSt.generation !== generation
+            || (localStorage.getItem(`${tableName}_view`) || "table") !== currentView) return;
         setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;
 
@@ -341,7 +349,7 @@ async function fetchMoreData(tableName, options = {}) {
     } catch (err) {
         console.warn("error fetching more data:", err);
     } finally {
-        scrollSt.isLoading = false;
+        if (scrollSt.generation === generation) scrollSt.isLoading = false;
     }
 }
 
@@ -415,4 +423,16 @@ export function appendDataToView(tableName, data, append = true) {
             );
         }
     }
+}
+
+/** Retains only pagination context, never an observer or pending request. */
+export function captureInfiniteScrollState(tableName) {
+    const { lastRowCount, orientation, isLoading } = getScrollState(tableName);
+    return { lastRowCount, orientation, isLoading };
+}
+
+export function resumeInfiniteScrollState(tableName, snapshot) {
+    const state = getScrollState(tableName);
+    state.lastRowCount = snapshot.lastRowCount;
+    initializeInfiniteScroll(tableName, snapshot.orientation);
 }

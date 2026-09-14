@@ -3,6 +3,15 @@
 // Bridges the existing image modal, row content builder, and already-visible result cards.
 // Exists so every real content image can lead into a full-height media view by default.
 
+import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
+
+import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
+import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
+import { fetchDatasetData } from "../../endpoints/endpoint_data_fetcher.js";
+import {
+    authorizeImageFirstView, beginImageFirstViewOpen, attachImageFirstView,
+    imageFirstViewDidClose, updateImageFirstViewImage,
+} from "../../navigation/nav_engine/image_first_view_history.js";
 import { parseRoleString } from "./card_field_formatter.js";
 import {
     openImageModalContent,
@@ -182,17 +191,39 @@ export async function openImageFirstView({
     rowItem = null,
     tableName = "",
     selectedCard = null,
+    restoringHistory = false,
+    isCurrent = () => true,
 } = {}) {
     if (!rowItem || typeof rowItem !== "object" || !tableName) {
         return null;
     }
 
-    const dataTypes = resolveRowArticleDataTypes(tableName, selectedCard);
+    const intent = beginImageFirstViewOpen({
+        tableName, rowId: rowItem.id, listPath: buildDatasetPath(tableName, DATASET_PREFIX || "/"),
+        restoring: restoringHistory, isCurrent,
+    });
+    if (!await authorizeImageFirstView(tableName, intent.isCurrent)) return null;
+    // Reopening history always obtains current row/column permissions. Its state
+    // contains only identities, never a cached copy of protected article data.
+    let dataTypes = resolveRowArticleDataTypes(tableName, selectedCard);
+    if (restoringHistory) {
+        const response = await fetchDatasetData({
+            dataset_name: tableName, filters: { id: rowItem.id },
+            view_key: "article_view", callerName: "openImageFirstView",
+        });
+        if (!intent.isCurrent()) return null;
+        rowItem = response?.data?.find(row => String(row.id) === String(rowItem.id));
+        if (!rowItem) return null;
+        dataTypes = response.types || {};
+        selectedCard = Array.from(document.getElementById(tableName + "_container")
+            ?.querySelectorAll(".card[data-id]") || [])
+            .find(card => String(card.dataset.id) === String(rowItem.id)) || null;
+    }
     const sortedColumns = sortColumnsByRole(Object.keys(rowItem), dataTypes);
     const imageRoleColumns = sortedColumns.filter((column) =>
         parseRoleString(dataTypes[column]?.card_element || "").baseRoles.includes("image")
     );
-    const [resolvedRows, currentUserProfile] = await Promise.all([
+    const [resolvedRows, currentUserProfile, sectionDefaults] = await Promise.all([
         resolveImageRowsForView({
             rowItem,
             tableName,
@@ -201,15 +232,16 @@ export async function openImageFirstView({
             imageSrc,
         }),
         fetchCurrentUserProfile().catch(() => null),
+        loadRowArticleSectionDefaults(tableName, "image_first"),
     ]);
-    if (resolvedRows.length === 0) {
+    if (!intent.isCurrent() || resolvedRows.length === 0) {
         return null;
     }
 
     let currentImageRow = resolveActiveImageRow(
         resolvedRows,
         imageSrc,
-        activeImageRow,
+        intent.image ? resolvedRows.find(row => row.filename === intent.image) : activeImageRow,
     );
     const imageEntries = resolvedRows.map((row, index) => ({ row, index }));
     const rowPresentationLabel = resolveRowPresentationLabel(
@@ -218,11 +250,13 @@ export async function openImageFirstView({
         dataTypes,
     );
     let closeImageFirstView = null;
+    let historyEntryId = null;
     const stage = buildRowArticleImageFirstStage({
         imageEntries,
         getActiveRow: () => currentImageRow,
         onSelectRow: (row) => {
             currentImageRow = row;
+            updateImageFirstViewImage(historyEntryId, row?.filename || "");
         },
         resolvePath: resolveImagePath,
         resolveAlt: resolveImageAltText,
@@ -244,9 +278,11 @@ export async function openImageFirstView({
             resolveHeaderInitial(rowItem, sortedColumns, dataTypes),
             imageRoleColumns.length > 0,
             currentUserProfile?.user_id ?? null,
+            { sectionDefaults },
         ),
         stage.whenTransitionMediaReady(),
     ]);
+    if (!intent.isCurrent()) return null;
     rowArticleContentElement
         .querySelectorAll(":scope > .big_card_image")
         .forEach((imageElement) => imageElement.remove());
@@ -299,17 +335,26 @@ export async function openImageFirstView({
     }
     const ariaLabel = getTranslationForKey("open_article") || "Open article";
     const topControlElements = rowNavigation ? [rowNavigation] : [];
+    historyEntryId = intent.commit(currentImageRow?.filename || "");
+    if (!historyEntryId) return null;
+    const onClose = () => {
+        shell.remove();
+        imageFirstViewDidClose(historyEntryId);
+    };
     const modalResult = transitionImageFirstModalContent({
         contentElement: shell,
         ariaLabel,
         topControlElements,
+        onClose,
     }) || openImageModalContent({
         contentElement: shell,
         classNames: ["image_first_view_modal"],
         overlayClassNames: ["image_first_view_overlay"],
         ariaLabel,
         topControlElements,
+        onClose,
     });
+    attachImageFirstView(historyEntryId, modalResult);
     closeImageFirstView = modalResult?.close || null;
     // The stage builder performs its initial synchronization before returning.
     // Rebuilding the same media after the modal animation has started forces

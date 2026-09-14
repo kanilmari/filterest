@@ -480,7 +480,7 @@ async function dropRegisteredDatasets(
     const response = await postJsonWithCsrf(
       request,
       '/api/drop-dataset',
-      { dataset_name: artifact.name },
+      { dataset_name: artifact.name, confirm_dataset_name: artifact.name },
       csrfToken,
     );
     if (response.ok || response.body.includes('does not exist')) {

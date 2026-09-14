@@ -506,7 +506,7 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 		rows, err := backend.Db.Query(`
 			SELECT t.table_name, t.updated
 			FROM system_db_tables t
-			WHERE t.schema_name = 'public'
+			WHERE t.schema_name = 'public' AND NOT t.ui_hidden
 			ORDER BY t.table_name
 		`)
 		if err != nil {

@@ -168,7 +168,7 @@ def parse_struct(spec: StructSpec) -> ParsedStruct:
         if json_name == "-" or not json_name:
             continue
 
-        optional = "omitempty" in json_tag or match.group("type").strip().startswith("*")
+        optional = "omitempty" in json_tag.split(",")[1:]
         fields.append(
             StructField(
                 field_name=match.group("field"),
@@ -184,14 +184,23 @@ def parse_struct(spec: StructSpec) -> ParsedStruct:
     return ParsedStruct(go_name=spec.go_name, ts_name=spec.ts_name, fields=fields)
 
 
+def nullable_type(ts_type: str) -> str:
+    if ts_type == "unknown" or ts_type.endswith(" | null"):
+        return ts_type
+    return f"{ts_type} | null"
+
+
 def map_go_type(go_type: str, name_map: dict[str, str]) -> str:
     normalized = go_type.strip()
 
-    while normalized.startswith("*"):
-        normalized = normalized[1:].strip()
+    if normalized.startswith("*"):
+        return nullable_type(map_go_type(normalized[1:], name_map))
 
     if normalized.startswith("[]"):
-        return f"{map_go_type(normalized[2:], name_map)}[]"
+        item_type = map_go_type(normalized[2:], name_map)
+        if " | " in item_type:
+            item_type = f"({item_type})"
+        return f"{item_type}[]"
 
     map_match = re.fullmatch(r"map\[\s*string\s*\]\s*(.+)", normalized)
     if map_match:
@@ -247,7 +256,14 @@ def build_output(parsed_structs: list[ParsedStruct]) -> str:
     for item in parsed_structs:
         lines.append(f"export interface {item.ts_name} {{")
         for field in item.fields:
-            ts_type = map_go_type(field.go_type, name_map)
+            go_type = field.go_type
+            omit_nil_pointer = field.optional and go_type.startswith("*")
+            if omit_nil_pointer:
+                # omitempty removes only a nil outer pointer, not an inner nil.
+                go_type = go_type[1:].strip()
+            ts_type = map_go_type(go_type, name_map)
+            if omit_nil_pointer and go_type.startswith(("[]", "map[")):
+                ts_type = nullable_type(ts_type)
             optional_marker = "?" if field.optional else ""
             lines.append(f"    {field.json_name}{optional_marker}: {ts_type};")
         lines.append("}")

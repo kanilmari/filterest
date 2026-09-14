@@ -323,3 +323,9 @@ describe('orderFilterColumns', () => {
         expect(result.main).toEqual(['b_count', 'a_count']);
     });
 });
+
+test('explicit finite choices use the shared multiselect even for numeric fields', () => {
+    expect(resolveFilterElementKind({ data_type: 'smallint', filter_options: [{ value: '0', label: 'Phase 0' }] })).toBe('choice');
+    expect(resolveFilterElementKind({ data_type: 'smallint' })).toBe('numeric_range');
+    expect(resolveFilterElementKind({ data_type: 'integer', foreign_table: 'users' })).toBe('foreign_key');
+});

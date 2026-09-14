@@ -50,10 +50,10 @@ Preparation changes only:
 
 The new identity is always **stable/runtime candidate**. Existing ledger bytes
 remain unchanged, including published history. The old active compatibility row
-becomes historical. The existing database minimum, target and schema snapshot
-remain the same. This command cannot introduce a database version or regenerate
-the schema and seed. Such changes need their own reviewed migration/bootstrap
-work before preparation. Product packages currently have no npm version field,
+becomes historical. Without an explicit database transition, the existing database minimum,
+target and schema snapshot remain the same. Preparation never generates or
+modifies migrations, schema, seed, snapshots or the database version marker.
+These inputs must be reviewed and committed first. Product packages currently have no npm version field,
 so no package version is invented. Private shell versions and feature registries
 are outside this command's scope.
 
@@ -64,6 +64,46 @@ process termination, power loss, or a storage failure that also prevents rollbac
 requires inspecting Git status and the retained release evidence before retrying.
 Do not run other source editors while applying. Release metadata input/output
 symlinks are refused.
+
+## Preparing a reviewed database transition
+
+When application code requires a new database schema, first commit source S with
+the new `app/VERSION_DB`, reviewed migrations, regenerated public bootstrap
+schema/seed/manifest and the matching tracked
+`app/server_tools/versioning/schema_snapshots/db-VERSION.sql`. The new snapshot
+must contain the exact reviewed bootstrap schema bytes. Keep the previous
+published `BUILD_IDENTITY.json`, ledger, application version and compatibility
+rows unchanged in S; do not assign the old published app version a new DB identity.
+A normal compatibility check may reject this deliberate pre-candidate state.
+It is reviewed source, not an eligible published runtime.
+
+Then explicitly acknowledge the previous published database target:
+
+```bash
+./filterest release prepare \
+  --version 9.3.8 --expect-current-version 9.3.7 \
+  --source-commit "$(git rev-parse HEAD)" \
+  --db-transition-from 9.7.13 \
+  --release-notes /tmp/filterest-release-notes.md \
+  --manifest-notes 'Reviewed DB 9.7.15 migration and bootstrap; minimum 9.7.15.' \
+  --json
+```
+
+These values are an example. `--db-transition-from` must exactly match the
+previous identity and active compatibility target. The new source DB version
+must be greater, and the new candidate's minimum **equals its new target**;
+this path cannot claim compatibility with an older schema. Omitting the flag
+for a DB change, using it without a DB increase, a missing/untracked snapshot,
+or mismatched schema/hash evidence stops preparation.
+
+Only the unchanged history is internally validated against its previous
+published DB target. The normal validator and candidate/published identities
+remain strict. The plan lists the same metadata outputs as an app-only release.
+Review it, rerun with `--apply`, and commit candidate C. The old active
+compatibility row becomes historical and the new app version receives the new
+DB pairing and canonical snapshot. All previous ledger bytes and snapshot
+files remain unchanged. Promotion rechecks this exact S→C contract from Git
+history; it does not need the preparation flag again.
 
 ## Verification and later publication
 

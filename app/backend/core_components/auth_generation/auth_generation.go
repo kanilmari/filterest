@@ -101,6 +101,7 @@ func ClearIdentity(session *sessions.Session) {
 		"username",
 		"user_role",
 		SessionKey,
+		AutomationSessionKey,
 	} {
 		delete(session.Values, key)
 	}

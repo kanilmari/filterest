@@ -15,10 +15,10 @@ import {
     CARD_DETAILS_LAYOUT_OPTIONS,
     CARD_DETAILS_LAYOUT_VALUES,
     CARD_STYLE_VARIANT_OPTIONS,
-    CARD_STYLE_VARIANT_VALUES,
     normalizeClientCardDetailsLayout,
-    normalizeClientCardStyleVariant,
+    normalizeClientCardStyleOverride,
 } from '../table_views/card_view/card_detail_layout_options.js';
+import { buildCardLabelVisibilityColumn, prepareCardLabelVisibilityRows } from './card_label_visibility_setting.js';
 import { getCardRoleOptions } from '../table_views/card_view/card_role_catalog.js';
 import { getCardDetailIconOptions } from '../table_views/card_view/card_detail_icon_builder.js';
 
@@ -49,7 +49,7 @@ const VISIBILITY_FLAGS = [
     { key: 'card_element',               type: 'select', options: CARD_ELEMENT_OPTIONS },
     { key: 'label_value_layout', type: 'select', width: '12rem', options: LABEL_VALUE_LAYOUT_OPTIONS },
     { key: 'card_detail_capitalization', type: 'checkbox' },
-    { key: 'show_key_on_card',           type: 'checkbox' },
+    { key: 'show_key_on_card_override',  type: 'select' },
     { key: 'show_value_on_card',         type: 'checkbox' },
     { key: 'hide_everywhere',            type: 'checkbox' },
     {
@@ -74,9 +74,11 @@ function getCardDetailsLayoutLabel(value) {
 }
 
 function getCardStyleVariantLabel(value) {
-    const normalizedValue = normalizeClientCardStyleVariant(value);
-    return CARD_STYLE_VARIANT_OPTIONS.find((option) => option.value === normalizedValue)?.label
-        || normalizedValue;
+    const normalizedValue = normalizeClientCardStyleOverride(value);
+    if (normalizedValue === null) return getCardVisibilityUiText('card_style_inherit', 'Sivuston oletus', 'Site default');
+    return normalizedValue === 'modern'
+        ? getCardVisibilityUiText('card_style_glowy', 'Hohtava', 'Glowy')
+        : getCardVisibilityUiText('card_style_plain', 'Tavallinen', 'Plain');
 }
 
 function cloneColumnsData(columns) {
@@ -119,7 +121,7 @@ function buildEditorColumns() {
             minWidth: '12rem',
             maxWidth: '12rem',
         },
-        ...VISIBILITY_FLAGS.map((flag) => ({
+        ...VISIBILITY_FLAGS.map((flag) => flag.key === 'show_key_on_card_override' ? buildCardLabelVisibilityColumn() : ({
             key: flag.key,
             label: flag.key === 'label_value_layout'
                 ? getCardVisibilityUiText('label_value_layout', 'Kentän otsikon ja arvon asettelu', 'Field label and value layout')
@@ -258,8 +260,8 @@ export async function generate_card_visibility_form(container) {
     let originalData = [];
     let cardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
     let originalCardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
-    let cardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
-    let originalCardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
+    let cardStyleVariant = null;
+    let originalCardStyleVariant = null;
     let checkboxTable = null;
     let layoutSelect = null;
     let styleVariantSelect = null;
@@ -307,8 +309,8 @@ export async function generate_card_visibility_form(container) {
         return (
             normalizeClientCardDetailsLayout(cardDetailsLayout) !==
                 normalizeClientCardDetailsLayout(originalCardDetailsLayout)
-            || normalizeClientCardStyleVariant(cardStyleVariant) !==
-                normalizeClientCardStyleVariant(originalCardStyleVariant)
+            || normalizeClientCardStyleOverride(cardStyleVariant) !==
+                normalizeClientCardStyleOverride(originalCardStyleVariant)
         );
     }
 
@@ -321,7 +323,7 @@ export async function generate_card_visibility_form(container) {
             layoutSelect.value = normalizeClientCardDetailsLayout(cardDetailsLayout);
         }
         if (styleVariantSelect instanceof HTMLSelectElement) {
-            styleVariantSelect.value = normalizeClientCardStyleVariant(cardStyleVariant);
+            styleVariantSelect.value = normalizeClientCardStyleOverride(cardStyleVariant) ?? '';
         }
         if (layoutSaveButton instanceof HTMLButtonElement) {
             layoutSaveButton.disabled = !isLayoutDirty();
@@ -340,7 +342,7 @@ export async function generate_card_visibility_form(container) {
         }
         columnsData = cloneColumnsData(originalData);
         cardDetailsLayout = normalizeClientCardDetailsLayout(originalCardDetailsLayout);
-        cardStyleVariant = normalizeClientCardStyleVariant(originalCardStyleVariant);
+        cardStyleVariant = normalizeClientCardStyleOverride(originalCardStyleVariant);
         syncLayoutControls();
     }
 
@@ -354,7 +356,7 @@ export async function generate_card_visibility_form(container) {
         const priorError = matrixContainer.querySelector('[data-testid="card-visibility-save-error"]');
         if (priorError) priorError.hidden = true;
         const normalizedLayout = normalizeClientCardDetailsLayout(nextLayout);
-        const normalizedStyleVariant = normalizeClientCardStyleVariant(nextStyleVariant);
+        const normalizedStyleVariant = normalizeClientCardStyleOverride(nextStyleVariant);
         const targetDataset = currentTableName;
         const response = await saveCardVisibility({
             table_name: targetDataset,
@@ -363,13 +365,16 @@ export async function generate_card_visibility_form(container) {
             columns: nextRows,
         });
         const configuredRows = nextRows.filter((row) => Object.hasOwn(row, 'label_value_layout'));
-        if (configuredRows.length) {
+        const labelRows = nextRows.filter((row) => Object.hasOwn(row, 'show_key_on_card_override'));
+        if (configuredRows.length || labelRows.length) {
             const readback = await fetchCardVisibility(targetDataset);
             const returnedColumns = Array.isArray(readback) ? readback : readback?.columns;
             const values = new Map((returnedColumns || []).map((row) => [row.column_uid, row.label_value_layout]));
+            const labelValues = new Map((returnedColumns || []).map((row) => [row.column_uid, row.show_key_on_card_override]));
             if ((!Array.isArray(readback) && readback?.table_name && readback.table_name !== targetDataset)
                 || configuredRows.some((row) => !values.has(row.column_uid)
-                    || values.get(row.column_uid) !== row.label_value_layout)) {
+                    || values.get(row.column_uid) !== row.label_value_layout)
+                || labelRows.some((row) => labelValues.get(row.column_uid) !== row.show_key_on_card_override)) {
                 throw new Error(getCardVisibilityUiText('label_value_layout_readback_failed',
                     'Asetuksen tallennusta ei voitu varmistaa. Lataa asetukset uudelleen.',
                     'The saved setting could not be verified. Reload the settings.'));
@@ -416,20 +421,20 @@ export async function generate_card_visibility_form(container) {
         const styleLabel = document.createElement('label');
         styleLabel.classList.add('cv-layout-label');
         styleLabel.htmlFor = 'cv_card_style_variant_select';
-        styleLabel.textContent = getTranslationForKey('card_style_variant') || 'Card style';
+        styleLabel.textContent = getCardVisibilityUiText('card_style_variant', 'Kortin tyyli', 'Card style');
 
         styleVariantSelect = document.createElement('select');
         styleVariantSelect.id = 'cv_card_style_variant_select';
         styleVariantSelect.classList.add('cv-layout-select');
         styleVariantSelect.dataset.testid = 'card-style-variant-select';
-        CARD_STYLE_VARIANT_OPTIONS.forEach((option) => {
+        [{ value: '' }, ...CARD_STYLE_VARIANT_OPTIONS].forEach((option) => {
             const optionNode = document.createElement('option');
             optionNode.value = option.value;
-            optionNode.textContent = getTranslationForKey(option.value) || option.label;
+            optionNode.textContent = getCardStyleVariantLabel(option.value);
             styleVariantSelect.appendChild(optionNode);
         });
         styleVariantSelect.addEventListener('change', () => {
-            cardStyleVariant = normalizeClientCardStyleVariant(styleVariantSelect.value);
+            cardStyleVariant = normalizeClientCardStyleOverride(styleVariantSelect.value);
             syncLayoutControls();
         });
 
@@ -564,8 +569,8 @@ export async function generate_card_visibility_form(container) {
         originalData = [];
         cardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
         originalCardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
-        cardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
-        originalCardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
+        cardStyleVariant = null;
+        originalCardStyleVariant = null;
         renderLoadingMessage(matrixContainer);
 
         try {
@@ -573,13 +578,13 @@ export async function generate_card_visibility_form(container) {
             if (requestSequence !== loadRequestSequence) {
                 return;
             }
-            columnsData = Array.isArray(response) ? response : (response.columns || []);
+            columnsData = prepareCardLabelVisibilityRows(Array.isArray(response) ? response : (response.columns || []));
             cardDetailsLayout = Array.isArray(response)
                 ? CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE
                 : normalizeClientCardDetailsLayout(response.card_details_layout);
             cardStyleVariant = Array.isArray(response)
-                ? CARD_STYLE_VARIANT_VALUES.STANDARD
-                : normalizeClientCardStyleVariant(response.card_style_variant);
+                ? null
+                : normalizeClientCardStyleOverride(response.card_style_variant);
             originalCardDetailsLayout = cardDetailsLayout;
             originalCardStyleVariant = cardStyleVariant;
             originalData = cloneColumnsData(columnsData);
@@ -592,8 +597,8 @@ export async function generate_card_visibility_form(container) {
             originalData = [];
             cardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
             originalCardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
-            cardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
-            originalCardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
+            cardStyleVariant = null;
+            originalCardStyleVariant = null;
         }
 
         if (columnsData.length === 0) {
@@ -631,8 +636,11 @@ export async function generate_card_visibility_form(container) {
     }
 
     const listenerController = new AbortController();
+    const languageObserver = new MutationObserver(() => checkboxTable?.setColumns(buildEditorColumns()));
+    languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     container.__cleanupListeners = () => {
         listenerController.abort();
+        languageObserver.disconnect();
         unmountCheckboxTable();
     };
 
@@ -652,8 +660,8 @@ export async function generate_card_visibility_form(container) {
             originalData = [];
             cardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
             originalCardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
-            cardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
-            originalCardStyleVariant = CARD_STYLE_VARIANT_VALUES.STANDARD;
+            cardStyleVariant = null;
+            originalCardStyleVariant = null;
             unmountCheckboxTable();
             renderInstructions(matrixContainer);
             return;

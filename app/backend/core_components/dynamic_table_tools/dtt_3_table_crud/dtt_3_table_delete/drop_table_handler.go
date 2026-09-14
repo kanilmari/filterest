@@ -19,7 +19,8 @@ import (
 )
 
 type DropTableRequest struct {
-	TableName string `json:"dataset_name"`
+	TableName          string `json:"dataset_name"`
+	ConfirmDatasetName string `json:"confirm_dataset_name"`
 }
 
 func DropTableHandler(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +43,11 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 	sanitizedTableName, err := security.SanitizeIdentifier(req.TableName)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Errorf("error validating table name: %w", err).Error())
+		return
+	}
+
+	if req.ConfirmDatasetName != req.TableName {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "confirm_dataset_name must exactly match dataset_name")
 		return
 	}
 

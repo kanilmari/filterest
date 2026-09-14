@@ -7,7 +7,6 @@ Why: Reports compatibility without mutating source, operator state, or database 
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import subprocess
@@ -31,6 +30,11 @@ try:
         DevStatusPaths,
         resolve_dev_status_paths,
     )
+    from ..lib.runtime_contract_status import (
+        collect_runtime_contract, parse_status_args as parse_args,
+        print_runtime_contract, run_status_cli,
+        resolve_database_sslmode as resolve_sslmode,
+    )
 except ImportError:
     from server_tools.lib.easelect_private_paths import (
         resolve_easelect_private_paths,
@@ -38,6 +42,11 @@ except ImportError:
     from server_tools.lib.dev_status_path_resolver import (
         DevStatusPaths,
         resolve_dev_status_paths,
+    )
+    from server_tools.lib.runtime_contract_status import (
+        collect_runtime_contract, parse_status_args as parse_args,
+        print_runtime_contract, run_status_cli,
+        resolve_database_sslmode as resolve_sslmode,
     )
 
 
@@ -109,14 +118,6 @@ def read_current_manifest_row(
             return row
     return None
 
-
-def resolve_sslmode(env: dict[str, str]) -> str:
-    sslmode = env.get("DB_SSLMODE", "").strip()
-    if sslmode:
-        return sslmode
-    if env.get("ENVIRONMENT_TYPE", "").strip() == "dev":
-        return "disable"
-    return "require"
 
 
 def read_state_file(path: Path) -> dict[str, str]:
@@ -373,6 +374,7 @@ def collect_status() -> dict[str, Any]:
             "db_version": repo_db_version,
         },
         "manifest": manifest_row,
+        "runtime_contract": collect_runtime_contract(STATUS_PATHS, env),
         "database_target": {
             "host": db_host,
             "port": db_port,
@@ -581,6 +583,9 @@ def print_human_status(status: dict[str, Any]) -> None:
     database = status["database"]
     shared_dev_storage = status["shared_dev_storage"]
 
+    print_runtime_contract(status["runtime_contract"])
+    print("")
+
     print("Repo")
     print(f"  {repo.get('app_version_file', 'VERSION_EASELECT')}: {repo['app_version']}")
     print(f"  VERSION_DB:       {repo['db_version']}")
@@ -683,42 +688,11 @@ def print_human_status(status: dict[str, Any]) -> None:
             print(f"  - {warning}")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Inspect the tracked app/DB pair and the active development DB."
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Print machine-readable JSON instead of the human summary.",
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Exit non-zero when warnings are present.",
-    )
-    return parser.parse_args()
-
-
 def main() -> int:
-    args = parse_args()
-
-    try:
-        status = collect_status()
-    except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-
-    if args.json:
-        print(json.dumps(status, indent=2, default=str))
-    else:
-        print_human_status(status)
-
-    if status.get("error"):
-        return 1
-    if args.strict and status.get("warnings"):
-        return 2
-    return 0
+    return run_status_cli(
+        parse_args(), collect_status, print_human_status,
+        lambda: collect_runtime_contract(STATUS_PATHS, resolve_environment()),
+    )
 
 
 if __name__ == "__main__":

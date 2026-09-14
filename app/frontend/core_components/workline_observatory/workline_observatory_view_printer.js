@@ -1,55 +1,18 @@
 // workline_observatory_view_printer.js
-// Renders workline phase rows, per-row release targets, selected detail, and scoped AI controls.
+// Renders phase rows, independent selection, row actions and shared modal entry points.
 // Bridges the normalized observatory snapshot with the private management-view shell.
 // Exists so the owner can compare current progress and the locked release boundary at a glance.
 
-import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
-import {
-    applyWorklineStatusAction,
-    applyWorklineReleaseGoalAction,
-    createWorklineReleaseGoal,
-    fetchWorklineObservatoryBoard,
-    fetchWorklineObservatoryReportHistory,
-    saveWorklineReleaseContract,
-} from './workline_observatory_api_adapter.js';
-import { startWorklineConversation } from './workline_observatory_chat_adapter.js';
+import { fetchWorklineObservatoryBoard } from './workline_observatory_api_adapter.js';
 import { showViewportContextMenu } from '../../reusable_components/context_menu/viewport_context_menu_positioner.js';
-import {
-    persistWorklineSelection,
-    readPersistedWorklineSelection,
-} from './workline_observatory_selection_storage.js';
-import {
-    buildWorklineObservatoryState,
-    getSelectedObservatoryWorklines,
-    getSelectedObservatoryWorkline,
-    replaceObservatoryWorklineSelection,
-    selectObservatoryWorkline,
-    toggleObservatoryWorklineSelection,
-} from './workline_observatory_state_builder.js';
-const COPY = {
-    en: { title: 'Workline observatory', subtitle: 'Select one or more worklines to change their state.', refresh: 'Refresh', now: 'NOW', noGoal: 'No release goal selected', goal: 'Selected release goal', releaseTarget: 'Release target', noReport: 'No canonical report yet.', reportHistory: 'Earlier reports and phases', reportHistoryLoading: 'Loading report history…', reportHistoryUnavailable: 'Report history is unavailable.', context: 'Context', plain: 'Plain language', technical: 'Technical', next: 'Next step', git: 'Scoped Git snapshot', tickets: 'Tickets', contract: 'Release contract', unclassified: 'Unclassified', save: 'Save classification', ask: 'Discuss this workline with AI', send: 'Start scoped conversation', phase: 'Phase', loading: 'Loading…', unavailable: 'Observatory unavailable.', locked: 'Locked', draft: 'Draft', newGoal: 'Start next release goal', goalKey: 'Release identity', goalRevision: 'Goal revision', goalTitle: 'Release name', goalOutcome: 'Target outcome', createGoal: 'Create and select goal', lockGoal: 'Lock release goal', mustComplete: 'Must complete', mustRemainIncomplete: 'Must remain incomplete', mustBeInPhase: 'Must be in phase', mustNotStart: 'Must not start', outsideRelease: 'Outside release' },
-    fi: { title: 'Työlinjojen tilannekuva', subtitle: 'Valitse yksi tai useampi työlinja muuttaaksesi niiden tilaa.', refresh: 'Päivitä', now: 'NYT', noGoal: 'Julkaisutavoitetta ei ole valittu', goal: 'Valittu julkaisutavoite', releaseTarget: 'Julkaisutavoite', noReport: 'Kanonista raporttia ei vielä ole.', reportHistory: 'Aiemmat raportit ja vaiheet', reportHistoryLoading: 'Raporttihistoriaa ladataan…', reportHistoryUnavailable: 'Raporttihistoriaa ei saatu ladattua.', context: 'Konteksti', plain: 'Selkokielellä', technical: 'Teknisesti', next: 'Seuraava askel', git: 'Rajattu Git-tilanne', tickets: 'Tiketit', contract: 'Julkaisusopimus', unclassified: 'Luokittelematon', save: 'Tallenna luokitus', ask: 'Keskustele tästä työlinjasta AI:n kanssa', send: 'Aloita rajattu keskustelu', phase: 'Vaihe', loading: 'Ladataan…', unavailable: 'Tilannekuvaa ei saatu ladattua.', locked: 'Lukittu', draft: 'Luonnos', newGoal: 'Aloita seuraava julkaisutavoite', goalKey: 'Julkaisun tunniste', goalRevision: 'Tavoitteen versio', goalTitle: 'Julkaisun nimi', goalOutcome: 'Tavoiteltu lopputulos', createGoal: 'Luo ja valitse tavoite', lockGoal: 'Lukitse julkaisutavoite', mustComplete: 'Valmistuttava', mustRemainIncomplete: 'Jätettävä keskeneräiseksi', mustBeInPhase: 'Oltava vaiheessa', mustNotStart: 'Ei aloiteta', outsideRelease: 'Julkaisun ulkopuolella' },
-    ch: { title: '工作线总览', subtitle: '选择一条或多条工作线以更改状态。', refresh: '刷新', now: '现在', noGoal: '未选择发布目标', goal: '所选发布目标', releaseTarget: '发布目标', noReport: '尚无规范报告。', reportHistory: '过往报告和阶段', reportHistoryLoading: '正在加载报告历史…', reportHistoryUnavailable: '无法加载报告历史。', context: '背景', plain: '简明说明', technical: '技术说明', next: '下一步', git: '限定 Git 快照', tickets: '工单', contract: '发布契约', unclassified: '未分类', save: '保存分类', ask: '与 AI 讨论此工作线', send: '开始限定对话', phase: '阶段', loading: '正在加载…', unavailable: '无法加载总览。', locked: '已锁定', draft: '草稿', newGoal: '开始下一个发布目标', goalKey: '发布标识', goalRevision: '目标修订', goalTitle: '发布名称', goalOutcome: '目标结果', createGoal: '创建并选择目标', lockGoal: '锁定发布目标', mustComplete: '必须完成', mustRemainIncomplete: '必须保持未完成', mustBeInPhase: '必须处于阶段', mustNotStart: '不得开始', outsideRelease: '发布范围外' },
-    yue: { title: '工作線總覽', subtitle: '揀一條或多條工作線去更改狀態。', refresh: '重新整理', now: '而家', noGoal: '未揀發佈目標', goal: '已選發佈目標', releaseTarget: '發佈目標', noReport: '未有正式報告。', reportHistory: '過往報告同階段', reportHistoryLoading: '載入緊報告記錄…', reportHistoryUnavailable: '未能載入報告記錄。', context: '背景', plain: '簡單說明', technical: '技術說明', next: '下一步', git: '限定 Git 快照', tickets: '工作單', contract: '發佈契約', unclassified: '未分類', save: '儲存分類', ask: '同 AI 討論呢條工作線', send: '開始限定對話', phase: '階段', loading: '載入中…', unavailable: '未能載入總覽。', locked: '已鎖定', draft: '草稿', newGoal: '開始下一個發佈目標', goalKey: '發佈識別', goalRevision: '目標修訂', goalTitle: '發佈名稱', goalOutcome: '目標結果', createGoal: '建立並揀選目標', lockGoal: '鎖定發佈目標', mustComplete: '必須完成', mustRemainIncomplete: '必須保持未完成', mustBeInPhase: '必須處於階段', mustNotStart: '唔可以開始', outsideRelease: '發佈範圍外' },
-};
+import { persistWorklineSelection, readPersistedWorklineSelection } from './workline_observatory_selection_storage.js';
+import { buildWorklineObservatoryState, getSelectedObservatoryWorklines, replaceObservatoryWorklineSelection, toggleObservatoryWorklineSelection } from './workline_observatory_state_builder.js';
+import { resolveCopy } from './workline_observatory_copy.js';
+import { buildStatusActionGuidance, buildWorklinePriorityEditor, createWorklineObservatoryActions, formatCopy, getStatusActions } from './workline_observatory_actions.js';
+import { createWorklineObservatoryDetailModal, describeReleaseContract } from './workline_observatory_detail_modal.js';
 
-const ACTION_COPY = {
-    en: { selected: '{count} selected', selectAll: 'Select all', deselectAll: 'Deselect all', selectRows: 'Select one or more worklines to change their state.', activate: 'Activate', pause: 'Pause', markDone: 'Mark done', discard: 'Discard', activeState: 'Active', pausedState: 'Paused', closedState: 'Done', archivedState: 'Discarded', chooseTarget: 'Select one or more worklines to move them to {state}.', alreadyTarget: 'All selected worklines are already {state}.', moveOne: 'Move “{title}” to {state}.', moveMany: 'Move all {count} selected worklines to {state}.', moveMixed: 'Move all {count} selected worklines to {state}; {sameCount} already have that state.', confirmOne: 'Change “{title}” to {state}?', confirmMany: 'Change all {count} selected worklines to {state}?', confirmMixed: 'Change all {count} selected worklines to {state}? {sameCount} already have that state.', changed: 'Changed {count} workline(s) to {state}.', status: 'Lifecycle state', lastStatus: 'Latest state decision', reconciliation: 'Waiting for AI synchronization', sourceObservatory: 'Owner in Observatory', sourceAgentTools: 'Agent/API', sourceReport: 'Canonical report synchronization', sourceCreation: 'Workline creation', sourceLegacy: 'Earlier state', unknownActor: 'Unknown user', selectionLabel: 'Select {title}' },
-    fi: { selected: '{count} valittu', selectAll: 'Valitse kaikki', deselectAll: 'Poista kaikki valinnat', selectRows: 'Valitse yksi tai useampi työlinja muuttaaksesi niiden tilaa.', activate: 'Aktivoi', pause: 'Tauota', markDone: 'Merkitse valmiiksi', discard: 'Hylkää', activeState: 'Aktiivinen', pausedState: 'Tauolla', closedState: 'Valmis', archivedState: 'Hylätty', chooseTarget: 'Valitse yksi tai useampi työlinja siirtääksesi ne tilaan {state}.', alreadyTarget: 'Kaikki valitut työlinjat ovat jo tilassa {state}.', moveOne: 'Siirrä “{title}” tilaan {state}.', moveMany: 'Siirrä kaikki {count} valittua työlinjaa tilaan {state}.', moveMixed: 'Siirrä kaikki {count} valittua työlinjaa tilaan {state}; {sameCount} on jo siinä tilassa.', confirmOne: 'Muutetaanko “{title}” tilaan {state}?', confirmMany: 'Muutetaanko kaikki {count} valittua työlinjaa tilaan {state}?', confirmMixed: 'Muutetaanko kaikki {count} valittua työlinjaa tilaan {state}? {sameCount} on jo siinä tilassa.', changed: 'Muutettiin {count} työlinjan tilaksi {state}.', status: 'Työlinjan tila', lastStatus: 'Viimeisin tilapäätös', reconciliation: 'Odottaa AI-synkronointia', sourceObservatory: 'Omistaja Observatoryssa', sourceAgentTools: 'Agentti/API', sourceReport: 'Kanonisen raportin synkronointi', sourceCreation: 'Työlinjan luonti', sourceLegacy: 'Aiempi tila', unknownActor: 'Tuntematon käyttäjä', selectionLabel: 'Valitse {title}' },
-    ch: { selected: '已选择 {count} 项', selectAll: '全选', deselectAll: '取消全选', selectRows: '选择一条或多条工作线以更改状态。', activate: '激活', pause: '暂停', markDone: '标记完成', discard: '放弃', activeState: '活动', pausedState: '已暂停', closedState: '已完成', archivedState: '已放弃', chooseTarget: '选择一条或多条工作线以移至“{state}”。', alreadyTarget: '所有所选工作线已处于“{state}”。', moveOne: '将“{title}”移至“{state}”。', moveMany: '将 {changeCount} 条工作线移至“{state}”。', moveMixed: '将所选 {count} 条中的 {changeCount} 条移至“{state}”；另有 {sameCount} 条已处于该状态。', confirmOne: '将“{title}”更改为“{state}”吗？', confirmMany: '将 {changeCount} 条工作线更改为“{state}”吗？', confirmMixed: '将所选 {count} 条中的 {changeCount} 条更改为“{state}”吗？', changed: '已将 {count} 条工作线更改为“{state}”。', status: '工作线状态', lastStatus: '最近状态决定', reconciliation: '等待 AI 同步', sourceObservatory: '所有者在总览中操作', sourceAgentTools: '代理/API', sourceReport: '规范报告同步', sourceCreation: '创建工作线', sourceLegacy: '较早状态', unknownActor: '未知用户', selectionLabel: '选择 {title}' },
-    yue: { selected: '已揀 {count} 項', selectAll: '全揀', deselectAll: '取消全揀', selectRows: '揀一條或多條工作線去更改狀態。', activate: '啟用', pause: '暫停', markDone: '標記完成', discard: '放棄', activeState: '進行中', pausedState: '已暫停', closedState: '已完成', archivedState: '已放棄', chooseTarget: '揀一條或多條工作線移去「{state}」。', alreadyTarget: '所有已揀工作線已經係「{state}」。', moveOne: '將「{title}」移去「{state}」。', moveMany: '將 {changeCount} 條工作線移去「{state}」。', moveMixed: '將已揀 {count} 條入面嘅 {changeCount} 條移去「{state}」；另外 {sameCount} 條已經係呢個狀態。', confirmOne: '將「{title}」改做「{state}」？', confirmMany: '將 {changeCount} 條工作線改做「{state}」？', confirmMixed: '將已揀 {count} 條入面嘅 {changeCount} 條改做「{state}」？', changed: '已將 {count} 條工作線改做「{state}」。', status: '工作線狀態', lastStatus: '最近狀態決定', reconciliation: '等緊 AI 同步', sourceObservatory: '擁有人喺總覽操作', sourceAgentTools: '代理/API', sourceReport: '正式報告同步', sourceCreation: '建立工作線', sourceLegacy: '較早狀態', unknownActor: '未知用戶', selectionLabel: '揀 {title}' },
-};
-
-const DEFAULT_COPY = { ...COPY.en, ...ACTION_COPY.en };
 const toolbarCleanupByContainer = new WeakMap();
-
-function resolveCopy() {
-    const language = String(getLanguageWithBrowserFallback() || 'en').toLowerCase();
-    if (language.startsWith('fi')) return { ...COPY.fi, ...ACTION_COPY.fi };
-    if (language === 'yue' || language === 'zh-tw' || language === 'zh-hk') return { ...COPY.yue, ...ACTION_COPY.yue };
-    if (language === 'ch' || language.startsWith('zh')) return { ...COPY.ch, ...ACTION_COPY.ch };
-    return DEFAULT_COPY;
-}
+const controllerCleanupByContainer = new WeakMap();
 
 export async function generate_workline_observatory_view(container) {
     if (!container) return;
@@ -58,14 +21,21 @@ export async function generate_workline_observatory_view(container) {
     container.textContent = copy.loading;
     try {
         const snapshot = await fetchWorklineObservatoryBoard();
-        renderWorklineObservatory(container, buildWorklineObservatoryState(snapshot), copy);
+        return renderWorklineObservatory(container, buildWorklineObservatoryState(snapshot), copy);
     } catch (error) {
         container.textContent = `${copy.unavailable} ${error?.message || ''}`.trim();
     }
 }
 
-export function renderWorklineObservatory(container, initialState, copy = DEFAULT_COPY) {
-    toolbarCleanupByContainer.get(container)?.();
+// The shared query host can replace the raw board without remounting its list/controller.
+export function renderWorklineObservatory(container, initialState, copy = resolveCopy(), options = {}) {
+    controllerCleanupByContainer.get(container)?.();
+    const followsLanguage = arguments[2] === undefined;
+    copy = { ...resolveCopy(), ...copy };
+    initialState = replaceObservatoryWorklineSelection(buildWorklineObservatoryState(initialState),
+        initialState?.selectedWorklineIds || [], initialState?.selectedWorklineId);
+    container.classList.add('workline-observatory-view');
+    let destroyed = false;
     const restoredSelection = readPersistedWorklineSelection();
     let state = restoredSelection
         ? replaceObservatoryWorklineSelection(
@@ -74,38 +44,13 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
             restoredSelection.selectedWorklineId,
         )
         : initialState;
-    let actionBusy = false;
     let actionMessage = '';
     let contextMenu = null;
     let activeContextMenuElement = null;
     let removeContextMenuListeners = () => {};
     let toolbarCompact = false;
-    const reportHistoryByWorklineID = new Map();
-    const reportHistoryStatusByWorklineID = new Map();
-    const selectedReportIDByWorklineID = new Map();
-    const ensureReportHistory = async (worklineId) => {
-        if (!worklineId || reportHistoryStatusByWorklineID.has(worklineId)) return;
-        reportHistoryStatusByWorklineID.set(worklineId, 'loading');
-        redraw();
-        try {
-            const reports = await fetchWorklineObservatoryReportHistory(worklineId);
-            reportHistoryByWorklineID.set(worklineId, reports);
-            reportHistoryStatusByWorklineID.set(worklineId, 'ready');
-            if (reports[0] && !selectedReportIDByWorklineID.has(worklineId)) {
-                const latestReportID = state.worklines.find((workline) => workline.id === worklineId)
-                    ?.latest_report?.id;
-                const initialReportID = reports.some((report) => report.id === latestReportID)
-                    ? latestReportID
-                    : reports[0].id;
-                selectedReportIDByWorklineID.set(worklineId, initialReportID);
-            }
-        } catch (_error) {
-            reportHistoryByWorklineID.set(worklineId, []);
-            reportHistoryStatusByWorklineID.set(worklineId, 'error');
-        }
-        if (container.isConnected) redraw();
-    };
     const redraw = () => {
+        if (destroyed) return;
         removeContextMenuListeners();
         removeContextMenuListeners = () => {};
         activeContextMenuElement?.remove();
@@ -123,6 +68,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
             activeContextMenuElement = nextContextMenu;
             const dismissContextMenu = (event) => {
                 if (nextContextMenu.contains(event.target)) return;
+                container.querySelector(`[data-row-actions="${contextMenu?.worklineId}"]`)?.setAttribute('aria-expanded', 'false');
                 contextMenu = null;
                 nextContextMenu.remove();
                 activeContextMenuElement = null;
@@ -139,12 +85,13 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         toolbarCleanupByContainer.set(container, installCompactToolbarObserver(view, (compact) => {
             toolbarCompact = compact;
         }));
-        queueMicrotask(() => void ensureReportHistory(state.selectedWorklineId));
+        detailModal.update();
     };
 
     const isSelected = (worklineId) => (state.selectedWorklineIds || []).includes(worklineId);
 
     const toggleWorkline = (worklineId) => {
+        if (actionController.busy) return;
         contextMenu = null;
         state = toggleObservatoryWorklineSelection(state, worklineId);
         persistWorklineSelection(state);
@@ -153,13 +100,8 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
 
     const openContextMenu = (event, worklineId) => {
         event.preventDefault();
-        if (!isSelected(worklineId)) {
-            state = replaceObservatoryWorklineSelection(state, [worklineId], worklineId);
-        } else {
-            state = selectObservatoryWorkline(state, worklineId);
-        }
-        persistWorklineSelection(state);
         contextMenu = {
+            worklineId,
             clientX: event.clientX,
             clientY: event.clientY,
         };
@@ -167,101 +109,39 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         queueMicrotask(() => document.querySelector('.workline-observatory__context-menu button:not(:disabled)')?.focus());
     };
 
-    const bindSelectionSurface = (element, workline, { nativeButton = false } = {}) => {
-        element.dataset.worklineId = String(workline.id);
-        element.dataset.selected = String(isSelected(workline.id));
-        element.dataset.reconciliationNeeded = String(Boolean(workline.status_reconciliation_needed));
-        element.addEventListener('contextmenu', (event) => openContextMenu(event, workline.id));
-        if (!nativeButton) {
-            element.tabIndex = 0;
-            element.setAttribute('role', 'button');
-            element.addEventListener('keydown', (event) => {
-                if (event.target !== element || (event.key !== 'Enter' && event.key !== ' ')) return;
-                event.preventDefault();
-                toggleWorkline(workline.id);
-            });
-        }
-    };
-
-    const refreshState = async (selectedIDs = state.selectedWorklineIds || [], focusedID = state.selectedWorklineId) => {
-        const snapshot = await fetchWorklineObservatoryBoard();
-        state = replaceObservatoryWorklineSelection(
-            buildWorklineObservatoryState(snapshot),
-            selectedIDs,
-            focusedID,
-        );
-        reportHistoryByWorklineID.clear();
-        reportHistoryStatusByWorklineID.clear();
-        selectedReportIDByWorklineID.clear();
-        persistWorklineSelection(state);
-    };
-
-    const performStatusAction = async (action) => {
-        const selected = getSelectedObservatoryWorklines(state);
-        const affected = selected.filter((workline) => workline.status !== action.status);
-        if (actionBusy) return;
-        if (selected.length === 0 || affected.length === 0) {
-            actionMessage = buildStatusActionGuidance(action, selected, copy);
-            redraw();
-            return;
-        }
-        const confirmation = buildStatusActionConfirmation(action, selected, affected, copy);
-        if (!window.confirm(confirmation)) return;
-
-        actionBusy = true;
-        actionMessage = '';
+    const updateSnapshot = (snapshot) => {
+        if (destroyed || !snapshot) return;
+        if (followsLanguage) Object.assign(copy, resolveCopy());
+        state = replaceObservatoryWorklineSelection(buildWorklineObservatoryState(snapshot),
+            state.selectedWorklineIds || [], state.selectedWorklineId);
         contextMenu = null;
+        persistWorklineSelection(state);
         redraw();
-        try {
-            const result = await applyWorklineStatusAction(
-                selected.map((workline) => ({
-                    id: workline.id,
-                    expected_revision: workline.status_revision || 0,
-                })),
-                action.status,
-            );
-            await refreshState(selected.map((workline) => workline.id), state.selectedWorklineId);
-            actionMessage = formatCopy(copy.changed, {
-                count: result?.changed_count ?? affected.length,
-                state: action.stateLabel,
-            });
-        } catch (error) {
-            actionMessage = error?.message || String(error);
-        } finally {
-            actionBusy = false;
-            redraw();
-        }
     };
+    const refreshState = async () => {
+        const snapshot = await (options.onRefresh ? options.onRefresh() : fetchWorklineObservatoryBoard());
+        updateSnapshot(snapshot);
+    };
+    const actionController = createWorklineObservatoryActions({
+        getState: () => state, copy, refresh: refreshState, redraw,
+        setMessage: (message) => { actionMessage = message; contextMenu = null; },
+    });
+    const detailModal = createWorklineObservatoryDetailModal({
+        getState: () => state, copy, actions: actionController, getMessage: () => actionMessage,
+        restoreFocus: (id) => {
+            if (destroyed) return;
+            const target = id === null ? '[data-release-goal-details]' : `[data-workline-title="${id}"]`;
+            container.querySelector(target)?.focus();
+        },
+    });
 
     const buildView = () => {
         const shell = document.createElement('section');
         shell.className = 'workline-observatory';
-        const header = document.createElement('header');
-        header.className = 'workline-observatory__header';
-        const heading = document.createElement('div');
-        const title = document.createElement('h2'); title.textContent = copy.title;
-        const subtitle = document.createElement('p'); subtitle.textContent = copy.subtitle;
-        heading.append(title, subtitle);
-        const refresh = document.createElement('button');
-        refresh.type = 'button'; refresh.className = 'button'; refresh.textContent = copy.refresh;
-        refresh.addEventListener('click', async () => {
-            refresh.disabled = true;
-            try {
-                await refreshState();
-                actionMessage = '';
-                contextMenu = null;
-            } catch (error) {
-                actionMessage = error?.message || String(error);
-            } finally {
-                redraw();
-            }
-        });
-        header.append(heading, refresh);
-
         const stickySentinel = document.createElement('span');
         stickySentinel.className = 'workline-observatory__toolbar-sentinel';
         stickySentinel.setAttribute('aria-hidden', 'true');
-        shell.append(header, stickySentinel, buildStatusActionToolbar(), buildBoard(), buildDetail());
+        shell.append(stickySentinel, buildStatusActionToolbar(), buildBoard());
         if (contextMenu) shell.append(buildContextMenu());
         shell.addEventListener('click', (event) => {
             if (!contextMenu || event.target.closest('.workline-observatory__context-menu')) return;
@@ -291,9 +171,9 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         selectionToggle.className = 'workline-observatory__selection-toggle';
         selectionToggle.checked = allSelected;
         selectionToggle.indeterminate = selected.length > 0 && !allSelected;
-        selectionToggle.title = allSelected ? copy.deselectAll : copy.selectAll;
+        selectionToggle.title = allSelected ? copy.deselectAll : copy.selectAllVisible;
         selectionToggle.setAttribute('aria-label', selectionToggle.title);
-        selectionToggle.disabled = actionBusy || state.worklines.length === 0;
+        selectionToggle.disabled = actionController.busy || state.worklines.length === 0;
         selectionToggle.addEventListener('change', () => {
             state = replaceObservatoryWorklineSelection(
                 state,
@@ -315,7 +195,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
             button.className = 'workline-observatory__selection-link';
             button.dataset.selectionAction = action;
             button.textContent = label;
-            button.disabled = actionBusy || disabled;
+            button.disabled = actionController.busy || disabled;
             button.addEventListener('click', () => {
                 state = replaceObservatoryWorklineSelection(
                     state,
@@ -331,7 +211,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         };
         selectionLinks.append(
             buildSelectionLink({
-                label: copy.selectAll,
+                label: copy.selectAllVisible,
                 action: 'select-all',
                 disabled: state.worklines.length === 0 || allSelected,
                 worklineIds: state.worklines.map((workline) => workline.id),
@@ -343,7 +223,15 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
                 worklineIds: [],
             }),
         );
-        selectionControls.append(selectionCount, selectionToggle, selectionLinks);
+        const visibleCount = document.createElement('span');
+        visibleCount.className = 'workline-observatory__visible-count';
+        visibleCount.textContent = formatCopy(copy.visible, { count: state.worklines.length });
+        const refresh = document.createElement('button');
+        refresh.type = 'button'; refresh.className = 'workline-observatory__selection-link';
+        refresh.textContent = copy.refresh; refresh.disabled = actionController.busy;
+        refresh.addEventListener('click', () => void actionController.mutate(async () => {}));
+        selectionLinks.append(refresh);
+        selectionControls.append(selectionCount, selectionToggle, selectionLinks, visibleCount);
         const guidance = document.createElement('output');
         guidance.className = 'workline-observatory__action-guidance';
         guidance.textContent = actionMessage;
@@ -363,7 +251,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         return toolbar;
     };
 
-    const buildStatusActionButton = (action, selected, guidance, context = false) => {
+    const buildStatusActionButton = (action, selected, guidance, context = false, rowIds = null) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = context
@@ -375,7 +263,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         button.title = actionGuidance;
         button.setAttribute('aria-label', actionGuidance);
         const hasAffectedWorkline = selected.some((workline) => workline.status !== action.status);
-        button.disabled = actionBusy;
+        button.disabled = actionController.busy;
         button.setAttribute('aria-disabled', String(selected.length === 0 || !hasAffectedWorkline));
         button.addEventListener('mouseenter', () => {
             if (guidance) guidance.textContent = actionGuidance;
@@ -383,7 +271,7 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         button.addEventListener('focus', () => {
             if (guidance) guidance.textContent = actionGuidance;
         });
-        button.addEventListener('click', () => void performStatusAction(action));
+        button.addEventListener('click', () => void actionController.status(action, rowIds));
         return button;
     };
 
@@ -394,17 +282,19 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         const guidance = document.createElement('output');
         guidance.className = 'workline-observatory__context-guidance';
         guidance.textContent = copy.selectRows;
-        const selected = getSelectedObservatoryWorklines(state);
+        const selected = state.worklines.filter((workline) => workline.id === contextMenu.worklineId);
         getStatusActions(copy).forEach((action) => {
-            const button = buildStatusActionButton(action, selected, guidance, true);
+            const button = buildStatusActionButton(action, selected, guidance, true, selected.map((workline) => workline.id));
             button.setAttribute('role', 'menuitem');
             menu.append(button);
         });
         menu.append(guidance);
         menu.addEventListener('keydown', (event) => {
             if (event.key !== 'Escape') return;
+            const worklineId = contextMenu.worklineId;
             contextMenu = null;
             redraw();
+            container.querySelector(`[data-row-actions="${worklineId}"]`)?.focus();
         });
         return menu;
     };
@@ -419,12 +309,18 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         const now = document.createElement('strong');
         now.className = 'workline-observatory__now';
         now.textContent = `${copy.now} (${state.openWorklineCount})`;
-        const target = document.createElement('strong');
+        const target = document.createElement('button');
+        target.type = 'button';
+        target.dataset.releaseGoalDetails = '';
         target.className = 'workline-observatory__targets-heading';
+        target.addEventListener('click', () => detailModal.open());
         target.textContent = state.releaseGoal
             ? `${copy.releaseTarget}: ${state.releaseGoal.title}`
             : copy.releaseTarget;
-        heading.append(titleSpacer, now, target);
+        const priority = document.createElement('strong');
+        priority.textContent = copy.priority;
+        priority.className = 'workline-observatory__priority-heading';
+        heading.append(titleSpacer, priority, now, target);
         board.append(heading);
         state.worklines.forEach((workline) => board.append(buildWorklineRow(workline)));
         return board;
@@ -435,7 +331,10 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         row.className = 'workline-observatory__workline-row';
         row.dataset.lifecycleStatus = workline.status || '';
         row.dataset.currentPhase = String(workline.current_phase);
-        bindSelectionSurface(row, workline, { nativeButton: true });
+        row.dataset.worklineId = String(workline.id);
+        row.dataset.selected = String(isSelected(workline.id));
+        row.dataset.reconciliationNeeded = String(Boolean(workline.status_reconciliation_needed));
+        row.addEventListener('contextmenu', (event) => openContextMenu(event, workline.id));
 
         const label = document.createElement('div');
         label.className = 'workline-observatory__workline-button';
@@ -444,14 +343,34 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         const title = document.createElement('button');
         title.type = 'button';
         title.className = 'workline-observatory__workline-title';
-        title.textContent = workline.title;
+        title.textContent = `#${workline.id} ${workline.title}`;
+        title.dataset.worklineTitle = String(workline.id);
+        title.addEventListener('click', () => detailModal.open(workline.id));
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.className = 'workline-observatory__workline-checkbox';
         checkbox.checked = isSelected(workline.id);
-        checkbox.setAttribute('aria-label', formatCopy(copy.selectionLabel, { title: workline.title }));
+        checkbox.disabled = actionController.busy;
+        checkbox.setAttribute('aria-label', formatCopy(copy.selectionLabel, { title: title.textContent }));
         checkbox.addEventListener('change', () => toggleWorkline(workline.id));
-        label.append(title, checkbox);
+        const selectionArea = document.createElement('label');
+        selectionArea.className = 'workline-observatory__selection-area';
+        selectionArea.title = formatCopy(copy.selectionLabel, { title: title.textContent });
+        selectionArea.append(checkbox);
+        const rowActions = document.createElement('button');
+        rowActions.type = 'button'; rowActions.textContent = '⋮';
+        rowActions.className = 'workline-observatory__row-actions';
+        rowActions.dataset.rowActions = String(workline.id);
+        rowActions.setAttribute('aria-label', formatCopy(copy.rowActions, { title: title.textContent }));
+        rowActions.setAttribute('aria-haspopup', 'menu');
+        rowActions.setAttribute('aria-expanded', String(contextMenu?.worklineId === workline.id));
+        rowActions.disabled = actionController.busy;
+        rowActions.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const rect = rowActions.getBoundingClientRect();
+            openContextMenu({ preventDefault() {}, clientX: rect.left, clientY: rect.bottom }, workline.id);
+        });
+        label.append(title, rowActions, selectionArea);
 
         const track = document.createElement('div');
         track.className = 'workline-observatory__track';
@@ -482,213 +401,27 @@ export function renderWorklineObservatory(container, initialState, copy = DEFAUL
         target.dataset.selected = String(isSelected(workline.id));
         target.textContent = describeReleaseContract(workline.release_contract, copy);
 
-        row.addEventListener('click', (event) => {
-            if (event.target === checkbox) return;
-            toggleWorkline(workline.id);
-        });
-        row.append(label, track, target);
+        const priority = document.createElement('div');
+        priority.className = 'workline-observatory__priority-row';
+        priority.append(buildWorklinePriorityEditor(workline, copy, actionController));
+        row.append(label, priority, track, target);
         return row;
     };
 
-    const buildDetail = () => {
-        const detail = document.createElement('aside');
-        detail.className = 'workline-observatory__detail';
-        detail.append(buildGoalPanel());
-        const workline = getSelectedObservatoryWorkline(state);
-        if (!workline) return detail;
-        const body = document.createElement('section');
-        body.className = 'workline-observatory__selected-workline';
-        const heading = document.createElement('h3');
-        heading.textContent = `${workline.title} · ${copy.phase} ${workline.current_phase}`;
-        body.append(
-            heading,
-            detailLine(copy.status, describeWorklineStatus(workline.status, copy)),
-            detailLine(copy.tickets, (workline.task_ids || []).map((id) => `#${id}`).join(', ') || '—'),
-            detailLine(copy.lastStatus, describeStatusChange(workline.latest_status_change, copy)),
-        );
-        if (workline.status_reconciliation_needed) {
-            const notice = document.createElement('p');
-            notice.className = 'workline-observatory__reconciliation-notice';
-            notice.textContent = copy.reconciliation;
-            body.append(notice);
-        }
-        const historyStatus = reportHistoryStatusByWorklineID.get(workline.id);
-        const reportHistory = reportHistoryByWorklineID.get(workline.id) || [];
-        const selectedReportID = selectedReportIDByWorklineID.get(workline.id);
-        const report = reportHistory.find((candidate) => candidate.id === selectedReportID)
-            || reportHistory[0]
-            || workline.latest_report;
-        body.append(buildReportHistoryControl(workline, reportHistory, historyStatus, report));
-        if (!report) {
-            const empty = document.createElement('p'); empty.textContent = copy.noReport; body.append(empty);
-        } else {
-            body.append(
-                detailLine(copy.context, report.context),
-                detailLine(copy.plain, report.plain_language),
-                detailLine(copy.technical, report.technical),
-                detailLine(copy.next, report.next_step),
-                detailLine(copy.git, `${report.git_worktree_state || '—'} · ${report.git_head_commit || '—'} · ${(report.git_workline_changed_paths || []).join(', ') || '—'}`),
-            );
-        }
-        body.append(buildContractEditor(workline), buildChatPanel(workline));
-        detail.append(body);
-        return detail;
+    const destroy = () => {
+        destroyed = true;
+        actionController.destroy();
+        detailModal.destroy();
+        removeContextMenuListeners();
+        activeContextMenuElement?.remove();
+        toolbarCleanupByContainer.get(container)?.();
+        toolbarCleanupByContainer.delete(container);
+        controllerCleanupByContainer.delete(container);
+        container.replaceChildren();
     };
-
-    const buildReportHistoryControl = (workline, reports, status, selectedReport) => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'workline-observatory__report-history';
-        if (status === 'loading' || !status) {
-            const loading = document.createElement('p'); loading.textContent = copy.reportHistoryLoading;
-            wrapper.append(loading);
-            return wrapper;
-        }
-        if (status === 'error') {
-            const unavailable = document.createElement('p'); unavailable.textContent = copy.reportHistoryUnavailable;
-            wrapper.append(unavailable);
-            return wrapper;
-        }
-        if (reports.length === 0) return wrapper;
-
-        const label = document.createElement('label');
-        const labelText = document.createElement('span'); labelText.textContent = copy.reportHistory;
-        const select = document.createElement('select');
-        select.setAttribute('aria-label', copy.reportHistory);
-        reports.forEach((report) => {
-            const option = document.createElement('option');
-            option.value = String(report.id);
-            option.textContent = formatReportHistoryOption(report, copy);
-            select.append(option);
-        });
-        select.value = String(selectedReport?.id || reports[0].id);
-        select.addEventListener('change', () => {
-            selectedReportIDByWorklineID.set(workline.id, Number(select.value));
-            redraw();
-        });
-        label.append(labelText, select);
-        wrapper.append(label);
-        return wrapper;
-    };
-
-    const buildGoalPanel = () => {
-        const panel = document.createElement('section'); panel.className = 'workline-observatory__goal';
-        const title = document.createElement('h3'); title.textContent = copy.goal; panel.append(title);
-        const goal = state.releaseGoal;
-        if (!goal) {
-            const empty = document.createElement('p'); empty.textContent = copy.noGoal;
-            panel.append(empty, buildGoalCreator());
-            return panel;
-        }
-        panel.append(
-            detailLine(`${goal.identity_key} v${goal.version}`, `${goal.title} · ${goal.decision_state === 'locked' ? copy.locked : copy.draft}`),
-            detailLine('', goal.outcome),
-        );
-        if (goal.decision_state === 'draft') panel.append(buildGoalLockButton(goal));
-        if (goal.decision_state === 'locked') panel.append(buildGoalCreator());
-        return panel;
-    };
-
-    const buildGoalLockButton = (goal) => {
-        const wrapper = document.createElement('div');
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = 'button'; button.textContent = copy.lockGoal;
-        button.addEventListener('click', async () => {
-            button.disabled = true;
-            try {
-                await applyWorklineReleaseGoalAction(goal.id, 'lock');
-                await generate_workline_observatory_view(container);
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-                button.disabled = false;
-            }
-        });
-        wrapper.append(button, status);
-        return wrapper;
-    };
-
-    const buildGoalCreator = () => {
-        const form = document.createElement('form');
-        form.className = 'workline-observatory__goal-creator';
-        const heading = document.createElement('h4'); heading.textContent = copy.newGoal;
-        const identity = labeledInput(copy.goalKey, 'text', 'release-');
-        const version = labeledInput(copy.goalRevision, 'number', '1'); version.input.min = '1';
-        const title = labeledInput(copy.goalTitle, 'text', '');
-        const outcome = labeledInput(copy.goalOutcome, 'text', '');
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const submit = document.createElement('button');
-        submit.type = 'submit'; submit.className = 'button'; submit.textContent = copy.createGoal;
-        form.append(heading, identity.wrapper, version.wrapper, title.wrapper, outcome.wrapper, submit, status);
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault(); submit.disabled = true;
-            try {
-                await createWorklineReleaseGoal({ identity_key: identity.input.value, version: Number(version.input.value), title: title.input.value, outcome: outcome.input.value, selected: true });
-                await generate_workline_observatory_view(container);
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-                submit.disabled = false;
-            }
-        });
-        return form;
-    };
-
-    const buildContractEditor = (workline) => {
-        const panel = document.createElement('section'); panel.className = 'workline-observatory__contract';
-        const heading = document.createElement('h4'); heading.textContent = copy.contract; panel.append(heading);
-        const goal = state.releaseGoal;
-        if (!goal) { panel.append(document.createTextNode(copy.unclassified)); return panel; }
-        const select = document.createElement('select');
-        const rules = ['outside_release', 'must_complete', 'must_remain_incomplete', 'must_be_in_phase', 'must_not_start'];
-        rules.forEach((rule) => {
-            const option = document.createElement('option');
-            option.value = rule; option.textContent = describeReleaseContract({ completion_rule: rule }, copy);
-            select.append(option);
-        });
-        select.value = workline.release_contract?.completion_rule || 'outside_release';
-        select.disabled = goal.decision_state === 'locked';
-        const phase = document.createElement('input');
-        phase.type = 'number'; phase.min = '0'; phase.max = '6';
-        phase.value = workline.release_contract?.target_phase ?? ''; phase.disabled = select.disabled;
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const save = document.createElement('button');
-        save.type = 'button'; save.className = 'button'; save.textContent = copy.save; save.disabled = select.disabled;
-        save.addEventListener('click', async () => {
-            save.disabled = true;
-            try {
-                await saveWorklineReleaseContract({ release_goal_id: goal.id, workline_id: workline.id, completion_rule: select.value, target_phase: phase.value === '' ? null : Number(phase.value) });
-                await generate_workline_observatory_view(container);
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-                save.disabled = false;
-            }
-        });
-        panel.append(select, phase, save, status);
-        return panel;
-    };
-
-    const buildChatPanel = (workline) => {
-        const panel = document.createElement('section'); panel.className = 'workline-observatory__chat';
-        const heading = document.createElement('h4'); heading.textContent = copy.ask;
-        const input = document.createElement('textarea'); input.rows = 3;
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const send = document.createElement('button'); send.type = 'button'; send.className = 'button'; send.textContent = copy.send;
-        send.addEventListener('click', async () => {
-            send.disabled = true;
-            try {
-                const response = await startWorklineConversation(workline, state.releaseGoal, input.value);
-                const session = response?.session || response;
-                status.textContent = `Queen: ${session?.id || session?.status || 'started'}`;
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-            } finally {
-                send.disabled = false;
-            }
-        });
-        panel.append(heading, input, send, status);
-        return panel;
-    };
-
+    controllerCleanupByContainer.set(container, destroy);
     redraw();
+    return { updateSnapshot, destroy };
 }
 
 function installCompactToolbarObserver(view, onCompactChange = () => {}) {
@@ -721,119 +454,4 @@ function findVerticalScrollportTop(element) {
         }
     }
     return 0;
-}
-
-function formatCopy(template, values) {
-    return Object.entries(values).reduce(
-        (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
-        String(template || ''),
-    );
-}
-
-function getStatusActions(copy) {
-    return [
-        { status: 'active', label: copy.activate, stateLabel: copy.activeState },
-        { status: 'paused', label: copy.pause, stateLabel: copy.pausedState },
-        { status: 'closed', label: copy.markDone, stateLabel: copy.closedState },
-        { status: 'archived', label: copy.discard, stateLabel: copy.archivedState },
-    ];
-}
-
-function buildStatusActionGuidance(action, selected, copy) {
-    if (selected.length === 0) {
-        return formatCopy(copy.chooseTarget, { state: action.stateLabel });
-    }
-    const affected = selected.filter((workline) => workline.status !== action.status);
-    if (affected.length === 0) {
-        return formatCopy(copy.alreadyTarget, { state: action.stateLabel });
-    }
-    if (selected.length === 1) {
-        return formatCopy(copy.moveOne, { title: selected[0].title, state: action.stateLabel });
-    }
-    if (affected.length === selected.length) {
-        return formatCopy(copy.moveMany, {
-            count: selected.length,
-            changeCount: affected.length,
-            state: action.stateLabel,
-        });
-    }
-    return formatCopy(copy.moveMixed, {
-        changeCount: affected.length,
-        count: selected.length,
-        sameCount: selected.length - affected.length,
-        state: action.stateLabel,
-    });
-}
-
-function buildStatusActionConfirmation(action, selected, affected, copy) {
-    if (selected.length === 1) {
-        return formatCopy(copy.confirmOne, { title: selected[0].title, state: action.stateLabel });
-    }
-    const template = affected.length === selected.length ? copy.confirmMany : copy.confirmMixed;
-    return formatCopy(template, {
-        changeCount: affected.length,
-        count: selected.length,
-        sameCount: selected.length - affected.length,
-        state: action.stateLabel,
-    });
-}
-
-function describeWorklineStatus(status, copy) {
-    return getStatusActions(copy).find((action) => action.status === status)?.stateLabel || status || '—';
-}
-
-function describeStatusChange(change, copy) {
-    if (!change) return '—';
-    const sources = {
-        observatory_ui: copy.sourceObservatory,
-        agent_tools_api: copy.sourceAgentTools,
-        report_sync: copy.sourceReport,
-        creation: copy.sourceCreation,
-        legacy: copy.sourceLegacy,
-    };
-    const actor = change.changed_by_username || copy.unknownActor;
-    const source = sources[change.source] || change.source || '—';
-    const parsed = new Date(change.changed_at);
-    const changedAt = Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
-    return `${actor} · ${source} · ${changedAt}`;
-}
-
-function formatReportHistoryOption(report, copy) {
-    const phase = report.phase_gate || report.current_phase || '—';
-    const parsed = new Date(report.created_at);
-    const createdAt = Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
-    return `${copy.phase} ${phase} · ${createdAt} · ${report.title || `#${report.id}`}`;
-}
-
-function detailLine(labelText, valueText) {
-    const row = document.createElement('div'); row.className = 'workline-observatory__detail-line';
-    if (labelText) {
-        const label = document.createElement('strong'); label.textContent = labelText; row.append(label);
-    }
-    const value = document.createElement('p'); value.textContent = String(valueText || '—'); row.append(value);
-    return row;
-}
-
-function describeReleaseContract(contract, copy) {
-    if (!contract) return copy.unclassified;
-    const labels = {
-        must_complete: copy.mustComplete,
-        must_remain_incomplete: copy.mustRemainIncomplete,
-        must_be_in_phase: copy.mustBeInPhase,
-        must_not_start: copy.mustNotStart,
-        outside_release: copy.outsideRelease,
-    };
-    const label = labels[contract.completion_rule] || copy.unclassified;
-    return contract.target_phase === null || contract.target_phase === undefined
-        ? label
-        : `${label} · ${copy.phase} ${contract.target_phase}`;
-}
-
-function labeledInput(labelText, type, value) {
-    const wrapper = document.createElement('label');
-    const label = document.createElement('span'); label.textContent = labelText;
-    const input = document.createElement('input');
-    input.type = type; input.value = value; input.required = true;
-    wrapper.append(label, input);
-    return { wrapper, input };
 }

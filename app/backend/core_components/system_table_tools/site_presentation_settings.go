@@ -53,9 +53,35 @@ const upsertDatasetCoverThemeSQL = `
 		'Admin-managed, theme-aware dataset cover presentation settings.'
 	)
 	ON CONFLICT (key) DO UPDATE
-	SET json_value = EXCLUDED.json_value,
+	SET json_value = jsonb_set(jsonb_set(jsonb_set(
+		EXCLUDED.json_value,
+		'{shared,card_show_all_fields}',
+		CASE
+			WHEN NOT $3::boolean THEN EXCLUDED.json_value #> '{shared,card_show_all_fields}'
+			WHEN jsonb_typeof(public.system_config.json_value #> '{shared,card_show_all_fields}') = 'boolean'
+				THEN public.system_config.json_value #> '{shared,card_show_all_fields}'
+			ELSE 'true'::jsonb
+		END
+	), '{shared,card_style_variant}',
+		CASE
+			WHEN NOT $4::boolean THEN EXCLUDED.json_value #> '{shared,card_style_variant}'
+			WHEN public.system_config.json_value #>> '{shared,card_style_variant}' IN ('standard', 'modern')
+				THEN public.system_config.json_value #> '{shared,card_style_variant}'
+			ELSE '"modern"'::jsonb
+		END
+	), '{shared,card_detail_columns}',
+		CASE
+			WHEN NOT $5::boolean THEN EXCLUDED.json_value #> '{shared,card_detail_columns}'
+			WHEN public.system_config.json_value #> '{shared,card_detail_columns}' IN ('1'::jsonb, '2'::jsonb, '3'::jsonb, '4'::jsonb)
+				THEN public.system_config.json_value #> '{shared,card_detail_columns}'
+			ELSE '2'::jsonb
+		END
+	),
 	    creation_spec = COALESCE(NULLIF(public.system_config.creation_spec, ''), EXCLUDED.creation_spec),
-	    updated = NOW()`
+	    updated = NOW()
+	RETURNING (json_value #>> '{shared,card_show_all_fields}')::boolean,
+	          json_value #>> '{shared,card_style_variant}',
+	          (json_value #>> '{shared,card_detail_columns}')::int`
 
 const upsertRowArticleTimestampDisplaySQL = `
 	INSERT INTO public.system_config (
@@ -101,7 +127,10 @@ type DatasetCoverSharedValues struct {
 	ImageBlur              float64 `json:"image_blur"`
 	CardImageWidth         float64 `json:"card_image_width"`
 	CardImagePresentation  string  `json:"card_image_presentation"`
+	CardDetailColumns      int     `json:"card_detail_columns"`
 	CardDescriptionLines   int     `json:"card_description_lines"`
+	CardStyleVariant       string  `json:"card_style_variant"`
+	CardShowAllFields      bool    `json:"card_show_all_fields"`
 	ActiveTabFade          float64 `json:"active_tab_fade"`
 	ActiveTabMaxOpacity    float64 `json:"active_tab_max_opacity"`
 	ActiveTabGlowIntensity float64 `json:"active_tab_glow_intensity"`
@@ -121,26 +150,35 @@ type DatasetCoverThemeConfig struct {
 type SitePresentationSettingsResponse struct {
 	DatasetCoverTheme              DatasetCoverThemeConfig `json:"dataset_cover_theme"`
 	RowArticleTimestampDisplayMode string                  `json:"row_article_timestamp_display_mode"`
+	// Request-only omission metadata never enters JSON responses or stored config.
+	preserveStoredCardShowAllFields bool
+	preserveStoredCardStyleVariant  bool
+	preserveStoredCardDetailColumns bool
 }
 
 var readSitePresentationSettings = readSitePresentationSettingsFromDB
 
-var persistSitePresentationSettings = func(r *http.Request, settings SitePresentationSettingsResponse) error {
+// Legacy clients omit newer card settings. Resolve those omissions under the
+// upsert's row lock, then return the persisted value rather than the input default.
+var persistSitePresentationSettings = func(r *http.Request, settings SitePresentationSettingsResponse) (SitePresentationSettingsResponse, error) {
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
-		return errors.New("transaction unavailable")
+		return SitePresentationSettingsResponse{}, errors.New("transaction unavailable")
 	}
 	coverJSON, err := json.Marshal(settings.DatasetCoverTheme)
 	if err != nil {
-		return fmt.Errorf("encode cover theme: %w", err)
+		return SitePresentationSettingsResponse{}, fmt.Errorf("encode cover theme: %w", err)
 	}
-	_, err = tx.Exec(
+	err = tx.QueryRow(
 		upsertDatasetCoverThemeSQL,
 		datasetCoverThemeConfigKey,
 		string(coverJSON),
-	)
+		settings.preserveStoredCardShowAllFields,
+		settings.preserveStoredCardStyleVariant,
+		settings.preserveStoredCardDetailColumns,
+	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns)
 	if err != nil {
-		return fmt.Errorf("save cover theme: %w", err)
+		return SitePresentationSettingsResponse{}, fmt.Errorf("save cover theme: %w", err)
 	}
 	_, err = tx.Exec(
 		upsertRowArticleTimestampDisplaySQL,
@@ -148,9 +186,9 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 		settings.RowArticleTimestampDisplayMode,
 	)
 	if err != nil {
-		return fmt.Errorf("save timestamp display mode: %w", err)
+		return SitePresentationSettingsResponse{}, fmt.Errorf("save timestamp display mode: %w", err)
 	}
-	return nil
+	return settings, nil
 }
 
 // GetSitePresentationSettingsHandler returns only public-safe presentation values.
@@ -175,7 +213,8 @@ func AdminSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request
 			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid site presentation settings")
 			return
 		}
-		if err := persistSitePresentationSettings(r, settings); err != nil {
+		settings, err = persistSitePresentationSettings(r, settings)
+		if err != nil {
 			log.Printf("\033[31merror: [AdminSitePresentationSettingsHandler] save failed: %v\033[0m", err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "site presentation settings save failed")
 			return
@@ -263,17 +302,53 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 			return SitePresentationSettingsResponse{}, err
 		}
 	}
-	if err := requireExactJSONKeys(themeParts["shared"], []string{
+	sharedKeys := []string{
 		"hero_extra_height", "hero_bottom_fade", "image_blur",
 		"card_image_width", "card_image_presentation", "card_description_lines",
 		"active_tab_fade", "active_tab_max_opacity",
 		"active_tab_glow_intensity", "active_tab_glow_width", "active_tab_glow_blur",
 		"brand_color",
-	}); err != nil {
+	}
+	var sharedParts map[string]json.RawMessage
+	if err := json.Unmarshal(themeParts["shared"], &sharedParts); err != nil {
+		return SitePresentationSettingsResponse{}, err
+	}
+	cardShowAllFields, provided := sharedParts["card_show_all_fields"]
+	if provided {
+		// encoding/json accepts null into bool; require an actual JSON boolean.
+		value := strings.TrimSpace(string(cardShowAllFields))
+		if value != "true" && value != "false" {
+			return SitePresentationSettingsResponse{}, errors.New("card_show_all_fields must be a boolean")
+		}
+		sharedKeys = append(sharedKeys, "card_show_all_fields")
+	}
+	cardStyle, styleProvided := sharedParts["card_style_variant"]
+	if styleProvided {
+		var value string
+		if json.Unmarshal(cardStyle, &value) != nil || (value != "standard" && value != "modern") {
+			return SitePresentationSettingsResponse{}, errors.New("card_style_variant must be standard or modern")
+		}
+		sharedKeys = append(sharedKeys, "card_style_variant")
+	}
+	columns, columnsProvided := sharedParts["card_detail_columns"]
+	if columnsProvided {
+		var value int
+		if json.Unmarshal(columns, &value) != nil || value < 1 || value > 4 {
+			return SitePresentationSettingsResponse{}, errors.New("card_detail_columns must be an integer between 1 and 4")
+		}
+		sharedKeys = append(sharedKeys, "card_detail_columns")
+	}
+	if err := requireExactJSONKeys(themeParts["shared"], sharedKeys); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
 
 	var settings SitePresentationSettingsResponse
+	settings.DatasetCoverTheme.Shared.CardShowAllFields = true
+	settings.DatasetCoverTheme.Shared.CardStyleVariant = "modern"
+	settings.DatasetCoverTheme.Shared.CardDetailColumns = 2
+	settings.preserveStoredCardShowAllFields = !provided
+	settings.preserveStoredCardStyleVariant = !styleProvided
+	settings.preserveStoredCardDetailColumns = !columnsProvided
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -384,6 +459,12 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if config.Shared.CardImagePresentation != "cover" && config.Shared.CardImagePresentation != "contain" && config.Shared.CardImagePresentation != "contain_blur" {
 		return errors.New("unsupported card image presentation")
 	}
+	if config.Shared.CardStyleVariant != "standard" && config.Shared.CardStyleVariant != "modern" {
+		return errors.New("unsupported card style variant")
+	}
+	if config.Shared.CardDetailColumns < 1 || config.Shared.CardDetailColumns > 4 {
+		return errors.New("shared.card_detail_columns must be between 1 and 4")
+	}
 	if config.Shared.CardDescriptionLines < 1 || config.Shared.CardDescriptionLines > 12 {
 		return fmt.Errorf("shared.card_description_lines must be between 1 and 12")
 	}
@@ -471,6 +552,9 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 				CardImageWidth:         300,
 				CardImagePresentation:  "contain",
 				CardDescriptionLines:   2,
+				CardDetailColumns:      2,
+				CardShowAllFields:      true,
+				CardStyleVariant:       "modern",
 				ActiveTabFade:          25,
 				ActiveTabMaxOpacity:    1,
 				ActiveTabGlowIntensity: 0.3,

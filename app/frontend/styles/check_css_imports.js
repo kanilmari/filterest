@@ -22,6 +22,7 @@ function check_and_fix_css_imports() {
     content = fs.readFileSync(css_file_path, 'utf8');
   } catch (err) {
     console.warn(`\x1b[31merror:\x1b[0m failed to read file: ${err.message}`);
+    process.exitCode = 1;
     return;
   }
 
@@ -94,6 +95,7 @@ function check_and_fix_css_imports() {
       fs.writeFileSync(css_file_path, new_content, 'utf8');
       console.log(`\x1b[32mFile "${css_file_path}" updated (${updated_lines} line(s) changed).\x1b[0m`);
     } catch (err) {
+      error_count++;
       console.warn(`\x1b[31merror:\x1b[0m failed to write file: ${err.message}`);
     }
   }
@@ -103,6 +105,7 @@ function check_and_fix_css_imports() {
   } else {
     console.log(`${error_count} errors, ${ok_count} OK, ${total} total imports.`);
   }
+  process.exitCode = error_count > 0 ? 1 : 0;
 }
 
 // Run main function

@@ -332,3 +332,70 @@ func TestBuildWhereClauseDoesNotRetargetKnownForbiddenSuffixColumn(t *testing.T)
 		t.Fatalf("forbidden exact field became an allowed range: %s %#v %v", where, args, err)
 	}
 }
+
+// The selected renderer is a bare control parameter. A same-named real field
+// stays filterable through its dataset-qualified key, including in one request.
+func TestBuildWhereClauseSeparatesViewKeyControlFromQualifiedField(t *testing.T) {
+	const dataset = "system_column_supported_views"
+	columns := map[string]dtt_models.ColumnInfo{
+		"view_key": {ColumnName: "view_key", DataType: "text"},
+	}
+	types := map[string]interface{}{"view_key": map[string]interface{}{"data_type": "text"}}
+	for _, tc := range []struct {
+		name     string
+		params   url.Values
+		filtered bool
+	}{
+		{"bare_renderer_control", url.Values{"view_key": {"table"}}, false},
+		{"qualified_real_field", url.Values{dataset + "_view_key": {"cloud_management"}}, true},
+		{"renderer_and_real_field", url.Values{"view_key": {"table"}, dataset + "_view_key": {"cloud_management"}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			where, args, err := buildWhereClause(tc.params, dataset, columns, nil, types)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tc.filtered {
+				if where != "" || len(args) != 0 {
+					t.Fatalf("renderer selector filtered rows: %s %#v", where, args)
+				}
+				return
+			}
+			if len(args) != 1 || args[0] != "%cloud_management%" ||
+				!strings.Contains(where, `"system_column_supported_views"."view_key"`) ||
+				!strings.Contains(where, "ILIKE") {
+				t.Fatalf("qualified field was dropped or combined with renderer control: %s %#v", where, args)
+			}
+		})
+	}
+}
+
+// Structured search filters have already passed metadata/SELECT validation.
+// Their view_key field must survive preparation and the shared WHERE boundary.
+func TestIntelligentViewKeyFilterSurvivesPreparationAndAuthorization(t *testing.T) {
+	const dataset = "system_column_supported_views"
+	types := map[string]interface{}{"view_key": map[string]interface{}{"data_type": "text"}}
+	for _, rawKey := range []string{"view_key", dataset + "_view_key"} {
+		for _, reference := range []string{"src", dataset} {
+			t.Run(rawKey+"/"+reference, func(t *testing.T) {
+				values, columns, err := prepareIntelligentSearchFilters(dataset, "fi",
+					map[string]string{rawKey: "cloud_management"}, []string{"view_key"}, types)
+				if err != nil {
+					t.Fatal(err)
+				}
+				before := values.Encode()
+				condition, args, err := appendIntelligentSearchAuthorizationCondition(dataset, reference,
+					intelligentSearchAuthorization{userRole: "admin", userID: 7,
+						userFilters: values, filterColumns: columns, filterTypes: types}, []interface{}{"rank"})
+				target := "\"" + reference + "\".\"view_key\""
+				if err != nil || !strings.Contains(condition, target) || !strings.Contains(condition, "ILIKE") ||
+					len(args) < 2 || args[len(args)-1] != "%cloud_management%" {
+					t.Fatalf("approved structured field filter disappeared: %s %#v %v", condition, args, err)
+				}
+				if values.Encode() != before {
+					t.Fatal("authorization mutated the prepared filter/locale input")
+				}
+			})
+		}
+	}
+}

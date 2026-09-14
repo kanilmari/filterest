@@ -1,4 +1,9 @@
-import { describe, expect, test } from 'vitest';
+// cell_editor_options.test.js
+// Verifies enum options and nullable dataset style values before inline persistence.
+// Connects metadata definitions to the normal table cell editor.
+// Keeps inheritance distinct from an explicit style override.
+import { describe, expect, test, vi } from 'vitest';
+vi.mock('../../../state_stores/lang_preference_reader.js', () => ({ getLanguageWithBrowserFallback: () => 'en' }));
 import {
     getInlineEditCacheInvalidationKeys,
     getInlineEditOptions,
@@ -54,6 +59,7 @@ describe('cell_editor_options', () => {
         });
 
         expect(options.map((option) => option.value)).toEqual([
+            '',
             'standard',
             'modern',
         ]);
@@ -67,12 +73,16 @@ describe('cell_editor_options', () => {
         })).toBe('conditional_multiline');
     });
 
-    test('normalizes unknown card style variants to standard', () => {
+    test('keeps empty and unknown dataset styles as inheritance', () => {
         expect(normalizeInlineEditOptionValue({
             tableName: 'system_db_tables',
             columnName: 'card_style_variant',
             value: 'floating',
-        })).toBe('standard');
+        })).toBeNull();
+        for (const value of [null, undefined, '']) {
+            expect(normalizeInlineEditOptionValue({tableName: 'system_db_tables', columnName: 'card_style_variant', value})).toBeNull();
+        }
+        expect(getInlineEditOptions({tableName: 'system_db_tables', columnName: 'card_style_variant'})[0]).toEqual({value: '', label: 'Site default'});
     });
 
     test('normalizes ticket status aliases to canonical DB status values', () => {

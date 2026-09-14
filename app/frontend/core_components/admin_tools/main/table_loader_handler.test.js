@@ -11,13 +11,22 @@ const mocks = vi.hoisted(() => ({
     endpointRouter: vi.fn(),
     openNavTab: vi.fn(() => Promise.resolve()),
     countThisFunction: vi.fn(),
-    primeDatasetAccessRegistry: vi.fn(),
+    primeDatasetAccessRegistry: vi.fn(() => true),
+    beginDatasetAccessRefresh: vi.fn(() => 1),
+    isCurrentDatasetAccessRefresh: vi.fn(() => true),
     setUnifiedTableState: vi.fn(),
     setRedirectNotice: vi.fn(),
     clearDatasetSelectionState: vi.fn(),
     setSelectedDataset: vi.fn(),
     getSelectedDataset: vi.fn(() => null),
     setInitialQueryParams: vi.fn(),
+}));
+
+const ifav = vi.hoisted(() => ({ restore: vi.fn(async () => true) }));
+vi.mock("../../navigation/nav_engine/image_first_view_history.js", () => ({
+    isImageFirstViewURL: () => new URL(location.href).searchParams.get("view") === "image_first_view",
+    getImageFirstViewBackingView: () => "card",
+    handleImageFirstViewHistory: ifav.restore,
 }));
 
 vi.mock("../../navigation/database_tree/nav_builder.js", () => ({
@@ -43,6 +52,8 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
 
 vi.mock("../../navigation/nav_engine/dataset_access_registry.js", () => ({
     primeDatasetAccessRegistry: mocks.primeDatasetAccessRegistry,
+    beginDatasetAccessRefresh: mocks.beginDatasetAccessRefresh,
+    isCurrentDatasetAccessRefresh: mocks.isCurrentDatasetAccessRefresh,
 }));
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
@@ -65,6 +76,8 @@ describe("load_tables deep-link startup routing", () => {
         localStorage.clear();
         window.history.replaceState({}, "", "/");
         mocks.getSelectedDataset.mockReturnValue(null);
+        mocks.primeDatasetAccessRegistry.mockReturnValue(true);
+        mocks.isCurrentDatasetAccessRefresh.mockReturnValue(true);
         mocks.endpointRouter.mockResolvedValue({
             datasets: [{ dataset_name: "dev_agent_tasks" }],
             tab_order: [],
@@ -81,13 +94,53 @@ describe("load_tables deep-link startup routing", () => {
         await load_tables();
 
         expect(mocks.setUnifiedTableState).toHaveBeenCalledWith("dev_agent_tasks", {
-            cardView: { collapsed: true, expandedId: "853" },
+            articleView: { collapsed: true, expandedId: "853", returnView: "card" },
         });
         expect(mocks.setInitialQueryParams).toHaveBeenCalledWith("?view=article");
         expect(mocks.openNavTab).toHaveBeenCalledWith("dev_agent_tasks", {
             skipUrlUpdate: true,
             forceReload: false,
         });
+    });
+
+    test("discards a stale metadata response before navigation or dataset state changes", async () => {
+        mocks.primeDatasetAccessRegistry.mockReturnValue(false);
+        expect(await load_tables()).toBeNull();
+        expect(mocks.createNavigationButtons).not.toHaveBeenCalled();
+        expect(mocks.setSelectedDataset).not.toHaveBeenCalled();
+        expect(mocks.openNavTab).not.toHaveBeenCalled();
+    });
+
+    test("stops a superseded refresh after private view loading", async () => {
+        mocks.isCurrentDatasetAccessRefresh.mockReturnValue(false);
+        expect(await load_tables()).toBeNull();
+        expect(mocks.createNavigationButtons).not.toHaveBeenCalled();
+        expect(mocks.openNavTab).not.toHaveBeenCalled();
+    });
+
+
+    test("explicit initial view overrides only this dataset's stored view", async () => {
+        localStorage.setItem("dev_agent_tasks_view", "table");
+        localStorage.setItem("other_view", "calendar");
+        history.replaceState({}, "", "/dev_agent_tasks?view=article_view&search=test");
+        await load_tables();
+        expect(localStorage.getItem("dev_agent_tasks_view")).toBe("article_view");
+        expect(localStorage.getItem("other_view")).toBe("calendar");
+    });
+
+
+    test.each(["", "?view=unknown"])("keeps the chosen view for an absent or unknown explicit view %s", async (query) => {
+        localStorage.setItem("dev_agent_tasks_view", "card");
+        history.replaceState({}, "", "/dev_agent_tasks" + query);
+        await load_tables();
+        expect(localStorage.getItem("dev_agent_tasks_view")).toBe("card");
+    });
+
+    test("resolves the supported article alias before the initial render", async () => {
+        localStorage.setItem("dev_agent_tasks_view", "table");
+        history.replaceState({}, "", "/dev_agent_tasks?view=article");
+        await load_tables();
+        expect(localStorage.getItem("dev_agent_tasks_view")).toBe("article_view");
     });
 
     test("keeps normal dataset routes on the regular URL update path", async () => {
@@ -101,4 +154,17 @@ describe("load_tables deep-link startup routing", () => {
             forceReload: false,
         });
     });
+});
+
+test("IFAV bookmark prepares its backing dataset without opening a classic article", async () => {
+    vi.clearAllMocks();
+    mocks.endpointRouter.mockResolvedValue({ datasets: [{ dataset_name: "dev_agent_tasks" }] });
+    history.replaceState({}, "", "/dev_agent_tasks/853?search=test&view=image_first_view#image=one.jpg");
+    await load_tables();
+    expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
+    expect(mocks.openNavTab).toHaveBeenCalledWith("dev_agent_tasks", {
+        skipUrlUpdate: true, forceReload: false, replacementParams: { search: "test", view: "card" },
+    });
+    expect(ifav.restore).toHaveBeenCalledWith(expect.objectContaining({ tableName: "dev_agent_tasks", rowId: "853" }));
+    expect(location.search).toContain("view=image_first_view");
 });

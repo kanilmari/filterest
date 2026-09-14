@@ -23,7 +23,9 @@ func TestSensitiveMaintenanceRoutesRequireAdmin(t *testing.T) {
 		"dtt_foreign_keys.DeleteForeignKeyHandler",
 		"dtt_crud_workflows.SimpleQueryTableHandler",
 		"system_table_tools.UpdateColumnMultilingualHandler",
+		"system_table_tools.AdminDatasetUIVisibilityHandler",
 		"system_table_tools.UpdateColumnInsertableHandler",
+		"system_table_tools.SaveArticleSectionDefaultsHandler",
 		"router.saveOpenAIAPIKeyHandler",
 	}
 
@@ -60,4 +62,14 @@ func TestForeignKeyReadHelpersKeepDefaultProfile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestArticleSectionDefaultsReadRetainsSessionSecurity(t *testing.T) {
+	handler := "system_table_tools.GetArticleSectionDefaultsHandler"
+	descriptor := pipeline.DescribeRouteProfile(handler)
+	if descriptor.ProfileName != "login_only" || descriptor.AdminOnly {
+		t.Fatalf("read profile = %#v", descriptor)
+	}
+	stages := pipeline.DescribePipeline(pipeline.RouteContext{}, pipeline.GetProfile(handler))
+	containsAll(t, stages, []string{"auth", "csrf", "fingerprint", "device_id"})
 }

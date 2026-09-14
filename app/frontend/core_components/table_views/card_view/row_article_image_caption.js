@@ -39,6 +39,7 @@ const PROVIDERS = { unsplash: "Unsplash", pexels: "Pexels", pixabay: "Pixabay" }
 // HTML, executable schemes, embedded credentials and relative URLs never do.
 function resolveCreditUrl(value) {
     if (typeof value !== "string" || !/^https?:\/\//i.test(value)
+        // eslint-disable-next-line no-control-regex -- Reject control characters in untrusted credit URLs.
         || /[\u0000-\u0020\u007f]/.test(value)) return null;
     try {
         const url = new URL(value);

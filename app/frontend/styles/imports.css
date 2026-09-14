@@ -16,8 +16,11 @@
 @import url("../core_components/navigation/navbar/navbar_layout.css");
 @import url("../core_components/navigation/menu_button/menu_button.css");
 @import url("../core_components/navigation/main_tabs/tabs.css");
+@import url("../core_components/navigation/main_tabs/hero_dataset_tabs.css");
 @import url("../core_components/lang/lang_panel.css");
 @import url("../core_components/lang/dev_lang_key_editor.css");
+
+@import url("../core_components/general_tables/gt_2_column_crud/column_manager.css");
 
 /* --- Table views --- */
 @import url("../core_components/table_views/table_view/tables.css");
@@ -51,6 +54,7 @@
 @import url("../core_components/admin_tools/admin_version_info_indicator.css");
 @import url("../core_components/admin_tools/admin_update_notice.css");
 @import url("../core_components/filterbar/text_search/text_search.css");
+@import url("../core_components/filterbar/text_search/supplemental_dataset_results.css");
 @import url("../core_components/filterbar/morphing_filterbar_content.css");
 @import url("../core_components/filterbar/dataset_corner_controls.css");
 @import url("../core_components/filterbar/dataset_cover_theme.css");
@@ -105,3 +109,5 @@
 @import url("../core_components/workline_observatory/workline_observatory_view.css");
 @import url("../core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/create_table_admin.css");
 @import url("../custom_views/search_vector_maintenance.css");
+
+@import url("../core_components/filterbar/dataset_surface_provider/dataset_surface_host.css");

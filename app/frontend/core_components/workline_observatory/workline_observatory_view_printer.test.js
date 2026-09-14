@@ -4,24 +4,28 @@
 // Exists so V1 remains browsable without depending on a live backend in unit tests.
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, saveContractMock, startConversationMock, statusActionMock } = vi.hoisted(() => ({
+const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, priorityActionMock, saveContractMock, startConversationMock, statusActionMock } = vi.hoisted(() => ({
     createGoalMock: vi.fn(),
     fetchBoardMock: vi.fn(),
     fetchHistoryMock: vi.fn(),
     goalActionMock: vi.fn(),
     languageMock: vi.fn(),
+    priorityActionMock: vi.fn(),
     saveContractMock: vi.fn(),
     startConversationMock: vi.fn(),
     statusActionMock: vi.fn(),
 }));
+
+vi.mock('../../icons/icon_loader.js', () => ({ setElementSvgContent: vi.fn() }));
 
 vi.mock('../state_stores/lang_preference_reader.js', () => ({
     getLanguageWithBrowserFallback: languageMock,
 }));
 vi.mock('./workline_observatory_api_adapter.js', () => ({
     applyWorklineStatusAction: statusActionMock,
+    applyWorklinePriorityAction: priorityActionMock,
     applyWorklineReleaseGoalAction: goalActionMock,
     createWorklineReleaseGoal: createGoalMock,
     fetchWorklineObservatoryBoard: fetchBoardMock,
@@ -32,6 +36,7 @@ vi.mock('./workline_observatory_chat_adapter.js', () => ({
     startWorklineConversation: startConversationMock,
 }));
 
+import { hideModal } from '../../reusable_components/modal/modal_builder.js';
 import { buildWorklineObservatoryState } from './workline_observatory_state_builder.js';
 import { generate_workline_observatory_view, renderWorklineObservatory } from './workline_observatory_view_printer.js';
 
@@ -43,6 +48,8 @@ beforeEach(() => {
     fetchHistoryMock.mockResolvedValue([]);
     window.confirm = vi.fn(() => true);
 });
+
+afterEach(() => hideModal({ immediate: true }));
 
 describe('workline observatory view', () => {
     test('renders worklines, six-slot NOW position, selected goal, and report context', () => {
@@ -66,9 +73,12 @@ describe('workline observatory view', () => {
         const container = document.getElementById('view');
         renderWorklineObservatory(container, state);
 
-        expect(container.textContent).toContain('release-8.42 v1');
-        expect(container.textContent).toContain('Visual workline observatory · Phase 3');
-        expect(container.textContent).toContain('Release alignment needs a visual truth.');
+        expect(container.querySelector('.workline-observatory__detail')).toBeNull();
+        expect(container.querySelector('[data-workline-title]').textContent).toBe('#869 Visual workline observatory');
+        container.querySelector('[data-workline-title]').click();
+        expect(document.querySelector('#custom_modal').textContent).toContain('release-8.42 v1');
+        expect(document.querySelector('#custom_modal').textContent).toContain('#869 Visual workline observatory · Latest reported phase 3');
+        expect(document.querySelector('#custom_modal').textContent).toContain('Release alignment needs a visual truth.');
         expect(container.querySelectorAll('.workline-observatory__phase-node')).toHaveLength(6);
         expect([...container.querySelectorAll('.workline-observatory__phase-node')].map((node) => node.textContent)).toEqual(['1', '2', '3', '4', '5', '6']);
         expect(container.querySelector('.workline-observatory__now').textContent).toBe('NOW (1)');
@@ -76,15 +86,28 @@ describe('workline observatory view', () => {
         expect(container.querySelector('.workline-observatory__target-row').textContent).toBe('Must be in phase · Phase 5');
         expect(container.querySelector('.workline-observatory__track').style.getPropertyValue('--history-links')).toBe('2');
         expect(container.querySelector('.workline-observatory__track').style.getPropertyValue('--future-links')).toBe('3');
-        expect(container.querySelector('.workline-observatory__chat textarea')).not.toBeNull();
+        expect(document.querySelector('#custom_modal .workline-observatory__chat textarea')).not.toBeNull();
+    });
+
+    test('selected workline precedes goal administration in mobile and keyboard DOM order', () => {
+        const container = document.createElement('div'); document.body.append(container);
+        renderWorklineObservatory(container, { worklines: [{ id: 28, title: 'Selected first', current_phase: 2 }] });
+        container.querySelector('[data-workline-title="28"]').click();
+        const detail = document.querySelector('#custom_modal .workline-observatory__detail');
+        expect(detail.classList.contains('workline-observatory__detail--with-workline')).toBe(true);
+        const sections = [...detail.children].filter((node) => node.tagName === 'SECTION');
+        expect(sections[0].classList.contains('workline-observatory__selected-workline')).toBe(true);
+        expect(sections[1].classList.contains('workline-observatory__goal')).toBe(true);
+        expect(sections[1].querySelector('.workline-observatory__goal-creator')).toBeTruthy();
     });
 
     test('renders a goal creator when no release goal is selected', () => {
         const container = document.getElementById('view');
         renderWorklineObservatory(container, buildWorklineObservatoryState({ worklines: [] }));
 
-        expect(container.textContent).toContain('No release goal selected');
-        expect(container.querySelector('.workline-observatory__goal-creator')).not.toBeNull();
+        container.querySelector('[data-release-goal-details]').click();
+        expect(document.querySelector('#custom_modal').textContent).toContain('No release goal selected');
+        expect(document.querySelector('#custom_modal .workline-observatory__goal-creator')).not.toBeNull();
         expect(container.querySelector('.workline-observatory__targets-heading').textContent).toBe('Release target');
     });
 
@@ -94,13 +117,11 @@ describe('workline observatory view', () => {
 
         languageMock.mockReturnValue('fi');
         await generate_workline_observatory_view(container);
-        expect(container.querySelector('.workline-observatory__header p').textContent)
-            .toBe('Valitse yksi tai useampi työlinja muuttaaksesi niiden tilaa.');
+        expect(container.querySelector('.workline-observatory__priority-heading').textContent).toBe('Prioriteetti');
 
         languageMock.mockReturnValue('ch');
         await generate_workline_observatory_view(container);
-        expect(container.querySelector('.workline-observatory__header p').textContent)
-            .toBe('选择一条或多条工作线以更改状态。');
+        expect(container.querySelector('.workline-observatory__priority-heading').textContent).toBe('优先级');
     });
 
     test('loads and browses earlier reports for the focused workline', async () => {
@@ -126,35 +147,35 @@ describe('workline observatory view', () => {
             }],
         }));
 
-        await vi.waitFor(() => expect(container.querySelector('.workline-observatory__report-history select')).not.toBeNull());
+        container.querySelector('[data-workline-title]').click();
+        await vi.waitFor(() => expect(document.querySelector('#custom_modal .workline-observatory__report-history select')).not.toBeNull());
         expect(fetchHistoryMock).toHaveBeenCalledWith(34);
-        expect(container.textContent).toContain('Current context.');
-        const select = container.querySelector('.workline-observatory__report-history select');
+        expect(document.querySelector('#custom_modal').textContent).toContain('Current context.');
+        const select = document.querySelector('#custom_modal .workline-observatory__report-history select');
         expect(select.options).toHaveLength(2);
         expect(select.options[1].textContent).toContain('Phase 2-3');
 
         select.value = '20';
         select.dispatchEvent(new Event('change'));
 
-        expect(container.textContent).toContain('Earlier context.');
-        expect(container.textContent).not.toContain('Current context.');
+        expect(document.querySelector('#custom_modal').textContent).toContain('Earlier context.');
+        expect(document.querySelector('#custom_modal').textContent).not.toContain('Current context.');
     });
 
-    test('keeps status actions around NOW and makes the full title row selectable', () => {
+    test('keeps status actions around NOW and selects only through the separate selection area', () => {
         const container = document.getElementById('view');
         renderWorklineObservatory(container, buildWorklineObservatoryState({
             worklines: [{ id: 1, title: 'Whole row', status: 'active', current_phase: 4 }],
         }));
 
-        expect(container.querySelector('.workline-observatory__header p').textContent)
-            .toBe('Select one or more worklines to change their state.');
+        expect(container.querySelector('.workline-observatory__visible-count').textContent).toBe('1 visible');
         expect(container.querySelector('.workline-observatory__action-guidance').textContent).toBe('');
         expect([...container.querySelectorAll('.workline-observatory__status-action-group--before-now button')]
             .map((button) => button.textContent)).toEqual(['Activate', 'Pause']);
         expect([...container.querySelectorAll('.workline-observatory__status-action-group--after-now button')]
             .map((button) => button.textContent)).toEqual(['Mark done', 'Discard']);
 
-        container.querySelector('.workline-observatory__workline-row').click();
+        container.querySelector('.workline-observatory__selection-area').click();
         expect(container.querySelector('.workline-observatory__workline-checkbox').checked).toBe(true);
         expect(container.querySelector('.workline-observatory__selection-count').textContent).toBe('1 selected');
 
@@ -244,17 +265,17 @@ describe('workline observatory view', () => {
         renderWorklineObservatory(container, buildWorklineObservatoryState({
             worklines: [{ id: 1, title: 'Already active', status: 'active', current_phase: 4 }],
         }));
-        container.querySelector('.workline-observatory__workline-row').click();
+        container.querySelector('.workline-observatory__selection-area').click();
 
         const activate = container.querySelector('[data-status-action="active"]');
         expect(activate.disabled).toBe(false);
         expect(activate.getAttribute('aria-disabled')).toBe('true');
-        expect(activate.title).toBe('All selected worklines are already Active.');
+        expect(activate.title).toBe('“Already active” is already Active.');
         activate.click();
 
         expect(statusActionMock).not.toHaveBeenCalled();
         expect(container.querySelector('.workline-observatory__action-guidance').textContent)
-            .toBe('All selected worklines are already Active.');
+            .toBe('“Already active” is already Active.');
     });
 
     test('opens the same actions at the pointer on right click and preserves an existing group', () => {
@@ -291,7 +312,7 @@ describe('workline observatory view', () => {
         ] };
         const container = document.getElementById('view');
         renderWorklineObservatory(container, buildWorklineObservatoryState(snapshot));
-        container.querySelectorAll('.workline-observatory__workline-row')[1].click();
+        container.querySelectorAll('.workline-observatory__selection-area')[1].click();
 
         renderWorklineObservatory(container, buildWorklineObservatoryState(snapshot));
 
@@ -310,6 +331,184 @@ describe('workline observatory view', () => {
         expect(nodes.map((node) => node.style.gridColumn)).toEqual(['1', '2', '3', '4', '5', '6']);
         expect(nodes.every((node) => node.dataset.state === 'completed')).toBe(true);
         expect(container.querySelector('.workline-observatory__phase-node[data-current="true"]')).toBeNull();
-        expect(container.textContent).toContain('Owner closed · Phase 6');
+        container.querySelector('[data-workline-title]').click();
+        expect(document.querySelector('#custom_modal').textContent).toContain('Owner closed · Latest reported phase 5');
+    });
+    test('opens title details without changing selection and restores focus when closed', async () => {
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, { worklines: [{ id: 1, title: 'Details', status: 'active', current_phase: 2 }] });
+        container.querySelector('[data-workline-title]').click();
+        expect(container.querySelector('.workline-observatory__workline-checkbox').checked).toBe(false);
+        expect(document.querySelector('#custom_modal').getAttribute('role')).toBe('dialog');
+        expect(container.querySelector('.workline-observatory__detail')).toBeNull();
+        document.querySelector('[data-testid="modal-close-button"]').click();
+        await Promise.resolve();
+        expect(document.querySelector('#custom_modal_overlay').getAttribute('aria-hidden')).toBe('true');
+        expect(document.activeElement).toBe(container.querySelector('[data-workline-title]'));
+    });
+
+    test.each([
+        ['en', '“Own row” is already Active.'],
+        ['fi', '“Own row” on jo tilassa Aktiivinen.'],
+        ['ch', '“Own row”已处于“活动”。'],
+        ['yue', '「Own row」已經係「進行中」。'],
+    ])('row menu guidance names its unselected row in %s', async (language, expected) => {
+        languageMock.mockReturnValue(language);
+        const container = document.getElementById('view');
+        const view = renderWorklineObservatory(container, {
+            worklines: [{ id: 28, title: 'Own row', status: 'active', current_phase: 2 }],
+        });
+        try {
+            container.querySelector('[data-row-actions="28"]').click();
+            await Promise.resolve();
+            const menu = document.querySelector('.workline-observatory__context-menu');
+            const activate = menu.querySelector('[data-status-action="active"]');
+            expect(document.activeElement).toBe(activate);
+            expect(menu.querySelector('.workline-observatory__context-guidance').textContent).toBe(expected);
+            expect(activate.title).toBe(expected);
+            expect(activate.getAttribute('aria-label')).toBe(expected);
+            expect(activate.getAttribute('aria-disabled')).toBe('true');
+            expect(container.querySelector('.workline-observatory__workline-checkbox').checked).toBe(false);
+            expect(statusActionMock).not.toHaveBeenCalled();
+            expect(window.confirm).not.toHaveBeenCalled();
+        } finally {
+            view.destroy();
+        }
+    });
+
+    test('row dropdown changes only that row while retaining the reviewed bulk selection', async () => {
+        const rows = [
+            { id: 1, title: 'One', status: 'active', status_revision: 2 },
+            { id: 2, title: 'Two', status: 'active', status_revision: 7 },
+        ];
+        const container = document.getElementById('view');
+        const onRefresh = vi.fn().mockResolvedValue({ worklines: rows });
+        renderWorklineObservatory(container, { worklines: rows }, undefined, { onRefresh });
+        container.querySelectorAll('.workline-observatory__workline-checkbox')[1].click();
+        container.querySelector('[data-row-actions="1"]').click();
+        document.querySelector('.workline-observatory__context-menu [data-status-action="paused"]').click();
+        await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+        expect(statusActionMock).toHaveBeenCalledWith([{ id: 1, expected_revision: 2 }], 'paused');
+        expect(window.confirm).toHaveBeenCalledWith('Change “One” to Paused?');
+        expect(container.querySelectorAll('.workline-observatory__workline-checkbox')[1].checked).toBe(true);
+        expect(fetchBoardMock).not.toHaveBeenCalled();
+    });
+
+    test('priority editor uses its independent revision and refreshes through the current-query host', async () => {
+        const row = { id: 9, title: 'Priority', status: 'active', status_revision: 12, priority: 'normal', priority_revision: 4 };
+        const container = document.getElementById('view');
+        const onRefresh = vi.fn().mockResolvedValue({ worklines: [{ ...row, priority: 'high', priority_revision: 5 }] });
+        renderWorklineObservatory(container, { worklines: [row] }, undefined, { onRefresh });
+        const priority = container.querySelector('[data-priority-workline-id="9"]');
+        priority.value = 'high';
+        priority.dispatchEvent(new Event('change'));
+        await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+        expect(priorityActionMock).toHaveBeenCalledWith([{ id: 9, expected_revision: 4 }], 'high');
+        expect(statusActionMock).not.toHaveBeenCalled();
+        expect(container.querySelector('[data-priority-workline-id="9"]').value).toBe('high');
+    });
+
+    test('drops hidden selections and uses fresh revisions after a shared query update', async () => {
+        const container = document.getElementById('view');
+        const visible = { id: 2, title: 'Two', status: 'active', status_revision: 8 };
+        const onRefresh = vi.fn().mockResolvedValue({ worklines: [visible] });
+        const controller = renderWorklineObservatory(container, { worklines: [
+            { id: 1, title: 'One', status: 'active', status_revision: 1 }, { ...visible, status_revision: 3 },
+        ] }, undefined, { onRefresh });
+        container.querySelector('[data-selection-action="select-all"]').click();
+        controller.updateSnapshot({ total_count: 2, filtered_count: 1, worklines: [visible] });
+        expect(container.querySelector('.workline-observatory__selection-count').textContent).toBe('1 selected');
+        expect(container.querySelector('.workline-observatory__visible-count').textContent).toBe('1 visible');
+        container.querySelector('[data-status-action="closed"]').click();
+        await vi.waitFor(() => expect(statusActionMock).toHaveBeenCalledOnce());
+        expect(statusActionMock).toHaveBeenCalledWith([{ id: 2, expected_revision: 8 }], 'closed');
+        controller.destroy();
+        controller.updateSnapshot({ worklines: [] });
+        expect(container.querySelectorAll('.workline-observatory__workline-row')).toHaveLength(0);
+    });
+
+    test('relocalizes existing list and modal when the shared host reapplies its snapshot', () => {
+        const container = document.getElementById('view');
+        const snapshot = { worklines: [{ id: 1, title: 'Localize', current_phase: 0 }] };
+        const controller = renderWorklineObservatory(container, snapshot);
+        container.querySelector('[data-workline-title]').click();
+        languageMock.mockReturnValue('fi');
+        controller.updateSnapshot(snapshot);
+        expect(container.querySelector('.workline-observatory__priority-heading').textContent).toBe('Prioriteetti');
+        expect(document.querySelector('#custom_modal').textContent).toContain('Viimeisin raportoitu vaihe 0');
+        languageMock.mockReturnValue('yue');
+        controller.updateSnapshot(snapshot);
+        expect(container.querySelector('.workline-observatory__priority-heading').textContent).toBe('優先次序');
+    });
+
+    test('ignores an earlier modal history response after opening another workline', async () => {
+        let resolveFirst;
+        fetchHistoryMock.mockImplementation((id) => id === 1
+            ? new Promise((resolve) => { resolveFirst = resolve; })
+            : Promise.resolve([{ id: 22, context: 'Second report' }]));
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, { worklines: [{ id: 1, title: 'One' }, { id: 2, title: 'Two' }] });
+        container.querySelector('[data-workline-title="1"]').click();
+        container.querySelector('[data-workline-title="2"]').click();
+        await vi.waitFor(() => expect(document.querySelector('#custom_modal').textContent).toContain('Second report'));
+        resolveFirst([{ id: 11, context: 'Stale first report' }]);
+        await Promise.resolve();
+        expect(document.querySelector('#custom_modal').textContent).not.toContain('Stale first report');
+        expect(document.querySelector('#custom_modal').textContent).toContain('Second report');
+    });
+
+    test('creates and locks release goals through the host refresh while keeping goal details reachable', async () => {
+        const container = document.getElementById('view');
+        const goal = { id: 7, identity_key: 'release-demo', version: 1, title: 'Demo', outcome: 'Visible goal', decision_state: 'draft' };
+        const onRefresh = vi.fn().mockResolvedValue({ worklines: [], release_goal: goal });
+        renderWorklineObservatory(container, { worklines: [] }, undefined, { onRefresh });
+        container.querySelector('[data-release-goal-details]').click();
+        const form = document.querySelector('#custom_modal .workline-observatory__goal-creator');
+        const values = ['release-demo', '1', 'Demo', 'Visible goal'];
+        [...form.querySelectorAll('input')].forEach((input, index) => { input.value = values[index]; });
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+        await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+        expect(createGoalMock).toHaveBeenCalledWith({ identity_key: 'release-demo', version: 1, title: 'Demo', outcome: 'Visible goal', selected: true });
+        await vi.waitFor(() => expect(document.querySelector('#custom_modal').textContent).toContain('Lock release goal'));
+        [...document.querySelectorAll('#custom_modal button')].find((button) => button.textContent === 'Lock release goal').click();
+        await vi.waitFor(() => expect(goalActionMock).toHaveBeenCalledWith(7, 'lock'));
+        expect(fetchBoardMock).not.toHaveBeenCalled();
+    });
+
+    test('keeps release contract editing and scoped chat attached to the modal workline', async () => {
+        const container = document.getElementById('view');
+        const row = { id: 9, title: 'Discarded design', status: 'archived', current_phase: 2, latest_report: { context: 'Immutable report' } };
+        const snapshot = { worklines: [row], release_goal: { id: 7, title: 'Demo', decision_state: 'draft' } };
+        const onRefresh = vi.fn().mockResolvedValue(snapshot);
+        renderWorklineObservatory(container, snapshot, undefined, { onRefresh });
+        container.querySelector('[data-workline-title]').click();
+        const contract = document.querySelector('#custom_modal .workline-observatory__contract');
+        contract.querySelector('select').value = 'must_be_in_phase';
+        contract.querySelector('input').value = '3';
+        contract.querySelector('button').click();
+        await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+        expect(saveContractMock).toHaveBeenCalledWith({ release_goal_id: 7, workline_id: 9, completion_rule: 'must_be_in_phase', target_phase: 3 });
+        startConversationMock.mockResolvedValue({ session: { id: 'chat-9' } });
+        const chat = document.querySelector('#custom_modal .workline-observatory__chat');
+        chat.querySelector('textarea').value = 'Review this design';
+        chat.querySelector('button').click();
+        await vi.waitFor(() => expect(startConversationMock).toHaveBeenCalledOnce());
+        expect(startConversationMock.mock.calls[0][0]).toMatchObject({ id: 9, current_phase: 2, status: 'archived' });
+        expect(startConversationMock.mock.calls[0][2]).toBe('Review this design');
+        expect(document.querySelector('#custom_modal .workline-observatory__report').querySelector('input,textarea')).toBeNull();
+    });
+    test('preserves a release-goal draft and exposes an API error inside its modal', async () => {
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, { worklines: [] });
+        container.querySelector('[data-release-goal-details]').click();
+        const form = document.querySelector('#custom_modal .workline-observatory__goal-creator');
+        form.querySelectorAll('input')[2].value = 'Keep this draft';
+        createGoalMock.mockRejectedValueOnce(new Error('Goal could not be saved'));
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+        await vi.waitFor(() => expect(document.querySelector('#custom_modal .workline-observatory__modal-guidance').textContent).toBe('Goal could not be saved'));
+        expect(document.querySelector('#custom_modal .workline-observatory__goal-creator input:nth-of-type(1)')).not.toBeNull();
+        expect(form.querySelectorAll('input')[2].value).toBe('Keep this draft');
+        expect(form.isConnected).toBe(true);
+        expect(form.querySelector('button').disabled).toBe(false);
     });
 });

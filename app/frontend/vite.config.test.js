@@ -21,6 +21,7 @@ import viteConfig, {
   resolveViteProjectLayout,
   shouldRedirectDevRootToStandaloneLogin,
 } from './vite.config.mjs';
+import { resolveRuntimeTestAliases } from '../vitest.config.mjs';
 
 const temporaryRoots = [];
 
@@ -102,11 +103,12 @@ describe('vite backend-owned asset routing', () => {
     expect(config.server.proxy).toHaveProperty('/symbol-assets');
   });
 
-  test('keeps embedded production bundles beside the canonical frontend source', () => {
+  test('uses the selected installation layout for production bundle output', () => {
     const config = viteConfig({ command: 'build' });
     const frontendRoot = fileURLToPath(new URL('.', import.meta.url));
 
-    expect(config.build.outDir).toBe(resolve(frontendRoot, 'dist'));
+    const layout = resolveViteProjectLayout(resolve(frontendRoot, '..'));
+    expect(config.build.outDir).toBe(layout.buildOutDir);
   });
 });
 
@@ -236,5 +238,34 @@ describe('vite project layout resolution', () => {
         ? resolve(applicationRoot, 'frontend', 'dist')
         : resolve(installationRoot, 'data/runtime/node/frontend-dist'),
     );
+  });
+});
+
+
+describe('Vitest installation-owned Node dependencies', () => {
+  test('resolves the bare test imports from an explicit external runtime', () => {
+    const runtime = temporaryRoot();
+    const modules = resolve(runtime, 'node_modules');
+    for (const name of ['glob', '@playwright/test']) {
+      const packageRoot = resolve(modules, name);
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(resolve(packageRoot, 'package.json'), JSON.stringify({
+        name, main: 'fixture.cjs',
+      }));
+      writeFileSync(resolve(packageRoot, 'fixture.cjs'), 'module.exports = {};');
+    }
+    const aliases = resolveRuntimeTestAliases({ FILTEREST_NODE_MODULES_ROOT: modules });
+    expect(aliases).toEqual([
+      { find: 'glob', replacement: resolve(modules, 'glob/fixture.cjs') },
+      { find: '@playwright/test', replacement: resolve(modules, '@playwright/test/fixture.cjs') },
+    ]);
+    expect(existsSync(resolve(runtime, 'app/node_modules'))).toBe(false);
+  });
+
+  test('keeps ordinary lookup without an override and rejects relative runtime roots', () => {
+    expect(resolveRuntimeTestAliases({})).toEqual([]);
+    expect(() => resolveRuntimeTestAliases({
+      FILTEREST_NODE_MODULES_ROOT: 'data/runtime/node/node_modules',
+    })).toThrow('must be an absolute path');
   });
 });

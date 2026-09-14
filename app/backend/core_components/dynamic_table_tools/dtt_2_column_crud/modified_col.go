@@ -5,8 +5,9 @@
 package dtt_2_column_crud
 
 type ModifiedCol struct {
-	OriginalName string `json:"original_name"`
-	NewName      string `json:"new_name"`
-	DataType     string `json:"data_type"`
-	Length       *int   `json:"length,omitempty"`
+	OriginalName   string `json:"original_name"`
+	NewName        string `json:"new_name"`
+	DataType       string `json:"data_type"`
+	Length         *int   `json:"length,omitempty"`
+	IsMultilingual *bool  `json:"is_multilingual,omitempty"`
 }

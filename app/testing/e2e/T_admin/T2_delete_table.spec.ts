@@ -123,11 +123,15 @@ test.describe('Dataset Deletion Handling', () => {
     await expect(deleteBtn).toBeVisible({ timeout: 5000 });
     await deleteBtn.click();
 
-    const confirmModal = page.locator('[data-testid="modal-container"]');
+    const confirmModal = page.locator('[data-testid="dataset-removal-dialog"]');
     await expect(confirmModal).toBeVisible({ timeout: 5000 });
-
-    const confirmBtn = confirmModal.locator('[data-testid="confirm-modal-confirm-button"]').first();
-    await expect(confirmBtn).toBeVisible({ timeout: 5000 });
+    await expect(confirmModal.getByTestId('dataset-removal-mode-hide')).toBeChecked();
+    await confirmModal.getByTestId('dataset-removal-mode-permanent').check();
+    const confirmBtn = confirmModal.getByTestId('dataset-removal-confirm');
+    await expect(confirmBtn).toBeDisabled();
+    await expect(confirmModal.getByTestId('dataset-removal-irreversible-warning')).toBeVisible();
+    await confirmModal.getByTestId('dataset-removal-confirm-name').fill(testTableName);
+    await expect(confirmBtn).toBeEnabled();
 
     await page.evaluate(() => {
       (window as Window & { __spa_delete_marker?: boolean }).__spa_delete_marker = true;

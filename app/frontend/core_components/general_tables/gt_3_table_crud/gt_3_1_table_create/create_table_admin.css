@@ -15,7 +15,10 @@
     min-width: 0;
     margin-bottom: 10px;
 }
-#table_creation_form label > span { display: block; margin-bottom: 4px; }
+#table_creation_form label > span {
+    display: block;
+    margin-bottom: 4px;
+}
 #table_creation_form input:not([type="checkbox"]),
 #table_creation_form select {
     min-width: 0;

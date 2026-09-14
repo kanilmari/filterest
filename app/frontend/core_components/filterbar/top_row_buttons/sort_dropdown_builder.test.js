@@ -67,6 +67,28 @@ describe("sort_dropdown_builder", () => {
         });
     });
 
+    test("an API surface advertises only supported sorts with localized field labels", () => {
+        mocks.getDatasetSortSelection.mockReturnValue("__newest:DESC");
+        createSortDropdown("extension", ["priority"], { priority: { data_type: "text", sco_number: 1 } }, {
+            allowPersistentDefault: false, allowedSortColumns: ["__newest", "priority"], columnLabels: { priority: "Prioriteetti" },
+        });
+        const options = mocks.createVanillaDropdown.mock.calls[0][0].options;
+        expect(options.map((option) => option.value)).toEqual(["__newest:DESC", "__newest:ASC", "priority:ASC", "priority:DESC"]);
+        expect(options.find((option) => option.value === "priority:ASC")).toMatchObject({ label: "Prioriteetti ↑", langKey: undefined });
+    });
+
+    test("extension sorting preserves ordinary actions but disables SQL default persistence", async () => {
+        mocks.getDatasetSortSelection.mockReturnValue("id:ASC");
+        const wrapper = createSortDropdown("extension", ["id"], { id: "integer" }, { allowPersistentDefault: false });
+        const options = mocks.createVanillaDropdown.mock.calls[0][0];
+        expect(options.renderOptionTrailingAction({ value: "id:ASC" }, { close() {} })).toBeNull();
+        expect(mocks.applyDatasetSortDefault).not.toHaveBeenCalled();
+        await options.onChange("id:DESC");
+        expect(mocks.refreshTableUnified).toHaveBeenCalledWith("extension", { skipUrlParams: true });
+        wrapper.destroy();
+        expect(mocks.dropdown.destroy).toHaveBeenCalledOnce();
+    });
+
     test("normalizes an unavailable URL sort and refreshes with the represented value", async () => {
         mocks.getDatasetSortSelection.mockReturnValue("missing:ASC");
         mocks.subscribeDatasetSortSelection.mockImplementation((_tableName, callback) => {

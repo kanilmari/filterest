@@ -17,6 +17,7 @@ const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 
 const IMAGE_MODAL_CONTROL_IDLE_DELAY_MS = 1200;
 const IMAGE_MODAL_SCROLL_HINT_HIDE_THRESHOLD_PX = 70;
 const IMAGE_FIRST_VIEW_CLOSE_DURATION_MS = 300;
+const imageModalCloseCallbacks = new WeakMap();
 const IMAGE_FIRST_RECORD_TRANSITION_DURATION_MS = 300;
 const imageFirstRecordTransitionStates = new WeakMap();
 const IMAGE_MODAL_TRANSIENT_CONTROL_SELECTOR = [
@@ -211,6 +212,7 @@ export function transitionImageFirstModalContent({
     contentElement,
     ariaLabel = "Image preview",
     topControlElements = [],
+    onClose = null,
 } = {}) {
     if (!(contentElement instanceof HTMLElement)) {
         return null;
@@ -248,6 +250,7 @@ export function transitionImageFirstModalContent({
         return null;
     }
 
+    imageModalCloseCallbacks.set(modalOverlay, onClose);
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")
         ?.matches === true;
     const restoreIncomingControls = lockImageFirstRecordControls(topControlElements);
@@ -314,12 +317,21 @@ export function transitionImageFirstModalContent({
  * The standalone preview and image-first article share modal lifecycle and
  * transient controls without coupling ordinary row articles to this overlay.
  */
+function waitForImageModalEntrance(modalOverlay) {
+    // Wait only for finite entrance effects, not the continuously pulsing hint.
+    const animations = modalOverlay.getAnimations?.({ subtree: true }) || [];
+    return Promise.allSettled(animations
+        .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map(animation => animation.finished));
+}
+
 export function openImageModalContent({
     contentElement,
     classNames = [],
     overlayClassNames = [],
     ariaLabel = "Image preview",
     topControlElements = [],
+    onClose = null,
 } = {}) {
     if (!(contentElement instanceof HTMLElement)) {
         return null;
@@ -381,9 +393,14 @@ export function openImageModalContent({
             ...validOverlayClassNames,
         );
         modal_overlay._imageModalOverlayClassNames = [];
+        const onClosed = imageModalCloseCallbacks.get(modal_overlay);
+        imageModalCloseCallbacks.delete(modal_overlay);
+        onClosed?.();
     };
+    imageModalCloseCallbacks.set(modal_overlay, onClose);
     showModal();
-    return { modalOverlay: modal_overlay, modal, close: hideModal };
+    return { modalOverlay: modal_overlay, modal, close: hideModal,
+        whenReady: waitForImageModalEntrance(modal_overlay) };
 }
 
 /**

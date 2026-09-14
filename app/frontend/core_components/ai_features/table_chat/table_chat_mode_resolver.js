@@ -1,6 +1,6 @@
 // table_chat_mode_resolver.js
 // Resolves which filterbar AI chat backend is available.
-// Bridges UI config compatibility, DEV-only Codex mode, and route permissions.
+// Bridges UI config compatibility, server-controlled Codex availability, and route permissions.
 // Exists to keep legacy transport removal behind one stable decision seam.
 
 import { hasRoutePermission } from "../../route_permission_checker.js";
@@ -31,7 +31,12 @@ export function canUseFilterbarAICodexDevMode({
         FILTERBAR_AI_CHAT_ROUTES.codex_dev
     ),
     isDevEnvironment = isFilterbarAIChatDevEnvironment(),
+    codingAgentCapability,
 } = {}) {
+    if (codingAgentCapability) {
+        return Boolean(hasCodexDevPermission && codingAgentCapability.feature_enabled === true
+            && codingAgentCapability.runner_ready === true);
+    }
     return Boolean(isDevEnvironment && hasCodexDevPermission);
 }
 
@@ -44,6 +49,7 @@ export function resolveAvailableFilterbarAIChatMode({
         FILTERBAR_AI_CHAT_ROUTES.codex_dev
     ),
     isDevEnvironment = isFilterbarAIChatDevEnvironment(),
+    codingAgentCapability,
 } = {}) {
     const normalizedMode = normalizeFilterbarAIChatMode(configuredMode);
     if (
@@ -51,6 +57,7 @@ export function resolveAvailableFilterbarAIChatMode({
         canUseFilterbarAICodexDevMode({
             hasCodexDevPermission,
             isDevEnvironment,
+            codingAgentCapability,
         })
     ) {
         return "codex_dev";

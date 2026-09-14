@@ -90,35 +90,25 @@ describe('createImageElement', () => {
         expect(logoTitle?.style.getPropertyValue('--service-logo-title-length')).toBe(String(rowLabel.length));
     });
 
-    test('frames normal service-catalog images without invoking the CSS icon renderer', () => {
-        const imagePath = '/storage/104/6169/300/104_6169_7169.svg';
-        const wrapper = createImageElement(imagePath, true, {
-            tableName: 'app_service_catalog',
-            rowLabel: 'Kanto Lab',
-            renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
-        });
-        const image = wrapper.querySelector('img');
+    test.each(['app_service_catalog', 'service_catalog', 'ordinary_dataset'])(
+        'uses shared SVG and raster presentation for untyped media in %s', (tableName) => {
+            const imagePath = '/storage/104/6169/300/104_6169_7169.svg';
+            const wrapper = createImageElement(imagePath, true, {
+                tableName, rowLabel: 'Kanto Lab', renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
+            });
+            expect(wrapper.classList.contains('service_catalog_logo_frame')).toBe(false);
+            expect(wrapper.classList.contains('record_svg_image_frame')).toBe(true);
+            expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
+            expect(wrapper.querySelector('img')?.getAttribute('src')).toBe(imagePath);
 
-        expect(wrapper.classList.contains('service_catalog_logo_frame')).toBe(true);
-        expect(wrapper.classList.contains('service_catalog_logo_frame--contrast-safe')).toBe(true);
-        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('image');
-        expect(wrapper.dataset.serviceCatalogLogoKind).toBe('standalone');
-        expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
-        expect(image?.getAttribute('src')).toBe(imagePath);
-    });
-
-    test('classifies service-catalog JPG media as a full image logo frame', () => {
-        const imagePath = '/storage/104/6169/300/104_6169_7169.jpg';
-        const wrapper = createImageElement(imagePath, true, {
-            tableName: 'app_service_catalog',
-            rowLabel: 'Kanto Lab',
-            renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
-        });
-
-        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('image');
-        expect(wrapper.dataset.serviceCatalogLogoKind).toBe('image');
-        expect(wrapper.querySelector('img')?.getAttribute('src')).toBe(imagePath);
-    });
+            const photo = createImageElement('/storage/photo.jpg', true, {
+                tableName, rowLabel: 'Photo', renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
+            });
+            expect(photo.classList.contains('service_catalog_logo_frame')).toBe(false);
+            expect(photo.dataset.imagePresentationKind).toBe('raster');
+            expect(photo.querySelector('img')?.getAttribute('src')).toBe('/storage/photo.jpg');
+        }
+    );
 
     test.each([
         ['/storage/service_catalog_logos/firefox.svg', 'firefox', 'Firefox', 'Fx'],
@@ -315,4 +305,59 @@ describe('createImageElement', () => {
         expect(image?.getAttribute('src')).toBe(imagePath);
         expect(image?.classList.contains('service-catalog-css-logo__mark')).toBe(false);
     });
+    test.each(['app_service_catalog', 'service_catalog', 'ordinary_dataset'])(
+        'selects typed and legacy logos from asset identity in %s', (tableName) => {
+            for (const renderSlot of Object.values(CARD_IMAGE_RENDER_SLOTS)) {
+                const wrapper = createImageElement('/storage/logo.svg', true, {
+                    tableName, rowLabel: 'Firefox', renderSlot,
+                    imageTypeId: 1, imageMetadata: { logo_variant: 'firefox', logo_show_label: false },
+                });
+                expect(wrapper.dataset.serviceCatalogLogoVariant).toBe('firefox');
+                expect(wrapper.dataset.serviceCatalogLogoShowLabel).toBe('false');
+                expect(wrapper.querySelector('img')?.getAttribute('src')).toBe('/storage/logo.svg');
+            }
+            const legacy = createImageElement('/storage/service_catalog_logos/firefox.svg', true, { tableName, rowLabel: 'Firefox' });
+            expect(legacy.dataset.serviceCatalogLogoVariant).toBe('firefox');
+            expect(legacy.querySelector('img')).toBeNull();
+            expect(legacy.querySelector('.service-catalog-css-logo__mark')?.textContent).toBe('Fx');
+        }
+    );
+
+    test.each(['normal_image', 'image', 'asset_image'])(
+        'preserves explicit %s presentation over the legacy filename fallback', (mode) => {
+            const src = '/storage/service_catalog_logos/firefox.svg';
+            const wrapper = createImageElement(src, true, {
+                tableName: 'ordinary_dataset', rowLabel: 'Firefox', imageTypeId: 1,
+                imageMetadata: { logo_variant: 'firefox', logo_render_mode: mode },
+            });
+            expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
+            expect(wrapper.querySelector('img')?.getAttribute('src')).toBe(src);
+        }
+    );
+
+    test('preserves typed Matrix image-only metadata over a different legacy name', () => {
+        const src = '/storage/service_catalog_logos/firefox.svg';
+        const wrapper = createImageElement(src, true, {
+            tableName: 'ordinary_dataset', rowLabel: 'Matrix', imageTypeId: 1,
+            imageMetadata: { logo_variant: 'matrix' },
+        });
+        expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
+        expect(wrapper.querySelector('img')?.getAttribute('src')).toBe(src);
+    });
+
+    test.each([
+        [2, { logo_variant: 'firefox' }],
+        [undefined, { logo_variant: 'firefox' }],
+        [1, { logo_variant: '../bad' }],
+        [1, []],
+        [1, '{invalid'],
+        [1, { logo_variant: 'firefox', logo_render_mode: 'unknown' }],
+    ])('keeps invalid or unsupported typed metadata on the image path', (imageTypeId, imageMetadata) => {
+        const wrapper = createImageElement('/storage/photo.png', true, {
+            tableName: 'ordinary_dataset', rowLabel: 'Photo', imageTypeId, imageMetadata,
+        });
+        expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
+        expect(wrapper.querySelector('img')?.getAttribute('src')).toBe('/storage/photo.png');
+    });
+
 });

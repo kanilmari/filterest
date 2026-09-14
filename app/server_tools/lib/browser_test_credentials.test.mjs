@@ -6,7 +6,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   loadBrowserTestCredentials,
   resolveBrowserTestCredentialFilePath,
@@ -29,6 +29,7 @@ function markApplication(applicationRoot) {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const root of temporaryRoots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -36,6 +37,9 @@ afterEach(() => {
 
 describe('protected browser-test runtime contract', () => {
   test('standalone tools use installation-owned keys and never app-local fallbacks', () => {
+    vi.stubEnv('FILTEREST_PROJECT_ROOT_OVERRIDE', '/fixture-ambient-other-installation');
+    vi.stubEnv('FILTEREST_TEST_CREDENTIAL_FILE', '/fixture-ambient-other-credential');
+    vi.stubEnv('LOGIN_OTP_CODE', 'ambient-otp-must-not-be-used');
     const installationRoot = path.join(temporaryRoot(), 'filterest');
     const applicationRoot = path.join(installationRoot, 'app');
     markApplication(applicationRoot);
@@ -58,14 +62,14 @@ describe('protected browser-test runtime contract', () => {
       { mode: 0o600 },
     );
 
-    expect(resolveBrowserTestCredentialFilePath({ applicationRoot })).toBe(
+    expect(resolveBrowserTestCredentialFilePath({ applicationRoot, environment: {} })).toBe(
       path.join(protectedRoot, 'dev_env_test_creds.txt'),
     );
-    expect(loadBrowserTestCredentials({ applicationRoot })).toEqual({
+    expect(loadBrowserTestCredentials({ applicationRoot, environment: {} })).toEqual({
       username: 'standalone-admin',
       password: 'standalone-password',
     });
-    expect(resolveBrowserTestOtpCode({ applicationRoot })).toBe('standalone-otp');
+    expect(resolveBrowserTestOtpCode({ applicationRoot, environment: {} })).toBe('standalone-otp');
   });
 
   test('embedded tools use the outer Easelect credential and protected key root', () => {
@@ -74,6 +78,8 @@ describe('protected browser-test runtime contract', () => {
     const keyRoot = path.join(path.dirname(easelectRoot), 'protected-keys');
     fs.mkdirSync(path.join(easelectRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    fs.writeFileSync(path.join(easelectRoot, 'filterest.source-roots'),
+      'filterest\nfilterest_private\n', { mode: 0o644 });
     markApplication(applicationRoot);
     fs.writeFileSync(path.join(applicationRoot, '.env'), 'LOGIN_OTP_CODE=app-wrong\n');
     fs.writeFileSync(path.join(applicationRoot, 'dev_env.txt'), 'LOGIN_OTP_CODE=app-wrong\n');
@@ -119,6 +125,8 @@ describe('protected browser-test runtime contract', () => {
     const credentialFile = path.join(temporaryRoot(), 'filterest-agent.env');
     fs.mkdirSync(path.join(easelectRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    fs.writeFileSync(path.join(easelectRoot, 'filterest.source-roots'),
+      'filterest\nfilterest_private\n', { mode: 0o644 });
     markApplication(applicationRoot);
     fs.writeFileSync(
       credentialFile,
@@ -143,6 +151,8 @@ describe('protected browser-test runtime contract', () => {
     const applicationRoot = path.join(installationRoot, 'app');
     fs.mkdirSync(path.join(easelectRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    fs.writeFileSync(path.join(easelectRoot, 'filterest.source-roots'),
+      'filterest\nfilterest_private\n', { mode: 0o644 });
     markApplication(applicationRoot);
     const environment = { FILTEREST_PROJECT_ROOT_OVERRIDE: installationRoot };
 

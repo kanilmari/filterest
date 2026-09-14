@@ -128,6 +128,22 @@ func setCachedPermissions(userRole, tableName string, entry *permCacheEntry) {
 	permCacheMu.Unlock()
 }
 
+// InvalidatePermissionsCache discards derived SELECT column lists after DDL.
+// Actual permissions are unchanged and will be read again for each affected role.
+func InvalidatePermissionsCache(tableName string) {
+	if tableName == "" {
+		return
+	}
+	suffix := "|" + tableName
+	permCacheMu.Lock()
+	defer permCacheMu.Unlock()
+	for key := range permCache {
+		if strings.HasSuffix(key, suffix) {
+			delete(permCache, key)
+		}
+	}
+}
+
 // =============================================================
 // User column settings cache
 // =============================================================

@@ -677,4 +677,18 @@ describe("initTabs", () => {
         expect(document.querySelector(".navtablinks.active").dataset.tabPresentation).toBe("tab-active");
     });
 
+    test("aborted query navigation preserves active tab presentation", async () => {
+        const { initTabs, openNavTab } = await import("./main_tab_printer.js");
+        await initTabs();
+        await openNavTab("app_service_catalog");
+        const activeBefore = document.querySelector(".navtablinks.active");
+        vi.mocked(handle_all_navigation).mockResolvedValueOnce({ abort: true, reason: "dirty_check_failed" });
+        const result = await openNavTab("system_about", { forceReload: true, replacementParams: { search: "new" } });
+        expect(result.abort).toBe(true);
+        expect(document.querySelector(".navtablinks.active")).toBe(activeBefore);
+        expect(handle_all_navigation).toHaveBeenLastCalledWith("system_about", expect.anything(), {
+            skipUrlUpdate: false, forceReload: true, replacementParams: { search: "new" },
+        });
+    });
+
 });

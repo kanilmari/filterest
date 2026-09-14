@@ -2,6 +2,7 @@
 // Handles the core logic for refreshing table data and updating the UI.
 // Bridges data fetching, view generation, infinite scroll, and column visibility into one entry point.
 // Exists to provide a single unified refresh function consumed by navigation, filters, and CRUD operations.
+import { invalidateCardArticleReturn, getCardArticleReturnToken } from "../../../navigation/nav_engine/card_article_return_state.js";
 import { fetchDatasetData } from '../../../endpoints/endpoint_data_fetcher.js';
 import { generate_table } from '../../../table_views/dataset_view_printer.js';
 import { resetOffset, updateOffset, disconnectInfiniteScroll } from '../../../infinite_scroll/infinite_scroll_handler.js';
@@ -24,7 +25,13 @@ export { getUnifiedTableState, setUnifiedTableState };
 
 import { resolveDatasetViewSelectionTarget } from "../../../table_views/dataset_view_registry.js";
 
+import { getDatasetQueryAdapter } from '../../../filterbar/dataset_surface_provider/dataset_query_adapter_registry.js';
+
 const refreshGenerations = new Map();
+
+export function invalidateTableRefresh(tableName) {
+    refreshGenerations.set(tableName, (refreshGenerations.get(tableName) || 0) + 1);
+}
 
 const DATASET_VIEW_PERMISSION_ROUTES = Object.freeze([
     '/api/add-row-multipart',
@@ -70,6 +77,12 @@ function getFirstRenderableRowId(rows = []) {
 // refresh_table_unified.js
 
 export async function refreshTableUnified(tableName, options = {}) {
+    const preserveCardReturn = options.preserveCardReturn
+        && options.preserveCardReturn === getCardArticleReturnToken(tableName)
+        ? options.preserveCardReturn : null;
+    if (!preserveCardReturn) invalidateCardArticleReturn(tableName);
+    const adapter = getDatasetQueryAdapter(tableName);
+    if (adapter) return adapter.refresh(options);
     const generation = (refreshGenerations.get(tableName) || 0) + 1;
     refreshGenerations.set(tableName, generation);
     const query = String(getParams(tableName)?.search || "").trim();
@@ -178,7 +191,8 @@ export async function refreshTableUnified(tableName, options = {}) {
             result.has_geo,
 			result.table_meta,
 			result.dataset_presentation,
-            hasCachedSearchRenderResult ? null : result.row_group_facets
+            hasCachedSearchRenderResult ? null : result.row_group_facets,
+            ...(preserveCardReturn ? [{ preserveCardReturn }] : [])
         );
         if (!isCurrent() || cachedSearchRenderResult?.isCurrent?.() === false) return;
         if (hasCachedSearchRenderResult) {

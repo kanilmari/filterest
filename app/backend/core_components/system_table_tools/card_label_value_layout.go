@@ -9,7 +9,7 @@ import (
 	"fmt"
 )
 
-// UnmarshalJSON preserves whether the optional layout was sent at all.
+// UnmarshalJSON preserves omitted versus explicit layout and label overrides.
 // Existing clients omit it; an explicit null restores the renderer's prior default.
 func (column *CardVisibilityColumn) UnmarshalJSON(data []byte) error {
 	type plainColumn CardVisibilityColumn
@@ -23,7 +23,7 @@ func (column *CardVisibilityColumn) UnmarshalJSON(data []byte) error {
 	}
 	*column = CardVisibilityColumn(decoded)
 	_, column.labelValueLayoutProvided = fields["label_value_layout"]
-	return nil
+	return decodeCardLabelVisibilityPresence(column, fields)
 }
 
 func validateLabelValueLayout(value *string) error {

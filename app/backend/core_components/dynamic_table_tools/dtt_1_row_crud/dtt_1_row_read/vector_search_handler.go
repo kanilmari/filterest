@@ -57,6 +57,10 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		userID = 1
 	}
 
+	if !allowDatasetUIRead(response_writer, table_name, userID) {
+		return
+	}
+
 	// Valitaan oikea tietokantayhteys käyttäjän roolin perusteella
 	currentDb := auth.GetDBForRole(userRole)
 	readQuerier, err := getPilotReadQuerier(request.Context(), table_name, currentDb)

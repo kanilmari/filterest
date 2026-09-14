@@ -66,6 +66,9 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	if !allowDatasetUIRead(response_writer, table_name, userID) {
+		return
+	}
 	// 1b. Hae myös user_role sessiosta, valitse oikea DB.
 	session, sessErr := e_sessions.GetOrCreateSession(nil, request)
 	if sessErr != nil {

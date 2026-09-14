@@ -3,6 +3,7 @@
 // Bridges filter and search controls, view selection, and dataset rendering components.
 // Exists to keep dataset screen assembly in one place while delegating each concrete view to its own module.
 
+import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
 import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
 import { create_card_view } from "./card_view/card_view_printer.js";
 import { create_article_view } from "./article_view/article_view_printer.js";
@@ -327,7 +328,8 @@ export async function generate_table(
     hasGeo = false,
     tableMeta = null,
     datasetPresentation = null,
-    rowGroupFacets = null
+    rowGroupFacets = null,
+    { preserveCardReturn = null } = {}
 ) {
     try {
         const tableSpecs = getAllSpecs();
@@ -416,7 +418,7 @@ export async function generate_table(
             `${dataset_name}_tableMeta`,
             JSON.stringify(tableMeta || {
                 card_details_layout: "conditional_multiline",
-                card_style_variant: "standard",
+                card_style_variant: null,
             })
         );
 
@@ -444,6 +446,8 @@ export async function generate_table(
         saveColumnWidths(dataset_name);
 
         for (const container of Object.values(viewContainers)) {
+            if (current_view === "article_view"
+                && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container)) continue;
             container.replaceChildren();
         }
 

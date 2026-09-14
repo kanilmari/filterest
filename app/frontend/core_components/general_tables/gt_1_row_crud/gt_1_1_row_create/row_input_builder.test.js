@@ -9,15 +9,20 @@ vi.mock("./row_api_fetcher.js", () => ({
 }));
 
 vi.mock("../../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js", () => ({
-    createMultiselectDropdown: vi.fn(() => ({
-        setOptions: setOptionsMock,
-    })),
+    createMultiselectDropdown: vi.fn(({containerElement}) => {
+        const input = document.createElement("input");
+        input.setAttribute("role", "combobox");
+        containerElement.appendChild(input);
+        return {setOptions: setOptionsMock};
+    }),
 }));
 
 vi.mock("./row_geometry_builder.js", () => ({
     buildGeometryField: vi.fn(),
 }));
 
+import {isRequiredForeignKeyColumn} from "./row_input_builder_helpers.js";
+import {createMultiselectDropdown} from "../../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js";
 import { fetchLinkableRows } from "./row_api_fetcher.js";
 import { buildForeignKeyField, buildRegularField } from "./row_input_builder.js";
 
@@ -26,6 +31,45 @@ describe("buildForeignKeyField", () => {
         vi.clearAllMocks();
         document.body.replaceChildren();
         localStorage.clear();
+    });
+
+
+    test.each([["NO", "", true], ["YES", "", false], ["NO", "'new'", false]])("marks required relation for nullable=%s/default=%s", (nullable, defaultValue, required) => {
+        fetchLinkableRows.mockResolvedValue([]);
+        const form = document.createElement("form");
+        const fieldset = buildForeignKeyField(form, "tickets", {
+            column_name: "status", foreign_table_name: "statuses", foreign_column_name: "slug",
+            is_nullable: nullable, column_default: defaultValue,
+        }, {});
+        const chooser = fieldset.querySelector('[role="combobox"]');
+        expect(chooser.getAttribute("aria-required")).toBe(String(required));
+        expect(Boolean(fieldset.querySelector("abbr"))).toBe(required);
+        chooser.setAttribute("aria-invalid", "true");
+        createMultiselectDropdown.mock.calls.at(-1)[0].onChange({includeValues:["new"]});
+        expect(form.elements.status.value).toBe("new");
+        expect(chooser.hasAttribute("aria-invalid")).toBe(false);
+    });
+
+
+    test.each([
+        ["user_id", '{"user_id":"currentUser"}'],
+        ["cached_username", '{"cached_username":"currentUserName"}'],
+        ["user_id", '{"user_id":"currentUser","other":null}'],
+    ])("does not mark the server-filled actor field %s as required", (column_name, source_insert_specs) => {
+        fetchLinkableRows.mockResolvedValue([]);
+        const form = document.createElement("form");
+        const fieldset = buildForeignKeyField(form, "tickets", {
+            column_name, source_insert_specs, foreign_table_name: "users", foreign_column_name: "id", is_nullable: "NO",
+        }, {});
+        expect(fieldset.querySelector('[role="combobox"]').getAttribute("aria-required")).toBe("false");
+        expect(fieldset.querySelector("abbr")).toBeNull();
+    });
+
+
+    test.each(['{"user_id":"otherUser"}', '{"cached_username":"currentUserName"}', '{"user_id":7}', '{"user_id":"currentUser","other":7}', 'invalid'])("rejects unsupported actor spec %s", (source_insert_specs) => {
+        expect(isRequiredForeignKeyColumn({
+            column_name: "user_id", is_nullable: "NO", foreign_table_name: "users", foreign_column_name: "id", source_insert_specs,
+        })).toBe(true);
     });
 
     test("localizes foreign labels while preserving the raw primary-key value", async () => {

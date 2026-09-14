@@ -24,7 +24,6 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_delete"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
-	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
 )
@@ -97,13 +96,17 @@ func isAllowedDataType(colType string) bool {
 func splitAllowedBaseType(colType string) (string, string, bool) {
 	c := normalizeTypeDefinition(colType)
 
-	// Exact types are checked in longest-first order so multi-word types win.
-	for _, exactType := range []string{"TIMESTAMP WITH TIME ZONE", "TIMESTAMPTZ", "BIGSERIAL", "SMALLINT", "INTEGER", "BIGINT", "BOOLEAN", "TIMESTAMP", "SERIAL", "TEXT", "DATE", "JSONB", "JSON"} {
+	// Direct types are checked longest-first; VARCHAR also allows an omitted length.
+	for _, exactType := range []string{"TIMESTAMP WITH TIME ZONE", "TIMESTAMPTZ", "BIGSERIAL", "SMALLINT", "INTEGER", "BIGINT", "BOOLEAN", "TIMESTAMP", "SERIAL", "TEXT", "DATE", "JSONB", "JSON", "VARCHAR"} {
 		if c == exactType {
 			return exactType, "", true
 		}
 		if strings.HasPrefix(c, exactType+" ") {
-			return exactType, strings.TrimSpace(strings.TrimPrefix(c, exactType)), true
+			suffix := strings.TrimSpace(strings.TrimPrefix(c, exactType))
+			if exactType == "VARCHAR" && strings.HasPrefix(suffix, "(") {
+				continue // Preserve the parameterized VARCHAR (length) spelling below.
+			}
+			return exactType, suffix, true
 		}
 	}
 
@@ -280,7 +283,7 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = dtt_3_table_create.CreateTableInDatabase(tx, tableName, sanitizedColumns, sanitizedForeignKeys)
+	err = dtt_3_table_create.CreateNewTableInDatabase(tx, tableName, sanitizedColumns, sanitizedForeignKeys)
 	if err != nil {
 		_ = tx.Rollback()
 		if writeCreateTableLangKeyError(w, err) {
@@ -340,206 +343,6 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Taulu luotu onnistuneesti"))
 }
 
-func resolveCreateTableFolderID(q dbutils.Querier, req CreateTableRequest) (int, error) {
-	if req.CreateFolder != nil && strings.TrimSpace(req.CreateFolder.FolderName) != "" {
-		return dtt_system_table_folders.CreateFolderWithQuerier(q, dtt_system_table_folders.CreateFolderRequest{
-			FolderName: req.CreateFolder.FolderName,
-			ParentID:   req.CreateFolder.ParentID,
-		})
-	}
-
-	if req.FolderID != nil && *req.FolderID > 0 {
-		if err := dtt_system_table_folders.EnsureFolderExists(q, *req.FolderID); err != nil {
-			return 0, err
-		}
-		return *req.FolderID, nil
-	}
-
-	return dtt_system_table_folders.EnsureDatabaseOtherTablesFolder(q)
-}
-
-func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead, grantGuestsRead bool) error {
-	// 1. Hae taulun UID
-	tableUID, err := ensureRegisteredTableUID(q, tableName)
-	if err != nil {
-		return err
-	}
-
-	// 2. Määrittele tarvittavat funktiot ja ryhmät
-
-	// Funktiot, jotka annetaan Adminille — kaikki table-specific handlerit
-	adminFuncNames := []string{
-		// dtt_1_row_read
-		"dtt_1_row_read.GetResultsHandlerWrapper",
-		"dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
-		"dtt_1_row_read.GetRowCountHandlerWrapper",
-		"dtt_1_row_read.GetFilterOptionsHandler",
-		"dtt_1_row_read.GetDynamicChildItemsHandler",
-		"dtt_1_row_read.GetResultsVector",
-		// dtt_1_row_create
-		"dtt_1_row_create.AddRowMultipartHandlerWrapper",
-		"dtt_1_row_create.GetAddRowColumnsHandlerWrapper",
-		"dtt_1_row_create.GetAddRowMetadataHandlerWrapper",
-		"dtt_1_row_create.GetOneToManyRelationsHandlerWrapper",
-		"dtt_1_row_create.GetManyToManyTablesHandlerWrapper",
-		"dtt_1_row_create.GetReferencedTableData",
-		"dtt_1_row_create.GeocodeAddressHandler",
-		// dtt_1_row_update
-		"dtt_1_row_update.UpdateRowHandlerWrapper",
-		// dtt_1_row_delete
-		"dtt_1_row_delete.DeleteRowsHandlerWrapper",
-		// dtt_2_column_crud
-		"dtt_2_column_crud.GetTableColumnsHandler",
-		// dtt_crud_workflows
-		"dtt_crud_workflows.ModifyColumnsHandler",
-		"dtt_crud_workflows.SetCommentsHandler",
-		"dtt_crud_workflows.CreateIndexesHandler",
-		// dtt_3_table_read / dtt_3_table_delete
-		"dtt_3_table_read.GetTableViewHandlerWrapper",
-		"dtt_3_table_delete.DropTableHandler",
-		// dtt_foreign_keys
-		"dtt_foreign_keys.GetForeignKeys",
-		"dtt_foreign_keys.AddForeignKeyHandler",
-		"dtt_foreign_keys.DeleteForeignKeyHandler",
-		// dtt_triggers
-		"dtt_triggers.CreateTriggerHandler",
-		"dtt_triggers.GetTriggersHandler",
-	}
-
-	// Funktiot, jotka annetaan Users/Guests (vain luku)
-	readFuncNames := []string{
-		"dtt_1_row_read.GetResultsHandlerWrapper",
-		"dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
-		"dtt_1_row_read.GetRowCountHandlerWrapper",
-		"dtt_1_row_read.GetFilterOptionsHandler",
-		"dtt_1_row_read.GetDynamicChildItemsHandler",
-		"dtt_1_row_read.GetResultsVector",
-		"dtt_2_column_crud.GetTableColumnsHandler",
-		"dtt_3_table_read.GetTableViewHandlerWrapper",
-	}
-
-	// Hae funktioiden ID:t
-	getFuncID := func(name string) (int, error) {
-		var id int
-		err := q.QueryRow("SELECT id FROM system_functions WHERE name = $1", name).Scan(&id)
-		return id, err
-	}
-
-	// Hae ryhmien ID:t
-	getGroupID := func(name string) (int, error) {
-		var id int
-		err := q.QueryRow("SELECT id FROM system_user_groups WHERE name = $1", name).Scan(&id)
-		return id, err
-	}
-
-	adminGroupID, err := getGroupID("admins")
-	if err != nil {
-		return err
-	}
-
-	// Lisää Admin-oikeudet
-	for _, fnName := range adminFuncNames {
-		fid, err := getFuncID(fnName)
-		if err != nil {
-			log.Printf("warning: function %q not found, skipping admin permission", fnName)
-			continue
-		}
-		if err := insertPerm(q, adminGroupID, fid, tableUID); err != nil {
-			return fmt.Errorf("inserting admin permission for %q: %w", fnName, err)
-		}
-	}
-
-	// Lisää Users-oikeudet
-	if grantUsersRead {
-		usersGroupID, err := getGroupID("users")
-		if err != nil {
-			return fmt.Errorf("users group not found: %w", err)
-		}
-		for _, fnName := range readFuncNames {
-			fid, err := getFuncID(fnName)
-			if err != nil {
-				log.Printf("warning: function %q not found, skipping users permission", fnName)
-				continue
-			}
-			if err := insertPerm(q, usersGroupID, fid, tableUID); err != nil {
-				return fmt.Errorf("inserting users permission for %q: %w", fnName, err)
-			}
-		}
-	}
-
-	// Lisää Guests-oikeudet
-	if grantGuestsRead {
-		guestsGroupID, err := getGroupID("guests")
-		if err != nil {
-			return fmt.Errorf("guests group not found: %w", err)
-		}
-		for _, fnName := range readFuncNames {
-			fid, err := getFuncID(fnName)
-			if err != nil {
-				log.Printf("warning: function %q not found, skipping guests permission", fnName)
-				continue
-			}
-			if err := insertPerm(q, guestsGroupID, fid, tableUID); err != nil {
-				return fmt.Errorf("inserting guests permission for %q: %w", fnName, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func ensureRegisteredTableUID(q dbutils.Querier, tableName string) (int, error) {
-	var tableUID int
-	err := q.QueryRow("SELECT table_uid FROM system_db_tables WHERE table_name = $1 AND schema_name = 'public'", tableName).Scan(&tableUID)
-	if err == nil {
-		return tableUID, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("table_uid lookup failed for %s: %w", tableName, err)
-	}
-
-	defaultFolderID, err := dtt_system_table_folders.EnsureDatabaseOtherTablesFolder(q)
-	if err != nil {
-		return 0, fmt.Errorf("failed to resolve default folder for %s: %w", tableName, err)
-	}
-
-	insertQuery := `
-		INSERT INTO system_db_tables (cached_oid, schema_name, table_name, folder_id)
-		SELECT c.oid, n.nspname, c.relname
-		     , $2
-		FROM pg_class c
-		JOIN pg_namespace n ON n.oid = c.relnamespace
-		WHERE c.relkind = 'r'
-		  AND n.nspname = 'public'
-		  AND c.relname = $1
-		  AND NOT EXISTS (
-			SELECT 1
-			FROM system_db_tables s
-			WHERE s.table_name = c.relname
-			  AND s.schema_name = n.nspname
-		  )
-	`
-	if _, insertErr := q.Exec(insertQuery, tableName, defaultFolderID); insertErr != nil {
-		return 0, fmt.Errorf("failed to register metadata row for %s: %w", tableName, insertErr)
-	}
-
-	err = q.QueryRow("SELECT table_uid FROM system_db_tables WHERE table_name = $1 AND schema_name = 'public'", tableName).Scan(&tableUID)
-	if err != nil {
-		return 0, fmt.Errorf("table_uid not found for %s: %w", tableName, err)
-	}
-
-	return tableUID, nil
-}
-
-func insertPerm(q dbutils.Querier, groupID, funcID, tableUID int) error {
-	query := `INSERT INTO system_group_table_func_rights
-		(user_group_id, function_id, target_table_uid, target_schema_name)
-		VALUES ($1, $2, $3, 'public')
-		ON CONFLICT (user_group_id, function_id, COALESCE(target_table_uid, 0)) DO NOTHING`
-	_, err := q.Exec(query, groupID, funcID, tableUID)
-	return err
-}
-
 // Bridge functions delegate to the underlying column CRUD packages.
 func RemoveColumnsWithBridge(
 	tx *sql.Tx,
@@ -558,10 +361,11 @@ func AddNewColumnsWithBridge(
 }
 
 type ModifyColumnsRequest struct {
-	TableName    string                          `json:"dataset_name"`
-	ModifiedCols []dtt_2_column_crud.ModifiedCol `json:"modified_columns"`
-	AddedCols    []dtt_2_column_crud.ModifiedCol `json:"added_columns"`
-	RemovedCols  []string                        `json:"removed_columns"`
+	TableName              string                          `json:"dataset_name"`
+	ModifiedCols           []dtt_2_column_crud.ModifiedCol `json:"modified_columns"`
+	AddedCols              []dtt_2_column_crud.ModifiedCol `json:"added_columns"`
+	RemovedCols            []string                        `json:"removed_columns"`
+	NewColumnsMultilingual *bool                           `json:"new_columns_multilingual,omitempty"`
 }
 
 func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
@@ -606,6 +410,11 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("modified column '%s' uses a forbidden data type '%s'", col.OriginalName, col.DataType))
 			return
 		}
+	}
+
+	if err := validateNewColumnLanguages(req.AddedCols); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// 1) Poistetut sarakkeet
@@ -662,9 +471,32 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Invalidate metadata caches so next GetResults fetch picks up schema changes.
-	dtt_1_row_read.InvalidateSchemaCache(sanitizedTableName)
-	dtt_1_row_read.InvalidateDatasetExistsCache(sanitizedTableName)
+	// DDL, metadata defaults and existing view memberships share this transaction.
+	if err := configureNewColumnDefaults(tx, sanitizedTableName, req.AddedCols, req.NewColumnsMultilingual); err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	names := make([]string, 0, len(req.AddedCols))
+	for _, column := range req.AddedCols {
+		names = append(names, column.NewName)
+	}
+	if err := dtt_2_column_update.AppendNewColumnsToFieldSets(tx, sanitizedTableName, names); err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Readers must not refill a cache from the old schema before this commit.
+	invalidate := func() {
+		dtt_1_row_read.InvalidateSchemaCache(sanitizedTableName)
+		dtt_1_row_read.InvalidateDatasetExistsCache(sanitizedTableName)
+		dtt_1_row_read.InvalidateUserColumnSettingsCache(sanitizedTableName, "")
+		dtt_1_row_read.InvalidatePermissionsCache(sanitizedTableName)
+	}
+	if !dbutils.RegisterAfterCommitHook(r.Context(), invalidate) {
+		invalidate()
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Muutokset tallennettu onnistuneesti"})
@@ -752,7 +584,7 @@ func SimpleCreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = dtt_3_table_create.CreateTableInDatabase(tx, tableName, sanitizedColumns, nil) // Ei foreign keys
+	err = dtt_3_table_create.CreateNewTableInDatabase(tx, tableName, sanitizedColumns, nil) // Ei foreign keys
 	if err != nil {
 		_ = tx.Rollback()
 		if writeCreateTableLangKeyError(w, err) {

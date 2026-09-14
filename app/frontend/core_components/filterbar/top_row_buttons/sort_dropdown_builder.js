@@ -30,7 +30,7 @@ import {
     createDatasetSortDefaultAction,
 } from "./dataset_sort_default_controller.js";
 
-export function createSortDropdown(tableName, columns, dataTypes) {
+export function createSortDropdown(tableName, columns, dataTypes, { allowPersistentDefault = true, allowedSortColumns = null, columnLabels = {} } = {}) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("sort-dropdown-wrapper");
 
@@ -44,7 +44,14 @@ export function createSortDropdown(tableName, columns, dataTypes) {
     wrapper.appendChild(dropdownContainer);
 
     const sortableColumns = filterSortableColumns(columns, dataTypes);
-    const options = buildSortOptions(sortableColumns, columns);
+    const options = buildSortOptions(sortableColumns, columns)
+        .filter((option) => !allowedSortColumns || (option.value && allowedSortColumns.includes(option.value.split(':')[0])))
+        .map((option) => {
+            const [column, direction] = option.value.split(':');
+            return columnLabels[column]
+                ? { ...option, label: `${columnLabels[column]} ${direction === 'DESC' ? '↓' : '↑'}`, langKey: undefined }
+                : option;
+        });
     const contextualOptions = () => options.filter((option) =>
         option.value !== "" || String(getParams(tableName).search || "").trim()
     );
@@ -120,7 +127,7 @@ export function createSortDropdown(tableName, columns, dataTypes) {
         useSearch: false,
         menuMaxWidth: 300,
         renderOptionTrailingAction: (option, { close }) =>
-            option.transient === true ? null : createDatasetSortDefaultAction(tableName, option, {
+            !allowPersistentDefault || option.transient === true ? null : createDatasetSortDefaultAction(tableName, option, {
                 selectOption: async (value) => {
                     dropdown.setValue(value, false);
                     await applySortSelection(value);
@@ -152,7 +159,7 @@ export function createSortDropdown(tableName, columns, dataTypes) {
         dropdown.setValue(value || "");
     });
 
-    void applyDatasetSortDefault(
+    if (allowPersistentDefault) void applyDatasetSortDefault(
         tableName,
         dropdown,
         availableValues

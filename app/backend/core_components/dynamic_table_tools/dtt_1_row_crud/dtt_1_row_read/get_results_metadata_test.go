@@ -40,27 +40,6 @@ func TestNormalizeCardDetailsLayout(t *testing.T) {
 	}
 }
 
-func TestNormalizeCardStyleVariant(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{name: "modern", input: "modern", want: "modern"},
-		{name: "standard", input: "standard", want: "standard"},
-		{name: "unknown fallback", input: "floating", want: "standard"},
-		{name: "empty fallback", input: "", want: "standard"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeCardStyleVariant(tt.input); got != tt.want {
-				t.Fatalf("normalizeCardStyleVariant(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestResolveOwnerColumnFromMetadataPrefersExplicitColumn(t *testing.T) {
 	columns := map[string]bool{
 		"created_by": true,
@@ -198,10 +177,15 @@ func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
 }
 
 type layoutMetadataDriver struct {
-	editable bool
-	present  bool
-	value    driver.Value
-	query    *string
+	detailColumn      bool
+	cardDetailColumns driver.Value
+	tableMeta         bool
+	styleColumn       bool
+	cardStyle         driver.Value
+	editable          bool
+	present           bool
+	value             driver.Value
+	query             *string
 }
 type layoutMetadataConn struct{ state *layoutMetadataDriver }
 type layoutMetadataRows struct {
@@ -220,12 +204,21 @@ func (*layoutMetadataConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("
 func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if strings.Contains(query, "SELECT EXISTS") {
 		present := true
+		if c.state.tableMeta && args[1].Value == "card_detail_columns" {
+			present = c.state.detailColumn
+		}
+		if c.state.tableMeta && args[1].Value == "card_style_variant" {
+			present = c.state.styleColumn
+		}
 		if args[1].Value == "label_value_layout" {
 			present = c.state.present
 		}
 		return &layoutMetadataRows{values: []driver.Value{present}}, nil
 	}
 	*c.state.query = query
+	if c.state.tableMeta {
+		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns}}, nil
+	}
 	value := c.state.value
 	if !c.state.present {
 		value = nil
@@ -285,7 +278,7 @@ func TestColumnMetadataCarriesOptionalLayoutWithoutExposingHiddenFields(t *testi
 			if !reflect.DeepEqual(result["url"]["label_value_layout"], tt.value) {
 				t.Fatalf("layout %s", encoded)
 			}
-			for _, guard := range []string{"COALESCE(scd.hide_everywhere, false) = false", "COALESCE(scd.client_delivery_mode, 'include') = 'include'"} {
+			for _, guard := range []string{"public.resolve_card_label_visibility(scd.show_key_on_card, scd.card_element) AS show_key_on_card", "COALESCE(scd.hide_everywhere, false) = false", "COALESCE(scd.client_delivery_mode, 'include') = 'include'"} {
 				if !strings.Contains(query, guard) {
 					t.Fatalf("missing delivery guard %s", guard)
 				}
@@ -336,6 +329,87 @@ func TestColumnMetadataCarriesExplicitEditability(t *testing.T) {
 			}
 			if !strings.Contains(query, "COALESCE(scd.editable_in_ui, false) AS editable_in_ui") {
 				t.Fatal("missing metadata must remain noneditable")
+			}
+		})
+	}
+}
+
+func TestTableMetadataPreservesNullableCardStyle(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		present bool
+		value   driver.Value
+		want    string
+	}{
+		{"older schema", false, nil, "null"}, {"inherited", true, nil, "null"},
+		{"standard", true, "standard", `"standard"`}, {"modern", true, "modern", `"modern"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			query := ""
+			name := "card-style-meta-" + t.Name()
+			sql.Register(name, &layoutMetadataDriver{tableMeta: true, styleColumn: test.present, cardStyle: test.value, query: &query})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			meta, err := fetchTableReadMeta(db, "example")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(meta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(body), `"card_style_variant":`+test.want) {
+				t.Fatalf("metadata=%s", body)
+			}
+			if strings.Contains(query, "COALESCE(card_style_variant") {
+				t.Fatal("query materialized an inherited style")
+			}
+			if !test.present && !strings.Contains(query, "NULL::varchar AS card_style_variant") {
+				t.Fatalf("legacy schema fallback=%s", query)
+			}
+		})
+	}
+}
+
+// Nullable dataset counts must reach the renderer unchanged, including on old schemas.
+func TestTableMetadataPreservesNullableCardDetailColumns(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		present bool
+		value   driver.Value
+		want    string
+	}{
+		{"older schema", false, nil, "null"}, {"inherited", true, nil, "null"},
+		{"one", true, int64(1), "1"}, {"four", true, int64(4), "4"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			query := ""
+			name := "card-columns-meta-" + t.Name()
+			sql.Register(name, &layoutMetadataDriver{tableMeta: true, detailColumn: test.present, cardDetailColumns: test.value, query: &query})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			meta, err := fetchTableReadMeta(db, "example")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(meta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(body), `"card_detail_columns":`+test.want) {
+				t.Fatalf("metadata=%s", body)
+			}
+			if strings.Contains(query, "COALESCE(card_detail_columns") {
+				t.Fatal("query materialized an inherited count")
+			}
+			if !test.present && !strings.Contains(query, "NULL::integer AS card_detail_columns") {
+				t.Fatalf("old schema query=%s", query)
 			}
 		})
 	}

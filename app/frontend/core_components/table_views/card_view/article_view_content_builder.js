@@ -3,6 +3,8 @@
 // Bridges row values, column metadata, and card formatting helpers into the final detail DOM.
 // Exists to keep article-view content composition separate from the legacy big-card UI state layer.
 
+import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
+
 import {
     parseRoleString,
     format_column_name,
@@ -40,6 +42,9 @@ import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { resolveRowArticleTimestampDisplayOptions } from "./row_article_presentation_settings.js";
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { splitKeywordRoleValue } from "./card_keyword_value_helpers.js";
+import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
+
+const DETAILS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
 
 function resolveRowArticleLabelMetadata(dataTypes = {}, detailEntry = {}) {
     return dataTypes[
@@ -67,7 +72,7 @@ export async function buildRowArticleContent(
     header_first_letter,
     table_has_image_role,
     current_user_id = null,
-    { selectedCard = null } = {},
+    { selectedCard = null, sectionDefaults = {} } = {},
 ) {
     const rowArticleContentElement = document.createElement("div");
     rowArticleContentElement.classList.add("big_card_content", "row_article_content");
@@ -520,7 +525,7 @@ export async function buildRowArticleContent(
     /* -- details ----------------------------------- */
     if (expandedDetailsEntries.length) {
         const detailsContainer = document.createElement("div");
-        detailsContainer.classList.add("big_card_details_container", "row_article_details_section");
+        detailsContainer.classList.add("big_card_details_container");
 
         expandedDetailsEntries.forEach((d) => {
             if (d.isLink) {
@@ -561,7 +566,16 @@ export async function buildRowArticleContent(
                 )
             );
         });
-        rowArticleContentElement.appendChild(detailsContainer);
+        rowArticleContentElement.appendChild(
+            buildRowArticleDisclosureSection({
+                titleLangKey: "row_article_section_details",
+                titleText: "Details",
+                iconPath: DETAILS_ICON_PATH,
+                contentElement: detailsContainer,
+                startOpen: resolveRowArticleSectionStartOpen(sectionDefaults, "details"),
+                sectionClassNames: "row_article_details_section",
+            })
+        );
     }
 
     return {

@@ -37,7 +37,7 @@ test.describe('Delete Payments Table', () => {
       const response = await fetch('/api/drop-dataset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataset_name: 'payments' }),
+        body: JSON.stringify({ dataset_name: 'payments', confirm_dataset_name: 'payments' }),
         credentials: 'include',
       });
       return { status: response.status, statusText: response.statusText, body: await response.text() };

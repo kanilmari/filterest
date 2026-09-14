@@ -111,6 +111,51 @@ describe("row article image-first stage", () => {
         expect(caption.textContent).toBe("Second image");
     });
 
+    test("groups the caption with the article cue without changing link or scroll actions", () => {
+        const { element, onBackdropActivate } = createStage([{
+            id: 1, filename: "one.jpg", alt: "One",
+            description: { en: "Illustration – [Photographer](https://unsplash.com/photos/example)" },
+        }]);
+        const article = document.createElement("article");
+        article.scrollIntoView = vi.fn();
+        document.body.append(element, article);
+        const controls = element.querySelector("[data-testid='row-article-image-first-bottom-controls']");
+        const caption = controls.querySelector("[data-testid='row-article-image-first-caption']");
+        const cue = controls.querySelector("[data-testid='row-article-image-scroll-hint']");
+        expect([...controls.children]).toEqual([caption, cue]);
+        expect(element.querySelector(".row_article_image_first_reveal_cluster").contains(controls))
+            .toBe(true);
+        const credit = caption.querySelector("a");
+        expect(credit.href).toBe("https://unsplash.com/photos/example");
+        credit.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        controls.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(onBackdropActivate).not.toHaveBeenCalled();
+        expect(article.scrollIntoView).not.toHaveBeenCalled();
+        cue.click();
+        expect(onBackdropActivate).not.toHaveBeenCalled();
+        expect(article.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+        element.remove();
+        article.remove();
+    });
+
+    test("keeps the article cue in the group when navigation removes the caption", () => {
+        const { element } = createStage([
+            { id: 1, filename: "one.jpg", description: { en: "Image credit" } },
+            { id: 2, filename: "two.jpg" },
+        ]);
+        const controls = element.querySelector("[data-testid='row-article-image-first-bottom-controls']");
+        const caption = controls.querySelector(".row_article_image_first_caption");
+        const cue = controls.querySelector(".row_article_image_first_scroll_hint");
+        expect(caption.hidden).toBe(false);
+        element.querySelector("[data-testid='row-article-image-next']").click();
+        expect(caption.hidden).toBe(true);
+        expect(caption.nextElementSibling).toBe(cue);
+        expect(cue.hidden).toBe(false);
+        element.querySelector("[data-testid='row-article-image-previous']").click();
+        expect(caption.hidden).toBe(false);
+        expect(controls.children).toHaveLength(2);
+    });
+
     test("shows the article cue and treats raster letterbox space as the backdrop", () => {
         const { element, onBackdropActivate } = createStage([
             { id: 1, filename: "one.jpg", alt: "One" },
@@ -322,10 +367,13 @@ describe("row article image-first stage", () => {
         }
     });
 
-    test("closes from unused space around an image-backed service logo", () => {
+    test.each(["app_service_catalog", "ordinary_dataset"])("closes from unused space around an image-backed logo in %s", (tableName) => {
         const { element, onBackdropActivate } = createStage(
-            [{ id: 1, filename: "service-logo.jpg", alt: "Service logo" }],
-            { tableName: "app_service_catalog", rowLabel: "Service" },
+            [{
+                id: 1, filename: "service-logo.jpg", alt: "Service logo", type_id: 1,
+                metadata_json: { logo_variant: "example", logo_render_mode: "normal_image" },
+            }],
+            { tableName, rowLabel: "Service" },
         );
 
         const mediaHost = element.querySelector(".row_article_image_first_media");

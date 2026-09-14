@@ -425,9 +425,9 @@
     margin-bottom: 10px;
 }
 .modal .form-actions .danger-button {
-    background: linear-gradient(135deg, hsl(0deg 70% 60%) 0%, hsl(0deg 70% 50%) 100%);
-    color: #fff;
-    box-shadow: 0 3px 8px hsl(0deg 70% 50% / 0.3);
+    background: var(--color-error-light);
+    color: var(--color-error);
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--color-error) 30%, transparent);
     padding: 12px 20px;
     margin-left: 10px;
     border: none;
@@ -438,13 +438,20 @@
     transition: box-shadow 0.2s ease, filter 0.2s ease;
 }
 
+/* Keep the semantic color pair together when the later generic .button
+   hover/active rules replace their background shorthand. */
 .modal .form-actions .danger-button:hover {
-    box-shadow: 0 4px 12px hsl(0deg 70% 50% / 0.35);
-    filter: brightness(1.05);
+    background: var(--color-error-light);
+    color: var(--color-error);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-error) 35%, transparent);
+    filter: none;
 }
 
 .modal .form-actions .danger-button:active {
-    box-shadow: 0 2px 6px hsl(0deg 70% 50% / 0.25);
+    background: var(--color-error-light);
+    color: var(--color-error);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-error) 25%, transparent);
+    filter: none;
 }
 
 /* Delete confirmation item list */

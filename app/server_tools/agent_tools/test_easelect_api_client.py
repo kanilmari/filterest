@@ -58,6 +58,21 @@ class PagingClient(EaselectAPIClient):
 
 
 class EaselectAPIClientTest(unittest.TestCase):
+    def test_confirmed_dataset_drop_carries_server_confirmation(self) -> None:
+        client = CapturingClient()
+        client.drop_dataset("e2e_confirmed_dataset")
+        self.assertEqual(client.calls, [{
+            "method": "POST",
+            "path": "/api/drop-dataset",
+            "data": {
+                "dataset_name": "e2e_confirmed_dataset",
+                "confirm_dataset_name": "e2e_confirmed_dataset",
+            },
+            "query": None,
+            "csrf": True,
+            "expect_json": True,
+        }])
+
     def test_tls_context_skips_verification_only_for_exact_native_origin(self) -> None:
         local_context = EaselectAPIClient._ssl_context(
             DEFAULT_BASE_URL,
@@ -220,13 +235,18 @@ class EaselectAPIClientTest(unittest.TestCase):
         self.assertEqual(client.calls[0]["method"], "POST")
         self.assertEqual(client.calls[0]["path"], "/api/admin/lang-key")
         self.assertTrue(client.calls[0]["csrf"])
-        self.assertEqual(client.calls[0]["data"]["yue"], "舊")
+        self.assertNotIn("yue", client.calls[0]["data"])
+        self.assertEqual(result["after"]["yue"], "舊")
 
     def test_load_project_env_uses_external_key_root_for_private_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir) / "easelect"
             project_root.mkdir()
             (project_root / ".git").mkdir()
+            (project_root / "filterest.source-roots").write_text(
+                "filterest_private\nfilterest_candidates\n", encoding="utf-8",
+            )
+            (project_root / "filterest.source-roots").chmod(0o644)
             (project_root / "VERSION_EASELECT").write_text("1.0.0\n", encoding="utf-8")
             key_root = Path(temp_dir) / "keys"
             development_root = key_root / "easelect_development"
@@ -261,6 +281,10 @@ class EaselectAPIClientTest(unittest.TestCase):
             project_root = Path(temp_dir) / "easelect"
             project_root.mkdir()
             (project_root / ".git").mkdir()
+            (project_root / "filterest.source-roots").write_text(
+                "filterest_private\nfilterest_candidates\n", encoding="utf-8",
+            )
+            (project_root / "filterest.source-roots").chmod(0o644)
             (project_root / "VERSION_EASELECT").write_text(
                 "1.0.0\n",
                 encoding="utf-8",
@@ -454,6 +478,10 @@ class EaselectAPIClientTest(unittest.TestCase):
             project_root = Path(temp_dir) / "easelect"
             project_root.mkdir()
             (project_root / ".git").mkdir()
+            (project_root / "filterest.source-roots").write_text(
+                "filterest_private\nfilterest_candidates\n", encoding="utf-8",
+            )
+            (project_root / "filterest.source-roots").chmod(0o644)
             (project_root / "VERSION_EASELECT").write_text(
                 "1.0.0\n",
                 encoding="utf-8",

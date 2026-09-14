@@ -23,6 +23,20 @@ describe('create_filter_bar inline hero mounting', () => {
         cleanupFilterBarBuilderTestDom();
     });
 
+    test('uses explicit surface metadata and omits SQL-only hero actions for API surfaces', async () => {
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/admin/dataset_header_config']));
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        const { appendChatUIIfAllowed } = await import('../admin_tools/admin_button_builder.js');
+        const { mountDatasetCoverTestPalette } = await import('../admin_tools/dataset_cover_test_palette.js');
+        create_filter_bar('demo', 'demo_uid', ['id'], { id: 'integer' }, 1, false, 'custom', {
+            metadata: { display_name: 'Authorized API surface' }, allowDatasetManagement: false,
+        });
+        expect(document.querySelector('.filterbar-inline-hero').textContent).toContain('Authorized API surface');
+        expect(document.querySelector('[data-testid="dataset-header-config-hero-button"]')).toBeNull();
+        expect(appendChatUIIfAllowed).not.toHaveBeenCalled();
+        expect(mountDatasetCoverTestPalette).not.toHaveBeenCalled();
+    });
+
     test('reattaches inline hero after the active scrollable content is rerendered', async () => {
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
@@ -116,7 +130,7 @@ describe('create_filter_bar inline hero mounting', () => {
 			.toContain('/storage/104/dataset_media/cover/original/cover.webp');
         expect(document.documentElement.style.getPropertyValue('--active-dataset-cover-image'))
             .toBe('');
-        expect(mountDatasetCoverTestPalette).toHaveBeenCalledWith(inlineHero, 'demo');
+        expect(mountDatasetCoverTestPalette).toHaveBeenCalledWith(inlineHero, 'demo', expect.objectContaining({ canCommit: expect.any(Function) }));
     });
 
     test('falls back to the localized dataset title when the site identity is unavailable', async () => {

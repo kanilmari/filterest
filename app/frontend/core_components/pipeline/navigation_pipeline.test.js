@@ -210,4 +210,81 @@ describe('navigation_pipeline', () => {
     expect(updateURLMock).not.toHaveBeenCalled();
     expect(performNavigationCore).toHaveBeenCalledTimes(1);
   });
+  test("a valid mounted return still checks permission and renders without a loading insertion", async () => {
+    hasDatasetPermissionMock.mockResolvedValue(true);
+    const mod = await loadModule();
+    const render = vi.fn();
+    await mod.runNavigationPipeline({
+      name: "events", skip: ["urlUpdate"], containerId: "events_container",
+      canRestoreMountedView: () => true, _performNavigationCore: render,
+    });
+    expect(hasDatasetPermissionMock).toHaveBeenCalledWith("/api/get-results", "events");
+    expect(render).toHaveBeenCalledOnce();
+    expect(withLoadingIndicatorMock).not.toHaveBeenCalled();
+  });
+
+  test("revoked permission cannot render a retained surface", async () => {
+    hasDatasetPermissionMock.mockResolvedValue(false);
+    const mod = await loadModule();
+    const render = vi.fn();
+    const result = await mod.runNavigationPipeline({
+      name: "events", skip: ["urlUpdate"], canRestoreMountedView: () => true,
+      _performNavigationCore: render,
+    });
+    expect(result).toEqual({ abort: true, reason: "permission_denied" });
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  test("invalidation during the permission await returns to normal loading", async () => {
+    let valid = true;
+    hasDatasetPermissionMock.mockImplementation(async () => { valid = false; return true; });
+    const mod = await loadModule();
+    const render = vi.fn();
+    await mod.runNavigationPipeline({
+      name: "events", skip: ["urlUpdate"], containerId: "events_container",
+      canRestoreMountedView: () => valid, _performNavigationCore: render,
+    });
+    expect(withLoadingIndicatorMock).toHaveBeenCalledOnce();
+    expect(render).toHaveBeenCalledOnce();
+  });
+
+  test("a delayed Back permission result aborts after a newer Forward instead of loading again", async () => {
+    let resolveBack;
+    hasDatasetPermissionMock
+      .mockReturnValueOnce(new Promise(resolve => { resolveBack = resolve; }))
+      .mockResolvedValue(true);
+    const mod = await loadModule();
+    const render = vi.fn();
+    let backCurrent = true;
+    const back = mod.runNavigationPipeline({
+      name: "events", skip: ["urlUpdate"], containerId: "events_container",
+      isCurrentNavigation: () => backCurrent,
+      canRestoreMountedView: () => backCurrent,
+      _performNavigationCore: render,
+    });
+    await vi.waitFor(() => expect(hasDatasetPermissionMock).toHaveBeenCalledOnce());
+    backCurrent = false;
+    await mod.runNavigationPipeline({
+      name: "events", skip: ["urlUpdate"], containerId: "events_container",
+      _performNavigationCore: render,
+    });
+    resolveBack(true);
+    expect(await back).toEqual({ abort: true, reason: "stale_navigation" });
+    expect(render).toHaveBeenCalledOnce();
+    expect(withLoadingIndicatorMock).toHaveBeenCalledOnce();
+  });
+
+  test("a current history intent with a cache miss still uses normal loading", async () => {
+    hasDatasetPermissionMock.mockResolvedValue(true);
+    const mod = await loadModule();
+    const render = vi.fn();
+    await mod.runNavigationPipeline({
+      name: "events", skip: ["urlUpdate"], containerId: "events_container",
+      isCurrentNavigation: () => true, canRestoreMountedView: () => false,
+      _performNavigationCore: render,
+    });
+    expect(render).toHaveBeenCalledOnce();
+    expect(withLoadingIndicatorMock).toHaveBeenCalledOnce();
+  });
+
 });

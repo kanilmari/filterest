@@ -75,6 +75,20 @@ describe("view_selector_printer", () => {
         closeRowArticleMock.mockReset();
     });
 
+    test("More-menu transitions preserve the query and commit the URL before rendering", async () => {
+        const { selectDatasetView } = await loadModule();
+        localStorage.setItem("demo_table_view", "article_view");
+        getParamsMock.mockReturnValue({ search: "retained query", sort_order: "DESC", view: "article_view" });
+        selectDatasetView("demo_table", "tree", "article_view");
+        expect(localStorage.getItem("demo_table_view")).toBe("tree");
+        expect(updateURLMock).toHaveBeenCalledWith("demo_table", {
+            search: "retained query", sort_order: "DESC", view: "tree",
+        });
+        expect(updateURLMock.mock.invocationCallOrder[0]).toBeLessThan(
+            refreshTableUnifiedMock.mock.invocationCallOrder[0],
+        );
+    });
+
     test.each([
         ["table", "Taulu"],
         ["transposed", "Vertailu"],
@@ -271,6 +285,21 @@ describe("view_selector_printer", () => {
             pendingAutoOpenFirstSearchResult: false,
             pendingAutoOpenFirstRenderedResult: false,
         });
+    });
+
+
+    test("reselecting the open article is inert and preserves its row/history", async () => {
+        localStorage.setItem("demo_table_view", "article_view");
+        document.body.innerHTML = '<div id="demo_table_article_view_container"><div class="card_view_wrapper big-card-open"><article class="active_row_article"></article></div></div>';
+        const original = document.querySelector("article");
+        const { createGenericViewSelector } = await loadModule();
+        const selector = createGenericViewSelector("demo_table", "article_view", [{ viewKey: "article_view" }]);
+        selector.querySelector("button").click();
+        await Promise.resolve();
+        expect(updateURLMock).not.toHaveBeenCalled();
+        expect(setParamsMock).not.toHaveBeenCalled();
+        expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
+        expect(document.querySelector("article")).toBe(original);
     });
 
     test("article button prepares the first rendered row when no active search exists", async () => {

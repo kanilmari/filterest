@@ -75,6 +75,7 @@ export function determineColumnCategory(column, dataType) {
  * @returns {'foreign_key'|'numeric_range'|'date_range'|'boolean_select'|'text_input'}
  */
 export function resolveFilterElementKind(colType) {
+    if (Array.isArray(colType?.filter_options)) return "choice";
     if (typeof colType === "object" && colType?.foreign_table) {
         return "foreign_key";
     }

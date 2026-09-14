@@ -33,6 +33,7 @@ import (
 	dtt_triggers "easelect/backend/core_components/dynamic_table_tools/dtt_triggers"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/event_bus"
+	frontendassets "easelect/backend/core_components/frontend_assets"
 	lang "easelect/backend/core_components/lang"
 	productidentity "easelect/backend/core_components/product_identity"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -230,6 +231,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/embedding-datasets", ai_features.GetEmbeddingDatasetsHandler, "ai_features.GetEmbeddingDatasetsHandler")
 	functionRegisterHandler("/api/admin/embedding-source-policy", ai_features.ExternalEmbeddingSourcePolicyHandler, "ai_features.ExternalEmbeddingSourcePolicyHandler")
 	functionRegisterHandler("/api/admin/ui-languages", lang.AdminUILanguagesHandler, "lang.AdminUILanguagesHandler")
+	functionRegisterHandler("/api/admin/dataset-ui-visibility", system_table_tools.AdminDatasetUIVisibilityHandler, "system_table_tools.AdminDatasetUIVisibilityHandler")
 	functionRegisterHandler("/api/admin/column-multilingual", system_table_tools.UpdateColumnMultilingualHandler, "system_table_tools.UpdateColumnMultilingualHandler")
 	functionRegisterHandler("/api/admin/column-insertable", system_table_tools.UpdateColumnInsertableHandler, "system_table_tools.UpdateColumnInsertableHandler")
 	functionRegisterHandler("/api/dataset_permissions", backend.PermissionsHandler, "backend.PermissionsHandler")
@@ -260,6 +262,8 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/child-tab-config/save", system_table_tools.SaveChildTabConfigHandler, "system_table_tools.SaveChildTabConfigHandler")
 	functionRegisterHandler("/api/child-tab-config/", system_table_tools.GetChildTabConfigHandler, "system_table_tools.GetChildTabConfigHandler")
 	functionRegisterHandler("/api/view-field-sets", system_table_tools.GetViewFieldSetsHandler, "system_table_tools.GetViewFieldSetsHandler")
+	functionRegisterHandler("/api/view-field-settings/article-section-defaults", system_table_tools.GetArticleSectionDefaultsHandler, "system_table_tools.GetArticleSectionDefaultsHandler")
+	functionRegisterHandler("/api/admin/view-field-settings/article-section-defaults", system_table_tools.SaveArticleSectionDefaultsHandler, "system_table_tools.SaveArticleSectionDefaultsHandler")
 	functionRegisterHandler("/api/view-field-sets/personal/save", system_table_tools.SavePersonalViewFieldSetHandler, "system_table_tools.SavePersonalViewFieldSetHandler")
 	functionRegisterHandler("/api/view-field-sets/personal/assign", system_table_tools.AssignPersonalViewFieldSetHandler, "system_table_tools.AssignPersonalViewFieldSetHandler")
 	functionRegisterHandler("/api/view-field-sets/personal/reset", system_table_tools.ResetPersonalViewFieldSetHandler, "system_table_tools.ResetPersonalViewFieldSetHandler")
@@ -388,7 +392,7 @@ func RegisterFrontendDirectory(urlPrefix string, directory string) error {
 
 	fileServer := http.StripPrefix(
 		urlPrefix,
-		http.FileServer(http.Dir(absoluteDirectory)),
+		frontendassets.FileServer(absoluteDirectory),
 	)
 	functionRegisterHandler(
 		urlPrefix,

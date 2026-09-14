@@ -230,34 +230,41 @@ function createGenericViewButton(label, viewKey, tableName, currentView, langKey
         }
     }
 
-    // Klikattaessa tallennetaan localStorageen ja kutsutaan refresh
-    btn.addEventListener("click", () => {
-
-        const datasetName = tableName;
-        const previousViewKey = localStorage.getItem(`${datasetName}_view`) || currentView || defaultView;
-        const route = getDatasetViewPermissionRoute(viewKey);
-        let nextViewKey = resolveDatasetViewSelectionTarget(viewKey);
-        if (!isDatasetViewSelectorAlias(viewKey) && viewKey !== defaultView && route && !hasRoutePermission(route)) {
-            nextViewKey = defaultView;
-        }
-        if (viewKey !== ARTICLE_VIEW_KEY) {
-            closeRowArticleBeforeViewSwitch(tableName);
-        }
-        localStorage.setItem(`${datasetName}_view`, nextViewKey);
-        syncActiveViewButtons(tableName, nextViewKey);
-        applyViewStyling(tableName);
-        const articlePreparation = prepareArticleViewTarget(tableName, viewKey, previousViewKey);
-        if (articlePreparation) {
-            void articlePreparation.finally(() => {
-                if (localStorage.getItem(`${tableName}_view`) === ARTICLE_VIEW_KEY) refreshTableUnified(tableName);
-            });
-            return;
-        }
-        rememberDatasetViewUrlState(tableName, nextViewKey);
-        refreshTableUnified(tableName);
-    });
+    btn.addEventListener("click", () => selectDatasetView(tableName, viewKey, currentView));
 
     return btn;
+}
+
+// Buttons and the More menu commit the same view, query and history transition.
+export function selectDatasetView(tableName, viewKey, currentView = null) {
+    if (!viewKey) return;
+    const defaultView = getDefaultViewSync();
+    const datasetName = tableName;
+    const previousViewKey = localStorage.getItem(`${datasetName}_view`) || currentView || defaultView;
+    const route = getDatasetViewPermissionRoute(viewKey);
+    let nextViewKey = resolveDatasetViewSelectionTarget(viewKey);
+    if (!isDatasetViewSelectorAlias(viewKey) && viewKey !== defaultView && route && !hasRoutePermission(route)) {
+        nextViewKey = defaultView;
+    }
+    // An open article is already the selected presentation. Re-selecting it
+    // must not replace its row entry with a collection URL and push it again.
+    if (nextViewKey === ARTICLE_VIEW_KEY && previousViewKey === ARTICLE_VIEW_KEY
+        && isRowArticleOpenForTable(tableName)) return;
+    if (viewKey !== ARTICLE_VIEW_KEY) {
+        closeRowArticleBeforeViewSwitch(tableName);
+    }
+    localStorage.setItem(`${datasetName}_view`, nextViewKey);
+    syncActiveViewButtons(tableName, nextViewKey);
+    applyViewStyling(tableName);
+    const articlePreparation = prepareArticleViewTarget(tableName, viewKey, previousViewKey);
+    if (articlePreparation) {
+        void articlePreparation.finally(() => {
+            if (localStorage.getItem(`${tableName}_view`) === ARTICLE_VIEW_KEY) refreshTableUnified(tableName);
+        });
+        return;
+    }
+    rememberDatasetViewUrlState(tableName, nextViewKey);
+    refreshTableUnified(tableName);
 }
 
 function isRowArticleOpenForTable(tableName) {

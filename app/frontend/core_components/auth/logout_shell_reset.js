@@ -18,6 +18,7 @@ const LOGOUT_SAFE_LOCAL_STORAGE_KEYS = Object.freeze([
     "chosen_language",
     "navVisibleWide",
     "navVisibleNarrow",
+    "filterest_public_presentation_v1", // Public site appearance only; no user or authorization state.
 ]);
 
 export function resolvePostLogoutPath(responseUrl, currentOrigin = window.location.origin) {

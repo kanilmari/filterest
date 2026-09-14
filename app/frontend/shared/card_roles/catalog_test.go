@@ -41,23 +41,8 @@ func TestCatalogDecoderAcceptsOnlyJSONDataExport(t *testing.T) {
 	}
 }
 
-func TestInitialLabelDefaultsForExplicitNewRoles(t *testing.T) {
-	for _, role := range []string{"details", "details10", "details_link10"} {
-		value, set := InitialShowKey(role)
-		if !set || !value {
-			t.Errorf("additional-information labels should be visible: %q", role)
-		}
-	}
-	for _, role := range []string{"header", "description1", "keywords", "details, header+lang_key"} {
-		value, set := InitialShowKey(role)
-		if !set || value {
-			t.Errorf("primary labels should be hidden: %q", role)
-		}
-	}
-	for _, role := range []string{"", "image", "username", "creation_spec", "hidden"} {
-		_, set := InitialShowKey(role)
-		if set {
-			t.Errorf("other roles must preserve existing default: %q", role)
-		}
+func TestCatalogKeepsLabelPolicyInDatabaseResolver(t *testing.T) {
+	if strings.Contains(string(catalogJSON), "initial_show_key") {
+		t.Fatal("role catalog must not duplicate or materialize database label defaults")
 	}
 }

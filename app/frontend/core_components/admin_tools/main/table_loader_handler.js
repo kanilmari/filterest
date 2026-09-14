@@ -3,6 +3,8 @@
 // Bridges table metadata, navigation helpers, and redirect/session state during admin tool startup.
 // Exists to keep admin table-loading and first-open behavior out of generic navigation modules.
 
+import { isRenderableDatasetView, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
+import { isImageFirstViewURL, getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
 import { create_navigation_buttons } from '../../navigation/database_tree/nav_builder.js';
 import {
     custom_views,
@@ -12,7 +14,7 @@ import { openNavTab } from '../../navigation/main_tabs/main_tab_printer.js';
 import { count_this_function } from '../../dev_tools/function_counter.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { DATASET_PREFIX, normalizePath } from '../../navigation/nav_engine/query_params.js';
-import { primeDatasetAccessRegistry } from '../../navigation/nav_engine/dataset_access_registry.js';
+import { primeDatasetAccessRegistry, beginDatasetAccessRefresh, isCurrentDatasetAccessRefresh } from '../../navigation/nav_engine/dataset_access_registry.js';
 import { setUnifiedTableState } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import {
     setRedirectNotice,
@@ -33,15 +35,18 @@ export async function load_tables(options = {}) {
     count_this_function("load_tables");
     const { forceReload = false } = options;
 
+    const accessGeneration = beginDatasetAccessRefresh();
     try {
         // Haetaan taululista palvelimelta
         const result_from_server = await endpoint_router('fetchContentTables');
         const array_of_grouped_tables = result_from_server?.datasets || []; // esim. [{ dataset_name: 'users' }, ...]
-        primeDatasetAccessRegistry(result_from_server);
+        if (!primeDatasetAccessRegistry(result_from_server, accessGeneration)) return null;
         await ensure_private_custom_views_loaded();
+        if (!isCurrentDatasetAccessRefresh(accessGeneration)) return null;
 
         // Luodaan sovelluksen "näkymä"-painikkeet (await: admin_tools-puu renderöidään async)
         await create_navigation_buttons(custom_views);
+        if (!isCurrentDatasetAccessRefresh(accessGeneration)) return null;
 
         // Koonti: kaikki taulut + custom-näkymät samaan joukkoon
         const set_of_every_table_and_view_name = new Set();
@@ -108,18 +113,44 @@ export async function load_tables(options = {}) {
         if (resolved_table_name) {
             // If a deep-linked row ID is present, pre-set cardView state
             // so table_refresh_unified auto-opens the big card after data loads
-            if (deepLinkedRowId) {
+            const opensImageFirst = Boolean(deepLinkedRowId) && isImageFirstViewURL();
+            if (deepLinkedRowId && !opensImageFirst) {
                 localStorage.setItem(`${resolved_table_name}_view`, "article_view");
                 setUnifiedTableState(resolved_table_name, {
                     articleView: { collapsed: true, expandedId: deepLinkedRowId, returnView: "card" }
                 });
             }
-            // Persist initial query params for consumers (e.g., deep link filters)
-            setInitialQueryParams(window.location.search || '');
-            await openNavTab(resolved_table_name, {
+            // The image-first route owns its row. The backing dataset must not
+            // also auto-open the ordinary article or overwrite the IFAV URL.
+            const targetURL = window.location.href;
+            const initialParams = new URLSearchParams(window.location.search);
+            if (!deepLinkedRowId) {
+                const requestedView = initialParams.get("view");
+                const explicitView = resolveDatasetViewSelectionTarget(requestedView);
+                if (requestedView && isRenderableDatasetView(explicitView)
+                    && localStorage.getItem(`${resolved_table_name}_view`) !== explicitView) {
+                    localStorage.setItem(`${resolved_table_name}_view`, explicitView);
+                }
+            }
+            if (opensImageFirst) {
+                const backingView = getImageFirstViewBackingView();
+                localStorage.setItem(`${resolved_table_name}_view`, backingView);
+                initialParams.set("view", backingView);
+            }
+            setInitialQueryParams(opensImageFirst ? "?" + initialParams : window.location.search || "");
+            const navigation = await openNavTab(resolved_table_name, {
                 skipUrlUpdate: isLandingOnFrontpage || Boolean(deepLinkedRowId),
                 forceReload,
+                ...(opensImageFirst ? { replacementParams: Object.fromEntries(initialParams) } : {}),
             });
+            if (opensImageFirst && !navigation?.abort && isCurrentDatasetAccessRefresh(accessGeneration)
+                && window.location.href === targetURL) {
+                await handleImageFirstViewHistory({
+                    tableName: resolved_table_name, rowId: deepLinkedRowId,
+                    isCurrentNavigation: () => isCurrentDatasetAccessRefresh(accessGeneration)
+                        && window.location.href === targetURL,
+                });
+            }
         }
 
         return result_from_server;

@@ -67,6 +67,8 @@ CREATE TABLE public.system_db_tables (
     is_default boolean,
     filterbar_visible_by_default boolean,
     is_removable boolean,
+    ui_hidden boolean DEFAULT false NOT NULL,
+    new_columns_multilingual boolean,
     is_main_table boolean,
     is_about_table boolean,
     fk_display_column character varying,
@@ -77,6 +79,8 @@ CREATE TABLE public.system_db_tables (
     sql_dump_policy character varying,
     card_details_layout character varying,
     card_style_variant character varying,
+    card_detail_columns smallint CONSTRAINT system_db_tables_card_detail_columns_range CHECK (card_detail_columns BETWEEN 1 AND 4),
+    article_section_initial_open jsonb DEFAULT '{}'::jsonb NOT NULL CONSTRAINT system_db_tables_article_section_initial_open_object CHECK (jsonb_typeof(article_section_initial_open) = 'object'),
     row_policy_owner_column character varying
 );
 
@@ -135,6 +139,7 @@ CREATE SCHEMA IF NOT EXISTS restricted;
 
 CREATE TABLE IF NOT EXISTS restricted.users_restricted (
     id integer NOT NULL,
+    api_only boolean NOT NULL DEFAULT false,
     password text NOT NULL,
     email text NOT NULL,
     login_verification_method text NOT NULL DEFAULT 'email'
@@ -202,7 +207,7 @@ ALTER TABLE public.system_db_tables ALTER COLUMN is_main_table SET DEFAULT FALSE
 ALTER TABLE public.system_db_tables ALTER COLUMN is_about_table SET DEFAULT FALSE;
 ALTER TABLE public.system_db_tables ALTER COLUMN sql_dump_policy SET DEFAULT 'all';
 ALTER TABLE public.system_db_tables ALTER COLUMN card_details_layout SET DEFAULT 'conditional_multiline';
-ALTER TABLE public.system_db_tables ALTER COLUMN card_style_variant SET DEFAULT 'standard';
+-- NULL card style inherits the site presentation default.
 ALTER TABLE public.system_db_tables ADD CONSTRAINT system_db_tables_pkey PRIMARY KEY (id);
 CREATE UNIQUE INDEX IF NOT EXISTS system_db_tables_table_uid_key ON public.system_db_tables (table_uid);
 CREATE UNIQUE INDEX IF NOT EXISTS system_db_tables_schema_table_key ON public.system_db_tables (schema_name, table_name);
@@ -289,7 +294,7 @@ CREATE TABLE IF NOT EXISTS public.system_column_details (
     card_element character varying(255) DEFAULT 'details',
     label_value_layout character varying(16),
     creation_spec text,
-    show_key_on_card boolean DEFAULT false,
+    show_key_on_card boolean,
     mandatory boolean,
     show_value_on_card boolean DEFAULT true,
     insert_expln_langkey character varying(128),

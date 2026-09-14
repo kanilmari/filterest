@@ -6,7 +6,7 @@
 import { createMultiselectDropdown } from "../../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js";
 import { fetchLinkableRows } from "./row_api_fetcher.js";
 import { buildGeometryField } from "./row_geometry_builder.js";
-import { buildFieldTestId, getInputType } from "./row_input_builder_helpers.js";
+import { buildFieldTestId, getInputType, isRequiredForeignKeyColumn } from "./row_input_builder_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
 import { buildMultilingualTextareaGroup } from "./row_multilingual_input_builder.js";
@@ -30,6 +30,14 @@ export function buildForeignKeyField(form, table_name, column, modal_form_state)
     datasetLabel.dataset.langKey = foreignDatasetName;
     datasetLabel.textContent = foreignDatasetName;
     legend.append(actionLabel, document.createTextNode(" "), datasetLabel);
+    const required = isRequiredForeignKeyColumn(column);
+    if (required) {
+        const requiredMark = document.createElement("abbr");
+        requiredMark.textContent = " *";
+        requiredMark.dataset.titleLangKey = "required";
+        requiredMark.title = getTranslationForKey("required") || "Required";
+        legend.appendChild(requiredMark);
+    }
     fieldset.appendChild(legend);
 
     const dropdown_container = document.createElement("div");
@@ -83,8 +91,14 @@ export function buildForeignKeyField(form, table_name, column, modal_form_state)
             const value = includeValues.at(-1) || "";
             hidden_input.value = value;
             modal_form_state[column.column_name] = value;
+            dropdown_container.querySelector('[role="combobox"]')?.removeAttribute("aria-invalid");
         },
     });
+
+    const chooser = dropdown_container.querySelector('[role="combobox"]');
+    chooser?.setAttribute("aria-required", String(required));
+    legend.id = `${table_name}-${column.column_name}-label`;
+    chooser?.setAttribute("aria-labelledby", legend.id);
 
     // Hae data
     fetchLinkableRows(foreignDatasetName, foreignValueColumn)

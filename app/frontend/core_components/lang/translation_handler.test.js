@@ -146,6 +146,55 @@ describe('translatePage', () => {
         expect(heading.textContent).toBe('\u8996\u5716\u8207\u5c55\u793a\u65b9\u5f0f');
     });
 
+    test('keeps deletion confirmation readable through live language changes without runtime keys', async () => {
+        const keys = ['delete_confirm_title', 'delete_confirm_single', 'delete_confirm_multiple'];
+        const labels = keys.map((key) => {
+            const label = document.createElement('p');
+            label.dataset.langKey = key;
+            document.body.appendChild(label);
+            return label;
+        });
+        window.translationPromises.ch = Promise.resolve({});
+        const { translatePage } = await import('./translation_handler.js');
+
+        for (const [language, expected] of [
+            ['fi', ['Vahvista poisto', 'Haluatko poistaa tämän kohteen?', 'Haluatko poistaa nämä kohteet?']],
+            ['en', ['Confirm deletion', 'Delete this item?', 'Delete these items?']],
+            ['fi', ['Vahvista poisto', 'Haluatko poistaa tämän kohteen?', 'Haluatko poistaa nämä kohteet?']],
+            ['ch', ['确认删除', '要删除此项目吗？', '要删除这些项目吗？']],
+            ['yue', ['確認刪除', '要刪除呢個項目嗎？', '要刪除呢啲項目嗎？']],
+        ]) {
+            await translatePage(language);
+            expect(labels.map((label) => label.textContent)).toEqual(expected);
+        }
+        expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
+    test('prefers reviewed runtime deletion copy over local fallbacks', async () => {
+        const keys = ['delete_confirm_title', 'delete_confirm_single', 'delete_confirm_multiple'];
+        const labels = keys.map((key) => {
+            const label = document.createElement('p');
+            label.dataset.langKey = key;
+            document.body.appendChild(label);
+            return label;
+        });
+        const copy = {
+            fi: ['Poiston vahvistus', 'Poistetaanko valittu kohde?', 'Poistetaanko valitut kohteet?'],
+            en: ['Confirm removal', 'Remove the selected item?', 'Remove the selected items?'],
+        };
+        for (const [language, values] of Object.entries(copy)) {
+            window.translationPromises[language] = Promise.resolve(
+                Object.fromEntries(keys.map((key, index) => [key, values[index]])),
+            );
+        }
+        const { translatePage } = await import('./translation_handler.js');
+        for (const language of ['fi', 'en', 'fi']) {
+            await translatePage(language);
+            expect(labels.map((label) => label.textContent)).toEqual(copy[language]);
+        }
+        expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
     test('uses local fallbacks for field-set ownership and inheritance status', async () => {
         const source = document.createElement('p');
         source.dataset.langKey = 'field_set_source_group';

@@ -34,18 +34,14 @@ func applyCreationCardRoles(q dbutils.Querier, tableName string, roles map[strin
 		if role == "" {
 			continue
 		}
-		var initialShowKey interface{}
-		if value, defined := card_roles.InitialShowKey(role); defined {
-			initialShowKey = value
-		}
 		result, err := q.Exec(`
             UPDATE system_column_details AS cd
-            SET card_element = $1, show_key_on_card = COALESCE($2, cd.show_key_on_card), updated = NOW()
+            SET card_element = $1, updated = NOW()
             FROM system_db_tables AS dt
             WHERE cd.table_uid = dt.table_uid
               AND dt.schema_name = current_schema()
-              AND dt.table_name = $3 AND cd.column_name = $4
-        `, role, initialShowKey, strings.ToLower(tableName), strings.ToLower(column))
+              AND dt.table_name = $2 AND cd.column_name = $3
+        `, role, strings.ToLower(tableName), strings.ToLower(column))
 		if err != nil {
 			return fmt.Errorf("assign card role: %w", err)
 		}

@@ -26,10 +26,11 @@ func TestWorklineObservatoryRequiresActivationAndAdminPipeline(t *testing.T) {
 		routes[pattern] = handlerName
 	})
 	want := map[string]string{
-		"/api/app/workline-observatory/board":          "workline_observatory.BoardHandler",
-		"/api/app/workline-observatory/status-actions": "workline_observatory.WorklineStatusActionsHandler",
-		"/api/app/workline-observatory/release-goals":  "workline_observatory.ReleaseGoalsHandler",
-		"/api/app/workline-observatory/contracts":      "workline_observatory.ReleaseContractsHandler",
+		"/api/app/workline-observatory/priority-actions": "workline_observatory.WorklinePriorityActionsHandler",
+		"/api/app/workline-observatory/board":            "workline_observatory.BoardHandler",
+		"/api/app/workline-observatory/status-actions":   "workline_observatory.WorklineStatusActionsHandler",
+		"/api/app/workline-observatory/release-goals":    "workline_observatory.ReleaseGoalsHandler",
+		"/api/app/workline-observatory/contracts":        "workline_observatory.ReleaseContractsHandler",
 	}
 	for path, handlerName := range want {
 		if routes[path] != handlerName {

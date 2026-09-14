@@ -246,6 +246,8 @@ def validate_manifest(
     repo_root: Path | None = None,
     manifest_path: Path | None = None,
     artifact_root: Path | None = None,
+    *,
+    current_db_version_override: str | None = None,
 ) -> int:
     repo_root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
     configured_manifest = manifest_path
@@ -263,7 +265,9 @@ def validate_manifest(
         print("❌ Compatibility paths must stay inside the repository root")
         return 1
     current_app_version, current_app_version_file = read_current_app_version(repo_root)
-    current_db_version = load_required_text(repo_root / "VERSION_DB")
+    # Release preparation may validate unchanged published history in source S.
+    # The ordinary CLI never supplies this internal override.
+    current_db_version = current_db_version_override or load_required_text(repo_root / "VERSION_DB")
 
     errors: list[str] = []
     rows: list[dict[str, str]] = []

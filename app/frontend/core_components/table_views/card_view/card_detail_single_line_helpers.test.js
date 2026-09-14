@@ -9,6 +9,22 @@ import { describe, expect, test } from "vitest";
 import { renderSingleLineCardDetails } from "./card_detail_single_line_helpers.js";
 
 describe("card_detail_single_line_helpers", () => {
+    test.each([1, 2, 3, 4])("limits responsive single-line columns to requested %s and preserves field order", (columns) => {
+        const container = document.createElement("div");
+        const entries = Array.from({length: 7}, (_, index) => ({
+            column: "field_" + index, label: "Field " + index, rawValue: "Value " + index,
+        }));
+        renderSingleLineCardDetails(container, entries, {}, {columns});
+        expect(container.classList.contains("card_details_single_line--responsive")).toBe(true);
+        for (const widthLimit of [1, 2, 3, 4]) {
+            const count = Math.min(columns, widthLimit);
+            expect(container.style.getPropertyValue("--card-single-columns-" + widthLimit)).toBe(String(count));
+            expect(container.style.getPropertyValue("--card-single-rows-" + widthLimit)).toBe(String(Math.ceil(7 / count)));
+        }
+        expect([...container.querySelectorAll(".card_detail_row_value")].map(el => el.textContent))
+            .toEqual(entries.map(entry => entry.rawValue));
+    });
+
     test("renderSingleLineCardDetails keeps translated label text for both mode", () => {
         const container = document.createElement("div");
 

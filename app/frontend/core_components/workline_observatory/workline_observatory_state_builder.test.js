@@ -98,4 +98,11 @@ describe('workline observatory state', () => {
         expect(replaced.selectedWorklineIds).toEqual([2]);
         expect(replaced.selectedWorklineId).toBe(2);
     });
+    test('retains real reported phase when normalized twice and defaults missing priority', () => {
+        const normalized = buildWorklineObservatoryState({ total_count: 8, filtered_count: 1, worklines: [{ id: 1, status: 'archived', current_phase: 2 }] });
+        const state = buildWorklineObservatoryState(normalized);
+        expect(state.worklines[0]).toMatchObject({ current_phase: 6, reported_current_phase: 2, priority: 'normal', priority_revision: 0 });
+        expect(state.totalCount).toBe(8);
+        expect(state.filteredCount).toBe(1);
+    });
 });

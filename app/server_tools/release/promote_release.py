@@ -22,6 +22,7 @@ APP_ROOT = Path(__file__).resolve().parents[2]
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 from server_tools.release import prepare_release as preparation
+from server_tools.release.database_transition import source_database_contract
 from server_tools.release.asset_verifier import verify_assets
 from server_tools.release.verify_binary_manifest import BinaryManifestError
 from server_tools.scripts.validate_app_db_compatibility import validate_manifest
@@ -59,7 +60,7 @@ def require_commit(root, commit):
         raise PromotionError("release commit does not identify an exact Git commit")
 
 
-def read_identity(root, commit):
+def read_identity(root, commit, *, reviewed_source=False):
     ledger = show(root, commit, preparation.LEDGER)
     entries = validate_ledger_bytes(ledger)
     identity = validate_build_identity(json.loads(show(root, commit, preparation.IDENTITY)))
@@ -67,14 +68,16 @@ def read_identity(root, commit):
         raise PromotionError("build identity must describe the latest immutable ledger record")
     version = show(root, commit, "app/VERSION_APP").decode().strip()
     database = show(root, commit, "app/VERSION_DB").decode().strip()
-    if identity["app_version"] != version or identity["database"]["target_version"] != database:
+    # Only S may contain a reviewed DB marker ahead of its published identity.
+    # inspect_candidate immediately validates that transition against immutable S.
+    if identity["app_version"] != version or (not reviewed_source and identity["database"]["target_version"] != database):
         raise PromotionError("build identity versions disagree with source markers")
     if identity["artifact_type"] != "runtime" or identity["channel"] != "stable" or identity["source"]["model"] != "public_first":
         raise PromotionError("promotion supports public-first stable/runtime identities only")
     return identity, ledger
 
 
-def validate_candidate_compatibility(root, source_commit, candidate_commit, source_identity, candidate):
+def validate_candidate_compatibility(root, source_commit, candidate_commit, source_identity, candidate, contract):
     """Preserve previous compatibility records while appending the candidate pair."""
     def rows_at(commit):
         text = show(root, commit, preparation.COMPATIBILITY).decode()
@@ -97,7 +100,7 @@ def validate_candidate_compatibility(root, source_commit, candidate_commit, sour
     appended = current[-1]
     expected = {"app_version": candidate["app_version"], "min_db_version": candidate["database"]["min_version"],
                 "target_db_version": candidate["database"]["target_version"],
-                "schema_snapshot_path": baseline.get("schema_snapshot_path"),
+                "schema_snapshot_path": contract["schema_snapshot_path"],
                 "git_commit_sha": source_commit, "status": "active", "notes": appended.get("notes"),
                 "recorded_at": candidate["created_at"]}
     if appended != expected or not isinstance(appended.get("notes"), str) or not appended["notes"].strip():
@@ -126,10 +129,23 @@ def inspect_candidate(root, candidate_commit, reviewed_source_commit, expected_v
     entries = validate_append_only(ledger, previous_ledger)
     if len(entries) != len(old_entries) + 1:
         raise PromotionError("candidate must append exactly one immutable record")
-    source_identity, _ = read_identity(root, reviewed_source_commit)
-    if candidate["database"] != source_identity["database"]:
+    source_identity, _ = read_identity(root, reviewed_source_commit, reviewed_source=True)
+    source_database = show(root, reviewed_source_commit, "app/VERSION_DB").decode().strip()
+    source_rows = [json.loads(line) for line in show(root, reviewed_source_commit, preparation.COMPATIBILITY).splitlines()
+                   if line.strip() and not line.lstrip().startswith(b"#")]
+    if not all(isinstance(row, dict) for row in source_rows):
+        raise PromotionError("compatibility history must contain JSON objects")
+    previous_target = source_identity["database"]["target_version"]
+    try:
+        contract = source_database_contract(source_identity, source_identity["app_version"],
+            source_database, source_rows, lambda path: show(root, reviewed_source_commit, path),
+            transition_from=previous_target if source_database != previous_target else None)
+    except ValueError as error:
+        raise PromotionError(str(error)) from error
+    expected_database = {key: contract[key] for key in ("min_version", "target_version")}
+    if candidate["database"] != expected_database:
         raise PromotionError("candidate changed reviewed database compatibility")
-    validate_candidate_compatibility(root, reviewed_source_commit, candidate_commit, source_identity, candidate)
+    validate_candidate_compatibility(root, reviewed_source_commit, candidate_commit, source_identity, candidate, contract)
     previous_version = show(root, reviewed_source_commit, "app/VERSION_APP").decode().strip()
     preparation.next_version(previous_version, expected_version, None)
     before_bootstrap = json.loads(show(root, reviewed_source_commit, preparation.BOOTSTRAP))

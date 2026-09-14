@@ -5,14 +5,44 @@
 
 const readableDatasetNames = new Set();
 let hasSnapshot = false;
+let refreshGeneration = 0;
+const acceptedResponses = new WeakMap();
+const listeners = new Set();
+
+function notifySnapshotChanged() {
+    for (const listener of listeners) listener();
+}
+
+/** Starts a metadata refresh; older responses may no longer grant access. */
+export function beginDatasetAccessRefresh() {
+    clearDatasetAccessRegistry();
+    return refreshGeneration;
+}
+
+export function isCurrentDatasetAccessRefresh(generation) {
+    return generation === refreshGeneration;
+}
+
+export function getDatasetAccessResponseGeneration(response) {
+    return response && typeof response === 'object' ? acceptedResponses.get(response) : undefined;
+}
+
+export function subscribeDatasetAccessRegistry(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+}
 
 export function clearDatasetAccessRegistry() {
     readableDatasetNames.clear();
     hasSnapshot = false;
+    refreshGeneration += 1;
+    notifySnapshotChanged();
 }
 
-export function primeDatasetAccessRegistry(contentTablesResponse = null) {
-    clearDatasetAccessRegistry();
+export function primeDatasetAccessRegistry(contentTablesResponse = null, generation = null) {
+    if (generation !== null && !isCurrentDatasetAccessRefresh(generation)) return false;
+    if (generation === null) clearDatasetAccessRegistry();
+    readableDatasetNames.clear();
 
     const datasets = Array.isArray(contentTablesResponse?.datasets)
         ? contentTablesResponse.datasets
@@ -32,6 +62,11 @@ export function primeDatasetAccessRegistry(contentTablesResponse = null) {
     });
 
     hasSnapshot = true;
+    if (contentTablesResponse && typeof contentTablesResponse === 'object') {
+        acceptedResponses.set(contentTablesResponse, refreshGeneration);
+    }
+    notifySnapshotChanged();
+    return true;
 }
 
 export function hasDatasetAccessSnapshot() {

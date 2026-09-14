@@ -316,7 +316,7 @@ export function buildRowArticleImageFirstStage({
     const caption = document.createElement("p");
     caption.classList.add("row_article_image_caption", "row_article_image_first_caption");
     caption.dataset.testid = "row-article-image-first-caption";
-    revealCluster.append(revealTitle, caption);
+    revealCluster.append(revealTitle);
     revealCluster.addEventListener("animationend", (event) => {
         if (event.target !== revealCluster) {
             return;
@@ -358,6 +358,12 @@ export function buildRowArticleImageFirstStage({
         event.stopPropagation();
         scrollToArticleContent(stage);
     });
+
+    const bottomControls = document.createElement("div");
+    bottomControls.classList.add("row_article_image_first_bottom_controls");
+    bottomControls.dataset.testid = "row-article-image-first-bottom-controls";
+    bottomControls.append(caption, scrollHint);
+    revealCluster.appendChild(bottomControls);
 
     const activeIndex = () => {
         const index = imageEntries.findIndex(({ row }) => rowsMatch(row, getActiveRow()));
@@ -487,7 +493,7 @@ export function buildRowArticleImageFirstStage({
         activateRelative(deltaX > 0 ? -1 : 1);
     }, { passive: true });
 
-    stage.append(revealCluster, previousButton, nextButton, position, scrollHint);
+    stage.append(revealCluster, previousButton, nextButton, position);
     sync();
     return {
         element: stage,

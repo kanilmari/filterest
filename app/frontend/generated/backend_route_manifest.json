@@ -261,6 +261,31 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/dataset-ui-visibility",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AdminDatasetUIVisibilityHandler",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/embedding-source-policy",
       "match_type": "exact",
       "handler_name": "ai_features.ExternalEmbeddingSourcePolicyHandler",
@@ -754,6 +779,35 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/view-field-settings/article-section-defaults",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.SaveArticleSectionDefaultsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/app/ai-chat/capabilities",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAICapabilitiesHandler",
@@ -782,6 +836,11 @@
       "path_pattern": "/api/app/ai-chat/codex-query",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAICodexQueryHandler",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
       "scenarios": [
         {
           "name": "production",
@@ -5148,6 +5207,44 @@
       "handler_name": "system_table_tools.SavePersonalViewFieldSetHandler",
       "methods": [
         "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/view-field-settings/article-section-defaults",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetArticleSectionDefaultsHandler",
+      "methods": [
+        "GET"
       ],
       "method_source": "explicit_stable_contract",
       "scenarios": [

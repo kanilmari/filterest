@@ -293,3 +293,21 @@ describe('api_pipeline', () => {
     });
 
 });
+
+
+test('passes opt-in AbortSignal to fetch and propagates cancellation', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')));
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await loadModule();
+    const pending = mod.runApiPipeline({
+        routeName: 'getIntelligentResultsStream', method: 'GET', stream: true,
+        signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+});

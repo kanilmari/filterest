@@ -37,3 +37,22 @@ export function getInputType(data_type) {
             return "text";
     }
 }
+
+
+// Mirrors only the server-supported actor defaults; unrelated insert specs
+// never make a required relation optional.
+export function isRequiredForeignKeyColumn(column) {
+    if (!(column.foreign_dataset_name || column.foreign_table_name)
+        || !column.foreign_column_name
+        || String(column.is_nullable).toLowerCase() !== "no"
+        || column.column_default) return false;
+    let specs = {};
+    try {
+        const parsed = JSON.parse(column.source_insert_specs || "{}");
+        if (parsed && !Array.isArray(parsed) && typeof parsed === "object"
+            && Object.values(parsed).every((value) => value === null || typeof value === "string")) specs = parsed;
+    } catch { /* Invalid specs cannot bypass required-field validation. */ }
+    const actorSupplied = (column.column_name === "user_id" && specs.user_id === "currentUser")
+        || (column.column_name === "cached_username" && specs.cached_username === "currentUserName");
+    return !actorSupplied;
+}

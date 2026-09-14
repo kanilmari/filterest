@@ -13,8 +13,6 @@ import { isCardStackViewport } from "../../../ui_config.js";
 import { appendImageWithSvgPresentation } from "./svg_image_presentation.js";
 import { prepareCardImagePresentation } from "./card_image_presentation.js";
 
-const SERVICE_CATALOG_TABLE_NAME = "app_service_catalog";
-const SERVICE_CATALOG_ROUTE_ALIAS = "service_catalog";
 const SERVICE_CATALOG_ICON_TYPE_ID = "1";
 const SERVICE_CATALOG_LEGACY_LOGO_PATTERN = /^service_catalog_logos\/([a-z0-9_-]+)\.svg$/i;
 const SERVICE_CATALOG_LOGO_RENDER_MODES = new Set([
@@ -46,7 +44,7 @@ const EXTERNALLY_SIZED_RENDER_SLOTS = new Set([
     CARD_IMAGE_RENDER_SLOTS.IMAGE_FIRST,
 ]);
 
-// The service catalog has three high-level logo presentation styles:
+// Typed and legacy logo assets share three presentation styles across datasets:
 // full image, standalone mark, and CSS-assisted composed logo.
 const SERVICE_CATALOG_LOGO_PRESENTATION_STYLES = Object.freeze({
     FULL_IMAGE: "image",
@@ -121,14 +119,16 @@ export function createImageElement(
     const wrapper = document.createElement('div');
     const altContext = buildImageAltContext(tableName, rowLabel);
     const serviceCatalogLogoPlan = resolveServiceCatalogLogoPlan({
-        tableName,
         imageTypeId,
         imageMetadata,
         imageSrc: image_src,
     });
     const useServiceCatalogCssLogo = Boolean(serviceCatalogLogoPlan?.variant);
     const cssOnlyServiceCatalogLogo = serviceCatalogLogoPlan?.cssOnly === true;
-    const useServiceCatalogLogoFrame = isServiceCatalogTableName(tableName) && useLargeSize;
+    const useServiceCatalogLogoFrame = useLargeSize && Boolean(
+        resolveTypedServiceCatalogLogoVariant(imageTypeId, imageMetadata)
+        || resolveLegacyServiceCatalogLogoVariant({ imageSrc: image_src })
+    );
     const usesExternalSizing = EXTERNALLY_SIZED_RENDER_SLOTS.has(renderSlot);
     wrapper.dataset.cardImageRenderSlot = renderSlot;
     if (usesExternalSizing) {
@@ -207,7 +207,6 @@ export function createImageElement(
         });
     }
     maybeAppendServiceCatalogCssLogo(wrapper, null, image_src, {
-        tableName,
         rowLabel,
         renderSlot,
         imageTypeId,
@@ -233,7 +232,6 @@ function maybeAppendServiceCatalogCssLogo(
     foregroundImg,
     imageSrc,
     {
-        tableName = "",
         rowLabel = "",
         renderSlot = CARD_IMAGE_RENDER_SLOTS.STANDALONE,
         imageTypeId = undefined,
@@ -242,7 +240,6 @@ function maybeAppendServiceCatalogCssLogo(
     } = {}
 ) {
     const resolvedLogoPlan = logoPlan || resolveServiceCatalogLogoPlan({
-        tableName,
         imageTypeId,
         imageMetadata,
         imageSrc,
@@ -320,13 +317,19 @@ function buildServiceCatalogLogoMark(imageSrc, logoPlan, { forceTextMark = false
 }
 
 function resolveServiceCatalogLogoPlan({
-    tableName = "",
     imageTypeId = undefined,
     imageMetadata = undefined,
     imageSrc = "",
 } = {}) {
+    // Explicit asset presentation also wins when an old filename could trigger
+    // the compatibility fallback. Dataset identity is not an image setting.
+    const metadata = parseImageMetadata(imageMetadata);
+    const typedVariant = resolveTypedServiceCatalogLogoVariant(imageTypeId, metadata);
+    if (SERVICE_CATALOG_IMAGE_RENDER_MODES.has(resolveServiceCatalogLogoRenderMode(metadata))
+        || (typedVariant && isServiceCatalogImageOnlyLogoVariant(typedVariant))) {
+        return null;
+    }
     const typedPlan = resolveTypedServiceCatalogLogoPlan({
-        tableName,
         imageTypeId,
         imageMetadata,
     });
@@ -334,7 +337,7 @@ function resolveServiceCatalogLogoPlan({
         return typedPlan;
     }
 
-    const legacyVariant = resolveLegacyServiceCatalogLogoVariant({ tableName, imageSrc });
+    const legacyVariant = resolveLegacyServiceCatalogLogoVariant({ imageSrc });
     if (legacyVariant) {
         if (isServiceCatalogImageOnlyLogoVariant(legacyVariant)) {
             return null;
@@ -355,26 +358,16 @@ function resolveServiceCatalogLogoPlan({
 /**
  * Reads typed service-catalog image metadata and returns the CSS logo rendering plan.
  *
- * @param {object} options - Table, image type, and metadata payload.
+ * @param {object} options - Image type and explicit metadata payload.
  * @returns {object|null}
  */
 function resolveTypedServiceCatalogLogoPlan({
-    tableName = "",
     imageTypeId = undefined,
     imageMetadata = undefined,
 } = {}) {
-    if (!isServiceCatalogTableName(tableName)) {
-        return null;
-    }
-    if (String(imageTypeId ?? "").trim() !== SERVICE_CATALOG_ICON_TYPE_ID) {
-        return null;
-    }
-
     const metadata = parseImageMetadata(imageMetadata);
-    const variant = String(metadata?.logo_variant || "").trim().toLowerCase();
-    if (!variant || !/^[a-z0-9_-]{1,48}$/.test(variant)) {
-        return null;
-    }
+    const variant = resolveTypedServiceCatalogLogoVariant(imageTypeId, metadata);
+    if (!variant) return null;
     if (isServiceCatalogImageOnlyLogoVariant(variant)) {
         return null;
     }
@@ -399,14 +392,17 @@ function resolveTypedServiceCatalogLogoPlan({
     };
 }
 
+// Type and explicit variant metadata opt an asset into logo presentation.
+function resolveTypedServiceCatalogLogoVariant(imageTypeId, imageMetadata) {
+    if (String(imageTypeId ?? "").trim() !== SERVICE_CATALOG_ICON_TYPE_ID) return "";
+    const metadata = parseImageMetadata(imageMetadata);
+    const variant = String(metadata?.logo_variant || "").trim().toLowerCase();
+    return /^[a-z0-9_-]{1,48}$/.test(variant) ? variant : "";
+}
+
 function resolveLegacyServiceCatalogLogoVariant({
-    tableName = "",
     imageSrc = "",
 } = {}) {
-    if (!isServiceCatalogTableName(tableName)) {
-        return "";
-    }
-
     const normalized = String(imageSrc || "")
         .trim()
         .replace(/^\/+/, "")
@@ -417,11 +413,6 @@ function resolveLegacyServiceCatalogLogoVariant({
         return "";
     }
     return variant;
-}
-
-function isServiceCatalogTableName(tableName = "") {
-    const normalized = String(tableName || "").trim();
-    return normalized === SERVICE_CATALOG_TABLE_NAME || normalized === SERVICE_CATALOG_ROUTE_ALIAS;
 }
 
 function resolveServiceCatalogLogoKind(imageSrc = "", logoPlan = null) {

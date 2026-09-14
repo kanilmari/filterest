@@ -44,9 +44,10 @@ func TestCreationCardRolesKeepLegacyDefaultsAndAcceptExistingVariants(t *testing
 }
 
 type roleRecorder struct {
-	args [][]interface{}
-	rows int64
-	err  error
+	args    [][]interface{}
+	queries []string
+	rows    int64
+	err     error
 }
 
 func (q *roleRecorder) Exec(query string, args ...interface{}) (sql.Result, error) {
@@ -54,6 +55,7 @@ func (q *roleRecorder) Exec(query string, args ...interface{}) (sql.Result, erro
 		panic("missing schema scope")
 	}
 	q.args = append(q.args, args)
+	q.queries = append(q.queries, query)
 	return &workflowQueueResult{rowsAffected: q.rows}, q.err
 }
 func (*roleRecorder) Query(string, ...interface{}) (*sql.Rows, error) { panic("unexpected query") }
@@ -65,7 +67,7 @@ func TestCreationCardRoleAssignmentChecksEveryTargetAndUsesBoundValues(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := [][]interface{}{{"header", false, "sample", "title"}, {"details", true, "sample", "id"}}
+	expected := [][]interface{}{{"header", "sample", "title"}, {"details", "sample", "id"}}
 	if !reflect.DeepEqual(q.args, expected) {
 		t.Fatalf("args=%v", q.args)
 	}
@@ -76,17 +78,19 @@ func TestCreationCardRoleAssignmentChecksEveryTargetAndUsesBoundValues(t *testin
 	}
 }
 
-func TestCreationRoleDefaultsKeepAdditionalInformationLabelsVisible(t *testing.T) {
+func TestCreationRoleAssignmentPreservesRawLabelOverrides(t *testing.T) {
 	q := &roleRecorder{rows: 1}
 	roles := map[string]string{"id": "details", "location": "details_link10", "title": "header",
 		"description": "description", "keywords": "keywords", "image": "image"}
 	if err := applyCreationCardRoles(q, "sample", roles); err != nil {
 		t.Fatal(err)
 	}
-	wanted := map[string]interface{}{"id": true, "location": true, "title": false, "description": false, "keywords": false, "image": nil}
-	for _, args := range q.args {
-		if args[1] != wanted[args[3].(string)] {
-			t.Fatalf("initial key flag = %v", args)
+	for index, args := range q.args {
+		if len(args) != 3 || args[0] != roles[args[2].(string)] {
+			t.Fatalf("role arguments = %v", args)
+		}
+		if strings.Contains(q.queries[index], "show_key_on_card") {
+			t.Fatal("role assignment must not materialize or overwrite raw label choices")
 		}
 	}
 }

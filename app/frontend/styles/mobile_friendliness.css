@@ -180,23 +180,23 @@
         border-radius: unset !important;
     }
 
-    .card--modern .card_modern_info_panel,
-    .card--modern .card_details_modern_tiles {
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel,
+    .card--modern:not([data-card-presentation-view="card"]) .card_details_modern_tiles {
         border: 0;
         border-radius: 0;
         background: transparent;
     }
 
-    .card--modern .card_modern_info_panel {
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel {
         overflow: visible;
     }
 
-    .card--modern .card_modern_info_panel > :not(:first-child),
-    .card--modern .card_modern_info_panel > .card_keywords_container,
-    .card--modern .card_modern_info_panel > .card_keywords_container + *,
-    .card--modern .card_detail_tile--row-separated,
-    .card--modern .card_detail_tile--column-separated,
-    .card--modern .card_detail_tile:not(:first-child) {
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel > :not(:first-child),
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel > .card_keywords_container,
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel > .card_keywords_container + *,
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--row-separated,
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--column-separated,
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile:not(:first-child) {
         border: 0;
     }
 
@@ -208,7 +208,7 @@
         padding: 8px 10px;
     }
 
-    .card--modern .card_details_modern_tiles {
+    .card--modern:not([data-card-presentation-view="card"]) .card_details_modern_tiles {
         grid-auto-flow: row;
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: none;
@@ -390,23 +390,23 @@
         border-radius: unset !important;
     }
 
-    .card--modern .card_modern_info_panel,
-    .card--modern .card_details_modern_tiles {
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel,
+    .card--modern:not([data-card-presentation-view="card"]) .card_details_modern_tiles {
         border: 0;
         border-radius: 0;
         background: transparent;
     }
 
-    .card--modern .card_modern_info_panel {
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel {
         overflow: visible;
     }
 
-    .card--modern .card_modern_info_panel > :not(:first-child),
-    .card--modern .card_modern_info_panel > .card_keywords_container,
-    .card--modern .card_modern_info_panel > .card_keywords_container + *,
-    .card--modern .card_detail_tile--row-separated,
-    .card--modern .card_detail_tile--column-separated,
-    .card--modern .card_detail_tile:not(:first-child) {
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel > :not(:first-child),
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel > .card_keywords_container,
+    .card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel > .card_keywords_container + *,
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--row-separated,
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--column-separated,
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile:not(:first-child) {
         border: 0;
     }
 
@@ -418,7 +418,7 @@
         padding: 8px 10px;
     }
 
-    .card--modern .card_details_modern_tiles {
+    .card--modern:not([data-card-presentation-view="card"]) .card_details_modern_tiles {
         grid-auto-flow: row;
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: none;

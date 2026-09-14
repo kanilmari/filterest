@@ -79,6 +79,7 @@ function build_symbol_map(ignore_list) {
         try {
             content = fs.readFileSync(file, "utf8");
         } catch (err) {
+            error_count++;
             console.log(`\x1b[31merror: %s\x1b[0m`, err.message);
             continue;
         }
@@ -187,6 +188,7 @@ function process_file(file_path, fix_imports) {
     try {
         content = fs.readFileSync(file_path, "utf8");
     } catch (err) {
+        error_count++;
         console.error(`\x1b[31merror: %s\x1b[0m`, err.message);
         return;
     }
@@ -542,6 +544,7 @@ function main() {
                 `${error_count} errors, ${ok_count} OK, ${total_imports} total imports.`
         );
     }
+    process.exitCode = error_count > 0 ? 1 : 0;
 }
 
 main();

@@ -3,16 +3,18 @@
 // Bridges chat interactions, backend AI read routes, and dataset table rendering.
 // Exists to keep the filterbar chat pinned to the API-first ai-chat facade.
 
+import { createCodingAgentControl } from './table_chat_coding_agent_control.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import {
-    canUseFilterbarAICodexDevMode,
     isFilterbarAIChatDevEnvironment,
     resolveAvailableFilterbarAIChatMode,
 } from './table_chat_mode_resolver.js';
 import {
     runApiToolsChatQuery,
     runCodexDevChatQuery,
+    hasPendingCodingAgentJob,
+    cancelCodingAgentPolling,
 } from './table_chat_query_runner.js';
 import {
     isOpenAIKeyConfigurationRequired,
@@ -27,7 +29,7 @@ let user_history_draft_map = new Map();
 let conversation_updated_at_map = new Map();
 let conversation_load_token_map = new Map();
 const LOCAL_CHAT_STORAGE_PREFIX = 'gptChatConversation_';
-const LOCAL_CHAT_MODE_STORAGE_PREFIX = 'gptChatMode_';
+const codingAgentControls = new Map();
 const MAX_CHAT_PREVIEW_LENGTH = 160;
 const RESULT_CONTEXT_MESSAGE_PREFIX = '[easelect_result_context]';
 const CHAT_PENDING_HEARTBEAT_MS = 10000;
@@ -63,7 +65,8 @@ async function start_codex_dev_query(table_name, user_message, pending_message =
     const chatResponse = await runCodexDevChatQuery(
         table_name,
         user_message,
-        conversation_map.get(table_name) || []
+        conversation_map.get(table_name) || [],
+        { externalRunner: codingAgentControls.get(table_name)?.capability?.runner_kind === 'external' }
     );
     const assistantReply = String(chatResponse?.answer || 'Codex completed without a visible answer.').trim();
     const visibleAssistantReply = append_no_result_fetch_notice(
@@ -91,32 +94,13 @@ async function start_codex_dev_query(table_name, user_message, pending_message =
  * The filterbar chat no longer holds a legacy EventSource transport to close.
  */
 export function destroy_chat(table_name) {
-    void table_name;
+    codingAgentControls.get(table_name)?.destroy();
+    codingAgentControls.delete(table_name);
+    cancelCodingAgentPolling(table_name);
 }
 
 function getConversationStorageKey(table_name) {
     return `${LOCAL_CHAT_STORAGE_PREFIX}${table_name}`;
-}
-
-function getChatModeStorageKey(table_name) {
-    return `${LOCAL_CHAT_MODE_STORAGE_PREFIX}${table_name}`;
-}
-
-function readChatModePreference(table_name) {
-    try {
-        return localStorage.getItem(getChatModeStorageKey(table_name)) || 'api_tools';
-    } catch (error) {
-        console.warn('AI chat mode read failed:', error);
-        return 'api_tools';
-    }
-}
-
-function writeChatModePreference(table_name, mode) {
-    try {
-        localStorage.setItem(getChatModeStorageKey(table_name), mode);
-    } catch (error) {
-        console.warn('AI chat mode save failed:', error);
-    }
 }
 
 function parseConversationTimestamp(updated_at) {
@@ -538,7 +522,9 @@ export function create_chat_ui(table_name, parent_element) {
         }
     });
 
-    const chat_mode_select = buildChatModeControl(table_name);
+    codingAgentControls.get(table_name)?.destroy();
+    const chat_mode_select = createCodingAgentControl(table_name);
+    if (chat_mode_select) codingAgentControls.set(table_name, chat_mode_select);
 
     const chat_send_btn = document.createElement('button');
     chat_send_btn.id = `${table_name}_chat_sendBtn`;
@@ -577,6 +563,13 @@ export function create_chat_ui(table_name, parent_element) {
     chat_container_full.appendChild(chat_input_row);
     chat_ui_wrapper.appendChild(chat_container_full);
     parent_element.appendChild(chat_ui_wrapper);
+    if (hasPendingCodingAgentJob(table_name)) {
+        const pending = append_pending_chat_message(table_name, 'codex_dev');
+        setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
+        void start_codex_dev_query(table_name, '', pending).catch(error => {
+            finish_pending_chat_message(table_name, pending, 'error', String(error.message));
+        }).finally(() => setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, false));
+    }
 
     // The send action is now API-first only: filterbar chat no longer keeps a
     // frontend EventSource rollback path to the legacy SSE SQL endpoint.
@@ -599,6 +592,7 @@ export function create_chat_ui(table_name, parent_element) {
         const configuredChatMode = chat_mode_select?.select?.value || 'api_tools';
         const chatMode = resolveAvailableFilterbarAIChatMode({
             configuredMode: configuredChatMode,
+            codingAgentCapability: chat_mode_select?.capability,
         });
         const pending_message = append_pending_chat_message(table_name, chatMode || configuredChatMode);
         setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
@@ -778,46 +772,6 @@ function setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, busy)
     chat_send_btn.setAttribute('aria-busy', String(nextBusy));
 }
 
-function buildChatModeControl(table_name) {
-    if (!canUseFilterbarAICodexDevMode()) {
-        return null;
-    }
-
-    const row = document.createElement('div');
-    row.classList.add('chat_mode_row');
-
-    const label = document.createElement('label');
-    label.setAttribute('for', `${table_name}_chat_mode`);
-    label.textContent = 'DEV AI';
-
-    const select = document.createElement('select');
-    select.id = `${table_name}_chat_mode`;
-    select.classList.add('chat_mode_select');
-
-    const apiOption = document.createElement('option');
-    apiOption.value = 'api_tools';
-    apiOption.textContent = 'API-AI';
-    select.appendChild(apiOption);
-
-    const codexOption = document.createElement('option');
-    codexOption.value = 'codex_dev';
-    codexOption.textContent = 'Codex';
-    select.appendChild(codexOption);
-
-    const preferredMode = readChatModePreference(table_name);
-    select.value = resolveAvailableFilterbarAIChatMode({
-        configuredMode: preferredMode,
-    }) === 'codex_dev' ? 'codex_dev' : 'api_tools';
-
-    select.addEventListener('change', () => {
-        writeChatModePreference(table_name, select.value);
-    });
-
-    row.appendChild(label);
-    row.appendChild(select);
-    return { row, select };
-}
-
 // ----- Yleisviestin näyttäminen chatissa -----
 export function append_chat_message(table_name, sender, friendly_explanation, sql_code, metadata = {}) {
     if (sender === 'system') {
@@ -980,16 +934,16 @@ function getPendingStatusMessages(mode) {
             ? [
                 'Codex started working.',
                 'Codex is reading the chat and context.',
-                'Codex may inspect and edit code in DEV mode.',
+                'Codex may inspect and edit the configured code workspace.',
                 'Codex is still working.',
-                'Long DEV runs may take up to 40 minutes.',
+                'Long coding jobs may take up to 40 minutes.',
             ]
             : [
                 'Codex aloitti työn.',
                 'Codex lukee keskustelua ja kontekstia.',
-                'Codex voi tarkistaa ja muokata koodia DEV-tilassa.',
+                'Codex voi tarkistaa ja muokata sille määritettyä koodityötilaa.',
                 'Codex työskentelee edelleen.',
-                'Pitkä DEV-ajo voi kestää enintään 40 minuuttia.',
+                'Pitkä koodaustyö voi kestää enintään 40 minuuttia.',
             ];
     }
     return isEnglish

@@ -593,6 +593,9 @@ func TestUpdateColumnMetadataInsertsNewColumn(t *testing.T) {
 	if !strings.Contains(state.execCalls[1], "card_element") {
 		t.Fatalf("exec[1] = %q, want explicit card_element default in INSERT", state.execCalls[1])
 	}
+	if !strings.Contains(state.execCalls[1], "show_key_on_card") || !strings.Contains(state.execCalls[1], "'details', NULL") {
+		t.Fatal("new details columns must inherit their label policy through raw NULL")
+	}
 	insertSQL := strings.ToLower(state.execCalls[1])
 	columnListStart := strings.Index(insertSQL, "(")
 	columnListEnd := strings.Index(insertSQL[columnListStart+1:], ")")

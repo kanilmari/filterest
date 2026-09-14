@@ -88,10 +88,12 @@ func TestSystemAutomationAccountHandlerRejectsMalformedOrUnknownPayload(t *testi
 	t.Setenv("EASELECT_SYSTEM_MANAGER_TOKEN", automationAccountTestManagerToken)
 	secret := "do-not-echo-this-password-41"
 	for name, body := range map[string]string{
-		"malformed": `{"password":`,
-		"unknown":   `{"password":"` + secret + `","username":"someone"}`,
-		"trailing":  `{"password":"` + secret + `"} {}`,
-		"empty":     `{}`,
+		"malformed":       `{"password":`,
+		"unknown":         `{"password":"` + secret + `","username":"someone"}`,
+		"trailing":        `{"password":"` + secret + `"} {}`,
+		"empty":           `{}`,
+		"unknown action":  `{"action":"delete"}`,
+		"revoke password": `{"action":"revoke","password":"must-not-be-sent"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
@@ -149,5 +151,18 @@ func TestSystemAutomationAccountRouteAndProfileContract(t *testing.T) {
 	profile := pipeline.GetProfile("router.systemAutomationAccountHandler")
 	if profile.AdminOnly || !profile.Skips("auth") || !profile.Skips("csrf") || !profile.Skips("access_control") {
 		t.Fatalf("system-manager route must use PublicProfile before its own stricter boundary: %#v", profile)
+	}
+}
+
+func TestAutomationRevokePayloadAndLegacyProvisionContract(t *testing.T) {
+	for _, body := range []string{`{"password":"existing-compatible-request"}`, `{"action":"revoke"}`} {
+		w := httptest.NewRecorder()
+		request, err := decodeSystemAutomationAccountRequest(w, newAutomationAccountManagerRequest(http.MethodPost, body))
+		if err != nil {
+			t.Fatalf("body=%s err=%v", body, err)
+		}
+		if strings.Contains(body, "revoke") && (request.Action != "revoke" || request.Password != "") {
+			t.Fatalf("request=%#v", request)
+		}
 	}
 }

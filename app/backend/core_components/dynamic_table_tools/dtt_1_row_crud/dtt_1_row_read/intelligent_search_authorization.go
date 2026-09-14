@@ -114,7 +114,18 @@ func appendIntelligentSearchAuthorizationCondition(
 	}
 
 	if len(authorization.userFilters) > 0 {
-		clause, filterArgs, err := buildWhereClause(authorization.userFilters, tableReference, authorization.filterColumns, nil, authorization.filterTypes, len(queryArgs))
+		// These keys already passed column/SELECT validation. Qualify fields
+		// before the mixed URL-query builder so view_key cannot become a
+		// renderer control; lang remains the prepared localization parameter.
+		qualifiedFilters := url.Values{}
+		for key, values := range authorization.userFilters {
+			qualifiedKey := key
+			if key != "lang" {
+				qualifiedKey = tableReference + "_" + key
+			}
+			qualifiedFilters[qualifiedKey] = append([]string(nil), values...)
+		}
+		clause, filterArgs, err := buildWhereClause(qualifiedFilters, tableReference, authorization.filterColumns, nil, authorization.filterTypes, len(queryArgs))
 		if err != nil {
 			return "", nil, err
 		}

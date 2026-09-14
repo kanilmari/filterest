@@ -173,9 +173,9 @@ describe("create_calendar_view", () => {
         eventButton?.click();
 
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
-        expect(localStorage.getItem("events_view")).toBe("card");
+        expect(localStorage.getItem("events_view")).toBe("article_view");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", {
-            cardView: {
+            articleView: {
                 collapsed: true,
                 expandedId: 1,
                 returnView: "calendar",

@@ -54,7 +54,9 @@ async function loadModule() {
 
 describe('open_column_management_modal', () => {
     beforeEach(() => {
+        for (const [options] of createModalMock.mock.calls) options.cleanupCallback?.();
         vi.clearAllMocks();
+        document.documentElement.lang = 'en';
         localStorage.clear();
         sessionStorage.clear();
         document.body.innerHTML = '';
@@ -63,7 +65,8 @@ describe('open_column_management_modal', () => {
             { column_name: 'legacy_col', data_type: 'TEXT', character_maximum_length: null },
             { column_name: 'gone_col', data_type: 'TEXT', character_maximum_length: null },
         ]);
-        endpointRouterMock.mockResolvedValue({ message: 'ok' });
+        endpointRouterMock.mockImplementation(async (route) => route === 'adminDatasetUiVisibility'
+            ? { dataset_name: 'demo_table', ui_hidden: false } : { message: 'ok' });
         refreshTableUnifiedMock.mockResolvedValue(undefined);
 
         localStorage.setItem('demo_table_sorting_and_filtering_specs', JSON.stringify({
@@ -149,6 +152,7 @@ describe('open_column_management_modal', () => {
             },
             offset: 0,
             cardView: { collapsed: false, expandedId: null },
+            articleView: { collapsed: false, expandedId: null },
         });
         expect(JSON.parse(localStorage.getItem('demo_table_hide_columns'))).toEqual({
             modern_col: true,
@@ -158,4 +162,236 @@ describe('open_column_management_modal', () => {
             'modern_col',
         ]);
     });
+
+    test('translates open fields and actions without replacing controls or saving drafts', async () => {
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const input = document.querySelector('input[name="column_name"]');
+        input.value = 'unsaved_name';
+        input.focus();
+        input.setSelectionRange(2, 7);
+        const actionButtons = document.querySelectorAll('.form-actions button');
+        expect([...actionButtons].map(button => button.textContent)).toEqual(['Cancel', 'Delete', 'Save']);
+        const type = document.querySelector('select[name="data_type"]');
+        type.value = 'VARCHAR';
+        type.dispatchEvent(new Event('change', { bubbles: true }));
+        const length = document.querySelector('input[name="length"]');
+        length.value = '77';
+        endpointRouterMock.mockClear();
+        for (const [lang, name, cancel, save] of [
+            ['fi', 'Sarakkeen nimi', 'Peruuta', 'Tallenna'],
+            ['en', 'Column name', 'Cancel', 'Save'],
+            ['ch', '列名', '取消', '保存'],
+            ['yue', '欄位名稱', '取消', '儲存'],
+            ['fi', 'Sarakkeen nimi', 'Peruuta', 'Tallenna'],
+        ]) {
+            document.documentElement.lang = lang;
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(input.parentElement.querySelector('span').textContent).toBe(name);
+            expect(actionButtons[0].textContent).toBe(cancel);
+            expect(actionButtons[2].textContent).toBe(save);
+            expect(document.activeElement).toBe(input);
+            expect([input.selectionStart, input.selectionEnd]).toEqual([2, 7]);
+            expect(input.value).toBe('unsaved_name');
+            expect(type.value).toBe('VARCHAR');
+            expect(length.value).toBe('77');
+        }
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+        const { cleanupCallback } = createModalMock.mock.calls.at(-1)[0];
+        cleanupCallback();
+        document.documentElement.lang = 'en';
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(actionButtons[2].textContent).toBe('Tallenna');
+    });
+
+    test.each([
+        [{ new_columns_multilingual: true }, false, true],
+        [{ new_columns_multilingual: false }, true, false],
+        [{}, true, true],
+        [{ new_columns_multilingual: null }, true, true],
+        [{}, false, false],
+    ])('resolves the table multilingual default from authoritative or legacy metadata (%j)', async (tableMetadata, existingMultilingual, expected) => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'id', data_type: 'INTEGER', ...tableMetadata },
+            { column_name: 'title', data_type: 'TEXT', is_multilingual: existingMultilingual },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        expect(defaultInput.checked).toBe(expected);
+        const existingRows = [...document.querySelectorAll('.column-row')].filter(row =>
+            row.querySelector('[name="column_name"]').dataset.originalName);
+        expect(existingRows.every(row => !row.querySelector('[name="is_multilingual"]'))).toBe(true);
+        const newRow = document.querySelector('[name="is_multilingual"]').closest('.column-row');
+        const type = newRow.querySelector('[name="data_type"]');
+        type.value = 'TEXT';
+        type.dispatchEvent(new Event('change'));
+        expect(newRow.querySelector('[name="is_multilingual"]').checked).toBe(expected);
+    });
+
+    test('empty metadata starts with a non-multilingual table default', async () => {
+        fetchColumnsMock.mockResolvedValue([]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        expect(document.querySelector('[data-testid="manage-table-multilingual-default"]').checked).toBe(false);
+    });
+
+    test('table default updates untouched new rows while preserving an explicit row override', async () => {
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const first = document.querySelector('[name="is_multilingual"]');
+        first.closest('.column-row').querySelector('[name="data_type"]').value = 'TEXT';
+        first.closest('.column-row').querySelector('[name="data_type"]').dispatchEvent(new Event('change'));
+        first.click(); // User chooses a per-column exception.
+        document.querySelector('[data-manage-table-key="manage_table_add_column"]').click();
+        const second = [...document.querySelectorAll('[name="is_multilingual"]')].at(-1);
+        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        defaultInput.click();
+        expect([first.checked, second.checked]).toEqual([true, true]);
+        defaultInput.click();
+        expect([first.checked, second.checked]).toEqual([true, false]);
+        document.querySelector('[data-manage-table-key="manage_table_add_column"]').click();
+        expect([...document.querySelectorAll('[name="is_multilingual"]')].at(-1).checked).toBe(false);
+    });
+
+    test('saves only the changed table default and newly added text-column choices', async () => {
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        defaultInput.click();
+        const add = document.querySelector('[data-manage-table-key="manage_table_add_column"]');
+        const choices = [['title', 'TEXT', true], ['code', 'VARCHAR', false], ['when', 'DATE', true]];
+        for (const [index, [name, type, multilingual]] of choices.entries()) {
+            if (index) add.click();
+            const input = [...document.querySelectorAll('[name="is_multilingual"]')].at(-1);
+            const row = input.closest('.column-row');
+            row.querySelector('[name="column_name"]').value = name;
+            const typeSelect = row.querySelector('[name="data_type"]');
+            typeSelect.value = 'TEXT';
+            typeSelect.dispatchEvent(new Event('change'));
+            input.checked = multilingual;
+            input.dispatchEvent(new Event('change'));
+            typeSelect.value = type;
+            typeSelect.dispatchEvent(new Event('change'));
+            if (type === 'VARCHAR') row.querySelector('[name="length"]').value = '30';
+            if (type === 'DATE') {
+                expect(input.disabled).toBe(true);
+                expect(input.parentElement.style.display).toBe('none');
+                typeSelect.value = 'TEXT';
+                typeSelect.dispatchEvent(new Event('change'));
+                expect(input.disabled).toBe(false);
+                expect(input.checked).toBe(true);
+                typeSelect.value = 'DATE';
+                typeSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+        expect(endpointRouterMock).toHaveBeenCalledWith('modifyColumns', expect.objectContaining({
+            body_data: {
+                dataset_name: 'demo_table', new_columns_multilingual: true,
+                modified_columns: [], removed_columns: [],
+                added_columns: [
+                    { original_name: '', new_name: 'title', data_type: 'TEXT', length: null, is_multilingual: true },
+                    { original_name: '', new_name: 'code', data_type: 'VARCHAR', length: 30, is_multilingual: false },
+                    { original_name: '', new_name: 'when', data_type: 'DATE', length: null },
+                ],
+            },
+        }));
+    });
+
+    test('saves an explicit false table default without changing an existing multilingual column', async () => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'title', data_type: 'TEXT', new_columns_multilingual: true, is_multilingual: true },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        document.querySelector('[data-testid="manage-table-multilingual-default"]').click();
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+        expect(endpointRouterMock).toHaveBeenCalledWith('modifyColumns', expect.objectContaining({
+            body_data: { dataset_name: 'demo_table', new_columns_multilingual: false,
+                modified_columns: [], added_columns: [], removed_columns: [] },
+        }));
+    });
+
+    test('language changes translate new multilingual controls without altering the draft choices', async () => {
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        const input = document.querySelector('[name="is_multilingual"]');
+        const row = input.closest('.column-row');
+        const type = row.querySelector('[name="data_type"]');
+        type.value = 'TEXT';
+        type.dispatchEvent(new Event('change'));
+        input.click();
+        input.focus();
+        for (const [language, defaultLabel, rowLabel] of [
+            ['fi', 'Uudet tekstisarakkeet ovat oletuksena monikielisiä', 'Monikielinen tekstisarake'],
+            ['en', 'New text columns are multilingual by default', 'Multilingual text column'],
+            ['ch', '新文本列默认支持多语言', '多语言文本列'],
+            ['yue', '新文字欄位預設支援多語言', '多語言文字欄位'],
+        ]) {
+            document.documentElement.lang = language;
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(defaultInput.parentElement.querySelector('span').textContent).toBe(defaultLabel);
+            expect(input.parentElement.querySelector('span').textContent).toBe(rowLabel);
+            expect(defaultInput.checked).toBe(false);
+            expect(input.checked).toBe(true);
+            expect(document.activeElement).toBe(input);
+        }
+        expect(endpointRouterMock.mock.calls.filter(([route]) => route === 'modifyColumns')).toHaveLength(0);
+    });
+
+    test('restores only the exact hidden dataset and verifies readback', async () => {
+        let hidden = true;
+        endpointRouterMock.mockImplementation(async (route, options) => {
+            if (route !== 'adminDatasetUiVisibility') throw new Error('unexpected route');
+            if (options.method === 'POST') hidden = options.body_data.ui_hidden;
+            return { dataset_name: 'demo_table', ui_hidden: hidden };
+        });
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const restore = document.querySelector('[data-testid="manage-table-restore"]');
+        expect(restore.hidden).toBe(false);
+        expect(endpointRouterMock.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(0);
+        restore.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(endpointRouterMock).toHaveBeenCalledWith('adminDatasetUiVisibility', expect.objectContaining({
+            method: 'POST',
+            body_data: { dataset_name: 'demo_table', ui_hidden: false },
+        }));
+        expect(restore.hidden).toBe(true);
+        expect(document.querySelector('[data-testid="manage-table-visibility"]').hidden).toBe(true);
+        expect(showSuccessToastMock).toHaveBeenCalledWith('Table restored to the interface.');
+    });
+
+    test('failed visibility lookup does not enable removal or claim a visible table', async () => {
+        endpointRouterMock.mockResolvedValue({ dataset_name: 'demo_table' });
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        expect(document.querySelector('[data-testid="btn-delete-table"]').disabled).toBe(true);
+        expect(document.querySelector('[data-testid="manage-table-restore"]').hidden).toBe(true);
+        expect(document.querySelector('[role="status"]').textContent).toContain('Could not check visibility');
+    });
+
+
+    test('preserves existing SQL types outside creation choices on an unchanged Save', async () => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'created', data_type: 'timestamp without time zone', character_maximum_length: null },
+            { column_name: 'amount', data_type: 'numeric', character_maximum_length: null },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const choices = document.querySelectorAll('[name="data_type"]');
+        expect(choices[0].value).toBe('TIMESTAMP WITHOUT TIME ZONE');
+        expect(choices[1].value).toBe('NUMERIC');
+        const form = document.querySelector('form');
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(endpointRouterMock).toHaveBeenCalledWith('modifyColumns', expect.objectContaining({
+            body_data: { dataset_name: 'demo_table', modified_columns: [], added_columns: [], removed_columns: [] },
+        }));
+    });
+
 });

@@ -3,6 +3,8 @@
 // Bridges the task progress renderer and stable article tool-section ordering.
 // Exists to keep big_card_opener from owning task-specific progress UI details.
 
+import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
+
 import { buildRowArticleTaskProgressSection } from "./row_article_task_progress.js";
 import { upsertRowArticleToolSection } from "./row_article_tool_section_inserter.js";
 
@@ -33,13 +35,19 @@ export async function hydrateRowArticleTaskProgressSection({
     rowArticleContentElement,
     tableName,
     rowId,
+    sectionDefaults = {},
 }) {
     if (!rowId) {
         return;
     }
 
     try {
-        const taskProgressSection = await buildRowArticleTaskProgressSection(tableName, rowId);
+        const taskProgressSection = await buildRowArticleTaskProgressSection(tableName, rowId, {
+            startOpen: resolveRowArticleSectionStartOpen(
+                sectionDefaults, "task_progress",
+                rowArticleContentElement.querySelector(".row_article_task_progress_section"),
+            ),
+        });
         upsertRowArticleToolSection({
             rowArticleElement,
             rowArticleContentElement,

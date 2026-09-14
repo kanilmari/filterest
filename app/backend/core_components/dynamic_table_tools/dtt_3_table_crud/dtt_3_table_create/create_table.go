@@ -1,7 +1,7 @@
 // create_table.go
-// HTTP handler for creating new dynamic tables. Validates the request, creates the PostgreSQL
-// table, and registers it in the system metadata tables.
-// Exists to make dataset creation atomic across physical schema and Easelect metadata.
+// Creates validated physical tables and registers their dataset metadata.
+// Connects dataset creation workflows and managed children to PostgreSQL DDL.
+// Separates strict new-dataset creation from existing managed-child behavior.
 package dtt_3_table_create
 
 import (
@@ -34,7 +34,18 @@ type ForeignKeyDefinition struct {
 	CascadeDelete bool `json:"cascadeDelete,omitempty"`
 }
 
+// CreateTableInDatabase preserves idempotent physical creation for managed child tables.
 func CreateTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition) error {
+	return createTableInDatabase(db, table_name, columns, foreign_keys, true)
+}
+
+// CreateNewTableInDatabase atomically rejects existing relations before dataset
+// creation workflows register metadata or grant requested runtime read access.
+func CreateNewTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition) error {
+	return createTableInDatabase(db, table_name, columns, foreign_keys, false)
+}
+
+func createTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition, allowExisting bool) error {
 	sanitizedTableName, err := security.SanitizeIdentifier(table_name)
 	if err != nil {
 		return err
@@ -90,7 +101,11 @@ func CreateTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 	}
 
 	var query_builder strings.Builder
-	query_builder.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (", sanitizedTableName))
+	query_builder.WriteString("CREATE TABLE ")
+	if allowExisting {
+		query_builder.WriteString("IF NOT EXISTS ")
+	}
+	query_builder.WriteString(fmt.Sprintf("%s (", sanitizedTableName))
 
 	columns_count := 0
 	updated_found := false

@@ -173,6 +173,9 @@ export function createViewFieldAssignmentsLayout(
     mixedWarning.hidden = true;
     controls.appendChild(mixedWarning);
     editor.appendChild(controls);
+    const articleDefaultsHost = document.createElement('div');
+    articleDefaultsHost.dataset.testid = 'article-section-defaults-host';
+    editor.appendChild(articleDefaultsHost);
 
     const fieldsHeader = document.createElement("div");
     fieldsHeader.className = "view-field-assignments__fields-header";
@@ -240,6 +243,7 @@ export function createViewFieldAssignmentsLayout(
     editor.appendChild(actions);
 
     return {
+        articleDefaultsHost,
         fieldList,
         fieldSearch,
         fieldWarning,

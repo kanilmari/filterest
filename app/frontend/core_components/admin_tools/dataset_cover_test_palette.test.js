@@ -4,6 +4,7 @@
 // Connects optional cover images, shared card controls and persisted site settings.
 // Preserves authorization while datasets without images gain the same editor.
 
+import { resetSitePresentationStatesForTests } from './site_presentation_state.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
     DEFAULT_DATASET_COVER_THEME,
@@ -34,13 +35,120 @@ function createMountOptions(overrides = {}) {
         requestFn: vi.fn(async () => ({ view_admin_cover_image_test_palette: true })),
         settingsRequestFn: vi.fn(async () => createSettings()),
         saveRequestFn: vi.fn(async (request) => request),
+        datasetSettingsRequestFn: vi.fn(async table_name => ({
+            table_name, card_style_variant: null, card_detail_columns: null, columns: [{ column_uid: 1 }],
+        })),
+        datasetSaveRequestFn: vi.fn(async request => request),
         permissionCheck: () => true,
         ...overrides,
     };
 }
 
 describe('dataset cover presentation settings', () => {
+    test('previews, translates, resets and saves the bounded detail column count', async () => {
+        document.documentElement.lang = 'en';
+        const options = createMountOptions();
+        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        const input = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-detail-columns"]');
+        expect([input.min, input.max, input.step, input.value]).toEqual(['1', '4', '1', '2']);
+        expect(input.getAttribute('aria-label')).toBe('Detail columns');
+        input.value = '4'; input.dispatchEvent(new Event('input'));
+        expect(document.documentElement.dataset.cardDetailColumns).toBe('4');
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
+        document.documentElement.lang = 'fi';
+        await vi.waitFor(() => expect(input.getAttribute('aria-label')).toBe('Detailien sarakkeet'));
+        expect(input.getAttribute('aria-description')).toContain('Kortin detailisarakkeiden');
+        expect(input.value).toBe('4');
+        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
+        expect(input.value).toBe('2');
+        input.value = '3'; input.dispatchEvent(new Event('input'));
+        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
+        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
+        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.card_detail_columns).toBe(3);
+        await vi.waitFor(() => expect(mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
+        input.value = '1'; input.dispatchEvent(new Event('input')); mounted.destroy();
+        expect(document.documentElement.dataset.cardDetailColumns).toBe('3');
+    });
+
+    test('separates dataset overrides and site defaults, preserving dataset draft when the site is saved', async () => {
+        const options = createMountOptions();
+        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        const get = id => mounted.panel.querySelector('[data-testid="' + id + '"]');
+        const datasetStyle = get('dataset-card-palette-style');
+        await vi.waitFor(() => expect(datasetStyle.disabled).toBe(false));
+        expect(get('dataset-card-palette-settings').querySelector('legend').textContent).toBe('This dataset');
+        expect(get('site-card-palette-settings').querySelector('legend').textContent).toBe('Site defaults');
+        expect([...datasetStyle.options].map(option => option.value)).toEqual(['inherit','modern','standard']);
+        datasetStyle.value = 'standard'; datasetStyle.dispatchEvent(new Event('change'));
+        get('dataset-cover-test-palette-save').click();
+        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
+        expect(options.datasetSaveRequestFn).not.toHaveBeenCalled();
+        expect(datasetStyle.value).toBe('standard');
+        get('dataset-card-palette-save').click();
+        await vi.waitFor(() => expect(options.datasetSaveRequestFn).toHaveBeenCalledTimes(1));
+        expect(options.datasetSaveRequestFn).toHaveBeenCalledWith({
+            table_name:'demo', card_style_variant:'standard', card_detail_columns:null,
+        });
+        mounted.destroy();
+    });
+
+    test('previews card field radios, keeps exact localized guidance and restores or saves the boolean', async () => {
+        document.documentElement.lang='en';
+        const options=createMountOptions();
+        const mounted=await mountDatasetCoverTestPalette(createCoverHero(),'demo',options);
+        const all=mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-fields-all"]');
+        const values=mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-fields-values"]');
+        const group=mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-fields"]');
+        expect(all.checked).toBe(true); expect(values.checked).toBe(false);
+        expect([...group.querySelectorAll('input[type=radio]')].map(input => input.value)).toEqual(['false', 'true']);
+        expect(group.textContent).toContain('Show all fields (Recommended)');
+        expect(group.textContent).toContain('Saves space and looks cleaner, but field positions may vary and labels need to be checked more carefully.');
+        expect(group.textContent).toContain('Uses more space, but keeps fields in consistent positions, making cards easier to scan and compare. (Recommended)');
+        values.click();
+        expect(document.documentElement.dataset.cardShowAllFields).toBe('false');
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
+        document.documentElement.lang='fi';
+        await vi.waitFor(() => expect(group.getAttribute('aria-label')).toBe('Kortin kentät'));
+        expect(values.checked).toBe(true);
+        expect(group.textContent).toContain('Näytä vain kentät, joilla on arvo');
+        expect(group.textContent).toContain('Säästää tilaa ja selkeyttää näkymää, mutta kenttien paikat voivat vaihdella ja kenttänimiä on luettava tarkemmin.');
+        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
+        expect(all.checked).toBe(true); expect(document.documentElement.dataset.cardShowAllFields).toBe('true');
+        values.click(); mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
+        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
+        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.card_show_all_fields).toBe(false);
+        await vi.waitFor(() => expect(mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
+        all.click(); mounted.destroy();
+        expect(document.documentElement.dataset.cardShowAllFields).toBe('false');
+    });
+
+    test('previews one shared style, localizes FI/EN and saves or restores it with the existing settings call', async () => {
+        document.documentElement.lang = 'en';
+        const options = createMountOptions();
+        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        const select = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-style"]');
+        expect([...select.options].map(option => option.value)).toEqual(['modern', 'standard']);
+        expect(select.value).toBe('modern'); expect(select.getAttribute('aria-label')).toBe('Card style');
+        select.value = 'standard'; select.dispatchEvent(new Event('change'));
+        expect(document.documentElement.dataset.cardStyleVariant).toBe('standard');
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
+        document.documentElement.lang = 'fi';
+        await vi.waitFor(() => expect(select.getAttribute('aria-label')).toBe('Kortin tyyli'));
+        expect(select.options[1].textContent).toBe('Tavallinen'); expect(select.value).toBe('standard');
+        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
+        expect(select.value).toBe('modern'); expect(document.documentElement.dataset.cardStyleVariant).toBe('modern');
+        select.value = 'standard'; select.dispatchEvent(new Event('change'));
+        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
+        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
+        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.card_style_variant).toBe('standard');
+        await vi.waitFor(() => expect(mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
+        select.value = 'modern'; select.dispatchEvent(new Event('change')); mounted.destroy();
+        expect(document.documentElement.dataset.cardStyleVariant).toBe('standard');
+    });
+
     beforeEach(() => {
+        localStorage.clear();
+        resetSitePresentationStatesForTests();
         document.body.innerHTML = '';
         document.documentElement.removeAttribute('lang');
         history.replaceState({}, '', '/demo?view=card');
@@ -228,7 +336,7 @@ describe('dataset cover presentation settings', () => {
             expect(field('image-opacity').parentElement.querySelector('span').textContent).toBe(opacityLabel);
             expect(field('close').title).toBe(language === 'fi' ? 'Sulje ulkoasun asetukset' : 'Close appearance settings');
             expect(field('close').getAttribute('aria-label')).toBe(field('close').title);
-            expect(field('save').textContent).toBe(language === 'fi' ? 'Tallenna asetukset' : 'Save settings');
+            expect(field('save').textContent).toBe(language === 'fi' ? 'Tallenna sivuston oletukset' : 'Save site defaults');
             expect(field('reset').textContent).toBe(language === 'fi' ? 'Palauta tallennetut arvot' : 'Reset to saved values');
             expect(panel.hidden).toBe(false);
             expect(control.button.getAttribute('aria-expanded')).toBe('true');
@@ -266,21 +374,53 @@ describe('dataset cover presentation settings', () => {
         const control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
         control.button.click();
         const save = control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]');
-        const status = control.panel.querySelector('[role="status"]');
+        const status = () => document.querySelector('[data-testid="toast"] .toast-notification-content');
         save.click();
-        expect(status.textContent).toBe('Tallennetaan…');
+        expect(control.panel.querySelector('[role="status"]')).toBeNull();
+        expect(status().textContent).toBe('Tallennetaan…');
         document.documentElement.lang = 'en';
         await Promise.resolve();
-        expect(status.textContent).toBe('Saving…');
+        expect(status().textContent).toBe('Saving…');
         expect(save.disabled).toBe(true);
         if (succeeds) finishSave(options.saveRequestFn.mock.calls[0][0]);
         else failSave(new Error('Save unavailable'));
         await vi.waitFor(() => expect(save.disabled).toBe(false));
-        expect(status.textContent).toBe(succeeds ? 'Settings saved.' : 'Saving failed.');
+        expect(status().textContent).toBe(succeeds ? 'Settings saved.' : 'Saving failed.');
         document.documentElement.lang = 'fi';
         await Promise.resolve();
-        expect(status.textContent).toBe(succeeds ? 'Asetukset tallennettu.' : 'Tallennus epäonnistui.');
+        expect(status().textContent).toBe(succeeds ? 'Asetukset tallennettu.' : 'Tallennus epäonnistui.');
         expect(options.saveRequestFn).toHaveBeenCalledOnce();
+        expect(document.querySelector('[data-testid="toast"]').dataset.toastLevel).toBe(succeeds ? 'success' : 'error');
+        control.destroy();
+        expect(document.querySelector('[data-testid="toast"]')).toBeNull();
+    });
+
+    test('remembers actual section choices across palette remounts without storing initial or programmatic openings', async () => {
+        const options = createMountOptions();
+        let control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        const groups = [...control.panel.querySelectorAll('details')];
+        expect(groups.every(group => !group.open)).toBe(true);
+        groups[0].open = true;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(localStorage.getItem('dataset_cover_palette_section_themeImage')).toBeNull();
+        groups[0].open = false;
+        groups[4].querySelector('summary').click();
+        await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('true'));
+        control.button.click(); control.button.click();
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
+        document.documentElement.lang = 'fi';
+        await Promise.resolve();
+        expect(groups[4].open).toBe(true);
+        control.destroy();
+        control = await mountDatasetCoverTestPalette(createCoverHero(), 'another_dataset', options);
+        const restored = [...control.panel.querySelectorAll('details')];
+        expect(restored.map(group => group.open)).toEqual([false, false, false, false, true, false]);
+        restored[4].querySelector('summary').click();
+        await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('false'));
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
+        control.destroy();
+        control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        expect([...control.panel.querySelectorAll('details')].every(group => !group.open)).toBe(true);
         control.destroy();
     });
 
@@ -327,12 +467,12 @@ describe('dataset cover presentation settings', () => {
         )).toHaveLength(12);
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(9);
+        )).toHaveLength(10);
         const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
         expect(toolboxes).toHaveLength(6);
         expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(6);
         expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(6);
-        expect(toolboxes[0].open).toBe(true);
+        expect([...toolboxes].every(toolbox => !toolbox.open)).toBe(true);
         expect(toolboxes[2].open).toBe(false);
         toolboxes[2].querySelector('summary').click();
         expect(toolboxes[2].open).toBe(true);
@@ -398,9 +538,7 @@ describe('dataset cover presentation settings', () => {
         expect(payload.dataset_cover_theme.shared.active_tab_glow_intensity).toBe(0.15);
         expect(payload.dataset_cover_theme.shared.active_tab_max_opacity).toBe(0.9);
         expect(payload.dataset_cover_theme.shared.brand_color).toBe('#00aa77');
-        await vi.waitFor(() => expect(panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-status"]'
-        ).textContent).toMatch(/saved|tallennettu/i));
+        await vi.waitFor(() => expect(document.querySelector('[data-testid="toast"] .toast-notification-content').textContent).toMatch(/saved|tallennettu/i));
 
         darkOpacity.value = '0.8';
         darkOpacity.dispatchEvent(new Event('input', { bubbles: true }));
@@ -423,9 +561,7 @@ describe('dataset cover presentation settings', () => {
         opacity.dispatchEvent(new Event('input', { bubbles: true }));
         control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
 
-        await vi.waitFor(() => expect(control.panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-status"]'
-        ).textContent).toMatch(/failed|epäonnistui/i));
+        await vi.waitFor(() => expect(document.querySelector('[data-testid="toast"] .toast-notification-content').textContent).toMatch(/failed|epäonnistui/i));
         expect(hero.style.getPropertyValue('--dataset-cover-light-image-opacity')).toBe('0.8');
         control.destroy();
     });

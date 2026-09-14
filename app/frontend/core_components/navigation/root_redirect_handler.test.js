@@ -9,17 +9,20 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const consumeRedirectNoticeMock = vi.fn();
 const runPostAuthBootstrapMock = vi.fn();
 const showInfoToastMock = vi.fn();
+const showToastMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
     vi.doMock("../state_stores/dataset_selection_saver.js", () => ({
         consumeRedirectNotice: consumeRedirectNoticeMock,
     }));
+    vi.doMock("../lang/translation_handler.js", () => ({ getTranslationForKey: key => key }));
     vi.doMock("../auth/post_auth_bootstrap.js", () => ({
         runPostAuthBootstrap: runPostAuthBootstrapMock,
     }));
     vi.doMock("../../reusable_components/notifications/toast_notification_printer.js", () => ({
         showInfoToast: showInfoToastMock,
+        showToast: showToastMock,
     }));
 
     return import("./root_redirect_handler.js");
@@ -72,4 +75,26 @@ describe("root_redirect_handler", () => {
 
         expect(showInfoToastMock).not.toHaveBeenCalled();
     });
+
+    test("replays only fixed management result keys as localized text nodes on startup", async () => {
+        const mod = await loadModule();
+        for (const [key, expected] of [
+            ['manage_table_hidden_success', 'Aineisto poistettu käyttöliittymästä. Tiedot säilyvät.'],
+            ['manage_table_deleted_success', 'Aineisto poistettu pysyvästi.'],
+        ]) {
+            document.documentElement.lang = 'fi';
+            consumeRedirectNoticeMock.mockReturnValue({ datasetName: 'demo', messageLangKey: key });
+            mod.showDatasetRedirectNoticeIfAvailable();
+            const { content, level } = showToastMock.mock.calls.at(-1)[0];
+            expect(level).toBe("info");
+            expect(content).toBeInstanceOf(HTMLElement);
+            expect(content.dataset.langKey).toBe(key);
+            expect(content.textContent).toBe(expected);
+            expect(content.children).toHaveLength(0);
+        }
+        expect(mod.buildDatasetRedirectNoticeMessage({
+            datasetName: 'demo', reason: 'deleted', messageLangKey: '<img src=x onerror=alert(1)>',
+        })).toBe('Taulu demo on poistettu. Siirryttiin oletusnäkymään.');
+    });
+
 });

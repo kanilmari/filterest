@@ -7,14 +7,20 @@ package workline_observatory
 import "time"
 
 type BoardSnapshot struct {
-	GeneratedAt time.Time         `json:"generated_at"`
-	Worklines   []BoardWorkline   `json:"worklines"`
-	ReleaseGoal *BoardReleaseGoal `json:"release_goal"`
+	DatasetSurfaceProviderKey    string            `json:"dataset_surface_provider_key"`
+	DatasetSurfaceCapabilityKeys []string          `json:"dataset_surface_capability_keys"`
+	TotalCount                   int               `json:"total_count"`
+	FilteredCount                int               `json:"filtered_count"`
+	GeneratedAt                  time.Time         `json:"generated_at"`
+	Worklines                    []BoardWorkline   `json:"worklines"`
+	ReleaseGoal                  *BoardReleaseGoal `json:"release_goal"`
 }
 
 type BoardWorkline struct {
 	ID                         int64                     `json:"id"`
 	Title                      string                    `json:"title"`
+	Priority                   string                    `json:"priority"`
+	PriorityRevision           int64                     `json:"priority_revision"`
 	Status                     string                    `json:"status"`
 	Tags                       []string                  `json:"tags"`
 	UpdatedAt                  time.Time                 `json:"updated_at"`

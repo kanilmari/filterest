@@ -3,6 +3,11 @@
 // Bridges row data, column roles, and permission state with the legacy big-card UI shell.
 // Exists to be the single orchestration point for launching, populating, and managing the row article view.
 
+import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
+
+import { ARTICLE_VIEW_KEY, resolveDatasetViewSelectionTarget } from "../dataset_view_registry.js";
+import { captureCardArticleReturn, getCardArticleOriginEntry } from "../../navigation/nav_engine/card_article_return_state.js";
+import { writeHistoryEntry } from "../../navigation/nav_engine/history_entry_state.js";
 import { createArticleLanguageEditor } from "../article_view/article_language_editor.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { rebaseSavedCardDraftFields } from "./card_edit_reconciler.js";
@@ -18,6 +23,7 @@ import { resolveRowArticleParentImageRows } from "./row_article_asset_resolver.j
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
+import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
 import {
     hasRoutePermission,
     hasDatasetPermission,
@@ -81,6 +87,26 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
     try {
         const activeView = localStorage.getItem(`${table_name}_view`) || "card";
         if (activeView !== "article_view") {
+            // Load adapters only after application initialization, at the user
+            // action boundary. The retained-state module must not import the
+            // renderer/search graph that imports this opener itself.
+            const [pagination, search, counts] = await Promise.all([
+                import("../../infinite_scroll/infinite_scroll_handler.js"),
+                import("../../filterbar/text_search/dataset_search_runtime_state.js"),
+                import("../../../reusable_components/results_count/results_count_printer.js"),
+            ]);
+            if (!isCurrent() || articleOpenGenerations.get(table_name) !== generation
+                || (localStorage.getItem(table_name + "_view") || "card") !== activeView) return;
+            const preserveCardReturn = captureCardArticleReturn(table_name, {
+                listPath: buildDatasetPath(table_name, DATASET_PREFIX || "/"),
+                readPagination: () => pagination.captureInfiniteScrollState(table_name),
+                readSearchCache: () => search.ongoingSearchResultsStore[table_name],
+                disconnectPagination: () => pagination.disconnectInfiniteScroll(table_name),
+                resumePagination: snapshot => pagination.resumeInfiniteScrollState(table_name, snapshot),
+                syncResultsCount: (query, cache, rowCount) => query
+                    ? search.syncSearchResultsCount(table_name, cache)
+                    : counts.setResultsCount(table_name, rowCount),
+            });
             setUnifiedTableState(table_name, {
                 articleView: {
                     collapsed: true,
@@ -95,7 +121,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
             );
             if (!isCurrent()) return;
-            await refreshTableUnified(table_name, { skipUrlParams: true });
+            await refreshTableUnified(table_name, { skipUrlParams: true, preserveCardReturn });
             return;
         }
         /* -------------------------------------------------- *
@@ -172,6 +198,8 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         }
 
         if (!canCommit()) return;
+        const sectionDefaults = await loadRowArticleSectionDefaults(table_name, "classic");
+        if (!canCommit()) return;
         const { rowArticleContentElement } = await buildRowArticleContent(
             row_item,
             table_name,
@@ -181,7 +209,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             header_first_letter,
             table_has_image_role,
             current_user_id,
-            { selectedCard },
+            { selectedCard, sectionDefaults },
         );
 
         if (!canCommit()) return;
@@ -204,6 +232,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             tableHasImageRole: table_has_image_role,
             currentUserId: current_user_id,
             showRelatedItems: show_related_items_on_big_cards,
+            sectionDefaults,
             canCommit,
             onLinkedTaskChildCountChange: (count) => { linkedTaskChildCount = count; },
         });
@@ -468,13 +497,18 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             ) + buildRowArticleQueryString(table_name);
             const currentUrl = window.location.pathname + window.location.search;
             const historyRowId = String(rowId);
-            const historyState = { bigCard: true, dataset: table_name, rowId: historyRowId };
+            const historyState = { bigCard: true, dataset: table_name, rowId: historyRowId, articleOriginEntry: getCardArticleOriginEntry(table_name) };
             const rowPathRoot = buildCardUrl(DATASET_PREFIX, table_name, historyRowId, "");
             const currentPath = window.location.pathname;
             const currentPathIsSameRow =
                 currentPath === rowPathRoot || currentPath.startsWith(`${rowPathRoot}-`);
+            // A direct collection article URL selects its initial row within
+            // the same view entry. There is no standalone full-card article list.
+            const currentPathIsArticleCollection = currentPath === buildDatasetPath(table_name, DATASET_PREFIX || "/")
+                && resolveDatasetViewSelectionTarget(new URLSearchParams(window.location.search).get("view")) === ARTICLE_VIEW_KEY;
             const currentHistoryState = history.state || {};
-            historyState.articleReturnAvailable = !currentPathIsSameRow || currentHistoryState.articleReturnAvailable === true;
+            historyState.articleReturnAvailable = !currentPathIsArticleCollection
+                && (!currentPathIsSameRow || currentHistoryState.articleReturnAvailable === true);
             const currentHistoryStateMatches =
                 currentHistoryState.bigCard === true
                 && currentHistoryState.dataset === table_name
@@ -482,15 +516,11 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             if (currentUrl === cardUrl && currentHistoryStateMatches) {
                 // The current history entry already describes this article.
             } else if (currentUrl === cardUrl) {
-                history.replaceState(historyState, "", cardUrl);
-            } else if (currentPathIsSameRow) {
-                history.replaceState(historyState, "", cardUrl);
+                writeHistoryEntry(cardUrl, historyState, { replace: true });
+            } else if (currentPathIsSameRow || currentPathIsArticleCollection) {
+                writeHistoryEntry(cardUrl, historyState, { replace: true });
             } else {
-                history.pushState(
-                    historyState,
-                    "",
-                    cardUrl
-                );
+                writeHistoryEntry(cardUrl, historyState);
             }
         }
         dispatchCardArticleToggle(table_name, true);
@@ -542,6 +572,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                     rowArticleContentElement,
                     tableName: table_name,
                     rowId: row_item.id,
+                    sectionDefaults,
                 });
                 await hydrateRelatedSections();
             })();

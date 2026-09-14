@@ -82,7 +82,7 @@ Use these documents together:
 
 - `Frontend_Guide.md`
   - frontend architecture and broader UI conventions
-- `DEV_GUIDE.md`
+- [Developer Guide](DEV_GUIDE.md)
   - contributor workflow, QA, and project-wide implementation rules
 - this document
   - durable accessibility baseline

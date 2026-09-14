@@ -76,6 +76,14 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Apply the shared UI visibility policy before either response mode reads
+	// search metadata or writes a first streamed packet. Admin membership is
+	// resolved by the same current database policy as ordinary row reads.
+	userID, _ := e_sessions.GetUserIDFromSession(r)
+	if !allowDatasetUIRead(w, r.URL.Query().Get("dataset"), userID) {
+		return
+	}
+
 	// 🔄 UUSI: jos stream‑parametri, käytä virtaavaa vastausta
 	if r.URL.Query().Get("stream") == "1" {
 		if err := queryIntelligentResultsStream(w, r); err != nil {

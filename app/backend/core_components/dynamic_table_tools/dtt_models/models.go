@@ -44,8 +44,9 @@ type ColumnInfo struct {
 }
 
 type TableReadMeta struct {
-	CardDetailsLayout string `json:"card_details_layout"`
-	CardStyleVariant  string `json:"card_style_variant"`
+	CardDetailsLayout string  `json:"card_details_layout"`
+	CardStyleVariant  *string `json:"card_style_variant"`
+	CardDetailColumns *int    `json:"card_detail_columns"`
 }
 
 type AddRowLanguageInfo struct {

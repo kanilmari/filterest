@@ -10,8 +10,7 @@ import {
 } from "../general_tables/gt_toolbar/toolbar_button_creator.js";
 import {
     createGenericViewSelector,
-    applyViewStyling,
-    closeRowArticleBeforeViewSwitch,
+    selectDatasetView,
 } from "../table_views/view_selector_printer.js";
 import { refreshTableUnified } from "../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { createVanillaDropdown } from "../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
@@ -170,11 +169,7 @@ function createAdminViewButtons(table_name, current_view, columns = [], dataType
         },
         onChange: (value) => {
             if (!value) return;
-            const datasetName = table_name;
-            closeRowArticleBeforeViewSwitch(datasetName);
-            localStorage.setItem(`${datasetName}_view`, value);
-            applyViewStyling(table_name);
-            refreshTableUnified(table_name);
+            selectDatasetView(table_name, value, current_view);
         }
     });
 

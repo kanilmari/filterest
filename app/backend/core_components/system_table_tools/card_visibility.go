@@ -19,39 +19,42 @@ import (
 )
 
 const defaultCardDetailsLayout = "conditional_multiline"
-const defaultCardStyleVariant = "standard"
 
 // CardVisibilityColumn represents one column's visibility settings.
 type CardVisibilityColumn struct {
-	ColumnUID                int     `json:"column_uid"`
-	ColumnName               string  `json:"column_name"`
-	CoNumber                 int     `json:"co_number"`
-	HideEverywhereLocked     bool    `json:"hide_everywhere_locked"`
-	HideEverywhereLockReason string  `json:"hide_everywhere_lock_reason"`
-	ClientDeliveryMode       string  `json:"client_delivery_mode"`
-	ClientDeliveryModeLocked bool    `json:"client_delivery_mode_locked"`
-	LabelValueLayout         *string `json:"label_value_layout"`
-	labelValueLayoutProvided bool
-	CardElement              string `json:"card_element"`
-	CardDetailLabelMode      string `json:"card_detail_label_mode"`
-	CardDetailIconSVG        string `json:"card_detail_icon_svg"`
-	CardDetailIconKey        string `json:"card_detail_icon_key"`
-	CardDetailCapitalization bool   `json:"card_detail_capitalization"`
-	ShowKeyOnCard            bool   `json:"show_key_on_card"`
-	ShowValueOnCard          bool   `json:"show_value_on_card"`
-	HideEverywhere           bool   `json:"hide_everywhere"`
-	HideOnSmallCard          bool   `json:"hide_on_small_card"`
-	HideFalseNullOnSmlCrd    bool   `json:"hide_false_null_on_sml_crd"`
-	HideFalseNullOnBigCrd    bool   `json:"hide_false_null_on_big_crd"`
-	HideOnBgCrdIfNotOwn      bool   `json:"hide_on_bg_crd_if_not_own"`
-	HideInFilterPanel        bool   `json:"hide_in_filter_panel"`
+	ColumnUID                     int     `json:"column_uid"`
+	ColumnName                    string  `json:"column_name"`
+	CoNumber                      int     `json:"co_number"`
+	HideEverywhereLocked          bool    `json:"hide_everywhere_locked"`
+	HideEverywhereLockReason      string  `json:"hide_everywhere_lock_reason"`
+	ClientDeliveryMode            string  `json:"client_delivery_mode"`
+	ClientDeliveryModeLocked      bool    `json:"client_delivery_mode_locked"`
+	LabelValueLayout              *string `json:"label_value_layout"`
+	labelValueLayoutProvided      bool
+	CardElement                   string `json:"card_element"`
+	CardDetailLabelMode           string `json:"card_detail_label_mode"`
+	CardDetailIconSVG             string `json:"card_detail_icon_svg"`
+	CardDetailIconKey             string `json:"card_detail_icon_key"`
+	CardDetailCapitalization      bool   `json:"card_detail_capitalization"`
+	ShowKeyOnCard                 bool   `json:"show_key_on_card"`
+	ShowKeyOnCardOverride         *bool  `json:"show_key_on_card_override"`
+	showKeyOnCardProvided         bool
+	showKeyOnCardOverrideProvided bool
+	ShowValueOnCard               bool `json:"show_value_on_card"`
+	HideEverywhere                bool `json:"hide_everywhere"`
+	HideOnSmallCard               bool `json:"hide_on_small_card"`
+	HideFalseNullOnSmlCrd         bool `json:"hide_false_null_on_sml_crd"`
+	HideFalseNullOnBigCrd         bool `json:"hide_false_null_on_big_crd"`
+	HideOnBgCrdIfNotOwn           bool `json:"hide_on_bg_crd_if_not_own"`
+	HideInFilterPanel             bool `json:"hide_in_filter_panel"`
 }
 
 // CardVisibilityResponse represents one table's card visibility settings.
 type CardVisibilityResponse struct {
 	TableName         string                 `json:"table_name"`
 	CardDetailsLayout string                 `json:"card_details_layout"`
-	CardStyleVariant  string                 `json:"card_style_variant"`
+	CardStyleVariant  *string                `json:"card_style_variant"`
+	CardDetailColumns *int                   `json:"card_detail_columns"`
 	Columns           []CardVisibilityColumn `json:"columns"`
 }
 
@@ -265,7 +268,8 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(scd.card_detail_icon_svg, '')     AS card_detail_icon_svg,
 		       %s,
 		       %s,
-		       COALESCE(scd.show_key_on_card, true)        AS show_key_on_card,
+		       public.resolve_card_label_visibility(scd.show_key_on_card, scd.card_element) AS show_key_on_card,
+		       scd.show_key_on_card AS show_key_on_card_override,
 		       COALESCE(scd.show_value_on_card, true)      AS show_value_on_card,
 		       COALESCE(scd.hide_everywhere, false)         AS hide_everywhere,
 		       COALESCE(scd.client_delivery_mode, 'include') AS client_delivery_mode,
@@ -281,32 +285,11 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		ORDER BY scd.co_number, scd.column_uid
 	`, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, labelValueLayoutExpr)
 
-	cardDetailsLayout := defaultCardDetailsLayout
-	cardStyleVariant := defaultCardStyleVariant
-	hasCardStyleVariant, err := publicTableColumnExists(backend.Db, "system_db_tables", "card_style_variant")
+	cardDetailsLayout, presentation, err := loadCardVisibilityTableSettings(backend.Db, tableName)
 	if err != nil {
-		log.Printf("\033[31merror: [GetCardVisibilityHandler] card_style_variant check failed: %v\033[0m", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking card style metadata")
+		log.Printf("\033[31merror: [GetCardVisibilityHandler] table settings query for %q: %v\033[0m", tableName, err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching card settings")
 		return
-	}
-	cardStyleVariantExpr := `'standard'::varchar AS card_style_variant`
-	if hasCardStyleVariant {
-		cardStyleVariantExpr = `COALESCE(card_style_variant, 'standard') AS card_style_variant`
-	}
-	if err := backend.Db.QueryRow(fmt.Sprintf(`
-		SELECT COALESCE(card_details_layout, $2), %s
-		FROM system_db_tables
-		WHERE table_name = $1
-		LIMIT 1
-	`, cardStyleVariantExpr), tableName, defaultCardDetailsLayout).Scan(&cardDetailsLayout, &cardStyleVariant); err != nil {
-		if err == sql.ErrNoRows {
-			cardDetailsLayout = defaultCardDetailsLayout
-			cardStyleVariant = defaultCardStyleVariant
-		} else {
-			log.Printf("\033[31merror: [GetCardVisibilityHandler] table settings query failed for table %q: %v\033[0m", tableName, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching card settings")
-			return
-		}
 	}
 
 	rows, err := backend.Db.Query(query, tableName)
@@ -324,7 +307,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			&c.ColumnUID, &c.ColumnName, &c.CoNumber, &c.CardElement,
 			&c.CardDetailLabelMode, &c.CardDetailIconSVG, &c.CardDetailIconKey,
 			&c.CardDetailCapitalization,
-			&c.ShowKeyOnCard, &c.ShowValueOnCard, &c.HideEverywhere,
+			&c.ShowKeyOnCard, &c.ShowKeyOnCardOverride, &c.ShowValueOnCard, &c.HideEverywhere,
 			&c.ClientDeliveryMode,
 			&c.HideOnSmallCard, &c.HideFalseNullOnSmlCrd, &c.HideFalseNullOnBigCrd,
 			&c.HideOnBgCrdIfNotOwn, &c.HideInFilterPanel, &c.LabelValueLayout,
@@ -366,16 +349,20 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, CardVisibilityResponse{
 		TableName:         tableName,
 		CardDetailsLayout: normalizeCardDetailsLayout(cardDetailsLayout),
-		CardStyleVariant:  normalizeCardStyleVariant(cardStyleVariant),
+		CardStyleVariant:  presentation.CardStyleVariant,
+		CardDetailColumns: presentation.CardDetailColumns,
 		Columns:           columns,
 	})
 }
 
 // updateCardVisibilityRequest is the expected request body for UpdateCardVisibilityHandler.
 type updateCardVisibilityRequest struct {
+	Scope             json.RawMessage `json:"scope"`
+	CardDetailColumns json.RawMessage `json:"card_detail_columns"`
+	fields            map[string]json.RawMessage
 	TableName         string                 `json:"table_name"`
 	CardDetailsLayout string                 `json:"card_details_layout"`
-	CardStyleVariant  string                 `json:"card_style_variant"`
+	CardStyleVariant  json.RawMessage        `json:"card_style_variant"`
 	Columns           []CardVisibilityColumn `json:"columns"`
 }
 
@@ -410,11 +397,26 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Scope) > 0 {
+		updateDatasetCardPresentation(w, r, req)
+		return
+	}
+
 	if req.TableName == "" || len(req.Columns) == 0 {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "table_name and columns are required")
 		return
 	}
 
+	cardStyleVariant, err := decodeCardStyleVariantOverride(req.CardStyleVariant)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	cardDetailColumns, err := decodeCardDetailColumnsOverride(req.CardDetailColumns)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
 		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] failed to acquire transaction\033[0m")
@@ -466,6 +468,15 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if len(req.CardStyleVariant) > 0 && !hasCardStyleVariant {
+		httpresponse.RespondWithError(w, http.StatusConflict, "card style migration required")
+		return
+	}
+	if len(req.CardDetailColumns) > 0 {
+		if !writeLegacyCardDetailColumns(w, tx, req.TableName, cardDetailColumns) {
+			return
+		}
+	}
 	if strings.TrimSpace(req.CardDetailsLayout) != "" {
 		if _, err := tx.Exec(`
 			UPDATE system_db_tables
@@ -477,12 +488,12 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if hasCardStyleVariant && strings.TrimSpace(req.CardStyleVariant) != "" {
+	if len(req.CardStyleVariant) > 0 {
 		if _, err := tx.Exec(`
 			UPDATE system_db_tables
 			SET card_style_variant = $1
 			WHERE table_name = $2
-		`, normalizeCardStyleVariant(req.CardStyleVariant), req.TableName); err != nil {
+		`, cardStyleVariant, req.TableName); err != nil {
 			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] style update for table %q: %v\033[0m", req.TableName, err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating card style variant")
 			return
@@ -553,7 +564,11 @@ func buildCardVisibilityUpdateQuery(includeIconKey, includeCapitalization, inclu
 	if includeCapitalization {
 		addSetClause("card_detail_capitalization")
 	}
-	addSetClause("show_key_on_card")
+	setClauses = append(setClauses, fmt.Sprintf(
+		"show_key_on_card = CASE WHEN $%d THEN $%d::boolean ELSE show_key_on_card END",
+		placeholder, placeholder+1,
+	))
+	placeholder += 2
 	addSetClause("show_value_on_card")
 	addSetClause("hide_everywhere")
 	addSetClause("client_delivery_mode")
@@ -587,8 +602,9 @@ func buildCardVisibilityUpdateArgs(col CardVisibilityColumn, includeIconKey, inc
 	if includeCapitalization {
 		args = append(args, col.CardDetailCapitalization)
 	}
+	labelProvided, labelOverride := cardLabelVisibilityOverrideForWrite(col)
 	args = append(args,
-		col.ShowKeyOnCard,
+		labelProvided, labelOverride,
 		col.ShowValueOnCard,
 		col.HideEverywhere,
 		normalizeClientDeliveryMode(col.ClientDeliveryMode),
@@ -659,11 +675,14 @@ func normalizeCardDetailsLayout(layout string) string {
 	}
 }
 
-func normalizeCardStyleVariant(variant string) string {
-	switch strings.ToLower(strings.TrimSpace(variant)) {
-	case "modern":
-		return "modern"
-	default:
-		return defaultCardStyleVariant
+// An absent request member preserves the override; explicit null clears it.
+func decodeCardStyleVariantOverride(raw json.RawMessage) (*string, error) {
+	if len(raw) == 0 {
+		return nil, nil
 	}
+	var value *string
+	if err := json.Unmarshal(raw, &value); err != nil || (value != nil && *value != "standard" && *value != "modern") {
+		return nil, fmt.Errorf("card_style_variant must be null, standard or modern")
+	}
+	return value, nil
 }

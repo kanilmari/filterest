@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -156,6 +157,12 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		return
 	}
 
+	for _, update := range updates {
+		if err := validateCardStyleUpdate(tableName, update); err != nil {
+			httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	tx, ok := dbutils.GetTx(request.Context())
 	if !ok {
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "transaction not found")
@@ -315,7 +322,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error verifying row update")
 			return
 		}
-		if tableName == "system_db_tables" && (update.Column == "card_details_layout" || update.Column == "card_style_variant") {
+		if tableName == "system_db_tables" && (update.Column == "card_details_layout" || update.Column == "card_style_variant" || update.Column == "card_detail_columns") {
 			var targetTableName string
 			if err := tx.QueryRow(
 				"SELECT table_name FROM system_db_tables WHERE id = $1",
@@ -323,7 +330,10 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			).Scan(&targetTableName); err != nil {
 				log.Printf("[UpdateRow] warning: card_details_layout cache invalidation lookup failed for row id %d: %v", updateRequest.ID, err)
 			} else if strings.TrimSpace(targetTableName) != "" {
-				dtt_1_row_read.InvalidateSchemaCache(targetTableName)
+				invalidate := func() { dtt_1_row_read.InvalidateSchemaCache(targetTableName) }
+				if !dbutils.RegisterAfterCommitHook(request.Context(), invalidate) {
+					invalidate()
+				}
 			}
 		}
 		changedFields = append(changedFields, update.Column)
@@ -385,6 +395,28 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	_ = json.NewEncoder(response_writer).Encode(map[string]string{
 		"message": "Row updated successfully",
 	})
+}
+
+// Validate before string conversion so only explicit null restores inheritance.
+func validateCardStyleUpdate(tableName string, update updateRowFieldUpdate) error {
+	if tableName != "system_db_tables" || update.Value == nil {
+		return nil
+	}
+	if update.Column == "card_detail_columns" {
+		value, ok := update.Value.(float64)
+		if !ok || value < 1 || value > 4 || value != math.Trunc(value) {
+			return errors.New("card_detail_columns must be null or an integer from 1 to 4")
+		}
+		return nil
+	}
+	if update.Column != "card_style_variant" {
+		return nil
+	}
+	value, ok := update.Value.(string)
+	if !ok || (value != "standard" && value != "modern") {
+		return errors.New("card_style_variant must be null, standard or modern")
+	}
+	return nil
 }
 
 func getSessionUserRoleOrGuest(request *http.Request) string {

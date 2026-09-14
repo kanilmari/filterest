@@ -24,6 +24,11 @@ const {
     articleUiSettings: { showRelatedItems: true },
 }));
 
+vi.mock("./row_article_section_defaults.js", async (importOriginal) => ({
+    ...await importOriginal(),
+    loadRowArticleSectionDefaults: vi.fn(async () => ({})),
+}));
+
 vi.mock("../article_view/article_language_editor.js", () => ({ createArticleLanguageEditor: vi.fn(() => null) }));
 
 vi.mock("../../endpoints/endpoint_router.js", () => ({
@@ -167,6 +172,7 @@ import {
     resolveRowArticleParentImageRows,
 } from "./row_article_asset_resolver.js";
 import { buildRowArticleContent } from "./row_article_content_builder.js";
+import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
 import { buildSlug } from "./row_article_opener_helpers.js";
 
@@ -185,6 +191,8 @@ describe("openRowArticleView", () => {
         window.history.replaceState({}, "", "/");
         localStorage.clear();
         articleUiSettings.showRelatedItems = true;
+        vi.mocked(loadRowArticleSectionDefaults).mockReset();
+        vi.mocked(loadRowArticleSectionDefaults).mockResolvedValue({});
         vi.mocked(primeDatasetPermissions).mockClear();
         vi.mocked(hasDatasetPermission).mockClear();
         ["events", "services", "service_catalog", "tickets", "app_service_catalog"].forEach((table) => localStorage.setItem(`${table}_view`, "article_view"));
@@ -297,6 +305,47 @@ describe("openRowArticleView", () => {
         expect(closeRowArticleMock).toHaveBeenCalled();
     });
 
+    test("uses defaults once and retains manual media state on same-row refresh", async () => {
+        document.body.innerHTML = `
+            <div id="events_article_view_container"><div class="card_view_wrapper">
+                <div class="card_container"><div class="card" data-id="42"></div></div>
+                <div class="row_article_placeholder"></div>
+            </div></div>`;
+        vi.mocked(buildRowArticleContent).mockImplementation(async () => createDefaultRowArticleContent());
+        const defaults = { details: false, images: false, attachments: true, related_rows: false };
+        vi.mocked(loadRowArticleSectionDefaults).mockResolvedValue(defaults);
+        vi.mocked(createRowArticleLoadSession).mockReturnValue({
+            fetchAttachmentLinking: vi.fn(async () => null),
+            fetchDynamicChildren: vi.fn(async () => ({ child_tables: [] })),
+            fetchImageLinking: vi.fn(async () => null),
+        });
+        vi.mocked(buildRowArticleImageGallery).mockImplementation(() => document.createElement("div"));
+        vi.mocked(buildRowArticleAttachmentList).mockImplementation(() => document.createElement("div"));
+        vi.mocked(buildRowArticleRelatedTabs).mockImplementation(() => document.createElement("div"));
+        const row = { id: 42, title: "Example" };
+        await openRowArticleView(row, "events");
+        await flushRowArticleHydration();
+        expect(loadRowArticleSectionDefaults).toHaveBeenCalledExactlyOnceWith("events", "classic");
+        expect(buildRowArticleContent.mock.calls[0][8].sectionDefaults).toBe(defaults);
+        const gallery = document.querySelector(".row_article_image_gallery_section");
+        const attachments = document.querySelector(".row_article_attachment_list_section");
+        expect(gallery.dataset.disclosureState).toBe("collapsed");
+        expect(attachments.dataset.disclosureState).toBe("expanded");
+        expect(document.querySelector(".row_article_related_items_section").dataset.disclosureState).toBe("collapsed");
+        gallery.querySelector("button").click();
+        attachments.querySelector("button").click();
+        const refresh = buildRowArticleImageGallery.mock.calls[0][3];
+        await refresh();
+        expect(document.querySelector(".row_article_image_gallery_section").dataset.disclosureState).toBe("expanded");
+        expect(document.querySelector(".row_article_attachment_list_section").dataset.disclosureState).toBe("collapsed");
+        expect(loadRowArticleSectionDefaults).toHaveBeenCalledTimes(1);
+        await openRowArticleView({ id: 43, title: "Next row" }, "events");
+        await flushRowArticleHydration();
+        expect(loadRowArticleSectionDefaults).toHaveBeenCalledTimes(2);
+        expect(document.querySelector(".row_article_image_gallery_section").dataset.disclosureState).toBe("collapsed");
+        expect(document.querySelector(".row_article_attachment_list_section").dataset.disclosureState).toBe("expanded");
+    });
+
     test("resolves the current result card before composing direct article media", async () => {
         document.body.innerHTML = `
             <div id="events_article_view_container">
@@ -325,7 +374,7 @@ describe("openRowArticleView", () => {
             expect.any(String),
             false,
             1,
-            { selectedCard: resolvedCard },
+            { selectedCard: resolvedCard, sectionDefaults: {} },
         );
     });
 
@@ -363,7 +412,7 @@ describe("openRowArticleView", () => {
             "S",
             false,
             1,
-            { selectedCard },
+            { selectedCard, sectionDefaults: {} },
         );
         expect(buildSlug).toHaveBeenCalledWith("Services");
         expect(document.body.textContent).not.toContain('{"en"');
@@ -398,6 +447,20 @@ describe("openRowArticleView", () => {
         });
     });
 
+
+    test("opening a collection article URL selects its row in the same history entry", async () => {
+        document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper"><div class="card_container"><div class="card" data-id="42"></div></div><div class="big_card_placeholder row_article_placeholder"></div></div></div>';
+        history.replaceState({ __filterestEntryId: "article-bookmark" }, "", "/events?view=article_view&search=harbour");
+        getParamsMock.mockReturnValue({ view: "article_view", search: "harbour" });
+        const push = vi.spyOn(history, "pushState");
+        try {
+            await openRowArticleView({ id: 42 }, "events", document.querySelector(".card"));
+            expect(push).not.toHaveBeenCalled();
+            expect(location.pathname).toBe("/events/42");
+            expect(history.state).toMatchObject({ __filterestEntryId: "article-bookmark", bigCard: true, articleReturnAvailable: false });
+        } finally { push.mockRestore(); }
+    });
+
     test("canonicalizes an already-current row path without adding a history entry", async () => {
         document.body.innerHTML = `
             <div id="events_article_view_container">
@@ -423,13 +486,13 @@ describe("openRowArticleView", () => {
 
         expect(pushStateSpy).not.toHaveBeenCalled();
         expect(replaceStateSpy).toHaveBeenCalledWith(
-            { bigCard: true, dataset: "events", rowId: "42", articleReturnAvailable: false },
+            expect.objectContaining({ bigCard: true, dataset: "events", rowId: "42", articleReturnAvailable: false }),
             "",
             "/events/42?view=article_view",
         );
         expect(window.location.pathname).toBe("/events/42");
         expect(window.location.search).toBe("?view=article_view");
-        expect(window.history.state).toEqual({
+        expect(window.history.state).toMatchObject({
             bigCard: true,
             dataset: "events",
             rowId: "42",
@@ -472,7 +535,7 @@ describe("openRowArticleView", () => {
             expect.any(String),
             expect.any(Boolean),
             expect.any(Number),
-            { selectedCard },
+            { selectedCard, sectionDefaults: {} },
         );
     });
 
@@ -508,7 +571,7 @@ describe("openRowArticleView", () => {
             expect.any(String),
             expect.any(Boolean),
             expect.any(Number),
-            { selectedCard },
+            { selectedCard, sectionDefaults: {} },
         );
     });
 
@@ -721,9 +784,10 @@ describe("openRowArticleView", () => {
         );
     });
 
-    test("keeps service-catalog inline cached image and suppresses duplicate gallery hero", async () => {
+    test.each(["app_service_catalog", "ordinary_dataset"])("keeps %s inline image and gallery thumbnails visible", async (tableName) => {
+        localStorage.setItem(`${tableName}_view`, "article_view");
         document.body.innerHTML = `
-            <div id="app_service_catalog_article_view_container">
+            <div id="${tableName}_article_view_container">
                 <div class="card_view_wrapper">
                     <div class="card_container">
                         <div class="card" data-id="42"></div>
@@ -764,31 +828,31 @@ describe("openRowArticleView", () => {
         vi.mocked(buildRowArticleImageGallery).mockImplementationOnce(() => {
             const gallery = document.createElement("div");
             gallery.classList.add("big_card_image_gallery", "row_article_image_gallery");
-            const hero = document.createElement("div");
-            hero.classList.add("big_card_hero_image");
-            hero.appendChild(document.createElement("img"));
-            gallery.appendChild(hero);
+            const thumbnails = document.createElement("div");
+            thumbnails.classList.add("big_card_thumbnail_row");
+            thumbnails.appendChild(document.createElement("img"));
+            gallery.appendChild(thumbnails);
             return gallery;
         });
 
         await openRowArticleView(
             { id: 42, title: "Firefox", cached_image: "/storage/104/42/original/firefox.svg" },
-            "app_service_catalog",
+            tableName,
             selectedCard,
         );
         await flushRowArticleHydration();
 
         const gallery = document.querySelector(".row_article_image_gallery");
-        const galleryHero = gallery?.querySelector(".big_card_hero_image");
+        const thumbnails = gallery?.querySelector(".big_card_thumbnail_row");
         expect(gallery).not.toBeNull();
         expect(inlineImage.hidden).toBe(false);
-        expect(inlineImage.dataset.serviceCatalogInlineImageSuppressed).toBe("false");
-        expect(inlineImage.dataset.serviceCatalogInlineImagePrimary).toBe("true");
-        expect(galleryHero?.hidden).toBe(true);
-        expect(galleryHero?.dataset.serviceCatalogGalleryHeroSuppressed).toBe("true");
+        expect(thumbnails?.hidden).toBe(false);
+        expect(thumbnails?.querySelector("img")).not.toBeNull();
+        expect(gallery.querySelector(".big_card_hero_image")).toBeNull();
+        expect(inlineImage.dataset.serviceCatalogInlineImagePrimary).toBeUndefined();
     });
 
-    test("keeps service-catalog inline cached image visible when gallery has no hero image", async () => {
+    test("keeps an inline image visible when its gallery is empty", async () => {
         document.body.innerHTML = `
             <div id="app_service_catalog_article_view_container">
                 <div class="card_view_wrapper">
@@ -820,9 +884,6 @@ describe("openRowArticleView", () => {
         vi.mocked(buildRowArticleImageGallery).mockImplementationOnce(() => {
             const gallery = document.createElement("div");
             gallery.classList.add("big_card_image_gallery", "row_article_image_gallery");
-            const hero = document.createElement("div");
-            hero.classList.add("big_card_hero_image");
-            gallery.appendChild(hero);
             return gallery;
         });
 
@@ -834,8 +895,8 @@ describe("openRowArticleView", () => {
         await flushRowArticleHydration();
 
         expect(inlineImage.hidden).toBe(false);
-        expect(inlineImage.dataset.serviceCatalogInlineImageSuppressed).toBe("false");
-        expect(inlineImage.dataset.serviceCatalogInlineImagePrimary).toBe("false");
+        expect(document.querySelector(".row_article_image_gallery")?.hidden).toBe(false);
+        expect(document.querySelector(".big_card_hero_image")).toBeNull();
     });
 
     test("a superseded article fetch cannot write DOM or history", async () => {
@@ -882,4 +943,32 @@ describe("openRowArticleView", () => {
         expect(controller.setDisabled).toHaveBeenLastCalledWith(false);
     });
 
+    test("captures the card return before changing view and passes only its token to refresh", async () => {
+        const { captureCardArticleReturn } = await import("../../navigation/nav_engine/card_article_return_state.js");
+        const { refreshTableUnified } = await import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js");
+        const token = {};
+        captureCardArticleReturn.mockImplementationOnce((dataset, adapter) => {
+            expect(localStorage.getItem(dataset + "_view")).toBe("card");
+            expect(adapter.listPath).toBe("/service_catalog");
+            return token;
+        });
+        localStorage.setItem("app_service_catalog_view", "card");
+        await openRowArticleView({ id: 42 }, "app_service_catalog");
+        expect(refreshTableUnified).toHaveBeenCalledWith("app_service_catalog", { skipUrlParams: true, preserveCardReturn: token });
+        expect(localStorage.getItem("app_service_catalog_view")).toBe("article_view");
+    });
+
 });
+
+vi.mock("../../navigation/nav_engine/card_article_return_state.js", () => ({ captureCardArticleReturn: vi.fn(() => null), getCardArticleOriginEntry: vi.fn(() => null) }));
+
+vi.mock("../../infinite_scroll/infinite_scroll_handler.js", () => ({
+    captureInfiniteScrollState: vi.fn(() => ({ isLoading: false })),
+    resumeInfiniteScrollState: vi.fn(), disconnectInfiniteScroll: vi.fn(),
+}));
+vi.mock("../../filterbar/text_search/dataset_search_runtime_state.js", () => ({
+    ongoingSearchResultsStore: {}, syncSearchResultsCount: vi.fn(),
+}));
+vi.mock("../../../reusable_components/results_count/results_count_printer.js", () => ({
+    setResultsCount: vi.fn(),
+}));

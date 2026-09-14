@@ -22,6 +22,27 @@ describe('groupViewsByGroup', () => {
         expect(result.admin_tools).toHaveLength(1);
     });
 
+    test('keeps a compatibility route registered without creating a visible alias group', () => {
+        const canonical = { name: 'view_field_settings', group: 'admin_tools',
+            containerId: 'view_field_settings_container', loadFunction: () => 'settings' };
+        const alias = { ...canonical, name: 'view_field_assignments',
+            group: 'legacy_alias', navigationHidden: true };
+        const registry = [canonical, alias];
+        const groups = groupViewsByGroup(registry);
+        expect(Object.keys(groups)).toEqual(['admin_tools']);
+        expect(groups.admin_tools).toEqual([canonical]);
+        expect(registry.find(view => view.name === 'view_field_assignments')).toBe(alias);
+        expect(alias.loadFunction).toBe(canonical.loadFunction);
+        expect(alias.containerId).toBe(canonical.containerId);
+    });
+
+    test('only explicit hidden navigation entries are excluded', () => {
+        const visible = { name: 'visible', group: 'tools', navigationHidden: false };
+        const ordinary = { name: 'ordinary', group: 'tools' };
+        const hidden = { name: 'hidden', group: 'tools', navigationHidden: true };
+        expect(groupViewsByGroup([visible, ordinary, hidden]).tools).toEqual([visible, ordinary]);
+    });
+
     test('returns empty object for empty array', () => {
         expect(groupViewsByGroup([])).toEqual({});
     });
@@ -147,7 +168,8 @@ describe('getAdminToolsStructure', () => {
         expect(maintenance).toBeDefined();
         expect(maintenance.children.length).toBeGreaterThan(0);
         expect(tableTools.children.some(c => c.id === 'card_visibility')).toBe(true);
-        expect(tableTools.children.some(c => c.id === 'view_field_assignments')).toBe(true);
+        expect(tableTools.children.some(c => c.id === 'view_field_settings')).toBe(true);
+        expect(tableTools.children.some(c => c.id === 'view_field_assignments')).toBe(false);
         expect(tableTools.children.some(c => c.id === 'service_catalog_moderation')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'dataset_alias_management')).toBe(true);
         expect(tableTools.children.some(c => c.id === 'symbols')).toBe(true);

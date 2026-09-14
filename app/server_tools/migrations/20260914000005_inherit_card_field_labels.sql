@@ -1,0 +1,80 @@
+-- 20260914000005_inherit_card_field_labels.sql
+-- Keeps raw label overrides separate from the shared role-based default.
+-- Connects metadata reads and the support matrix to one deterministic SQL policy.
+-- Existing true/false choices are preserved; only new and explicitly reset fields inherit.
+-- VERSION_DB: 9.7.15
+-- VERSION_DB_OWNER: 20260914000001_record_admin_agent_and_dataset_presentation_release.sql
+
+ALTER TABLE public.system_column_details ALTER COLUMN show_key_on_card DROP DEFAULT;
+
+-- Shared runtime policy for raw NULL label visibility; explicit overrides always win.
+CREATE OR REPLACE FUNCTION public.resolve_card_label_visibility(label_override BOOLEAN, card_role TEXT)
+RETURNS BOOLEAN
+LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+AS $policy$
+    SELECT CASE
+        WHEN label_override IS NOT NULL THEN label_override
+        ELSE COALESCE((
+            SELECT CASE
+                WHEN bool_or(token ~ '^(header|description[0-9]*|keywords)([[:space:]]*\+[[:space:]]*lang[-_]key)?$') THEN FALSE
+                ELSE bool_or(token ~ '^details(_link)?[0-9]*([[:space:]]*\+[[:space:]]*lang[-_]key)?$')
+            END
+            FROM (
+                SELECT regexp_replace(value, '^[[:space:]]+|[[:space:]]+$', '', 'g') AS token
+                FROM unnest(string_to_array(COALESCE(card_role, ''), ',')) AS token_values(value)
+            ) AS roles
+        ), FALSE)
+    END;
+$policy$;
+
+CREATE OR REPLACE VIEW public.system_column_supported_views AS
+SELECT
+    details.column_uid::BIGINT * 2147483648::BIGINT + views.id::BIGINT AS id,
+    details.table_uid,
+    tables.table_name,
+    details.column_uid,
+    details.column_name,
+    views.id AS view_id,
+    views.view_key,
+    views.name AS view_name,
+    views.status AS view_status,
+    CASE
+        WHEN COALESCE(details.client_delivery_mode, 'include') = 'server_only' THEN FALSE
+        WHEN COALESCE(details.hide_everywhere, FALSE) THEN FALSE
+        WHEN views.view_key IN ('card', 'product_card')
+             AND COALESCE(details.hide_on_small_card, FALSE) THEN FALSE
+        ELSE TRUE
+    END AS is_supported,
+    CASE
+        WHEN COALESCE(details.client_delivery_mode, 'include') = 'server_only' THEN 'server_only'
+        WHEN COALESCE(details.hide_everywhere, FALSE) THEN 'hidden_everywhere'
+        WHEN views.view_key IN ('card', 'product_card')
+             AND COALESCE(details.hide_on_small_card, FALSE) THEN 'hidden_on_card'
+        ELSE 'supported'
+    END AS support_state,
+    details.data_type,
+    COALESCE(details.editable_in_ui, TRUE) AS editable_in_ui,
+    COALESCE(details.is_multilingual, FALSE) AS is_multilingual,
+    (
+        COALESCE(details.client_delivery_mode, 'include') = 'include'
+        AND NOT COALESCE(details.hide_everywhere, FALSE)
+        AND NOT COALESCE(details.hide_in_filter_panel, FALSE)
+    ) AS is_filterable,
+    COALESCE(details.client_delivery_mode, 'include') AS client_delivery_mode,
+    COALESCE(details.hide_everywhere, FALSE) AS hide_everywhere,
+    COALESCE(details.hide_on_small_card, FALSE) AS hide_on_small_card,
+    COALESCE(details.hide_in_filter_panel, FALSE) AS hide_in_filter_panel,
+    COALESCE(details.card_element, '') AS card_element,
+    public.resolve_card_label_visibility(details.show_key_on_card, details.card_element) AS show_key_on_card,
+    COALESCE(details.show_value_on_card, TRUE) AS show_value_on_card
+FROM public.system_column_details AS details
+JOIN public.system_db_tables AS tables
+  ON tables.table_uid = details.table_uid
+CROSS JOIN public.system_table_views AS views;
+
+COMMENT ON VIEW public.system_column_supported_views IS
+    'Read-only column-by-view support matrix. Global metadata determines support; personal, group, and site field assignments remain separate presentation preferences.';
+COMMENT ON COLUMN public.system_column_supported_views.is_supported IS
+    'Deterministic effective support: false for server_only, globally hidden, or card-hidden columns; true otherwise.';
+COMMENT ON COLUMN public.system_column_supported_views.client_delivery_mode IS
+    'Client projection mode is include or server_only. It is data minimization, not field authorization.';

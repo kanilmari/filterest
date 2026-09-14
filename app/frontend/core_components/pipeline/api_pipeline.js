@@ -80,6 +80,7 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     fetchViewData: 'vanilla_tree.GetViewDataHandler',
     dropDataset: 'dtt_3_table_delete.DropTableHandler',
     modifyColumns: 'dtt_crud_workflows.ModifyColumnsHandler',
+    adminDatasetUiVisibility: 'system_table_tools.AdminDatasetUIVisibilityHandler',
     updateOids: 'system_table_tools.HandleUpdateOidsAndTableNames',
     generateTranslations: 'lang.GenerateTranslationsHandler',
     fixTranslations: 'lang.FixTableTranslationsHandler',
@@ -150,6 +151,8 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     getDatasetHeaderConfig: 'system_table_tools.GetDatasetHeaderConfigHandler',
     saveDatasetHeaderConfig: 'system_table_tools.SaveDatasetHeaderConfigHandler',
     getViewFieldSets: 'system_table_tools.GetViewFieldSetsHandler',
+    getArticleSectionDefaults: 'system_table_tools.GetArticleSectionDefaultsHandler',
+    saveArticleSectionDefaults: 'system_table_tools.SaveArticleSectionDefaultsHandler',
     savePersonalViewFieldSet: 'system_table_tools.SavePersonalViewFieldSetHandler',
     assignPersonalViewFieldSet: 'system_table_tools.AssignPersonalViewFieldSetHandler',
     resetPersonalViewFieldSet: 'system_table_tools.ResetPersonalViewFieldSetHandler',
@@ -314,6 +317,7 @@ async function buildFetchOptionsStage(ctx) {
         headers: ctx.headers,
         bodyData: ctx.bodyData,
     });
+    if (ctx.signal !== undefined) ctx.fetchOptions.signal = ctx.signal;
 }
 
 /**

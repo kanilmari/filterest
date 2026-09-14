@@ -4,10 +4,12 @@
 // Exists so site/group assignments cannot widen, expose server-only fields, or report unverified saves.
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     get: vi.fn(),
+    articleGet: vi.fn(),
+    articleSave: vi.fn(),
     save: vi.fn(),
     reset: vi.fn(),
     renderTree: vi.fn(),
@@ -21,6 +23,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../endpoints/stable_endpoint_router.js", () => ({
     getViewFieldSets: mocks.get,
+    getArticleSectionDefaults: mocks.articleGet,
+    saveArticleSectionDefaults: mocks.articleSave,
     saveSiteViewFieldSet: mocks.save,
     resetSharedViewFieldSet: mocks.reset,
 }));
@@ -94,17 +98,27 @@ async function createLoadedView(response = baseResponse) {
 }
 
 describe("view_field_assignments_view", () => {
+    afterEach(() => {
+        Array.from(document.body.children).forEach(container => container.__cleanupListeners?.());
+    });
     beforeEach(() => {
         document.body.replaceChildren();
         localStorage.clear();
         sessionStorage.clear();
         mocks.pickerConfigs.length = 0;
-        [mocks.get, mocks.save, mocks.reset, mocks.renderTree, mocks.confirm,
+        [mocks.get, mocks.articleGet, mocks.articleSave, mocks.save, mocks.reset, mocks.renderTree, mocks.confirm,
             mocks.success, mocks.warning, mocks.extractDataset, mocks.language]
             .forEach((mock) => mock.mockReset());
         mocks.language.mockReturnValue("en");
         mocks.extractDataset.mockReturnValue("orders");
         mocks.confirm.mockResolvedValue(true);
+        mocks.articleGet.mockImplementation(async (dataset, presentation) => ({
+            dataset, presentation_key: presentation, supported_sections: presentation === 'classic'
+                ? ['details', 'images', 'attachments', 'related_rows', 'task_progress'] : ['details'],
+            overrides: {}, initial_open: presentation === 'classic'
+                ? { details: true, images: true, attachments: true, related_rows: true, task_progress: true } : { details: true },
+            can_edit: true,
+        }));
         mocks.save.mockResolvedValue({ field_set_id: 30 });
         mocks.reset.mockResolvedValue({ status: "ok" });
     });
@@ -292,6 +306,26 @@ describe("view_field_assignments_view", () => {
         expect(mocks.get).toHaveBeenCalledWith("orders", "article_view");
         expect(Array.from(select.options).filter((option) => option.value === "article_view")).toHaveLength(1);
         expect(container.querySelector("h2").textContent).toBe("View field settings");
+    });
+
+    test("article block settings use dataset context independently of group field sets", async () => {
+        const container = await createLoadedView();
+        expect(mocks.articleGet).not.toHaveBeenCalled();
+        const view = container.querySelector('[data-testid="view-field-assignments-view"]');
+        mocks.get.mockResolvedValue({ ...baseResponse, view_key: 'article_view' });
+        view.value = 'article_view'; view.dispatchEvent(new Event('change'));
+        await vi.waitFor(() => expect(mocks.articleGet).toHaveBeenCalledWith('orders', 'classic'));
+        const panel = container.querySelector('[data-testid="article-section-defaults"]');
+        expect(panel.hidden).toBe(false);
+        const details = panel.querySelector('[data-testid="article-section-default-details"]');
+        details.checked = false; details.dispatchEvent(new Event('change'));
+        const count = mocks.articleGet.mock.calls.length;
+        mocks.pickerConfigs.at(-1).onChange({ includeValues: ['2'] });
+        expect(mocks.articleGet).toHaveBeenCalledTimes(count);
+        expect(panel.querySelector('[data-testid="article-section-default-details"]').checked).toBe(false);
+        expect(mocks.articleSave).not.toHaveBeenCalled();
+        container.__cleanupListeners();
+        expect(container.querySelector('[data-testid="article-section-defaults"]')).toBeNull();
     });
 
 });

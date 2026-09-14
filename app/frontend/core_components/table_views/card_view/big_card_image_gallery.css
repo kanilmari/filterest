@@ -49,25 +49,37 @@
     text-align: start;
 }
 
-.row_article_image_first_caption {
+.row_article_image_first_bottom_controls {
     position: absolute;
     z-index: 3;
-    inset-inline-start: 50%;
-    inset-block-end: max(4rem, env(safe-area-inset-bottom));
+    inset-inline: 14px;
+    inset-block-end: max(14px, env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content) minmax(0, 1fr);
+    align-items: center;
+    pointer-events: none;
+}
+
+.row_article_image_first_caption {
+    grid-column: 2;
     width: max-content;
-    max-width: min(90vw, 900px);
+    max-width: min(900px, calc(100vw - 20rem));
     margin: 0;
-    padding: 0.7rem 1rem;
-    transform: translateX(-50%);
+    padding: calc(0.7rem - 2px) calc(1rem - 2px);
     border: 1px solid color-mix(in srgb, var(--border_color) 72%, transparent);
     border-radius: var(--border_radius, 8px);
-    background: color-mix(in srgb, var(--bg_color_extreme) 76%, transparent);
+    background: color-mix(in srgb, var(--bg_color_extreme) 68%, transparent);
     box-shadow: 0 8px 28px color-mix(in srgb, var(--bg_color_extreme) 45%, transparent);
     color: var(--text_color);
     text-align: center;
     text-shadow: 0 1px 3px color-mix(in srgb, var(--bg_color_extreme) 85%, transparent);
     pointer-events: auto;
     backdrop-filter: blur(8px);
+}
+
+/* Generic modal paragraphs must not offset the caption against its adjacent cue. */
+.image_first_view_modal .row_article_image_first_caption {
+    margin: 0;
 }
 
 .row_article_image_first_caption[hidden] {
@@ -513,22 +525,40 @@ body.dark-mode .image_first_view_modal {
 }
 
 .row_article_image_first_scroll_hint {
-    position: absolute;
-    z-index: 3;
-    inset-block-end: 14px;
-    inset-inline-start: 50%;
+    grid-column: 3;
+    justify-self: start;
+    margin-inline-start: 8px;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     min-width: 0;
     padding: 0.35rem 0.7rem;
-    transform: translateX(-50%);
     border-radius: 999px;
     background: color-mix(in srgb, var(--bg_color_extreme) 82%, transparent 18%);
     color: var(--text_color);
     line-height: 1;
     animation: image-first-scroll-hint-pulse
         calc(var(--transition-time, 0.5s) * 3) ease-in-out infinite;
+}
+
+.row_article_image_first_caption[hidden] + .row_article_image_first_scroll_hint {
+    grid-column: 2;
+    margin-inline-start: 0;
+}
+
+/* Keep opacity in the transition list even after shared theme transitions mount. */
+body .image_modal.image_first_view_modal :is(
+    .modal_close_button,
+    .row_article_image_first_arrow,
+    .row_article_row_navigation_button,
+    .row_article_image_first_scroll_hint
+) {
+    backdrop-filter: blur(8px);
+    transition: opacity var(--transition-time, 0.5s) ease,
+        background-color var(--theme-transition-duration, 520ms) var(--theme-transition-easing, ease),
+        color var(--theme-transition-duration, 520ms) var(--theme-transition-easing, ease),
+        border-color var(--theme-transition-duration, 520ms) var(--theme-transition-easing, ease),
+        box-shadow var(--theme-transition-duration, 520ms) var(--theme-transition-easing, ease);
 }
 
 .row_article_image_first_scroll_hint > span {
@@ -538,11 +568,11 @@ body.dark-mode .image_first_view_modal {
 
 @keyframes image-first-scroll-hint-pulse {
     0%, 100% {
-        transform: translate(-50%, 0);
+        transform: translateY(0);
     }
 
     50% {
-        transform: translate(-50%, 5px);
+        transform: translateY(5px);
     }
 }
 
@@ -613,7 +643,24 @@ body.dark-mode .image_first_view_modal {
     }
 }
 
+@media (width <= 600px) {
+    .row_article_image_first_bottom_controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .row_article_image_first_caption {
+        max-width: calc(100vw - 28px);
+    }
+
+    .row_article_image_first_scroll_hint {
+        margin-inline-start: 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
+
     .image_first_view,
     .row_article_image_first_stage::before,
     .row_article_image_first_reveal_cluster,
@@ -621,6 +668,15 @@ body.dark-mode .image_first_view_modal {
     .row_article_image_first_arrow,
     .row_article_image_first_scroll_hint {
         animation: none;
+        transition: none;
+    }
+
+    body .image_modal.image_first_view_modal :is(
+        .modal_close_button,
+        .row_article_image_first_arrow,
+        .row_article_row_navigation_button,
+        .row_article_image_first_scroll_hint
+    ) {
         transition: none;
     }
 

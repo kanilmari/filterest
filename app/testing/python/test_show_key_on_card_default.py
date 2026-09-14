@@ -1,4 +1,4 @@
-"""Contract for label-free new card metadata in native and public installs."""
+"""Contract for inherited new label metadata in native and public installs."""
 
 from pathlib import Path
 
@@ -10,16 +10,9 @@ MIGRATION = (
     / "migrations"
     / "20260817000004_default_card_field_labels_off.sql"
 )
-PRIVATE_GENERATOR = (
-    REPO_ROOT
-    / "server_tools"
-    / "public_slice_export"
-    / "generate_filterest_public_repo.sh"
-)
-GENERATED_PUBLIC_SCHEMA = REPO_ROOT / "server_tools/public_bootstrap/schema.sql"
-PUBLIC_SCHEMA_SOURCE = (
-    PRIVATE_GENERATOR if PRIVATE_GENERATOR.is_file() else GENERATED_PUBLIC_SCHEMA
-)
+INHERIT_MIGRATION = REPO_ROOT / "server_tools/migrations/20260914000005_inherit_card_field_labels.sql"
+PUBLIC_SCHEMA_SOURCE = REPO_ROOT / "server_tools/public_bootstrap/source/base.schema.sql"
+PUBLIC_SUPPORTED_VIEWS = REPO_ROOT / "server_tools/public_bootstrap/source/column_supported_views.schema.sql"
 
 
 def test_native_migration_changes_only_the_default():
@@ -29,8 +22,14 @@ def test_native_migration_changes_only_the_default():
     assert "UPDATE public.system_column_details" not in sql
 
 
-def test_public_first_run_schema_uses_the_same_default():
+def test_public_first_run_and_upgrade_keep_new_labels_inherited():
     source = PUBLIC_SCHEMA_SOURCE.read_text(encoding="utf-8")
+    upgrade = INHERIT_MIGRATION.read_text(encoding="utf-8")
+    supported_views = PUBLIC_SUPPORTED_VIEWS.read_text(encoding="utf-8")
 
-    assert "show_key_on_card boolean DEFAULT false" in source
-    assert "show_key_on_card boolean DEFAULT true" not in source
+    assert "show_key_on_card boolean," in source
+    assert "show_key_on_card boolean DEFAULT" not in source
+    assert "ALTER COLUMN show_key_on_card DROP DEFAULT" in upgrade
+    assert "UPDATE public.system_column_details" not in upgrade
+    assert "public.resolve_card_label_visibility" in supported_views
+    assert "public.resolve_card_label_visibility" in upgrade

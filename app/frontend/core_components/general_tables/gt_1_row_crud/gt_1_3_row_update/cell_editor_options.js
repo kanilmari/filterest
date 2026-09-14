@@ -1,13 +1,15 @@
 // cell_editor_options.js
 // Resolves safe inline-edit option lists for known metadata enum columns.
-// Exists so table cells can use dropdowns for constrained values instead of raw text entry.
+// Bridges metadata enum definitions and the existing inline cell editor.
+// Preserves nullable dataset style inheritance when the administrator uses a dropdown.
 
 import {
     CARD_DETAILS_LAYOUT_OPTIONS,
     CARD_STYLE_VARIANT_OPTIONS,
     normalizeClientCardDetailsLayout,
-    normalizeClientCardStyleVariant,
+    normalizeClientCardStyleOverride,
 } from '../../../table_views/card_view/card_detail_layout_options.js';
+import { getLanguageWithBrowserFallback } from '../../../state_stores/lang_preference_reader.js';
 import {
     getTicketStatusOptions,
     isTicketStatusField,
@@ -37,12 +39,13 @@ function isCardStyleVariantColumn(tableName, columnName) {
 }
 
 function resolveOptionLabel(option, translate) {
-    const valueLabel = translate?.(option.value);
-    if (typeof valueLabel === 'string' && valueLabel.trim()) {
+    const key = option.labelKey || option.value;
+    const valueLabel = translate?.(key);
+    if (typeof valueLabel === 'string' && valueLabel.trim() && valueLabel !== key) {
         return valueLabel;
     }
 
-    return option.label || option.value;
+    return (getLanguageWithBrowserFallback() === 'fi' ? option.fi : null) || option.label || option.value;
 }
 
 export function getInlineEditOptions({ tableName, columnName, translate } = {}) {
@@ -61,10 +64,13 @@ export function getInlineEditOptions({ tableName, columnName, translate } = {}) 
     }
 
     if (isCardStyleVariantColumn(tableName, columnName)) {
-        return CARD_STYLE_VARIANT_OPTIONS.map((option) => ({
+        const translated = translate?.('card_style_inherit');
+        const label = translated && translated !== 'card_style_inherit' ? translated
+            : getLanguageWithBrowserFallback() === 'fi' ? 'Sivuston oletus' : 'Site default';
+        return [{value: '', label}, ...CARD_STYLE_VARIANT_OPTIONS.map((option) => ({
             value: option.value,
             label: resolveOptionLabel(option, translate),
-        }));
+        }))];
     }
 
     return [];
@@ -84,7 +90,7 @@ export function normalizeInlineEditOptionValue({
     }
 
     if (isCardStyleVariantColumn(tableName, columnName)) {
-        return normalizeClientCardStyleVariant(value);
+        return normalizeClientCardStyleOverride(value);
     }
 
     return value;

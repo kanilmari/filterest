@@ -98,6 +98,11 @@ func insertDataAccordingToPayload(
 		return 0, nil, err
 	}
 
+	if err := normalizeMainForeignKeyValues(columnsInfo, payload); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return 0, nil, err
+	}
+
 	columnTypeMap := make(map[string]string)
 	colNullableMap := make(map[string]bool) // YES → true
 	for _, col := range columnsInfo {

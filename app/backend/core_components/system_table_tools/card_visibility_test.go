@@ -6,12 +6,18 @@ package system_table_tools
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 )
 
@@ -65,22 +71,55 @@ func TestNormalizeCardDetailsLayout(t *testing.T) {
 	}
 }
 
-func TestNormalizeCardStyleVariant(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{name: "standard", input: "standard", want: "standard"},
-		{name: "modern", input: "modern", want: "modern"},
-		{name: "unknown fallback", input: "floating", want: "standard"},
-		{name: "empty fallback", input: "", want: "standard"},
+func TestCardStyleOverridePresenceAndNullContract(t *testing.T) {
+	for _, value := range []string{"omitted", "null", `"standard"`, `"modern"`} {
+		t.Run(value, func(t *testing.T) {
+			body := `{"table_name":"example","columns":[{"column_uid":1}]`
+			if value != "omitted" {
+				body += `,"card_style_variant":` + value
+			}
+			body += "}"
+			var request updateCardVisibilityRequest
+			if err := json.Unmarshal([]byte(body), &request); err != nil {
+				t.Fatal(err)
+			}
+			style, err := decodeCardStyleVariantOverride(request.CardStyleVariant)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(request.CardStyleVariant) == 0) != (value == "omitted") {
+				t.Fatal("request presence lost")
+			}
+			if value == "omitted" || value == "null" {
+				if style != nil {
+					t.Fatal("inherit must remain nil")
+				}
+			} else if style == nil || `"`+*style+`"` != value {
+				t.Fatalf("explicit style = %v", style)
+			}
+			response, err := json.Marshal(CardVisibilityResponse{CardStyleVariant: style})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := value
+			if want == "omitted" {
+				want = "null"
+			}
+			if !strings.Contains(string(response), `"card_style_variant":`+want) {
+				t.Fatalf("raw nullable JSON lost: %s", response)
+			}
+		})
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeCardStyleVariant(tt.input); got != tt.want {
-				t.Fatalf("normalizeCardStyleVariant(%q) = %q, want %q", tt.input, got, tt.want)
+func TestCardVisibilityRejectsInvalidStyleBeforeTransaction(t *testing.T) {
+	for _, value := range []string{`""`, `"floating"`, `"Modern"`, "true", "1", "{}", "[]"} {
+		t.Run(value, func(t *testing.T) {
+			body := `{"table_name":"example","columns":[{"column_uid":1}],"card_style_variant":` + value + "}"
+			response := httptest.NewRecorder()
+			UpdateCardVisibilityHandler(response, httptest.NewRequest(http.MethodPost, "/api/card-visibility/update", strings.NewReader(body)))
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d: %s", response.Code, response.Body.String())
 			}
 		})
 	}
@@ -387,5 +426,147 @@ func TestColumnLayoutDoesNotBypassDatasetOwnershipOrClientDelivery(t *testing.T)
 		[]CardVisibilityColumn{{ColumnUID: 9, ClientDeliveryMode: "server_only", LabelValueLayout: layoutString("stacked")}})
 	if err == nil {
 		t.Fatal("layout bypassed protected id delivery")
+	}
+}
+
+// Exercise the real handler through database/sql so nil must reach SQL as NULL,
+// while an absent member must produce no dataset-style UPDATE at all.
+type cardStyleWriteState struct {
+	value                              driver.Value
+	styleWrites, columnWrites, commits int
+	missingColumn                      bool
+}
+type cardStyleWriteDriver struct{ state *cardStyleWriteState }
+type cardStyleWriteConn struct{ state *cardStyleWriteState }
+type cardStyleWriteTx struct{ state *cardStyleWriteState }
+type cardStyleWriteRows struct {
+	values   []driver.Value
+	consumed bool
+}
+
+func (d *cardStyleWriteDriver) Open(string) (driver.Conn, error) {
+	return &cardStyleWriteConn{d.state}, nil
+}
+func (c *cardStyleWriteConn) Prepare(string) (driver.Stmt, error) {
+	return nil, fmt.Errorf("unexpected prepare")
+}
+func (c *cardStyleWriteConn) Close() error              { return nil }
+func (c *cardStyleWriteConn) Begin() (driver.Tx, error) { return &cardStyleWriteTx{c.state}, nil }
+func (t *cardStyleWriteTx) Commit() error               { t.state.commits++; return nil }
+func (*cardStyleWriteTx) Rollback() error               { return nil }
+func (c *cardStyleWriteConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "SELECT EXISTS") {
+		return &cardStyleWriteRows{values: []driver.Value{!(c.state.missingColumn && args[1].Value == "card_style_variant")}}, nil
+	}
+	if query == fieldViewColumnGuardQuery {
+		return &cardStyleWriteRows{values: []driver.Value{int64(1), "label", ""}}, nil
+	}
+	return nil, fmt.Errorf("unexpected query: %s", query)
+}
+func (c *cardStyleWriteConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if strings.Contains(query, "SET card_style_variant = $1") {
+		if args[1].Value != "style_fixture" {
+			return nil, fmt.Errorf("wrong dataset target")
+		}
+		c.state.value = args[0].Value
+		c.state.styleWrites++
+	} else if strings.Contains(query, "UPDATE system_column_details") {
+		c.state.columnWrites++
+	} else {
+		return nil, fmt.Errorf("unexpected exec: %s", query)
+	}
+	return driver.RowsAffected(1), nil
+}
+func (r *cardStyleWriteRows) Columns() []string {
+	names := make([]string, len(r.values))
+	for i := range names {
+		names[i] = fmt.Sprint(i)
+	}
+	return names
+}
+func (*cardStyleWriteRows) Close() error { return nil }
+func (r *cardStyleWriteRows) Next(values []driver.Value) error {
+	if r.consumed {
+		return io.EOF
+	}
+	copy(values, r.values)
+	r.consumed = true
+	return nil
+}
+func TestCardVisibilityHandlerPersistsExplicitNullAndPreservesOmittedStyle(t *testing.T) {
+	for _, test := range []struct {
+		name, raw string
+		want      driver.Value
+		writes    int
+		missing   bool
+		status    int
+	}{
+		{"omitted", "", "modern", 0, false, http.StatusOK},
+		{"inherit", "null", nil, 1, false, http.StatusOK},
+		{"standard", `"standard"`, "standard", 1, false, http.StatusOK},
+		{"modern", `"modern"`, "modern", 1, false, http.StatusOK},
+		{"missing migration", "null", "modern", 0, true, http.StatusConflict},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := &cardStyleWriteState{value: "modern", missingColumn: test.missing}
+			driverName := "card-style-save-" + t.Name()
+			sql.Register(driverName, &cardStyleWriteDriver{state})
+			db, err := sql.Open(driverName, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			previous := backend.Db
+			backend.Db = db
+			defer func() { backend.Db = previous }()
+			body := `{"table_name":"style_fixture","columns":[{"column_uid":1,"client_delivery_mode":"include","show_value_on_card":true}]`
+			if test.raw != "" {
+				body += `,"card_style_variant":` + test.raw
+			}
+			body += "}"
+			tx := dbutils.NewLazyTx(db)
+			defer tx.Rollback()
+			request := httptest.NewRequest(http.MethodPost, "/api/card-visibility/update", strings.NewReader(body))
+			request = request.WithContext(dbutils.SetLazyTx(request.Context(), tx))
+			response := httptest.NewRecorder()
+			UpdateCardVisibilityHandler(response, request)
+			if response.Code != test.status {
+				t.Fatalf("status=%d: %s", response.Code, response.Body.String())
+			}
+			if test.status == http.StatusOK {
+				if err := tx.Commit(); err != nil {
+					t.Fatal(err)
+				}
+				if state.columnWrites != 2 || state.commits != 1 {
+					t.Fatalf("normal column save/commit lost: %#v", state)
+				}
+			} else if state.columnWrites != 0 || state.commits != 0 {
+				t.Fatal("unsupported schema caused a partial write")
+			}
+			if state.styleWrites != test.writes || state.value != test.want {
+				t.Fatalf("style persistence=%#v, want value=%v writes=%d", state, test.want, test.writes)
+			}
+		})
+	}
+}
+
+func TestCardVisibilityResponseCarriesRawDatasetColumns(t *testing.T) {
+	for _, count := range []*int{nil, func() *int { value := 4; return &value }()} {
+		response := CardVisibilityResponse{TableName: "example", CardDetailColumns: count, Columns: []CardVisibilityColumn{}}
+		body, err := json.Marshal(response)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded map[string]json.RawMessage
+		if err := json.Unmarshal(body, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		want := "null"
+		if count != nil {
+			want = "4"
+		}
+		if string(decoded["card_detail_columns"]) != want {
+			t.Fatalf("raw nullable count missing: %s", body)
+		}
 	}
 }

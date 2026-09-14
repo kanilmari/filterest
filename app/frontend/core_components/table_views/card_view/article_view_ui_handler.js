@@ -344,7 +344,8 @@ export function closeBigCard(
     big_card_div,
     selectedCard,
     table_name,
-    skipHistoryBack = false
+    skipHistoryBack = false,
+    { restoreScroll = true } = {}
 ) {
     big_card_div.remove();
     wrapper.classList.remove("big-card-open");
@@ -378,7 +379,7 @@ export function closeBigCard(
         }
     }
     // Restore scroll position that was saved when the card was opened
-    restoreScrollAfterBigCard();
+    if (restoreScroll) restoreScrollAfterBigCard();
     dispatchCardArticleToggle(table_name, false);
     Array.from(card_container.children).forEach((c) => {
         c.classList.remove("small-card");

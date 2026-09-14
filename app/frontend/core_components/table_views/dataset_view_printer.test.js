@@ -154,6 +154,15 @@ describe('generate_table', () => {
 		expect(document.querySelector('.dataset-results-surface')).not.toBeNull();
 	});
 
+    test.each([null, {card_style_variant: null}, {card_style_variant: 'standard'}])('retains style inheritance or an explicit override from metadata %j', async tableMeta => {
+        localStorage.setItem('demo_dataset_view', 'card');
+        const { generate_table } = await import('./dataset_view_printer.js');
+        await generate_table('demo_dataset', ['id'], [{id: 1}], {id: 'INTEGER'}, 1, false, tableMeta);
+        expect(JSON.parse(localStorage.getItem('demo_dataset_tableMeta')).card_style_variant)
+            .toBe(tableMeta?.card_style_variant ?? null);
+        expect(createCardViewMock).toHaveBeenCalled();
+    });
+
     test('starts building the filterbar before an async card view finishes', async () => {
         const events = [];
         let resolveCardView;
@@ -457,4 +466,31 @@ describe('generate_table', () => {
         expect(localStorage.getItem('app_cloud_services_default_view_seen')).toBe('cloud_management');
         expect(activeContainer.id).toBe('app_cloud_services_cloud_management_view_container');
     });
+    test("only an explicitly retained card host survives classic article generation", async () => {
+        localStorage.setItem("events_view", "card");
+        createCardViewMock.mockImplementation(() => {
+            const card = document.createElement("div");
+            card.className = "card_view_wrapper";
+            card.textContent = "Original row";
+            return card;
+        });
+        const { generate_table } = await import("./dataset_view_printer.js");
+        await generate_table("events", ["id"], [{ id: 3 }], { id: "INTEGER" }, 100);
+        const host = document.getElementById("events_card_view_container");
+        const original = host.querySelector(".card_view_wrapper");
+        const { shouldPreserveCardReturnHost } = await import("../navigation/nav_engine/card_article_return_state.js");
+        const token = {};
+        shouldPreserveCardReturnHost.mockImplementation((dataset, providedToken, candidate) =>
+            dataset === "events" && providedToken === token && candidate === host);
+        localStorage.setItem("events_view", "article_view");
+        await generate_table("events", ["id", "description"], [{ id: 3 }], { description: "TEXT" }, 100, false, null, null, null, { preserveCardReturn: token });
+        expect(host.contains(original)).toBe(true);
+        expect(host.style.display).toBe("none");
+        // An ordinary refresh must still release the old card surface.
+        await generate_table("events", ["id"], [{ id: 3 }], {}, 100);
+        expect(original.isConnected).toBe(false);
+    });
+
 });
+
+vi.mock("../navigation/nav_engine/card_article_return_state.js", () => ({ shouldPreserveCardReturnHost: vi.fn(() => false) }));

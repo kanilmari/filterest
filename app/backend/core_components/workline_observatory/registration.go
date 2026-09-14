@@ -23,6 +23,7 @@ func Register() {
 			handler     func(http.ResponseWriter, *http.Request)
 		}{
 			{"/api/app/workline-observatory/board", "workline_observatory.BoardHandler", BoardHandler},
+			{"/api/app/workline-observatory/priority-actions", "workline_observatory.WorklinePriorityActionsHandler", WorklinePriorityActionsHandler},
 			{"/api/app/workline-observatory/status-actions", "workline_observatory.WorklineStatusActionsHandler", WorklineStatusActionsHandler},
 			{"/api/app/workline-observatory/release-goals", "workline_observatory.ReleaseGoalsHandler", ReleaseGoalsHandler},
 			{"/api/app/workline-observatory/contracts", "workline_observatory.ReleaseContractsHandler", ReleaseContractsHandler},

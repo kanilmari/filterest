@@ -8,12 +8,11 @@ release promotion, Git commits and publication remain separate operations.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager, redirect_stdout
+from contextlib import contextmanager
 import datetime as dt
 import fcntl
 import hashlib
 import json
-import io
 import os
 from pathlib import Path
 import re
@@ -24,7 +23,7 @@ import tempfile
 APP_ROOT = Path(__file__).resolve().parents[2]
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
-from server_tools.scripts.validate_app_db_compatibility import validate_manifest
+from server_tools.release.database_transition import source_database_contract, validate_source_manifest
 from server_tools.public_slice_export import generate_third_party_notices as notices
 from server_tools.public_slice_export.third_party_notice_renderer import render_notice_from_manifest
 from server_tools.versioning.release_contract_v1 import (
@@ -134,28 +133,27 @@ def prepare_metadata(root, args):
     matching = [entry for entry in entries if entry.record["record_id"] == identity["ledger_record_id"]]
     if len(matching) != 1 or build_identity_from_entry(matching[0]) != identity:
         raise PreparationError("current build identity does not match its immutable ledger record")
-    if identity["app_version"] != current or identity["database"]["target_version"] != database:
-        raise PreparationError("current build identity versions disagree with source markers")
     compatibility_text = regular_path(root, COMPATIBILITY).read_text()
-    diagnostics = io.StringIO()
-    with redirect_stdout(diagnostics):
-        valid = validate_manifest(root / "app", Path("server_tools/versioning/app_db_compatibility.jsonl"))
-    if valid:
-        raise PreparationError(diagnostics.getvalue().strip())
-    rows = [json.loads(line) for line in compatibility_text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
-    active = [row for row in rows if row.get("status") == "active"]
-    if len(active) != 1 or active[0].get("app_version") != current or active[0].get("target_db_version") != database:
-        raise PreparationError("compatibility requires one active row matching current source")
+    try:
+        rows = [json.loads(line) for line in compatibility_text.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+    except json.JSONDecodeError as error:
+        raise PreparationError("compatibility contains invalid JSON") from error
+    if not all(isinstance(row, dict) for row in rows):
+        raise PreparationError("compatibility history must contain JSON objects")
+    try:
+        contract = source_database_contract(identity, current, database, rows,
+            lambda path: regular_path(root, path).read_bytes(),
+            transition_from=getattr(args, "db_transition_from", None))
+        if contract["transition"] and identity != build_identity_from_entry(entries[-1]):
+            raise PreparationError("database transition requires the latest published identity")
+        validate_source_manifest(root, contract)
+    except ValueError as error:
+        raise PreparationError(str(error)) from error
     if any(row.get("app_version") == version for row in rows):
         raise PreparationError("compatibility already contains the requested version")
-    minimum = active[0].get("min_db_version")
-    if minimum != identity["database"]["min_version"]:
-        raise PreparationError("compatibility minimum database version disagrees with current build identity")
-    snapshot = active[0].get("schema_snapshot_path", "")
-    if not snapshot.startswith("server_tools/versioning/schema_snapshots/"):
-        raise PreparationError("active compatibility row lacks a public schema snapshot")
-    if regular_path(root, "app/" + snapshot).read_bytes() != regular_path(root, "app/server_tools/public_bootstrap/schema.sql").read_bytes():
-        raise PreparationError("compatibility schema snapshot disagrees with reviewed bootstrap")
+    minimum = contract["min_version"]
+    snapshot = contract["schema_snapshot_path"]
     build_id = f"filterest-{version}-stable-runtime-{args.source_commit[:12]}"
     record = {"schema_version": 1, "record_type": "build", "record_id": "build:" + build_id,
               "previous_record_sha256": entries[-1].sha256 if entries else None,
@@ -322,6 +320,7 @@ def parse_args(argv=None):
     version.add_argument("--bump", choices=("patch", "minor", "major"))
     parser.add_argument("--expect-current-version", required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--db-transition-from", help="Explicit previous published DB target; new minimum equals source VERSION_DB")
     parser.add_argument("--release-notes", type=Path, required=True)
     parser.add_argument("--manifest-notes", required=True)
     parser.add_argument("--created-at", default=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))

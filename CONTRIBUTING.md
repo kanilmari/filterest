@@ -8,7 +8,7 @@ changes first so their scope fits the product and maintenance goals.
 
 Keep contributions focused. Preserve supported languages, accessibility, and
 both application themes; follow the [Filterest Constitution](app/docs/constitution/constitution.md)
-and the relevant development guide. Run checks appropriate to the changed
+and the [Developer Guide](app/docs/instructions_and_documentation/DEV_GUIDE.md). Run checks appropriate to the changed
 behavior and explain what they verify.
 
 Use synthetic example data. Do not include credentials, personal or customer

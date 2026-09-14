@@ -21,6 +21,7 @@ const systemAutomationAccountBodyLimit = 4096
 
 type systemAutomationAccountRequest struct {
 	Password string `json:"password"`
+	Action   string `json:"action"`
 }
 
 // systemAutomationAccountHandler returns non-secret readiness on GET and
@@ -57,6 +58,11 @@ func systemAutomationAccountHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if request.Action == "revoke" {
+		record, err := provisioner.Revoke(r.Context())
+		respondWithSystemAutomationAccountResult(w, record, err)
+		return
+	}
 	record, err := provisioner.Provision(r.Context(), request.Password)
 	respondWithSystemAutomationAccountResult(w, record, err)
 }
@@ -82,8 +88,17 @@ func decodeSystemAutomationAccountRequest(w http.ResponseWriter, r *http.Request
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return request, errors.New("request body must contain one JSON object")
 	}
-	if request.Password == "" {
-		return request, errors.New("password is required")
+	switch request.Action {
+	case "":
+		if request.Password == "" {
+			return request, errors.New("password is required")
+		}
+	case "revoke":
+		if request.Password != "" {
+			return request, errors.New("revoke must not include a password")
+		}
+	default:
+		return request, errors.New("unknown action")
 	}
 	return request, nil
 }

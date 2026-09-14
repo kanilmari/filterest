@@ -56,7 +56,7 @@ import { createStableApiClient } from '../../generated/stable_api_client.js';
  * @typedef {object} UpdateCardVisibilityRequest
  * @property {string} table_name
  * @property {string} [card_details_layout]
- * @property {string} [card_style_variant]
+ * @property {string|null} [card_style_variant]
  * @property {CardVisibilityColumn[]} columns
  */
 /**
@@ -236,6 +236,8 @@ export async function fetchCardVisibility(tableName) {
 
 /**
  * saveCardVisibility posts the admin card visibility update payload.
+ * columns[].show_key_on_card_override is optional boolean|null: null inherits;
+ * omission preserves storage, while show_key_on_card remains the effective read value.
  *
  * @param {UpdateCardVisibilityRequest} request
  * @returns {Promise<UpdateCardVisibilityResponse>}
@@ -243,6 +245,13 @@ export async function fetchCardVisibility(tableName) {
 export async function saveCardVisibility(request) {
     return stable_candidate_endpoint_router('updateCardVisibility', {
         body_data: request,
+    });
+}
+
+/** Saves only nullable presentation overrides; no column configuration is replayed. */
+export async function saveDatasetCardPresentation(request) {
+    return stable_candidate_endpoint_router('updateCardVisibility', {
+        body_data: { ...request, scope: 'dataset_presentation' },
     });
 }
 
@@ -333,6 +342,21 @@ export async function getViewFieldSets(dataset, viewKey) {
     const query = new URLSearchParams({ dataset, view_key: viewKey });
     return stable_candidate_endpoint_router('getViewFieldSets', {
         url_params: `?${query.toString()}`,
+    });
+}
+
+/** Read dataset-level initial disclosure defaults for classic or image-first articles. */
+export async function getArticleSectionDefaults(dataset, presentationKey) {
+    const query = new URLSearchParams({ dataset, presentation_key: presentationKey });
+    return stable_candidate_endpoint_router('getArticleSectionDefaults', {
+        method: 'GET', url_params: `?${query.toString()}`,
+    });
+}
+
+/** Save a section boolean patch or reset only the selected article presentation. */
+export async function saveArticleSectionDefaults(request) {
+    return stable_candidate_endpoint_router('saveArticleSectionDefaults', {
+        method: 'POST', body_data: request,
     });
 }
 

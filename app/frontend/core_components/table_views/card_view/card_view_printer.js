@@ -26,6 +26,7 @@ import {
     resolveCardFieldDisplayValue,
 } from "./card_field_formatter_helpers.js";
 import { expandForeignKeyDetailEntries } from "./relation_detail_helpers.js";
+import { isEmptyCardFieldValue, mountCardFieldGroup, selectCardFieldEntries } from "./card_field_presentation.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { makeColumnClass } from "../../filterbar/filter_list/column_visibility_handler.js";
 import { renderKeyValuePairs } from "../../../reusable_components/key_value_container/kv_container_printer.js";
@@ -68,7 +69,10 @@ import {
     CARD_DETAILS_LAYOUT_VALUES,
     CARD_STYLE_VARIANT_VALUES,
     normalizeClientCardDetailsLayout,
+    normalizeClientCardStyleOverride,
+    normalizeCardDetailColumnOverride,
     normalizeClientCardStyleVariant,
+    resolveClientCardStyleVariant,
     resolveKvLayoutModeForCardDetails,
 } from "./card_detail_layout_options.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
@@ -144,6 +148,8 @@ function notifyCardMounted(card) {
     if (!(card instanceof HTMLElement)) {
         return;
     }
+    // A palette preview may have changed while this card was built off-DOM.
+    card._refreshFieldPresentation?.forEach((refresh) => refresh());
     card.dispatchEvent(new CustomEvent(CARD_MOUNT_EVENT));
     if (typeof requestAnimationFrame === "function") {
         requestAnimationFrame(updateCardImageSources);
@@ -230,7 +236,7 @@ function getCardDetailsLayout(tableName) {
 }
 
 function getMetadataCardStyleVariant(tableName) {
-    return normalizeClientCardStyleVariant(
+    return normalizeClientCardStyleOverride(
         getTableMetaFromStorage(tableName)?.card_style_variant
     );
 }
@@ -276,17 +282,17 @@ function renderCardDetailsSection(
     dataTypes,
     cardDetailsLayout,
     cardStyleVariant,
-    { deferResponsiveLayoutMs = 0 } = {}
+    { deferResponsiveLayoutMs = 0, detailColumns } = {}
 ) {
     const normalizedStyleVariant = normalizeClientCardStyleVariant(cardStyleVariant);
     if (normalizedStyleVariant === CARD_STYLE_VARIANT_VALUES.MODERN) {
-        renderModernCardDetails(containerElement, detailEntries, dataTypes);
+        renderModernCardDetails(containerElement, detailEntries, dataTypes, { columns: detailColumns });
         return;
     }
 
     const normalizedLayout = normalizeClientCardDetailsLayout(cardDetailsLayout);
     if (normalizedLayout === CARD_DETAILS_LAYOUT_VALUES.SINGLE_LINE) {
-        renderSingleLineCardDetails(containerElement, detailEntries, dataTypes);
+        renderSingleLineCardDetails(containerElement, detailEntries, dataTypes, { columns: detailColumns });
         return;
     }
 
@@ -308,8 +314,11 @@ function renderCardDetailsSection(
         ).trim()] || {},
     }));
 
-    renderKeyValuePairs(containerElement, kvDataArray, {
+    return renderKeyValuePairs(containerElement, kvDataArray, {
         ...kvDefaultOptions,
+        ...(detailColumns !== undefined
+            ? { maxColumns: detailColumns, minPairWidth: 240, singleColumnBreakpoint: 0 }
+            : {}),
         layoutMode: resolveKvLayoutModeForCardDetails(normalizedLayout),
         animateHeight: true,
         deferResponsiveLayoutMs,
@@ -321,12 +330,19 @@ export async function appendDataToCardView(
     card_container,
     columns,
     data,
-    table_name
+    table_name,
+    { viewKey, dataTypes } = {}
 ) {
-    let data_types =
+    const storedTypes =
         JSON.parse(localStorage.getItem(`${table_name}_dataTypes`)) || {};
-
-    const collapsed = getUnifiedTableState(table_name)?.cardView?.collapsed;
+    const data_types = { ...storedTypes, ...dataTypes };
+    // Detached search batches pass their presentation explicitly; ordinary
+    // appends inherit the owning wrapper before consulting the active view.
+    const renderView = viewKey
+        ?? card_container.closest('.card_view_wrapper')?.dataset.viewKey
+        ?? localStorage.getItem(`${table_name}_view`);
+    const stateKey = renderView === 'article_view' ? 'articleView' : 'cardView';
+    const collapsed = getUnifiedTableState(table_name)?.[stateKey]?.collapsed;
     const renderContext = await resolveCardRenderContext(
         table_name,
         columns,
@@ -355,7 +371,9 @@ export async function appendDataToCardView(
                 table_name,
                 data_types,
                 renderContext,
-                index
+                index,
+                null,
+                renderView || "card"
             );
         if (collapsed) {
             card.classList.add("small-card");
@@ -391,11 +409,13 @@ async function createSingleCard(
     data_types,
     renderContext = null,
     cardIndex = 0,
-    chosenLanguage = null
+    chosenLanguage = null,
+    viewKey = "card"
 ) {
     /* --- FUNKTIOLASKURI ---------------------------------------- */
     count_this_function("createSingleCard");
     const chosenLang = chosenLanguage || getLanguageWithBrowserFallback();
+    const collectEmptyFields = viewKey === "card" || always_show_empty_fields_on_cards;
 
     /* --- PIILOTUS-ASETUS --------------------------------------- */
     const hideFieldsOnCardsString =
@@ -428,11 +448,17 @@ async function createSingleCard(
     const card = document.createElement("div");
     card.classList.add("card", "saturate_on_hover");
     card.dataset.testid = 'card-item';
+    card.dataset.cardPresentationView = viewKey;
+    card.dataset.datasetName = table_name;
     setFieldHideAttribute(card);
     if (row_item.id != null) card.dataset.id = row_item.id;
-    const cardStyleVariant = getMetadataCardStyleVariant(table_name);
-    const isModernCardStyle =
-        normalizeClientCardStyleVariant(cardStyleVariant) === CARD_STYLE_VARIANT_VALUES.MODERN;
+    const styleOverride = getMetadataCardStyleVariant(table_name);
+    const columnOverride = normalizeCardDetailColumnOverride(getTableMetaFromStorage(table_name)?.card_detail_columns);
+    if (columnOverride !== null) card.dataset.cardColumnsOverride = String(columnOverride);
+    if (styleOverride !== null) card.dataset.cardStyleOverride = styleOverride;
+    const cardStyleVariant = resolveClientCardStyleVariant(styleOverride,
+        viewKey === 'card' ? document.documentElement.dataset.cardStyleVariant : CARD_STYLE_VARIANT_VALUES.STANDARD);
+    const isModernCardStyle = cardStyleVariant === CARD_STYLE_VARIANT_VALUES.MODERN;
     card.dataset.cardStyleVariant = cardStyleVariant;
     if (isModernCardStyle) {
         card.classList.add("card--modern");
@@ -448,7 +474,7 @@ async function createSingleCard(
         card.classList.toggle("selected", cb.checked);
 
         if (row_item.id != null) {
-            const checkboxId = `${table_name}_card_checkbox_${row_item.id}`;
+            const checkboxId = `${table_name}_${viewKey === "article_view" ? "article_view" : "card"}_checkbox_${row_item.id}`;
             cb.id = checkboxId;
         }
         cb.dataset.ariaLabelLangKey = "select";
@@ -627,24 +653,20 @@ async function createSingleCard(
            0) ILMAN ROOLIA -> pelkkä key/value
            -------------------------------------------------------- */
         if (baseRoles.length === 0) {
-            if (!always_show_empty_fields_on_cards && !val_str.trim()) {
+            if (!collectEmptyFields && !val_str.trim()) {
                 continue;
             }
-            const wrap = document.createElement("div");
-            wrap.classList.add("card_pair", columnClass);
-            setFieldHideAttribute(wrap);
-            wrap.appendChild(
-                createKeyValueElement(
-                    col_label,
-                    storedRawValue,
-                    column,
-                    hasLangKey,
-                    "card_value",
-                    val_str,
-                    data_types[column]
-                )
-            );
-            card_text_content.appendChild(wrap);
+            mountCardFieldGroup(card, card_text_content, viewKey, (parent, showAll) => {
+                if (!showAll && isEmptyCardFieldValue(val_str, isMultilingual)) return;
+                const wrap = document.createElement("div");
+                wrap.classList.add("card_pair", columnClass);
+                setFieldHideAttribute(wrap);
+                wrap.appendChild(createKeyValueElement(
+                    col_label, storedRawValue, column, hasLangKey,
+                    "card_value", val_str, data_types[column]
+                ));
+                parent.appendChild(wrap);
+            }, always_show_empty_fields_on_cards);
             continue;
         }
 
@@ -657,13 +679,14 @@ async function createSingleCard(
             /* --- DESCRIPTION ---------------------------------- */
             if (
                 /^description\d*$/.test(role) &&
-                (always_show_empty_fields_on_cards || val_str.trim())
+                (collectEmptyFields || val_str.trim())
             ) {
                 description_entries.push({
                     suffix_number:
                         parseInt(role.replace("description", "")) ||
                         Number.MAX_SAFE_INTEGER,
                     rawValue: val_str,
+                    isMultilingual,
                     label: col_label,
                     hasLangKey,
                     column,
@@ -676,13 +699,14 @@ async function createSingleCard(
             /* --- DETAILS LINK --------------------------------- */
             if (
                 /^details_link\d*$/.test(role) &&
-                (always_show_empty_fields_on_cards || val_str.trim())
+                (collectEmptyFields || val_str.trim())
             ) {
                 details_entries.push({
                     suffix_number:
                         parseInt(role.replace("details_link", "")) ||
                         Number.MAX_SAFE_INTEGER,
                     rawValue: val_str,
+                    isMultilingual,
                     label: col_label,
                     hasLangKey,
                     column,
@@ -695,13 +719,14 @@ async function createSingleCard(
             /* --- DETAILS (plain) ------------------------------ */
             if (
                 /^details\d*$/.test(role) &&
-                (always_show_empty_fields_on_cards || val_str.trim())
+                (collectEmptyFields || val_str.trim())
             ) {
                 details_entries.push({
                     suffix_number:
                         parseInt(role.replace("details", "")) ||
                         Number.MAX_SAFE_INTEGER,
                     rawValue: val_str,
+                    isMultilingual,
                     label: col_label,
                     hasLangKey,
                     column,
@@ -712,10 +737,11 @@ async function createSingleCard(
             }
 
             /* --- KEYWORDS ------------------------------------- */
-            if (role === "keywords" && (always_show_empty_fields_on_cards || val_str.trim())) {
+            if (role === "keywords" && (collectEmptyFields || val_str.trim())) {
                 keywords_list.push({
                     column,
                     rawValue: val_str,
+                    isMultilingual,
                     preferredLang: chosenLang,
                     label: col_label,
                     hasLangKey,
@@ -790,22 +816,18 @@ async function createSingleCard(
             }
 
             /* --- MUUT (fallback) ------------------------------ */
-            if (val_str.trim() || always_show_empty_fields_on_cards) {
-                const wrap = document.createElement("div");
-                wrap.classList.add("card_pair", columnClass);
-                setFieldHideAttribute(wrap);
-                wrap.appendChild(
-                    createKeyValueElement(
-                        col_label,
-                        storedRawValue,
-                        column,
-                        hasLangKey,
-                        "card_details",
-                        val_str,
-                        data_types[column]
-                    )
-                );
-                card_text_content.appendChild(wrap);
+            if (val_str.trim() || collectEmptyFields) {
+                mountCardFieldGroup(card, card_text_content, viewKey, (parent, showAll) => {
+                    if (!showAll && isEmptyCardFieldValue(val_str, isMultilingual)) return;
+                    const wrap = document.createElement("div");
+                    wrap.classList.add("card_pair", columnClass);
+                    setFieldHideAttribute(wrap);
+                    wrap.appendChild(createKeyValueElement(
+                        col_label, storedRawValue, column, hasLangKey,
+                        "card_details", val_str, data_types[column]
+                    ));
+                    parent.appendChild(wrap);
+                }, always_show_empty_fields_on_cards);
             }
         }
     } // for(column)
@@ -902,66 +924,60 @@ async function createSingleCard(
     /* === TEKSTIOSIOT (description, keywords, details) ========== */
     const deferResponsiveLayoutMs = getCardPostEntranceDelay(cardIndex);
     const cardDetailsLayout = getCardDetailsLayout(table_name);
-    const cardInfoSectionContainer = isModernCardStyle
-        ? document.createElement("div")
-        : card_text_content;
-
-    if (isModernCardStyle) {
-        cardInfoSectionContainer.classList.add("card_modern_info_panel");
-        setFieldHideAttribute(cardInfoSectionContainer);
-        card_text_content.appendChild(cardInfoSectionContainer);
-    }
-
-    addDescriptionSection(
-        description_entries,
-        row_item,
-        table_name,
-        cardInfoSectionContainer
-    );
-    addKeywordsSection(keywords_list, row_item, table_name, cardInfoSectionContainer, {
-        deferResponsiveLayoutMs,
-    });
-    // addDetailsSection(details_entries, row_item, table_name, card_text_content);
-
-    /* -----------------------------------------------------------
-       UUSI TESTI: KV-DISPLAY-KIRJASTON KÄYTTÖ
-       ----------------------------------------------------------- */
-    try {
-        count_this_function("createSingleCard_renderKV");
-
-        const expandedDetailsEntries = expandForeignKeyDetailEntries(
-            details_entries.sort((a, b) => a.suffix_number - b.suffix_number),
-            row_item,
-            data_types
-        );
-        const formattedDetailsEntries = formatCardDetailEntriesForCardDisplay(
-            expandedDetailsEntries,
-            data_types,
-            timestampDisplayOptions
-        );
-
-        if (formattedDetailsEntries.length) {
-            const kvContainerDiv = document.createElement("div");
-            kvContainerDiv.classList.add("card_details_kv");
-            setFieldHideAttribute(kvContainerDiv);
-            cardInfoSectionContainer.appendChild(kvContainerDiv);
-
-            renderCardDetailsSection(
-                kvContainerDiv,
-                formattedDetailsEntries,
-                data_types,
-                cardDetailsLayout,
-                cardStyleVariant,
-                { deferResponsiveLayoutMs }
-            );
+    mountCardFieldGroup(card, card_text_content, viewKey, (parent, showAll, effectiveStyle, detailColumns) => {
+        const isModernCardStyle = effectiveStyle === CARD_STYLE_VARIANT_VALUES.MODERN;
+        const cardInfoSectionContainer = isModernCardStyle
+            ? document.createElement("div") : parent;
+        if (isModernCardStyle) {
+            cardInfoSectionContainer.classList.add("card_modern_info_panel");
+            setFieldHideAttribute(cardInfoSectionContainer);
+            parent.appendChild(cardInfoSectionContainer);
         }
-    } catch (err) {
-        console.warn("KV-display render failed", err);
-    }
-
-    if (isModernCardStyle && cardInfoSectionContainer.childElementCount === 0) {
-        cardInfoSectionContainer.remove();
-    }
+        addDescriptionSection(
+            selectCardFieldEntries(description_entries, showAll, data_types),
+            row_item, table_name, cardInfoSectionContainer
+        );
+        addKeywordsSection(
+            selectCardFieldEntries(keywords_list, showAll, data_types),
+            row_item, table_name, cardInfoSectionContainer, { deferResponsiveLayoutMs }
+        );
+        let disposeDetails;
+        try {
+            count_this_function("createSingleCard_renderKV");
+            const expandedDetailsEntries = expandForeignKeyDetailEntries(
+                details_entries.sort((a, b) => a.suffix_number - b.suffix_number),
+                row_item, data_types
+            );
+            const formattedDetailsEntries = formatCardDetailEntriesForCardDisplay(
+                selectCardFieldEntries(expandedDetailsEntries, showAll, data_types),
+                data_types, timestampDisplayOptions
+            );
+            if (formattedDetailsEntries.length) {
+                const kvContainerDiv = document.createElement("div");
+                kvContainerDiv.classList.add("card_details_kv");
+                setFieldHideAttribute(kvContainerDiv);
+                cardInfoSectionContainer.appendChild(kvContainerDiv);
+                disposeDetails = renderCardDetailsSection(
+                    kvContainerDiv, formattedDetailsEntries, data_types,
+                    cardDetailsLayout, effectiveStyle, { deferResponsiveLayoutMs, detailColumns }
+                );
+            }
+        } catch (err) {
+            console.warn("KV-display render failed", err);
+        }
+        if (isModernCardStyle && cardInfoSectionContainer.childElementCount === 0) {
+            cardInfoSectionContainer.remove();
+        }
+        return () => {
+            if (typeof disposeDetails === "function") disposeDetails();
+            // Removing the keyword child first lets its existing observer release
+            // timers/listeners even when the whole modern panel is then replaced.
+            if (isModernCardStyle) {
+                cardInfoSectionContainer.querySelectorAll('.card_keywords_container')
+                    .forEach((element) => element.remove());
+            }
+        };
+    }, always_show_empty_fields_on_cards);
 
     /* --- FOOTER ----------------------------------------------- */
     const footer_div = document.createElement("div");
@@ -1217,7 +1233,9 @@ export async function create_card_view(columns, data, table_name, { viewKey = "c
                 table_name,
                 data_types,
                 renderContext,
-                index
+                index,
+                null,
+                viewKey
             );
         if (collapsed) {
             card.classList.add("small-card");
@@ -1302,7 +1320,8 @@ export async function refreshCardLanguages(chosenLanguage = null) {
             dataTypes,
             null,
             0,
-            chosenLanguage
+            chosenLanguage,
+            card.dataset.cardPresentationView || "card"
         );
         if (card.classList.contains('small-card')) {
             newCard.classList.add('small-card');
@@ -1314,13 +1333,17 @@ export async function refreshCardLanguages(chosenLanguage = null) {
         newCard._data_types = dataTypes;
         newCard._hasLocalizedRowData = true;
         card.replaceWith(newCard);
+        notifyCardMounted(newCard);
     }
 
     const big = document.querySelector('.active_row_article, .active_big_card');
     if (big && big._row && big._table_name) {
         const row = big._row;
         const tableName = big._table_name;
-        const selected = row.id != null ? document.querySelector(`.card[data-id="${row.id}"]`) : null;
+        const articleList = big.closest('.article_view_wrapper, .card_view_wrapper');
+        const selected = row.id != null && articleList
+            ? [...articleList.querySelectorAll('.card')].find((card) => card.dataset.id === String(row.id)) || null
+            : null;
         await openRowArticleView(row, tableName, selected);
     }
 }

@@ -129,6 +129,20 @@ describe("do_intelligent_search", () => {
         createTableViewDom("dev_agent_tasks");
     });
 
+    test("routes an explicitly registered surface without stream or cache side effects", async () => {
+        const { do_intelligent_search } = await import('./dataset_search_executor.js');
+        const { registerDatasetQueryAdapter } = await import('../dataset_surface_provider/dataset_query_adapter_registry.js');
+        const refresh = vi.fn(async () => 'board');
+        const release = registerDatasetQueryAdapter('extension', { refresh });
+        try {
+            expect(await do_intelligent_search('extension', ' words ')).toBe('board');
+            expect(refresh).toHaveBeenCalledWith({ search: 'words' });
+            expect(endpointRouterMock).not.toHaveBeenCalled();
+            expect(disconnectInfiniteScrollMock).not.toHaveBeenCalled();
+            expect(clearRowGroupFacetsMock).not.toHaveBeenCalled();
+        } finally { release(); }
+    });
+
     test("removes a stale no-results notice when text hits arrive after AI hits", async () => {
         endpointRouterMock.mockResolvedValue(
             createNdjsonStreamResponse([
@@ -244,6 +258,43 @@ describe("do_intelligent_search", () => {
         expect(oldReader.cancel).toHaveBeenCalledOnce();
         expect(ongoingSearchResults.dev_agent_tasks).toBe(newestCache);
         expect(newestCache.data).toEqual([]);
+    });
+
+    test('preserves the renderer and stream metadata across article, card and article replay', async () => {
+        const tableName = 'app_service_catalog';
+        const types = { type_of_operation: { data_type: 'text', is_multilingual: true, card_element: 'description' } };
+        const showView = (viewKey) => {
+            createCardViewDom(tableName);
+            if (viewKey === 'article_view') {
+                document.getElementById(tableName + '_card_view_container').id = tableName + '_article_view_container';
+            }
+            localStorage.setItem(tableName + '_view', viewKey);
+        };
+        getUnifiedTableStateMock.mockReturnValue({
+            cardView: { collapsed: false }, articleView: { collapsed: true },
+        });
+        appendDataToCardViewMock.mockResolvedValue(undefined);
+        showView('article_view');
+        endpointRouterMock.mockResolvedValueOnce(createNdjsonStreamResponse([
+            { stage: 'text', columns: ['id', 'type_of_operation'], types, data: [{ id: 1, type_of_operation: '{"fi":"Ohjelmisto","en":"Software"}' }] },
+            { stage: 'ai', columns: ['id', 'type_of_operation'], types, data: [{ id: 2, type_of_operation: '{"fi":"Peli","en":"Game"}' }] },
+        ]));
+        const { do_intelligent_search, rerenderCachedSearchResults } = await import('./dataset_search_executor.js');
+        await do_intelligent_search(tableName, 'kanto');
+        expect(appendDataToCardViewMock).toHaveBeenCalled();
+        for (const call of appendDataToCardViewMock.mock.calls) {
+            expect(call[4]).toEqual({ viewKey: 'article_view', dataTypes: types });
+        }
+        for (const viewKey of ['card', 'article_view']) {
+            appendDataToCardViewMock.mockClear();
+            showView(viewKey);
+            await rerenderCachedSearchResults(tableName);
+            expect(appendDataToCardViewMock).toHaveBeenCalledTimes(2);
+            for (const call of appendDataToCardViewMock.mock.calls) {
+                expect(call[4]).toEqual({ viewKey, dataTypes: types });
+            }
+        }
+        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
     });
 
     test("does not commit cards built by a search replaced during asynchronous rendering", async () => {

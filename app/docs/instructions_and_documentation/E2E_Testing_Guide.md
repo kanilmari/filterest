@@ -337,7 +337,7 @@ See `T7_card_visibility.spec.ts` as a complete reference for admin view testing.
 
 ## Tickets vs Docs
 
-Keep durable E2E strategy here and in `DEV_GUIDE.md`, not only in umbrella tickets.
+Keep durable E2E strategy here and in the [Developer Guide](DEV_GUIDE.md), not only in umbrella tickets.
 
 - Put project-wide rules here: helper-first patterns, selector strategy, SPA constraints, report usage, and how Playwright fits with Vitest and Visual Guardian.
 - Put ticket-specific leftovers in tickets: uncovered workflows, missing verification, flaky cases, or one-off regressions that still need implementation.

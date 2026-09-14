@@ -13,8 +13,7 @@ const createChatUiMock = vi.hoisted(() => vi.fn((_tableName, parentElement) => {
 }));
 const getTranslationForKeyMock = vi.hoisted(() => vi.fn(() => ""));
 const createGenericViewSelectorMock = vi.hoisted(() => vi.fn(() => document.createElement("div")));
-const applyViewStylingMock = vi.hoisted(() => vi.fn());
-const closeRowArticleBeforeViewSwitchMock = vi.hoisted(() => vi.fn());
+const selectDatasetViewMock = vi.hoisted(() => vi.fn());
 const createVanillaDropdownMock = vi.hoisted(() => vi.fn(() => document.createElement("div")));
 const hasDatasetPermissionMock = vi.hoisted(() => vi.fn(() => Promise.resolve(false)));
 const createFieldViewEditorButtonMock = vi.hoisted(() => vi.fn(() => {
@@ -35,8 +34,7 @@ vi.mock("../general_tables/gt_toolbar/toolbar_button_creator.js", () => ({
 
 vi.mock("../table_views/view_selector_printer.js", () => ({
     createGenericViewSelector: createGenericViewSelectorMock,
-    applyViewStyling: applyViewStylingMock,
-    closeRowArticleBeforeViewSwitch: closeRowArticleBeforeViewSwitchMock,
+    selectDatasetView: selectDatasetViewMock,
 }));
 
 vi.mock("../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
@@ -88,8 +86,7 @@ describe("appendChatUIIfAllowed", () => {
         document.body.innerHTML = "";
         createChatUiMock.mockClear();
         createGenericViewSelectorMock.mockClear();
-        applyViewStylingMock.mockClear();
-        closeRowArticleBeforeViewSwitchMock.mockClear();
+        selectDatasetViewMock.mockClear();
         createVanillaDropdownMock.mockClear();
         hasDatasetPermissionMock.mockReset();
         hasDatasetPermissionMock.mockResolvedValue(false);
@@ -180,7 +177,7 @@ describe("appendChatUIIfAllowed", () => {
             "card",
             [
                 expect.objectContaining({ viewKey: "card", label: "Cards", langKey: "view_card" }),
-                expect.objectContaining({ viewKey: "article", label: "Article", langKey: "view_article" }),
+                expect.objectContaining({ viewKey: "article_view", label: "Article", langKey: "view_article" }),
                 expect.objectContaining({ viewKey: "table", label: "Table", langKey: "view_table" }),
                 expect.objectContaining({ viewKey: "normal", label: "List", langKey: "view_normal" }),
                 expect.objectContaining({ viewKey: "transposed", label: "Compare", langKey: "view_transposed" }),
@@ -202,7 +199,7 @@ describe("appendChatUIIfAllowed", () => {
             translate: expect.any(Function),
         }));
         createVanillaDropdownMock.mock.calls[0][0].onChange("calendar");
-        expect(closeRowArticleBeforeViewSwitchMock).toHaveBeenCalledWith("demo_table");
+        expect(selectDatasetViewMock).toHaveBeenCalledWith("demo_table", "calendar", "card");
         expect(viewSelectorContainer.children).toHaveLength(1);
     });
 
@@ -241,6 +238,12 @@ describe("appendChatUIIfAllowed", () => {
             langKey: "view_tree",
         });
         expect(dropdownOptions.every((option) => Boolean(option.langKey))).toBe(true);
+        const select = createVanillaDropdownMock.mock.calls[0][0].onChange;
+        select("tree");
+        expect(selectDatasetViewMock).toHaveBeenCalledWith("demo_table", "tree", "card");
+        select("");
+        expect(selectDatasetViewMock).toHaveBeenCalledTimes(1);
+
     });
 
     test("renders chat as a pinned filterbar dock with a clickable animated header", async () => {

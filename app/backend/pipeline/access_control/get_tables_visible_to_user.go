@@ -16,8 +16,10 @@ func GetTablesVisibleToUser(db *sql.DB, userID int) (map[int]bool, error) {
 	queryRows, queryError := db.Query(`
 		SELECT DISTINCT gf.target_table_uid
 		FROM system_group_table_func_rights gf
+		JOIN public.system_db_tables visible_dataset ON visible_dataset.table_uid = gf.target_table_uid
 		JOIN system_user_group_memberships ug ON gf.user_group_id = ug.group_id
 		WHERE ug.user_id = $1
+		  AND NOT visible_dataset.ui_hidden
 		  AND gf.target_table_uid IS NOT NULL
 	`, userID)
 	if queryError != nil {

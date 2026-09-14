@@ -3,7 +3,7 @@
 // Zero DOM access — all functions are pure input→output.
 
 /**
- * Group an array of view objects by their `group` property.
+ * Group visible navigation entries without removing compatibility routes from the registry.
  *
  * @param {Array<{group: string, name: string}>} views - Array of view definitions
  * @returns {Object<string, Array>} Views grouped by group name
@@ -11,6 +11,7 @@
 export function groupViewsByGroup(views) {
     const groups = {};
     views.forEach(view => {
+        if (view.navigationHidden === true) return;
         if (!groups[view.group]) {
             groups[view.group] = [];
         }

@@ -144,6 +144,10 @@ func handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		showLoginForm(w, r, "Kirjautumisen varmennustapaa ei voitu lukea.")
 		return
 	}
+	if verification.APIOnly {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{"error": "automation_api_channel_required"})
+		return
+	}
 	submittedCode := strings.TrimSpace(r.FormValue("otp"))
 	switch verification.Method {
 	case verificationNone:

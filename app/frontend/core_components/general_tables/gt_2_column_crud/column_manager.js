@@ -9,7 +9,8 @@ import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { isValidIdentifier } from '../../../reusable_components/dom_container_builder.js';
 import { showSuccessToast, showWarningToast } from '../../../reusable_components/notifications/toast_notification_printer.js';
 import { drop_table } from '../gt_3_table_crud/gt_3_2_table_delete/table_remover.js';
-import { getTranslationForKey } from '../../lang/translation_handler.js';
+import { managementText, managementLabel, setManagementText, observeManagementLanguage } from './manage_table_i18n.js';
+import { getDatasetUIVisibility, setDatasetUIVisibility } from './dataset_ui_visibility.js';
 import { refreshTableUnified } from '../gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { getUnifiedTableState, setUnifiedTableState } from '../../state_stores/table_state_store.js';
 import { getHiddenColumns } from '../../filterbar/filter_list/column_visibility_handler.js';
@@ -146,6 +147,9 @@ function purgeStaleColumnState(tableName, removedColumns, renamedMap) {
 
 export async function open_column_management_modal(table_name) {
     const columns = await fetch_columns_for_table(table_name);
+    const declaredDefault = columns[0]?.new_columns_multilingual;
+    const initialMultilingualDefault = typeof declaredDefault === 'boolean'
+        ? declaredDefault : columns.some(column => column.is_multilingual === true);
 
     // Muunna character varying -> VARCHAR
     columns.forEach(col => {
@@ -172,23 +176,49 @@ export async function open_column_management_modal(table_name) {
     form.style.border = '1px solid var(--border_color)';
     form.style.padding = '10px';
 
+    const datasetLabel = managementLabel('manage_table_name');
+    const datasetName = document.createElement('code');
+    datasetName.className = 'manage-table-dataset-name';
+    datasetName.textContent = table_name;
+    datasetLabel.appendChild(datasetName);
+    form.appendChild(datasetLabel);
+
+    const visibilityPanel = document.createElement('section');
+    visibilityPanel.className = 'manage-table-visibility';
+    visibilityPanel.dataset.testid = 'manage-table-visibility';
+    const visibilityStatus = setManagementText(document.createElement('p'), 'manage_table_visibility_loading');
+    visibilityStatus.setAttribute('role', 'status');
+    const restoreButton = setManagementText(document.createElement('button'), 'manage_table_restore');
+    restoreButton.type = 'button';
+    restoreButton.dataset.testid = 'manage-table-restore';
+    restoreButton.hidden = true;
+    visibilityPanel.append(visibilityStatus, restoreButton);
+    form.appendChild(visibilityPanel);
+
+    const multilingualDefaultLabel = managementLabel('manage_table_multilingual_default');
+    multilingualDefaultLabel.style.display = 'flex';
+    multilingualDefaultLabel.style.alignItems = 'flex-start';
+    multilingualDefaultLabel.style.gap = '8px';
+    const multilingualDefaultInput = document.createElement('input');
+    multilingualDefaultInput.type = 'checkbox';
+    multilingualDefaultInput.dataset.testid = 'manage-table-multilingual-default';
+    multilingualDefaultInput.checked = initialMultilingualDefault;
+    multilingualDefaultLabel.prepend(multilingualDefaultInput);
+    form.append(multilingualDefaultLabel);
+    multilingualDefaultInput.addEventListener('change', () => {
+        form.querySelectorAll('input[name="is_multilingual"]').forEach(input => {
+            if (input.dataset.multilingualOverride !== 'true') {
+                input.checked = multilingualDefaultInput.checked;
+            }
+        });
+    });
+
     const allowedTypes = ['INTEGER', 'VARCHAR', 'TEXT', 'BOOLEAN', 'DATE'];
 
     function createColumnRow(column_name_value, data_type_value, length_value, original = true) {
         const row = document.createElement('div');
         row.classList.add('column-row');
-        row.style.display = 'grid';
-        row.style.gridTemplateColumns = '1fr 1fr';
-        row.style.gridGap = '5px';
-        row.style.border = '1px solid var(--table_border_color)';
-        row.style.padding = '5px';
-
-        // Asetetaan suhteellinen asemointi, jotta poistonappi voidaan ankkuroida oikeaan yläkulmaan:
-        row.style.position = 'relative';
-
-        // Nimi
-        const nameLabel = document.createElement('label');
-        nameLabel.textContent = getTranslationForKey('name') || 'Nimi: ';
+        const nameLabel = managementLabel('manage_table_column_name');
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
         nameInput.name = 'column_name';
@@ -200,32 +230,41 @@ export async function open_column_management_modal(table_name) {
         row.appendChild(nameLabel);
 
         // Tietotyyppi
-        const typeLabel = document.createElement('label');
-        typeLabel.textContent = getTranslationForKey('data_type') || ' Tietotyyppi: ';
+        const typeLabel = managementLabel('manage_table_data_type');
         const typeSelect = document.createElement('select');
         typeSelect.name = 'data_type';
 
         const emptyOpt = document.createElement('option');
         emptyOpt.value = '';
-        emptyOpt.textContent = getTranslationForKey('select') || '--Valitse--';
+        setManagementText(emptyOpt, 'manage_table_select_type');
         typeSelect.appendChild(emptyOpt);
 
         allowedTypes.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t;
-            opt.textContent = t;
+            setManagementText(opt, 'manage_table_type_' + t.toLowerCase());
             if (data_type_value && t === data_type_value.toUpperCase()) {
                 opt.selected = true;
             }
             typeSelect.appendChild(opt);
         });
 
+        // Existing PostgreSQL types outside the editor's creation choices must
+        // remain selected, so an unrelated Save cannot reinterpret their schema.
+        const existingType = String(data_type_value || '').toUpperCase();
+        if (existingType && !allowedTypes.includes(existingType)) {
+            const existingOption = document.createElement('option');
+            existingOption.value = existingType;
+            existingOption.textContent = existingType;
+            existingOption.selected = true;
+            typeSelect.appendChild(existingOption);
+        }
+
         typeLabel.appendChild(typeSelect);
         row.appendChild(typeLabel);
 
         // Pituus (vain VARCHAR)
-        const lengthLabel = document.createElement('label');
-        lengthLabel.textContent = getTranslationForKey('length_varchar_only') || 'Pituus (vain VARCHAR): ';
+        const lengthLabel = managementLabel('manage_table_length');
         const lengthInput = document.createElement('input');
         lengthInput.type = 'number';
         lengthInput.name = 'length';
@@ -246,28 +285,37 @@ export async function open_column_management_modal(table_name) {
             }
         });
 
-        // Poista-painike (punainen rasti, aina divin oikeassa yläkulmassa, näkyy hoveroitaessa)
+        if (!original) {
+            const multilingualLabel = managementLabel('manage_table_column_multilingual');
+            const multilingualInput = document.createElement('input');
+            multilingualInput.type = 'checkbox';
+            multilingualInput.name = 'is_multilingual';
+            multilingualInput.dataset.testid = 'manage-table-new-column-multilingual';
+            multilingualInput.checked = multilingualDefaultInput.checked;
+            multilingualInput.style.width = 'auto';
+            multilingualInput.style.justifySelf = 'start';
+            multilingualInput.addEventListener('change', () => {
+                multilingualInput.dataset.multilingualOverride = 'true';
+            });
+            multilingualLabel.append(multilingualInput);
+            const syncMultilingualType = () => {
+                const textColumn = ['TEXT', 'VARCHAR'].includes(typeSelect.value);
+                multilingualLabel.style.display = textColumn ? 'grid' : 'none';
+                multilingualInput.disabled = !textColumn;
+            };
+            typeSelect.addEventListener('change', syncMultilingualType);
+            syncMultilingualType();
+            row.append(multilingualLabel);
+        }
+
+        // Keep the removal control available to touch and keyboard users.
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.textContent = '×';
-        removeButton.style.position = 'absolute';
-        removeButton.style.top = '5px';
-        removeButton.style.right = '5px';
-        removeButton.style.color = 'red';
-        removeButton.style.border = 'none';
-        removeButton.style.backgroundColor = 'transparent';
-        removeButton.style.fontSize = '18px';
-        removeButton.style.cursor = 'pointer';
-        removeButton.style.opacity = '0';
-        removeButton.style.transition = 'opacity 0.2s';
-
-        // Näytä rasti hoverissa, piilota kun ei hover
-        row.addEventListener('mouseenter', () => {
-            removeButton.style.opacity = '1';
-        });
-        row.addEventListener('mouseleave', () => {
-            removeButton.style.opacity = '0';
-        });
+        removeButton.className = 'column-remove-button';
+        removeButton.dataset.manageTableAriaKey = 'manage_table_remove_column';
+        removeButton.setAttribute('data-aria-label-lang-key', 'manage_table_remove_column');
+        removeButton.setAttribute('aria-label', managementText('manage_table_remove_column'));
 
         removeButton.addEventListener('click', () => {
             row.remove();
@@ -279,8 +327,7 @@ export async function open_column_management_modal(table_name) {
 
     // Luo rivit olemassa oleville sarakkeille
     columns.forEach(col => {
-        const dt = allowedTypes.includes(col.data_type.toUpperCase()) ? col.data_type : '';
-        const r = createColumnRow(col.column_name, dt, col.character_maximum_length, true);
+        const r = createColumnRow(col.column_name, col.data_type, col.character_maximum_length, true);
         form.appendChild(r);
     });
 
@@ -291,7 +338,7 @@ export async function open_column_management_modal(table_name) {
     // Lisää uusi sarake -painike
     const addRowButton = document.createElement('button');
     addRowButton.type = 'button';
-    addRowButton.dataset.langKey = 'add_new_column';
+    setManagementText(addRowButton, 'manage_table_add_column');
     addRowButton.style.backgroundColor = 'var(--button_bg_color)';
     addRowButton.style.color = 'var(--button_text_color)';
     addRowButton.addEventListener('mouseenter', () => {
@@ -308,13 +355,13 @@ export async function open_column_management_modal(table_name) {
     });
     form.appendChild(addRowButton);
 
-    // Kolme nappia: Peruuta, Tallenna, Poista taulu
+    // Keep Save last and aligned to the right.
     const buttonRow = document.createElement('div');
     buttonRow.classList.add('form-actions');
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
-    cancelButton.dataset.langKey = 'cancel';
+    setManagementText(cancelButton, 'manage_table_cancel');
     cancelButton.classList.add('cancel-button');
     cancelButton.addEventListener('click', () => {
         hideModal();
@@ -323,30 +370,60 @@ export async function open_column_management_modal(table_name) {
 
     const saveButton = document.createElement('button');
     saveButton.type = 'submit';
-    saveButton.dataset.langKey = 'save_changes';
+    setManagementText(saveButton, 'manage_table_save');
+    saveButton.dataset.testid = 'manage-table-save';
     saveButton.classList.add('submit-button');
-    buttonRow.appendChild(saveButton);
 
     const deleteTableButton = document.createElement('button');
     deleteTableButton.type = 'button';
     deleteTableButton.dataset.testid = 'btn-delete-table';
-    deleteTableButton.dataset.langKey = 'delete_the_whole_table';
+    setManagementText(deleteTableButton, 'manage_table_delete');
+    deleteTableButton.disabled = true;
     deleteTableButton.classList.add('danger-button');
     deleteTableButton.addEventListener('click', () => drop_table(table_name));
-    buttonRow.appendChild(deleteTableButton);
+    buttonRow.append(deleteTableButton, saveButton);
 
     form.appendChild(buttonRow);
 
+    let disposeLanguage = () => {};
+    let disposed = false;
     createModal({
-        // Näytetään otsikko vain data-lang-keyllä:
-        titleDataLangKey: `manage_table+${table_name}`,
+        titleDataLangKey: 'manage_table_title',
+        titlePlainText: managementText('manage_table_title'),
         contentElements: [form],
-        maxWidth: '768px'
+        maxWidth: '768px',
+        cleanupCallback: () => { disposed = true; disposeLanguage(); },
     });
+    disposeLanguage = observeManagementLanguage(form);
     showModal();
+
+    function showVisibility(uiHidden) {
+        if (disposed) return;
+        visibilityPanel.hidden = !uiHidden;
+        restoreButton.hidden = !uiHidden;
+        if (uiHidden) setManagementText(visibilityStatus, 'manage_table_hidden');
+        deleteTableButton.disabled = false;
+    }
+
+    restoreButton.addEventListener('click', async () => {
+        if (restoreButton.disabled) return;
+        restoreButton.disabled = true;
+        try {
+            const result = await setDatasetUIVisibility(table_name, false);
+            if (disposed) return;
+            showVisibility(result.ui_hidden);
+            showSuccessToast(managementText('manage_table_restored'));
+        } catch (error) {
+            if (!disposed) setManagementText(visibilityStatus, 'manage_table_restore_failed');
+            console.warn('Dataset restoration failed:', error);
+        } finally {
+            restoreButton.disabled = false;
+        }
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saveButton.disabled) return;
 
         const currentRows = form.querySelectorAll('.column-row');
         const currentColumns = [];
@@ -359,7 +436,7 @@ export async function open_column_management_modal(table_name) {
 
             const newName = nameInput.value.trim();
             if (newName && !isValidIdentifier(newName)) {
-                showWarningToast(getTranslationForKey('invalid_column_name') || `Virheellinen sarakenimi "${newName}". Käytä vain a-z, A-Z, numeroita ja alaviivaa.`);
+                showWarningToast(managementText('manage_table_invalid_name'));
                 invalidInput = true;
                 return;
             }
@@ -368,7 +445,8 @@ export async function open_column_management_modal(table_name) {
                 original_name: nameInput.dataset.originalName || null,
                 new_name: newName,
                 data_type: typeSelect.value,
-                length: lengthInput.value ? parseInt(lengthInput.value, 10) : null
+                length: lengthInput.value ? parseInt(lengthInput.value, 10) : null,
+                is_multilingual: r.querySelector('input[name="is_multilingual"]')?.checked
             });
         });
         if (invalidInput) {
@@ -416,7 +494,9 @@ export async function open_column_management_modal(table_name) {
                     original_name: "",
                     new_name: currCol.new_name,
                     data_type: currCol.data_type,
-                    length: currCol.data_type.toUpperCase() === 'VARCHAR' ? currCol.length : null
+                    length: currCol.data_type.toUpperCase() === 'VARCHAR' ? currCol.length : null,
+                    ...(['TEXT', 'VARCHAR'].includes(currCol.data_type)
+                        ? { is_multilingual: currCol.is_multilingual === true } : {})
                 });
             }
         }
@@ -429,13 +509,19 @@ export async function open_column_management_modal(table_name) {
         };
 
 
+        if (multilingualDefaultInput.checked !== initialMultilingualDefault) {
+            requestData.new_columns_multilingual = multilingualDefaultInput.checked;
+        }
+
+        saveButton.disabled = true;
         try {
             await endpoint_router('modifyColumns', {
                 method: 'POST',
-                body_data: requestData
+                body_data: requestData,
+                suppressErrorToast: true,
             });
 
-            showSuccessToast(getTranslationForKey('changes_saved_successfully') || 'Muutokset tallennettu onnistuneesti.');
+            showSuccessToast(managementText('manage_table_saved'));
             hideModal();
 
             const renamedMap = modified_columns
@@ -446,7 +532,17 @@ export async function open_column_management_modal(table_name) {
             await refreshTableUnified(table_name, { skipUrlParams: true });
 
         } catch (error) {
-            console.warn('Virhe tallennettaessa muutoksia:', error);
+            showWarningToast(managementText('manage_table_save_failed'));
+            console.warn('Column management save failed:', error);
+        } finally {
+            saveButton.disabled = false;
         }
     });
+
+    try {
+        showVisibility((await getDatasetUIVisibility(table_name)).ui_hidden);
+    } catch (error) {
+        if (!disposed) setManagementText(visibilityStatus, 'manage_table_visibility_failed');
+        console.warn('Dataset visibility lookup failed:', error);
+    }
 }

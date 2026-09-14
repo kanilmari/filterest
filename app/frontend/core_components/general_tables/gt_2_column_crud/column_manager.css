@@ -1,0 +1,100 @@
+/* column_manager.css
+ * Keeps management controls usable in either application theme and narrow dialogs.
+ */
+.column_management_forms .column-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    position: relative;
+    padding: 10px 42px 10px 10px;
+    border: 1px solid var(--table_border_color);
+}
+.column_management_forms .column-row label {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+.column_management_forms .column-row input,
+.column_management_forms .column-row select {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+.column_management_forms .column-remove-button {
+    position: absolute;
+    inset-block-start: 5px;
+    inset-inline-end: 5px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    color: var(--color-error);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+}
+.column_management_forms .column-remove-button:focus-visible,
+.dataset-removal-dialog button:focus-visible,
+.column_management_forms button:focus-visible {
+    outline: 2px solid var(--primary_color);
+    outline-offset: 2px;
+}
+.column_management_forms .form-actions,
+.dataset-removal-dialog .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.column_management_forms .form-actions .submit-button,
+.dataset-removal-dialog .form-actions .submit-button {
+    margin-inline-start: auto;
+}
+.manage-table-visibility,
+.dataset-removal-dialog {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+.manage-table-visibility[hidden],
+.manage-table-visibility [hidden],
+.dataset-removal-dialog [hidden] {
+    display: none;
+}
+.manage-table-dataset-name,
+.dataset-removal-dialog code {
+    display: block;
+    overflow-wrap: anywhere;
+}
+.dataset-removal-dialog fieldset {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    border: 1px solid var(--border_color);
+    min-width: 0;
+}
+.dataset-removal-dialog .deletion-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.dataset-removal-dialog .deletion-option input {
+    margin-block-start: 3px;
+}
+.dataset-removal-dialog .deletion-confirmation {
+    display: grid;
+    gap: 8px;
+}
+.dataset-removal-dialog input[type="text"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+}
+.dataset-removal-dialog .deletion-warning,
+.dataset-removal-dialog [role="alert"] {
+    color: var(--color-error);
+}
+@media (width <= 560px) {
+    .column_management_forms .column-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

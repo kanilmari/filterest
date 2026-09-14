@@ -249,3 +249,31 @@ describe("card image modal", () => {
         expect(body.hasAttribute("aria-busy")).toBe(false);
     });
 });
+
+test("Escape and close-button cleanup notify the current IFAV history owner exactly once", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = "";
+    const { openImageModalContent, transitionImageFirstModalContent } = await import("./card_image_modal.js");
+    const first = vi.fn(), current = vi.fn();
+    const content = () => {
+        const shell = document.createElement("div");
+        shell.className = "image_first_view";
+        shell.innerHTML = '<div class="row_article_image_first_stage"></div>';
+        return shell;
+    };
+    openImageModalContent({ contentElement: content(), classNames: ["image_first_view_modal"],
+        overlayClassNames: ["image_first_view_overlay"], onClose: first });
+    transitionImageFirstModalContent({ contentElement: content(), onClose: current });
+    await vi.advanceTimersByTimeAsync(350);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await vi.advanceTimersByTimeAsync(350);
+    expect(current).toHaveBeenCalledOnce();
+    expect(first).not.toHaveBeenCalled();
+    expect(document.getElementById("custom_modal_overlay").style.display).toBe("none");
+    const closed = vi.fn();
+    openImageModalContent({ contentElement: content(), classNames: ["image_first_view_modal"], onClose: closed });
+    document.querySelector("#custom_modal .modal_close_button").click();
+    await vi.advanceTimersByTimeAsync(350);
+    expect(closed).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+});

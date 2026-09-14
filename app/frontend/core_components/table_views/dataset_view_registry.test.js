@@ -91,6 +91,7 @@ describe("dataset_view_registry", () => {
         expect(DATASET_VIEW_PERMISSION_ROUTES).toEqual({
             card: "/ui/view/card",
             article_view: "/ui/view/article_view",
+            image_first_view: "/ui/view/article_view",
             table: "/ui/view/table",
             normal: "/ui/view/list",
             transposed: "/ui/view/transposed",
@@ -124,4 +125,11 @@ describe("dataset_view_registry", () => {
             "fi"
         )).toBe("Lis\u00e4\u00e4");
     });
+});
+
+test("image-first is a named history presentation, not a duplicate dataset renderer", () => {
+    expect(getDatasetViewContainerId("image_first_view", "services")).toBe("");
+    expect(getDatasetViewLabelForLanguage("image_first_view", "fi")).toBe("Kuvapainotteinen artikkeli");
+    expect(getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_DIRECT).map(option => option.viewKey)).not.toContain("image_first_view");
+    expect(getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_MORE).map(option => option.viewKey)).not.toContain("image_first_view");
 });

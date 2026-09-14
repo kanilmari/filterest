@@ -97,6 +97,19 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         fetchDatasetDataMock.mockRejectedValue(new Error("Dataset not found"));
     });
 
+    test("dispatches only an explicitly registered surface before SQL fetch and permissions", async () => {
+        const { refreshTableUnified } = await loadModule();
+        const { registerDatasetQueryAdapter } = await import('../../../filterbar/dataset_surface_provider/dataset_query_adapter_registry.js');
+        const refresh = vi.fn(async () => ({ total_count: 1 }));
+        const release = registerDatasetQueryAdapter('extension', { refresh });
+        try {
+            expect(await refreshTableUnified('extension', { skipUrlParams: true })).toEqual({ total_count: 1 });
+            expect(refresh).toHaveBeenCalledWith({ skipUrlParams: true });
+            expect(fetchDatasetDataMock).not.toHaveBeenCalled();
+            expect(primeDatasetPermissionsMock).not.toHaveBeenCalled();
+        } finally { release(); }
+    });
+
     test("redirects missing datasets back to root inside the SPA", async () => {
         const mod = await loadModule();
 
@@ -401,6 +414,19 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         await old;
         expect(generateTableMock).not.toHaveBeenCalled();
         expect(openRowArticleViewMock).not.toHaveBeenCalled();
+    });
+
+    test("a committed mounted return invalidates a refresh still awaiting its response", async () => {
+        const mod = await loadModule();
+        let resolve;
+        fetchDatasetDataMock.mockReturnValue(new Promise(done => { resolve = done; }));
+        const pending = mod.refreshTableUnified("events", { skipUrlParams: true });
+        await vi.waitFor(() => expect(fetchDatasetDataMock).toHaveBeenCalledOnce());
+        mod.invalidateTableRefresh("events");
+        resolve({ data: [{ id: 99 }], columns: ["id"], types: {}, row_count: 1 });
+        await pending;
+        expect(generateTableMock).not.toHaveBeenCalled();
+        expect(updateOffsetMock).not.toHaveBeenCalled();
     });
 
 });

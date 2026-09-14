@@ -48,7 +48,7 @@ func GetTableColumnsWithTypesAndIDs(tableName string) ([]map[string]interface{},
 	err := backend.Db.QueryRow(`
         SELECT table_uid
         FROM system_db_tables
-        WHERE table_name = $1
+        WHERE table_name = $1 AND schema_name = current_schema()
     `, tableName).Scan(&tableUID)
 	if err != nil {
 		return nil, fmt.Errorf("read_update_columns: error fetching table_uid for table %s: %v", tableName, err)
@@ -56,10 +56,16 @@ func GetTableColumnsWithTypesAndIDs(tableName string) ([]map[string]interface{},
 
 	// Hae saraketiedot liittymällä system_column_details ja information_schema.columns
 	query := `
-        SELECT cd.column_uid, cd.column_name, c.data_type, cd.co_number
+        SELECT cd.column_uid, cd.column_name, c.data_type, cd.co_number,
+               COALESCE(cd.is_multilingual, FALSE),
+               COALESCE(dt.new_columns_multilingual, EXISTS (
+                   SELECT 1 FROM system_column_details source
+                   WHERE source.table_uid = dt.table_uid AND source.is_multilingual
+               ))
         FROM system_column_details cd
+        JOIN system_db_tables dt ON dt.table_uid = cd.table_uid
         JOIN information_schema.columns c
-          ON c.table_name = $1 AND c.column_name = cd.column_name
+          ON c.table_name = $1 AND c.column_name = cd.column_name AND c.table_schema = current_schema()
         WHERE cd.table_uid = $2
         ORDER BY cd.co_number
     `
@@ -72,21 +78,28 @@ func GetTableColumnsWithTypesAndIDs(tableName string) ([]map[string]interface{},
 	var columns []map[string]interface{}
 	for rows.Next() {
 		var (
-			columnUid  int
-			columnName string
-			dataType   string
-			coNumber   int
+			columnUid              int
+			columnName             string
+			dataType               string
+			coNumber               int
+			isMultilingual         bool
+			newColumnsMultilingual bool
 		)
-		if err := rows.Scan(&columnUid, &columnName, &dataType, &coNumber); err != nil {
+		if err := rows.Scan(&columnUid, &columnName, &dataType, &coNumber, &isMultilingual, &newColumnsMultilingual); err != nil {
 			return nil, err
 		}
 		columnInfo := map[string]interface{}{
-			"column_uid":  columnUid,
-			"column_name": columnName,
-			"data_type":   dataType,
-			"co_number":   coNumber, // ( = column order number )
+			"column_uid":               columnUid,
+			"column_name":              columnName,
+			"data_type":                dataType,
+			"is_multilingual":          isMultilingual,
+			"new_columns_multilingual": newColumnsMultilingual,
+			"co_number":                coNumber, // ( = column order number )
 		}
 		columns = append(columns, columnInfo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return columns, nil
 }

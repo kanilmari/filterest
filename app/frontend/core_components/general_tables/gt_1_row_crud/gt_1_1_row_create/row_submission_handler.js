@@ -3,6 +3,7 @@
 // Bridges modal UI events, endpoint submission, translations, and dataset refresh behavior.
 // Exists to keep row-creation submit/cancel behavior out of the form-building layer.
 
+import { isRequiredForeignKeyColumn } from "./row_input_builder_helpers.js";
 import { mediaLibraryText } from "../../../../reusable_components/media_library_picker/media_library_picker.js";
 import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_preference_reader.js";
 import { hideModal } from "../../../../reusable_components/modal/modal_builder.js";
@@ -53,6 +54,24 @@ export function appendFormActions(form, table_uid, columns, modal_form_state, cl
 
 /** Lomakkeen submit: lähetetään päärivi, asset-lapset ja olemassa olevien rivien liitokset. */
 async function submit_new_row(table_uid, form, columns, modal_form_state, clearStateCallback) {
+    // Custom FK comboboxes submit hidden values, which browser required-field
+    // validation does not inspect. Reveal/focus their existing form section.
+    const missingRelation = columns.find((column) =>
+        isRequiredForeignKeyColumn(column)
+        && !String(form.elements[column.column_name]?.value ?? "").trim()
+    );
+    if (missingRelation) {
+        const control = form.elements[missingRelation.column_name];
+        control?.dispatchEvent(new Event("invalid", { cancelable: true }));
+        const chooser = control?.closest("fieldset")?.querySelector('[role="combobox"]');
+        chooser?.setAttribute("aria-invalid", "true");
+        chooser?.focus();
+        const label = getTranslationForKey(missingRelation.lang_key || missingRelation.column_name,
+            { fallback: missingRelation.column_name, countUsage: false });
+        showWarningToast(`${getTranslationForKey("choose_from_existing") || "Choose from existing…"}: ${label}`);
+        return;
+    }
+
     const formData = new FormData();
 
     const mainData = {};

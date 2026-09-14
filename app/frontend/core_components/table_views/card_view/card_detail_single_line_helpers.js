@@ -7,6 +7,7 @@ import { applyLabelValueLayout } from "../../../reusable_components/key_value_co
 import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
+import { normalizeCardDetailColumns } from "./card_detail_layout_options.js";
 
 const SINGLE_LINE_CARD_DETAIL_DESKTOP_COLUMNS = 2;
 const FALLBACK_CARD_DETAIL_ICON_KEY = "info";
@@ -65,7 +66,7 @@ function getSingleLineCardDetailDesktopRowCount(detailEntries) {
  * Bridges the specialized icon-aware helper and the conditional_multiline base CSS.
  * Exists to keep spacing/surface/order aligned without enabling multiline wrapping.
  */
-function prepareSingleLineCardDetailContainer(containerElement, detailEntries) {
+function prepareSingleLineCardDetailContainer(containerElement, detailEntries, columns) {
     containerElement.classList.add(
         "card_details_single_line",
         "kv-display",
@@ -75,6 +76,16 @@ function prepareSingleLineCardDetailContainer(containerElement, detailEntries) {
         "--card-details-single-line-rows",
         String(getSingleLineCardDetailDesktopRowCount(detailEntries))
     );
+    if (columns !== undefined) {
+        const requestedColumns = normalizeCardDetailColumns(columns);
+        containerElement.classList.add("card_details_single_line--responsive");
+        for (const widthLimit of [1, 2, 3, 4]) {
+            const count = Math.min(requestedColumns, widthLimit);
+            containerElement.style.setProperty("--card-single-columns-" + widthLimit, String(count));
+            containerElement.style.setProperty("--card-single-rows-" + widthLimit,
+                String(Math.max(1, Math.ceil(detailEntries.length / count))));
+        }
+    }
 }
 
 function createSingleLineCardDetailValue(detailEntry) {
@@ -114,9 +125,9 @@ function createSingleLineCardDetailValue(detailEntry) {
     return valueContainer;
 }
 
-export function renderSingleLineCardDetails(containerElement, detailEntries, dataTypes = {}) {
+export function renderSingleLineCardDetails(containerElement, detailEntries, dataTypes = {}, { columns } = {}) {
     const entries = Array.isArray(detailEntries) ? detailEntries : [];
-    prepareSingleLineCardDetailContainer(containerElement, entries);
+    prepareSingleLineCardDetailContainer(containerElement, entries, columns);
 
     entries.forEach((detailEntry) => {
         const row = document.createElement("div");

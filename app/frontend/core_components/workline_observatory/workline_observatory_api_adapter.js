@@ -9,17 +9,38 @@ import { registerEndpointRoute } from '../pipeline/api_pipeline.js';
 const ROUTES = Object.freeze({
     board: 'worklineObservatoryBoard',
     statusActions: 'worklineObservatoryStatusActions',
+    priorityActions: 'worklineObservatoryPriorityActions',
     goals: 'worklineObservatoryReleaseGoals',
     contracts: 'worklineObservatoryContracts',
 });
 
 registerEndpointRoute(ROUTES.board, '/api/app/workline-observatory/board');
 registerEndpointRoute(ROUTES.statusActions, '/api/app/workline-observatory/status-actions');
+registerEndpointRoute(ROUTES.priorityActions, '/api/app/workline-observatory/priority-actions');
 registerEndpointRoute(ROUTES.goals, '/api/app/workline-observatory/release-goals');
 registerEndpointRoute(ROUTES.contracts, '/api/app/workline-observatory/contracts');
 
-export function fetchWorklineObservatoryBoard() {
-    return endpoint_router(ROUTES.board, { suppressAuthRedirect: true });
+// Accepts the shared host's normalized query and leaves report-history reads separate.
+export function fetchWorklineObservatoryBoard(query = {}) {
+    const allowed = ['search', 'status', 'status_exclude', 'priority', 'priority_exclude', 'current_phase', 'current_phase_exclude', 'sort_column', 'sort_order'];
+    const params = new URLSearchParams();
+    for (const key of allowed) {
+        const value = query[key];
+        if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+    }
+    return endpoint_router(ROUTES.board, {
+        ...(params.size ? { url_params: `?${params}` } : {}),
+        suppressAuthRedirect: true,
+    });
+}
+
+// Priority has its own revision so a priority decision cannot rewrite report history.
+export function applyWorklinePriorityAction(worklines, targetPriority) {
+    return endpoint_router(ROUTES.priorityActions, {
+        method: 'POST',
+        body_data: { worklines, target_priority: targetPriority },
+        suppressAuthRedirect: true,
+    });
 }
 
 export async function fetchWorklineObservatoryReportHistory(worklineId) {

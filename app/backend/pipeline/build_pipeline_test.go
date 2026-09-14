@@ -53,6 +53,7 @@ func TestAlwaysEnforcedStagesAlwaysPresent(t *testing.T) {
 		"request_size_limit",
 		"logging",
 		"error_handling",
+		"automation_check",
 		"audit",
 	}
 	containsAll(t, stages, alwaysEnforced)
@@ -91,6 +92,7 @@ func TestDefaultProfileSkipsNothing(t *testing.T) {
 		"request_size_limit",
 		"logging",
 		"error_handling",
+		"automation_check",
 		"auth",
 		"csrf",
 		"fingerprint",
@@ -340,5 +342,25 @@ func TestApplyDevOverridesInDev(t *testing.T) {
 		if !profile.Skips("auth") {
 			t.Errorf("%s: expected PublicProfile (skips auth) in dev, got %+v", name, profile)
 		}
+	}
+}
+
+func TestAutomationCheckCannotBeSkippedAndPrecedesAuth(t *testing.T) {
+	profile := pipeline.PublicProfile
+	profile.SkipStages = map[string]bool{"automation_check": true, "auth": true, "csrf": true}
+	stages := pipeline.DescribePipeline(emptyCtx, profile)
+	containsAll(t, stages, []string{"automation_check"})
+	stages = pipeline.DescribePipeline(emptyCtx, pipeline.DefaultProfile)
+	guard, auth := -1, -1
+	for i, stage := range stages {
+		if stage == "automation_check" {
+			guard = i
+		}
+		if stage == "auth" {
+			auth = i
+		}
+	}
+	if guard < 0 || auth <= guard {
+		t.Fatalf("guard must inspect identity before guest downgrade: %v", stages)
 	}
 }

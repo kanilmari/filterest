@@ -3,6 +3,7 @@
 // Bridges the URL bar and filter/sort state across navigation and popstate events.
 // Exists to centralise param read/write logic so every navigation path shares a consistent state model.
 
+import { writeHistoryEntry, rememberHistoryDatasetView } from "./history_entry_state.js";
 import {
     buildDatasetPath,
     getInternalDatasetName,
@@ -116,6 +117,21 @@ export function setParams(dataset, params = {}) {
     saveToStorage();
 }
 
+function rememberVisibleDatasetHistoryView() {
+    const path = normalizePath(location.pathname);
+    const prefix = path.startsWith('/admin/') ? '/admin/' : DATASET_PREFIX;
+    const dataset = getInternalDatasetName(path.slice(prefix.length));
+    // A row URL or another route must not inherit a hidden dataset's view.
+    if (!dataset || dataset.includes('/') || buildDatasetPath(dataset, prefix) !== path) return;
+    const root = document.getElementById(`${dataset}_container`);
+    const view = root?.querySelector('.tab_parts_container')?.dataset.view;
+    if (!root?.isConnected || root.classList.contains('hidden')
+        || getComputedStyle(root).display === 'none' || !view) return;
+    const hasVisibleResults = [...root.querySelectorAll('.scrollable_content')]
+        .some(host => host.childElementCount > 0 && !host.hidden && getComputedStyle(host).display !== 'none');
+    if (hasVisibleResults) rememberHistoryDatasetView(dataset, view);
+}
+
 export function updateURL(
     dataset,
     params = getParams(dataset),
@@ -136,13 +152,9 @@ export function updateURL(
     const newUrl = `${targetPath}${query ? `?${query}` : ''}`;
     const currentUrl = window.location.pathname + window.location.search;
     const state = options.state === undefined ? {} : options.state;
-    if (options.replace) {
-        history.replaceState(state, '', newUrl);
-    } else if (currentUrl === newUrl) {
-        history.replaceState(state, '', newUrl);
-    } else {
-        history.pushState(state, '', newUrl);
-    }
+    const replace = Boolean(options.replace || currentUrl === newUrl);
+    if (!replace) rememberVisibleDatasetHistoryView();
+    writeHistoryEntry(newUrl, state, { replace });
 }
 
 /**

@@ -166,7 +166,7 @@ describe("product_card_view_printer", () => {
             .toBe("/storage/firefox.svg?rev=3");
     });
 
-    test("switches to the normal card article view on click and keyboard activation", async () => {
+    test("switches to the classic article view and retains the product-card return target on click and keyboard activation", async () => {
         const row = {
             id: 5,
             title: "Keyboard Product",
@@ -183,11 +183,12 @@ describe("product_card_view_printer", () => {
         card.click();
 
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
-        expect(localStorage.getItem("products_view")).toBe("card");
+        expect(localStorage.getItem("products_view")).toBe("article_view");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("products", {
-            cardView: {
+            articleView: {
                 collapsed: true,
                 expandedId: 5,
+                returnView: "product_card",
             },
         });
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith("products", {
@@ -204,9 +205,10 @@ describe("product_card_view_printer", () => {
 
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("products", {
-            cardView: {
+            articleView: {
                 collapsed: true,
                 expandedId: 5,
+                returnView: "product_card",
             },
         });
     });

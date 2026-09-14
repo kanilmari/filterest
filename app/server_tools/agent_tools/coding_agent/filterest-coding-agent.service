@@ -1,0 +1,29 @@
+# Optional dedicated coding runner. Configure paths, web UID/group and auth first.
+# Kept separate from the web process so an application restart keeps accepted jobs.
+[Unit]
+Description=Filterest administrator coding agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=filterest-agent
+Group=filterest-agent-ipc
+UMask=0077
+RuntimeDirectory=filterest-coding-agent
+RuntimeDirectoryMode=0750
+StateDirectory=filterest-coding-agent
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 /opt/filterest-coding-agent/runner/coding_agent_runner.py --config /etc/filterest-coding-agent/site.json
+Restart=on-failure
+RestartSec=3
+KillMode=control-group
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/filterest-coding-agent/source /var/lib/filterest-coding-agent /run/filterest-coding-agent
+
+[Install]
+WantedBy=multi-user.target

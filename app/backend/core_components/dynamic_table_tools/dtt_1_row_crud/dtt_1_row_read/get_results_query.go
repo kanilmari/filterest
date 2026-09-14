@@ -90,8 +90,9 @@ func buildWhereClause(
 	lang := sanitizeLanguageParam(queryParams.Get("lang"))
 
 	for param, values := range queryParams {
-		// ohitetaan metaparametrit
-		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "lang" || param == rowGroupFilterQueryKey {
+		// Skip bare controls before stripping the dataset prefix; qualified
+		// keys still address real fields with the same name.
+		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey {
 			continue
 		}
 		if len(values) == 0 {

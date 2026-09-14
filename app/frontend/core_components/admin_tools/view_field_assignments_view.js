@@ -27,6 +27,7 @@ import {
     getViewFieldAssignmentsCancelText,
     getViewFieldAssignmentsCopy,
 } from "./view_field_assignments_copy.js";
+import { createArticleSectionDefaultsPanel } from "./article_section_defaults_panel.js";
 import { createViewFieldAssignmentsLayout } from "./view_field_assignments_layout.js";
 import {
     buildEditorFieldRows,
@@ -133,6 +134,7 @@ export async function generate_view_field_assignments_view(container) {
     let loadSequence = 0;
 
     const {
+        articleDefaultsHost,
         fieldList,
         fieldSearch,
         fieldWarning,
@@ -154,6 +156,8 @@ export async function generate_view_field_assignments_view(container) {
         language,
         rememberedViewKey: rememberedAdminState.viewKey,
     });
+
+    const articleDefaults = createArticleSectionDefaultsPanel({ host: articleDefaultsHost });
 
     function persistAdminState() {
         writeRememberedAdminState({
@@ -541,6 +545,7 @@ export async function generate_view_field_assignments_view(container) {
     });
 
     viewSelect.addEventListener("change", () => {
+        void articleDefaults.setContext(dataset, viewSelect.value);
         persistAdminState();
         if (dataset) void loadAssignments();
     });
@@ -550,6 +555,7 @@ export async function generate_view_field_assignments_view(container) {
         const selectedDataset = extractFirstSelectedTableName(event.detail?.selectedCategories);
         if (!selectedDataset || selectedDataset === dataset) return;
         dataset = selectedDataset;
+        void articleDefaults.setContext(dataset, viewSelect.value);
         void loadAssignments({ selectAllGroups: !hasRememberedGroupSelection });
     }, { signal: listenerController.signal });
 
@@ -583,6 +589,7 @@ export async function generate_view_field_assignments_view(container) {
     syncMutationControls();
     container.__cleanupListeners = () => {
         loadSequence += 1;
+        articleDefaults.destroy();
         listenerController.abort();
         groupPicker?.destroy?.();
         groupPicker = null;

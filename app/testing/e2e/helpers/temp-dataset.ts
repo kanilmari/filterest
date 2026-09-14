@@ -241,6 +241,7 @@ async function cleanupPartialTempDataset(page: Page, datasetName: string): Promi
   }
   const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
     dataset_name: datasetName,
+    confirm_dataset_name: datasetName,
   });
   if (!response.ok && !response.body.includes('does not exist')) {
     throw new Error(
@@ -364,6 +365,7 @@ export async function dropTempDataset(
   }
   const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
     dataset_name: datasetName,
+    confirm_dataset_name: datasetName,
   });
   if (!response.ok && response.body.includes('does not exist')) {
     unregisterTestArtifact('dataset', datasetName);
@@ -403,7 +405,7 @@ export async function cleanupDatasetViaRequest(
   }
   const csrfToken = await fetchCsrfTokenForRequest(request);
   const response = await request.post('/api/drop-dataset', {
-    data: { dataset_name: datasetName },
+    data: { dataset_name: datasetName, confirm_dataset_name: datasetName },
     headers: {
       'X-CSRF-Token': csrfToken,
     },

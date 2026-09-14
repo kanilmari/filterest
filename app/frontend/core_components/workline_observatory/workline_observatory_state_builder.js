@@ -37,11 +37,13 @@ export function buildWorklinePhaseNodes(value, lifecycleStatus = 'active') {
 export function buildWorklineObservatoryState(snapshot = {}) {
     const worklines = Array.isArray(snapshot.worklines)
         ? snapshot.worklines.map((workline) => {
-            const reportedPhase = normalizeWorklinePhase(workline?.current_phase);
+            const reportedPhase = normalizeWorklinePhase(workline?.reported_current_phase ?? workline?.current_phase);
             const terminal = workline?.status === 'closed' || workline?.status === 'archived';
             const currentPhase = terminal ? 6 : reportedPhase;
             return {
                 ...workline,
+                priority: ['low', 'normal', 'high', 'critical'].includes(workline?.priority) ? workline.priority : 'normal',
+                priority_revision: Number.isInteger(workline?.priority_revision) ? workline.priority_revision : 0,
                 reported_current_phase: reportedPhase,
                 current_phase: currentPhase,
                 phase_nodes: buildWorklinePhaseNodes(currentPhase, workline?.status),
@@ -55,10 +57,12 @@ export function buildWorklineObservatoryState(snapshot = {}) {
         openWorklineCount: worklines.filter((workline) =>
             workline.status === 'active' || workline.status === 'paused'
         ).length,
-        releaseGoal: snapshot.release_goal || null,
+        releaseGoal: snapshot.release_goal ?? snapshot.releaseGoal ?? null,
+        totalCount: snapshot.total_count ?? snapshot.totalCount ?? worklines.length,
+        filteredCount: snapshot.filtered_count ?? snapshot.filteredCount ?? worklines.length,
         selectedWorklineId: worklines[0]?.id ?? null,
         selectedWorklineIds: [],
-        generatedAt: snapshot.generated_at || '',
+        generatedAt: snapshot.generated_at || snapshot.generatedAt || '',
     };
 }
 

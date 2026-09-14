@@ -53,6 +53,8 @@
 }
 
 .card {
+    --card-base-background: var(--bg_color_text);
+
     border-top: 1px solid var(--card_border_color);
     border-bottom: 1px solid var(--card_border_color);
     border-left: 1px solid var(--card_border_color);
@@ -67,7 +69,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background-color: var(--bg_color_card_frame);
+    background-color: var(--card-base-background);
 }
 
 @keyframes card-entrance-from-sidebar {
@@ -120,14 +122,14 @@
     --card-modern-label-color: color-mix(in srgb, var(--text_color) 72%, var(--card-modern-accent-color) 28%);
     --card-modern-value-color: color-mix(in srgb, var(--text_color) 92%, var(--card-modern-accent-color) 8%);
     --card-modern-left-border-color: hsl(var(--brand-hue) 42% 72%);
-    --card-modern-surface-bg: color-mix(in srgb, var(--bg_color_2) 42%, transparent);
     --card-modern-surface-border: color-mix(in srgb, var(--border_color) 72%, transparent);
     --card-modern-separator-color: var(--card-modern-surface-border);
     border-color: color-mix(in srgb, var(--border_color) 72%, transparent);
     box-shadow:
         0 18px 42px rgb(0 0 0 / 16%),
         0 1px 0 color-mix(in srgb, var(--bg_color_extreme) 58%, transparent) inset;
-    background-color: color-mix(in srgb, var(--bg_color_text) 92%, var(--bg_color_2) 8%);
+    --card-base-background: color-mix(in srgb, var(--bg_color_text) 80%, transparent);
+    backdrop-filter: blur(12px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -142,16 +144,6 @@ body.light-mode .card--modern {
 
 body.dark-mode .card--modern {
     --card-modern-left-border-color: hsl(var(--brand-hue) 42% 32%);
-}
-
-.card--modern .card_content {
-    background:
-        linear-gradient(
-            145deg,
-            color-mix(in srgb, var(--bg_color_text) 94%, var(--card-modern-accent-color) 6%) 0%,
-            var(--bg_color_text) 52%,
-            color-mix(in srgb, var(--bg_color_text) 92%, var(--bg_color_2) 8%) 100%
-        );
 }
 
 .card--modern .card_header {
@@ -192,7 +184,6 @@ body.dark-mode .card--modern {
     border: 1px solid var(--card-modern-surface-border);
     border-left: 3px solid var(--card-modern-left-border-color);
     border-radius: var(--border_radius);
-    background: var(--card-modern-surface-bg);
 }
 
 .card--modern .card_description_container::before {
@@ -255,7 +246,6 @@ body.dark-mode .card--modern {
     border: 1px solid var(--card-modern-surface-border);
     border-left: 3px solid var(--card-modern-left-border-color);
     border-radius: var(--border_radius);
-    background: var(--card-modern-surface-bg);
     padding: 8px;
 }
 
@@ -312,7 +302,6 @@ body.dark-mode .card--modern {
     /* If enabled, this would accent the details panel with a blue left edge. */
     /* border-left: 3px solid var(--card-modern-left-border-color); */
     border-radius: var(--border_radius);
-    background: var(--card-modern-surface-bg);
 }
 
 .card--modern .card_modern_info_panel > :not(:first-child) {
@@ -348,7 +337,6 @@ body.dark-mode .card--modern {
     border: 1px solid var(--card-modern-surface-border);
     border-left: 3px solid var(--card-modern-left-border-color);
     border-radius: var(--border_radius);
-    background: var(--card-modern-surface-bg);
 }
 
 .card--modern .card_modern_info_panel .card_details_modern_tiles {
@@ -448,22 +436,107 @@ body.dark-mode .card--modern {
     white-space: normal;
 }
 
+/* Keywords already provide this boundary; description-only cards need the same single divider. */
+.card[data-card-presentation-view="card"] .card_modern_info_panel > .card_description_container + .card_details_modern_tiles {
+    border-top: 1px solid var(--card-modern-separator-color);
+}
+
+/* The auto-sized parent track would otherwise keep its old intrinsic width below the new cap. */
+.card_container:is([data-card-detail-columns="3"], [data-card-detail-columns="4"]):has(> .card[data-card-presentation-view="card"]) {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* Larger requested grids can use available card width; the default two-column cap stays intact. */
+.card[data-card-presentation-view="card"][data-card-detail-columns="3"] {
+    --card_text_max_width: calc(3 * 240px + 2px);
+    max-width: 1450px;
+}
+
+.card[data-card-presentation-view="card"][data-card-detail-columns="4"] {
+    --card_text_max_width: calc(4 * 240px + 2px);
+    max-width: 1450px;
+}
+
+/* Inline containment must retain the existing text width in the parent auto-sized track. */
+.card[data-card-presentation-view="card"]:not(.card--modern) .card_text_content {
+    container-name: card-details;
+    container-type: inline-size;
+    contain-intrinsic-inline-size: var(--card_text_max_width);
+}
+
+/* Width bands select precomputed column-first layouts; resizing keeps field/link nodes. */
+.card[data-card-presentation-view="card"] .card_modern_info_panel {
+    container-name: card-details;
+    container-type: inline-size;
+    contain-intrinsic-inline-size: var(--card_text_max_width);
+}
+
+.card--modern .card_details_modern_tiles--responsive {
+    grid-template-columns: repeat(var(--card-details-columns-4, 2), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--card-details-rows-4, 1), auto);
+}
+
+.card--modern .card_details_modern_tiles--responsive > .card_detail_tile {
+    display: var(--card-detail-display-4, grid);
+    border-top: var(--card-detail-top-4, 0) solid var(--card-modern-separator-color);
+    border-left: var(--card-detail-left-4, 0) solid var(--card-modern-separator-color);
+}
+
+@container card-details (max-width: 959px) {
+    .card--modern .card_details_modern_tiles--responsive {
+        grid-template-columns: repeat(var(--card-details-columns-3, 2), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--card-details-rows-3, 1), auto);
+    }
+
+    .card--modern .card_details_modern_tiles--responsive > .card_detail_tile {
+        display: var(--card-detail-display-3, grid);
+        border-top: var(--card-detail-top-3, 0) solid var(--card-modern-separator-color);
+        border-left: var(--card-detail-left-3, 0) solid var(--card-modern-separator-color);
+    }
+}
+
+@container card-details (max-width: 719px) {
+    .card--modern .card_details_modern_tiles--responsive {
+        grid-template-columns: repeat(var(--card-details-columns-2, 2), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--card-details-rows-2, 1), auto);
+    }
+
+    .card--modern .card_details_modern_tiles--responsive > .card_detail_tile {
+        display: var(--card-detail-display-2, grid);
+        border-top: var(--card-detail-top-2, 0) solid var(--card-modern-separator-color);
+        border-left: var(--card-detail-left-2, 0) solid var(--card-modern-separator-color);
+    }
+}
+
+@container card-details (max-width: 479px) {
+    .card--modern .card_details_modern_tiles--responsive {
+        grid-template-columns: repeat(var(--card-details-columns-1, 2), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--card-details-rows-1, 1), auto);
+    }
+
+    .card--modern .card_details_modern_tiles--responsive > .card_detail_tile {
+        display: var(--card-detail-display-1, grid);
+        border-top: var(--card-detail-top-1, 0) solid var(--card-modern-separator-color);
+        border-left: var(--card-detail-left-1, 0) solid var(--card-modern-separator-color);
+    }
+}
+
 @container card-list (max-width: 720px) {
-    .card--modern .card_details_modern_tiles {
+    .card--modern .card_details_modern_tiles:not(.card_details_modern_tiles--responsive) {
         grid-auto-flow: row;
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: none;
     }
 
-    .card--modern .card_detail_tile--column-separated {
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--column-separated {
         border-left: 0;
     }
 
-    .card--modern .card_detail_tile--placeholder {
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--placeholder {
         display: none;
     }
 
-    .card--modern .card_detail_tile:not(:first-child) {
+    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile:not(:first-child) {
         border-top: 1px solid var(--card-modern-separator-color);
     }
 
@@ -488,7 +561,6 @@ body.dark-mode .card--modern {
     gap: 0.75rem;
     padding: 15px;
     border-radius: calc(var(--border_radius) - 1px);
-    background-color: var(--bg_color_text);
     --card_media_column_width: var(--card_image_small_width);
     --card_layout_bound_width: calc(
         var(--card_media_column_width) + var(--card_body_gap) + var(--card_text_max_width)
@@ -549,28 +621,27 @@ body.dark-mode .card--modern {
     max-width: 100%;
     height: auto;
     display: block;
-    border-top: 1px solid var(--border_color);
-    border-bottom: 1px solid var(--border_color);
-    border-right: 1px solid var(--border_color);
-    border-left: 1px solid var(--border_color);
+    border: 0;
     border-radius: var(--border_radius_small);
     /* background: color-mix(in srgb, var(--bg_color_extreme) 70%, #777 30%); */
 }
 
-@container card-list (min-width: 1061px) {
-    .card_image > .wrapper {
-        position: relative;
-    }
+.card_image > .wrapper,
+.big_card_image > .wrapper {
+    position: relative;
+}
 
-    .card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        box-sizing: border-box;
-        border: 1px solid var(--border_color);
-        border-radius: inherit;
-        pointer-events: none;
-    }
+/* A single inset frame follows the media box at every width without changing image fit. */
+.card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after,
+.big_card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--border_color);
+    border-radius: inherit;
+    pointer-events: none;
 }
 
 .card_image .wrapper.service_catalog_logo_frame,
@@ -583,7 +654,7 @@ body.dark-mode .card--modern {
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--border_color) 82%, transparent);
+    border: 1px solid var(--border_color);
     border-radius: 14px;
     background:
         linear-gradient(
@@ -591,7 +662,7 @@ body.dark-mode .card--modern {
             color-mix(in srgb, var(--bg_color_2) 72%, transparent) 0%,
             color-mix(in srgb, var(--bg_color_text) 88%, transparent) 100%
         );
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border_color) 78%, transparent);
+    box-shadow: none;
     transition:
         background-color 160ms ease,
         box-shadow 160ms ease;
@@ -1018,7 +1089,7 @@ body.dark-mode .card--modern {
 }
 
 @container card-list (min-width: 650px) {
-    .card_details_single_line {
+    .card_details_single_line:not(.card_details_single_line--responsive) {
         grid-auto-flow: column;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         grid-template-rows: repeat(var(--card-details-single-line-rows, 1), auto);
@@ -1035,18 +1106,46 @@ body.dark-mode .card--modern {
 
 @supports (grid-template-columns: subgrid) {
     @container card-list (min-width: 650px) {
-        .card_details_single_line {
+        .card_details_single_line:not(.card_details_single_line--responsive) {
             grid-template-columns:
                 max-content minmax(0, 1fr)
                 max-content minmax(0, 1fr);
             column-gap: 0;
         }
 
-        .card_details_single_line .card_detail_row_single_line {
+        .card_details_single_line:not(.card_details_single_line--responsive) .card_detail_row_single_line {
             grid-column: span 2;
             grid-template-columns: subgrid;
             column-gap: inherit;
         }
+    }
+}
+
+/* The ordinary Plain card uses the same 240px width bands as Glowy. */
+.card_details_single_line--responsive {
+    grid-auto-flow: column;
+    grid-template-columns: repeat(var(--card-single-columns-4, 2), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--card-single-rows-4, 1), auto);
+}
+
+@container card-details (max-width: 959px) {
+    .card_details_single_line--responsive {
+        grid-template-columns: repeat(var(--card-single-columns-3, 2), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--card-single-rows-3, 1), auto);
+    }
+}
+
+@container card-details (max-width: 719px) {
+    .card_details_single_line--responsive {
+        grid-template-columns: repeat(var(--card-single-columns-2, 2), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--card-single-rows-2, 1), auto);
+    }
+}
+
+@container card-details (max-width: 479px) {
+    .card_details_single_line--responsive {
+        grid-template-columns: repeat(var(--card-single-columns-1, 2), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--card-single-rows-1, 1), auto);
     }
 }
 

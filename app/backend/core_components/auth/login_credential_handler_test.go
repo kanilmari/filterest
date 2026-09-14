@@ -38,6 +38,7 @@ type credentialMockConfig struct {
 	fixedPINHash       string
 	totpSecret         string
 	authGeneration     int64
+	apiOnly            bool
 }
 
 type credentialMockDriver struct{ cfg credentialMockConfig }
@@ -108,8 +109,8 @@ func (c *credentialMockConn) QueryContext(_ context.Context, query string, args 
 			generation = 1
 		}
 		return &credentialMockRows{
-			cols: []string{"password", "login_verification_method", "fixed_pin_hash", "totp_secret", "email", "authentication_generation"},
-			vals: []driver.Value{passwordHash, method, c.cfg.fixedPINHash, c.cfg.totpSecret, "", generation},
+			cols: []string{"password", "login_verification_method", "fixed_pin_hash", "totp_secret", "email", "authentication_generation", "api_only"},
+			vals: []driver.Value{passwordHash, method, c.cfg.fixedPINHash, c.cfg.totpSecret, "", generation, c.cfg.apiOnly},
 		}, nil
 	case strings.Contains(query, "SELECT password"):
 		return &credentialMockRows{cols: []string{"password"}, vals: []driver.Value{c.cfg.hashedPassword}}, nil

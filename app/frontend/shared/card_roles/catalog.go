@@ -14,9 +14,8 @@ import (
 var catalogJSON []byte
 
 type Definition struct {
-	ID             string `json:"id"`
-	InitialShowKey *bool  `json:"initial_show_key"`
-	Numbered       bool   `json:"numbered"`
+	ID       string `json:"id"`
+	Numbered bool   `json:"numbered"`
 }
 type Catalog struct {
 	Roles     []Definition `json:"roles"`
@@ -110,30 +109,4 @@ func validBase(value string) bool {
 		}
 	}
 	return false
-}
-
-// InitialShowKey applies only to explicitly authored new columns. A primary
-// title/description/keywords role takes priority over an additional-information
-// role in combinations, so the same field does not acquire a heading label.
-func InitialShowKey(value string) (bool, bool) {
-	show := false
-	hasDefault := false
-	for _, item := range strings.Split(value, ",") {
-		base := strings.TrimSpace(strings.SplitN(strings.TrimSpace(item), "+", 2)[0])
-		for _, role := range definitions.Roles {
-			matches := base == role.ID
-			if role.Numbered && strings.HasPrefix(base, role.ID) {
-				suffix := strings.TrimPrefix(base, role.ID)
-				matches = suffix == "" || strings.Trim(suffix, "0123456789") == ""
-			}
-			if !matches || role.InitialShowKey == nil {
-				continue
-			}
-			if !*role.InitialShowKey {
-				return false, true
-			}
-			show, hasDefault = true, true
-		}
-	}
-	return show, hasDefault
 }

@@ -41,6 +41,7 @@ export async function endpoint_router(route_name, {
     returnResponse = false,
     suppressAuthRedirect = false,
     suppressErrorToast = false,
+    signal = undefined,
 } = {}) {
     const context = {
         routeName: route_name,
@@ -52,6 +53,7 @@ export async function endpoint_router(route_name, {
         returnResponse,
         suppressAuthRedirect,
         suppressErrorToast,
+        ...(signal === undefined ? {} : { signal }),
     };
 
     const result = await runApiPipeline(context);

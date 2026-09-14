@@ -633,8 +633,33 @@ BEGIN
     END IF;
 END $$;
 
+-- Administrator-only reversible dataset visibility; preserves all existing rights.
+INSERT INTO public.system_functions
+ (name, package, disabled, specific_table_related, url_route_endpoint, ui_only,
+  rate_limit_amount, rate_limit_minutes, creation_spec)
+VALUES ('system_table_tools.AdminDatasetUIVisibilityHandler', 'system_table_tools', FALSE, FALSE,
+ '/api/admin/dataset-ui-visibility', FALSE, 200, 20, 'Administrator dataset UI hide and restore.')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.system_group_table_func_rights
+ (user_group_id, function_id, target_schema_name, target_table_uid, creation_spec)
+SELECT 1, id, 'public', NULL, 'Administrator dataset UI hide and restore.'
+FROM public.system_functions f
+WHERE f.name = 'system_table_tools.AdminDatasetUIVisibilityHandler'
+ AND NOT EXISTS (
+  SELECT 1 FROM public.system_group_table_func_rights rights
+  WHERE rights.user_group_id = 1 AND rights.function_id = f.id
+   AND rights.target_schema_name = 'public' AND rights.target_table_uid IS NULL
+ )
+ON CONFLICT DO NOTHING;
+
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.7.13', 'Filterest generated public bootstrap');
+VALUES ('9.7.15', 'Filterest generated public bootstrap');
+
+-- Administrator coding agents require an explicit production opt-in.
+INSERT INTO public.system_config (key, value_type, boolean_value, text_value, json_value)
+VALUES ('coding_agent_dev_only', 2, TRUE, 'true', '{"value":true}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
 -- Filterest public bootstrap: metadata and multilingual content for the
 -- established mock services, risks, documentation, and tickets workspace.
 
@@ -3373,5 +3398,14 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260908000007_seed_image_picker_copy.sql'),
   ('20260908000008_restore_column_support_view_registration.sql'),
   ('20260908000009_seed_article_editor_copy.sql'),
-  ('20260908000010_restrict_media_registry_and_restore_support_view.sql')
+  ('20260908000010_restrict_media_registry_and_restore_support_view.sql'),
+  ('20260911000001_add_dataset_ui_visibility.sql'),
+  ('20260912000002_add_new_column_multilingual_default.sql'),
+  ('20260913000001_inherit_site_card_style.sql'),
+  ('20260914000001_record_admin_agent_and_dataset_presentation_release.sql'),
+  ('20260914000002_add_dataset_card_detail_columns.sql'),
+  ('20260914000003_add_coding_agent_dev_only.sql'),
+  ('20260914000004_add_automation_api_only.sql'),
+  ('20260914000005_inherit_card_field_labels.sql'),
+  ('20260914000006_add_article_section_initial_open.sql')
 ON CONFLICT (filename) DO NOTHING;

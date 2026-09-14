@@ -17,22 +17,34 @@ export async function* readDatasetSearchResponse(tableName, query, options, isCu
     if (options.useLocation && typeof options.gps?.lat === "number" && typeof options.gps?.lon === "number") {
         url_params += "&gps=" + encodeURIComponent(options.gps.lat + "," + options.gps.lon);
     }
+    const { signal } = options;
+    if (signal?.aborted) return;
     const response = await endpoint_router("getIntelligentResultsStream", {
         url_params, headers: { Accept: "application/x-ndjson" }, stream: true,
+        ...(signal === undefined ? {} : { signal }),
+        ...(options.suppressAuthRedirect ? { suppressAuthRedirect: true } : {}),
+        ...(options.suppressErrorToast ? { suppressErrorToast: true } : {}),
     });
     const reader = response.body.getReader();
     let finished = false;
+    let cancellation = null;
+    const cancel = () => {
+        cancellation ||= Promise.resolve(reader.cancel()).catch(() => undefined);
+        return cancellation;
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) void cancel();
     const decoder = new TextDecoder();
     let buffer = "";
     try {
-        while (isCurrent()) {
+        while (isCurrent() && !signal?.aborted) {
             const { value, done } = await reader.read();
-            if (!isCurrent()) return;
+            if (!isCurrent() || signal?.aborted) return;
             buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
             buffer = done ? "" : lines.pop();
             for (const line of lines) {
-                if (!isCurrent()) return;
+                if (!isCurrent() || signal?.aborted) return;
                 if (!line.trim()) continue;
                 let packet;
                 try { packet = JSON.parse(line); }
@@ -42,7 +54,8 @@ export async function* readDatasetSearchResponse(tableName, query, options, isCu
             if (done) { finished = true; return; }
         }
     } finally {
-        if (!finished) await reader.cancel();
+        signal?.removeEventListener("abort", cancel);
+        if (!finished) await cancel();
         reader.releaseLock?.();
     }
 }

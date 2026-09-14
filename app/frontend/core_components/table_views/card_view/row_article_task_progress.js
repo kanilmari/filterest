@@ -100,7 +100,7 @@ function buildTaskProgressContent(payload = {}) {
  * @param {number|string} rowId
  * @returns {Promise<HTMLElement|null>}
  */
-export async function buildRowArticleTaskProgressSection(tableName, rowId) {
+export async function buildRowArticleTaskProgressSection(tableName, rowId, { startOpen = true } = {}) {
     const normalizedTableName = String(tableName || "").trim();
     const normalizedRowId = String(rowId ?? "").trim();
     if (normalizedTableName !== TASK_PROGRESS_DATASET || !normalizedRowId) {
@@ -128,7 +128,7 @@ export async function buildRowArticleTaskProgressSection(tableName, rowId) {
         titleText: "Progress",
         iconPath: TASK_PROGRESS_ICON_PATH,
         contentElement,
-        startOpen: true,
+        startOpen,
         sectionClassNames: "row_article_task_progress_section",
     });
 }

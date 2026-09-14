@@ -1,0 +1,65 @@
+/* supplemental_dataset_results.css
+ * Styles compact read-only matches after the current dataset search.
+ * Uses the application's explicit theme tokens in all result surfaces.
+ * Keeps links readable and the groups within their own content width.
+ */
+
+.supplemental-dataset-results {
+  position: relative;
+  clear: both;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 1rem;
+  color: var(--text_color);
+}
+
+.supplemental-dataset-results[hidden],
+.supplemental-dataset-group[hidden] {
+  display: none;
+}
+
+.supplemental-dataset-results h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+.supplemental-dataset-group {
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--border_color);
+}
+
+.supplemental-dataset-group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.supplemental-dataset-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.supplemental-dataset-group li {
+  margin-block: 0.6rem;
+  overflow-wrap: anywhere;
+}
+
+.supplemental-dataset-group p {
+  margin: 0.25rem 0 0;
+}
+
+.supplemental-dataset-group a {
+  color: var(--link_color, var(--primary_color));
+  text-decoration: underline;
+}
+
+.supplemental-dataset-group a:focus-visible {
+  outline: 2px solid var(--primary_color);
+  outline-offset: 3px;
+}
+
+.supplemental-dataset-show-all {
+  display: inline-block;
+  margin-top: 0.25rem;
+}

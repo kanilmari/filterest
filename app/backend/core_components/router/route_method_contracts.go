@@ -15,6 +15,8 @@ type RouteMethodContract struct {
 }
 
 var explicitRouteMethodContracts = map[string]RouteMethodContract{
+	"system_table_tools.GetArticleSectionDefaultsHandler":  {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
+	"system_table_tools.SaveArticleSectionDefaultsHandler": {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	// Stable auth bootstrap / permission cache routes.
 	"router.healthHandler":                     {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"router.systemHealthHandler":               {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
@@ -39,6 +41,7 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"auth.UserPermissionsHandler":              {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 
 	// Stable admin maintenance routes.
+	"dtt_1_row_read.FilterbarAICodexQueryHandler":            {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.ListFKCacheTriggersHandler":          {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.RefreshFKCacheHandler":               {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"dtt_system_table_folders.HandleSetCurrentProjectFolder": {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},

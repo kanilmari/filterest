@@ -38,7 +38,7 @@ describe('site card image selector', () => {
         initial.dataset_cover_theme.shared.card_image_width = 420;
         const save = vi.fn(async value => value);
         const control = await mount(initial, save);
-        const select = control.panel.querySelector('select');
+        const select = control.panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-presentation"]');
         expect(select.value).toBe('cover');
         select.value = 'contain_blur';
         select.dispatchEvent(new Event('change'));
@@ -67,7 +67,7 @@ describe('site card image selector', () => {
         delete initial.dataset_cover_theme.shared.card_image_presentation;
         initial.dataset_cover_theme.shared.card_image_width = 440;
         const control = await mount(initial);
-        expect(control.panel.querySelector('select').value).toBe('contain');
+        expect(control.panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-presentation"]').value).toBe('contain');
         expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('440px');
     });
     it('applies the saved mode to visitors without exposing an editor', async () => {

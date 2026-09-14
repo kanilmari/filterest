@@ -6,6 +6,10 @@ its source and development tools.
 - [The main README](../../README.md) describes installation, development commands,
   and the portable `app/` plus operator-directory layout.
 - [The Constitution](constitution/constitution.md) defines the product principles.
+- [Developer Guide](instructions_and_documentation/DEV_GUIDE.md) is the shared
+  handbook for coding, testing, source boundaries and local verification.
+- [Filterest Dictionary](instructions_and_documentation/Dictionary.md) defines
+  shared English product terms and interface components.
 - [Contribution guidance](../../CONTRIBUTING.md) explains how to propose changes.
 - [The project model](instructions_and_documentation/Filterest_Project_Model.md)
   distinguishes current project capabilities from proposed future architecture.

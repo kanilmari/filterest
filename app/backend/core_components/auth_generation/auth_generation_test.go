@@ -99,9 +99,10 @@ func TestClearIdentityLeavesUnrelatedSessionValues(t *testing.T) {
 	session.Values["user_role"] = "admin"
 	session.Values[SessionKey] = int64(3)
 	session.Values["csrf_token"] = "keep"
+	session.Values[AutomationSessionKey] = true
 
 	ClearIdentity(session)
-	for _, key := range []string{"authenticated", "user_id", "username", "user_role", SessionKey} {
+	for _, key := range []string{"authenticated", "user_id", "username", "user_role", SessionKey, AutomationSessionKey} {
 		if _, exists := session.Values[key]; exists {
 			t.Fatalf("identity key %q was not cleared", key)
 		}

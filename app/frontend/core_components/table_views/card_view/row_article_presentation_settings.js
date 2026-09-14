@@ -3,24 +3,11 @@
 // Keeps one cached policy so ordinary cards and article-side summaries stay consistent.
 // Falls back safely when the public setting is temporarily unavailable.
 
-import { fetchSitePresentationSettings } from "../../endpoints/stable_endpoint_router.js";
+import { getSitePresentationState, resetSitePresentationStatesForTests } from "../../admin_tools/site_presentation_state.js";
 import {
     normalizeTimestampDisplayMode,
     TIMESTAMP_DISPLAY_MODE_DATE_TIME,
 } from "../timestamp_display_formatter.js";
-
-let presentationSettingsPromise = null;
-
-async function loadSitePresentationSettings() {
-    if (!presentationSettingsPromise) {
-        presentationSettingsPromise = fetchSitePresentationSettings().catch((error) => {
-            presentationSettingsPromise = null;
-            console.warn("Unable to load site presentation settings; using defaults", error);
-            return {};
-        });
-    }
-    return presentationSettingsPromise;
-}
 
 /**
  * Resolves the site-wide card and article timestamp presentation policy.
@@ -28,7 +15,7 @@ async function loadSitePresentationSettings() {
  * Keeps the legacy row-article setting key as the shared compatibility contract.
  */
 export async function resolveSiteTimestampDisplayOptions(locale = "") {
-    const settings = await loadSitePresentationSettings();
+    const settings = await getSitePresentationState().loadSettings();
     return {
         displayMode: normalizeTimestampDisplayMode(
             settings?.row_article_timestamp_display_mode
@@ -43,5 +30,5 @@ export async function resolveRowArticleTimestampDisplayOptions(locale = "") {
 }
 
 export function resetRowArticlePresentationSettingsCacheForTests() {
-    presentationSettingsPromise = null;
+    resetSitePresentationStatesForTests();
 }

@@ -44,6 +44,7 @@ type loginVerificationRecord struct {
 	TOTPSecret               string
 	Email                    string
 	AuthenticationGeneration int64
+	APIOnly                  bool
 }
 
 func parseLoginVerificationMethod(value string) (loginVerificationMethod, error) {
@@ -65,7 +66,8 @@ func loadLoginVerificationRecord(userID int) (loginVerificationRecord, error) {
 		       COALESCE(fixed_pin_hash, ''),
 		       COALESCE(totp_secret, ''),
 		       email,
-		       authentication_generation
+		       authentication_generation,
+		       api_only
 		FROM restricted.users_restricted
 		WHERE id = $1
 	`, userID).Scan(
@@ -75,6 +77,7 @@ func loadLoginVerificationRecord(userID int) (loginVerificationRecord, error) {
 		&record.TOTPSecret,
 		&record.Email,
 		&record.AuthenticationGeneration,
+		&record.APIOnly,
 	)
 	if err != nil {
 		return record, err

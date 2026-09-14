@@ -92,13 +92,14 @@ export interface CardVisibilityColumn {
     hide_everywhere_lock_reason: string;
     client_delivery_mode: string;
     client_delivery_mode_locked: boolean;
-    label_value_layout?: string;
+    label_value_layout: string | null;
     card_element: string;
     card_detail_label_mode: string;
     card_detail_icon_svg: string;
     card_detail_icon_key: string;
     card_detail_capitalization: boolean;
     show_key_on_card: boolean;
+    show_key_on_card_override: boolean | null;
     show_value_on_card: boolean;
     hide_everywhere: boolean;
     hide_on_small_card: boolean;
@@ -111,6 +112,7 @@ export interface CardVisibilityColumn {
 export interface CardVisibilityResponse {
     table_name: string;
     card_details_layout: string;
-    card_style_variant: string;
+    card_style_variant: string | null;
+    card_detail_columns: number | null;
     columns: CardVisibilityColumn[];
 }

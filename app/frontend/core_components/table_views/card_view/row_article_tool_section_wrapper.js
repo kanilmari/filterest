@@ -43,9 +43,10 @@ export function wrapRowArticleToolSection({
     });
 }
 
-export function wrapRowArticleImageGallerySection(galleryElement) {
+export function wrapRowArticleImageGallerySection(galleryElement, { startOpen = true } = {}) {
     return wrapRowArticleToolSection({
         contentElement: galleryElement,
+        startOpen,
         titleLangKey: "row_article_section_images",
         titleText: "Images",
         iconPath: VISIBLE_FIELDS_ICON_PATH,
@@ -53,9 +54,10 @@ export function wrapRowArticleImageGallerySection(galleryElement) {
     });
 }
 
-export function wrapRowArticleAttachmentSection(attachmentElement) {
+export function wrapRowArticleAttachmentSection(attachmentElement, { startOpen = true } = {}) {
     return wrapRowArticleToolSection({
         contentElement: attachmentElement,
+        startOpen,
         titleLangKey: "row_article_section_attachments",
         titleText: "Attachments",
         iconPath: TABLE_TOOLS_ICON_PATH,
@@ -63,9 +65,10 @@ export function wrapRowArticleAttachmentSection(attachmentElement) {
     });
 }
 
-export function wrapRowArticleRelatedRowsSection(relatedRowsElement) {
+export function wrapRowArticleRelatedRowsSection(relatedRowsElement, { startOpen = true } = {}) {
     return wrapRowArticleToolSection({
         contentElement: relatedRowsElement,
+        startOpen,
         titleLangKey: "row_article_section_related_rows",
         titleText: "Related rows",
         iconPath: TABLE_TOOLS_ICON_PATH,

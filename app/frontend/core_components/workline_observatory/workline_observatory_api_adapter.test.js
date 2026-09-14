@@ -13,7 +13,7 @@ const { endpointRouterMock, registerEndpointRouteMock } = vi.hoisted(() => ({
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: endpointRouterMock }));
 vi.mock('../pipeline/api_pipeline.js', () => ({ registerEndpointRoute: registerEndpointRouteMock }));
 
-import { fetchWorklineObservatoryReportHistory } from './workline_observatory_api_adapter.js';
+import { applyWorklinePriorityAction, fetchWorklineObservatoryBoard, fetchWorklineObservatoryReportHistory } from './workline_observatory_api_adapter.js';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -32,5 +32,19 @@ describe('workline observatory API adapter', () => {
         endpointRouterMock.mockResolvedValue({ reports: null });
 
         await expect(fetchWorklineObservatoryReportHistory(34)).resolves.toEqual([]);
+    });
+    test('serializes only normalized shared board query keys', async () => {
+        await fetchWorklineObservatoryBoard({ search: 'A & B', priority: 'high,critical', status_exclude: 'closed', current_phase: '0,3', sort_column: 'priority', sort_order: 'DESC', workline_id: 99, unknown: 'ignored' });
+        const options = endpointRouterMock.mock.calls[0][1];
+        const params = new URLSearchParams(options.url_params);
+        expect(Object.fromEntries(params)).toEqual({ search: 'A & B', priority: 'high,critical', status_exclude: 'closed', current_phase: '0,3', sort_column: 'priority', sort_order: 'DESC' });
+        expect(options.suppressAuthRedirect).toBe(true);
+    });
+
+    test('sends priority decisions to the independent atomic endpoint', async () => {
+        await applyWorklinePriorityAction([{ id: 9, expected_revision: 2 }], 'critical');
+        expect(endpointRouterMock).toHaveBeenCalledWith('worklineObservatoryPriorityActions', {
+            method: 'POST', body_data: { worklines: [{ id: 9, expected_revision: 2 }], target_priority: 'critical' }, suppressAuthRedirect: true,
+        });
     });
 });

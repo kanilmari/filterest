@@ -3,6 +3,7 @@
 // Bridges navigation events and view/dataset state via the declarative navigation pipeline.
 // Exists to serve as the single entry point for all in-app navigation so every path runs the same pipeline stages.
 
+import { invalidateCardArticleReturn, getCardArticleReturnToken } from "./card_article_return_state.js";
 import { refreshTableUnified } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { applyViewStyling } from '../../table_views/view_selector_printer.js';
 import { setSelectedDataset, getSelectedDataset } from '../../state_stores/dataset_selection_saver.js';
@@ -26,12 +27,13 @@ import { ensure_private_custom_views_loaded } from '../admin_and_user_tools/cust
 import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
 
 export async function handle_all_navigation(name, customViews, options = {}) {
-    const { skipUrlUpdate = false, forceReload = false } = options;
+    const { skipUrlUpdate = false, forceReload = false, replacementParams, restoreMountedView, preserveCardReturn, isCurrentNavigation } = options;
     await ensure_private_custom_views_loaded();
+    if (isCurrentNavigation?.() === false) return { abort: true, reason: "stale_navigation" };
     const arrayOfViews = customViews || [];
 
     // 1) Selvitetään, onko kyseessä custom_view vai normaali taulu
-    const { loadFunction, containerId, isCustomView } = get_load_info(name, arrayOfViews);
+    const { loadFunction, containerId, isCustomView } = get_load_info(name, arrayOfViews, { preserveCardReturn });
 
     // 2) Etsitään ryhmä navigaationapeille
     let groupName = null;
@@ -41,13 +43,15 @@ export async function handle_all_navigation(name, customViews, options = {}) {
     }
 
     useStorageParams();
-    const params = getParams(name);
+    const params = replacementParams === undefined ? getParams(name) : { ...replacementParams };
     const prefix = groupName === 'admin_tools' ? '/admin/' : DATASET_PREFIX;
 
     // 3) Pipeline: dirtyCheck → urlUpdate → viewRender
     // _performNavigationCore is injected to avoid circular import with navigation_pipeline.js
     const context = {
         name,
+        canRestoreMountedView: () => restoreMountedView?.isCurrent() === true,
+        isCurrentNavigation,
         containerId,
         loadFunction,
         groupName,
@@ -61,18 +65,22 @@ export async function handle_all_navigation(name, customViews, options = {}) {
             targetLoadFunction,
             targetGroupName,
             targetIsCustomView
-        ) => _performNavigationCore(
+        ) => isCurrentNavigation?.() === false
+            ? { abort: true, reason: "stale_navigation" }
+            : _performNavigationCore(
             targetName,
             targetContainerId,
             targetLoadFunction,
             targetGroupName,
             targetIsCustomView,
-            forceReload
+            forceReload,
+            restoreMountedView,
+            preserveCardReturn
         ),
     };
 
     try {
-        await runNavigationPipeline(context);
+        return await runNavigationPipeline(context);
     } finally {
         // 4) Palautetaan URL-parametrien käyttö (runs even if pipeline aborts)
         useUrlParams();
@@ -99,7 +107,9 @@ async function _performNavigationCore(
     load_function,
     groupName,
     isCustomView,
-    forceReload = false
+    forceReload = false,
+    restoreMountedView = null,
+    preserveCardReturn = null
 ) {
     // Poistetaan vanhan aktiivisen napin korostus (sekä nav- että admin-puusta)
     const old_active_button = document.querySelector('.general_button_nav.active, .general_button_admin.active');
@@ -128,12 +138,16 @@ async function _performNavigationCore(
     // Cleanup: close any active chat SSE connections for the previous dataset
     const previousDataset = getSelectedDataset();
     if (previousDataset && previousDataset !== data_lang_key) {
+        invalidateCardArticleReturn(previousDataset);
         destroy_chat(previousDataset);
     }
 
+    const restoredMountedView = restoreMountedView?.isCurrent() === true
+        && restoreMountedView.commit() === true;
     // Cleanup: call __cleanupListeners on containers that define it (e.g. manage_permissions)
     const all_containers = document.querySelectorAll('#tabs_container > .content_div');
     all_containers.forEach(container_element => {
+        if (restoredMountedView && container_element.id === container_id) return;
         if (
             !forceReload
             && previousDataset !== data_lang_key
@@ -158,8 +172,12 @@ async function _performNavigationCore(
         await load_function();
         container_element = document.getElementById(container_id);
         contentWasReloaded = true;
-    } else if (forceReload || !container_element.hasChildNodes()) {
-        clearDatasetScrollState(container_element);
+    } else if (!restoredMountedView && (forceReload || !container_element.hasChildNodes())) {
+        // The article reload preserves this exact card host and its return
+        // viewport. Ordinary reloads and invalidated tokens still clear it.
+        if (!preserveCardReturn || getCardArticleReturnToken(data_lang_key) !== preserveCardReturn) {
+            clearDatasetScrollState(container_element);
+        }
         await load_function();
         contentWasReloaded = true;
     }
@@ -239,7 +257,7 @@ function _ensureAdminTreeBranchOpen(buttonEl) {
     }
 }
 
-export function get_load_info(name, custom_views) {
+export function get_load_info(name, custom_views, refreshOptions = {}) {
     const custom_view = custom_views.find(view => view.name === name);
     if (custom_view) {
         return {
@@ -250,7 +268,7 @@ export function get_load_info(name, custom_views) {
     } else {
         return {
             loadFunction: () => {
-                return refreshTableUnified(name);
+                return refreshTableUnified(name, refreshOptions);
             },
             containerId: `${name}_container`,
             isCustomView: false

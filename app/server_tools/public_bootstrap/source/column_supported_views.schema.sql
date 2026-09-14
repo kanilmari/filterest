@@ -3,6 +3,26 @@
 -- Mirrors the corresponding incremental migration without importing runtime data.
 -- Keeps clean installs and upgraded databases on the same feature contract.
 
+-- Shared runtime policy for raw NULL label visibility; explicit overrides always win.
+CREATE OR REPLACE FUNCTION public.resolve_card_label_visibility(label_override BOOLEAN, card_role TEXT)
+RETURNS BOOLEAN
+LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+AS $policy$
+    SELECT CASE
+        WHEN label_override IS NOT NULL THEN label_override
+        ELSE COALESCE((
+            SELECT CASE
+                WHEN bool_or(token ~ '^(header|description[0-9]*|keywords)([[:space:]]*\+[[:space:]]*lang[-_]key)?$') THEN FALSE
+                ELSE bool_or(token ~ '^details(_link)?[0-9]*([[:space:]]*\+[[:space:]]*lang[-_]key)?$')
+            END
+            FROM (
+                SELECT regexp_replace(value, '^[[:space:]]+|[[:space:]]+$', '', 'g') AS token
+                FROM unnest(string_to_array(COALESCE(card_role, ''), ',')) AS token_values(value)
+            ) AS roles
+        ), FALSE)
+    END;
+$policy$;
+
 CREATE OR REPLACE VIEW public.system_column_supported_views AS
 SELECT
     details.column_uid::BIGINT * 2147483648::BIGINT + views.id::BIGINT AS id,
@@ -41,7 +61,7 @@ SELECT
     COALESCE(details.hide_on_small_card, FALSE) AS hide_on_small_card,
     COALESCE(details.hide_in_filter_panel, FALSE) AS hide_in_filter_panel,
     COALESCE(details.card_element, '') AS card_element,
-    COALESCE(details.show_key_on_card, TRUE) AS show_key_on_card,
+    public.resolve_card_label_visibility(details.show_key_on_card, details.card_element) AS show_key_on_card,
     COALESCE(details.show_value_on_card, TRUE) AS show_value_on_card
 FROM public.system_column_details AS details
 JOIN public.system_db_tables AS tables

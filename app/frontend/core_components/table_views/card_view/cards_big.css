@@ -12,7 +12,8 @@
     min-height: 0;
     height: 100%;
     padding: 1rem;
-    border: 1px solid var(--border_color);
+    border-inline: 1px solid var(--border_color);
+    border-block: 0;
     background-color: var(--bg_color_extreme);
     position: relative;
     margin: 0;

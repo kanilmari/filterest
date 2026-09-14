@@ -87,6 +87,9 @@ var filterbarAICodexWorkingDir = os.Getwd
 
 // FilterbarAICodexQueryHandler lets explicit DEV-mode browser chats ask local Codex for code-aware help.
 func FilterbarAICodexQueryHandler(w http.ResponseWriter, r *http.Request) {
+	if handleConfiguredCodingAgent(w, r) {
+		return
+	}
 	if strings.TrimSpace(os.Getenv("ENVIRONMENT_TYPE")) != "dev" {
 		httpresponse.RespondWithError(w, http.StatusNotFound, "Codex chat is available only in DEV mode")
 		return
@@ -532,6 +535,9 @@ func buildFilterbarAICodexExecArgs(commandArgs []string, workingDir string, outp
 		"--output-last-message", outputPath,
 		"-",
 	)
+	if model := strings.TrimSpace(os.Getenv("FILTERBAR_AI_CODEX_MODEL")); model != "" {
+		args = append(args[:len(args)-1], "--model", model, "-")
+	}
 	return args
 }
 

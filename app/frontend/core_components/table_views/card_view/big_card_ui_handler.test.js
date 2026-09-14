@@ -24,6 +24,7 @@ import {
     createRowArticleLinkTwoLine,
     createRowArticleNavigableElement,
     dispatchCardArticleToggle,
+    closeBigCard,
 } from "./big_card_ui_handler.js";
 
 describe("big_card_ui_handler label icons", () => {
@@ -259,4 +260,20 @@ describe("article shared field layout", () => {
             expect(hidden.textContent).toBe("Visible value");
         },
     );
+    test("mounted history return can close article state without restoring unrelated window scroll", () => {
+        const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+        const wrapper = document.createElement("div");
+        wrapper.dataset.viewKey = "article_view";
+        wrapper.className = "card_view_wrapper big-card-open";
+        wrapper.innerHTML = '<div class="card_container"><div class="card small-card"></div></div><article class="active_row_article"></article>';
+        document.body.appendChild(wrapper);
+        const cards = wrapper.querySelector(".card_container");
+        closeBigCard(wrapper, cards, wrapper.querySelector("article"), null, "events", true, { restoreScroll: false });
+        expect(wrapper.classList.contains("big-card-open")).toBe(false);
+        expect(wrapper.querySelector("article")).toBeNull();
+        expect(cards.firstChild.classList.contains("small-card")).toBe(false);
+        expect(scroll).not.toHaveBeenCalled();
+        wrapper.remove(); scroll.mockRestore();
+    });
+
 });

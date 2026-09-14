@@ -14,7 +14,7 @@ import (
 )
 
 const boardWorklinesQuery = `
-SELECT w.id, w.title, w.status, w.tags, w.updated,
+SELECT w.id, w.title, w.status, w.tags, w.updated, w.priority, w.priority_revision,
        w.status_revision, w.status_changed_by,
        COALESCE(status_user.username, ''), w.status_changed_at, w.status_change_source,
        COALESCE(latest.id, 0), COALESCE(latest.title, ''),
@@ -62,7 +62,11 @@ ORDER BY r.created DESC, r.id DESC
 LIMIT 100`
 
 func loadBoardSnapshot(ctx context.Context, database *sql.DB) (BoardSnapshot, error) {
-	snapshot := BoardSnapshot{GeneratedAt: time.Now().UTC(), Worklines: []BoardWorkline{}}
+	snapshot := BoardSnapshot{
+		GeneratedAt: time.Now().UTC(), Worklines: []BoardWorkline{},
+		DatasetSurfaceProviderKey:    "workline-observatory",
+		DatasetSurfaceCapabilityKeys: []string{"workline-board-query"},
+	}
 	rows, err := database.QueryContext(ctx, boardWorklinesQuery)
 	if err != nil {
 		return snapshot, fmt.Errorf("query worklines: %w", err)
@@ -106,7 +110,7 @@ func scanBoardWorkline(scanner interface{ Scan(...interface{}) error }) (BoardWo
 	var reportCreated sql.NullTime
 	var statusChangedBy sql.NullInt64
 	if err := scanner.Scan(
-		&workline.ID, &workline.Title, &workline.Status, pq.Array(&workline.Tags), &workline.UpdatedAt,
+		&workline.ID, &workline.Title, &workline.Status, pq.Array(&workline.Tags), &workline.UpdatedAt, &workline.Priority, &workline.PriorityRevision,
 		&workline.StatusRevision, &statusChangedBy,
 		&workline.LatestStatusChange.ChangedByUsername, &workline.LatestStatusChange.ChangedAt,
 		&workline.LatestStatusChange.Source,

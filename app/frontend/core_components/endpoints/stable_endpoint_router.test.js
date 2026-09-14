@@ -306,6 +306,17 @@ describe('stable_endpoint_router', () => {
         });
     });
 
+    test('dataset palette posts a narrow presentation scope without replaying column metadata', async () => {
+        const payload = { table_name: 'orders', card_style_variant: null, card_detail_columns: 4 };
+        endpointRouterMock.mockResolvedValue(payload);
+        const mod = await loadModule();
+        await expect(mod.saveDatasetCardPresentation(payload)).resolves.toEqual(payload);
+        expect(endpointRouterMock).toHaveBeenCalledExactlyOnceWith('updateCardVisibility', {
+            method: 'POST', body_data: { ...payload, scope: 'dataset_presentation' },
+        });
+        expect(payload).not.toHaveProperty('scope');
+    });
+
     test('symbol registry wrappers use the same protected route for list and assignment', async () => {
         endpointRouterMock
             .mockResolvedValueOnce({ symbols: [{ key: 'table' }] })
@@ -420,4 +431,19 @@ describe('stable_endpoint_router', () => {
         ).rejects.toThrow('Route "fetchAuthModes" only allows method(s): GET');
         expect(endpointRouterMock).not.toHaveBeenCalled();
     });
+    test('article initial-state wrappers keep dataset and presentation separate from field-set group scopes', async () => {
+        endpointRouterMock.mockResolvedValue({ dataset: 'ordinary table', presentation_key: 'classic' });
+        const mod = await loadModule();
+        await mod.getArticleSectionDefaults('ordinary table', 'classic');
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('getArticleSectionDefaults', {
+            method: 'GET', url_params: '?dataset=ordinary+table&presentation_key=classic',
+        });
+        const patch = { dataset: 'ordinary table', presentation_key: 'image_first', initial_open: { details: false } };
+        await mod.saveArticleSectionDefaults(patch);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('saveArticleSectionDefaults', { method: 'POST', body_data: patch });
+        const reset = { dataset: 'ordinary table', presentation_key: 'classic', reset_to_defaults: true };
+        await mod.saveArticleSectionDefaults(reset);
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('saveArticleSectionDefaults', { method: 'POST', body_data: reset });
+    });
+
 });

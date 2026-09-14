@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 // query_params.js has import-time side effects (window.location, localStorage, popstate).
 // Only the pure parse/build helpers are safe to unit test.
 // We import the module dynamically after ensuring jsdom globals are ready.
@@ -152,7 +152,8 @@ describe('updateURL', () => {
 
     expect(window.location.pathname).toBe('/dev_agent_tasks/853-existing-title');
     expect(window.location.search).toBe('?search=853&view=article');
-    expect(window.history.state).toEqual(state);
+    expect(window.history.state).toMatchObject(state);
+    expect(window.history.state.__filterestEntryId).toEqual(expect.any(String));
   });
 });
 
@@ -164,4 +165,21 @@ describe('parseTableQueryString ↔ buildTableQueryString roundtrip', () => {
     const reparsed = parseTableQueryString(rebuilt);
     expect(reparsed).toEqual(parsed);
   });
+});
+
+
+test.each(["card", "table"])("records the actual no-view %s origin before a selector changes URL", view => {
+  localStorage.clear();
+  history.replaceState({ __filterestEntryId: "origin", otherOwner: 4 }, "", "/service_catalog?sort_column=__newest");
+  document.body.innerHTML = `<div id="app_service_catalog_container"><div class="tab_parts_container" data-view="${view}"><div class="scrollable_content" style="display:block"><p>Rows</p></div></div></div>`;
+  // The selector already changed the preference; only the rendered origin is reliable.
+  localStorage.setItem("app_service_catalog_view", "calendar");
+  let origin;
+  const originalPush = history.pushState.bind(history);
+  const push = vi.spyOn(history, "pushState").mockImplementation((...args) => { origin = structuredClone(history.state); originalPush(...args); });
+  try {
+    updateURL("app_service_catalog", { sort_column: "__newest", view: "calendar" });
+    expect(origin).toMatchObject({ __filterestEntryId: "origin", otherOwner: 4, __filterestDatasetView: { dataset: "app_service_catalog", path: "/service_catalog", view } });
+    expect(history.state.__filterestDatasetView).toBeUndefined();
+  } finally { push.mockRestore(); document.body.innerHTML = ""; }
 });

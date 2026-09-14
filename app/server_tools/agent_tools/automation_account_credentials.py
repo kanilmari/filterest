@@ -305,6 +305,7 @@ def _validate_ready_record(record: dict[str, object]) -> AutomationCredentialRes
         and record.get("ready") is True
         and record.get("username") == AUTOMATION_ACCOUNT_USERNAME
         and record.get("enabled") is True
+        and record.get("api_only") is True
         and record.get("admin_group_member") is True
         and record.get("admin_access_allowed") is True
         and record.get("privileged") is False
@@ -358,12 +359,13 @@ def ensure_automation_credentials(
     manager_token = load_manager_token(manager_environment_file)
     credentials_file = _require_absolute_path(credentials_file, "automation credential file")
 
-    if credentials_file.exists() and not rotate:
+    if credentials_file.exists():
         existing = load_automation_credentials(credentials_file)
         if existing["FILTEREST_API_BASE_URL"].rstrip("/") != api_base_url:
             raise AutomationCredentialError("automation credential file belongs to another API target")
         if existing["FILTEREST_API_USERNAME"] != AUTOMATION_ACCOUNT_USERNAME:
             raise AutomationCredentialError("automation credential file belongs to another username")
+    if credentials_file.exists() and not rotate:
         _verify_api_login(api_base_url, existing["FILTEREST_API_PASSWORD"])
         readback = _validate_ready_record(
             _manager_request(manager_base_url, manager_token, "GET")
@@ -403,9 +405,55 @@ def ensure_automation_credentials(
     )
 
 
+def _validate_revoked_record(record: dict[str, object]) -> AutomationCredentialResult:
+    user_id = record.get("user_id")
+    generation = record.get("authentication_generation")
+    if (
+        record.get("exists") is not True or record.get("ready") is not False
+        or record.get("enabled") is not False or record.get("api_only") is not True
+        or record.get("username") != AUTOMATION_ACCOUNT_USERNAME
+        or type(user_id) is not int or user_id <= 1
+        or type(generation) is not int or generation < 1
+    ):
+        raise AutomationCredentialError("automation account readback did not prove revocation")
+    return AutomationCredentialResult(
+        action="revoked", base_url="", username=AUTOMATION_ACCOUNT_USERNAME,
+        user_id=user_id, authentication_generation=generation,
+    )
+
+
+def revoke_automation_credentials(
+    *, api_base_url: str, manager_base_url: str,
+    manager_environment_file: Path, credentials_file: Path,
+) -> AutomationCredentialResult:
+    """Disable the dedicated account without replacing or deleting its local secret."""
+    api_base_url = _validate_origin(api_base_url, "API base URL")
+    manager_base_url = _validate_origin(manager_base_url, "manager base URL")
+    existing = load_automation_credentials(credentials_file)
+    if existing["FILTEREST_API_BASE_URL"].rstrip("/") != api_base_url:
+        raise AutomationCredentialError("automation credential file belongs to another API target")
+    if existing["FILTEREST_API_USERNAME"] != AUTOMATION_ACCOUNT_USERNAME:
+        raise AutomationCredentialError("automation credential file belongs to another username")
+    manager_token = load_manager_token(manager_environment_file)
+    revoked = _validate_revoked_record(
+        _manager_request(manager_base_url, manager_token, "POST", payload={"action": "revoke"})
+    )
+    readback = _validate_revoked_record(
+        _manager_request(manager_base_url, manager_token, "GET")
+    )
+    if (revoked.user_id, revoked.authentication_generation) != (
+        readback.user_id, readback.authentication_generation
+    ):
+        raise AutomationCredentialError("automation account changed before revocation readback completed")
+    return AutomationCredentialResult(
+        action="revoked", base_url=api_base_url, username=readback.username,
+        user_id=readback.user_id, authentication_generation=readback.authentication_generation,
+    )
+
+
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Provision or verify the fixed Filterest API automation administrator.",
+        description="Provision, verify, rotate, or revoke the fixed Filterest API automation administrator.",
     )
     parser.add_argument("--api-base-url", required=True)
     parser.add_argument(
@@ -414,10 +462,15 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--manager-environment-file", required=True, type=Path)
     parser.add_argument("--credentials-file", required=True, type=Path)
-    parser.add_argument(
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument(
         "--rotate",
         action="store_true",
         help="replace an existing automation password after verified provisioning",
+    )
+    action.add_argument(
+        "--revoke", action="store_true",
+        help="disable the account and invalidate its sessions; retain the local credential file",
     )
     return parser
 
@@ -425,18 +478,21 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _build_argument_parser().parse_args(argv)
     try:
-        result = ensure_automation_credentials(
+        options = dict(
             api_base_url=args.api_base_url,
             manager_base_url=args.manager_base_url or args.api_base_url,
             manager_environment_file=args.manager_environment_file,
             credentials_file=args.credentials_file,
-            rotate=args.rotate,
         )
+        if args.revoke:
+            result = revoke_automation_credentials(**options)
+        else:
+            result = ensure_automation_credentials(**options, rotate=args.rotate)
     except AutomationCredentialError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(
-        "automation credentials ready: "
+        f"automation credentials {'revoked' if result.action == 'revoked' else 'ready'}: "
         f"target={result.base_url} username={result.username} "
         f"action={result.action} generation={result.authentication_generation}"
     )

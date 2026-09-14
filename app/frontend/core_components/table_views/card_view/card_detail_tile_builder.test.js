@@ -9,6 +9,33 @@ import { describe, expect, test } from "vitest";
 import { renderModernCardDetails } from "./card_detail_tile_builder.js";
 
 describe("card_detail_tile_builder", () => {
+    test.each([1, 2, 3, 4])("prepares column-first layouts up to the requested %i columns", (columns) => {
+        const container = document.createElement("div");
+        const entries = Array.from({ length: 5 }, (_, index) => ({
+            column: "field_" + index, label: "Field " + index, rawValue: String(index),
+        }));
+        renderModernCardDetails(container, entries, {}, { columns });
+        expect(container.classList.contains("card_details_modern_tiles--responsive")).toBe(true);
+        expect([...container.querySelectorAll(".card_detail_tile:not(.card_detail_tile--placeholder)")]
+            .map(tile => tile.querySelector(".card_detail_tile_value").textContent))
+            .toEqual(["0", "1", "2", "3", "4"]);
+        for (let limit = 1; limit <= 4; limit += 1) {
+            const effective = Math.min(columns, limit);
+            const rows = Math.ceil(entries.length / effective);
+            expect(container.style.getPropertyValue("--card-details-columns-" + limit)).toBe(String(effective));
+            expect(container.style.getPropertyValue("--card-details-rows-" + limit)).toBe(String(rows));
+            const visibleTiles = [...container.children].filter(tile =>
+                tile.style.getPropertyValue("--card-detail-display-" + limit) !== "none");
+            expect(visibleTiles).toHaveLength(rows * effective);
+            expect(visibleTiles.map(tile => tile.style.getPropertyValue("--card-detail-top-" + limit)))
+                .toEqual(visibleTiles.map((_, index) => index % rows > 0 ? "1px" : "0px"));
+            expect(visibleTiles.map(tile => tile.style.getPropertyValue("--card-detail-left-" + limit)))
+                .toEqual(visibleTiles.map((_, index) => Math.floor(index / rows) > 0 ? "1px" : "0px"));
+        }
+        expect([...container.querySelectorAll(".card_detail_tile--placeholder")]
+            .every(tile => tile.getAttribute("aria-hidden") === "true")).toBe(true);
+    });
+
     test("renders configured icon keys with label and value text", () => {
         const container = document.createElement("div");
 

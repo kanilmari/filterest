@@ -7,6 +7,7 @@ import { appendDataToView, disconnectInfiniteScroll } from "../../infinite_scrol
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { createSupplementalDatasetSearch } from "./supplemental_dataset_search.js";
 import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
@@ -34,6 +35,8 @@ import {
     getSearchPresentationRows,
 } from "./dataset_search_runtime_state.js";
 
+import { getDatasetQueryAdapter } from '../dataset_surface_provider/dataset_query_adapter_registry.js';
+
 export const _ongoingSearchResults = ongoingSearchResultsStore;
 
 async function renderRowsIntoTarget(
@@ -56,8 +59,9 @@ async function renderRowsIntoTarget(
         targetHost.classList?.contains("card_container") ||
         targetHost.classList?.contains("search-ai-results-card-container")
     ) {
+        const renderOptions = { viewKey: getCurrentSearchView(tableName), dataTypes };
         if (!expectedCache) {
-            await appendDataToCardView(targetHost, columns, rows, tableName);
+            await appendDataToCardView(targetHost, columns, rows, tableName, renderOptions);
             return true;
         }
 
@@ -66,7 +70,7 @@ async function renderRowsIntoTarget(
         // the newer search has already cleared and repopulated the live view.
         const stagingHost = document.createElement("div");
         stagingHost.className = targetHost.className;
-        await appendDataToCardView(stagingHost, columns, rows, tableName);
+        await appendDataToCardView(stagingHost, columns, rows, tableName, renderOptions);
         if (!isCurrentSearchCache(tableName, expectedCache)) {
             return false;
         }
@@ -488,7 +492,10 @@ export async function rerenderCachedSearchResults(tableName, expectedCache = nul
 
     if (!isCurrentSearchCache(tableName, cache)) return;
     await openFirstPendingSearchArticle(tableName, visibleTextRows, cache);
-    if (isCurrentSearchCache(tableName, cache)) syncSearchResultsCount(tableName, cache);
+    if (isCurrentSearchCache(tableName, cache)) {
+        syncSearchResultsCount(tableName, cache);
+        cache.supplemental?.place();
+    }
 }
 
 export function getCachedSearchResultForRender(tableName, { query = null } = {}) {
@@ -549,11 +556,14 @@ export async function sortCachedSearchResults(
  * A new cache identity invalidates every delayed stream, fallback and article open.
  */
 export async function do_intelligent_search(tableName, userQuery, opts = {}) {
+    const adapter = getDatasetQueryAdapter(tableName);
+    if (adapter) return adapter.refresh({ search: userQuery.trim() });
     if (!userQuery.trim()) return;
     clearRowGroupFacets(tableName);
     disconnectInfiniteScroll(tableName);
     cleanupSearchArtifacts(tableName);
     const context = getSearchFilterContext(tableName);
+    _ongoingSearchResults[tableName]?.supplemental?.destroy();
     const cache = initSearchCache();
     Object.assign(cache, {
         query: userQuery.trim(), filterSignature: context.signature,
@@ -571,12 +581,16 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     }
     syncSearchResultsCount(tableName, cache);
     const isCurrent = () => isCurrentSearchCache(tableName, cache);
+    cache.supplemental = createSupplementalDatasetSearch(tableName, cache.query, {
+        isCurrent, getContainer: () => getSearchStageContainer(tableName),
+    });
     const requestOptions = { ...opts, filters: Object.fromEntries(Object.entries(context.clientFilters).map(([key, value]) => [key, String(value)])), rowGroupSlug: context.rowGroupSlug, view: getCurrentSearchView(tableName) };
     try {
         for await (const packet of readDatasetSearchResponse(tableName, cache.query, requestOptions, isCurrent)) {
             if (!isCurrent()) return;
             const aiHost = packet.stage === "ai" ? createSecondSearchResultsHost(tableName) : null;
             await update_table_ui(tableName, packet, aiHost, cache);
+            if (isCurrent()) cache.supplemental.place();
         }
         if (!isCurrent()) return;
         const hasFilters = Object.keys(context.clientFilters).length > 0 || Boolean(context.rowGroupSlug);

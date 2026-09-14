@@ -286,6 +286,9 @@ carry forward only the five operator-owned directories after taking a backup.
 
 ## Development
 
+Read the [Developer Guide](app/docs/instructions_and_documentation/DEV_GUIDE.md)
+for shared coding conventions, QA and verification.
+
 ```bash
 ./filterest setup --profile development  # one-time toolchain and database setup
 ./filterest start     # build and run the local application

@@ -29,3 +29,31 @@ test("cancels an obsolete response before reading any row", async () => {
     expect(packets).toEqual([]);
     expect(cancel).toHaveBeenCalledOnce();
 });
+
+
+test("aborts pending response headers through the existing endpoint pipeline", async () => {
+    const controller = new AbortController();
+    endpoint.mockImplementationOnce((_route, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")));
+    }));
+    const iterator = readDatasetSearchResponse("other", "query", {
+        signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
+    }, () => true);
+    const pending = iterator.next();
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(endpoint.mock.calls.at(-1)[1]).toMatchObject({
+        signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
+    });
+});
+test("cancels a pending stream read immediately and ignores later chunks", async () => {
+    const controller = new AbortController();
+    const cancel = vi.fn();
+    endpoint.mockResolvedValueOnce({ body: new ReadableStream({ cancel }) });
+    const iterator = readDatasetSearchResponse("other", "query", { signal: controller.signal }, () => true);
+    const pending = iterator.next();
+    await Promise.resolve(); await Promise.resolve();
+    controller.abort();
+    await expect(pending).resolves.toMatchObject({ done: true });
+    expect(cancel).toHaveBeenCalledOnce();
+});

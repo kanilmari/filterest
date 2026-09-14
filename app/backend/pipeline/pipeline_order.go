@@ -9,6 +9,7 @@ import (
 	"easelect/backend/pipeline/admin_check"
 	"easelect/backend/pipeline/audit"
 	"easelect/backend/pipeline/auth_check"
+	"easelect/backend/pipeline/automation_check"
 	"easelect/backend/pipeline/csrf_check"
 	"easelect/backend/pipeline/device_id_check"
 	"easelect/backend/pipeline/error_handling"
@@ -61,6 +62,13 @@ var PipelineOrder = []Stage{
 		AlwaysEnforced: true,
 		Fn: func(next http.HandlerFunc, ctx RouteContext) http.HandlerFunc {
 			return error_handling.WithErrorRecovery(ctx.HandlerName, next)
+		},
+	},
+	{
+		Name:           "automation_check",
+		AlwaysEnforced: true,
+		Fn: func(next http.HandlerFunc, ctx RouteContext) http.HandlerFunc {
+			return automation_check.WithAutomationCheck(ctx.URLPattern, next)
 		},
 	},
 	{

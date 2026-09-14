@@ -114,6 +114,8 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 			cols: []string{"boolean_value"},
 			vals: []driver.Value{c.loginToBrowse},
 		}, nil
+	case strings.Contains(query, "dataset.ui_hidden"):
+		return &rootHandlerMockRows{cols: []string{"hidden"}, vals: []driver.Value{false}}, nil
 	case strings.Contains(query, "SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)"):
 		exists := len(args) > 0 && (args[0].Value == "app_service_catalog" || args[0].Value == "app_cloud_services")
 		return &rootHandlerMockRows{

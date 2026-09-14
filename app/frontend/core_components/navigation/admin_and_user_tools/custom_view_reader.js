@@ -361,6 +361,6 @@ function append_private_custom_views(privateViews) {
 }
 
 
-// Keep existing bookmarks navigable through the same authorized editor.
+// Keep existing bookmarks navigable through the same authorized editor, outside visible menus.
 const fieldSettingsView = custom_views.find((view) => view.name === "view_field_settings");
-custom_views.push({ ...fieldSettingsView, name: "view_field_assignments", group: "legacy_alias", requiredPermission: "/ui/admin/view_field_assignments" });
+custom_views.push({ ...fieldSettingsView, name: "view_field_assignments", group: "legacy_alias", navigationHidden: true, requiredPermission: "/ui/admin/view_field_assignments" });

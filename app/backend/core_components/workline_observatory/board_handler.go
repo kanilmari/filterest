@@ -41,6 +41,11 @@ func BoardHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "workline_observatory_unavailable")
 		return
 	}
+	snapshot, err = queryBoardSnapshot(snapshot, r.URL.Query())
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	httpresponse.RespondWithJSON(w, http.StatusOK, snapshot)
 }
 

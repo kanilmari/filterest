@@ -86,6 +86,9 @@ var AdminProfile = RouteProfile{
 
 // RouteProfiles is the single source of truth for per-route pipeline configuration.
 var RouteProfiles = map[string]RouteProfile{
+	// Article defaults reuse canonical dataset read authorization inside the handlers.
+	"system_table_tools.GetArticleSectionDefaultsHandler":  LoginOnlyProfile,
+	"system_table_tools.SaveArticleSectionDefaultsHandler": AdminProfile,
 	// Handlers enforce canonical dataset, row and field rights inside the request transaction.
 	"media_library.ListHandler":    LoginOnlyProfile,
 	"media_library.AttachHandler":  LoginOnlyProfile,
@@ -193,6 +196,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.RefreshFKCacheHandler":                 AdminProfile,
 	"system_table_tools.GetCardVisibilityHandler":              AdminProfile,
 	"system_table_tools.UpdateCardVisibilityHandler":           AdminProfile,
+	"system_table_tools.AdminDatasetUIVisibilityHandler":       AdminProfile,
 	"system_table_tools.UpdateColumnMultilingualHandler":       AdminProfile,
 	"system_table_tools.UpdateColumnInsertableHandler":         AdminProfile,
 	"system_table_tools.GetAdminUIFeatureFlagsHandler":         AdminProfile,

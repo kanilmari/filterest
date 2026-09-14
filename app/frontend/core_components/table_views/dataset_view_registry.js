@@ -10,6 +10,7 @@ export const DATASET_VIEW_SELECTOR_GROUP_DIRECT = "direct";
 export const DATASET_VIEW_SELECTOR_GROUP_MORE = "more";
 export const CARD_VIEW_KEY = "card";
 export const ARTICLE_VIEW_KEY = "article_view";
+export const IMAGE_FIRST_VIEW_KEY = "image_first_view";
 
 /** Resolves legacy article names without reusing the card presentation dimension. */
 export function normalizeDatasetViewKey(viewKey) {
@@ -41,6 +42,13 @@ export const DATASET_VIEW_SELECTOR_TEXT = Object.freeze({
 });
 
 const DATASET_VIEW_DEFINITION_LIST = [
+    {
+        viewKey: IMAGE_FIRST_VIEW_KEY,
+        permissionRoute: "/ui/view/article_view",
+        langKey: "view_image_first",
+        labelFallback: "Image-first article",
+        translations: { fi: "Kuvapainotteinen artikkeli", en: "Image-first article", ch: "图片优先文章", yue: "圖片優先文章" },
+    },
     {
         viewKey: CARD_VIEW_KEY,
         rendererKey: CARD_VIEW_KEY,

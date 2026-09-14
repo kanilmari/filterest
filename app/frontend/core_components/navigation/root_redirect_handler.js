@@ -4,8 +4,16 @@
 // Exists to reuse one no-reload root-return path instead of duplicating full browser navigations.
 
 import { consumeRedirectNotice } from "../state_stores/dataset_selection_saver.js";
+import { managementText } from "../general_tables/gt_2_column_crud/manage_table_i18n.js";
 import { runPostAuthBootstrap } from "../auth/post_auth_bootstrap.js";
-import { showInfoToast } from "../../reusable_components/notifications/toast_notification_printer.js";
+import { showInfoToast, showToast } from "../../reusable_components/notifications/toast_notification_printer.js";
+
+// Only fixed management-result keys may enter the shared translation surface.
+// A stored notice never supplies arbitrary HTML or an arbitrary translation key.
+function managementNoticeKey(notice) {
+    return ['manage_table_hidden_success', 'manage_table_deleted_success'].includes(notice?.messageLangKey)
+        ? notice.messageLangKey : '';
+}
 
 /**
  * Builds a user-facing message for dataset redirect notices.
@@ -16,6 +24,9 @@ export function buildDatasetRedirectNoticeMessage(notice) {
     if (!notice || typeof notice !== "object") {
         return "";
     }
+
+    const localizedKey = managementNoticeKey(notice);
+    if (localizedKey) return managementText(localizedKey);
 
     const datasetName = notice?.datasetName || "";
     const reason = notice?.reason || "deleted";
@@ -41,7 +52,17 @@ export function showDatasetRedirectNoticeIfAvailable() {
 
     const message = buildDatasetRedirectNoticeMessage(notice);
     if (message) {
-        showInfoToast(message);
+        const key = managementNoticeKey(notice);
+        if (key) {
+            // Startup consumes notices before language loading finishes. Keep a
+            // text-only translation node so the selected language updates it.
+            const content = document.createElement('span');
+            content.dataset.langKey = key;
+            content.textContent = message;
+            showToast({ content, level: "info" });
+        } else {
+            showInfoToast(message);
+        }
     }
 }
 

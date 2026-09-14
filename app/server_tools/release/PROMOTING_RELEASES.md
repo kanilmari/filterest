@@ -95,3 +95,19 @@ Candidate assets remain local verification evidence. Commit P, its final rebuilt
 assets and remote publication must each be verified explicitly. Promotion always
 reports `remote_published=false`, `publication_ready=false` and
 `final_rebuild_required=true`; it does not claim to have uploaded a release.
+
+
+## Candidates prepared with a database transition
+
+Promotion supports the explicit `prepare --db-transition-from` path. Reviewed
+source S may carry a new `VERSION_DB`, bootstrap and canonical schema snapshot
+while retaining the previous published identity and compatibility history.
+Promotion reconstructs this transition from immutable S bytes: the target must
+increase, the new minimum must equal that target, and C must use the exact new
+pair and snapshot. S→C still cannot change schema, seed, DB marker, snapshot or
+product source. Historical compatibility rows are preserved except for the old
+active row becoming historical; ledger history remains byte-for-byte append-only.
+
+Candidate C and published P must each pass the ordinary strict identity and
+compatibility checks. This does not relax asset verification, permit a DB
+downgrade, or avoid rebuilding the exact final commit after promotion.

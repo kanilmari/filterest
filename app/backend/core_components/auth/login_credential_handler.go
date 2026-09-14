@@ -16,6 +16,7 @@ import (
 	"time"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
@@ -139,11 +140,15 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 	if !enforceLoginAccess(w, r, session, userID) {
 		return
 	}
+	if verification.APIOnly && !auth_generation.AutomationAPIRequest(r, "/api/login") {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{"error": "automation_api_channel_required"})
+		return
+	}
 	log.Printf("[login-json] credentials OK for user %s (id=%d) 🔑", req.Username, userID)
 
 	switch verification.Method {
 	case verificationNone:
-		completeLoginJSON(w, r, session, userID, req.Username, req.Fingerprint, verification.AuthenticationGeneration)
+		completeLoginJSON(w, r, session, userID, req.Username, req.Fingerprint, verification.AuthenticationGeneration, verification.APIOnly)
 		return
 	case verificationFixedPIN, verificationTOTP:
 		setPendingLoginState(session, userID, req.Username, req.Fingerprint, verification.AuthenticationGeneration)
@@ -234,6 +239,10 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "verification_method_unavailable"})
 		return
 	}
+	if verificationRecord.APIOnly && !auth_generation.AutomationAPIRequest(r, "/api/login") {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{"error": "automation_api_channel_required"})
+		return
+	}
 	pendingGeneration, generationOK := session.Values["otp_pending_authentication_generation"].(int64)
 	if !generationOK || pendingGeneration != verificationRecord.AuthenticationGeneration {
 		clearPendingLoginState(session)
@@ -305,11 +314,11 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 	// Clean up pending values
 	clearPendingLoginState(session)
 
-	completeLoginJSON(w, r, session, userID, username, fingerprint, pendingGeneration)
+	completeLoginJSON(w, r, session, userID, username, fingerprint, pendingGeneration, verificationRecord.APIOnly)
 }
 
 // completeLoginJSON regenerates and persists an authenticated session after all configured checks pass.
-func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, username, fingerprint string, authenticationGeneration int64) {
+func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, username, fingerprint string, authenticationGeneration int64, apiOnly bool) {
 	if !enforceLoginAccess(w, r, session, userID) {
 		return
 	}
@@ -334,6 +343,11 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 		logging.Errorf("[login-json] session identity setup failed for user %d: %v", userID, err)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return
+	}
+
+	delete(session.Values, auth_generation.AutomationSessionKey)
+	if apiOnly {
+		session.Values[auth_generation.AutomationSessionKey] = true
 	}
 
 	// Device ID

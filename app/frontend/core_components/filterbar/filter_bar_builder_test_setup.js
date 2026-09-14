@@ -10,6 +10,10 @@ const mockUiConfig = vi.hoisted(() => ({
 }));
 const mockMountDatasetCoverTestPalette = vi.hoisted(() => vi.fn(async () => null));
 
+vi.mock('../navigation/main_tabs/hero_dataset_tabs.js', () => ({
+    createHeroDatasetTabs: vi.fn(() => ({ element: document.createElement('nav'), destroy: vi.fn() })),
+}));
+
 vi.mock('../admin_tools/admin_button_builder.js', () => ({
     appendChatUIIfAllowed: vi.fn(),
 }));

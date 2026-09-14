@@ -55,6 +55,7 @@ describe("performSpaLogoutReset", () => {
         history.replaceState({}, "", "/app_service_catalog?foo=1");
         localStorage.setItem("button_state", "logout");
         localStorage.setItem("theme", "dark");
+        localStorage.setItem("filterest_public_presentation_v1", "public-site-only");
         localStorage.setItem("chosen_language", "fi");
         localStorage.setItem("navVisibleWide", "false");
         localStorage.setItem("navVisibleNarrow", "true");
@@ -81,6 +82,7 @@ describe("performSpaLogoutReset", () => {
         const result = await mod.performSpaLogoutReset();
 
         expect(result).toEqual({ postLogoutPath: "/login" });
+        expect(localStorage.getItem("filterest_public_presentation_v1")).toBe("public-site-only");
         expect(endpointRouterMock).toHaveBeenCalledWith("logout", {
             returnResponse: true,
             suppressAuthRedirect: true,

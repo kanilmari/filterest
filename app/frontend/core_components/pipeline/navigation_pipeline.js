@@ -102,6 +102,7 @@ async function permissionCheckStage(ctx) {
  * @param {Object} ctx - Navigation context with name, params, prefix
  */
 async function urlUpdateStage(ctx) {
+    if (ctx.isCurrentNavigation?.() === false) return { abort: true, reason: "stale_navigation" };
     updateURL(ctx.name, ctx.params, ctx.prefix);
 }
 
@@ -114,6 +115,13 @@ async function urlUpdateStage(ctx) {
  * @param {Object} ctx - Navigation context with all navigation data
  */
 async function viewRenderStage(ctx) {
+    if (ctx.isCurrentNavigation?.() === false) return { abort: true, reason: "stale_navigation" };
+    // Revalidate after dirty/permission awaits. A mounted return does not need a
+    // loading element inserted above the viewport whose anchor we are restoring.
+    if (ctx.canRestoreMountedView?.() === true) {
+        await ctx._performNavigationCore(ctx.name, ctx.containerId, ctx.loadFunction, ctx.groupName, ctx.isCustomView);
+        return;
+    }
     await withLoadingIndicator(ctx.containerId, () =>
         ctx._performNavigationCore(
             ctx.name,

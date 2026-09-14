@@ -39,16 +39,19 @@
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
-  background: rgb(0 255 136 / 0.15);
-  border-color: rgb(0 255 136 / 0.3);
+  background: var(--button_bg_color);
+  border-color: var(--border_color);
   transition:
     opacity 180ms ease,
     background-color 0.3s ease,
     border-color 0.3s ease;
 }
-.filterbar-fixed-toggle:hover {
-  background: var(--button_hover_bg_color);
-  border-color: rgb(0 255 136 / 0.3);
+.filterbar-fixed-toggle:hover,
+.filterbar-fixed-toggle:focus-visible,
+.filterbar-panel__toggle-dock .hide_filter_bar_button:hover,
+.filterbar-panel__toggle-dock .hide_filter_bar_button:focus-visible {
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
+  border-color: var(--color-brand);
 }
 .filterbar-fixed-toggle-icon {
   width: 22px;
@@ -673,4 +676,10 @@ body.light-mode .logo-letter-backgrounds-container--serlog-glow
   .dataset-filter-top-grid {
     gap: 6px;
   }
+}
+
+.filterbar-fixed-toggle:focus-visible,
+.filterbar-panel__toggle-dock .hide_filter_bar_button:focus-visible {
+	outline: 2px solid var(--color-brand);
+	outline-offset: 2px;
 }

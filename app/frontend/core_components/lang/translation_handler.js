@@ -26,7 +26,28 @@ let defaultTranslations = {};
 import { getCardRoleTranslationFallbacks } from '../table_views/card_view/card_role_catalog.js';
 import { TABLE_CREATION_TRANSLATION_FALLBACKS } from '../general_tables/gt_3_table_crud/gt_3_1_table_create/table_creation_translation_fallbacks.js';
 
+import { MANAGE_TABLE_TRANSLATION_FALLBACKS } from '../general_tables/gt_2_column_crud/manage_table_translation_fallbacks.js';
+
 const LOCAL_TRANSLATION_FALLBACKS = {
+    delete_confirm_title: {
+        fi: "Vahvista poisto",
+        en: "Confirm deletion",
+        ch: "确认删除",
+        yue: "確認刪除",
+    },
+    delete_confirm_single: {
+        fi: "Haluatko poistaa tämän kohteen?",
+        en: "Delete this item?",
+        ch: "要删除此项目吗？",
+        yue: "要刪除呢個項目嗎？",
+    },
+    delete_confirm_multiple: {
+        fi: "Haluatko poistaa nämä kohteet?",
+        en: "Delete these items?",
+        ch: "要删除这些项目吗？",
+        yue: "要刪除呢啲項目嗎？",
+    },
+    ...MANAGE_TABLE_TRANSLATION_FALLBACKS,
     ...getCardRoleTranslationFallbacks(),
     ...TABLE_CREATION_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),

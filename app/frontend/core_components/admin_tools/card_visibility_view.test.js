@@ -26,6 +26,7 @@ function buildColumn(overrides = {}) {
         card_detail_icon_key: '',
         card_detail_capitalization: true,
         show_key_on_card: true,
+        show_key_on_card_override: true,
         show_value_on_card: true,
         hide_everywhere: false,
         client_delivery_mode: 'include',
@@ -191,7 +192,10 @@ describe('card_visibility_view', () => {
                 card_detail_icon_svg: '<svg viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg>',
             })],
         });
-        saveCardVisibilityMock.mockResolvedValue({ status: 'ok', message: 'Saved via wrapper' });
+        saveCardVisibilityMock.mockImplementation(async request => {
+            fetchCardVisibilityMock.mockResolvedValue({ table_name: 'orders', columns: request.columns });
+            return { status: 'ok', message: 'Saved via wrapper' };
+        });
         const { generate_card_visibility_form } = await loadModule();
         const container = document.createElement('div');
         localStorage.setItem('full_tree_data', JSON.stringify({ nodes: [{ id: 'node-1' }] }));
@@ -223,10 +227,10 @@ describe('card_visibility_view', () => {
         expect(cancelButton.disabled).toBe(false);
 
         const checkbox = /** @type {HTMLInputElement | null} */ (
-            container.querySelector('tbody tr td:nth-child(5) input[type="checkbox"]')
+            container.querySelector('[data-testid="card-label-visibility-select"]')
         );
         expect(checkbox).not.toBeNull();
-        checkbox.checked = false;
+        checkbox.value = 'false';
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
         await flushAsyncWork();
 
@@ -257,7 +261,7 @@ describe('card_visibility_view', () => {
         expect(container.textContent).not.toContain('card_detail_icon_svg');
         expect(container.querySelector('tbody tr input[type="text"]')).toBeNull();
 
-        expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"show_key_on_card":false');
+        expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"show_key_on_card_override":false');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_element":"details_link"');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_detail_capitalization":true');
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"card_detail_label_mode":"both"');
@@ -277,12 +281,13 @@ describe('card_visibility_view', () => {
                 card_detail_label_mode: 'both',
                 card_detail_icon_key: 'calendar',
                 card_detail_icon_svg: '<svg viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg>',
-                show_key_on_card: false,
+                show_key_on_card: true,
+                show_key_on_card_override: false,
             })],
         });
         expect(localStorage.getItem('orders_dataTypes')).toBe(null);
         expect(localStorage.getItem('orders_tableMeta')).toBe(null);
-        expect(localStorage.getItem('card_visibility_draft_orders')).toBe(null);
+        await vi.waitFor(() => expect(localStorage.getItem('card_visibility_draft_orders')).toBe(null));
         expect(showSuccessToastMock).toHaveBeenCalledWith('Saved via wrapper');
     });
 
@@ -372,6 +377,28 @@ describe('card_visibility_view', () => {
         });
         expect(showSuccessToastMock).toHaveBeenCalledWith('Style saved');
     });
+    test.each(['en', 'fi'])('keeps dataset inheritance explicit and saves either override or null in %s', async language => {
+        getLanguageWithBrowserFallbackMock.mockReturnValue(language);
+        fetchCardVisibilityMock.mockResolvedValue({ card_style_variant: null, columns: [buildColumn()] });
+        saveCardVisibilityMock.mockResolvedValue({ status: 'ok' });
+        const { generate_card_visibility_form } = await loadModule();
+        const container = document.createElement('div');
+        await generate_card_visibility_form(container);
+        document.dispatchEvent(new CustomEvent('checkboxSelectionChanged', { detail: { selectedCategories: ['orders'] } }));
+        await flushAsyncWork();
+        const select = container.querySelector('[data-testid="card-style-variant-select"]');
+        const save = container.querySelector('[data-testid="card-details-layout-save-button"]');
+        expect(select.value).toBe(''); expect(save.disabled).toBe(true);
+        expect(select.options[0].textContent).toBe(language === 'fi' ? 'Sivuston oletus' : 'Site default');
+        select.value = 'standard'; select.dispatchEvent(new Event('change')); save.click();
+        await vi.waitFor(() => expect(save.disabled).toBe(true));
+        expect(saveCardVisibilityMock).toHaveBeenLastCalledWith(expect.objectContaining({card_style_variant: 'standard'}));
+        select.value = ''; select.dispatchEvent(new Event('change')); save.click();
+        await vi.waitFor(() => expect(save.disabled).toBe(true));
+        expect(saveCardVisibilityMock).toHaveBeenLastCalledWith(expect.objectContaining({card_style_variant: null}));
+        expect(saveCardVisibilityMock).toHaveBeenCalledTimes(2);
+    });
+
     async function openLayoutEditor(layout = null) {
         fetchCardVisibilityMock.mockResolvedValue({
             table_name: 'orders', columns: [buildColumn({ label_value_layout: layout })],
@@ -487,6 +514,86 @@ describe('card_visibility_view', () => {
         expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"label_value_layout":"inline"');
         expect(container.querySelector('[role="alert"]').hidden).toBe(false);
         container.__cleanupListeners();
+    });
+
+
+    test.each([null, true, false])('edits raw label override %s without replacing the effective boolean', async initial => {
+        let stored = buildColumn({ show_key_on_card: true, show_key_on_card_override: initial });
+        fetchCardVisibilityMock.mockImplementation(async () => ({ table_name: 'orders', columns: [stored] }));
+        saveCardVisibilityMock.mockImplementation(async request => {
+            stored = { ...request.columns[0] };
+            return { status: 'ok' };
+        });
+        const { generate_card_visibility_form } = await loadModule();
+        const container = document.createElement('div');
+        await generate_card_visibility_form(container);
+        document.dispatchEvent(new CustomEvent('checkboxSelectionChanged', { detail: { selectedCategories: ['orders'] } }));
+        await flushAsyncWork();
+        container.querySelector('[data-testid="card-visibility-edit-button"]').click();
+        let select = container.querySelector('[data-testid="card-label-visibility-select"]');
+        expect(select).not.toBeNull();
+        expect(select.value).toBe(initial === null ? 'inherit' : String(initial));
+        const next = initial === false ? null : false;
+        select.value = next === null ? 'inherit' : String(next);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        getLanguageWithBrowserFallbackMock.mockReturnValue('fi');
+        document.documentElement.lang = 'fi';
+        await new Promise(resolve => setTimeout(resolve, 0));
+        select = container.querySelector('[data-testid="card-label-visibility-select"]');
+        expect(select.value).toBe(next === null ? 'inherit' : String(next));
+        expect(select.options[0].textContent).toBe('Roolin oletus');
+        container.querySelector('[data-testid="card-visibility-save-button"]').click();
+        await vi.waitFor(() => expect(showSuccessToastMock).toHaveBeenCalled());
+        expect(saveCardVisibilityMock).toHaveBeenLastCalledWith(expect.objectContaining({
+            columns: [expect.objectContaining({ show_key_on_card: true, show_key_on_card_override: next })],
+        }));
+    });
+
+
+    test.each([['en', 'Role default', 'Show', 'Hide'], ['fi', 'Roolin oletus', 'Näytä', 'Piilota'],
+        ['ch', '角色默认值', '显示', '隐藏'], ['yue', '角色預設值', '顯示', '隱藏']])(
+        'localizes label inheritance in %s and preserves false', async (language, inherit, show, hide) => {
+            getLanguageWithBrowserFallbackMock.mockReturnValue(language);
+            fetchCardVisibilityMock.mockResolvedValue({ columns: [buildColumn({ show_key_on_card_override: false })] });
+            const { generate_card_visibility_form } = await loadModule();
+            const container = document.createElement('div');
+            await generate_card_visibility_form(container);
+            document.dispatchEvent(new CustomEvent('checkboxSelectionChanged', { detail: { selectedCategories: ['orders'] } }));
+            await flushAsyncWork();
+            container.querySelector('[data-testid="card-visibility-edit-button"]').click();
+            const select = container.querySelector('[data-testid="card-label-visibility-select"]');
+            expect([...select.options].map(option => option.textContent)).toEqual([inherit, show, hide]);
+            expect(select.value).toBe('false');
+        });
+
+    test('retains a raw null draft when save readback still reports an explicit boolean', async () => {
+        fetchCardVisibilityMock.mockResolvedValue({ table_name: 'orders', columns: [buildColumn()] });
+        saveCardVisibilityMock.mockResolvedValue({ status: 'ok' });
+        const { generate_card_visibility_form } = await loadModule();
+        const container = document.createElement('div');
+        await generate_card_visibility_form(container);
+        document.dispatchEvent(new CustomEvent('checkboxSelectionChanged', { detail: { selectedCategories: ['orders'] } }));
+        await flushAsyncWork();
+        container.querySelector('[data-testid="card-visibility-edit-button"]').click();
+        const select = container.querySelector('[data-testid="card-label-visibility-select"]');
+        select.value = 'inherit'; select.dispatchEvent(new Event('change'));
+        container.querySelector('[data-testid="card-visibility-save-button"]').click();
+        await vi.waitFor(() => expect(container.querySelector('[data-testid="card-visibility-save-error"]').hidden).toBe(false));
+        expect(showSuccessToastMock).not.toHaveBeenCalled();
+        expect(container.querySelector('[data-testid="card-label-visibility-select"]').value).toBe('inherit');
+    });
+
+    test('normalizes legacy booleans without guessing missing overrides or replacing explicit null', async () => {
+        await loadModule();
+        const { prepareCardLabelVisibilityRows } = await import('./card_label_visibility_setting.js');
+        expect(prepareCardLabelVisibilityRows([
+            { show_key_on_card: false }, { show_key_on_card: true },
+            { show_key_on_card: true, show_key_on_card_override: null }, {},
+        ])).toEqual([
+            { show_key_on_card: false, show_key_on_card_override: false },
+            { show_key_on_card: true, show_key_on_card_override: true },
+            { show_key_on_card: true, show_key_on_card_override: null }, {},
+        ]);
     });
 
 });

@@ -3,6 +3,7 @@
 // Bridges ai-chat facade responses, cached dataset metadata, and table rendering.
 // Exists to keep the non-legacy chat transport out of the legacy SSE UI printer.
 
+import { codingAgentCopy } from "./table_chat_coding_agent_control.js";
 import { generate_table } from "../../table_views/dataset_view_printer.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import {
@@ -250,7 +251,7 @@ export async function runApiToolsChatQuery(table_name, user_message, conversatio
     };
 }
 
-export async function runCodexDevChatQuery(table_name, user_message, conversationMessages = []) {
+export async function runCodexDevChatQuery(table_name, user_message, conversationMessages = [], { externalRunner = false } = {}) {
     const payload = {
         dataset: table_name,
         query: user_message,
@@ -263,10 +264,29 @@ export async function runCodexDevChatQuery(table_name, user_message, conversatio
         payload.messages = conversationMessages;
     }
 
-    const response = await endpoint_router("aiChatCodexQuery", {
-        method: "POST",
-        body_data: payload,
-    });
+    let response;
+    const existing = readPendingCodingAgentJob(table_name);
+    if (existing) {
+        response = await pollCodingAgentJob(table_name, existing.job_id);
+    } else {
+        payload.request_id = crypto.randomUUID();
+        // Persist external request identity before dispatch: a dropped acceptance
+        // response can still be recovered from the durable runner after reload.
+        if (externalRunner) localStorage.setItem(codingAgentJobKey(table_name), JSON.stringify({ job_id: payload.request_id }));
+        try {
+            response = await endpoint_router("aiChatCodexQuery", {
+                method: "POST",
+                body_data: payload,
+            });
+        } catch (error) {
+            if ([400, 403, 404, 409, 429].includes(error?.status)) localStorage.removeItem(codingAgentJobKey(table_name));
+            throw error;
+        }
+        if (response?.job_id) {
+            localStorage.setItem(codingAgentJobKey(table_name), JSON.stringify({ job_id: response.job_id }));
+            response = await pollCodingAgentJob(table_name, response.job_id);
+        }
+    }
 
     let resultActionTaken = false;
     const responsePlan = response?.plan || {};
@@ -291,4 +311,58 @@ export async function runCodexDevChatQuery(table_name, user_message, conversatio
         usage: response?.usage || null,
         resultActionTaken,
     };
+}
+
+function codingAgentJobKey(dataset) { return "codingAgentJob_" + dataset; }
+function readPendingCodingAgentJob(dataset) {
+    const value = readStoredJSON(codingAgentJobKey(dataset));
+    return typeof value?.job_id === "string" ? value : null;
+}
+export function hasPendingCodingAgentJob(dataset) {
+    return Boolean(readPendingCodingAgentJob(dataset));
+}
+
+const codingAgentPolls = new Map();
+export function cancelCodingAgentPolling(dataset) {
+    codingAgentPolls.get(dataset)?.abort();
+}
+
+/** Polling reads durable job state; losing the page never cancels its writer. */
+async function pollCodingAgentJob(dataset, jobID) {
+    cancelCodingAgentPolling(dataset);
+    const controller = new AbortController();
+    codingAgentPolls.set(dataset, controller);
+    const aborted = () => new DOMException(codingAgentCopy().pending, "AbortError");
+    try {
+        for (;;) {
+            if (controller.signal.aborted) throw aborted();
+            const response = await endpoint_router("aiChatCodexQuery", {
+                method: "GET", url_params: new URLSearchParams({ dataset, job_id: jobID }).toString(),
+                suppressErrorToast: true, signal: controller.signal,
+            });
+            if (controller.signal.aborted) throw aborted();
+            if (response?.status === "completed") {
+                localStorage.removeItem(codingAgentJobKey(dataset));
+                return response;
+            }
+            if (["failed", "interrupted"].includes(response?.status)) {
+                localStorage.removeItem(codingAgentJobKey(dataset));
+                throw new Error(codingAgentCopy().failed);
+            }
+            if (!["queued", "running"].includes(response?.status)) throw new Error(codingAgentCopy().unavailable);
+            await new Promise((resolve, reject) => {
+                const onAbort = () => { clearTimeout(timer); reject(aborted()); };
+                const timer = setTimeout(() => {
+                    controller.signal.removeEventListener("abort", onAbort);
+                    resolve();
+                }, 1500);
+                controller.signal.addEventListener("abort", onAbort, { once: true });
+            });
+        }
+    } catch (error) {
+        if ([400, 401, 403, 404].includes(error?.status)) localStorage.removeItem(codingAgentJobKey(dataset));
+        throw error;
+    } finally {
+        if (codingAgentPolls.get(dataset) === controller) codingAgentPolls.delete(dataset);
+    }
 }

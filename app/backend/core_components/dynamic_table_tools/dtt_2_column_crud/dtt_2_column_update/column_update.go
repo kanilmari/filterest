@@ -186,8 +186,8 @@ func UpdateColumnMetadata(q dbutils.Querier) error {
 				// Uusi sarake, lisätään se ja asetetaan co_number = attNumber
 				insertQuery := `
                     INSERT INTO system_column_details
-                        (table_uid, column_name, data_type, co_number, card_element)
-                    VALUES ($1, $2, $3, $4, 'details')
+                        (table_uid, column_name, data_type, co_number, card_element, show_key_on_card)
+                    VALUES ($1, $2, $3, $4, 'details', NULL)
                 `
 				_, err = q.Exec(
 					insertQuery,

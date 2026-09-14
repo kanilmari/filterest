@@ -1,7 +1,7 @@
 // big_card_content_builder.test.js
-// Verifies big-card media rendering keeps service-catalog logo contrast protection wired narrowly.
+// Verifies article content, detail disclosures and narrowly scoped card-media integration.
 // Bridges buildBigCardContent and its mocked card-media dependencies with jsdom DOM assertions.
-// Exists to keep the CRITICAL big-card surface limited to the logo wrapper path only.
+// Exists to preserve article content contracts while shared renderers and wrappers evolve.
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -148,6 +148,19 @@ describe('big_card_content_builder', () => {
         createRowArticleNavigableElementMock.mockImplementation(() => document.createElement('div'));
     });
 
+    test.each([false, true])('applies details opening default %s without losing field content', async (startOpen) => {
+        const built = await buildRowArticleContent(
+            { location: 'Helsinki' }, 'events',
+            { location: { card_element: 'details', show_key_on_card: true } },
+            ['location'], 'seed', '', false, null,
+            { sectionDefaults: { details: startOpen } },
+        );
+        const section = built.rowArticleContentElement.querySelector('.row_article_details_section');
+        expect(section?.querySelector('button')?.getAttribute('aria-expanded')).toBe(String(startOpen));
+        expect(createRowArticleKeyValueElementMock).toHaveBeenCalled();
+        expect(section?.querySelector('.big_card_details_container')).not.toBeNull();
+    });
+
     test('keeps the legacy big-card export mapped to the row article builder', () => {
         expect(buildBigCardContent).toBe(buildRowArticleContent);
     });
@@ -265,7 +278,7 @@ describe('big_card_content_builder', () => {
         );
     });
 
-    test('keeps detail field labels and values visible without a generic Details heading', async () => {
+    test('starts Details open and toggles its content without removing field labels or values', async () => {
         createRowArticleKeyValueElementMock.mockImplementation((label, value, column, _lang, _class, showKey) => {
             const field = document.createElement('div');
             field.dataset.column = column;
@@ -282,12 +295,44 @@ describe('big_card_content_builder', () => {
             ['id', 'location'], 'seed-1', 'T', false,
         );
         const content = built.rowArticleContentElement;
-        const details = content.querySelector(':scope > .row_article_details_section');
+        document.body.appendChild(content);
+        const section = content.querySelector(':scope > .row_article_details_section');
+        const button = section.querySelector('button.row_article_disclosure_header');
+        expect(button).not.toBeNull();
+        const shell = section.querySelector('.animated-disclosure-content-shell');
+        const details = section.querySelector('.big_card_details_container');
+        const fields = [...details.querySelectorAll('[data-column]')];
+        expect(button.querySelector('[data-lang-key="row_article_section_details"]').textContent).toBe('Details');
+        expect(button.getAttribute('aria-controls')).toBe(shell.id);
+        expect(button.getAttribute('aria-expanded')).toBe('true');
+        expect(shell.hidden).toBe(false);
         expect(details.textContent).toBe('id: 7location: Helsinki');
-        expect(details.querySelectorAll('[data-column]')).toHaveLength(2);
-        expect(content.querySelector('[data-lang-key="row_article_section_details"]')).toBeNull();
-        expect(details.querySelector('button, summary')).toBeNull();
-        expect(details.hidden).toBe(false);
+        expect(fields).toHaveLength(2);
+
+        button.click();
+        expect(button.getAttribute('aria-expanded')).toBe('false');
+        await vi.waitFor(() => expect(shell.hidden).toBe(true));
+        expect(button.hidden).toBe(false);
+        expect([...details.querySelectorAll('[data-column]')]).toEqual(fields);
+
+        button.click();
+        expect(button.getAttribute('aria-expanded')).toBe('true');
+        await vi.waitFor(() => expect(shell.hidden).toBe(false));
+        expect(details.textContent).toBe('id: 7location: Helsinki');
+        expect([...details.querySelectorAll('[data-column]')]).toEqual(fields);
+        section.destroy();
+    });
+
+    test('does not create an empty Details disclosure when no details survive the article policy', async () => {
+        resolveRowArticleRelationDetailEntriesMock.mockReturnValueOnce([]);
+        const built = await buildRowArticleContent(
+            { related_id: 7 }, 'travel_info',
+            { related_id: { card_element: 'details', foreign_table: 'locations' } },
+            ['related_id'], 'seed-1', 'T', false,
+        );
+        expect(built.rowArticleContentElement.querySelector('.row_article_details_section')).toBeNull();
+        expect(built.rowArticleContentElement.querySelector('[data-lang-key="row_article_section_details"]')).toBeNull();
+        expect(built.rowArticleContentElement.querySelector('.big_card_details_container')).toBeNull();
     });
 
     test('prepends the dataset icon to the row article header', async () => {

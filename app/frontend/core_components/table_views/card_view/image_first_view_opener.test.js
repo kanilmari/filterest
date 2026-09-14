@@ -13,6 +13,19 @@ const {
     transitionImageFirstModalContentMock: vi.fn(),
 }));
 
+vi.mock("./row_article_section_defaults.js", () => ({
+    loadRowArticleSectionDefaults: vi.fn(async () => ({})),
+}));
+
+vi.mock("../../pipeline/navigation_pipeline.js", () => ({
+    runNavigationPipeline: vi.fn(async context => context),
+}));
+vi.mock("../../navigation/nav_engine/dataset_aliases.js", () => ({
+    buildDatasetPath: name => "/" + name,
+}));
+vi.mock("../../navigation/nav_engine/query_params.js", () => ({ DATASET_PREFIX: "/" }));
+vi.mock("../../endpoints/endpoint_data_fetcher.js", () => ({ fetchDatasetData: vi.fn() }));
+
 vi.mock("./card_image_modal.js", () => ({
     openImageModalContent: openImageModalContentMock,
     transitionImageFirstModalContent: transitionImageFirstModalContentMock,
@@ -36,7 +49,7 @@ vi.mock("./row_article_asset_resolver.js", () => ({
 }));
 
 vi.mock("../../route_permission_checker.js", () => ({
-    hasRoutePermission: vi.fn(() => false),
+    hasRoutePermission: vi.fn(route => route === "/ui/view/article_view"),
 }));
 
 vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
@@ -53,6 +66,7 @@ vi.mock("../../../ui_config.js", () => ({
 }));
 
 import { openImageFirstView } from "./image_first_view_opener.js";
+import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 
 function buildArticleContent() {
     const content = document.createElement("div");
@@ -73,6 +87,9 @@ function buildArticleContent() {
 describe("openImageFirstView", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
+        history.replaceState({}, "", "/examples?view=table&search=needle");
+        vi.mocked(loadRowArticleSectionDefaults).mockReset();
+        vi.mocked(loadRowArticleSectionDefaults).mockResolvedValue({});
         buildContentMock.mockReset();
         openImageModalContentMock.mockReset();
         transitionImageFirstModalContentMock.mockReset();
@@ -85,6 +102,16 @@ describe("openImageFirstView", () => {
         });
     });
 
+    test("loads only image-first defaults once for this row opening", async () => {
+        vi.mocked(loadRowArticleSectionDefaults).mockResolvedValueOnce({ details: false });
+        await openImageFirstView({
+            imageRows: [{ filename: "hero.png" }],
+            rowItem: { id: 3, title: "Example" }, tableName: "examples",
+        });
+        expect(loadRowArticleSectionDefaults).toHaveBeenCalledExactlyOnceWith("examples", "image_first");
+        expect(buildContentMock.mock.calls[0][8]).toEqual({ sectionDefaults: { details: false } });
+    });
+
     test("opens globally without dataset activation and keeps a one-image stage bounded", async () => {
         await openImageFirstView({
             imageSrc: "/storage/hero.png",
@@ -94,6 +121,7 @@ describe("openImageFirstView", () => {
             tableName: "examples",
         });
 
+        expect(new URL(location.href).searchParams.get("view")).toBe("image_first_view");
         const view = document.querySelector('[data-testid="image-first-view"]');
         const article = view.querySelector(".image_first_view_article_content");
         expect(view).not.toBeNull();
@@ -224,4 +252,47 @@ describe("openImageFirstView", () => {
         expect(openImageModalContentMock).not.toHaveBeenCalled();
     });
 
+});
+
+test("Forward fetches the row and metadata again and restores the selected image", async () => {
+    document.body.innerHTML = "";
+    const { fetchDatasetData } = await import("../../endpoints/endpoint_data_fetcher.js");
+    fetchDatasetData.mockResolvedValue({ data: [{ id: 3, title: "Fresh" }], types: { title: { card_element: "header", is_multilingual: true } } });
+    history.replaceState({ imageFirstView: { dataset: "examples", rowId: "3" } }, "", "/examples/3?view=image_first_view#image=second.png");
+    await openImageFirstView({ tableName: "examples", rowItem: { id: 3 },
+        restoringHistory: true, imageRows: [{ filename: "first.png" }, { filename: "second.png" }] });
+    expect(fetchDatasetData).toHaveBeenCalledWith(expect.objectContaining({ filters: { id: 3 }, view_key: "article_view" }));
+    expect(buildContentMock).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Fresh" }), "examples",
+        { title: { card_element: "header", is_multilingual: true } }, expect.anything(), expect.anything(),
+        expect.anything(), expect.anything(), expect.anything(), { sectionDefaults: {} });
+    expect(document.querySelector('[data-testid="row-article-image-first-media"]').getAttribute("src")).toContain("second.png");
+});
+
+test("a denied Forward or a row removed by current permissions never opens stale content", async () => {
+    const { runNavigationPipeline } = await import("../../pipeline/navigation_pipeline.js");
+    const { fetchDatasetData } = await import("../../endpoints/endpoint_data_fetcher.js");
+    openImageModalContentMock.mockClear(); transitionImageFirstModalContentMock.mockClear(); fetchDatasetData.mockClear();
+    runNavigationPipeline.mockResolvedValueOnce({ abort: true, reason: "permission_denied" });
+    expect(await openImageFirstView({ tableName: "examples", rowItem: { id: 3 }, restoringHistory: true })).toBeNull();
+    expect(fetchDatasetData).not.toHaveBeenCalled();
+    fetchDatasetData.mockResolvedValueOnce({ data: [], types: {} });
+    expect(await openImageFirstView({ tableName: "examples", rowItem: { id: 3 }, restoringHistory: true })).toBeNull();
+    expect(openImageModalContentMock).not.toHaveBeenCalled();
+    expect(transitionImageFirstModalContentMock).not.toHaveBeenCalled();
+});
+
+test("an old media build cannot resurrect IFAV after the URL changed", async () => {
+    let release;
+    buildContentMock.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    openImageModalContentMock.mockClear(); transitionImageFirstModalContentMock.mockClear();
+    history.replaceState({}, "", "/examples?view=card");
+    const opening = openImageFirstView({ tableName: "examples", rowItem: { id: 3 },
+        imageRows: [{ filename: "first.png" }], imageSrc: "/storage/first.png" });
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    history.replaceState({}, "", "/elsewhere?view=table");
+    release({ rowArticleContentElement: buildArticleContent() });
+    expect(await opening).toBeNull();
+    expect(openImageModalContentMock).not.toHaveBeenCalled();
+    expect(transitionImageFirstModalContentMock).not.toHaveBeenCalled();
+    expect(location.pathname).toBe("/elsewhere");
 });

@@ -1,54 +1,47 @@
 #!/usr/bin/env bash
-# check_gitignore.sh - list missing paths declared by the Filterest .gitignore.
-# Prints warnings and refreshes the adjacent Markdown report.
+# Lists missing literal paths declared by the Filterest .gitignore.
+# Connects the installation ignore policy to QA warnings and an optional report.
+# Keeps ordinary checks read-only; --write-report explicitly refreshes Markdown.
+set -euo pipefail
 
-set -uo pipefail        # ei -e, jotta varoitukset eivät pysäytä skriptiä
+write_report=0
+for argument in "$@"; do
+  case "$argument" in
+    --write-report) write_report=1 ;;
+    --help|-h) echo "Usage: check_gitignore.sh [--write-report]"; exit 0 ;;
+    *) echo "Unknown gitignore check argument: $argument" >&2; exit 2 ;;
+  esac
+done
 
 script_directory_absolute_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Filterest keeps maintained source below app/, while .gitignore belongs to the
-# transferable installation root one level above it. Resolving from this
-# script's stable app/server_tools/check_gitignore location keeps the audit
-# correct in both the Easelect-owned source tree and a standalone checkout.
+# Source lives below app/; the transferable installation owns .gitignore.
 project_root_absolute_path="$(cd "${script_directory_absolute_path}/../../.." && pwd)"
 gitignore_file_path="${project_root_absolute_path}/.gitignore"
 output_markdown="${script_directory_absolute_path}/missing_gitignore_paths.md"
-
-{
-  echo "# Missing .gitignore paths"
-  echo ""
-} > "$output_markdown"
-
-# macOS ships Bash 3.2, which has dotglob/nullglob but not globstar. Missing
-# wildcard patterns are intentionally non-actionable below, so recursive **
-# expansion is unnecessary for the literal-path audit this script enforces.
-shopt -s dotglob nullglob
+report_lines=("# Missing .gitignore paths" "")
 
 while IFS= read -r gitignore_line || [[ -n "$gitignore_line" ]]; do
-  # Skip blank and comment lines.
-  [[ -z "$gitignore_line" ]] && continue
-  [[ "$gitignore_line" =~ ^# ]] && continue
-
+  [[ -z "$gitignore_line" || "$gitignore_line" == \#* ]] && continue
   path_pattern="$gitignore_line"
-  # A negated rule still names a path that belongs to the audit surface.
-  if [[ "$path_pattern" == !* ]]; then
-    path_pattern="${path_pattern:1}"
-  fi
-
-  matching_paths=("${project_root_absolute_path}/"$path_pattern)
-  if [[ ${#matching_paths[@]} -eq 0 ]]; then
-    # Globs often document future/generated/secret files that should not exist
-    # in a clean checkout. Only literal missing paths are actionable here.
-    case "$path_pattern" in
-      *'*'*|*'?'*|*'['*) continue ;;
-    esac
+  # A negated rule still names a path in this audit.
+  [[ "$path_pattern" != !* ]] || path_pattern="${path_pattern:1}"
+  # Wildcards may name future/generated/secret files; absence is non-actionable.
+  case "$path_pattern" in
+    *'*'*|*'?'*|*'['*) continue ;;
+  esac
+  declared_path="${project_root_absolute_path}/$path_pattern"
+  if [[ ! -e "$declared_path" && ! -L "$declared_path" ]]; then
     printf '\033[33mWARNING: .gitignore path is not available: %s\033[0m\n' \
-      "${project_root_absolute_path}/$path_pattern" >&2
-    echo "- ${project_root_absolute_path}/$path_pattern" >> "$output_markdown"
+      "$declared_path" >&2
+    report_lines+=("- $declared_path")
   fi
 done < "$gitignore_file_path"
 
-if [[ $(wc -l < "$output_markdown") -eq 2 ]]; then
-  echo "Kaikki .gitignore-polut löytyvät." >> "$output_markdown"
+if [[ ${#report_lines[@]} -eq 2 ]]; then
+  report_lines+=("Kaikki .gitignore-polut löytyvät.")
 fi
-
-exit 0
+if [[ "$write_report" -eq 1 ]]; then
+  printf '%s\n' "${report_lines[@]}" > "$output_markdown"
+else
+  printf '%s\n' "${report_lines[@]}"
+fi

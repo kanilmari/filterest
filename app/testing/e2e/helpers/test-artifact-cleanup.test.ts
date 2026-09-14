@@ -148,9 +148,10 @@ describe('E2E artifact cleanup ownership', () => {
       if (url === '/api/translations?lang=en') return jsonResponse({ orders: 'Orders' });
       throw new Error(`Unexpected GET ${url}`);
     });
-    const post = vi.fn(async (url: string, options: { data?: { dataset_name?: string } }) => {
+    const post = vi.fn(async (url: string, options: { data?: { dataset_name?: string; confirm_dataset_name?: string } }) => {
       expect(url).toBe('/api/drop-dataset');
       expect(options.data?.dataset_name).toBe('e2e_registered_exactly');
+      expect(options.data?.confirm_dataset_name).toBe('e2e_registered_exactly');
       datasets = datasets.filter((name) => name !== options.data?.dataset_name);
       return jsonResponse({ status: 'success' });
     });

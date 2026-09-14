@@ -601,7 +601,7 @@ function createFilterElement(tableName, column, colType) {
         return container;
     }
 
-    if (filterElementKind === "foreign_key") {
+    if (filterElementKind === "foreign_key" || filterElementKind === "choice") {
         const baseId = `${tableName}_${column}`;
         const dropdownContainer = document.createElement("div");
         dropdownContainer.id = baseId;
@@ -611,8 +611,15 @@ function createFilterElement(tableName, column, colType) {
             savedDropdownState.excludeValues.length > 0
         );
 
+        let destroyed = false;
+        let mountedDropdown = null;
+        container.destroy = () => {
+            destroyed = true;
+            mountedDropdown?.destroy();
+        };
         import("../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js")
             .then(({ createMultiselectDropdown }) => {
+                if (destroyed) return;
                 const dropdown = createMultiselectDropdown({
                     containerElement: dropdownContainer,
                     options: [],
@@ -636,13 +643,14 @@ function createFilterElement(tableName, column, colType) {
                     },
                 });
 
+                mountedDropdown = dropdown;
                 const foreignTable = colType.foreign_table;
                 const foreignValueColumn = colType.foreign_column || "id";
                 let optionsLoaded = false;
                 let optionsPromise = null;
 
                 const ensureForeignFilterOptions = async () => {
-                    if (optionsLoaded) {
+                    if (destroyed || optionsLoaded) {
                         return;
                     }
                     if (optionsPromise) {
@@ -651,10 +659,12 @@ function createFilterElement(tableName, column, colType) {
                     }
 
                     optionsPromise = (async () => {
-                        const data = await fetchFilterOptions({
-                            dataset_name: foreignTable,
-                            value_column: foreignValueColumn,
-                        });
+                        const data = filterElementKind === "choice"
+                            ? colType.filter_options
+                            : await fetchFilterOptions({
+                                dataset_name: foreignTable,
+                                value_column: foreignValueColumn,
+                            });
                         let dropdownOptions = mapForeignFilterOptions(data);
 
                         if (shouldRetryForeignFilterOptionsWithSlug(column, colType, dropdownOptions, foreignValueColumn)) {
@@ -674,6 +684,7 @@ function createFilterElement(tableName, column, colType) {
                             }
                         }
 
+                        if (destroyed) return;
                         dropdown.setOptions(dropdownOptions);
                         dropdown.setValue(savedDropdownState);
                         optionsLoaded = true;
@@ -690,7 +701,7 @@ function createFilterElement(tableName, column, colType) {
                     }
                 };
 
-                if (hasSavedDropdownValues) {
+                if (hasSavedDropdownValues || filterElementKind === "choice") {
                     void ensureForeignFilterOptions();
                 } else {
                     const lazyLoadOptions = () => {

@@ -279,6 +279,10 @@ class EaselectAPIClient:
             ),
         ))
         self._opener = urllib.request.build_opener(*transport_handlers)
+        self._opener.addheaders = [
+            ("User-Agent", "Filterest-Agent-Tools/1.0"),
+            ("X-Filterest-Automation", "1"),
+        ]
 
     @staticmethod
     def _ssl_context(
@@ -844,7 +848,10 @@ class EaselectAPIClient:
         return self.request(
             "POST",
             "/api/drop-dataset",
-            data={"dataset_name": dataset_name},
+            data={
+                "dataset_name": dataset_name,
+                "confirm_dataset_name": dataset_name,
+            },
             csrf=True,
         )
 

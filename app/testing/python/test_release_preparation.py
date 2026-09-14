@@ -317,3 +317,97 @@ def test_bootstrap_malformed_structure_has_clear_failure(candidate):
     (root / release.BOOTSTRAP).write_text("[]\n")
     with pytest.raises(release.PreparationError, match="JSON object"):
         release.prepare(args)
+
+
+def reviewed_db_transition(root, args, target="2.0.1"):
+    """Commit new reviewed DB artifacts, keeping the published history unchanged."""
+    args.db_transition_from = "2.0.0"
+    write(root, "app/VERSION_DB", target + "\n")
+    manifest = json.loads((root / release.BOOTSTRAP).read_bytes())
+    manifest["db_version"] = target
+    for name in ("schema.sql", "seed_data.sql"):
+        relative = "server_tools/public_bootstrap/" + name
+        content = ("reviewed " + target + " " + name).encode()
+        write(root, "app/" + relative, content)
+        manifest["generated_files"][relative]["sha256"] = hashlib.sha256(content).hexdigest()
+    write(root, "app/server_tools/versioning/schema_snapshots/db-" + target + ".sql",
+          (root / "app/server_tools/public_bootstrap/schema.sql").read_bytes())
+    write(root, release.BOOTSTRAP, release.json_bytes(manifest))
+    args.source_commit = commit_fixture(root)
+
+
+def test_explicit_database_transition_preserves_published_history(candidate):
+    from server_tools.scripts.validate_app_db_compatibility import validate_manifest
+    root, args = candidate
+    published_identity = (root / release.IDENTITY).read_bytes()
+    published_ledger = (root / release.LEDGER).read_bytes()
+    published_snapshot = (root / "app/server_tools/versioning/schema_snapshots/db-2.0.0.sql").read_bytes()
+    reviewed_db_transition(root, args)
+    before = snapshot(root)
+    assert validate_manifest(root / "app") == 1  # S is deliberately not a candidate.
+    result = release.prepare(args)
+    assert result["source_clean"] and snapshot(root) == before
+    assert (root / release.IDENTITY).read_bytes() == published_identity
+    args.apply = True
+    release.prepare(args)
+    assert validate_manifest(root / "app") == 0
+    assert (root / release.LEDGER).read_bytes().startswith(published_ledger)
+    assert (root / "app/server_tools/versioning/schema_snapshots/db-2.0.0.sql").read_bytes() == published_snapshot
+    identity = json.loads((root / release.IDENTITY).read_bytes())
+    assert identity["database"] == {"min_version": "2.0.1", "target_version": "2.0.1"}
+    rows = [json.loads(line) for line in (root / release.COMPATIBILITY).read_bytes().splitlines()]
+    old = json.loads(before[release.COMPATIBILITY])
+    assert rows[0] == dict(old, status="historical")
+    assert rows[-1]["schema_snapshot_path"].endswith("/db-2.0.1.sql")
+    for name in ("app/VERSION_DB", "app/server_tools/public_bootstrap/schema.sql",
+                 "app/server_tools/public_bootstrap/seed_data.sql",
+                 "app/server_tools/versioning/schema_snapshots/db-2.0.1.sql"):
+        assert (root / name).read_bytes() == before[name]
+
+
+@pytest.mark.parametrize("change,message", [
+    ("no_flag", "requires explicit --db-transition-from"),
+    ("wrong_from", "does not match published"),
+    ("downgrade", "requires a newer target"),
+    ("snapshot", "snapshot disagrees"),
+    ("untracked_snapshot", "git-tracked artifact"),
+    ("stale_bootstrap", "hash mismatch"),
+    ("history_min", "minimum database"),
+])
+def test_database_transition_rejects_unreviewed_or_inconsistent_inputs(candidate, change, message):
+    root, args = candidate
+    reviewed_db_transition(root, args, "1.9.9" if change == "downgrade" else "2.0.1")
+    if change == "no_flag":
+        args.db_transition_from = None
+    elif change == "wrong_from":
+        args.db_transition_from = "1.0.0"
+    elif change == "snapshot":
+        write(root, "app/server_tools/versioning/schema_snapshots/db-2.0.1.sql", "wrong")
+    elif change == "untracked_snapshot":
+        release.git(root, "rm", "--cached", "app/server_tools/versioning/schema_snapshots/db-2.0.1.sql")
+    elif change == "stale_bootstrap":
+        write(root, "app/server_tools/public_bootstrap/schema.sql", "stale")
+    elif change == "history_min":
+        row = json.loads((root / release.COMPATIBILITY).read_bytes())
+        row["min_db_version"] = "1.0.0"
+        write(root, release.COMPATIBILITY, release.canonical_json_line(row))
+    before = snapshot(root)
+    with pytest.raises((ValueError, OSError), match=message):
+        release.prepare(args)
+    assert snapshot(root) == before
+
+
+def test_same_database_cannot_claim_a_transition(candidate):
+    root, args = candidate
+    args.db_transition_from = "2.0.0"
+    before = snapshot(root)
+    with pytest.raises(release.PreparationError, match="requires a newer target"):
+        release.prepare(args)
+    assert snapshot(root) == before
+
+
+def test_database_transition_cli_uses_explicit_full_option(candidate):
+    _, args = candidate
+    parsed = release.parse_args(["--expect-current-version", "1.2.3", "--source-commit", args.source_commit,
+        "--release-notes", str(args.release_notes), "--manifest-notes", "reviewed", "--db-transition-from", "2.0.0"])
+    assert parsed.db_transition_from == "2.0.0"

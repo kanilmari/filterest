@@ -33,6 +33,9 @@ func TestRegisterFrontendDirectoryServesOnlyTheMountedChildPrefix(t *testing.T) 
 	if response.Code != 200 {
 		t.Fatalf("status = %d, want 200", response.Code)
 	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store for extension modules", got)
+	}
 	if response.Body.String() != "export {};\n" {
 		t.Fatalf("body = %q, want extension module", response.Body.String())
 	}

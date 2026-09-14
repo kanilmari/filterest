@@ -419,6 +419,49 @@ func resolveAndAuthorizeOwnedChildren(
 	return resolved, nil
 }
 
+// normalizeMainForeignKeyValues applies missing-value semantics before integer
+// conversion can turn a missing required relation into the fabricated ID zero.
+func normalizeMainForeignKeyValues(columns []dtt_models.AddRowColumnInfo, row map[string]interface{}) error {
+	for _, column := range columns {
+		if column.ForeignTableName == "" || column.ForeignColumnName == "" ||
+			!isAddRowColumnUserInsertable(column) || column.GenerationExpression != "" ||
+			strings.EqualFold(column.IsIdentity, "YES") {
+			continue
+		}
+		// These exact actor fields are populated later from the authenticated
+		// session by source_insert_specs, even when metadata is insertable.
+		// No other spec/column combination may bypass required validation.
+		var specs map[string]string
+		if json.Unmarshal([]byte(column.SourceInsertSpecs), &specs) == nil &&
+			((column.ColumnName == "user_id" && specs["user_id"] == "currentUser") ||
+				(column.ColumnName == "cached_username" && specs["cached_username"] == "currentUserName")) {
+			continue
+		}
+
+		value, supplied := row[column.ColumnName]
+		blank := false
+		if text, ok := value.(string); ok {
+			blank = strings.TrimSpace(text) == ""
+		}
+		if supplied && value != nil && !blank {
+			continue
+		}
+		// Omission and an untouched empty form control allow the database
+		// default. Explicit JSON null remains distinct from a default.
+		if column.ColumnDefault != "" && (!supplied || blank) {
+			delete(row, column.ColumnName)
+			continue
+		}
+		if strings.EqualFold(column.IsNullable, "NO") {
+			return fmt.Errorf("required foreign-key value missing for %s", column.ColumnName)
+		}
+		if supplied {
+			row[column.ColumnName] = nil
+		}
+	}
+	return nil
+}
+
 func validateMainForeignKeyReads(
 	tx *sql.Tx,
 	columns []dtt_models.AddRowColumnInfo,

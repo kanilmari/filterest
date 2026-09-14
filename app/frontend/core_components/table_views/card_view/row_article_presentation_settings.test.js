@@ -3,6 +3,7 @@
 // Covers ordinary cards and article rendering through one shared public setting.
 // Exists so invalid or unavailable configuration never restores raw ISO timestamps.
 
+import { DEFAULT_DATASET_COVER_THEME, getSitePresentationState } from "../../admin_tools/site_presentation_state.js";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const { fetchSitePresentationSettingsMock } = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ import {
 
 describe("row_article_presentation_settings", () => {
     beforeEach(() => {
+        globalThis.localStorage?.clear();
         fetchSitePresentationSettingsMock.mockReset();
         resetRowArticlePresentationSettingsCacheForTests();
     });
@@ -28,7 +30,7 @@ describe("row_article_presentation_settings", () => {
     test("returns the allowlisted timestamp mode with the current UI language", async () => {
         fetchSitePresentationSettingsMock.mockResolvedValue({
             row_article_timestamp_display_mode: "date_only",
-            dataset_cover_theme: {},
+            dataset_cover_theme: DEFAULT_DATASET_COVER_THEME,
         });
 
         await expect(resolveRowArticleTimestampDisplayOptions("fi")).resolves.toEqual({
@@ -40,6 +42,7 @@ describe("row_article_presentation_settings", () => {
     test("falls back to date_time for unsupported values", async () => {
         fetchSitePresentationSettingsMock.mockResolvedValue({
             row_article_timestamp_display_mode: "raw_iso",
+            dataset_cover_theme: DEFAULT_DATASET_COVER_THEME,
         });
 
         await expect(resolveRowArticleTimestampDisplayOptions("en")).resolves.toEqual({
@@ -49,9 +52,9 @@ describe("row_article_presentation_settings", () => {
     });
 
     test("caches one successful site-settings read for the current page", async () => {
-        fetchSitePresentationSettingsMock.mockResolvedValue({});
+        fetchSitePresentationSettingsMock.mockResolvedValue({ dataset_cover_theme: DEFAULT_DATASET_COVER_THEME });
 
-        await resolveRowArticleTimestampDisplayOptions("en");
+        await Promise.all([resolveRowArticleTimestampDisplayOptions("en"), getSitePresentationState().loadSettings()]);
         await resolveRowArticleTimestampDisplayOptions("fi");
 
         expect(fetchSitePresentationSettingsMock).toHaveBeenCalledTimes(1);
@@ -60,6 +63,7 @@ describe("row_article_presentation_settings", () => {
     test("shares the same typed timestamp policy with ordinary cards", async () => {
         fetchSitePresentationSettingsMock.mockResolvedValue({
             row_article_timestamp_display_mode: "date_only",
+            dataset_cover_theme: DEFAULT_DATASET_COVER_THEME,
         });
 
         await expect(resolveSiteTimestampDisplayOptions("fi")).resolves.toEqual({

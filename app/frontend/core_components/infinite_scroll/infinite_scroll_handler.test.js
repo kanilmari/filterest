@@ -239,4 +239,43 @@ describe("initializeInfiniteScroll", () => {
         disconnectInfiniteScroll("articles");
     });
 
+    test("late pagination cannot change count, offset or another renderer after disconnect", async () => {
+        createCardView("return_cards");
+        let resolveOld;
+        fetchDatasetDataMock.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.initializeInfiniteScroll("return_cards");
+        intersectionObservers[0].callback([{ isIntersecting: true }]);
+        expect(fetchDatasetDataMock).toHaveBeenCalledOnce();
+        scroll.disconnectInfiniteScroll("return_cards");
+        localStorage.setItem("return_cards_view", "article_view");
+        resolveOld({ data: [{ id: 9 }], row_count: 999 });
+        await Promise.resolve(); await Promise.resolve();
+        expect(appendDataToCardViewMock).not.toHaveBeenCalled();
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+        expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
+    });
+
+    test("an old request's finally does not release the newer request's loading lock", async () => {
+        createCardView("return_cards");
+        let resolveOld, resolveNew;
+        fetchDatasetDataMock
+            .mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }))
+            .mockReturnValueOnce(new Promise(resolve => { resolveNew = resolve; }));
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.initializeInfiniteScroll("return_cards");
+        intersectionObservers[0].callback([{ isIntersecting: true }]);
+        scroll.disconnectInfiniteScroll("return_cards");
+        scroll.initializeInfiniteScroll("return_cards");
+        intersectionObservers[1].callback([{ isIntersecting: true }]);
+        resolveOld({ data: [{ id: 9 }], row_count: 999 });
+        await Promise.resolve(); await Promise.resolve();
+        intersectionObservers[1].callback([{ isIntersecting: true }]);
+        expect(fetchDatasetDataMock).toHaveBeenCalledTimes(2);
+        expect(scroll.captureInfiniteScrollState("return_cards").isLoading).toBe(true);
+        resolveNew({ data: [], row_count: 0 });
+        await Promise.resolve(); await Promise.resolve();
+        scroll.disconnectInfiniteScroll("return_cards");
+    });
+
 });

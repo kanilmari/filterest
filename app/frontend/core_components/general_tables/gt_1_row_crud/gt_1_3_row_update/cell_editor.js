@@ -528,7 +528,7 @@ async function handleOptionEditing({
         optionElement.textContent = option.label;
         select.appendChild(optionElement);
     });
-    select.value = normalizedOriginalValue;
+    select.value = normalizedOriginalValue ?? '';
 
     let completed = false;
     let commitInFlight = false;

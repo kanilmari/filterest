@@ -176,8 +176,8 @@
 
 .dataset-shared-topbar__menu-button:hover,
 .dataset-shared-topbar__menu-button:focus-visible {
-  border-color: rgb(0 255 136 / 0.3);
-  background: var(--button_hover_bg_color);
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
 }
 
 /* ============================================
@@ -292,4 +292,9 @@
   .dataset-shared-topbar__menu-slot--visible {
     transition-duration: 0ms;
   }
+}
+
+.dataset-shared-topbar__menu-button:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }

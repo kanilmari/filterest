@@ -3,6 +3,8 @@
 // Bridges the memoized article load session, shared media renderers and current-view guard.
 // Keeps caption hydration independent of related-section visibility and editing permissions.
 
+import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
+
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
 import { buildRowArticleImageGallery } from "./row_article_image_gallery.js";
 import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js";
@@ -13,7 +15,6 @@ import {
     resolveRowArticleImageGalleryChild,
 } from "./row_article_asset_resolver.js";
 import { hasDatasetPermission, primeDatasetPermissions } from "../../route_permission_checker.js";
-import { syncServiceCatalogInlineCachedImageVisibility } from "./row_article_service_catalog_image_syncer.js";
 import {
     wrapRowArticleAttachmentSection,
     wrapRowArticleImageGallerySection,
@@ -40,7 +41,19 @@ export function createRowArticleMediaHydrator({
     showRelatedItems: show_related_items_on_big_cards,
     canCommit,
     onLinkedTaskChildCountChange,
+    sectionDefaults = {},
 }) {
+    const sectionOpenState = new Map();
+    const sectionOptions = (key, selector) => {
+        const existing = rowArticleContentElement.querySelector(selector);
+        const startOpen = resolveRowArticleSectionStartOpen(
+            sectionOpenState.has(key) ? { [key]: sectionOpenState.get(key) } : sectionDefaults,
+            key,
+            existing,
+        );
+        sectionOpenState.set(key, startOpen);
+        return { startOpen };
+    };
     let refreshMediaSections = async () => {};
     const hydrateRelatedSections = async () => {
         if (!canCommit() || !rowArticleElement.isConnected || !row_item.id) {
@@ -184,14 +197,9 @@ export function createRowArticleMediaHydrator({
                     syncInlineCaptions(freshMediaState.imageChildForGallery);
                     const freshGalleryElement = await renderGallery(freshMediaState.imageChildForGallery);
                     if (!canCommit() || !rowArticleElement.isConnected) return;
-                    syncServiceCatalogInlineCachedImageVisibility(
-                        rowArticleContentElement,
-                        table_name,
-                        freshGalleryElement
-                    );
                     upsertMediaSection(
                         ".row_article_image_gallery_section",
-                        wrapRowArticleImageGallerySection(freshGalleryElement),
+                        wrapRowArticleImageGallerySection(freshGalleryElement, sectionOptions("images", ".row_article_image_gallery_section")),
                         ".row_article_attachment_list_section, .row_article_related_items_section",
                     );
                     upsertMediaSection(
@@ -199,7 +207,7 @@ export function createRowArticleMediaHydrator({
                         wrapRowArticleAttachmentSection(await renderAttachments(
                             freshMediaState.attachmentChildForList,
                             freshMediaState.attachmentLinking,
-                        )),
+                        ), sectionOptions("attachments", ".row_article_attachment_list_section")),
                         ".row_article_related_items_section",
                     );
                 } catch (refreshErr) {
@@ -233,14 +241,9 @@ export function createRowArticleMediaHydrator({
 
             const galleryElement = await renderGallery(initialMediaState.imageChildForGallery);
             if (!canCommit() || !rowArticleElement.isConnected) return;
-            syncServiceCatalogInlineCachedImageVisibility(
-                rowArticleContentElement,
-                table_name,
-                galleryElement
-            );
             if (galleryElement) {
                 rowArticleContentElement.appendChild(
-                    wrapRowArticleImageGallerySection(galleryElement)
+                    wrapRowArticleImageGallerySection(galleryElement, sectionOptions("images", ".row_article_image_gallery_section"))
                 );
             }
 
@@ -251,7 +254,7 @@ export function createRowArticleMediaHydrator({
             if (!canCommit() || !rowArticleElement.isConnected) return;
             if (attachmentList) {
                 rowArticleContentElement.appendChild(
-                    wrapRowArticleAttachmentSection(attachmentList)
+                    wrapRowArticleAttachmentSection(attachmentList, sectionOptions("attachments", ".row_article_attachment_list_section"))
                 );
             }
 
@@ -267,7 +270,7 @@ export function createRowArticleMediaHydrator({
             );
             if (tabsEl && canCommit() && rowArticleElement.isConnected) {
                 rowArticleContentElement.appendChild(
-                    wrapRowArticleRelatedRowsSection(tabsEl)
+                    wrapRowArticleRelatedRowsSection(tabsEl, sectionOptions("related_rows", ".row_article_related_items_section"))
                 );
             }
         } catch (err) {

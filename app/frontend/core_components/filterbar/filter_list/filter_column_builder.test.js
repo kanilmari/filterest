@@ -4,11 +4,12 @@
 // Bridges low-level row-part assembly and the persisted table state used by filter controls.
 // Exists to lock in the refactor that moved shared filter control construction behind one API.
 
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
     buildFilterControlParts,
     buildFilterRowParts,
     mapForeignFilterOptions,
+    createFilterElement,
 } from "./filter_column_builder.js";
 
 describe("filter column row builders", () => {
@@ -117,4 +118,38 @@ describe("filter column row builders", () => {
             { value: "raw-id", label: ordinaryJson },
         ]);
     });
+});
+
+
+test('finite API choices use the existing multiselect include/exclude and shared refresh path', async () => {
+    const { registerDatasetQueryAdapter } = await import('../dataset_surface_provider/dataset_query_adapter_registry.js');
+    const { getParams } = await import('../../navigation/nav_engine/query_params.js');
+    const refresh = vi.fn(async () => {});
+    const release = registerDatasetQueryAdapter('choice_surface', { refresh });
+    const element = createFilterElement('choice_surface', 'priority', { data_type: 'text', filter_options: [
+        { value: 'high', label: 'Korkea' }, { value: 'low', label: 'Matala' },
+    ] });
+    document.body.append(element);
+    try {
+        const target = document.getElementById('choice_surface_priority');
+        await vi.waitFor(() => expect(target.__dropdown?.getLabelsForValues(['high'])).toEqual(['Korkea']));
+        target.__dropdown.setValue({ includeValues: ['high'], excludeValues: ['low'] }, true);
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+        expect(getParams('choice_surface')).toMatchObject({ choice_surface_priority: 'high', choice_surface_priority_exclude: 'low' });
+        const portal = document.querySelector('.msd-dropdown-list');
+        element.destroy();
+        expect(target.__dropdown).toBeUndefined();
+        expect(portal?.isConnected).toBe(false);
+    } finally { release(); element.destroy?.(); element.remove(); }
+});
+
+
+test('destroy before the dropdown import resolves never mounts a detached portal', async () => {
+    const before = document.querySelectorAll('.msd-dropdown-list').length;
+    const element = createFilterElement('closed_surface', 'priority', { data_type: 'text', filter_options: [{ value: 'high', label: 'High' }] });
+    const target = element.querySelector('#closed_surface_priority');
+    element.destroy();
+    await vi.dynamicImportSettled();
+    expect(target.__dropdown).toBeUndefined();
+    expect(document.querySelectorAll('.msd-dropdown-list')).toHaveLength(before);
 });

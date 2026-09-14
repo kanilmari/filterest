@@ -36,6 +36,8 @@ type automationProvisionerMockState struct {
 	credentialUpdates  int
 	credentialInserts  int
 	storedPasswordHash string
+	apiOnlyWritten     bool
+	disableCount       int
 }
 
 type automationProvisionerMockDriver struct {
@@ -115,7 +117,7 @@ func (connection *automationProvisionerMockConn) QueryContext(
 	switch {
 	case strings.Contains(normalized, "LEFT JOIN restricted.users_restricted credentials"):
 		return &automationProvisionerMockRows{
-			columns: []string{"id", "username", "enabled", "admin", "privileged", "creation_spec", "membership", "method", "generation"},
+			columns: []string{"id", "username", "enabled", "admin", "privileged", "creation_spec", "membership", "method", "generation", "api_only"},
 			rows:    connection.state.statusRows,
 		}, nil
 	case strings.Contains(normalized, "SELECT id, username, COALESCE(creation_spec, '')"):
@@ -128,7 +130,18 @@ func (connection *automationProvisionerMockConn) QueryContext(
 	case strings.Contains(normalized, "INSERT INTO system_users"):
 		connection.state.publicInsertCount++
 		return &automationProvisionerMockRows{columns: []string{"id"}, rows: [][]driver.Value{{int64(44)}}}, nil
+	case strings.Contains(normalized, "UPDATE system_users u SET enabled = FALSE"):
+		connection.state.disableCount++
+		return &automationProvisionerMockRows{columns: []string{"privileged", "admin", "membership"}, rows: [][]driver.Value{{false, true, true}}}, nil
+	case strings.Contains(normalized, "SET api_only = TRUE, authentication_generation"):
+		connection.state.apiOnlyWritten = true
+		if !connection.state.hasCredentials {
+			return &automationProvisionerMockRows{columns: []string{"generation", "method"}}, nil
+		}
+		connection.state.generation++
+		return &automationProvisionerMockRows{columns: []string{"generation", "method"}, rows: [][]driver.Value{{connection.state.generation, "none"}}}, nil
 	case strings.Contains(normalized, "UPDATE restricted.users_restricted"):
+		connection.state.apiOnlyWritten = strings.Contains(normalized, "api_only = TRUE")
 		connection.state.credentialUpdates++
 		connection.state.storedPasswordHash = arguments[1].Value.(string)
 		if !connection.state.hasCredentials {
@@ -140,6 +153,7 @@ func (connection *automationProvisionerMockConn) QueryContext(
 			rows:    [][]driver.Value{{connection.state.generation}},
 		}, nil
 	case strings.Contains(normalized, "INSERT INTO restricted.users_restricted"):
+		connection.state.apiOnlyWritten = strings.Contains(normalized, "authentication_generation, api_only") && strings.Contains(normalized, "NULL, NULL, 1, TRUE")
 		connection.state.credentialInserts++
 		connection.state.storedPasswordHash = arguments[1].Value.(string)
 		connection.state.generation = 1
@@ -211,7 +225,7 @@ func TestAutomationAccountProvisionerCreatesAtomicReadyAdministrator(t *testing.
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
-	if !record.Exists || !record.Ready || !record.Created || record.Username != AutomationAccountUsername {
+	if !record.Exists || !record.Ready || !record.APIOnly || !state.apiOnlyWritten || !record.Created || record.Username != AutomationAccountUsername {
 		t.Fatalf("unexpected record: %#v", record)
 	}
 	if state.beginCount != 1 || state.commitCount != 1 || state.rollbackCount != 0 {
@@ -237,7 +251,7 @@ func TestAutomationAccountProvisionerRotatesWithoutDuplicateIdentity(t *testing.
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
-	if record.Created || record.AuthenticationGeneration != 8 {
+	if record.Created || !record.APIOnly || !state.apiOnlyWritten || record.AuthenticationGeneration != 8 {
 		t.Fatalf("rotation record = %#v", record)
 	}
 	if state.publicInsertCount != 0 || state.publicUpdateCount != 1 || state.credentialUpdates != 1 {
@@ -247,7 +261,8 @@ func TestAutomationAccountProvisionerRotatesWithoutDuplicateIdentity(t *testing.
 
 func TestAutomationAccountProvisionerRejectsHumanOrDuplicateIdentity(t *testing.T) {
 	for name, rows := range map[string][][]driver.Value{
-		"human collision": {{int64(44), AutomationAccountUsername, "Created in browser"}},
+		"human collision":            {{int64(44), AutomationAccountUsername, "Created in browser"}},
+		"renamed protected identity": {{int64(44), "renamed", automationCreationSpec}},
 		"duplicate rows": {
 			{int64(44), AutomationAccountUsername, automationCreationSpec},
 			{int64(45), strings.ToUpper(AutomationAccountUsername), automationCreationSpec},
@@ -294,7 +309,7 @@ func TestAutomationAccountProvisionerRejectsInvalidPasswordBeforeTransaction(t *
 func TestAutomationAccountStatusReturnsNonSecretReadback(t *testing.T) {
 	state := &automationProvisionerMockState{statusRows: [][]driver.Value{{
 		int64(44), AutomationAccountUsername, true, true, false,
-		automationCreationSpec, true, "none", int64(3),
+		automationCreationSpec, true, "none", int64(3), true,
 	}}}
 	provisioner := NewAutomationAccountProvisioner(openAutomationProvisionerMockDB(t, state))
 	record, err := provisioner.Status(context.Background())
@@ -303,5 +318,43 @@ func TestAutomationAccountStatusReturnsNonSecretReadback(t *testing.T) {
 	}
 	if !record.Exists || !record.Ready || record.AuthenticationGeneration != 3 {
 		t.Fatalf("status record = %#v", record)
+	}
+}
+
+func TestAutomationRevokeInvalidatesGenerationWithoutReplacingPassword(t *testing.T) {
+	state := &automationProvisionerMockState{
+		identityRows:   [][]driver.Value{{int64(44), AutomationAccountUsername, automationCreationSpec}},
+		hasCredentials: true, generation: 7, storedPasswordHash: "keep-existing-hash",
+	}
+	record, err := NewAutomationAccountProvisioner(openAutomationProvisionerMockDB(t, state)).Revoke(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !record.Exists || record.Ready || record.Enabled || !record.APIOnly || record.AuthenticationGeneration != 8 ||
+		!record.AdminGroupMember || !record.AdminAccessAllowed {
+		t.Fatalf("record = %#v", record)
+	}
+	if state.storedPasswordHash != "keep-existing-hash" || !state.apiOnlyWritten || state.disableCount != 1 ||
+		state.commitCount != 1 || state.rollbackCount != 0 {
+		t.Fatalf("unexpected revoke mutations: %#v", state)
+	}
+}
+func TestAutomationRevokeRollsBackOnMissingCredentialsOrAudit(t *testing.T) {
+	for _, auditFailure := range []bool{false, true} {
+		state := &automationProvisionerMockState{
+			identityRows:   [][]driver.Value{{int64(44), AutomationAccountUsername, automationCreationSpec}},
+			hasCredentials: auditFailure, failAudit: auditFailure, generation: 7,
+		}
+		_, err := NewAutomationAccountProvisioner(openAutomationProvisionerMockDB(t, state)).Revoke(context.Background())
+		if err == nil || state.commitCount != 0 || state.rollbackCount != 1 {
+			t.Fatalf("err=%v commits=%d rollbacks=%d", err, state.commitCount, state.rollbackCount)
+		}
+	}
+}
+func TestAutomationStatusRequiresProtectedAPIOnlyBit(t *testing.T) {
+	state := &automationProvisionerMockState{statusRows: [][]driver.Value{{int64(44), AutomationAccountUsername, true, true, false, automationCreationSpec, true, "none", int64(3), false}}}
+	record, err := NewAutomationAccountProvisioner(openAutomationProvisionerMockDB(t, state)).Status(context.Background())
+	if err != nil || !record.Exists || record.Ready || record.APIOnly {
+		t.Fatalf("record=%#v err=%v", record, err)
 	}
 }
