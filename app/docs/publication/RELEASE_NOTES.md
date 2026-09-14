@@ -1,12 +1,11 @@
-# Filterest 9.3.8
+# Filterest 9.3.9
 
-This candidate pairs application 9.3.8 with database schema 9.7.15. Existing installations must run the reviewed migrations before this application version becomes ready.
+Database version: 9.7.15 (unchanged).
 
-- Cards use one shared renderer with ordinary and glowy styles. Site defaults and dataset overrides have separate palette controls and saves; NULL inherits the site value. The service catalog follows the same metadata path as other datasets. Detail columns, image borders and a single translucent card background follow the selected presentation.
-- Classic and image-first articles have explicit navigation state. Returning to a list preserves its URL and scroll container; explicit article links retain their requested view. Administrators can configure initial article sections per dataset, and card labels preserve explicit choices while supporting role-based inheritance.
-- The coding-agent entry is administrator-only. The boolean system setting coding_agent_dev_only defaults to true; false permits production access when the separately configured runner is available. Production execution uses a persistent Git workspace, isolated jobs and fixed maintenance commands. Installing and authenticating that runner remains an operator action.
-- Automation authentication uses a protected API-only account flag and signed session channel. API tooling identifies itself explicitly; browser HTML access and untrusted channel claims are denied. Revocation advances the authentication generation without changing normal user account policy.
-- Workline Observatory shows workline numbers, and reporting phases apply to the complete agreed workline scope. Dataset creation and removal guards, shared field settings, supplemental search and theme contrast receive the integrated corrections.
-- Runtime status reports explicit application resources independently of a particular container orchestrator. Frontend directory ownership is documented as a plan: content views belong under the content area, while toolbar folders own their selection controls. This release does not move the frontend directory tree.
+- Fresh dataset pages use their configured default view from the common read metadata, including readers without the administrator navigation tree. The renderer and view selector apply the existing default-view permission exception to that same dataset default. Permitted explicit and saved view selections keep their existing precedence.
+- The administrator Coding agent selector waits for the server capability response instead of hiding prematurely from a cached route list. Failed or unauthorized capability requests keep the control unavailable. Feature policy and runner readiness remain separate.
+- The optional external Coding agent runner cleans up its Unix socket when stopped and verifies a leftover socket before restarting. The example service preserves the socket directory across service restarts so existing container mounts can remain attached.
 
-Validation includes the full frontend and Go backend suites, production frontend build, lint and generated-contract checks, isolated migration/fresh-bootstrap tests, a complete native database backup and restore, native palette persistence and API-channel checks. This candidate does not deploy production sites or publish platform release assets.
+Coding agent access remains administrator-only. Enabling the feature does not install or authenticate an external runner. Production runner provisioning, credential setup and an actual completed model-backed job require separate verification; this release does not claim those steps have succeeded.
+
+No database migration is introduced by this release.
