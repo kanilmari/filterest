@@ -101,3 +101,19 @@ test("keeps article field-set order and never fills hidden fields from an old ca
     expect(Object.keys(row)).not.toContain("__articleColumns");
     expect(ROW_ARTICLE_VIEW_KEY).toBe("article_view");
 });
+
+test("carries fresh article roles and languages independently of the source list projection", async () => {
+    const types = { description: { card_element: "description", is_multilingual: true } };
+    const row = await fetchPermittedRowArticleData({
+        tableName: "travel_info",
+        rowItem: { id: 7, title: "Preview" },
+        requestRows: async () => ({
+            columns: ["description"], types,
+            data: [{ id: 7, description: '{"fi":"Artikkeli","en":"Article"}' }],
+        }),
+    });
+    expect(row.__articleTypes).toBe(types);
+    expect(row.__articleColumns).toEqual(["description"]);
+    expect(Object.keys(row)).toEqual(["id", "description"]);
+    expect(JSON.stringify(row)).not.toContain("__articleTypes");
+});

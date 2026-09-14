@@ -3,6 +3,7 @@
 // Bridges ordered article image rows with pointer, keyboard, and touch navigation.
 // Exists to keep the ordinary thumbnail gallery unchanged for standard articles.
 
+import { buildRowArticleImageArrow, buildRowArticleImagePosition } from "./row_article_image_controls.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { createImageElement } from "./card_avatar_builder.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
@@ -249,30 +250,6 @@ function isBackdropActivationTarget(event, stage, mediaElement) {
     return false;
 }
 
-function buildImageArrow(direction, activate) {
-    const isPrevious = direction === "previous";
-    const langKey = isPrevious ? "previous_image" : "next_image";
-    const fallback = isPrevious ? "Previous image" : "Next image";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.classList.add(
-        "row_article_image_first_arrow",
-        `row_article_image_first_arrow--${direction}`,
-        "fw-btn",
-        "fw-btn--ghost",
-    );
-    button.dataset.testid = `row-article-image-${direction}`;
-    button.dataset.titleLangKey = langKey;
-    button.dataset.ariaLabelLangKey = langKey;
-    button.textContent = isPrevious ? "‹" : "›";
-    button.title = getTranslationForKey(langKey) || fallback;
-    button.setAttribute("aria-label", button.title);
-    button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        activate();
-    });
-    return button;
-}
 
 /**
  * Creates a 100dvh media stage with same-row image navigation.
@@ -329,13 +306,10 @@ export function buildRowArticleImageFirstStage({
         }
     });
 
-    const previousButton = buildImageArrow("previous", () => activateRelative(-1));
-    const nextButton = buildImageArrow("next", () => activateRelative(1));
+    const previousButton = buildRowArticleImageArrow("previous", () => activateRelative(-1));
+    const nextButton = buildRowArticleImageArrow("next", () => activateRelative(1));
 
-    const position = document.createElement("span");
-    position.classList.add("row_article_image_first_position");
-    position.dataset.testid = "row-article-image-position";
-    position.setAttribute("aria-live", "polite");
+    const position = buildRowArticleImagePosition();
 
     const scrollHint = document.createElement("button");
     scrollHint.type = "button";

@@ -533,6 +533,23 @@ describe('generate_table', () => {
         expect(original.isConnected).toBe(false);
     });
 
+    test.each(['card', 'table'])('records the initial %s rows for a later article transfer', async view => {
+        localStorage.setItem('events_view', view);
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const { setUnifiedTableState } = await import('../state_stores/table_state_store.js');
+        const loaded = await import('./dataset_loaded_rows.js');
+        const registry = await import('../navigation/nav_engine/dataset_access_registry.js');
+        registry.primeDatasetAccessRegistry({ datasets: [{ dataset_name: 'events' }] });
+        setUnifiedTableState('events', { offset: 2 });
+        await generate_table('events', ['id'], [{ id: 1 }, { id: 2 }], { id: 'INTEGER' }, 8, false, { default_view_name: view });
+        const token = loaded.captureLoadedDatasetRows('events');
+        expect(token).not.toBeNull();
+        localStorage.setItem('events_view', 'article_view');
+        expect(loaded.resolveLoadedDatasetRows('events', token)).toMatchObject({
+            projectionView: view, offset: 2, result: { data: [{ id: 1 }, { id: 2 }] },
+        });
+    });
+
 });
 
 vi.mock("../navigation/nav_engine/card_article_return_state.js", () => ({ shouldPreserveCardReturnHost: vi.fn(() => false) }));

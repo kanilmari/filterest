@@ -52,12 +52,14 @@
 }
 
 .card_image_content--clickable,
-.big_card_image > [data-image-first-src] {
+.big_card_image > [data-image-first-src],
+.row_article_inline_media > [data-image-first-src] {
     cursor: pointer;
 }
 
 .card_image_content--clickable [role="button"]:focus-visible,
-.big_card_image > [data-image-first-src]:focus-visible {
+.big_card_image > [data-image-first-src]:focus-visible,
+.row_article_inline_media > [data-image-first-src]:focus-visible {
     outline: 2px solid var(--primary_color, hsl(207deg 70% 53%));
     outline-offset: -2px;
 }

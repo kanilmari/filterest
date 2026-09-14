@@ -45,6 +45,43 @@ function createMountOptions(overrides = {}) {
 }
 
 describe('dataset cover presentation settings', () => {
+    test('edits captions in a separate site-wide section with shared FI/EN choices and saved reset', async () => {
+        document.documentElement.lang = 'en';
+        const options = createMountOptions();
+        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+        const get = id => mounted.panel.querySelector('[data-testid="' + id + '"]');
+        const select = get('dataset-cover-test-palette-article-image-caption-position');
+        const section = get('site-article-image-palette-settings');
+        expect(section.contains(select)).toBe(true);
+        expect(get('site-card-palette-settings').contains(select)).toBe(false);
+        expect(section.textContent).toContain('Article images');
+        expect(select.getAttribute('aria-description')).toBe('Site-wide setting for article images.');
+        expect([...select.options].map(option => option.value)).toEqual(['below', 'overlay']);
+        expect(select.value).toBe('below');
+        select.value = 'overlay'; select.dispatchEvent(new Event('change'));
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect(options.saveRequestFn).not.toHaveBeenCalled();
+        get('dataset-cover-test-palette-tab-dark').click();
+        expect(select.value).toBe('overlay');
+        document.documentElement.lang = 'fi';
+        await vi.waitFor(() => expect(select.getAttribute('aria-label')).toBe('Kuvatekstin sijainti'));
+        expect(section.textContent).toContain('Artikkelikuvat');
+        expect(select.getAttribute('aria-description')).toBe('Sivuston yhteinen asetus artikkelien kuville.');
+        expect([...select.options].map(option => option.textContent)).toEqual(['Kuvan alla', 'Kuvan päällä']);
+        get('dataset-cover-test-palette-tab-light').click();
+        expect(select.value).toBe('overlay');
+        get('dataset-cover-test-palette-reset').click();
+        expect(select.value).toBe('below');
+        select.value = 'overlay'; select.dispatchEvent(new Event('change'));
+        get('dataset-cover-test-palette-save').click();
+        await vi.waitFor(() => expect(get('dataset-cover-test-palette-save').disabled).toBe(false));
+        expect(options.saveRequestFn).toHaveBeenCalledOnce();
+        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
+        expect(options.datasetSaveRequestFn).not.toHaveBeenCalled();
+        select.value = 'below'; select.dispatchEvent(new Event('change')); mounted.destroy();
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+    });
+
     test('previews, translates, resets and saves the bounded detail column count', async () => {
         document.documentElement.lang = 'en';
         const options = createMountOptions();
@@ -414,7 +451,7 @@ describe('dataset cover presentation settings', () => {
         control.destroy();
         control = await mountDatasetCoverTestPalette(createCoverHero(), 'another_dataset', options);
         const restored = [...control.panel.querySelectorAll('details')];
-        expect(restored.map(group => group.open)).toEqual([false, false, false, false, true, false]);
+        expect(restored.map(group => group.open)).toEqual([false, false, false, false, true, false, false]);
         restored[4].querySelector('summary').click();
         await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('false'));
         expect(options.saveRequestFn).not.toHaveBeenCalled();
@@ -469,9 +506,9 @@ describe('dataset cover presentation settings', () => {
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
         )).toHaveLength(10);
         const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
-        expect(toolboxes).toHaveLength(6);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(6);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(6);
+        expect(toolboxes).toHaveLength(7);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(7);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(7);
         expect([...toolboxes].every(toolbox => !toolbox.open)).toBe(true);
         expect(toolboxes[2].open).toBe(false);
         toolboxes[2].querySelector('summary').click();

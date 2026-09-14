@@ -16,8 +16,13 @@ function normalizeImagePath(filename = "") {
     }
 }
 function resolveInlineImagePath(container) {
+    // Logo renderers hide their inner mark from accessibility; the owning media
+    // still identifies the asset. Never take a neighbouring record preview.
+    const media = container?.querySelector?.(
+        ":scope > [data-image-first-src], :scope > .row_article_inline_media > [data-image-first-src]",
+    );
     const image = container?.querySelector?.("img:not([aria-hidden='true'])");
-    const source = image?.dataset?.imageFirstSrc || image?.getAttribute?.("src") || "";
+    const source = media?.dataset?.imageFirstSrc || image?.dataset?.imageFirstSrc || image?.getAttribute?.("src") || "";
     try {
         return new URL(source, window.location.href).pathname;
     } catch {

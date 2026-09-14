@@ -627,13 +627,15 @@ body.dark-mode .card--modern {
 }
 
 .card_image > .wrapper,
-.big_card_image > .wrapper {
+.big_card_image > .wrapper,
+.row_article_inline_media > .wrapper {
     position: relative;
 }
 
 /* A single inset frame follows the media box at every width without changing image fit. */
 .card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after,
-.big_card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after {
+.big_card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after,
+.row_article_inline_media > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after {
     content: "";
     position: absolute;
     z-index: 2;

@@ -94,6 +94,43 @@ test("Back restores the same card nodes, metadata, filters, offset and inner vie
     expect(getUnifiedTableState("catalog").offset).toBe(100);
 });
 
+test("Back keeps the shared count above retained results through pagination and another Forward/Back", () => {
+    const host = fixture();
+    const surface = host.querySelector(".dataset-results-surface");
+    const wrapper = host.querySelector(".card_view_wrapper");
+    const cards = wrapper.querySelector(".card_container");
+    const controls = document.getElementById("catalog_card_top_controls");
+    const count = document.createElement("div");
+    count.className = "results_count";
+    count.textContent = "100 results";
+    controls.appendChild(count);
+    retained.captureCardArticleReturn("catalog", adapter);
+
+    for (let batch = 0; batch < 2; batch += 1) {
+        const origin = openArticle(host);
+        // The article renderer borrows the shared controls from the retained list.
+        document.getElementById("catalog_article_view_container").appendChild(controls);
+        history.replaceState(origin, "", "/catalog?view=card");
+        expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
+        expect(surface.firstElementChild).toBe(controls);
+        expect(controls.nextElementSibling).toBe(wrapper);
+
+        // Infinite scrolling grows the existing result host after each return.
+        const nextRows = document.createDocumentFragment();
+        for (let index = 0; index < 20; index += 1) {
+            const row = document.createElement("div");
+            row.className = "card";
+            row.dataset.id = String(20 * batch + index + 4);
+            nextRows.appendChild(row);
+        }
+        cards.appendChild(nextRows);
+        expect(cards.children).toHaveLength(1 + 20 * (batch + 1));
+        expect(count.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(surface.firstElementChild).toBe(controls);
+        expect(document.querySelectorAll("#catalog_card_top_controls")).toHaveLength(1);
+    }
+});
+
 test.each(["query", "language", "detached", "refresh", "unknown entry"])("%s invalidates a return before commit", reason => {
     const host = fixture(); retained.captureCardArticleReturn("catalog", adapter);
     const original = openArticle(host);

@@ -557,4 +557,30 @@ describe('card language refresh', () => {
         expect(sidebarTitle?.dataset.titleLangContext).toBe('Revontulet Lapissa');
         expect(sidebarTitle?.title).toBe('title: Revontulet Lapissa');
     });
+    test('paged append deduplicates existing and overlapping IDs without replacing the selected card', async () => {
+        const host = document.createElement('div');
+        const selected = document.createElement('div');
+        selected.className = 'card selected';
+        selected.dataset.id = '1';
+        host.append(selected);
+        document.body.append(host);
+        await appendDataToCardView(host, ['id'], [{ id: '1' }, { id: 2 }, { id: 2 }], 'events', { viewKey: 'article_view' });
+        expect([...host.querySelectorAll('.card')].map(card => card.dataset.id)).toEqual(['1', '2']);
+        expect(host.firstChild).toBe(selected);
+    });
+
+    test('a page invalidated during async rendering never commits cards to the live host', async () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        let current = true;
+        let release;
+        hasDatasetPermissionMock.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        const pending = appendDataToCardView(host, ['id'], [{ id: 2 }], 'events', { isCurrent: () => current });
+        await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+        current = false;
+        release(false);
+        await pending;
+        expect(host.querySelector('.card')).toBeNull();
+    });
+
 });

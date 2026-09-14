@@ -118,7 +118,6 @@ export async function showLoginModal(redirectTarget) {
         shell.appendChild(form);
 
         // Attach event listeners and cache the form
-        await ensurePasswordVisibilityIconsLoaded();
         setupFormInteractions(form);
         cachedLoginShell = shell;
 
@@ -140,19 +139,14 @@ function setupFormInteractions(form) {
     // Password toggle
     const togglePasswordBtn = form.querySelector("#toggle-password");
     const passwordInput = form.querySelector("#password");
-    const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
     
     if (togglePasswordBtn && passwordInput) {
-        // Re-attach the SVG icons logic as they might be lost or need re-initialization
-        // Actually, the SVGs are in the HTML fetched. We just need the click handler.
-        
-        // We need the SVG strings from login.js or just toggle type.
-        // Let's just toggle type for simplicity, or copy the SVG logic if we want to be fancy.
-        // The fetched HTML already contains the initial SVG.
-        
+        togglePasswordBtn.setAttribute("aria-pressed", String(passwordInput.type !== "password"));
         togglePasswordBtn.addEventListener("click", () => {
             const isHidden = passwordInput.type === "password";
             passwordInput.type = isHidden ? "text" : "password";
+            togglePasswordBtn.setAttribute("aria-pressed", String(isHidden));
+            const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
 
             if (visibilityOffSvg && visibilityOnSvg) {
                 togglePasswordBtn.innerHTML = isHidden
@@ -166,9 +160,12 @@ function setupFormInteractions(form) {
     const toggleResetPasswordBtn = form.querySelector("#toggle-password-reset");
     const resetPasswordInput = form.querySelector("#password-reset-new-password");
     if (toggleResetPasswordBtn && resetPasswordInput) {
+        toggleResetPasswordBtn.setAttribute("aria-pressed", String(resetPasswordInput.type !== "password"));
         toggleResetPasswordBtn.addEventListener("click", () => {
             const isHidden = resetPasswordInput.type === "password";
             resetPasswordInput.type = isHidden ? "text" : "password";
+            toggleResetPasswordBtn.setAttribute("aria-pressed", String(isHidden));
+            const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
 
             if (visibilityOffSvg && visibilityOnSvg) {
                 toggleResetPasswordBtn.innerHTML = isHidden
@@ -178,6 +175,17 @@ function setupFormInteractions(form) {
             toggleResetPasswordBtn.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
         });
     }
+
+    // The template already has a themed SVG fallback. Optional assets must never
+    // delay form listeners, and a late response must respect the current reveal state.
+    void ensurePasswordVisibilityIconsLoaded().then(() => {
+        const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
+        for (const [button, input] of [[togglePasswordBtn, passwordInput], [toggleResetPasswordBtn, resetPasswordInput]]) {
+            if (!button || !input) continue;
+            const icon = input.type === "password" ? visibilityOffSvg : visibilityOnSvg;
+            if (icon) button.innerHTML = icon;
+        }
+    }).catch(() => console.warn("[login] Password icons unavailable; using the form fallback."));
 
     // Privacy notice link
     const privacyNoticeLink = form.querySelector("#privacy-notice-link");

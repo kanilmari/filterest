@@ -49,6 +49,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         image_blur: 1,
         card_image_width: 300,
         card_image_presentation: 'contain',
+        article_image_caption_position: 'below',
         card_show_all_fields: true,
         card_style_variant: CARD_STYLE_VARIANT_VALUES.MODERN,
         card_description_lines: 2,
@@ -72,7 +73,7 @@ export function isValidThemeConfig(config) {
         }
     }
     for (const key of Object.keys(DEFAULT_DATASET_COVER_THEME.shared)) {
-        if (['brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'image_blur'].includes(key)) continue;
+        if (['brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'article_image_caption_position', 'image_blur'].includes(key)) continue;
         if (!Number.isFinite(config.shared[key])) return false;
     }
     return (config.shared.card_detail_columns === undefined
@@ -83,6 +84,8 @@ export function isValidThemeConfig(config) {
         || Object.values(CARD_STYLE_VARIANT_VALUES).includes(config.shared.card_style_variant))
         && (config.shared.card_image_presentation === undefined
         || CARD_IMAGE_PRESENTATIONS.includes(config.shared.card_image_presentation))
+        && (config.shared.article_image_caption_position === undefined
+        || ['below', 'overlay'].includes(config.shared.article_image_caption_position))
         && /^#[0-9a-f]{6}$/i.test(config.shared.brand_color || '');
 }
 
@@ -132,9 +135,16 @@ export function brandColorComponents(hexColor) {
     };
 }
 
+function applyArticleImageCaptionSetting(config) {
+    if (typeof document === 'undefined' || !document.documentElement) return;
+    document.documentElement.dataset.articleImageCaptionPosition =
+        config.shared.article_image_caption_position ?? 'below';
+}
+
 export function applySitePresentationGlobals(config, { preserveKnownBrand = false } = {}) {
     if (typeof document === 'undefined' || !document.documentElement || !isValidThemeConfig(config)) return;
     const documentRoot = document.documentElement;
+    applyArticleImageCaptionSetting(config);
     applyCardImagePresentationSetting(config.shared.card_image_presentation);
     applyCardFieldPresentationSetting(
         config.shared.card_show_all_fields, config.shared.card_style_variant, config.shared.card_detail_columns
@@ -214,6 +224,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
                 brand: brandColorComponents(saved.dataset_cover_theme.shared.brand_color),
             }));
         } catch { /* Private browsing or exhausted storage still allows live settings. */ }
+        applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
         applyCardFieldPresentationSetting(
             effectiveSettings().dataset_cover_theme.shared.card_show_all_fields,
             effectiveSettings().dataset_cover_theme.shared.card_style_variant,
@@ -257,6 +268,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         saveQueue = pending.catch(() => {});
         return pending;
     }
+    applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
     applyCardFieldPresentationSetting(
             effectiveSettings().dataset_cover_theme.shared.card_show_all_fields,
             effectiveSettings().dataset_cover_theme.shared.card_style_variant,

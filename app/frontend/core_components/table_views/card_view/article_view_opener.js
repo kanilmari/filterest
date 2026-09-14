@@ -3,6 +3,8 @@
 // Bridges row data, column roles, and permission state with the legacy big-card UI shell.
 // Exists to be the single orchestration point for launching, populating, and managing the row article view.
 
+import { captureLoadedDatasetRows } from "../dataset_loaded_rows.js";
+
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 
 import { ARTICLE_VIEW_KEY, resolveDatasetViewSelectionTarget } from "../dataset_view_registry.js";
@@ -97,6 +99,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             ]);
             if (!isCurrent() || articleOpenGenerations.get(table_name) !== generation
                 || (localStorage.getItem(table_name + "_view") || "card") !== activeView) return;
+            const loadedRows = captureLoadedDatasetRows(table_name);
             const preserveCardReturn = captureCardArticleReturn(table_name, {
                 listPath: buildDatasetPath(table_name, DATASET_PREFIX || "/"),
                 readPagination: () => pagination.captureInfiniteScrollState(table_name),
@@ -121,7 +124,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
             );
             if (!isCurrent()) return;
-            await refreshTableUnified(table_name, { skipUrlParams: true, preserveCardReturn });
+            await refreshTableUnified(table_name, { skipUrlParams: true, preserveCardReturn, loadedRows });
             return;
         }
         /* -------------------------------------------------- *
@@ -136,7 +139,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         selectedCard = selectedCard instanceof HTMLElement
             ? selectedCard
             : resolveVisibleResultCard(table_name, row_item.id);
-        const data_types = resolveRowArticleDataTypes(table_name, selectedCard);
+        const data_types = row_item.__articleTypes ?? resolveRowArticleDataTypes(table_name, selectedCard);
 
         const columns = row_item.__articleColumns || Object.keys(row_item);
         const sorted_columns = row_item.__articleColumns ? columns : sortColumnsByRole(columns, data_types);

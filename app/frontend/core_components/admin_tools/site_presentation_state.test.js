@@ -20,7 +20,8 @@ const deferred = () => {
     return { promise, resolve, reject };
 };
 const hue = () => document.documentElement.style.getPropertyValue('--brand-hue');
-const bootstrap = readFileSync('frontend/public/site_presentation_bootstrap.js', 'utf8');
+const bootstrap = readFileSync('frontend/index.html', 'utf8')
+    .match(/<script id="site-presentation-bootstrap"[^>]*>([\s\S]*?)<\/script>/)[1];
 const boot = () => window.eval(bootstrap);
 const putCache = (snapshot) => localStorage.setItem(PUBLIC_PRESENTATION_CACHE_KEY, JSON.stringify({
     schema_version: 1, settings: snapshot, brand: brandColorComponents(snapshot.dataset_cover_theme.shared.brand_color),
@@ -35,6 +36,47 @@ beforeEach(() => {
 });
 
 describe('public presentation state', () => {
+    test('defaults a legacy caption setting and immediately applies cached and refreshed choices', async () => {
+        const legacy = settings();
+        delete legacy.dataset_cover_theme.shared.article_image_caption_position;
+        legacy.dataset_cover_theme.shared.card_detail_columns = 4;
+        putCache(legacy);
+        const refreshed = settings();
+        refreshed.dataset_cover_theme.shared.article_image_caption_position = 'overlay';
+        const state = createSitePresentationState({ requestFn: async () => refreshed });
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('below');
+        expect(state.savedSettings().dataset_cover_theme.shared.card_detail_columns).toBe(4);
+        await state.loadSettings();
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        const cached = createSitePresentationState({ requestFn: async () => { throw Error('offline'); } });
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect((await cached.loadSettings()).dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
+        const owner = {}, draft = cached.savedSettings();
+        draft.dataset_cover_theme.shared.article_image_caption_position = 'below';
+        const onChange = vi.fn(() => expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('below'));
+        window.addEventListener('dataset-cover-presentation-changed', onChange, { once: true });
+        cached.setPreview(owner, draft);
+        expect(onChange).toHaveBeenCalledOnce();
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
+        cached.releasePreview(owner);
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+    });
+    test.each([null, true, 0, {}, [], '', 'unknown'])('rejects invalid article caption position %j', value => {
+        const input = settings(); input.dataset_cover_theme.shared.article_image_caption_position = value;
+        expect(isValidThemeConfig(input.dataset_cover_theme)).toBe(false);
+    });
+    test('preserves the caption when unrelated palette settings are normalized and saved', async () => {
+        const stored = settings(); stored.dataset_cover_theme.shared.article_image_caption_position = 'overlay';
+        const state = createSitePresentationState({ requestFn: async () => stored });
+        await state.loadSettings();
+        const draft = state.savedSettings(); draft.dataset_cover_theme.shared.card_style_variant = 'standard';
+        const save = vi.fn(async payload => payload);
+        await state.saveSettings(draft, save);
+        expect(save.mock.calls[0][0].dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
+        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect(state.savedSettings().dataset_cover_theme.shared.card_style_variant).toBe('standard');
+    });
+
     test('defaults old column counts to two and separates preview from saved settings', async () => {
         const old = settings(); delete old.dataset_cover_theme.shared.card_detail_columns;
         old.dataset_cover_theme.shared.card_show_all_fields = false;
@@ -216,9 +258,10 @@ describe('public presentation state', () => {
 });
 
 describe('early public-brand paint', () => {
-    test('runs a blocking cache reader before the stylesheet, without modules or inline injection', () => {
+    test('paints from nonce-authorized local cache before CSS without another network request', () => {
         const html = readFileSync('frontend/index.html', 'utf8');
-        const script = '<script src="/frontend/public/site_presentation_bootstrap.js"></script>';
+        const script = '<script id="site-presentation-bootstrap" nonce="{{ .CSPNonce }}">';
+        expect(html).not.toContain('src="/frontend/public/site_presentation_bootstrap.js"');
         expect(html.indexOf(script)).toBeGreaterThan(0);
         expect(html.indexOf(script)).toBeLessThan(html.indexOf('<link rel="stylesheet"'));
         putCache(settings());

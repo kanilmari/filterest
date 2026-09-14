@@ -157,7 +157,8 @@ export function restoreCardArticleReturn(datasetName) {
     record.root.querySelector(".tab_parts_container")?.setAttribute("data-view", "card");
     record.root.classList.remove("hidden");
     if (record.topControls?.isConnected && record.controlsParent?.isConnected) {
-        record.controlsParent.appendChild(record.topControls);
+        // Keep the count and filters above the retained rows as pagination grows them.
+        record.controlsParent.insertBefore(record.topControls, record.cardRoot);
     }
     document.getElementById(`${datasetName}_filterBar_panel`)?.__syncActiveView?.();
     record.adapter.syncResultsCount(record.query, record.searchCache, record.pagination.lastRowCount);

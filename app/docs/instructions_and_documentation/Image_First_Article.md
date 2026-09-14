@@ -13,3 +13,17 @@ The details section uses the existing `row_article_section_details` translation 
 The modal uses the application's explicit theme and existing reduced-motion behavior. Image captions and their original-photo attribution are described in [Article image captions](Article_Image_Captions.md).
 
 Focused regression tests live beside `image_first_view_opener.js` and `translation_handler.js`; the image-stage and modal tests cover the existing close animation and image/letterbox boundary. Browser verification should include real article gutters, text selection, interactive content, language switches, both explicit themes with the opposite OS theme, and a narrow viewport.
+
+## Ordinary article result lists
+
+Opening an ordinary article from a paginated result view transfers its currently
+loaded row prefix to the compact article list. The list continues at the next
+unread offset using its source view's field projection; it does not replay pages.
+The expanded article independently fetches its current permitted fields and types.
+The compact list has its own scroll observer. Repeated boundary rows are deduplicated
+without changing the server offset. Back restores the retained source list and its
+offset; Forward reuses that list before continuing article-side pagination.
+Changing filters, language or access invalidates incompatible transfers. Intelligent
+search retains its separate streaming lifecycle and does not request ordinary pages.
+The result count remains before the result list, including after article return and
+further page appends.

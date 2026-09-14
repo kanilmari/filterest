@@ -47,7 +47,23 @@
 
     <link rel="icon" type="image/png" sizes="16x16" href="{{.FaviconPath}}">
     {{/* dev_error_forwarder is now loaded as ES module import in main.js */}}
-    <script src="/frontend/public/site_presentation_bootstrap.js"></script>
+    <script id="site-presentation-bootstrap" nonce="{{ .CSPNonce }}">
+    // First paint uses only validated local cache; no network dependency before CSS.
+    // Only finite numeric HSL components from our versioned cache become CSS values.
+    (() => {
+        try {
+            const cached = JSON.parse(localStorage.getItem('filterest_public_presentation_v1') || 'null');
+            const brand = cached?.brand;
+            if (cached?.schema_version !== 1 || !brand) return;
+            const valid = (value, max) => Number.isFinite(value) && value >= 0 && value <= max;
+            if (!valid(brand.hue, 360) || !valid(brand.saturation, 100) || !valid(brand.lightness, 100)) return;
+            const root = document.documentElement;
+            root.style.setProperty('--brand-hue', String(brand.hue));
+            root.style.setProperty('--brand-sat', `${brand.saturation}%`);
+            root.style.setProperty('--brand-light', `${brand.lightness}%`);
+        } catch { /* Missing, blocked or corrupt storage keeps the normal first-visit fallback. */ }
+    })();
+    </script>
     {{if .UseMinifiedAssets}}
     <link rel="stylesheet" id="imports-css" href="{{.ImportsCSSPath}}">
     {{else}}
@@ -105,7 +121,40 @@
             </div>
         </div>
     </div>
-    <script src="/frontend/public/initial_browser_check.js"></script> <!-- IE check, can't be a module, added in "public/" -->
+    <script id="initial-shell-bootstrap" nonce="{{ .CSPNonce }}">
+    // Local shell state is ready before modules, without a blocking script request.
+    // Keep this compatibility check ES5 so an unsupported browser can read its message.
+    (function () {
+        var userAgent = window.navigator.userAgent;
+        var userLang = navigator.language || navigator.userLanguage || 'en';
+        if (userAgent.indexOf('MSIE ') >= 0 || userAgent.indexOf('Trident/') >= 0) {
+            document.body.innerHTML = userLang.toLowerCase().indexOf('fi') === 0
+                ? '<h1>Hei IE-käyttäjä!</h1><p>Internet Explorer on vanhentunut selain. '
+                    + 'Lataa jokin uudempi, esimerkiksi <a href="https://brave.com/download/">Brave</a>.</p>'
+                : '<h1>Hello IE user!</h1><p>Your Internet Explorer browser is outdated. '
+                    + 'Please install a more modern browser, for example <a href="https://brave.com/download/">Brave</a>.</p>';
+            return;
+        }
+
+        var bodyContent = document.querySelector('.body_content');
+        if (!bodyContent) return;
+        var threshold = 1850;
+        try {
+            var rawBreakpoint = window.getComputedStyle(document.documentElement)
+                .getPropertyValue('--navbar-breakpoint');
+            var parsedBreakpoint = parseInt(rawBreakpoint, 10);
+            if (isFinite(parsedBreakpoint)) threshold = parsedBreakpoint;
+        } catch (error) { /* CSS unavailable: retain the shared layout fallback. */ }
+        try {
+            var isWide = window.innerWidth >= threshold;
+            var storedVisibility = localStorage.getItem(isWide ? 'navVisibleWide' : 'navVisibleNarrow');
+            var visible = storedVisibility !== null ? storedVisibility === 'true' : isWide;
+            bodyContent.setAttribute('data-navbar-initial-open', visible ? 'true' : 'false');
+        } catch (error) {
+            bodyContent.setAttribute('data-navbar-initial-open', 'false');
+        }
+    })();
+    </script>
     {{if .UseMinifiedAssets}}
     <script type="module" id="main-bundle" src="{{.MainBundlePath}}"></script>
     {{else}}

@@ -35,8 +35,7 @@ import { initializeAuthSessionNotice } from './auth_session_notice_handler.js';
 import "./auth_preference_controls.js";
 
 // 2-step AJAX login: Phase 1 (credentials) → Phase 2 (OTP verification)
-document.addEventListener("DOMContentLoaded", async () => {
-    await ensurePasswordVisibilityIconsLoaded();
+document.addEventListener("DOMContentLoaded", () => {
     initializeStandaloneLoginShell();
     initializeAuthSessionNotice();
     initializeTourGalleryModals();
@@ -459,14 +458,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const togglePasswordBtn = document.getElementById("toggle-password");
     const passwordInput = document.getElementById("password");
     if (togglePasswordBtn && passwordInput) {
-        const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
-        if (visibilityOffSvg) {
-            togglePasswordBtn.innerHTML = visibilityOffSvg;
-        }
-
+        togglePasswordBtn.setAttribute("aria-pressed", String(passwordInput.type !== "password"));
         togglePasswordBtn.addEventListener("click", () => {
             const isHidden = passwordInput.type === "password";
             passwordInput.type = isHidden ? "text" : "password";
+            togglePasswordBtn.setAttribute("aria-pressed", String(isHidden));
+            const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
             if (visibilityOffSvg && visibilityOnSvg) {
                 togglePasswordBtn.innerHTML = isHidden ? visibilityOnSvg : visibilityOffSvg;
             }
@@ -480,14 +477,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const toggleResetPasswordBtn = document.getElementById("toggle-password-reset");
     const resetPasswordInput = document.getElementById("password-reset-new-password");
     if (toggleResetPasswordBtn && resetPasswordInput) {
-        const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
-        if (visibilityOffSvg) {
-            toggleResetPasswordBtn.innerHTML = visibilityOffSvg;
-        }
-
+        toggleResetPasswordBtn.setAttribute("aria-pressed", String(resetPasswordInput.type !== "password"));
         toggleResetPasswordBtn.addEventListener("click", () => {
             const isHidden = resetPasswordInput.type === "password";
             resetPasswordInput.type = isHidden ? "text" : "password";
+            toggleResetPasswordBtn.setAttribute("aria-pressed", String(isHidden));
+            const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
             if (visibilityOffSvg && visibilityOnSvg) {
                 toggleResetPasswordBtn.innerHTML = isHidden ? visibilityOnSvg : visibilityOffSvg;
             }
@@ -497,6 +492,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             );
         });
     }
+
+    // The template already has a themed SVG fallback. Optional assets must never
+    // delay form listeners, and a late response must respect the current reveal state.
+    void ensurePasswordVisibilityIconsLoaded().then(() => {
+        const { visibilityOffSvg, visibilityOnSvg } = getPasswordVisibilityIcons();
+        for (const [button, input] of [[togglePasswordBtn, passwordInput], [toggleResetPasswordBtn, resetPasswordInput]]) {
+            if (!button || !input) continue;
+            const icon = input.type === "password" ? visibilityOffSvg : visibilityOnSvg;
+            if (icon) button.innerHTML = icon;
+        }
+    }).catch(() => console.warn("[login] Password icons unavailable; using the form fallback."));
 
     // Lisätään privacy notice modal functionality
     const privacyNoticeLink = document.getElementById("privacy-notice-link");

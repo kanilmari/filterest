@@ -20,7 +20,7 @@ import {
     wrapRowArticleImageGallerySection,
     wrapRowArticleRelatedRowsSection,
 } from "./row_article_tool_section_wrapper.js";
-import { syncRowArticleInlineImageCaptions } from "./row_article_image_caption.js";
+import { disposeRowArticleInlineMedia, syncRowArticleInlineMedia } from "./row_article_inline_media.js";
 import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 
 /**
@@ -39,10 +39,45 @@ export function createRowArticleMediaHydrator({
     tableHasImageRole: table_has_image_role,
     currentUserId: current_user_id,
     showRelatedItems: show_related_items_on_big_cards,
-    canCommit,
+    canCommit: isCurrent,
     onLinkedTaskChildCountChange,
     sectionDefaults = {},
 }) {
+    let disposed = false;
+    let connectionObserver = null;
+    let observedAncestors = [];
+    const canCommit = () => !disposed && isCurrent() && rowArticleElement.isConnected
+        && rowArticleElement.contains(rowArticleContentElement);
+    const dispose = () => {
+        if (disposed) return;
+        disposed = true;
+        connectionObserver?.disconnect();
+        observedAncestors = [];
+        disposeRowArticleInlineMedia(rowArticleContentElement);
+    };
+    const observeArticleConnection = () => {
+        const ancestors = [];
+        for (let node = rowArticleContentElement.parentNode; node; node = node.parentNode) {
+            ancestors.push(node);
+        }
+        if (ancestors.length === observedAncestors.length
+            && ancestors.every((node, index) => node === observedAncestors[index])) return;
+        if (!connectionObserver) {
+            // Watch direct parent-child boundaries, not every image/caption mutation.
+            // This also catches removal of an entire view or dataset ancestor.
+            connectionObserver = new MutationObserver(() => {
+                if (!rowArticleElement.isConnected || !rowArticleElement.contains(rowArticleContentElement)) {
+                    dispose();
+                } else {
+                    observeArticleConnection();
+                }
+            });
+        } else {
+            connectionObserver.disconnect();
+        }
+        observedAncestors = ancestors;
+        ancestors.forEach(node => connectionObserver.observe(node, { childList: true }));
+    };
     const sectionOpenState = new Map();
     const sectionOptions = (key, selector) => {
         const existing = rowArticleContentElement.querySelector(selector);
@@ -63,17 +98,19 @@ export function createRowArticleMediaHydrator({
             ".big_card_image[data-row-article-image-column]",
         ));
         if (!show_related_items_on_big_cards && !hasInlineImage) return;
+        observeArticleConnection();
 
         // Main-image credits belong to the article, independently of the optional
         // related sections. Keep permitted parent credits if child loading fails.
         const syncInlineCaptions = (imageChild = null) => {
             if (!canCommit() || !rowArticleElement.isConnected) return;
-            syncRowArticleInlineImageCaptions(
+            syncRowArticleInlineMedia(
                 rowArticleContentElement,
                 resolveRowArticleImageRows(
                     imageChild?.rows || [],
                     imageChild ? [] : parent_row_image_rows,
                 ),
+                { rowItem: row_item, tableName: table_name, selectedCard, rowLabel: row_presentation_label, canCommit },
             );
         };
         syncInlineCaptions();
@@ -280,7 +317,8 @@ export function createRowArticleMediaHydrator({
 
     return {
         hydrateRelatedSections,
+        dispose,
         // Saving article fields can happen before or after initial media hydration.
-        refreshMediaSections: () => refreshMediaSections(),
+        refreshMediaSections: () => canCommit() ? refreshMediaSections() : undefined,
     };
 }

@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+let retainedToken = null;
 const fetchDatasetDataMock = vi.fn();
 const generateTableMock = vi.fn();
 const resetOffsetMock = vi.fn();
@@ -28,6 +29,10 @@ const hasCachedSearchResultsMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
+    vi.doMock("../../../navigation/nav_engine/card_article_return_state.js", () => ({
+        getCardArticleReturnToken: () => retainedToken,
+        invalidateCardArticleReturn: vi.fn(),
+    }));
     vi.doMock("../../../endpoints/endpoint_data_fetcher.js", () => ({
         fetchDatasetData: fetchDatasetDataMock,
     }));
@@ -80,6 +85,7 @@ async function loadModule() {
 describe("table_refresh_unified missing-dataset recovery", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        retainedToken = null;
         const baseState = {
             offset: 0,
             sort: { column: "id", direction: "ASC" },
@@ -427,6 +433,79 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         await pending;
         expect(generateTableMock).not.toHaveBeenCalled();
         expect(updateOffsetMock).not.toHaveBeenCalled();
+    });
+
+    test.each(["card", "table"])("article transfer reuses all loaded %s rows and selected row without a page fetch", async (view) => {
+        const mod = await loadModule();
+        const loaded = await import("../../../table_views/dataset_loaded_rows.js");
+        const registry = await import("../../../navigation/nav_engine/dataset_access_registry.js");
+        registry.primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] });
+        document.body.innerHTML = '<div id="events_' + view + '_view_container"></div>';
+        const state = { offset: 4, filters: {}, sort: { column: "id", direction: "ASC" }, articleView: { collapsed: true, expandedId: 3 } };
+        getUnifiedTableStateMock.mockReturnValue(state);
+        localStorage.setItem("events_view", view);
+        const host = document.querySelector("div");
+        loaded.rememberLoadedDatasetRows(host, "events", { data: [{ id: 1 }, { id: 2 }], columns: ["id"], types: {}, row_count: 9 }, view);
+        loaded.appendLoadedDatasetRows(host, "events", [{ id: 3 }, { id: 4 }], 4);
+        const token = loaded.captureLoadedDatasetRows("events");
+        localStorage.setItem("events_view", "article_view");
+        await mod.refreshTableUnified("events", { skipUrlParams: true, loadedRows: token });
+        expect(fetchDatasetDataMock).not.toHaveBeenCalled();
+        expect(resetOffsetMock).not.toHaveBeenCalled();
+        expect(updateOffsetMock).not.toHaveBeenCalled();
+        expect(generateTableMock.mock.calls[0][2].map(row => row.id)).toEqual([1, 2, 3, 4]);
+        expect(generateTableMock.mock.calls[0][9].loadedRows).toMatchObject({ offset: 4, projectionView: view });
+        expect(openRowArticleViewMock).toHaveBeenCalledWith({ id: 3 }, "events", null, expect.any(Object));
+    });
+
+    test("access revoked during transfer preparation prevents rendering retained rows", async () => {
+        const mod = await loadModule();
+        const loaded = await import("../../../table_views/dataset_loaded_rows.js");
+        const registry = await import("../../../navigation/nav_engine/dataset_access_registry.js");
+        registry.primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] });
+        const access = await import("../../../navigation/nav_engine/dataset_access_registry.js");
+        document.body.innerHTML = '<div id="events_card_view_container"></div>';
+        getUnifiedTableStateMock.mockReturnValue({ offset: 1, filters: {}, sort: {} });
+        localStorage.setItem("events_view", "card");
+        loaded.rememberLoadedDatasetRows(document.querySelector("div"), "events", { data: [{ id: 1 }] }, "card");
+        const token = loaded.captureLoadedDatasetRows("events");
+        localStorage.setItem("events_view", "article_view");
+        primeDatasetPermissionsMock.mockImplementationOnce(() => { access.clearDatasetAccessRegistry(); return Promise.resolve({}); });
+        await mod.refreshTableUnified("events", { skipUrlParams: true, loadedRows: token });
+        expect(generateTableMock).not.toHaveBeenCalled();
+        expect(fetchDatasetDataMock).not.toHaveBeenCalled();
+    });
+
+
+    test.each([true, false])("Forward reuses the committed card prefix only with its valid return token (%s)", async valid => {
+        const mod = await loadModule();
+        const loaded = await import("../../../table_views/dataset_loaded_rows.js");
+        const registry = await import("../../../navigation/nav_engine/dataset_access_registry.js");
+        registry.primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] });
+        document.body.innerHTML = '<div id="events_card_view_container"></div>';
+        loaded.rememberLoadedDatasetRows(document.querySelector("div"), "events", {
+            data: [{ id: 1 }, { id: 2 }, { id: 3 }], columns: ["id"], types: {}, row_count: 10,
+        }, "card");
+        localStorage.setItem("events_view", "article_view");
+        getUnifiedTableStateMock.mockReturnValue({ offset: 0, filters: {}, sort: { column: "id", direction: "ASC" } });
+        // The signature at render and return must match; URL parsing may reset
+        // the offset, but cannot change the already-committed source prefix.
+        loaded.rememberLoadedDatasetRows(document.querySelector("div"), "events", {
+            data: [{ id: 1 }, { id: 2 }, { id: 3 }], columns: ["id"], types: {}, row_count: 10,
+        }, "card");
+        const requested = {};
+        retainedToken = valid ? requested : {};
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 1 }], columns: ["id"], types: {}, row_count: 10 });
+        await mod.refreshTableUnified("events", { skipUrlParams: true, preserveCardReturn: requested });
+        if (valid) {
+            expect(fetchDatasetDataMock).not.toHaveBeenCalled();
+            expect(resetOffsetMock).not.toHaveBeenCalled();
+            expect(generateTableMock.mock.calls[0][2]).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+            expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", { offset: 3 });
+        } else {
+            expect(fetchDatasetDataMock).toHaveBeenCalledOnce();
+            expect(resetOffsetMock).toHaveBeenCalledWith("events");
+        }
     });
 
 });

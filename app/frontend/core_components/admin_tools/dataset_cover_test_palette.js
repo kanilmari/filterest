@@ -15,6 +15,7 @@ import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_
 import { DATASET_COVER_PALETTE_COPY as COPY } from './dataset_cover_palette_copy.js';
 import { buildDatasetCardPaletteControl, buildCardStyleControl } from './dataset_card_palette_control.js';
 import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
+import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import {
     DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
     getSitePresentationState,
@@ -30,6 +31,7 @@ const TOOLBOX_ICON_PATHS = Object.freeze({
     ovalGradient: '/frontend/icons/symbols/tune.svg',
     heroLayout: '/frontend/icons/symbols/layers.svg',
     cardLayout: '/frontend/icons/symbols/grid_view.svg',
+    articleImages: '/frontend/icons/symbols/image.svg',
     navigation: '/frontend/icons/symbols/settings.svg',
 });
 
@@ -333,7 +335,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
     sharedToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
     sharedToolboxes.dataset.testid = 'dataset-cover-test-palette-shared-controls';
     const toolboxByGroup = new Map();
-    ['themeImage', 'ovalGeometry', 'ovalGradient', 'heroLayout', 'cardLayout', 'navigation']
+    ['themeImage', 'ovalGeometry', 'ovalGradient', 'heroLayout', 'cardLayout', 'articleImages', 'navigation']
         .forEach((groupName) => {
             const toolbox = createPaletteToolbox(copy[groupName], {
                 iconPath: TOOLBOX_ICON_PATHS[groupName],
@@ -347,6 +349,12 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         });
     toolboxByGroup.get('ovalGeometry').content.prepend(maskLabel);
     toolboxByGroup.get('themeImage').content.prepend(coverVisibilityLabel);
+    const articleImageControl = buildArticleImageCaptionControl(copy, (value) => {
+        draftSettings.dataset_cover_theme.shared.article_image_caption_position = value;
+        previewDraft();
+    });
+    toolboxByGroup.get('articleImages').toolbox.dataset.testid = 'site-article-image-palette-settings';
+    toolboxByGroup.get('articleImages').controls.appendChild(articleImageControl.element);
     const cardScope = document.createElement('fieldset');
     cardScope.className = 'dataset-cover-test-palette__card-scope';
     cardScope.dataset.testid = 'site-card-palette-settings';
@@ -481,6 +489,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
                 control.input.setAttribute('aria-description', copy[control.hint]);
             }
         });
+        articleImageControl.setCopy(copy);
         cardImageControl.setCopy(copy);
         cardFieldsControl.setCopy(copy);
         cardStyleControl.setCopy(copy);
@@ -510,6 +519,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
             control.input.value = String(source[control.key]);
             control.output.value = renderControlValue(control.input.value, control.unit);
         });
+        articleImageControl.setValue(draftSettings.dataset_cover_theme.shared.article_image_caption_position);
         cardImageControl.setValue(draftSettings.dataset_cover_theme.shared.card_image_presentation);
         cardFieldsControl.setValue(draftSettings.dataset_cover_theme.shared.card_show_all_fields);
         cardStyleControl.setValue(draftSettings.dataset_cover_theme.shared.card_style_variant);

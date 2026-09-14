@@ -3,6 +3,8 @@
 // Bridges filter and search controls, view selection, and dataset rendering components.
 // Exists to keep dataset screen assembly in one place while delegating each concrete view to its own module.
 
+import { appendLoadedDatasetRows, clearLoadedDatasetRows, rememberLoadedDatasetRows } from "./dataset_loaded_rows.js";
+
 import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
 import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
 import { create_card_view } from "./card_view/card_view_printer.js";
@@ -330,7 +332,7 @@ export async function generate_table(
     tableMeta = null,
     datasetPresentation = null,
     rowGroupFacets = null,
-    { preserveCardReturn = null } = {}
+    { preserveCardReturn = null, loadedRows = null } = {}
 ) {
     try {
         const tableSpecs = getAllSpecs();
@@ -461,6 +463,7 @@ export async function generate_table(
         for (const container of Object.values(viewContainers)) {
             if (current_view === "article_view"
                 && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container)) continue;
+            clearLoadedDatasetRows(container);
             container.replaceChildren();
         }
 
@@ -574,6 +577,14 @@ export async function generate_table(
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
         renderRowGroupFacets(dataset_name, rowGroupFacets);
+        rememberLoadedDatasetRows(scrollableContainer, dataset_name, {
+            data, columns, types: data_types, row_count: rowCount, has_geo: hasGeo,
+            table_meta: tableMeta, dataset_presentation: datasetPresentation,
+            row_group_facets: rowGroupFacets,
+        }, loadedRows?.projectionView || current_view);
+        if (loadedRows) {
+            appendLoadedDatasetRows(scrollableContainer, dataset_name, [], loadedRows.offset);
+        }
         seedInfiniteScrollRowCount(dataset_name, rowCount);
         syncFilterBarVisibilityState(dataset_name);
         initializeInfiniteScroll(

@@ -11,6 +11,7 @@ const showModalMock = vi.fn();
 const hideModalMock = vi.fn();
 const endpointRouterMock = vi.fn();
 const ensureIconsMock = vi.fn().mockResolvedValue(undefined);
+let currentIcons = { visibilityOffSvg: "", visibilityOnSvg: "" };
 const runPostAuthBootstrapMock = vi.fn().mockResolvedValue({ dataLoaded: false });
 const publishAuthLoginMock = vi.fn();
 const isCrossTabLoginSyncEnabledMock = vi.fn().mockResolvedValue(true);
@@ -62,7 +63,7 @@ async function loadModule() {
     }));
     vi.doMock("./password_visibility_icon_reader.js", () => ({
         ensurePasswordVisibilityIconsLoaded: ensureIconsMock,
-        getPasswordVisibilityIcons: () => ({ visibilityOffSvg: "", visibilityOnSvg: "" }),
+        getPasswordVisibilityIcons: () => currentIcons,
     }));
     vi.doMock("./post_auth_bootstrap.js", () => ({
         runPostAuthBootstrap: runPostAuthBootstrapMock,
@@ -88,6 +89,8 @@ async function loadModule() {
 describe("showLoginModal", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        ensureIconsMock.mockReset().mockResolvedValue(undefined);
+        currentIcons = { visibilityOffSvg: "", visibilityOnSvg: "" };
         history.replaceState({}, "", "/");
         document.body.innerHTML = `<div id="modal-root"></div>`;
         endpointRouterMock.mockResolvedValue({
@@ -101,6 +104,64 @@ describe("showLoginModal", () => {
             ok: true,
             json: async () => ({ authenticated: true }),
         }));
+    });
+
+    test.each(["pending", "failed"])("opens a usable modal with %s visibility icons", async (state) => {
+        ensureIconsMock.mockImplementation(() => state === "pending"
+            ? new Promise(() => {})
+            : Promise.reject(new Error("asset connection aborted")));
+        const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const mod = await loadModule();
+        await mod.showLoginModal();
+        expect(showModalMock).toHaveBeenCalledOnce();
+        const shell = createModalMock.mock.calls.at(-1)[0].contentElements[0];
+        document.body.append(shell);
+        const form = shell.querySelector("form");
+        for (const [buttonId, inputId] of [
+            ["toggle-password", "password"],
+            ["toggle-password-reset", "password-reset-new-password"],
+        ]) {
+            const button = form.querySelector("#" + buttonId);
+            button.focus();
+            button.click();
+            expect(form.querySelector("#" + inputId).type).toBe("text");
+            expect(button.getAttribute("aria-label")).toBe("Hide password");
+            expect(button.getAttribute("aria-pressed")).toBe("true");
+            expect(document.activeElement).toBe(button);
+            expect(button.textContent).toContain("toggle");
+        }
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+            ok: false, json: async () => ({ error: "wrong_credentials" }),
+        }));
+        const event = new Event("submit", { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/login", expect.objectContaining({
+            method: "POST", credentials: "include",
+        })));
+        warning.mockRestore();
+    });
+
+    test("late icons follow the current modal reveal state without moving focus", async () => {
+        let finish;
+        ensureIconsMock.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+        const mod = await loadModule();
+        await mod.showLoginModal();
+        const shell = createModalMock.mock.calls.at(-1)[0].contentElements[0];
+        document.body.append(shell);
+        const button = shell.querySelector("#toggle-password");
+        button.focus();
+        button.click();
+        currentIcons = {
+            visibilityOffSvg: '<svg data-state="off" fill="currentColor"></svg>',
+            visibilityOnSvg: '<svg data-state="on" fill="currentColor"></svg>',
+        };
+        finish();
+        await vi.waitFor(() => expect(button.querySelector('[data-state="on"]')).not.toBeNull());
+        expect(shell.querySelector("#password").type).toBe("text");
+        expect(document.activeElement).toBe(button);
+        button.click();
+        expect(button.querySelector('[data-state="off"]')).not.toBeNull();
     });
 
     test("fetches the login form through the fragment path", async () => {

@@ -278,4 +278,67 @@ describe("initializeInfiniteScroll", () => {
         scroll.disconnectInfiniteScroll("return_cards");
     });
 
+    test("continues paging the open article's actual small-card scroll host", async () => {
+        document.body.innerHTML = '<div id="paged_article_view_container"><div class="card_view_wrapper big-card-open"><div class="card_container"><div class="card small-card active_card" data-id="3"></div></div></div></div>';
+        localStorage.setItem("paged_view", "article_view");
+        localStorage.setItem("paged_columns", '["id","title"]');
+        getUnifiedTableStateMock.mockReturnValue({
+            offset: 40, filters: { category: "one" }, sort: { column: "id", direction: "ASC" },
+            articleView: { collapsed: true, expandedId: 3 },
+        });
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 41, title: "Next" }], row_count: 80 });
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.initializeInfiniteScroll("paged");
+        const selected = document.querySelector(".active_card");
+        const observer = intersectionObservers.at(-1);
+        expect(observer.options.root).toBe(document.querySelector(".card_container"));
+        observer.callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1));
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({ offset: 40, view_key: "article_view" }));
+        await vi.waitFor(() => expect(appendDataToCardViewMock).toHaveBeenCalled());
+        expect(document.querySelector(".active_card")).toBe(selected);
+        scroll.disconnectInfiniteScroll("paged");
+    });
+
+    test("does not release page loading or advance the offset before async cards commit", async () => {
+        createCardView("async_cards");
+        getUnifiedTableStateMock.mockReturnValue({ offset: 20, filters: {}, cardView: {} });
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 21 }], row_count: 50 });
+        let release;
+        appendDataToCardViewMock.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.initializeInfiniteScroll("async_cards");
+        const observer = intersectionObservers.at(-1);
+        observer.callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(appendDataToCardViewMock).toHaveBeenCalled());
+        expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
+        observer.callback([{ isIntersecting: true }]);
+        expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1);
+        release();
+        await vi.waitFor(() => expect(setUnifiedTableStateMock).toHaveBeenCalledWith("async_cards", expect.objectContaining({ offset: 21 })));
+        scroll.disconnectInfiniteScroll("async_cards");
+    });
+
+    test("a stale async append cannot advance the restored list offset", async () => {
+        createCardView("pending");
+        getUnifiedTableStateMock.mockReturnValue({ offset: 20, filters: {} });
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 21 }], row_count: 50 });
+        let release;
+        let guard;
+        appendDataToCardViewMock.mockImplementationOnce((_host, _columns, _rows, _table, options) => {
+            guard = options.isCurrent;
+            return new Promise(resolve => { release = resolve; });
+        });
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.initializeInfiniteScroll("pending");
+        intersectionObservers.at(-1).callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+        scroll.disconnectInfiniteScroll("pending");
+        expect(guard()).toBe(false);
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
+    });
+
 });

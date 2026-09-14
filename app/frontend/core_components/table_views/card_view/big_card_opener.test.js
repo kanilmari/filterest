@@ -24,6 +24,10 @@ const {
     articleUiSettings: { showRelatedItems: true },
 }));
 
+vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: vi.fn(key => key) }));
+
+vi.mock("../dataset_loaded_rows.js", () => ({ captureLoadedDatasetRows: vi.fn(() => null) }));
+
 vi.mock("./row_article_section_defaults.js", async (importOriginal) => ({
     ...await importOriginal(),
     loadRowArticleSectionDefaults: vi.fn(async () => ({})),
@@ -34,6 +38,8 @@ vi.mock("../article_view/article_language_editor.js", () => ({ createArticleLang
 vi.mock("../../endpoints/endpoint_router.js", () => ({
     endpoint_router: vi.fn(),
 }));
+
+vi.mock("./card_avatar_builder.js", () => ({ createImageElement: vi.fn(src => { const image = document.createElement("img"); image.src = src; return image; }) }));
 
 vi.mock("./row_article_data_fetcher.js", () => ({ fetchPermittedRowArticleData: fetchPermittedRowArticleDataMock }));
 
@@ -95,6 +101,8 @@ vi.mock("./row_article_opener_helpers.js", () => ({
 }));
 
 vi.mock("../../../ui_config.js", () => ({
+    enable_experimental_row_article_row_navigation: false,
+    isCardStackViewport: vi.fn(() => false),
     get show_related_items_on_big_cards() { return articleUiSettings.showRelatedItems; },
 }));
 
@@ -943,10 +951,26 @@ describe("openRowArticleView", () => {
         expect(controller.setDisabled).toHaveBeenLastCalledWith(false);
     });
 
+    test("expanded article uses fresh article metadata instead of its reused compact-list types", async () => {
+        const types = { title: { card_element: "header", is_multilingual: true } };
+        const row = { id: 42, title: '{"en":"Article"}' };
+        Object.defineProperty(row, "__articleTypes", { value: types });
+        Object.defineProperty(row, "__articleColumns", { value: ["title"] });
+        fetchPermittedRowArticleDataMock.mockResolvedValueOnce(row);
+        await openRowArticleView({ id: 42, title: "Preview" }, "events", document.querySelector(".card"));
+        expect(buildRowArticleContent.mock.calls.at(-1)).toContain(types);
+    });
+
     test("captures the card return before changing view and passes only its token to refresh", async () => {
         const { captureCardArticleReturn } = await import("../../navigation/nav_engine/card_article_return_state.js");
         const { refreshTableUnified } = await import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js");
         const token = {};
+        const rowsToken = {};
+        const { captureLoadedDatasetRows } = await import("../dataset_loaded_rows.js");
+        captureLoadedDatasetRows.mockImplementationOnce((dataset) => {
+            expect(localStorage.getItem(dataset + "_view")).toBe("card");
+            return rowsToken;
+        });
         captureCardArticleReturn.mockImplementationOnce((dataset, adapter) => {
             expect(localStorage.getItem(dataset + "_view")).toBe("card");
             expect(adapter.listPath).toBe("/service_catalog");
@@ -954,7 +978,7 @@ describe("openRowArticleView", () => {
         });
         localStorage.setItem("app_service_catalog_view", "card");
         await openRowArticleView({ id: 42 }, "app_service_catalog");
-        expect(refreshTableUnified).toHaveBeenCalledWith("app_service_catalog", { skipUrlParams: true, preserveCardReturn: token });
+        expect(refreshTableUnified).toHaveBeenCalledWith("app_service_catalog", { skipUrlParams: true, preserveCardReturn: token, loadedRows: rowsToken });
         expect(localStorage.getItem("app_service_catalog_view")).toBe("article_view");
     });
 

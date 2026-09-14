@@ -224,3 +224,16 @@ describe("credit locale and URL variants", () => {
         expect(caption.textContent).not.toContain(".jpg)");
     });
 });
+
+describe("inline logo caption identity", () => {
+    test("uses the active media source for aria-hidden SVG marks instead of a record preview", () => {
+        const article = document.createElement("div");
+        article.innerHTML = '<div class="big_card_image" data-row-article-image-column="cached_image"><div class="row_article_inline_media"><div class="wrapper" data-image-first-src="/storage/logo.svg"><div role="img"><img src="/storage/logo.svg" aria-hidden="true"></div></div><nav><img src="/storage/preview.jpg"></nav></div></div>';
+        document.body.append(article);
+        syncRowArticleInlineImageCaptions(article, [
+            {filename: "logo.svg", description: "Active logo credit"},
+            {filename: "preview.jpg", description: "Other record credit"},
+        ]);
+        expect(article.querySelector(".row_article_inline_image_caption").textContent).toBe("Active logo credit");
+    });
+});

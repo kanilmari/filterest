@@ -46,5 +46,11 @@ export async function fetchPermittedRowArticleData({
             configurable: true,
         });
     }
+    if (response.types && typeof response.types === "object" && !Array.isArray(response.types)) {
+        Object.defineProperty(authorizedRow, "__articleTypes", {
+            value: response.types,
+            configurable: true,
+        });
+    }
     return authorizedRow;
 }

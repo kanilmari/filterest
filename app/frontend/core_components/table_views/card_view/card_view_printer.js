@@ -331,8 +331,18 @@ export async function appendDataToCardView(
     columns,
     data,
     table_name,
-    { viewKey, dataTypes } = {}
+    { viewKey, dataTypes, isCurrent = () => true } = {}
 ) {
+    if (!isCurrent()) return;
+    const existingIds = new Set(Array.from(card_container.querySelectorAll(".card[data-id]"),
+        card => String(card.dataset.id)));
+    data = data.filter(row => {
+        if (row?.id == null) return true;
+        const key = String(row.id);
+        if (existingIds.has(key)) return false;
+        existingIds.add(key);
+        return true;
+    });
     const storedTypes =
         JSON.parse(localStorage.getItem(`${table_name}_dataTypes`)) || {};
     const data_types = { ...storedTypes, ...dataTypes };
@@ -386,6 +396,7 @@ export async function appendDataToCardView(
         frag.appendChild(card);
         createdCards.push(card);
     }
+    if (!isCurrent()) return;
     const sentinel = card_container.querySelector(
         `#${table_name}_infinite_scroll_sentinel`
     );

@@ -1,0 +1,99 @@
+/* row_article_inline_media.css
+ * Places ordinary article image controls inside their own media rectangle.
+ * Shares button and caption skins with the image-first gallery stylesheet.
+ * Keeps article spacing and hover behavior independent from viewport animations.
+ */
+
+/* Ordinary articles own their image rectangle, not the image-first viewport. */
+.big_card_image:has(> .row_article_inline_media) {
+    position: relative;
+}
+
+.row_article_inline_media {
+    position: relative;
+    isolation: isolate;
+    min-width: 0;
+    width: 100%;
+    touch-action: pan-y;
+}
+
+.row_article_inline_top_controls {
+    position: absolute;
+    z-index: 3;
+    inset-block-start: 12px;
+    inset-inline: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.row_article_inline_top_controls > * {
+    pointer-events: auto;
+}
+
+.row_article_inline_media .row_article_image_first_position {
+    position: static;
+    transform: none;
+    margin-inline-start: auto;
+}
+
+.row_article_inline_record_controls {
+    min-width: 0;
+}
+
+.row_article_inline_record_controls .row_article_row_navigation {
+    background: transparent;
+    margin: 0;
+    padding: 0;
+    gap: 8px;
+}
+
+:root[data-article-image-caption-position="overlay"] .row_article_inline_image_caption {
+    position: absolute;
+    z-index: 3;
+    inset-block-end: 14px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 4rem) !important;
+}
+
+/* Caption rises by 3px; the following prose starts 5px lower in the below mode. */
+:root:not([data-article-image-caption-position="overlay"])
+    .row_article_content:has(.row_article_inline_image_caption:not([hidden]))
+    > .big_card_description_container {
+    padding-block-start: 28px;
+}
+
+.row_article_inline_media :is(.row_article_image_first_arrow, .row_article_image_first_position,
+    .row_article_inline_record_controls) {
+    transition: opacity 160ms ease;
+    backdrop-filter: blur(8px);
+}
+
+@media (hover: hover) {
+    .row_article_inline_media:not(:hover, :focus-within)
+        :is(.row_article_image_first_arrow, .row_article_image_first_position,
+            .row_article_inline_record_controls) {
+        opacity: 0;
+        pointer-events: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .row_article_inline_media :is(.row_article_image_first_arrow, .row_article_image_first_position,
+        .row_article_inline_record_controls) {
+        transition: none;
+    }
+}
+
+
+.big_card_image .row_article_row_navigation_preview {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100%;
+    object-fit: contain;
+}

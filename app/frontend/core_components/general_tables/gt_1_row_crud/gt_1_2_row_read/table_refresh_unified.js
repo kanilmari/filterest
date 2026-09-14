@@ -2,6 +2,9 @@
 // Handles the core logic for refreshing table data and updating the UI.
 // Bridges data fetching, view generation, infinite scroll, and column visibility into one entry point.
 // Exists to provide a single unified refresh function consumed by navigation, filters, and CRUD operations.
+import { captureLoadedDatasetRows, resolveLoadedDatasetRows } from "../../../table_views/dataset_loaded_rows.js";
+import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../../table_views/dataset_view_registry.js";
+
 import { invalidateCardArticleReturn, getCardArticleReturnToken } from "../../../navigation/nav_engine/card_article_return_state.js";
 import { fetchDatasetData } from '../../../endpoints/endpoint_data_fetcher.js';
 import { generate_table } from '../../../table_views/dataset_view_printer.js';
@@ -22,8 +25,6 @@ import {
 
 // Re-export state functions for backward compatibility (17 importers use this path)
 export { getUnifiedTableState, setUnifiedTableState };
-
-import { resolveDatasetViewSelectionTarget } from "../../../table_views/dataset_view_registry.js";
 
 import { getDatasetQueryAdapter } from '../../../filterbar/dataset_surface_provider/dataset_query_adapter_registry.js';
 
@@ -86,8 +87,14 @@ export async function refreshTableUnified(tableName, options = {}) {
     const generation = (refreshGenerations.get(tableName) || 0) + 1;
     refreshGenerations.set(tableName, generation);
     const query = String(getParams(tableName)?.search || "").trim();
+    // Forward already changed the active view and parsed the target offset.
+    // Only a validated mounted-card return may reuse its still-committed prefix.
+    const loadedRowsToken = options.loadedRows || (preserveCardReturn
+        ? captureLoadedDatasetRows(tableName, { retainedCardReturn: true }) : null);
+    const loadedRows = resolveLoadedDatasetRows(tableName, loadedRowsToken);
     const isCurrent = () => refreshGenerations.get(tableName) === generation
-        && String(getParams(tableName)?.search || "").trim() === query;
+        && String(getParams(tableName)?.search || "").trim() === query
+        && (!loadedRows || resolveLoadedDatasetRows(tableName, loadedRowsToken) === loadedRows);
     // console.log('refreshTableUnified tableName and options: ', tableName, options);
     try {
         // 1) Haetaan ensin localStoragen nykyinen unified-tila
@@ -119,7 +126,7 @@ export async function refreshTableUnified(tableName, options = {}) {
 
         // 5) Nollataan offset (asetetaan localStorageen offset=0 tälle taululle)
         // console.log('refresh_table_unified.js: refreshTableUnified kutsuu funktiota resetOffset arvoilla:', tableName);
-        resetOffset(tableName);
+        if (!loadedRows) resetOffset(tableName);
 
         // 6) Haetaan localStoragesta tuore offset uudelleen
         currentState = getUnifiedTableState(tableName);
@@ -134,7 +141,7 @@ export async function refreshTableUnified(tableName, options = {}) {
         if (!isCurrent()) return;
 
         // 7) Haetaan data fetchDatasetData-funktiolla (nyt varmasti offset=0, ellei override)
-        const result = await fetchDatasetData({
+        const result = loadedRows?.result || await fetchDatasetData({
             dataset_name: tableName,
             offset: currentState.offset,
             sort_column: currentState.sort.column,
@@ -177,7 +184,9 @@ export async function refreshTableUnified(tableName, options = {}) {
         // observer can wake up immediately on short result sets. Advancing the
         // offset here prevents that first observer tick from re-fetching the
         // same page and appending duplicate cards.
-        if (!hasCachedSearchRenderResult) {
+        if (loadedRows) {
+            setUnifiedTableState(tableName, { offset: loadedRows.offset });
+        } else if (!hasCachedSearchRenderResult) {
             updateOffset(tableName, data.length);
         }
 
@@ -192,7 +201,7 @@ export async function refreshTableUnified(tableName, options = {}) {
 			result.table_meta,
 			result.dataset_presentation,
             hasCachedSearchRenderResult ? null : result.row_group_facets,
-            ...(preserveCardReturn ? [{ preserveCardReturn }] : [])
+            ...((preserveCardReturn || loadedRows) ? [{ preserveCardReturn, loadedRows }] : [])
         );
         if (!isCurrent() || cachedSearchRenderResult?.isCurrent?.() === false) return;
         if (hasCachedSearchRenderResult) {
@@ -233,7 +242,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             const expandedId = stateAfterBuild[stateKey].expandedId;
             let rowItem = renderData.find(r => String(r.id) === String(expandedId));
             let cardElem = document.querySelector(
-                `#${tableName}_${currentView}_view_container .card[data-id='${expandedId}']`
+                `#${getDatasetViewContainerId(currentView, tableName)} .card[data-id='${expandedId}']`
             );
 
             // If the row is not in the current page of results (deep link),

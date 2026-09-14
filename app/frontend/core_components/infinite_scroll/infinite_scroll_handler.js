@@ -3,6 +3,10 @@
 // Bridges endpoint data fetching and table/card-view renderers with scroll sentinel lifecycle events.
 // Exists to decouple scroll setup, teardown, and per-table state from rendering and data layers.
 
+import { appendLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection } from "../table_views/dataset_loaded_rows.js";
+import { getDatasetViewContainerId } from "../table_views/dataset_view_registry.js";
+import { getParams } from "../navigation/nav_engine/query_params.js";
+
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
 import { appendDataToTable } from "../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../table_views/card_view/card_view_printer.js";
@@ -17,12 +21,6 @@ import {
 // Per-table scroll state: Map<tableName, { isLoading, observer, sentinel, lastRowCount }>
 const scrollState = new Map();
 let articleToggleListenerInstalled = false;
-
-function isRowArticleOpen(tableName) {
-    const view = localStorage.getItem(`${tableName}_view`) === "article_view" ? "article" : "card";
-    const wrapper = document.querySelector(`#${tableName}_${view}_view_container .card_view_wrapper`);
-    return wrapper?.classList.contains("big-card-open") === true;
-}
 
 /**
  * Returns the scroll state for a given table, creating a fresh entry if needed.
@@ -88,11 +86,6 @@ function ensureArticleToggleListener() {
     document.addEventListener("big-card-toggle", (event) => {
         const tableName = String(event?.detail?.tableName || "").trim();
         if (!tableName) {
-            return;
-        }
-
-        if (event?.detail?.isOpen) {
-            disconnectInfiniteScroll(tableName);
             return;
         }
 
@@ -185,6 +178,8 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     const state = getScrollState(tableName);
     state.orientation = orientation;
     clearFillScreenTimers(tableName);
+    // Intelligent search owns its streamed rows and must never fetch ordinary pages.
+    if (String(getParams(tableName)?.search || "").trim()) return;
 
     // Jos observer on olemassa, tuhotaan se ensin (estää tuplahavainnoinnin)
     if (state.observer) {
@@ -208,7 +203,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
         if (cardContainer) {
             sentinelParent = cardContainer;
             const collapsed = getUnifiedTableState(tableName)?.[currentView === "article_view" ? "articleView" : "cardView"]?.collapsed;
-            observerRoot = collapsed ? cardContainer : container;
+            observerRoot = collapsed || cardContainer.closest(".big-card-open") ? cardContainer : container;
         }
     }
 
@@ -243,11 +238,6 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     const fillScreenInterval = setInterval(async () => {
         // Jos observer on purettu (data loppui), lopetetaan
         if (!state.observer || !state.sentinel) {
-            clearInterval(fillScreenInterval);
-            state.fillScreenIntervalId = null;
-            return;
-        }
-        if (["card", "article_view"].includes(currentView) && isRowArticleOpen(tableName)) {
             clearInterval(fillScreenInterval);
             state.fillScreenIntervalId = null;
             return;
@@ -299,13 +289,12 @@ async function fetchMoreData(tableName, options = {}) {
     try {
         const tableState = getUnifiedTableState(tableName);
         const currentView = localStorage.getItem(`${tableName}_view`) || "table";
-        if (isInfiniteScroll && ["card", "article_view"].includes(currentView) && isRowArticleOpen(tableName)) {
-            if (scrollSt.observer) {
-                scrollSt.observer.disconnect();
-                scrollSt.observer = null;
-            }
-            return;
-        }
+        if (isInfiniteScroll && String(getParams(tableName)?.search || "").trim()) return;
+        const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
+        const isCurrent = () => scrollSt.generation === generation
+            && (localStorage.getItem(tableName + "_view") || "table") === currentView
+            && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
+            && container?.isConnected;
         const offsetVal = isInfiniteScroll ? tableState.offset || 0 : 0;
         const filters = tableState.filters || {};
         if (searchType) filters.searchType = searchType;
@@ -323,10 +312,9 @@ async function fetchMoreData(tableName, options = {}) {
             })`,
             row_count: isInfiniteScroll ? scrollSt.lastRowCount : null,
             include_card_support: ["card", "article_view"].includes(currentView),
-            view_key: currentView,
+            view_key: getLoadedDatasetProjection(container, tableName) || currentView,
         });
-        if (scrollSt.generation !== generation
-            || (localStorage.getItem(`${tableName}_view`) || "table") !== currentView) return;
+        if (!isCurrent()) return;
         setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;
 
@@ -336,16 +324,23 @@ async function fetchMoreData(tableName, options = {}) {
             if (isInfiniteScroll && scrollSt.observer) {
                 scrollSt.observer.disconnect();
                 scrollSt.observer = null;
+                scrollSt.sentinel?.remove();
                 scrollSt.sentinel = null;
             }
             return;
         }
 
-        if (isInfiniteScroll) {
-            updateOffset(tableName, result.data.length);
+        const rows = append
+            ? filterLoadedDatasetDuplicates(container, tableName, result.data)
+            : result.data;
+        await appendDataToView(tableName, rows, append, { isCurrent, dataTypes: result.types });
+        if (!isCurrent()) return;
+        if (isInfiniteScroll) updateOffset(tableName, result.data.length);
+        appendLoadedDatasetRows(container, tableName, rows, getUnifiedTableState(tableName).offset);
+        if (isInfiniteScroll && Number.isFinite(result.row_count)
+            && getUnifiedTableState(tableName).offset >= result.row_count) {
+            disconnectInfiniteScroll(tableName);
         }
-
-        appendDataToView(tableName, result.data, append);
     } catch (err) {
         console.warn("error fetching more data:", err);
     } finally {
@@ -353,7 +348,7 @@ async function fetchMoreData(tableName, options = {}) {
     }
 }
 
-export function appendDataToView(tableName, data, append = true) {
+export function appendDataToView(tableName, data, append = true, { isCurrent, dataTypes } = {}) {
     const datasetName = tableName;
     const currentView = localStorage.getItem(`${datasetName}_view`) || "table";
 
@@ -400,7 +395,8 @@ export function appendDataToView(tableName, data, append = true) {
                 }
             });
         }
-        appendDataToCardView(cardContainer, columns, data, tableName);
+        return appendDataToCardView(cardContainer, columns, data, tableName,
+            ...(isCurrent || dataTypes ? [{ isCurrent, dataTypes }] : []));
     } else if (["normal", "transposed", "ticket"].includes(currentView)) {
         const containerId = `${tableName}_${currentView === "article_view" ? "article" : currentView}_view_container`;
         const container = document.getElementById(containerId);

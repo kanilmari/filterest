@@ -45,7 +45,7 @@
 .row_article_inline_image_caption {
     width: 100%;
     margin: 0;
-    padding: 0.7rem 0 0;
+    padding: calc(0.7rem - 3px) 0 0;
     text-align: start;
 }
 
@@ -64,6 +64,11 @@
     grid-column: 2;
     width: max-content;
     max-width: min(900px, calc(100vw - 20rem));
+
+}
+
+.row_article_image_first_caption,
+:root[data-article-image-caption-position="overlay"] .row_article_inline_image_caption {
     margin: 0;
     padding: calc(0.7rem - 2px) calc(1rem - 2px);
     border: 1px solid color-mix(in srgb, var(--border_color) 72%, transparent);
@@ -133,7 +138,8 @@ body.dark-mode .image_first_view_modal {
     z-index: 1;
     display: grid;
     place-items: center;
-    width: fit-content;
+    /* Definite stage width prevents inline-size-contained SVG hosts collapsing. */
+    width: 100%;
     max-width: 100%;
     height: fit-content;
     max-height: 100dvh;
@@ -431,7 +437,7 @@ body.dark-mode .image_first_view_modal {
     line-height: 1;
 }
 
-.image_first_view_modal :is(
+:is(.image_first_view_modal, .row_article_inline_media) :is(
     .row_article_image_first_arrow,
     .row_article_row_navigation_button
 ) {
@@ -453,7 +459,7 @@ body.dark-mode .image_first_view_modal {
     font-size: 2rem;
 }
 
-.image_first_view_modal .row_article_row_navigation_button {
+:is(.image_first_view_modal, .row_article_inline_media) .row_article_row_navigation_button {
     display: inline-flex;
     width: auto;
     min-width: 48px;
@@ -527,7 +533,7 @@ body.dark-mode .image_first_view_modal {
 .row_article_image_first_scroll_hint {
     grid-column: 3;
     justify-self: start;
-    margin-inline-start: 8px;
+    margin-inline-start: 20px;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -647,7 +653,7 @@ body .image_modal.image_first_view_modal :is(
     .row_article_image_first_bottom_controls {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 20px;
     }
 
     .row_article_image_first_caption {

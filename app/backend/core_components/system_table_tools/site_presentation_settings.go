@@ -53,7 +53,7 @@ const upsertDatasetCoverThemeSQL = `
 		'Admin-managed, theme-aware dataset cover presentation settings.'
 	)
 	ON CONFLICT (key) DO UPDATE
-	SET json_value = jsonb_set(jsonb_set(jsonb_set(
+	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(
 		EXCLUDED.json_value,
 		'{shared,card_show_all_fields}',
 		CASE
@@ -76,12 +76,20 @@ const upsertDatasetCoverThemeSQL = `
 				THEN public.system_config.json_value #> '{shared,card_detail_columns}'
 			ELSE '2'::jsonb
 		END
+	), '{shared,article_image_caption_position}',
+		CASE
+			WHEN NOT $6::boolean THEN EXCLUDED.json_value #> '{shared,article_image_caption_position}'
+			WHEN public.system_config.json_value #>> '{shared,article_image_caption_position}' IN ('below', 'overlay')
+				THEN public.system_config.json_value #> '{shared,article_image_caption_position}'
+			ELSE '"below"'::jsonb
+		END
 	),
 	    creation_spec = COALESCE(NULLIF(public.system_config.creation_spec, ''), EXCLUDED.creation_spec),
 	    updated = NOW()
 	RETURNING (json_value #>> '{shared,card_show_all_fields}')::boolean,
 	          json_value #>> '{shared,card_style_variant}',
-	          (json_value #>> '{shared,card_detail_columns}')::int`
+	          (json_value #>> '{shared,card_detail_columns}')::int,
+	          json_value #>> '{shared,article_image_caption_position}'`
 
 const upsertRowArticleTimestampDisplaySQL = `
 	INSERT INTO public.system_config (
@@ -124,19 +132,20 @@ type DatasetCoverSharedValues struct {
 	HeroExtraHeight float64 `json:"hero_extra_height"`
 	HeroBottomFade  float64 `json:"hero_bottom_fade"`
 	// ImageBlur remains as a rollback-safe fallback for older application builds.
-	ImageBlur              float64 `json:"image_blur"`
-	CardImageWidth         float64 `json:"card_image_width"`
-	CardImagePresentation  string  `json:"card_image_presentation"`
-	CardDetailColumns      int     `json:"card_detail_columns"`
-	CardDescriptionLines   int     `json:"card_description_lines"`
-	CardStyleVariant       string  `json:"card_style_variant"`
-	CardShowAllFields      bool    `json:"card_show_all_fields"`
-	ActiveTabFade          float64 `json:"active_tab_fade"`
-	ActiveTabMaxOpacity    float64 `json:"active_tab_max_opacity"`
-	ActiveTabGlowIntensity float64 `json:"active_tab_glow_intensity"`
-	ActiveTabGlowWidth     float64 `json:"active_tab_glow_width"`
-	ActiveTabGlowBlur      float64 `json:"active_tab_glow_blur"`
-	BrandColor             string  `json:"brand_color"`
+	ImageBlur                   float64 `json:"image_blur"`
+	CardImageWidth              float64 `json:"card_image_width"`
+	CardImagePresentation       string  `json:"card_image_presentation"`
+	ArticleImageCaptionPosition string  `json:"article_image_caption_position"`
+	CardDetailColumns           int     `json:"card_detail_columns"`
+	CardDescriptionLines        int     `json:"card_description_lines"`
+	CardStyleVariant            string  `json:"card_style_variant"`
+	CardShowAllFields           bool    `json:"card_show_all_fields"`
+	ActiveTabFade               float64 `json:"active_tab_fade"`
+	ActiveTabMaxOpacity         float64 `json:"active_tab_max_opacity"`
+	ActiveTabGlowIntensity      float64 `json:"active_tab_glow_intensity"`
+	ActiveTabGlowWidth          float64 `json:"active_tab_glow_width"`
+	ActiveTabGlowBlur           float64 `json:"active_tab_glow_blur"`
+	BrandColor                  string  `json:"brand_color"`
 }
 
 // DatasetCoverThemeConfig groups light, dark, and shared cover settings.
@@ -151,14 +160,15 @@ type SitePresentationSettingsResponse struct {
 	DatasetCoverTheme              DatasetCoverThemeConfig `json:"dataset_cover_theme"`
 	RowArticleTimestampDisplayMode string                  `json:"row_article_timestamp_display_mode"`
 	// Request-only omission metadata never enters JSON responses or stored config.
-	preserveStoredCardShowAllFields bool
-	preserveStoredCardStyleVariant  bool
-	preserveStoredCardDetailColumns bool
+	preserveStoredCardShowAllFields           bool
+	preserveStoredCardStyleVariant            bool
+	preserveStoredCardDetailColumns           bool
+	preserveStoredArticleImageCaptionPosition bool
 }
 
 var readSitePresentationSettings = readSitePresentationSettingsFromDB
 
-// Legacy clients omit newer card settings. Resolve those omissions under the
+// Legacy clients omit newer presentation settings. Resolve those omissions under the
 // upsert's row lock, then return the persisted value rather than the input default.
 var persistSitePresentationSettings = func(r *http.Request, settings SitePresentationSettingsResponse) (SitePresentationSettingsResponse, error) {
 	tx, ok := dbutils.RequireTx(r.Context())
@@ -176,7 +186,8 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 		settings.preserveStoredCardShowAllFields,
 		settings.preserveStoredCardStyleVariant,
 		settings.preserveStoredCardDetailColumns,
-	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns)
+		settings.preserveStoredArticleImageCaptionPosition,
+	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition)
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("save cover theme: %w", err)
 	}
@@ -338,6 +349,14 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 		}
 		sharedKeys = append(sharedKeys, "card_detail_columns")
 	}
+	caption, captionProvided := sharedParts["article_image_caption_position"]
+	if captionProvided {
+		var value string
+		if json.Unmarshal(caption, &value) != nil || (value != "below" && value != "overlay") {
+			return SitePresentationSettingsResponse{}, errors.New("article_image_caption_position must be below or overlay")
+		}
+		sharedKeys = append(sharedKeys, "article_image_caption_position")
+	}
 	if err := requireExactJSONKeys(themeParts["shared"], sharedKeys); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -346,9 +365,11 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	settings.DatasetCoverTheme.Shared.CardShowAllFields = true
 	settings.DatasetCoverTheme.Shared.CardStyleVariant = "modern"
 	settings.DatasetCoverTheme.Shared.CardDetailColumns = 2
+	settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition = "below"
 	settings.preserveStoredCardShowAllFields = !provided
 	settings.preserveStoredCardStyleVariant = !styleProvided
 	settings.preserveStoredCardDetailColumns = !columnsProvided
+	settings.preserveStoredArticleImageCaptionPosition = !captionProvided
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -459,6 +480,9 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if config.Shared.CardImagePresentation != "cover" && config.Shared.CardImagePresentation != "contain" && config.Shared.CardImagePresentation != "contain_blur" {
 		return errors.New("unsupported card image presentation")
 	}
+	if config.Shared.ArticleImageCaptionPosition != "below" && config.Shared.ArticleImageCaptionPosition != "overlay" {
+		return errors.New("unsupported article image caption position")
+	}
 	if config.Shared.CardStyleVariant != "standard" && config.Shared.CardStyleVariant != "modern" {
 		return errors.New("unsupported card style variant")
 	}
@@ -546,21 +570,22 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 			Light: light,
 			Dark:  dark,
 			Shared: DatasetCoverSharedValues{
-				HeroExtraHeight:        40,
-				HeroBottomFade:         48,
-				ImageBlur:              1,
-				CardImageWidth:         300,
-				CardImagePresentation:  "contain",
-				CardDescriptionLines:   2,
-				CardDetailColumns:      2,
-				CardShowAllFields:      true,
-				CardStyleVariant:       "modern",
-				ActiveTabFade:          25,
-				ActiveTabMaxOpacity:    1,
-				ActiveTabGlowIntensity: 0.3,
-				ActiveTabGlowWidth:     1.5,
-				ActiveTabGlowBlur:      2,
-				BrandColor:             "#1a8fe6",
+				HeroExtraHeight:             40,
+				HeroBottomFade:              48,
+				ImageBlur:                   1,
+				CardImageWidth:              300,
+				CardImagePresentation:       "contain",
+				ArticleImageCaptionPosition: "below",
+				CardDescriptionLines:        2,
+				CardDetailColumns:           2,
+				CardShowAllFields:           true,
+				CardStyleVariant:            "modern",
+				ActiveTabFade:               25,
+				ActiveTabMaxOpacity:         1,
+				ActiveTabGlowIntensity:      0.3,
+				ActiveTabGlowWidth:          1.5,
+				ActiveTabGlowBlur:           2,
+				BrandColor:                  "#1a8fe6",
 			},
 		},
 		RowArticleTimestampDisplayMode: rowArticleTimestampDateTime,
