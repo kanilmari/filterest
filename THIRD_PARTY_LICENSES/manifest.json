@@ -315,7 +315,7 @@
         },
         {
           "path": "app/frontend/templates/login.html",
-          "sha256": "42a5ccee6c0cb15b940ef503999348f77ed9f48a61b7ce426691a1d997614569"
+          "sha256": "5cf93c6e8b1191cea9f9af6076c74081860ae31802e298863b5488841a56716e"
         }
       ],
       "license": "Apache-2.0",
@@ -402,7 +402,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "11f427c94387256a2d71c75759c38222d26999a839ee48a9c85371afe3f1b302"
+    "sha256": "09792e474da620390aa5c2f899c8949809336949299596d2fe1c5debb173ef0a"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -837,7 +837,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.3.9",
+  "filterest_app_version": "9.3.10",
   "first_party_components": [
     {
       "assets": [
