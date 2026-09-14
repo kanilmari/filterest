@@ -10,6 +10,7 @@ import (
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/middlewares"
+	"easelect/backend/pipeline/admin_check"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -62,9 +63,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 func RegisterAPIHandler(w http.ResponseWriter, r *http.Request) {
 	logging.Infof("registerAPIHandler called")
 
-	// Check if registration is enabled in system_config
+	// Closed public signup still permits explicit administrator account creation.
+	// Keep the existing admin-access gate and the same CSRF/rate-limited writer.
 	if !registrationEnabledFunc() {
-		httpresponse.RespondWithError(w, http.StatusForbidden, "Registration is disabled")
+		if r.Method != http.MethodPost || !registrationHasCurrentAdministrator(w, r) {
+			httpresponse.RespondWithError(w, http.StatusForbidden, "Registration is disabled")
+			return
+		}
+		admin_check.WithAdminUserCheck(handleRegisterPost)(w, r)
 		return
 	}
 
@@ -73,6 +79,29 @@ func RegisterAPIHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+}
+
+// registrationHasCurrentAdministrator requires the canonical current identity and role.
+// It bridges a public route's signed cookie to the existing administrator-access stage;
+// a cached role claim alone never grants the closed-registration exception.
+func registrationHasCurrentAdministrator(w http.ResponseWriter, r *http.Request) bool {
+	if e_sessions.Store == nil {
+		return false
+	}
+	session, err := e_sessions.GetOrCreateSession(w, r)
+	if err != nil || session.Values["authenticated"] != true {
+		return false
+	}
+	userID, ok := session.Values["user_id"].(int)
+	if !ok || userID <= 1 {
+		return false
+	}
+	current, err := backend.AuthenticatedSessionMatches(r.Context(), backend.DbConfidential, session, userID)
+	if err != nil || !current {
+		return false
+	}
+	role, err := backend.ResolveUserRole(userID)
+	return err == nil && role == "admin"
 }
 
 func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
