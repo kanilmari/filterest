@@ -30,6 +30,7 @@ import { create_price_chart_view } from "./price_chart_view/price_chart_view_pri
 import { create_cloud_management_view } from "./cloud_management_view/cloud_management_view_printer.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { getDefaultViewSync } from "../config_fetcher.js";
+import { resolveDatasetDefaultView } from "./dataset_default_view.js";
 import { show_search_and_filter_button } from "../../ui_config.js";
 import { getAllSpecs } from "../state_stores/table_specs_reader.js";
 import {
@@ -333,15 +334,27 @@ export async function generate_table(
 ) {
     try {
         const tableSpecs = getAllSpecs();
+        // Read metadata belongs to every dataset reader. The admin navigation
+        // tree may not exist or may still be loading on a fresh browser.
+        if (tableMeta && Object.hasOwn(tableMeta, "default_view_name")) {
+            tableSpecs[dataset_name] = {
+                ...tableSpecs[dataset_name],
+                default_view_name: tableMeta.default_view_name,
+            };
+        }
         const datasetName = dataset_name;
         const table_uid = tableSpecs[dataset_name]?.table_uid || dataset_name;
         const globalDefault = getDefaultViewSync();
+        const datasetDefault = resolveDatasetDefaultView(datasetName, { tableMeta, tableSpecs, globalDefault });
+        const defaultView = resolveRenderableView(
+            datasetName, datasetDefault, columns, data, data_types, hasGeo, tableSpecs, globalDefault
+        );
         let current_view = resolveStoredViewForDatasetDefault(
             datasetName,
             tableSpecs,
-            globalDefault
+            defaultView
         );
-        current_view = resolvePermittedView(current_view, globalDefault);
+        current_view = resolvePermittedView(current_view, defaultView);
         current_view = resolveRenderableView(
             datasetName,
             current_view,
@@ -350,9 +363,9 @@ export async function generate_table(
             data_types,
             hasGeo,
             tableSpecs,
-            globalDefault
+            defaultView
         );
-        current_view = resolvePermittedView(current_view, globalDefault);
+        current_view = resolvePermittedView(current_view, defaultView);
         localStorage.setItem(`${datasetName}_view`, current_view);
 
         applyViewStyling(dataset_name);

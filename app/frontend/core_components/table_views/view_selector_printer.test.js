@@ -75,6 +75,31 @@ describe("view_selector_printer", () => {
         closeRowArticleMock.mockReset();
     });
 
+    test("the dataset default button is available without granting other views", async () => {
+        getDefaultViewSyncMock.mockReturnValue("card");
+        hasRoutePermissionMock.mockReturnValue(false);
+        localStorage.setItem("demo_table_tableMeta", JSON.stringify({ default_view_name: "table" }));
+        const { createGenericViewSelector, selectDatasetView } = await loadModule();
+        const selector = createGenericViewSelector("demo_table", "article_view", [
+            { viewKey: "table" }, { viewKey: "card" }, { viewKey: "article_view" },
+        ]);
+        document.body.append(selector);
+        const table = selector.querySelector('[data-testid="view-btn-table"]');
+        expect(applyPermissionMock.mock.calls.some(([button]) => button === table)).toBe(false);
+        expect(applyPermissionMock).toHaveBeenCalledTimes(2);
+        table.click();
+        expect(localStorage.getItem("demo_table_view")).toBe("table");
+        expect(updateURLMock).toHaveBeenLastCalledWith("demo_table", { view: "table" });
+        for (const blocked of ["card", "article_view"]) {
+            updateURLMock.mockClear();
+            refreshTableUnifiedMock.mockClear();
+            selectDatasetView("demo_table", blocked, "table");
+            expect(localStorage.getItem("demo_table_view")).toBe("table");
+            expect(updateURLMock).toHaveBeenLastCalledWith("demo_table", { view: "table" });
+            expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
+        }
+    });
+
     test("More-menu transitions preserve the query and commit the URL before rendering", async () => {
         const { selectDatasetView } = await loadModule();
         localStorage.setItem("demo_table_view", "article_view");

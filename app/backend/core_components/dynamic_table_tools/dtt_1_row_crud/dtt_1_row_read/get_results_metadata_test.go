@@ -177,6 +177,8 @@ func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
 }
 
 type layoutMetadataDriver struct {
+	defaultView       driver.Value
+	defaultViewColumn bool
 	detailColumn      bool
 	cardDetailColumns driver.Value
 	tableMeta         bool
@@ -204,6 +206,9 @@ func (*layoutMetadataConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("
 func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if strings.Contains(query, "SELECT EXISTS") {
 		present := true
+		if c.state.tableMeta && args[1].Value == "default_view_id" {
+			present = c.state.defaultViewColumn
+		}
 		if c.state.tableMeta && args[1].Value == "card_detail_columns" {
 			present = c.state.detailColumn
 		}
@@ -217,7 +222,7 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 	}
 	*c.state.query = query
 	if c.state.tableMeta {
-		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns}}, nil
+		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns, c.state.defaultView}}, nil
 	}
 	value := c.state.value
 	if !c.state.present {
@@ -410,6 +415,46 @@ func TestTableMetadataPreservesNullableCardDetailColumns(t *testing.T) {
 			}
 			if !test.present && !strings.Contains(query, "NULL::integer AS card_detail_columns") {
 				t.Fatalf("old schema query=%s", query)
+			}
+		})
+	}
+}
+
+// The normal row response must carry the DB default without requiring the admin tree.
+func TestTableMetadataIncludesDefaultView(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		present bool
+		value   driver.Value
+		want    string
+	}{
+		{"table", true, "table", `"table"`},
+		{"card", true, "card", `"card"`},
+		{"site fallback", true, nil, "null"},
+		{"older schema", false, nil, "null"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			query := ""
+			name := "default-view-meta-" + t.Name()
+			sql.Register(name, &layoutMetadataDriver{tableMeta: true, defaultViewColumn: test.present, defaultView: test.value, query: &query})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			meta, err := fetchTableReadMeta(db, "example")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(meta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(body), `"default_view_name":`+test.want) {
+				t.Fatalf("metadata=%s", body)
+			}
+			if !test.present && strings.Contains(query, "system_db_tables.default_view_id") {
+				t.Fatal("older schema must not query an absent default view column")
 			}
 		})
 	}

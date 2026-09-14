@@ -34,7 +34,9 @@ export function canUseFilterbarAICodexDevMode({
     codingAgentCapability,
 } = {}) {
     if (codingAgentCapability) {
-        return Boolean(hasCodexDevPermission && codingAgentCapability.feature_enabled === true
+        // A successful capability response already passed the live admin/route
+        // checks; do not veto it with an older browser route-list snapshot.
+        return Boolean(codingAgentCapability.feature_enabled === true
             && codingAgentCapability.runner_ready === true);
     }
     return Boolean(isDevEnvironment && hasCodexDevPermission);

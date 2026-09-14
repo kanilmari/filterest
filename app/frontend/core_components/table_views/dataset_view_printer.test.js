@@ -126,6 +126,9 @@ describe('generate_table', () => {
         createPriceChartViewMock.mockImplementation(() => document.createElement('div'));
         createCloudManagementViewMock.mockImplementation(() => document.createElement('div'));
         datasetSupportsMapViewMock.mockReturnValue(true);
+        hasRoutePermissionMock.mockReturnValue(true);
+        getAllSpecsMock.mockReturnValue({});
+        getDefaultViewSyncMock.mockReturnValue('card');
     });
 
 	test('uses presentation media returned with dataset results without admin tree metadata', async () => {
@@ -434,6 +437,45 @@ describe('generate_table', () => {
         );
         expect(localStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
+    });
+
+    test.each([
+        ['fresh reader without admin tree', {}, null, 'table', 'table'],
+        ['read metadata wins a stale tree', { default_view_name: 'article_view' }, null, 'table', 'table'],
+        ['explicit article remains selected', {}, 'article_view', 'table', 'article_view'],
+        ['saved card selection remains selected', {}, 'card', 'table', 'card'],
+        ['empty dataset default uses site default', { default_view_name: 'article_view' }, null, null, 'card'],
+    ])('%s', async (_name, spec, stored, defaultView, expected) => {
+        getAllSpecsMock.mockReturnValue({ demo_dataset: spec });
+        if (stored) localStorage.setItem('demo_dataset_view', stored);
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const active = await generate_table('demo_dataset', ['id'], [{ id: 1 }],
+            { id: 'INTEGER' }, 1, false, { default_view_name: defaultView });
+        expect(localStorage.getItem('demo_dataset_view')).toBe(expected);
+        expect(active.id).toBe(expected === 'article_view'
+            ? 'demo_dataset_article_view_container' : `demo_dataset_${expected}_view_container`);
+    });
+
+    test.each([null, 'article_view', 'card'])('uses the reader default with no extra route grants (stored=%s)', async stored => {
+        hasRoutePermissionMock.mockReturnValue(false);
+        getAllSpecsMock.mockReturnValue({});
+        if (stored) localStorage.setItem('demo_dataset_view', stored);
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const active = await generate_table('demo_dataset', ['id'], [{ id: 1 }],
+            { id: 'INTEGER' }, 1, false, { default_view_name: 'table' });
+        expect(active.id).toBe('demo_dataset_table_view_container');
+        expect(localStorage.getItem('demo_dataset_view')).toBe('table');
+    });
+
+    test('does not restore an unsupported default after permission fallback', async () => {
+        datasetSupportsMapViewMock.mockReturnValue(false);
+        hasRoutePermissionMock.mockReturnValue(false);
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const active = await generate_table('demo_dataset', ['id'], [{ id: 1 }],
+            { id: 'INTEGER' }, 1, false, { default_view_name: 'map' });
+        expect(active.id).toBe('demo_dataset_card_view_container');
+        expect(createMapViewMock).not.toHaveBeenCalled();
+        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
     });
 
     test('migrates cloud-management datasets from stale generic views to their DB default once', async () => {

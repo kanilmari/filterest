@@ -85,8 +85,8 @@ test.each([
     [true, true, true, "codex_dev"],
     [true, false, true, "api_tools"],
     [false, true, true, "api_tools"],
-    [true, true, false, "api_tools"],
-])("production coding selection combines server permission %s, readiness %s and route %s", async (enabled, ready, routeAllowed, expected) => {
+    [true, true, false, "codex_dev"],
+])("production coding selection uses current server permission %s/readiness %s despite cached route %s", async (enabled, ready, routeAllowed, expected) => {
     const mod = await loadModule();
     expect(mod.resolveAvailableFilterbarAIChatMode({
         configuredMode: "codex_dev", isDevEnvironment: false,

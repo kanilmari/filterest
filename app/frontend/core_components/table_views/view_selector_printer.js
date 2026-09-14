@@ -11,7 +11,7 @@ import { refreshTableUnified } from "../general_tables/gt_1_row_crud/gt_1_2_row_
 import { updateTabPathsForView } from "../navigation/main_tabs/main_tab_printer.js";
 import { updateShowMenuButtonPosition } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { applyPermission, hasRoutePermission } from "../route_permission_checker.js";
-import { getDefaultViewSync } from "../config_fetcher.js";
+import { resolveDatasetDefaultView } from "./dataset_default_view.js";
 import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
 import { getParams, setParams, updateURL } from "../navigation/nav_engine/query_params.js";
@@ -222,7 +222,7 @@ function createGenericViewButton(label, viewKey, tableName, currentView, langKey
     }
     btn.setAttribute("aria-pressed", viewKey === activeViewKey ? "true" : "false");
 
-    const defaultView = getDefaultViewSync();
+    const defaultView = resolveDatasetDefaultView(tableName);
     if (viewKey !== defaultView && !isDatasetViewSelectorAlias(viewKey)) {
         const route = getDatasetViewPermissionRoute(viewKey);
         if (route) {
@@ -238,7 +238,7 @@ function createGenericViewButton(label, viewKey, tableName, currentView, langKey
 // Buttons and the More menu commit the same view, query and history transition.
 export function selectDatasetView(tableName, viewKey, currentView = null) {
     if (!viewKey) return;
-    const defaultView = getDefaultViewSync();
+    const defaultView = resolveDatasetDefaultView(tableName);
     const datasetName = tableName;
     const previousViewKey = localStorage.getItem(`${datasetName}_view`) || currentView || defaultView;
     const route = getDatasetViewPermissionRoute(viewKey);
@@ -250,13 +250,13 @@ export function selectDatasetView(tableName, viewKey, currentView = null) {
     // must not replace its row entry with a collection URL and push it again.
     if (nextViewKey === ARTICLE_VIEW_KEY && previousViewKey === ARTICLE_VIEW_KEY
         && isRowArticleOpenForTable(tableName)) return;
-    if (viewKey !== ARTICLE_VIEW_KEY) {
+    if (nextViewKey !== ARTICLE_VIEW_KEY) {
         closeRowArticleBeforeViewSwitch(tableName);
     }
     localStorage.setItem(`${datasetName}_view`, nextViewKey);
     syncActiveViewButtons(tableName, nextViewKey);
     applyViewStyling(tableName);
-    const articlePreparation = prepareArticleViewTarget(tableName, viewKey, previousViewKey);
+    const articlePreparation = prepareArticleViewTarget(tableName, nextViewKey, previousViewKey);
     if (articlePreparation) {
         void articlePreparation.finally(() => {
             if (localStorage.getItem(`${tableName}_view`) === ARTICLE_VIEW_KEY) refreshTableUnified(tableName);

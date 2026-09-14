@@ -15,9 +15,16 @@ beforeEach(() => {
  document.documentElement.lang="fi";document.body.innerHTML="";localStorage.clear();
  request.mockReset();permission.mockReturnValue(true);
 });
-test("ordinary users do not receive or request coding controls", () => {
- permission.mockReturnValue(false);
- expect(createCodingAgentControl("fixture")).toBeNull();expect(request).not.toHaveBeenCalled();
+test("a denied administrator request leaves controls hidden even with stale route access", async () => {
+ document.head.innerHTML='<meta name="app-env" content="dev">';
+ request.mockRejectedValue(Object.assign(new Error("Forbidden"),{status:403}));
+ const control=createCodingAgentControl("fixture");document.body.append(control.row);
+ await vi.waitFor(()=>expect(control.capability).toEqual({feature_enabled:false,runner_ready:false}));
+ expect(control.row.hidden).toBe(true);
+ expect(control.select.value).toBe("api_tools");
+ expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(true);
+ expect(request).toHaveBeenCalledWith("aiChatCodexQuery",expect.objectContaining({suppressAuthRedirect:true}));
+ control.destroy();
 });
 test("enabled production with an unready runner explains setup without allowing sends", async () => {
  request.mockResolvedValue({feature_enabled:true,runner_ready:false,dev_only:false});
@@ -45,4 +52,42 @@ test("a late availability response cannot revive destroyed controls", async () =
  const control=createCodingAgentControl("fixture");control.destroy();
  resolve({feature_enabled:true,runner_ready:true});
  await Promise.resolve();expect(control.capability).toBeUndefined();expect(control.row.hidden).toBe(true);
+});
+
+
+test("fresh administrator availability recovers missing route cache without early visibility", async () => {
+ permission.mockReturnValue(false);
+ let resolve;request.mockReturnValue(new Promise(done=>{resolve=done;}));
+ const control=createCodingAgentControl("fixture");
+ expect(control).not.toBeNull();
+ document.body.append(control.row);
+ expect(control.row.hidden).toBe(true);
+ expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(true);
+ resolve({feature_enabled:true,runner_ready:false,dev_only:false});
+ await vi.waitFor(()=>expect(control.row.hidden).toBe(false));
+ expect(control.row.textContent).toContain("ei ole valmis");
+ expect(control.select.value).toBe("api_tools");
+ expect(request.mock.calls).toHaveLength(1);
+ control.destroy();
+});
+
+test.each([401,403,503])("failed availability %s cannot enable a stored DEV choice", async status => {
+ document.head.innerHTML='<meta name="app-env" content="dev">';
+ localStorage.setItem("gptChatMode_fixture","codex_dev");
+ request.mockRejectedValue(Object.assign(new Error("Unavailable"),{status}));
+ const control=createCodingAgentControl("fixture");document.body.append(control.row);
+ await vi.waitFor(()=>expect(control.capability?.feature_enabled).toBe(false));
+ expect(control.row.hidden).toBe(true);
+ expect(control.select.value).toBe("api_tools");
+ expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(true);
+ control.destroy();
+});
+
+test("production policy restriction hides the service even with a ready runner", async () => {
+ request.mockResolvedValue({feature_enabled:false,runner_ready:true,dev_only:true});
+ const control=createCodingAgentControl("fixture");document.body.append(control.row);
+ await vi.waitFor(()=>expect(control.capability?.dev_only).toBe(true));
+ expect(control.row.hidden).toBe(true);
+ expect(control.select.value).toBe("api_tools");
+ control.destroy();
 });

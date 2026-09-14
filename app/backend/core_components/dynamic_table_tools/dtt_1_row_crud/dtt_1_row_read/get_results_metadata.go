@@ -448,7 +448,11 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 	if err != nil {
 		return meta, fmt.Errorf("fetchTableReadMeta: checking card_detail_columns column failed: %v", err)
 	}
-	if !hasCardDetailsLayout && !hasCardStyleVariant && !hasCardDetailColumns {
+	hasDefaultView, err := columnExistsInTable(db, "system_db_tables", "default_view_id")
+	if err != nil {
+		return meta, fmt.Errorf("fetchTableReadMeta: checking default_view_id column failed: %v", err)
+	}
+	if !hasCardDetailsLayout && !hasCardStyleVariant && !hasCardDetailColumns && !hasDefaultView {
 		return meta, nil
 	}
 
@@ -467,15 +471,21 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 		cardDetailColumnsExpr = `card_detail_columns`
 	}
 
+	defaultViewExpr := `NULL::varchar AS default_view_name`
+	if hasDefaultView {
+		defaultViewExpr = `(SELECT name FROM system_table_views WHERE id = system_db_tables.default_view_id) AS default_view_name`
+	}
+
+	var defaultView *string
 	var layout sql.NullString
 	var styleVariant *string
 	var detailColumns *int
 	err = db.QueryRow(fmt.Sprintf(`
-		SELECT %s, %s, %s
+		SELECT %s, %s, %s, %s
 		FROM system_db_tables
 		WHERE table_name = $1
 		LIMIT 1
-	`, cardDetailsLayoutExpr, cardStyleVariantExpr, cardDetailColumnsExpr), tableName).Scan(&layout, &styleVariant, &detailColumns)
+	`, cardDetailsLayoutExpr, cardStyleVariantExpr, cardDetailColumnsExpr, defaultViewExpr), tableName).Scan(&layout, &styleVariant, &detailColumns, &defaultView)
 	if err == sql.ErrNoRows {
 		return meta, nil
 	}
@@ -483,6 +493,7 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 		return meta, err
 	}
 
+	meta.DefaultViewName = defaultView
 	meta.CardDetailsLayout = normalizeCardDetailsLayout(layout.String)
 	meta.CardStyleVariant = styleVariant
 	meta.CardDetailColumns = detailColumns

@@ -204,3 +204,173 @@ def test_cancelled_operation_never_spawns_a_process(monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     with pytest.raises(InterruptedError):
         run_timed(["must-not-run"], timeout=1, cancel_event=cancelled)
+
+
+def test_restart_replaces_only_owned_stale_socket(config):
+    path = Path(config["socket"])
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as dead:
+        dead.bind(str(path))
+    parent_identity = path.parent.stat().st_ino
+    server = RunnerServer(config)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.connect(str(path))
+        assert path.parent.stat().st_ino == parent_identity
+    finally:
+        server.server_close()
+        server.jobs.close()
+    assert not path.exists()
+    assert path.parent.stat().st_ino == parent_identity
+
+
+def test_live_socket_without_new_lock_is_not_removed(config):
+    path = Path(config["socket"])
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as live:
+        live.bind(str(path))
+        live.listen()
+        identity = path.stat().st_ino
+        with pytest.raises(ValueError, match="live runner"):
+            RunnerServer(config)
+        assert path.stat().st_ino == identity
+
+
+def test_second_runner_cannot_replace_or_unlock_first_socket(config):
+    first = RunnerServer(config)
+    path = Path(config["socket"])
+    identity = path.stat().st_ino
+    try:
+        for _ in range(2):
+            with pytest.raises(ValueError, match="another runner owns"):
+                RunnerServer(config)
+            assert path.stat().st_ino == identity
+    finally:
+        first.server_close()
+        first.jobs.close()
+
+
+@pytest.mark.parametrize("kind", ["regular", "symlink", "directory"])
+def test_non_socket_endpoint_is_never_removed(config, kind, tmp_path):
+    path = Path(config["socket"])
+    target = tmp_path / "protected"
+    target.write_text("keep")
+    if kind == "regular":
+        path.write_text("keep endpoint")
+    elif kind == "symlink":
+        path.symlink_to(target)
+    else:
+        path.mkdir()
+    with pytest.raises(ValueError, match="socket owned"):
+        RunnerServer(config)
+    assert path.exists()
+    assert target.read_text() == "keep"
+
+
+def test_foreign_owned_socket_is_never_removed(config, monkeypatch):
+    path = Path(config["socket"])
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as dead:
+        dead.bind(str(path))
+    original = os.stat
+    def foreign_stat(name, *args, **kwargs):
+        info = original(name, *args, **kwargs)
+        if name == path.name and kwargs.get("dir_fd") is not None:
+            fields = list(info)
+            fields[4] = os.getuid() + 10000
+            return os.stat_result(fields)
+        return info
+    monkeypatch.setattr(os, "stat", foreign_stat)
+    with pytest.raises(ValueError, match="socket owned"):
+        RunnerServer(config)
+    assert path.exists()
+
+
+def test_shutdown_keeps_socket_replaced_by_another_owner(config):
+    server = RunnerServer(config)
+    path = Path(config["socket"])
+    path.unlink()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as replacement:
+        replacement.bind(str(path))
+        replacement.listen()
+        identity = path.stat().st_ino
+        try:
+            server.server_close()
+            assert path.stat().st_ino == identity
+        finally:
+            server.jobs.close()
+
+
+def test_socket_lock_symlink_is_rejected(config, tmp_path):
+    target = tmp_path / "keep"
+    target.write_text("do not change")
+    path = Path(config["socket"])
+    (path.parent / ("." + path.name + ".lock")).symlink_to(target)
+    with pytest.raises(OSError):
+        RunnerServer(config)
+    assert target.read_text() == "do not change"
+
+
+def launch_runner(config, tmp_path):
+    actual = dict(config, allowed_web_uids=[os.getuid() + 10000])
+    configuration = tmp_path / "service-config.json"
+    configuration.write_text(json.dumps(actual))
+    process = subprocess.Popen([sys.executable, str(Path(__file__).with_name("coding_agent_runner.py")),
+                                "--config", str(configuration)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise AssertionError(process.communicate()[1].decode())
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.connect(config["socket"])
+            return process
+        except OSError:
+            time.sleep(.02)
+    process.kill()
+    process.wait()
+    raise AssertionError("runner socket did not become available")
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="production runner intentionally rejects root")
+def test_sigterm_cleans_socket_and_normal_restart_preserves_directory(config, tmp_path):
+    path = Path(config["socket"])
+    identity = path.parent.stat().st_ino
+    for _ in range(2):
+        process = launch_runner(config, tmp_path)
+        try:
+            process.terminate()
+            assert process.wait(timeout=5) == 0
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        assert not path.exists()
+        assert path.parent.stat().st_ino == identity
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="production runner intentionally rejects root")
+def test_sigkill_stale_socket_recovers_on_restart(config, tmp_path):
+    path = Path(config["socket"])
+    identity = path.parent.stat().st_ino
+    first = launch_runner(config, tmp_path)
+    first.kill()
+    first.wait(timeout=5)
+    assert path.exists()
+    second = launch_runner(config, tmp_path)
+    try:
+        assert path.parent.stat().st_ino == identity
+        second.terminate()
+        assert second.wait(timeout=5) == 0
+    finally:
+        if second.poll() is None:
+            second.kill()
+            second.wait()
+    assert not path.exists()
+
+
+def test_bound_socket_before_listen_is_not_mistaken_for_stale(config):
+    path = Path(config["socket"])
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as live:
+        live.bind(str(path))
+        identity = path.stat().st_ino
+        with pytest.raises(ValueError, match="live process has bound"):
+            RunnerServer(config)
+        assert path.stat().st_ino == identity

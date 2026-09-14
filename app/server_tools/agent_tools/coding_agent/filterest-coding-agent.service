@@ -12,6 +12,7 @@ Group=filterest-agent-ipc
 UMask=0077
 RuntimeDirectory=filterest-coding-agent
 RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
 StateDirectory=filterest-coding-agent
 StateDirectoryMode=0700
 ExecStart=/usr/bin/python3 /opt/filterest-coding-agent/runner/coding_agent_runner.py --config /etc/filterest-coding-agent/site.json

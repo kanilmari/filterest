@@ -31,7 +31,11 @@ install its runner or deploy the production sites.
 
 GET does not start a model. Enabling the policy alone does not install a runner,
 authenticate an account, verify quota, or start a paid request. The UI explains
-when the enabled service still needs setup.
+when the enabled service still needs setup. It requests this live administrator
+check when mounting the chat, including when the browser's cached route list
+is missing or stale. The selector stays hidden and Codex disabled until the
+request succeeds; denied or failed requests never enable the development
+adapter as a fallback. Every later job request retains the backend checks.
 
 ## Existing development adapter
 
