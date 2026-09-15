@@ -3,31 +3,6 @@
  * Kept separate from the canonical hero mask so the experiment stays isolated.
  */
 
-.filterbar-inline-hero__cover-palette-button {
-	position: absolute;
-	z-index: 3;
-	top: 62px;
-	right: 17px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	padding: 0;
-	color: var(--text_color);
-	background: color-mix(in srgb, var(--bg_color_2) 82%, transparent);
-	border: 1px solid var(--filter_panel_border);
-	border-radius: 50%;
-	box-shadow: var(--fw-shadow-raised);
-	backdrop-filter: blur(10px);
-}
-
-.filterbar-inline-hero__cover-palette-button:hover,
-.filterbar-inline-hero__cover-palette-button:focus-visible {
-	color: var(--button_hover_text_color, var(--text_color));
-	background: var(--button_hover_bg_color);
-}
-
 .filterbar-inline-hero__cover-palette-icon {
 	width: 18px;
 	height: 18px;

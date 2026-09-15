@@ -36,6 +36,38 @@ beforeEach(() => {
 });
 
 describe('public presentation state', () => {
+    test('uses approved new-site glow defaults without replacing saved legacy choices', async () => {
+        const keys = ['active_tab_fade', 'active_tab_max_opacity', 'active_tab_glow_intensity',
+            'active_tab_glow_width', 'active_tab_glow_blur'];
+        const values = payload => keys.map(key => payload.dataset_cover_theme.shared[key]);
+        expect(values(normalizePresentationSettings(null))).toEqual([25, 1, 0.5, 2, 4]);
+        const legacy = settings('#00aa77');
+        Object.assign(legacy.dataset_cover_theme.shared, {
+            active_tab_glow_intensity: 0.3, active_tab_glow_width: 1.5, active_tab_glow_blur: 2,
+        });
+        legacy.dataset_cover_theme.shared.article_image_caption_position = 'overlay';
+        putCache(legacy);
+        const state = createSitePresentationState({ requestFn: async () => legacy });
+        expect(values(state.savedSettings())).toEqual([25, 1, 0.3, 1.5, 2]);
+        await state.loadSettings();
+        const draft = state.savedSettings();
+        Object.assign(draft.dataset_cover_theme.shared, {
+            active_tab_glow_intensity: 0.5, active_tab_glow_width: 2, active_tab_glow_blur: 4,
+        });
+        const save = vi.fn(async payload => payload);
+        await state.saveSettings(draft, save);
+        expect(save.mock.calls[0][0]).toEqual(draft);
+        expect(state.savedSettings()).toEqual(draft);
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(draft);
+        for (const key of keys) delete draft.dataset_cover_theme.shared[key];
+        for (const key of keys) delete legacy.dataset_cover_theme.shared[key];
+        expect(draft).toEqual(legacy);
+        const css = document.documentElement.style;
+        expect(['--navtab-active-fade-width', '--navtab-active-max-opacity', '--navtab-active-glow-intensity',
+            '--navtab-active-glow-width', '--navtab-active-glow-blur'].map(key => css.getPropertyValue(key)))
+            .toEqual(['25px', '1', '0.5', '2px', '4px']);
+    });
+
     test('defaults a legacy caption setting and immediately applies cached and refreshed choices', async () => {
         const legacy = settings();
         delete legacy.dataset_cover_theme.shared.article_image_caption_position;

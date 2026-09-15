@@ -386,7 +386,7 @@ describe('dataset cover presentation settings', () => {
             expect(document.documentElement.style.cssText).toBe(rootStyle);
         }
         expect(panel.textContent).toContain('Aineistovälilehdet');
-        expect(panel.textContent).toContain('Kansikuva ja häivytys');
+        expect(panel.textContent).toContain('Tausta- ja kansikuva');
         expect(panel.textContent).toContain('Liukuvärin keskustan kohta');
         expect(panel.textContent).toContain('Tummennuskerroksen peittävyys');
         expect(panel.textContent).toContain('Kansi- ja taustakuvan sumennus');
@@ -439,20 +439,20 @@ describe('dataset cover presentation settings', () => {
         expect(groups.every(group => !group.open)).toBe(true);
         groups[0].open = true;
         await new Promise(resolve => setTimeout(resolve, 0));
-        expect(localStorage.getItem('dataset_cover_palette_section_themeImage')).toBeNull();
+        expect(localStorage.getItem('dataset_cover_palette_section_backgroundCover')).toBeNull();
         groups[0].open = false;
-        groups[4].querySelector('summary').click();
+        groups[1].querySelector('summary').click();
         await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('true'));
         control.button.click(); control.button.click();
         control.panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
         document.documentElement.lang = 'fi';
         await Promise.resolve();
-        expect(groups[4].open).toBe(true);
+        expect(groups[1].open).toBe(true);
         control.destroy();
         control = await mountDatasetCoverTestPalette(createCoverHero(), 'another_dataset', options);
         const restored = [...control.panel.querySelectorAll('details')];
-        expect(restored.map(group => group.open)).toEqual([false, false, false, false, true, false, false]);
-        restored[4].querySelector('summary').click();
+        expect(restored.map(group => group.open)).toEqual([false, true, false, false]);
+        restored[1].querySelector('summary').click();
         await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('false'));
         expect(options.saveRequestFn).not.toHaveBeenCalled();
         control.destroy();
@@ -488,7 +488,7 @@ describe('dataset cover presentation settings', () => {
         expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
     });
 
-    test('separates theme controls from shared controls and saves both themes atomically', async () => {
+    test('groups background and cover controls together and saves both themes atomically', async () => {
         const hero = createCoverHero();
         const saveRequestFn = vi.fn(async (request) => request);
         const control = await mountDatasetCoverTestPalette(
@@ -501,14 +501,30 @@ describe('dataset cover presentation settings', () => {
 
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-theme-controls"] input[type="range"]'
-        )).toHaveLength(12);
+        )).toHaveLength(14);
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(10);
+        )).toHaveLength(8);
+        const background = panel.querySelector('[data-testid="dataset-cover-test-palette-backgroundImage"]');
+        const cover = panel.querySelector('[data-testid="dataset-cover-test-palette-coverImage"]');
+        expect(background.querySelectorAll('input[type="range"]')).toHaveLength(1);
+        expect(cover.querySelectorAll('input[type="range"]')).toHaveLength(13);
+        expect(background.closest('details')).toBe(cover.closest('details'));
+        expect(cover.querySelector('[data-testid="dataset-cover-test-palette-cover-visible"]')).not.toBeNull();
+        expect(cover.querySelector('[data-testid="dataset-cover-test-palette-mask-enabled"]')).not.toBeNull();
+        expect([background, cover].map(section => section.querySelector('legend').textContent))
+            .toEqual(['Background image', 'Cover image']);
+        document.documentElement.lang = 'fi';
+        await Promise.resolve();
+        expect([background, cover].map(section => section.querySelector('legend').textContent))
+            .toEqual(['Taustakuva', 'Kansikuva']);
+        expect(cover.closest('details').querySelector('summary').textContent).toBe('Tausta- ja kansikuva');
+        document.documentElement.lang = 'en';
+        await Promise.resolve();
         const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
-        expect(toolboxes).toHaveLength(7);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(7);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(7);
+        expect(toolboxes).toHaveLength(4);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(4);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(4);
         expect([...toolboxes].every(toolbox => !toolbox.open)).toBe(true);
         expect(toolboxes[2].open).toBe(false);
         toolboxes[2].querySelector('summary').click();

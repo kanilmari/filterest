@@ -74,10 +74,10 @@
 }
 
 .navtablinks.active .navtab-active-glow-path {
-    stroke-width: var(--navtab-active-glow-width, 1.5px);
-    opacity: var(--navtab-active-glow-intensity, 0.3);
+    stroke-width: var(--navtab-active-glow-width, 2px);
+    opacity: var(--navtab-active-glow-intensity, 0.5);
     filter: drop-shadow(
-        0 0 var(--navtab-active-glow-blur, 2px) var(--primary_color)
+        0 0 var(--navtab-active-glow-blur, 4px) var(--primary_color)
     );
 }
 
@@ -165,4 +165,16 @@
     left: 62px;
     right: 20px;
     font-size: 18px;
+}
+
+/* Active dataset identity is independent of the rounded/rectangular SVG skin.
+   Text decoration paints within the existing label box, so activation cannot
+   shift its position or change the tab's measured size. */
+.navtablinks.active .navtab_icon {
+    color: var(--primary_color);
+}
+.navtablinks.active .tab_button_text {
+    text-decoration-line: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
 }

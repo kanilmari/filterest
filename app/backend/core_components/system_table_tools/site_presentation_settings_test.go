@@ -62,11 +62,37 @@ func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T)
 	if shared.CardDescriptionLines != 2 {
 		t.Fatalf("card description line default = %d", shared.CardDescriptionLines)
 	}
-	if shared.ActiveTabGlowIntensity != 0.3 || shared.ActiveTabGlowWidth != 1.5 || shared.ActiveTabGlowBlur != 2 {
+	if shared.ActiveTabGlowIntensity != 0.5 || shared.ActiveTabGlowWidth != 2 || shared.ActiveTabGlowBlur != 4 {
 		t.Fatalf("shared glow defaults = %#v", shared)
 	}
 	if settings.RowArticleTimestampDisplayMode != rowArticleTimestampDateTime {
 		t.Fatalf("timestamp mode = %q", settings.RowArticleTimestampDisplayMode)
+	}
+}
+
+func TestSitePresentationGlowDefaultsPreserveStoredChoices(t *testing.T) {
+	config := defaultSitePresentationSettings().DatasetCoverTheme
+	// Database reads merge persisted JSON onto defaults, preserving deliberate older choices.
+	raw := `{"shared":{"active_tab_glow_intensity":0.3,"active_tab_glow_width":1.5,"active_tab_glow_blur":2,"brand_color":"#00aa77","card_detail_columns":4}}`
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		t.Fatal(err)
+	}
+	settings := defaultSitePresentationSettings()
+	settings.DatasetCoverTheme = config
+	body, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeSitePresentationSettings(bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded != settings {
+		t.Fatal("validated save must preserve the full settings, including existing glow choices")
+	}
+	shared := decoded.DatasetCoverTheme.Shared
+	if shared.ActiveTabGlowIntensity != 0.3 || shared.ActiveTabGlowWidth != 1.5 || shared.ActiveTabGlowBlur != 2 {
+		t.Fatalf("stored glow choices replaced by new defaults: %#v", shared)
 	}
 }
 
@@ -216,7 +242,7 @@ func TestAdminSitePresentationSettingsHandlerRejectsIncompleteUnknownAndInvalidV
 	invalidThemeBlur := strings.Replace(string(validBody), `"image_blur":1`, `"image_blur":25`, 1)
 	invalidGlowIntensity := strings.Replace(
 		string(validBody),
-		`"active_tab_glow_intensity":0.3`,
+		`"active_tab_glow_intensity":0.5`,
 		`"active_tab_glow_intensity":1.1`,
 		1,
 	)

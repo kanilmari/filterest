@@ -5,9 +5,9 @@
 :root {
 	--navtab-active-fade-width: 25px;
 	--navtab-active-max-opacity: 1;
-	--navtab-active-glow-intensity: 0.3;
-	--navtab-active-glow-width: 1.5px;
-	--navtab-active-glow-blur: 2px;
+	--navtab-active-glow-intensity: 0.5;
+	--navtab-active-glow-width: 2px;
+	--navtab-active-glow-blur: 4px;
 	--dataset-background-light-image-blur: 1px;
 	--dataset-background-dark-image-blur: 1px;
 }

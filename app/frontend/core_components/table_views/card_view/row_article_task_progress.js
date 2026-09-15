@@ -5,16 +5,22 @@
 
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
+import {
+    patchTaskTodoProgressForStatusChange,
+    TASK_PROGRESS_SEGMENTS,
+} from "./row_article_task_todo_status.js";
 
 const TASK_PROGRESS_DATASET = "dev_agent_tasks";
 const TASK_PROGRESS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
-const TASK_PROGRESS_SEGMENTS = 10;
 
 function normalizeProgressPayload(payload = {}) {
     const total = Number.parseInt(String(payload.total ?? "0"), 10);
     const completed = Number.parseInt(String(payload.completed ?? "0"), 10);
     const percent = Number.parseInt(String(payload.percent ?? "0"), 10);
-    const litSegments = Number.parseInt(String(payload.lit_segments ?? "0"), 10);
+    const litSegments = Number.parseInt(
+        String(payload.lit_segments ?? payload.litSegments ?? "0"),
+        10,
+    );
 
     return {
         total: Number.isFinite(total) ? Math.max(0, total) : 0,
@@ -90,7 +96,35 @@ function buildTaskProgressContent(payload = {}) {
         content.appendChild(statuses);
     }
 
+    content._taskTodoProgress = progress;
     return content;
+}
+
+/**
+ * Updates the article progress visual from the same todo status change as the checkbox.
+ *
+ * @param {ParentNode|null|undefined} articleRoot
+ * @param {unknown} fromStatus
+ * @param {unknown} toStatus
+ * @returns {object|null}
+ */
+export function applyTaskTodoStatusChangeToArticleProgress(articleRoot, fromStatus, toStatus) {
+    const content = articleRoot?.querySelector?.(".row_article_task_progress");
+    if (!(content instanceof HTMLElement)) {
+        return null;
+    }
+
+    const nextPayload = patchTaskTodoProgressForStatusChange(
+        content._taskTodoProgress || {},
+        fromStatus,
+        toStatus,
+    );
+    const replacement = buildTaskProgressContent(nextPayload);
+    if (!replacement) {
+        return nextPayload;
+    }
+    content.replaceWith(replacement);
+    return nextPayload;
 }
 
 /**

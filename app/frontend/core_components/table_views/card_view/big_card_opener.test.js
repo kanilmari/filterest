@@ -77,6 +77,7 @@ vi.mock("../../dev_tools/function_counter.js", () => ({
 }));
 
 vi.mock("../../state_stores/table_state_store.js", () => ({
+    getUnifiedTableState: vi.fn(() => ({ articleView: { expandedId: null } })),
     setUnifiedTableState: vi.fn(),
 }));
 

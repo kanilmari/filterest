@@ -110,6 +110,34 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(heroButton).toBeTruthy();
     });
 
+    test('keeps authorized settings and delayed palette beside tabs in the first hero row', async () => {
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/admin/dataset_header_config']));
+        const { mountDatasetCoverTestPalette } = await import('../admin_tools/dataset_cover_test_palette.js');
+        let resolvePalette;
+        const button = document.createElement('button');
+        const destroy = vi.fn(() => button.remove());
+        mountDatasetCoverTestPalette.mockImplementationOnce(async hero => {
+            await new Promise(resolve => { resolvePalette = resolve; });
+            hero.append(button);
+            return { button, destroy };
+        });
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'integer' }, 1, false, 'card');
+        const hero = document.querySelector('.filterbar-inline-hero');
+        const row = hero.querySelector('.filterbar-inline-hero__top-row');
+        const actions = row?.querySelector('.filterbar-inline-hero__actions');
+        expect(hero.firstElementChild).toBe(row);
+        expect(row?.querySelector('nav')).toBeTruthy();
+        expect(actions?.querySelector('[data-testid="dataset-header-config-hero-button"]')).toBeTruthy();
+        expect(row?.nextElementSibling?.classList.contains('filter-content-inner')).toBe(true);
+        resolvePalette();
+        await vi.waitFor(() => expect(button.parentElement).toBe(actions));
+        expect(hero.querySelectorAll('.filterbar-inline-hero__top-row')).toHaveLength(1);
+        panel.__destroy?.();
+        hero.destroy();
+        expect(destroy).toHaveBeenCalled();
+    });
+
     test('replaces the project logo grid with the dataset symbol asset in inline hero', async () => {
         const { mountDatasetCoverTestPalette } = await import(
             '../admin_tools/dataset_cover_test_palette.js'
