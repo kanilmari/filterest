@@ -316,6 +316,12 @@ export function setupFilterbarSectionOrdering(panelBody) {
     }, { signal });
 
     markSections();
+    const sectionMountObserver = new MutationObserver(() => {
+        if (!signal.aborted) {
+            markSections();
+        }
+    });
+    sectionMountObserver.observe(panelBody, { childList: true });
     const ready = fetchSectionLayout()
         .then(async (layout) => {
             applyingRemoteLayout = true;
@@ -333,6 +339,7 @@ export function setupFilterbarSectionOrdering(panelBody) {
         ready,
         destroy() {
             clearTimeout(saveTimer);
+            sectionMountObserver.disconnect();
             controller.abort();
         },
     };

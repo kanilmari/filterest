@@ -82,6 +82,135 @@ export function ensureTableContainers(tableName) {
 }
 
 /**
+ * Holds a filterbar section's place in the compact panel until rights resolve.
+ * Between unknown dataset permissions and the later labeled disclosure section.
+ * Exists so unauthorized tool headings never enter the document, even for a frame.
+ */
+function createPermissionPendingFilterbarSectionMount(sectionKey) {
+    const mount = document.createElement("div");
+    mount.hidden = true;
+    mount.setAttribute("aria-hidden", "true");
+    mount.dataset.filterbarSectionKey = sectionKey;
+    mount.dataset.filterbarSectionPending = "true";
+    return mount;
+}
+
+function sectionHasInteractiveControls(container) {
+    return container.querySelectorAll("button, a, select, input").length > 0;
+}
+
+function replacePendingSectionMount(mount, section) {
+    if (!(mount instanceof HTMLElement) || !mount.isConnected) {
+        section?.destroy?.();
+        return null;
+    }
+    mount.replaceWith(section);
+    return section;
+}
+
+function discardPendingSectionMount(mount) {
+    if (mount instanceof HTMLElement) {
+        mount.remove();
+    }
+}
+
+/**
+ * Builds the permission-gated Tools and Views disclosures only after rights resolve.
+ * Between dataset permission checks and the compact filterbar section list.
+ * Exists so guests never paint Add & manage content or View content as… labels.
+ */
+async function mountPermissionedFilterbarSections({
+    tableUID,
+    tableName,
+    currentView,
+    columns,
+    dataTypes,
+    toolsMount,
+    viewsMount,
+    isDestroyed,
+    onSectionMounted,
+}) {
+    const actionContent = document.createElement("div");
+    actionContent.classList.add(
+        "dataset-filter-primary-actions",
+        "dataset-filter-primary-actions--tools"
+    );
+    const adminButtonsContainer = document.createElement("div");
+    adminButtonsContainer.classList.add("dataset-filter-management-buttons");
+    actionContent.appendChild(adminButtonsContainer);
+
+    const viewContent = document.createElement("div");
+    viewContent.classList.add("dataset-filter-secondary-row");
+    const viewSelectorContainer = document.createElement("div");
+    viewContent.appendChild(viewSelectorContainer);
+
+    const [canAdd] = await Promise.all([
+        hasDatasetPermission("/api/add-row-multipart", tableName),
+        appendAdminFeatures(
+            tableName,
+            adminButtonsContainer,
+            viewSelectorContainer,
+            currentView,
+            { columns, dataTypes }
+        ),
+    ]);
+
+    if (isDestroyed()) {
+        discardPendingSectionMount(toolsMount);
+        discardPendingSectionMount(viewsMount);
+        onSectionMounted?.({ actionRow: null, viewRow: null });
+        return { actionRow: null, viewRow: null };
+    }
+
+    if (canAdd) {
+        actionContent.insertBefore(
+            createAddRowButton(tableUID, tableName),
+            adminButtonsContainer
+        );
+    }
+    if (adminButtonsContainer.children.length === 0) {
+        adminButtonsContainer.remove();
+    }
+
+    let actionRow = null;
+    if (sectionHasInteractiveControls(actionContent)) {
+        actionRow = buildFilterbarDisclosureSection({
+            iconPath: "/frontend/icons/general/table-tools-icon.svg",
+            iconClassName: "filterbar-section-heading-icon--tools",
+            langKey: "filterbar_add_manage_content",
+            fallbackText: "Add & manage content",
+            contentElement: actionContent,
+            sectionClassNames: ["dataset-filter-tools-section"],
+            startOpen: false,
+        });
+        actionRow.dataset.filterbarSectionKey = "tools";
+        actionRow = replacePendingSectionMount(toolsMount, actionRow);
+    } else {
+        discardPendingSectionMount(toolsMount);
+    }
+
+    let viewRow = null;
+    if (viewSelectorContainer.children.length > 0) {
+        viewRow = buildFilterbarDisclosureSection({
+            iconPath: "/frontend/icons/general/view-palette-icon.svg",
+            iconClassName: "view-selector-heading-icon",
+            langKey: "filterbar_view_content_as",
+            fallbackText: "View content as…",
+            contentElement: viewContent,
+            sectionClassNames: ["dataset-filter-views-section"],
+            startOpen: false,
+        });
+        viewRow.dataset.filterbarSectionKey = "views";
+        viewRow = replacePendingSectionMount(viewsMount, viewRow);
+    } else {
+        discardPendingSectionMount(viewsMount);
+    }
+
+    onSectionMounted?.({ actionRow, viewRow });
+    return { actionRow, viewRow };
+}
+
+/**
  * Luo top_row‑elementin, joka sisältää:
  *  1) peruskäyttäjän napit
  *  2) (valinnaisesti) admin-napit ja näkymävalitsimen
@@ -101,8 +230,11 @@ export function buildTopRow(
     topRow.id = `${tableUID}_filterBar_top_row`;
     topRow.classList.add("dataset-filter-top-grid");
 
+    let destroyed = false;
     let sortDropdown = null;
     let sortSearchRow = null;
+    let actionRow = null;
+    let viewRow = null;
     if (show_filterbar_search_basic_controls_section) {
         /* ---------- Rivi 1: Sort by (left) + Reset search (right) ---------- */
         const sortSearchContent = document.createElement("div");
@@ -137,78 +269,39 @@ export function buildTopRow(
         topRow.appendChild(sortSearchRow);
     }
 
-    /* ---------- Rivi 2: Add + Delete + Manage table ---------- */
-    const actionContent = document.createElement("div");
-    actionContent.classList.add(
-        "dataset-filter-primary-actions",
-        "dataset-filter-primary-actions--tools"
-    );
-    const actionRow = buildFilterbarDisclosureSection({
-        iconPath: "/frontend/icons/general/table-tools-icon.svg",
-        iconClassName: "filterbar-section-heading-icon--tools",
-        langKey: "filterbar_add_manage_content",
-        fallbackText: "Add & manage content",
-        contentElement: actionContent,
-        sectionClassNames: ["dataset-filter-tools-section"],
-        startOpen: false,
-    });
-    actionRow.dataset.filterbarSectionKey = "tools";
+    const toolsMount = createPermissionPendingFilterbarSectionMount("tools");
+    const viewsMount = createPermissionPendingFilterbarSectionMount("views");
+    topRow.append(toolsMount, viewsMount);
 
-    const addBtn = createAddRowButton(tableUID, tableName);
-    actionContent.appendChild(addBtn);
-
-    const adminButtonsContainer = document.createElement("div");
-    adminButtonsContainer.classList.add("dataset-filter-management-buttons");
-    actionContent.appendChild(adminButtonsContainer);
-
-    topRow.appendChild(actionRow);
-
-    /* ---------- Rivi 3: Näkymävalitsin ---------- */
-    const viewContent = document.createElement("div");
-    viewContent.classList.add("dataset-filter-secondary-row");
-
-    const viewSelectorContainer = document.createElement("div");
-    viewContent.appendChild(viewSelectorContainer);
-    const viewRow = buildFilterbarDisclosureSection({
-        iconPath: "/frontend/icons/general/view-palette-icon.svg",
-        iconClassName: "view-selector-heading-icon",
-        langKey: "filterbar_view_content_as",
-        fallbackText: "View content as…",
-        contentElement: viewContent,
-        sectionClassNames: ["dataset-filter-views-section"],
-        startOpen: false,
-    });
-    viewRow.dataset.filterbarSectionKey = "views";
-    topRow.appendChild(viewRow);
-
-    // Run permission checks and then hide empty rows
-    Promise.all([
-        hasDatasetPermission("/api/add-row-multipart", tableName).then(allowed => {
-            if (!allowed) addBtn.remove();
-        }),
-        appendAdminFeatures(
-            tableName,
-            adminButtonsContainer,
-            viewSelectorContainer,
-            currentView,
-            { columns, dataTypes }
-        ),
-    ]).then(() => {
-        // Hide actionRow if no visible interactive elements remain
-        const actionChildren = actionContent.querySelectorAll("button, a, select, input");
-        if (actionChildren.length === 0) actionRow.style.display = "none";
-
-        // Hide viewRow if view selector has no content
-        if (viewSelectorContainer.children.length === 0) {
-            viewRow.style.display = "none";
-        }
+    const ready = mountPermissionedFilterbarSections({
+        tableUID,
+        tableName,
+        currentView,
+        columns,
+        dataTypes,
+        toolsMount,
+        viewsMount,
+        isDestroyed: () => destroyed,
+        onSectionMounted(mounted) {
+            actionRow = mounted.actionRow;
+            viewRow = mounted.viewRow;
+        },
+    }).catch((err) => {
+        discardPendingSectionMount(toolsMount);
+        discardPendingSectionMount(viewsMount);
+        console.warn("filterbar permissioned sections failed to mount", err);
+        return { actionRow: null, viewRow: null };
     });
 
+    topRow.ready = ready;
     topRow.destroy = () => {
+        destroyed = true;
         sortDropdown?.destroy?.();
         sortSearchRow?.destroy?.();
-        actionRow.destroy?.();
-        viewRow.destroy?.();
+        actionRow?.destroy?.();
+        viewRow?.destroy?.();
+        discardPendingSectionMount(toolsMount);
+        discardPendingSectionMount(viewsMount);
     };
 
     return topRow;

@@ -297,8 +297,8 @@ export async function appendAdminFeatures(
         viewSelectorContainer.appendChild(viewSelector);
     }
 
-    // Row visibility is handled by the caller (filterbar_ui.js) after all
-    // permission checks complete via Promise.all().
+    // The caller mounts labeled Tools/Views sections only after these checks
+    // resolve, so unauthorized headings are never painted and then hidden.
 }
 
 
