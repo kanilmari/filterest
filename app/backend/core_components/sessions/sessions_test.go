@@ -21,6 +21,7 @@ func resetSessionTestGlobals() {
 	Store = nil
 	SessionName = "session"
 	currentAuthCookieConfig = legacyAuthCookieConfig()
+	_ = SetHTTPListenPort("")
 }
 
 func initSessionTestStore(t *testing.T) {
@@ -34,6 +35,7 @@ func initSessionTestStore(t *testing.T) {
 	t.Setenv("DB_HOST", "127.0.0.1")
 	t.Setenv("DB_PORT", "5433")
 	t.Setenv("DB_NAME", "easelect_test")
+	t.Setenv("PORT_NUMBER_IN_COOKIES", "0")
 	InitSessionStore()
 	t.Cleanup(resetSessionTestGlobals)
 }
@@ -115,6 +117,7 @@ func TestInitSessionStoreSetsOptionsAndInstanceScopedSessionName(t *testing.T) {
 	t.Setenv("DB_HOST", "127.0.0.1")
 	t.Setenv("DB_PORT", "5433")
 	t.Setenv("DB_NAME", "demo")
+	t.Setenv("PORT_NUMBER_IN_COOKIES", "0")
 	defer resetSessionTestGlobals()
 
 	InitSessionStore()
@@ -152,6 +155,7 @@ func TestInitSessionStorePrefersExplicitSessionCookieName(t *testing.T) {
 	t.Setenv("DB_HOST", "db.internal")
 	t.Setenv("DB_PORT", "5432")
 	t.Setenv("DB_NAME", "shared_app")
+	t.Setenv("PORT_NUMBER_IN_COOKIES", "0")
 	defer resetSessionTestGlobals()
 
 	InitSessionStore()
@@ -306,6 +310,7 @@ func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
 	t.Setenv("DB_HOST", "127.0.0.1")
 	t.Setenv("DB_PORT", "5433")
 	t.Setenv("DB_NAME", "corrupt_cookie_test")
+	t.Setenv("PORT_NUMBER_IN_COOKIES", "0")
 	config, err := resolveAuthCookieConfig()
 	if err != nil {
 		t.Fatalf("resolveAuthCookieConfig returned error: %v", err)
