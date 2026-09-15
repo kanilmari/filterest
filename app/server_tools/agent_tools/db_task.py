@@ -1299,6 +1299,7 @@ def _list_todos(task_id):
 
 def _create_todo(task_id, todo_text, parent_todo_id=None, sort_order=None, *, verify_task=True):
     """Create one structured todo row through the agent-tools todo endpoint."""
+    # Write todo_text as technical title, newline, then human identifier phrase (DEV_GUIDE).
     if verify_task:
         _read_task_or_exit(task_id)
     payload = {
