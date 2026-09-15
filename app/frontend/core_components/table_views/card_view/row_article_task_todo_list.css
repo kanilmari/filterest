@@ -1,0 +1,108 @@
+/*
+ * row_article_task_todo_list.css
+ *
+ * Checkbox checklist layout for ticket-article todo child tabs.
+ * Bridges native checkbox controls, verbatim todo_text rows, and existing status chips.
+ * Exists so todo↔done toggling stays visually distinct from observatory mass-selection.
+ */
+
+.row_article_task_todo_list,
+.row_article_task_todo_list.comment_list {
+    display: grid;
+    gap: 0.08rem;
+}
+
+.row_article_task_todo_item,
+.row_article_task_todo_item.comment_item,
+.row_article_task_todo_item.child_pretty_card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.25rem 0.7rem;
+    min-width: 0;
+    padding: 0.35rem 0.7rem;
+}
+
+.row_article_task_todo_item.is-child {
+    padding-left: 1.6rem;
+}
+
+.row_article_task_todo_toggle {
+    display: grid;
+    grid-template-columns: 1.15rem minmax(0, 1fr);
+    align-items: start;
+    gap: 0.65rem;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.row_article_task_todo_checkbox {
+    appearance: auto;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin: 0.15rem 0 0;
+    flex: 0 0 auto;
+    accent-color: var(--accent_color, hsl(207deg 70% 53%));
+    cursor: pointer;
+}
+
+.row_article_task_todo_copy {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.row_article_task_todo_text {
+    min-width: 0;
+    color: var(--text_color);
+    font-weight: 650;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.row_article_task_todo_phrase {
+    min-width: 0;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.82em;
+    font-weight: 450;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.row_article_task_todo_item.is-done .row_article_task_todo_copy {
+    color: var(--text_color_secondary, var(--text_color));
+    text-decoration: line-through;
+}
+
+.row_article_task_todo_status {
+    justify-self: end;
+}
+
+.row_article_task_todo_status_button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+
+.row_article_task_todo_actions {
+    justify-self: end;
+}
+
+@media (width <= 720px) {
+    .row_article_task_todo_item,
+    .row_article_task_todo_item.comment_item,
+    .row_article_task_todo_item.child_pretty_card {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .row_article_task_todo_status,
+    .row_article_task_todo_actions {
+        justify-self: start;
+        margin-left: 1.8rem;
+    }
+}

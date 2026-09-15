@@ -34,7 +34,14 @@ import {
     isOutgoingRelatedTable,
     shouldHandleSpaNavigationClick,
     shouldLazyLoadRelatedTableRows,
+    shouldOpenRelatedTab,
+    clickFallbackRelatedTabIfNoneActive,
 } from './big_card_child_tabs_helpers.js';
+import {
+    isTaskTodoChildDataset,
+    renderTaskTodoCheckboxList,
+} from './row_article_task_todo_list.js';
+import { persistRowArticleViewRestoreState } from './row_article_view_restore_state.js';
 
 /**
  * Builds a horizontal tab bar for FK-referring tables plus the comments tab.
@@ -187,6 +194,7 @@ export async function buildRelatedTabs(
         tab_content.querySelectorAll('.related_tab_panel').forEach((tabPanel) => tabPanel.classList.remove('active'));
         btn.classList.add('active');
         panel.classList.add('active');
+        persistRowArticleViewRestoreState(table_name, row_id, { relatedTabKey: btn.dataset.tabKey });
     };
 
     let first_tab = true;
@@ -247,8 +255,49 @@ export async function buildRelatedTabs(
 
         const row_list = document.createElement('div');
         row_list.classList.add('comment_list', 'related_record_list', 'child_record_list');
+        const relatedRowOpenHandler = (relatedRow) => relatedRow?.id != null
+            ? async () => openRelatedRecord({
+                relatedDataset: relatedTable.dataset,
+                relatedRow,
+                parentDataset: table_name,
+                parentRowId: row_id,
+                relatedTabsContainer: container,
+            })
+            : null;
+        const relatedRowDeleteHandler = (relatedRow) => can_delete_rows && relatedRow?.id != null
+            ? async () => deleteRelatedRecord({
+                relatedDataset: relatedTable.dataset,
+                relatedRow,
+                dataTypes: relatedDataTypes,
+                tabKey: tab_key,
+                reloadRelatedTabs,
+            })
+            : null;
         const renderRelatedRows = (rowsToRender = [], totalRowCount = initialRowCount) => {
             row_list.replaceChildren();
+
+            if (isTaskTodoChildDataset(relatedTable.dataset)) {
+                renderTaskTodoCheckboxList(rowsToRender, {
+                    container: row_list,
+                    dataTypes: relatedDataTypes,
+                    onOpen: (relatedRow) => {
+                        const openHandler = relatedRowOpenHandler(relatedRow);
+                        if (openHandler) {
+                            return openHandler();
+                        }
+                    },
+                    onDelete: can_delete_rows
+                        ? (relatedRow) => {
+                            const deleteHandler = relatedRowDeleteHandler(relatedRow);
+                            if (deleteHandler) {
+                                return deleteHandler();
+                            }
+                        }
+                        : null,
+                });
+                updateTabButtonLabel(totalRowCount);
+                return;
+            }
 
             if (rowsToRender.length > 0) {
                 row_list.appendChild(createRelatedRecordListHeader(can_delete_rows));
@@ -256,24 +305,8 @@ export async function buildRelatedTabs(
 
             rowsToRender.forEach((relatedRow) => row_list.appendChild(createRelatedRecordCard(relatedRow, {
                 dataTypes: relatedDataTypes,
-                onOpen: relatedRow?.id != null
-                    ? async () => openRelatedRecord({
-                        relatedDataset: relatedTable.dataset,
-                        relatedRow,
-                        parentDataset: table_name,
-                        parentRowId: row_id,
-                        relatedTabsContainer: container,
-                    })
-                    : null,
-                onDelete: can_delete_rows && relatedRow?.id != null
-                    ? async () => deleteRelatedRecord({
-                        relatedDataset: relatedTable.dataset,
-                        relatedRow,
-                        dataTypes: relatedDataTypes,
-                        tabKey: tab_key,
-                        reloadRelatedTabs,
-                    })
-                    : null,
+                onOpen: relatedRowOpenHandler(relatedRow),
+                onDelete: relatedRowDeleteHandler(relatedRow),
             })));
 
             if (rowsToRender.length === 0) {
@@ -349,15 +382,10 @@ export async function buildRelatedTabs(
             more.hidden = true;
         }
 
-        if (preferred_active_tab_key && preferred_active_tab_key === tab_key) {
+        if (shouldOpenRelatedTab(preferred_active_tab_key, tab_key, first_tab)) {
             btn.classList.add('active');
             panel.classList.add('active');
-            if (!relatedRowsLoaded) void loadRelatedRows();
-            first_tab = false;
-        } else if (first_tab) {
-            btn.classList.add('active');
-            panel.classList.add('active');
-            if (!relatedRowsLoaded) void loadRelatedRows();
+            if (!relatedRowsLoaded) await loadRelatedRows();
             first_tab = false;
         }
 
@@ -453,15 +481,10 @@ export async function buildRelatedTabs(
         });
 
         // Lazy-load on first click
-        if (preferred_active_tab_key === '__comments') {
+        if (shouldOpenRelatedTab(preferred_active_tab_key, '__comments', first_tab)) {
             btn.classList.add('active');
             panel.classList.add('active');
-            load_comments();
-            first_tab = false;
-        } else if (first_tab) {
-            btn.classList.add('active');
-            panel.classList.add('active');
-            load_comments();
+            await load_comments();
             first_tab = false;
         }
 
@@ -476,6 +499,7 @@ export async function buildRelatedTabs(
 
     container.appendChild(tab_bar);
     container.appendChild(tab_content);
+    clickFallbackRelatedTabIfNoneActive(tab_bar);
     return container;
 }
 

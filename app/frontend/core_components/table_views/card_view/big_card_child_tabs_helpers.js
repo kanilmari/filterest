@@ -70,6 +70,20 @@ export function buildRelatedTabKey(relatedTable = {}) {
     ].join("__");
 }
 
+export function shouldOpenRelatedTab(preferredTabKey, tabKey, fallbackStillOpen) {
+    if (preferredTabKey) {
+        return preferredTabKey === tabKey;
+    }
+    return Boolean(fallbackStillOpen);
+}
+
+export function clickFallbackRelatedTabIfNoneActive(tabBar) {
+    if (!(tabBar instanceof HTMLElement) || tabBar.querySelector(".related_tab_button.active")) {
+        return;
+    }
+    tabBar.querySelector(".related_tab_button")?.click();
+}
+
 export function findMatchingRelatedTableEntry(childTables = [], datasetName = "", columnName = "", referenceDirection = "") {
     if (!Array.isArray(childTables)) {
         return null;
