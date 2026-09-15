@@ -12,11 +12,27 @@ find_claude_bin() {
         echo "claude"
         return 0
     fi
-    local ext_claude
-    ext_claude=$(find ~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude \
-        2>/dev/null | sort -r | head -1)
-    if [[ -n "$ext_claude" && -x "$ext_claude" ]]; then
-        echo "$ext_claude"
+    # The Claude Code extension bundles the CLI. Desktop VS Code keeps it under
+    # ~/.vscode, while Remote/WSL and Insiders builds use their own extension
+    # roots, so every known root is scanned before the backend is declared missing.
+    local -a ext_roots=(
+        "$HOME/.vscode/extensions"
+        "$HOME/.vscode-server/extensions"
+        "$HOME/.vscode-insiders/extensions"
+        "$HOME/.vscode-server-insiders/extensions"
+    )
+    local -a ext_candidates=()
+    local ext_root ext_candidate
+    for ext_root in "${ext_roots[@]}"; do
+        for ext_candidate in "$ext_root"/anthropic.claude-code-*/resources/native-binary/claude; do
+            if [[ -x "$ext_candidate" ]]; then
+                ext_candidates+=("$ext_candidate")
+            fi
+        done
+    done
+    if (( ${#ext_candidates[@]} > 0 )); then
+        # Version sort selects the newest build; a plain sort ranks 2.1.9 above 2.1.270.
+        printf '%s\n' "${ext_candidates[@]}" | sort -V | tail -1
         return 0
     fi
     return 1
