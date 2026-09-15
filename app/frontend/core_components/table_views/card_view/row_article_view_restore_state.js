@@ -5,12 +5,43 @@
 
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 
+const HEIGHT_STABLE_FRAMES = 2;
+const LAYOUT_UNKNOWN_SETTLE_FRAMES = 2;
+const MAX_RESTORE_MS = 1200;
+
 function sameRowArticleId(left, right) {
     return left != null && right != null && String(left) === String(right);
 }
 
 function readArticleView(tableName) {
     return getUnifiedTableState(tableName)?.articleView || {};
+}
+
+function scheduleNextFrame(callback) {
+    if (typeof requestAnimationFrame === "function") {
+        return requestAnimationFrame(callback);
+    }
+    return setTimeout(callback, 0);
+}
+
+function cancelNextFrame(handle) {
+    if (typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(handle);
+        return;
+    }
+    clearTimeout(handle);
+}
+
+function nowMs() {
+    return typeof performance === "object" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+}
+
+export function waitForRowArticleLayoutPass() {
+    return new Promise((resolve) => {
+        scheduleNextFrame(() => scheduleNextFrame(resolve));
+    });
 }
 
 export function articleViewRestoreFieldsForRowChange(tableName, nextRowId) {
@@ -81,6 +112,15 @@ export function bindRelatedRowsDisclosurePersist(section, tableName, rowId) {
     });
 }
 
+function canHoldSavedScroll(scrollElement, savedScroll) {
+    const scrollHeight = Number(scrollElement.scrollHeight) || 0;
+    const clientHeight = Number(scrollElement.clientHeight) || 0;
+    if (scrollHeight === 0 && clientHeight === 0) {
+        return null;
+    }
+    return (scrollHeight - clientHeight) >= savedScroll - 1;
+}
+
 export function attachRowArticleContentScrollPersistence(
     scrollElement,
     tableName,
@@ -93,12 +133,7 @@ export function attachRowArticleContentScrollPersistence(
 
     let restoring = false;
     let restoreFrame = null;
-    const scheduleFrame = typeof requestAnimationFrame === "function"
-        ? requestAnimationFrame
-        : (callback) => setTimeout(callback, 0);
-    const cancelFrame = typeof cancelAnimationFrame === "function"
-        ? cancelAnimationFrame
-        : (frameId) => clearTimeout(frameId);
+    let resizeObserver = null;
 
     const remember = () => {
         if (restoring || !isCurrent()) {
@@ -112,8 +147,42 @@ export function attachRowArticleContentScrollPersistence(
     const cancelRestore = () => {
         restoring = false;
         if (restoreFrame != null) {
-            cancelFrame(restoreFrame);
+            cancelNextFrame(restoreFrame);
             restoreFrame = null;
+        }
+        resizeObserver?.disconnect();
+        resizeObserver = null;
+    };
+
+    const applySavedScroll = (savedScroll) => {
+        if (!isCurrent()) {
+            cancelRestore();
+            return;
+        }
+        scrollElement.scrollTop = savedScroll;
+    };
+
+    const finishRestore = (savedScroll) => {
+        applySavedScroll(savedScroll);
+        restoring = false;
+        restoreFrame = null;
+        resizeObserver?.disconnect();
+        resizeObserver = null;
+    };
+
+    const watchLayout = (savedScroll) => {
+        if (typeof ResizeObserver !== "function") {
+            return;
+        }
+        resizeObserver?.disconnect();
+        resizeObserver = new ResizeObserver(() => {
+            if (restoring && isCurrent()) {
+                applySavedScroll(savedScroll);
+            }
+        });
+        resizeObserver.observe(scrollElement);
+        for (const child of scrollElement.children) {
+            resizeObserver.observe(child);
         }
     };
 
@@ -129,20 +198,45 @@ export function attachRowArticleContentScrollPersistence(
             if (!isCurrent() || savedScroll == null) {
                 return;
             }
+            cancelRestore();
             restoring = true;
-            const apply = () => {
-                if (!isCurrent()) {
-                    restoring = false;
+            const startedAt = nowMs();
+            let lastHeight = -1;
+            let stableFrames = 0;
+            let unknownFrames = 0;
+
+            applySavedScroll(savedScroll);
+            watchLayout(savedScroll);
+
+            const tick = () => {
+                if (!restoring || !isCurrent()) {
                     return;
                 }
-                scrollElement.scrollTop = savedScroll;
+                applySavedScroll(savedScroll);
+                const height = Number(scrollElement.scrollHeight) || 0;
+                if (height === lastHeight) {
+                    stableFrames += 1;
+                } else {
+                    stableFrames = 0;
+                    lastHeight = height;
+                }
+                const canHold = canHoldSavedScroll(scrollElement, savedScroll);
+                if (canHold === null) {
+                    unknownFrames += 1;
+                    if (unknownFrames >= LAYOUT_UNKNOWN_SETTLE_FRAMES) {
+                        finishRestore(savedScroll);
+                        return;
+                    }
+                } else if (canHold && stableFrames >= HEIGHT_STABLE_FRAMES) {
+                    finishRestore(savedScroll);
+                    return;
+                } else if ((nowMs() - startedAt) >= MAX_RESTORE_MS) {
+                    finishRestore(savedScroll);
+                    return;
+                }
+                restoreFrame = scheduleNextFrame(tick);
             };
-            apply();
-            restoreFrame = scheduleFrame(() => {
-                apply();
-                restoring = false;
-                restoreFrame = null;
-            });
+            restoreFrame = scheduleNextFrame(tick);
         },
         detach() {
             cancelRestore();

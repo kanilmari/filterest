@@ -8,6 +8,7 @@ import {
     attachRowArticleContentScrollPersistence,
     bindRelatedRowsDisclosurePersist,
     readRowArticleViewRestoreState,
+    waitForRowArticleLayoutPass,
 } from "./row_article_view_restore_state.js";
 
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
@@ -113,7 +114,8 @@ export function createRowArticleMediaHydrator({
             ".big_card_image[data-row-article-image-column]",
         ));
         if (!show_related_items_on_big_cards && !hasInlineImage) {
-            scrollPersistence.restore();
+            await waitForRowArticleLayoutPass();
+            if (canCommit()) scrollPersistence.restore();
             return;
         }
         observeArticleConnection();
@@ -335,6 +337,9 @@ export function createRowArticleMediaHydrator({
         } catch (err) {
             console.warn("virhe: %s", err.message);
         } finally {
+            if (canCommit()) {
+                await waitForRowArticleLayoutPass();
+            }
             if (canCommit()) {
                 scrollPersistence.restore();
             }

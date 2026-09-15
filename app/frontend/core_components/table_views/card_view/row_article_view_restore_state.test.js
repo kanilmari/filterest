@@ -21,6 +21,37 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
+async function flushFrames(count = 2) {
+    for (let i = 0; i < count; i += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+}
+
+function installClampedScrollMetrics(element, { scrollHeight, clientHeight }) {
+    const metrics = {
+        scrollHeight,
+        clientHeight,
+        scrollTop: 0,
+    };
+    Object.defineProperty(element, "scrollHeight", {
+        configurable: true,
+        get: () => metrics.scrollHeight,
+    });
+    Object.defineProperty(element, "clientHeight", {
+        configurable: true,
+        get: () => metrics.clientHeight,
+    });
+    Object.defineProperty(element, "scrollTop", {
+        configurable: true,
+        get: () => metrics.scrollTop,
+        set: (value) => {
+            const maxScroll = Math.max(0, metrics.scrollHeight - metrics.clientHeight);
+            metrics.scrollTop = Math.max(0, Math.min(Number(value) || 0, maxScroll));
+        },
+    });
+    return metrics;
+}
+
 describe("row_article_view_restore_state", () => {
     test("reads persisted tab, related-rows, and scroll only for the same expanded ticket", () => {
         setUnifiedTableState("dev_agent_tasks", {
@@ -100,10 +131,37 @@ describe("row_article_view_restore_state", () => {
         content.dispatchEvent(new Event("scroll"));
         expect(getUnifiedTableState("dev_agent_tasks").articleView.scrollTop).toBe(360);
 
-        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await flushFrames(4);
         content.scrollTop = 90;
         content.dispatchEvent(new Event("scroll"));
         expect(getUnifiedTableState("dev_agent_tasks").articleView.scrollTop).toBe(90);
+        persistence.detach();
+    });
+
+    test("re-applies saved scroll after related content grows instead of keeping a first-paint clamp", async () => {
+        setUnifiedTableState("dev_agent_tasks", {
+            articleView: { expandedId: 889, scrollTop: 800 },
+        });
+        const content = document.createElement("div");
+        const metrics = installClampedScrollMetrics(content, {
+            scrollHeight: 500,
+            clientHeight: 400,
+        });
+        const persistence = attachRowArticleContentScrollPersistence(
+            content,
+            "dev_agent_tasks",
+            889,
+        );
+
+        persistence.restore();
+        expect(metrics.scrollTop).toBe(100);
+        content.dispatchEvent(new Event("scroll"));
+        expect(getUnifiedTableState("dev_agent_tasks").articleView.scrollTop).toBe(800);
+
+        metrics.scrollHeight = 1600;
+        await flushFrames(6);
+        expect(metrics.scrollTop).toBe(800);
+        expect(getUnifiedTableState("dev_agent_tasks").articleView.scrollTop).toBe(800);
         persistence.detach();
     });
 

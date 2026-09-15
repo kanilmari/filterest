@@ -385,7 +385,7 @@ export async function buildRelatedTabs(
         if (shouldOpenRelatedTab(preferred_active_tab_key, tab_key, first_tab)) {
             btn.classList.add('active');
             panel.classList.add('active');
-            if (!relatedRowsLoaded) void loadRelatedRows();
+            if (!relatedRowsLoaded) await loadRelatedRows();
             first_tab = false;
         }
 
@@ -484,7 +484,7 @@ export async function buildRelatedTabs(
         if (shouldOpenRelatedTab(preferred_active_tab_key, '__comments', first_tab)) {
             btn.classList.add('active');
             panel.classList.add('active');
-            load_comments();
+            await load_comments();
             first_tab = false;
         }
 
