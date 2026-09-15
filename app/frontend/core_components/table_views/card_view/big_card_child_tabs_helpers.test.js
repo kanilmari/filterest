@@ -11,6 +11,7 @@ import {
     parseRelatedTabKey,
     shouldHandleSpaNavigationClick,
     shouldLazyLoadRelatedTableRows,
+    shouldOpenRelatedTab,
 } from './big_card_child_tabs_helpers.js';
 
 describe('shouldHandleSpaNavigationClick', () => {
@@ -111,6 +112,14 @@ describe('buildRelatedTabKey', () => {
             column: 'id',
             reference_direction: 'outgoing',
         })).toBe('services__id__outgoing');
+    });
+});
+
+describe('shouldOpenRelatedTab', () => {
+    test('keeps a restored child tab instead of the default first tab', () => {
+        expect(shouldOpenRelatedTab('dev_agent_task_todos__task_id__', 'dev_agent_tasks__parent_id__', true)).toBe(false);
+        expect(shouldOpenRelatedTab('dev_agent_task_todos__task_id__', 'dev_agent_task_todos__task_id__', false)).toBe(true);
+        expect(shouldOpenRelatedTab(null, 'dev_agent_tasks__parent_id__', true)).toBe(true);
     });
 });
 

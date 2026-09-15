@@ -24,6 +24,7 @@ import {
 import { resolveRowArticleParentImageRows } from "./row_article_asset_resolver.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { articleViewRestoreFieldsForRowChange } from "./row_article_view_restore_state.js";
 import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
 import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
 import {
@@ -117,6 +118,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                     returnView: activeView,
                     pendingAutoOpenFirstRenderedResult: row_item?.id == null,
                     pendingAutoOpenFirstSearchResult: false,
+                    ...articleViewRestoreFieldsForRowChange(table_name, row_item?.id ?? null),
                 },
             });
             localStorage.setItem(`${table_name}_view`, "article_view");
@@ -539,6 +541,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 expandedId: row_item.id ?? null,
                 pendingAutoOpenFirstRenderedResult: false,
                 pendingAutoOpenFirstSearchResult: false,
+                ...articleViewRestoreFieldsForRowChange(table_name, row_item.id ?? null),
             },
         });
 

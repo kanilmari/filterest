@@ -4,6 +4,11 @@
 // Keeps caption hydration independent of related-section visibility and editing permissions.
 
 import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
+import {
+    attachRowArticleContentScrollPersistence,
+    bindRelatedRowsDisclosurePersist,
+    readRowArticleViewRestoreState,
+} from "./row_article_view_restore_state.js";
 
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
 import { buildRowArticleImageGallery } from "./row_article_image_gallery.js";
@@ -48,9 +53,16 @@ export function createRowArticleMediaHydrator({
     let observedAncestors = [];
     const canCommit = () => !disposed && isCurrent() && rowArticleElement.isConnected
         && rowArticleElement.contains(rowArticleContentElement);
+    const scrollPersistence = attachRowArticleContentScrollPersistence(
+        rowArticleContentElement,
+        table_name,
+        row_item.id,
+        { isCurrent: canCommit },
+    );
     const dispose = () => {
         if (disposed) return;
         disposed = true;
+        scrollPersistence.detach();
         connectionObserver?.disconnect();
         observedAncestors = [];
         disposeRowArticleInlineMedia(rowArticleContentElement);
@@ -81,11 +93,14 @@ export function createRowArticleMediaHydrator({
     const sectionOpenState = new Map();
     const sectionOptions = (key, selector) => {
         const existing = rowArticleContentElement.querySelector(selector);
-        const startOpen = resolveRowArticleSectionStartOpen(
-            sectionOpenState.has(key) ? { [key]: sectionOpenState.get(key) } : sectionDefaults,
-            key,
-            existing,
-        );
+        const restore = readRowArticleViewRestoreState(table_name, row_item.id);
+        let defaults = sectionOpenState.has(key)
+            ? { [key]: sectionOpenState.get(key) }
+            : sectionDefaults;
+        if (key === "related_rows" && !existing && typeof restore.relatedRowsOpen === "boolean") {
+            defaults = { ...defaults, related_rows: restore.relatedRowsOpen };
+        }
+        const startOpen = resolveRowArticleSectionStartOpen(defaults, key, existing);
         sectionOpenState.set(key, startOpen);
         return { startOpen };
     };
@@ -97,7 +112,10 @@ export function createRowArticleMediaHydrator({
         const hasInlineImage = Boolean(rowArticleContentElement.querySelector(
             ".big_card_image[data-row-article-image-column]",
         ));
-        if (!show_related_items_on_big_cards && !hasInlineImage) return;
+        if (!show_related_items_on_big_cards && !hasInlineImage) {
+            scrollPersistence.restore();
+            return;
+        }
         observeArticleConnection();
 
         // Main-image credits belong to the article, independently of the optional
@@ -295,23 +313,31 @@ export function createRowArticleMediaHydrator({
                 );
             }
 
+            const restore = readRowArticleViewRestoreState(table_name, row_item.id);
             const tabsEl = await buildRowArticleRelatedTabs(
                 filterRowArticleNonMediaChildTables(dyn.child_tables),
                 table_name,
                 row_item.id,
                 current_user_id,
-                null,
+                restore.relatedTabKey,
                 {
                     fetchDynamicChildren: rowArticleLoadSession.fetchDynamicChildren,
                 }
             );
             if (tabsEl && canCommit() && rowArticleElement.isConnected) {
-                rowArticleContentElement.appendChild(
-                    wrapRowArticleRelatedRowsSection(tabsEl, sectionOptions("related_rows", ".row_article_related_items_section"))
+                const relatedSection = wrapRowArticleRelatedRowsSection(
+                    tabsEl,
+                    sectionOptions("related_rows", ".row_article_related_items_section"),
                 );
+                bindRelatedRowsDisclosurePersist(relatedSection, table_name, row_item.id);
+                rowArticleContentElement.appendChild(relatedSection);
             }
         } catch (err) {
             console.warn("virhe: %s", err.message);
+        } finally {
+            if (canCommit()) {
+                scrollPersistence.restore();
+            }
         }
     };
 

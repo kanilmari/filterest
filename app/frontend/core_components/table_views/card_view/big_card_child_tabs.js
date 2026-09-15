@@ -34,11 +34,14 @@ import {
     isOutgoingRelatedTable,
     shouldHandleSpaNavigationClick,
     shouldLazyLoadRelatedTableRows,
+    shouldOpenRelatedTab,
+    clickFallbackRelatedTabIfNoneActive,
 } from './big_card_child_tabs_helpers.js';
 import {
     isTaskTodoChildDataset,
     renderTaskTodoCheckboxList,
 } from './row_article_task_todo_list.js';
+import { persistRowArticleViewRestoreState } from './row_article_view_restore_state.js';
 
 /**
  * Builds a horizontal tab bar for FK-referring tables plus the comments tab.
@@ -191,6 +194,7 @@ export async function buildRelatedTabs(
         tab_content.querySelectorAll('.related_tab_panel').forEach((tabPanel) => tabPanel.classList.remove('active'));
         btn.classList.add('active');
         panel.classList.add('active');
+        persistRowArticleViewRestoreState(table_name, row_id, { relatedTabKey: btn.dataset.tabKey });
     };
 
     let first_tab = true;
@@ -378,12 +382,7 @@ export async function buildRelatedTabs(
             more.hidden = true;
         }
 
-        if (preferred_active_tab_key && preferred_active_tab_key === tab_key) {
-            btn.classList.add('active');
-            panel.classList.add('active');
-            if (!relatedRowsLoaded) void loadRelatedRows();
-            first_tab = false;
-        } else if (first_tab) {
+        if (shouldOpenRelatedTab(preferred_active_tab_key, tab_key, first_tab)) {
             btn.classList.add('active');
             panel.classList.add('active');
             if (!relatedRowsLoaded) void loadRelatedRows();
@@ -482,12 +481,7 @@ export async function buildRelatedTabs(
         });
 
         // Lazy-load on first click
-        if (preferred_active_tab_key === '__comments') {
-            btn.classList.add('active');
-            panel.classList.add('active');
-            load_comments();
-            first_tab = false;
-        } else if (first_tab) {
+        if (shouldOpenRelatedTab(preferred_active_tab_key, '__comments', first_tab)) {
             btn.classList.add('active');
             panel.classList.add('active');
             load_comments();
@@ -505,6 +499,7 @@ export async function buildRelatedTabs(
 
     container.appendChild(tab_bar);
     container.appendChild(tab_content);
+    clickFallbackRelatedTabIfNoneActive(tab_bar);
     return container;
 }
 

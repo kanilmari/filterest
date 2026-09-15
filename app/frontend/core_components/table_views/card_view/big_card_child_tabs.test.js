@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     hasDatasetPermission: vi.fn(() => Promise.resolve(false)),
     primeDatasetPermissions: vi.fn(() => Promise.resolve(new Map())),
     primeMultipleDatasetPermissions: vi.fn(() => Promise.resolve(new Map())),
+    getUnifiedTableState: vi.fn(() => ({ articleView: { expandedId: 42 } })),
     setUnifiedTableState: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ vi.mock("../../route_permission_checker.js", () => ({
 }));
 
 vi.mock("../../state_stores/table_state_store.js", () => ({
+    getUnifiedTableState: mocks.getUnifiedTableState,
     setUnifiedTableState: mocks.setUnifiedTableState,
 }));
 
@@ -250,5 +252,70 @@ describe("buildRelatedTabs related-record navigation", () => {
         });
         expect(tabs.querySelector('[data-todo-id="101"]')?.classList.contains("is-done")).toBe(true);
         expect(tabs.querySelector(".row_article_task_todo_status")?.textContent).toBe("done");
+    });
+
+    test("restores the Agent task todos child tab instead of the default first tab", async () => {
+        mocks.getUnifiedTableState.mockReturnValue({ articleView: { expandedId: 889 } });
+        const tabs = await buildRelatedTabs(
+            [
+                {
+                    dataset: "dev_agent_tasks",
+                    column: "parent_id",
+                    row_count: 1,
+                    rows: [{ id: 1, title: "Linked task" }],
+                    types: { title: { card_element: "header" } },
+                },
+                {
+                    dataset: "dev_agent_task_todos",
+                    column: "task_id",
+                    row_count: 1,
+                    rows: [{ id: 101, todo_text: "Stay open after F5", status: "todo" }],
+                    types: { todo_text: { card_element: "header" } },
+                },
+            ],
+            "dev_agent_tasks",
+            889,
+            1,
+            "dev_agent_task_todos__task_id__",
+        );
+
+        expect(tabs.querySelector(".related_tab_button.active")?.dataset.tabKey)
+            .toBe("dev_agent_task_todos__task_id__");
+        expect(tabs.querySelector(".related_tab_panel.active .row_article_task_todo_list")).not.toBeNull();
+        expect(tabs.querySelector('[data-tab-key="dev_agent_tasks__parent_id__"]')
+            ?.classList.contains("active")).toBe(false);
+    });
+
+    test("persists the opened related child tab for the same article row", async () => {
+        mocks.getUnifiedTableState.mockReturnValue({ articleView: { expandedId: 889 } });
+        const tabs = await buildRelatedTabs(
+            [
+                {
+                    dataset: "dev_agent_tasks",
+                    column: "parent_id",
+                    row_count: 1,
+                    rows: [{ id: 1, title: "Linked task" }],
+                    types: { title: { card_element: "header" } },
+                },
+                {
+                    dataset: "dev_agent_task_todos",
+                    column: "task_id",
+                    row_count: 1,
+                    rows: [{ id: 101, todo_text: "Stay open after F5", status: "todo" }],
+                    types: { todo_text: { card_element: "header" } },
+                },
+            ],
+            "dev_agent_tasks",
+            889,
+            1,
+        );
+
+        tabs.querySelector('[data-tab-key="dev_agent_task_todos__task_id__"]').click();
+
+        expect(mocks.setUnifiedTableState).toHaveBeenCalledWith("dev_agent_tasks", {
+            articleView: { relatedTabKey: "dev_agent_task_todos__task_id__" },
+        });
+        expect(tabs.querySelector(".related_tab_button.active")?.dataset.tabKey)
+            .toBe("dev_agent_task_todos__task_id__");
     });
 });
