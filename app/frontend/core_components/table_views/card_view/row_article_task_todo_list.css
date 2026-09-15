@@ -6,17 +6,21 @@
  * Exists so todo↔done toggling stays visually distinct from observatory mass-selection.
  */
 
-.row_article_task_todo_list {
+.row_article_task_todo_list,
+.row_article_task_todo_list.comment_list {
     display: grid;
-    gap: 0.2rem;
+    gap: 0.08rem;
 }
 
-.row_article_task_todo_item {
+.row_article_task_todo_item,
+.row_article_task_todo_item.comment_item,
+.row_article_task_todo_item.child_pretty_card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 0.45rem 0.75rem;
+    gap: 0.25rem 0.7rem;
     min-width: 0;
+    padding: 0.35rem 0.7rem;
 }
 
 .row_article_task_todo_item.is-child {
@@ -42,16 +46,32 @@
     cursor: pointer;
 }
 
+.row_article_task_todo_copy {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
 .row_article_task_todo_text {
     min-width: 0;
     color: var(--text_color);
     font-weight: 650;
-    line-height: 1.4;
+    line-height: 1.35;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
-.row_article_task_todo_item.is-done .row_article_task_todo_text {
+.row_article_task_todo_phrase {
+    min-width: 0;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.82em;
+    font-weight: 450;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.row_article_task_todo_item.is-done .row_article_task_todo_copy {
     color: var(--text_color_secondary, var(--text_color));
     text-decoration: line-through;
 }
@@ -73,7 +93,9 @@
 }
 
 @media (width <= 720px) {
-    .row_article_task_todo_item {
+    .row_article_task_todo_item,
+    .row_article_task_todo_item.comment_item,
+    .row_article_task_todo_item.child_pretty_card {
         grid-template-columns: minmax(0, 1fr);
         align-items: start;
     }

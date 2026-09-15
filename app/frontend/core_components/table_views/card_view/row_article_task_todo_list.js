@@ -12,6 +12,7 @@ import {
     isTaskTodoCompletionStatus,
     normalizeTaskTodoStatus,
     readTaskTodoText,
+    splitTaskTodoText,
     TASK_TODO_DATASET,
     TASK_TODO_DONE_STATUS,
     TASK_TODO_OPEN_STATUS,
@@ -176,6 +177,7 @@ function createTaskTodoRow(row, {
     }
 
     const todoText = readTaskTodoText(row);
+    const { title, phrase } = splitTaskTodoText(todoText);
     const toggle = document.createElement("label");
     toggle.classList.add("row_article_task_todo_toggle");
 
@@ -185,12 +187,24 @@ function createTaskTodoRow(row, {
     checkbox.dataset.testid = "task-todo-checkbox";
     checkbox.setAttribute("aria-label", todoText || "todo");
 
+    const copy = document.createElement("span");
+    copy.classList.add("row_article_task_todo_copy");
+
     const text = document.createElement("span");
     text.classList.add("row_article_task_todo_text");
-    text.textContent = todoText;
+    text.textContent = title;
     text.title = todoText;
+    copy.appendChild(text);
 
-    toggle.append(checkbox, text);
+    if (phrase) {
+        const phraseEl = document.createElement("span");
+        phraseEl.classList.add("row_article_task_todo_phrase");
+        phraseEl.dataset.testid = "task-todo-phrase";
+        phraseEl.textContent = phrase;
+        copy.appendChild(phraseEl);
+    }
+
+    toggle.append(checkbox, copy);
     item.appendChild(toggle);
     item.appendChild(createTaskTodoStatusChip(row?.status, {
         onOpen: typeof onOpen === "function" ? () => onOpen(row, dataTypes) : null,

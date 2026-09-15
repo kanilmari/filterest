@@ -52,6 +52,7 @@ describe("row_article_task_todo_list", () => {
         expect(firstCheckbox.checked).toBe(false);
         expect(todoRow.querySelector(".row_article_task_todo_text")?.textContent)
             .toBe("  Quick toggle todo↔done  ");
+        expect(todoRow.querySelector("[data-testid='task-todo-phrase']")).toBeNull();
         expect(todoRow.querySelector(".row_article_task_todo_status")?.textContent).toBe("todo");
 
         expect(reviewRow.querySelector('input[type="checkbox"]').checked).toBe(false);
@@ -62,6 +63,34 @@ describe("row_article_task_todo_list", () => {
         expect(childRow.classList.contains("is-child")).toBe(true);
         expect(childRow.querySelector('input[type="checkbox"]').checked).toBe(true);
         expect(childRow.classList.contains("is-done")).toBe(true);
+    });
+
+    test("shows a lightning identifier phrase under the title only when todo_text has a newline", () => {
+        const list = renderTaskTodoCheckboxList([
+            { id: 41, todo_text: "Quick toggle todo↔done\nlightning-id 889", status: "todo" },
+            { id: 42, todo_text: "Single line title", status: "todo" },
+            { id: 43, parent_todo_id: 41, todo_text: "Child is a real subtask", status: "todo" },
+        ]);
+
+        const phrased = list.querySelector('[data-todo-id="41"]');
+        expect(phrased.querySelector(".row_article_task_todo_text")?.textContent)
+            .toBe("Quick toggle todo↔done");
+        expect(phrased.querySelector("[data-testid='task-todo-phrase']")?.textContent)
+            .toBe("lightning-id 889");
+        expect(phrased.querySelector(".row_article_task_todo_phrase")).not.toBeNull();
+
+        const single = list.querySelector('[data-todo-id="42"]');
+        expect(single.querySelector(".row_article_task_todo_text")?.textContent)
+            .toBe("Single line title");
+        expect(single.querySelector("[data-testid='task-todo-phrase']")).toBeNull();
+
+        const child = list.querySelector('[data-todo-id="43"]');
+        expect(child.classList.contains("is-child")).toBe(true);
+        expect(child.querySelector(".row_article_task_todo_text")?.textContent)
+            .toBe("Child is a real subtask");
+        expect(child.querySelector("[data-testid='task-todo-phrase']")).toBeNull();
+        expect(phrased.querySelector("[data-testid='task-todo-phrase']")?.textContent)
+            .not.toBe("Child is a real subtask");
     });
 
     test("toggles todo to done with optimistic UI, API persistence, and progress update", async () => {

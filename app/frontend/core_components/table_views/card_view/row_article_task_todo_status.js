@@ -87,6 +87,26 @@ export function readTaskTodoText(row = {}) {
     return String(row.todo_text);
 }
 
+/**
+ * Splits verbatim todo_text into a title line and an optional lightning identifier phrase.
+ * A newline is the only phrase signal: first line stays the title; later non-empty lines
+ * become the secondary phrase. Single-line values have no phrase. Child rows are not used.
+ *
+ * @param {unknown} todoText
+ * @returns {{ title: string, phrase: string }}
+ */
+export function splitTaskTodoText(todoText) {
+    const raw = todoText == null ? "" : String(todoText);
+    if (!raw.includes("\n")) {
+        return { title: raw, phrase: "" };
+    }
+    const lines = raw.split(/\r?\n/);
+    return {
+        title: lines[0] ?? "",
+        phrase: lines.slice(1).filter((line) => line.trim() !== "").join("\n"),
+    };
+}
+
 function parseCount(value) {
     const count = Number.parseInt(String(value ?? "0"), 10);
     return Number.isFinite(count) ? Math.max(0, count) : 0;

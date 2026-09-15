@@ -10,6 +10,7 @@ import {
     normalizeTaskTodoStatus,
     patchTaskTodoProgressForStatusChange,
     readTaskTodoText,
+    splitTaskTodoText,
     summarizeTaskTodoProgress,
     summarizeTaskTodoProgressFromRows,
 } from "./row_article_task_todo_status.js";
@@ -35,6 +36,33 @@ describe("row_article_task_todo_status", () => {
         expect(readTaskTodoText({ todo_text: "  #889 checkbox UX  " }))
             .toBe("  #889 checkbox UX  ");
         expect(readTaskTodoText({})).toBe("");
+    });
+
+    test("splits a newline todo_text into title plus lightning identifier phrase", () => {
+        expect(splitTaskTodoText("Quick toggle todo↔done\nlightning-id 889")).toEqual({
+            title: "Quick toggle todo↔done",
+            phrase: "lightning-id 889",
+        });
+        expect(splitTaskTodoText("Title line\n\n  keep spaced phrase  \n")).toEqual({
+            title: "Title line",
+            phrase: "  keep spaced phrase  ",
+        });
+        expect(splitTaskTodoText("Title\r\nphrase one\r\nphrase two")).toEqual({
+            title: "Title",
+            phrase: "phrase one\nphrase two",
+        });
+    });
+
+    test("omits the identifier phrase when todo_text is a single line", () => {
+        expect(splitTaskTodoText("  Identifier text stays  ")).toEqual({
+            title: "  Identifier text stays  ",
+            phrase: "",
+        });
+        expect(splitTaskTodoText("Title only\n\n")).toEqual({
+            title: "Title only",
+            phrase: "",
+        });
+        expect(splitTaskTodoText("")).toEqual({ title: "", phrase: "" });
     });
 
     test("matches server rounding for the 10-light progress bar", () => {

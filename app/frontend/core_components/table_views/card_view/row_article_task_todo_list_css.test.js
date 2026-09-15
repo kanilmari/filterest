@@ -30,4 +30,18 @@ describe("row_article_task_todo_list.css", () => {
         expect(imports).toContain("row_article_task_todo_list.css");
         expect(css).not.toContain("workline-observatory");
     });
+
+    test("tightens list-row gap and pretty-card padding and keeps phrase secondary", () => {
+        const listRule = ruleBody("\\.row_article_task_todo_list(?:[^{]*)");
+        const itemRule = ruleBody("\\.row_article_task_todo_item(?:[^{]*)");
+        const phraseRule = ruleBody("\\.row_article_task_todo_phrase");
+        const doneRule = ruleBody("\\.row_article_task_todo_item\\.is-done \\.row_article_task_todo_copy");
+
+        expect(listRule).toContain("gap: 0.08rem");
+        expect(itemRule).toContain("padding: 0.35rem 0.7rem");
+        expect(phraseRule).toContain("font-size: 0.82em");
+        expect(phraseRule).toContain("text_color_secondary");
+        expect(doneRule).toContain("text-decoration: line-through");
+        expect(css).not.toMatch(/\.row_article_task_todo_phrase[^{]*\{[^}]*text-decoration:\s*line-through/);
+    });
 });
