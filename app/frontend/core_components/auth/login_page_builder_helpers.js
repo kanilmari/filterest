@@ -233,3 +233,26 @@ function isPublicLoginReturnPath(refUrl) {
     return !refUrl.searchParams.has('login-entry')
         && !refUrl.searchParams.has('register-entry');
 }
+
+/**
+ * Bind a login/recovery control to a lang key so live language switches retarget it.
+ * Submit inputs keep their visible label in `value`; other nodes use textContent.
+ * Why: recovery used to overwrite the shared submit value with Finnish and leave
+ * `data-lang-key="login"`, so English UI and later language changes never caught up.
+ *
+ * @param {HTMLElement|null|undefined} element
+ * @param {string} langKey
+ * @param {string} label - already-resolved translation or fallback
+ */
+export function applyLoginLangKey(element, langKey, label) {
+    if (!element || !langKey) {
+        return;
+    }
+
+    element.dataset.langKey = langKey;
+    if (element.tagName === 'INPUT') {
+        element.value = label;
+        return;
+    }
+    element.textContent = label;
+}

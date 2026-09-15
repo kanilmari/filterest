@@ -54,6 +54,28 @@ func TestEnsureLoginPageLangKeysUpsertsLoginIntroKey(t *testing.T) {
 	}
 }
 
+func TestLoginPageRecoverySendCodeKeyHasFinnishAndEnglish(t *testing.T) {
+	var sendCode *startupLangKeySeed
+	for index := range loginPageLangKeySeeds {
+		if loginPageLangKeySeeds[index].langKey == "send_code" {
+			sendCode = &loginPageLangKeySeeds[index]
+			break
+		}
+	}
+	if sendCode == nil {
+		t.Fatal("send_code seed was not found")
+	}
+	if sendCode.fi != "Lähetä koodi" {
+		t.Fatalf("send_code Finnish copy = %q, want Lähetä koodi", sendCode.fi)
+	}
+	if sendCode.en != "Send code" {
+		t.Fatalf("send_code English copy = %q, want Send code", sendCode.en)
+	}
+	if sendCode.en == sendCode.fi {
+		t.Fatal("send_code English copy must not stay Finnish")
+	}
+}
+
 func TestLoginPageSiteTourCopyUsesFilterestPublicBrand(t *testing.T) {
 	var siteStory *startupLangKeySeed
 	for index := range loginPageLangKeySeeds {

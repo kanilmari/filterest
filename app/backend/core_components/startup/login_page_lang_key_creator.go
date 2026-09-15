@@ -116,6 +116,30 @@ var loginPageLangKeySeeds = []startupLangKeySeed{
 		ch:      loginPagePlatformStorySiteHTMLCH,
 	},
 	{
+		langKey: "send_code",
+		fi:      "Lähetä koodi",
+		en:      "Send code",
+		ch:      "发送验证码",
+	},
+	{
+		langKey: "reset_password",
+		fi:      "Vaihda salasana",
+		en:      "Reset password",
+		ch:      "重置密码",
+	},
+	{
+		langKey: "password_reset_code_sent",
+		fi:      "Jos käyttäjä löytyy, vahvistuskoodi on lähetetty. Syötä koodi ja uusi salasana.",
+		en:      "If the account exists, a verification code was sent. Enter the code and your new password.",
+		ch:      "如果账户存在，验证码已发送。请输入验证码和新密码。",
+	},
+	{
+		langKey: "password_updated_sign_in",
+		fi:      "Salasana vaihdettu. Kirjaudu sisään uudella salasanalla.",
+		en:      "Password updated. Log in with the new password.",
+		ch:      "密码已更新。请使用新密码登录。",
+	},
+	{
 		langKey: "login_page_tour_gallery_heading",
 		fi:      "Kurkistuksia käyttöliittymään",
 		en:      "Interface snapshots",

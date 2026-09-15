@@ -8,9 +8,30 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 let startup;
 let icons;
+let uiLanguage;
 const ensureIcons = vi.fn();
 const fingerprint = vi.fn();
 const initializeShell = vi.fn();
+const loginCopy = {
+    en: {
+        send_code: 'Send code',
+        login: 'Login',
+        reset_password: 'Reset password',
+        password_reset_code_sent: 'If the account exists, a verification code was sent. Enter the code and your new password.',
+        password_updated_sign_in: 'Password updated. Log in with the new password.',
+        verify: 'Verify',
+        enter_otp: 'Enter the verification code.',
+    },
+    fi: {
+        send_code: 'Lähetä koodi',
+        login: 'Kirjaudu',
+        reset_password: 'Vaihda salasana',
+        password_reset_code_sent: 'Jos käyttäjä löytyy, vahvistuskoodi on lähetetty. Syötä koodi ja uusi salasana.',
+        password_updated_sign_in: 'Salasana vaihdettu. Kirjaudu sisään uudella salasanalla.',
+        verify: 'Vahvista',
+        enter_otp: 'Syötä vahvistuskoodi.',
+    },
+};
 
 async function loadStartup() {
     vi.resetModules();
@@ -33,6 +54,9 @@ async function loadStartup() {
     vi.doMock('./login_page_shell_builder.js', () => ({ initializeStandaloneLoginShell: initializeShell }));
     vi.doMock('./auth_session_notice_handler.js', () => ({ initializeAuthSessionNotice: vi.fn() }));
     vi.doMock('./auth_preference_controls.js', () => ({}));
+    vi.doMock('../lang/translation_handler.js', () => ({
+        getTranslationForKey: (key, { fallback } = {}) => loginCopy[uiLanguage][key] || fallback || '',
+    }));
 
     const original = document.addEventListener.bind(document);
     vi.spyOn(document, 'addEventListener').mockImplementation((type, listener, options) => {
@@ -48,6 +72,7 @@ beforeEach(() => {
     ensureIcons.mockReset().mockImplementation(() => new Promise(() => {}));
     fingerprint.mockReset().mockResolvedValue('test-fingerprint');
     initializeShell.mockReset();
+    uiLanguage = 'en';
     document.body.innerHTML = `
         <form class="auth-form">
             <input id="username" value="fixture-user">
@@ -56,11 +81,16 @@ beforeEach(() => {
                 <svg data-fallback="password" fill="currentColor"></svg>
             </button>
             <input id="csrf_token" value="test-csrf">
+            <a id="forgot-password-link" href="#">Forgot password?</a>
+            <a id="back-to-login-link" href="#" style="display:none">Back to login</a>
+            <div id="password-reset-section" style="display:none">
+                <div id="password-reset-message"></div>
+            </div>
             <input id="password-reset-new-password" type="password" value="fixture-reset">
             <button type="button" id="toggle-password-reset" aria-label="Show password">
                 <svg data-fallback="reset" fill="currentColor"></svg>
             </button>
-            <div id="submit"><input type="submit" value="Login"></div>
+            <div id="submit"><input type="submit" data-lang-key="login" value="Login" data-testid="login-submit"></div>
         </form>`;
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: false, json: async () => ({ error: 'wrong_credentials' }),
@@ -138,5 +168,55 @@ describe('standalone login startup', () => {
         const prefetch = doc.querySelector('script[src$="translation_prefetcher.js"]');
         expect(prefetch.hasAttribute('async')).toBe(true);
         expect(prefetch.hasAttribute('defer')).toBe(false);
+    });
+
+    test('English recovery send control is not Finnish and retargets its lang key', async () => {
+        await loadStartup();
+        startup();
+
+        document.getElementById('forgot-password-link').dispatchEvent(
+            new MouseEvent('click', { bubbles: true, cancelable: true })
+        );
+
+        const submitBtn = document.querySelector('[data-testid="login-submit"]');
+        expect(submitBtn.dataset.langKey).toBe('send_code');
+        expect(submitBtn.value).toBe('Send code');
+        expect(submitBtn.value).not.toBe('Lähetä koodi');
+    });
+
+    test('Finnish recovery send control stays Finnish', async () => {
+        uiLanguage = 'fi';
+        await loadStartup();
+        startup();
+
+        document.getElementById('forgot-password-link').dispatchEvent(
+            new MouseEvent('click', { bubbles: true, cancelable: true })
+        );
+
+        const submitBtn = document.querySelector('[data-testid="login-submit"]');
+        expect(submitBtn.dataset.langKey).toBe('send_code');
+        expect(submitBtn.value).toBe('Lähetä koodi');
+    });
+
+    test('language switch after opening recovery keeps the send control on send_code', async () => {
+        await loadStartup();
+        startup();
+        document.getElementById('forgot-password-link').dispatchEvent(
+            new MouseEvent('click', { bubbles: true, cancelable: true })
+        );
+
+        const submitBtn = document.querySelector('[data-testid="login-submit"]');
+        expect(submitBtn.dataset.langKey).toBe('send_code');
+
+        uiLanguage = 'fi';
+        const { applyLoginLangKey } = await import('./login_page_builder_helpers.js');
+        applyLoginLangKey(submitBtn, 'send_code', loginCopy.fi.send_code);
+        expect(submitBtn.value).toBe('Lähetä koodi');
+
+        uiLanguage = 'en';
+        applyLoginLangKey(submitBtn, 'send_code', loginCopy.en.send_code);
+        expect(submitBtn.value).toBe('Send code');
+        expect(submitBtn.value).not.toBe('Lähetä koodi');
+        expect(submitBtn.dataset.langKey).toBe('send_code');
     });
 });

@@ -16,6 +16,7 @@ import {
     ensurePasswordVisibilityIconsLoaded,
     getPasswordVisibilityIcons,
 } from "./password_visibility_icon_reader.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
     translateError,
     pickLang,
@@ -27,6 +28,7 @@ import {
     formatOtpError,
     resolvePostLoginTarget,
     computeStandaloneLoginBackTarget,
+    applyLoginLangKey,
 } from "./login_page_builder_helpers.js";
 import { publishAuthLogin } from "./auth_broadcast.js";
 import { isCrossTabLoginSyncEnabled } from "../config_fetcher.js";
@@ -124,7 +126,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const csrfToken = document.getElementById("csrf_token")?.value || '';
 
         if (!otpCode) {
-            showLoginError("Syötä vahvistuskoodi.");
+            showLoginError(
+                getTranslationForKey("enter_otp", { fallback: "Enter the verification code." })
+                    || "Enter the verification code."
+            );
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
@@ -194,7 +199,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const csrfToken = document.getElementById("csrf_token")?.value || '';
 
         if (!otpCode) {
-            showLoginError("Syötä vahvistuskoodi.");
+            showLoginError(
+                getTranslationForKey("enter_otp", { fallback: "Enter the verification code." })
+                    || "Enter the verification code."
+            );
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
@@ -220,7 +228,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         restoreLoginCredentialsPhase();
-        showLoginError("Salasana vaihdettu. Kirjaudu sisään uudella salasanalla.");
+        showLoginError(
+            getTranslationForKey("password_updated_sign_in", {
+                fallback: "Password updated. Log in with the new password.",
+            }) || "Password updated. Log in with the new password."
+        );
         document.getElementById("password")?.focus();
         if (submitBtn) submitBtn.disabled = false;
     }
@@ -261,7 +273,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         if (resendLink) resendLink.style.display = data.verification_method === 'email' ? 'inline' : 'none';
-        if (submitBtn) submitBtn.value = 'Vahvista';
+        applyLoginLangKey(
+            submitBtn,
+            'verify',
+            getTranslationForKey('verify', { fallback: 'Verify' }) || 'Verify'
+        );
 
         // Focus OTP input
         const otpInput = document.getElementById("otp");
@@ -295,7 +311,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (privacyNotice) privacyNotice.style.display = 'none';
         if (passwordLabel) passwordLabel.style.display = 'none';
         if (passwordWrapper) passwordWrapper.style.display = 'none';
-        if (submitBtn) submitBtn.value = 'Lähetä koodi';
+        applyLoginLangKey(
+            submitBtn,
+            'send_code',
+            getTranslationForKey('send_code', { fallback: 'Send code' }) || 'Send code'
+        );
 
         clearLoginError();
     }
@@ -322,12 +342,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (otpSection) otpSection.style.display = 'none';
         if (resetSection) resetSection.style.display = 'block';
         if (resetMessage) {
-            resetMessage.textContent = "Jos käyttäjä löytyy, vahvistuskoodi on lähetetty. Syötä koodi ja uusi salasana.";
+            applyLoginLangKey(
+                resetMessage,
+                'password_reset_code_sent',
+                getTranslationForKey('password_reset_code_sent', {
+                    fallback: 'If the account exists, a verification code was sent. Enter the code and your new password.',
+                }) || 'If the account exists, a verification code was sent. Enter the code and your new password.'
+            );
         }
         if (resendResetLink) resendResetLink.style.display = 'inline';
         if (backLink) backLink.style.display = 'inline';
         if (forgotLink) forgotLink.style.display = 'none';
-        if (submitBtn) submitBtn.value = 'Vaihda salasana';
+        applyLoginLangKey(
+            submitBtn,
+            'reset_password',
+            getTranslationForKey('reset_password', { fallback: 'Reset password' }) || 'Reset password'
+        );
 
         document.getElementById("password-reset-otp")?.focus();
         clearLoginError();
@@ -360,7 +390,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (backLink) backLink.style.display = 'none';
         if (resendLink) resendLink.style.display = 'none';
         if (resendResetLink) resendResetLink.style.display = 'none';
-        if (submitBtn) submitBtn.value = 'Login';
+        applyLoginLangKey(
+            submitBtn,
+            'login',
+            getTranslationForKey('login', { fallback: 'Login' }) || 'Login'
+        );
 
         const otpInput = document.getElementById("otp");
         const resetOtpInput = document.getElementById("password-reset-otp");
