@@ -32,6 +32,36 @@ maintenance is not an unfinished feature of an already completed workline.
 Worklines and tickets remain distinct primary concepts; technical links between
 them do not create sub-worklines or another kind of ticket.
 
+### Agent-task todos: identifier phrases
+
+When creating or updating `dev_agent_task_todos` rows, `todo_text` must carry a
+technical title and, when the human already described the item, their own
+identifying wording. This is mandatory agent practice.
+
+1. Extract the human’s own identifying wording / everyday problem description
+   from their messages.
+2. Compress it into a short identifier phrase.
+3. Write `todo_text` with a newline: line 1 is the technical title; line 2 and
+   later are the identifier phrase. The article todo checkbox UI already splits
+   on that newline and shows the phrase as a muted second line.
+4. Do not leave only a technical label when the human already described the
+   item in their own words.
+5. Do not add a new database column. The newline inside `todo_text` is the
+   contract.
+
+Example:
+
+```text
+Restore article scroll after related todos settle
+Stay open after F5
+```
+
+A single-line value is acceptable only when no human wording exists to preserve.
+The UI splitter is `splitTaskTodoText` in
+[row_article_task_todo_status.js](../../frontend/core_components/table_views/card_view/row_article_task_todo_status.js).
+The [Dictionary](Dictionary.md) names the ticket-todo term; keep the writing
+rule here.
+
 ## 1. Source and development environment
 
 Paths and commands below start at the Filterest installation root.

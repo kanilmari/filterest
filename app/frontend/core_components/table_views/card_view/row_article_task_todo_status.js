@@ -91,6 +91,7 @@ export function readTaskTodoText(row = {}) {
  * Splits verbatim todo_text into a title line and an optional lightning identifier phrase.
  * A newline is the only phrase signal: first line stays the title; later non-empty lines
  * become the secondary phrase. Single-line values have no phrase. Child rows are not used.
+ * Agents writing rows must use this newline form; see DEV_GUIDE.md.
  *
  * @param {unknown} todoText
  * @returns {{ title: string, phrase: string }}
