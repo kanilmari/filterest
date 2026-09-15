@@ -93,6 +93,12 @@ export function attachRowArticleContentScrollPersistence(
 
     let restoring = false;
     let restoreFrame = null;
+    const scheduleFrame = typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (callback) => setTimeout(callback, 0);
+    const cancelFrame = typeof cancelAnimationFrame === "function"
+        ? cancelAnimationFrame
+        : (frameId) => clearTimeout(frameId);
 
     const remember = () => {
         if (restoring || !isCurrent()) {
@@ -106,7 +112,7 @@ export function attachRowArticleContentScrollPersistence(
     const cancelRestore = () => {
         restoring = false;
         if (restoreFrame != null) {
-            cancelAnimationFrame(restoreFrame);
+            cancelFrame(restoreFrame);
             restoreFrame = null;
         }
     };
@@ -132,7 +138,7 @@ export function attachRowArticleContentScrollPersistence(
                 scrollElement.scrollTop = savedScroll;
             };
             apply();
-            restoreFrame = requestAnimationFrame(() => {
+            restoreFrame = scheduleFrame(() => {
                 apply();
                 restoring = false;
                 restoreFrame = null;
