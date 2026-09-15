@@ -15,6 +15,27 @@ let currentIcons = { visibilityOffSvg: "", visibilityOnSvg: "" };
 const runPostAuthBootstrapMock = vi.fn().mockResolvedValue({ dataLoaded: false });
 const publishAuthLoginMock = vi.fn();
 const isCrossTabLoginSyncEnabledMock = vi.fn().mockResolvedValue(true);
+let uiLanguage = "en";
+const loginCopy = {
+    en: {
+        send_code: "Send code",
+        login: "Login",
+        reset_password: "Reset password",
+        password_reset_code_sent: "If the account exists, a verification code was sent. Enter the code and your new password.",
+        password_updated_sign_in: "Password updated. Log in with the new password.",
+        verify: "Verify",
+        enter_otp: "Enter the verification code.",
+    },
+    fi: {
+        send_code: "Lähetä koodi",
+        login: "Kirjaudu",
+        reset_password: "Vaihda salasana",
+        password_reset_code_sent: "Jos käyttäjä löytyy, vahvistuskoodi on lähetetty. Syötä koodi ja uusi salasana.",
+        password_updated_sign_in: "Salasana vaihdettu. Kirjaudu sisään uudella salasanalla.",
+        verify: "Vahvista",
+        enter_otp: "Syötä vahvistuskoodi.",
+    },
+};
 
 function buildLoginFormHtml() {
     return `
@@ -46,7 +67,7 @@ function buildLoginFormHtml() {
                 <button type="button" id="toggle-password-reset">toggle reset</button>
                 <a id="resend-password-reset-otp" href="#" style="display:none"></a>
             </div>
-            <div id="submit"><input type="submit" value="Login" /></div>
+            <div id="submit"><input type="submit" data-lang-key="login" value="Login" data-testid="login-submit" /></div>
         </form>
     `;
 }
@@ -75,7 +96,7 @@ async function loadModule() {
         isCrossTabLoginSyncEnabled: isCrossTabLoginSyncEnabledMock,
     }));
     vi.doMock("../lang/translation_handler.js", () => ({
-        getTranslationForKey: () => "",
+        getTranslationForKey: (key, { fallback } = {}) => loginCopy[uiLanguage][key] || fallback || "",
     }));
     vi.doMock("../state_stores/lang_preference_reader.js", () => ({
         getLanguageWithBrowserFallback: () => "en",
@@ -100,6 +121,7 @@ describe("showLoginModal", () => {
         runPostAuthBootstrapMock.mockResolvedValue({ dataLoaded: false });
         publishAuthLoginMock.mockReset();
         isCrossTabLoginSyncEnabledMock.mockReset().mockResolvedValue(true);
+        uiLanguage = "en";
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({ authenticated: true }),
@@ -243,6 +265,32 @@ describe("showLoginModal", () => {
             expect(errorElement.getAttribute("role")).toBe("alert");
             expect(errorElement.getAttribute("aria-live")).toBe("assertive");
         });
+    });
+
+    test("English forgot-password send control is not Finnish", async () => {
+        const mod = await loadModule();
+        await mod.showLoginModal();
+
+        const form = createModalMock.mock.calls.at(-1)[0].contentElements[0].querySelector("form.auth-form");
+        form.querySelector("#forgot-password-link").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        const submitBtn = form.querySelector('[data-testid="login-submit"]');
+        expect(submitBtn.dataset.langKey).toBe("send_code");
+        expect(submitBtn.value).toBe("Send code");
+        expect(submitBtn.value).not.toBe("Lähetä koodi");
+    });
+
+    test("Finnish forgot-password send control stays Finnish", async () => {
+        uiLanguage = "fi";
+        const mod = await loadModule();
+        await mod.showLoginModal();
+
+        const form = createModalMock.mock.calls.at(-1)[0].contentElements[0].querySelector("form.auth-form");
+        form.querySelector("#forgot-password-link").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        const submitBtn = form.querySelector('[data-testid="login-submit"]');
+        expect(submitBtn.dataset.langKey).toBe("send_code");
+        expect(submitBtn.value).toBe("Lähetä koodi");
     });
 
     test("forgot-password request switches the modal into reset verification mode", async () => {

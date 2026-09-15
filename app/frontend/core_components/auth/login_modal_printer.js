@@ -20,6 +20,7 @@ import {
     sanitizeOtpCode,
     buildPasswordResetRequestBody,
     buildPasswordResetBody,
+    applyLoginLangKey,
 } from "./login_page_builder_helpers.js";
 import { runPostAuthBootstrap } from "./post_auth_bootstrap.js";
 import { publishAuthLogin } from "./auth_broadcast.js";
@@ -289,7 +290,11 @@ function setupFormInteractions(form) {
             }
             if (resendLink) resendLink.style.display = data.verification_method === 'email' ? 'inline' : 'none';
             if (submitBtn) {
-                submitBtn.value = getTranslationForKey("verify") || 'Verify';
+                applyLoginLangKey(
+                    submitBtn,
+                    'verify',
+                    getTranslationForKey('verify', { fallback: 'Verify' }) || 'Verify'
+                );
                 submitBtn.disabled = false;
             }
             const otpInput = form.querySelector("#otp");
@@ -405,7 +410,12 @@ function setupFormInteractions(form) {
         }
 
         restoreLoginCredentialsPhase();
-        showFormError(form, "Password updated. Log in with the new password.");
+        showFormError(
+            form,
+            getTranslationForKey("password_updated_sign_in", {
+                fallback: "Password updated. Log in with the new password.",
+            }) || "Password updated. Log in with the new password."
+        );
         submitBtn.disabled = false;
     }
 
@@ -436,7 +446,11 @@ function setupFormInteractions(form) {
         if (forgotLink) forgotLink.style.display = 'none';
         if (backLink) backLink.style.display = 'inline';
         if (privacyNotice) privacyNotice.style.display = 'none';
-        if (submitBtn) submitBtn.value = 'Send code';
+        applyLoginLangKey(
+            submitBtn,
+            'send_code',
+            getTranslationForKey('send_code', { fallback: 'Send code' }) || 'Send code'
+        );
         clearFormError(form);
     }
 
@@ -462,12 +476,22 @@ function setupFormInteractions(form) {
         if (otpSection) otpSection.style.display = 'none';
         if (resetSection) resetSection.style.display = 'block';
         if (resetMessage) {
-            resetMessage.textContent = "If the account exists, a verification code was sent. Enter the code and your new password.";
+            applyLoginLangKey(
+                resetMessage,
+                'password_reset_code_sent',
+                getTranslationForKey('password_reset_code_sent', {
+                    fallback: 'If the account exists, a verification code was sent. Enter the code and your new password.',
+                }) || 'If the account exists, a verification code was sent. Enter the code and your new password.'
+            );
         }
         if (resendResetLink) resendResetLink.style.display = 'inline';
         if (forgotLink) forgotLink.style.display = 'none';
         if (backLink) backLink.style.display = 'inline';
-        if (submitBtn) submitBtn.value = 'Reset password';
+        applyLoginLangKey(
+            submitBtn,
+            'reset_password',
+            getTranslationForKey('reset_password', { fallback: 'Reset password' }) || 'Reset password'
+        );
         form.querySelector("#password-reset-otp")?.focus();
         clearFormError(form);
     }
@@ -499,7 +523,11 @@ function setupFormInteractions(form) {
         if (resendResetLink) resendResetLink.style.display = 'none';
         if (forgotLink) forgotLink.style.display = 'inline';
         if (backLink) backLink.style.display = 'none';
-        if (submitBtn) submitBtn.value = 'Login';
+        applyLoginLangKey(
+            submitBtn,
+            'login',
+            getTranslationForKey('login', { fallback: 'Login' }) || 'Login'
+        );
         const otpInput = form.querySelector("#otp");
         const resetOtpInput = form.querySelector("#password-reset-otp");
         const resetPasswordInput = form.querySelector("#password-reset-new-password");

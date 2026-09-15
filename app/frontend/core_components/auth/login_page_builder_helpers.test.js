@@ -2,6 +2,7 @@
 // Bridges representative auth inputs with the helper module's normalized outputs.
 // Covers redirect boundaries without requiring a browser or live authentication.
 // Exists to prevent unsafe return targets and auth-loop regressions.
+// @vitest-environment jsdom
 import { describe, test, expect, afterEach } from 'vitest';
 import {
     translateError,
@@ -14,6 +15,7 @@ import {
     formatOtpError,
     resolvePostLoginTarget,
     computeStandaloneLoginBackTarget,
+    applyLoginLangKey,
 } from './login_page_builder_helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -254,6 +256,48 @@ describe('resolvePostLoginTarget', () => {
             'https://evil.example/steal',
             'https://example.com'
         )).toBe('/');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// applyLoginLangKey
+// ---------------------------------------------------------------------------
+describe('applyLoginLangKey', () => {
+    test('English recovery send control cannot keep a Finnish label', () => {
+        const submitBtn = document.createElement('input');
+        submitBtn.type = 'submit';
+        submitBtn.dataset.langKey = 'login';
+        submitBtn.value = 'Lähetä koodi';
+
+        applyLoginLangKey(submitBtn, 'send_code', 'Send code');
+
+        expect(submitBtn.dataset.langKey).toBe('send_code');
+        expect(submitBtn.value).toBe('Send code');
+        expect(submitBtn.value).not.toBe('Lähetä koodi');
+    });
+
+    test('Finnish recovery send control stays Finnish', () => {
+        const submitBtn = document.createElement('input');
+        submitBtn.type = 'submit';
+        applyLoginLangKey(submitBtn, 'send_code', 'Lähetä koodi');
+
+        expect(submitBtn.dataset.langKey).toBe('send_code');
+        expect(submitBtn.value).toBe('Lähetä koodi');
+    });
+
+    test('rebinds follow-up recovery copy through a lang key', () => {
+        const message = document.createElement('div');
+        message.textContent = 'Jos käyttäjä löytyy, vahvistuskoodi on lähetetty. Syötä koodi ja uusi salasana.';
+
+        applyLoginLangKey(
+            message,
+            'password_reset_code_sent',
+            'If the account exists, a verification code was sent. Enter the code and your new password.'
+        );
+
+        expect(message.dataset.langKey).toBe('password_reset_code_sent');
+        expect(message.textContent).toContain('verification code was sent');
+        expect(message.textContent).not.toContain('vahvistuskoodi');
     });
 });
 
