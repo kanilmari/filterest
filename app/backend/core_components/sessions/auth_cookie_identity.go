@@ -156,16 +156,20 @@ func resolveAuthCookieConfig() (authCookieConfig, error) {
 			return authCookieConfig{}, fmt.Errorf("SESSION_SECRET_KEY is required when SESSION_COOKIE_MODE=%s", authCookieModeReplicaPool)
 		}
 		namespace := canonicalCookieNamespace("replica-pool:" + explicitSessionName)
+		names, err := withListenPortCookieNames(AuthCookieNames{
+			Session:     sessionName,
+			DeviceID:    "device_id_" + namespace,
+			Fingerprint: "fingerprint_" + namespace,
+		})
+		if err != nil {
+			return authCookieConfig{}, err
+		}
 		return authCookieConfig{
 			mode:            mode,
 			stableIdentity:  explicitSessionName,
 			keyDeriveScope:  "replica-pool:" + explicitSessionName + "|database:" + databaseIdentity,
 			cookieNamespace: namespace,
-			names: AuthCookieNames{
-				Session:     sessionName,
-				DeviceID:    "device_id_" + namespace,
-				Fingerprint: "fingerprint_" + namespace,
-			},
+			names:           names,
 		}, nil
 	}
 
@@ -180,16 +184,20 @@ func resolveAuthCookieConfig() (authCookieConfig, error) {
 		identitySource = "database:"
 	}
 	namespace := canonicalCookieNamespace(identitySource + stableIdentity)
+	names, err := withListenPortCookieNames(AuthCookieNames{
+		Session:     "session_" + namespace,
+		DeviceID:    "device_id_" + namespace,
+		Fingerprint: "fingerprint_" + namespace,
+	})
+	if err != nil {
+		return authCookieConfig{}, err
+	}
 	return authCookieConfig{
 		mode:            mode,
 		stableIdentity:  stableIdentity,
 		keyDeriveScope:  identitySource + stableIdentity + "|database:" + databaseIdentity,
 		cookieNamespace: namespace,
-		names: AuthCookieNames{
-			Session:     "session_" + namespace,
-			DeviceID:    "device_id_" + namespace,
-			Fingerprint: "fingerprint_" + namespace,
-		},
+		names:           names,
 	}, nil
 }
 

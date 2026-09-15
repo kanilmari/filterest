@@ -251,20 +251,14 @@ func Run(options Options) {
 		log.Printf("Ympäristömuuttujien latausvaroitus: %v", environmentLoadError)
 	}
 
-	if err := backend.ValidateConfig(); err != nil {
-		log.Fatalf("Configuration validation failed:\n%v", err)
+	port, portError := e_sessions.ResolveHTTPListenPort()
+	if portError != nil {
+		log.Fatalf("Invalid PORT value %q: must be a number between 1 and 65535", os.Getenv("PORT"))
 	}
-
-	e_sessions.InitSessionStore()
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8082"
+	if err := e_sessions.SetHTTPListenPort(port); err != nil {
+		log.Fatalf("Invalid HTTP listen port %q: %v", port, err)
 	}
-	portNumber, portError := strconv.Atoi(port)
-	if portError != nil || portNumber < 1 || portNumber > 65535 {
-		log.Fatalf("Invalid PORT value %q: must be a number between 1 and 65535", port)
-	}
+	portNumber, _ := strconv.Atoi(port)
 
 	environmentType = effectiveEnvironmentType(
 		options.BuildEnvironment,
@@ -277,6 +271,12 @@ func Run(options Options) {
 		log.Printf("🔧 Dev build - running in %s mode (ENVIRONMENT_TYPE=%s)", environmentType, os.Getenv("ENVIRONMENT_TYPE"))
 	}
 	os.Setenv("ENVIRONMENT_TYPE", environmentType)
+
+	if err := backend.ValidateConfig(); err != nil {
+		log.Fatalf("Configuration validation failed:\n%v", err)
+	}
+
+	e_sessions.InitSessionStore()
 
 	if err := backend.InitDB(); err != nil {
 		log.Fatalf("DB-yhteys epäonnistui: %v", err)

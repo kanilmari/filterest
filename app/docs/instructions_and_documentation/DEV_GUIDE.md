@@ -402,6 +402,20 @@ keys through ordinary iterations. Replica-pool mode is only for nodes sharing
 one database with explicit shared identity/keys. Do not weaken authentication
 for tests or print/commit passwords, cookies or protected environment files.
 
+Browsers do **not** isolate cookies by port. Cookies for `Domain=localhost`
+(or any other shared host) are visible to every port on that host, so
+`https://localhost:8082` and `https://localhost:8090` overwrite each other's
+`session_*`, `device_id_*`, and `fingerprint_*` cookies in DevTools and in the
+browser cookie jar. CSRF tokens live in the session cookie, so they follow the
+same name.
+
+When `port_number_in_cookies` is on, those cookie names include the actual HTTP
+listen port the process is bound to (not an unused default). Local `dev` and
+`test` environments enable this by default; production leaves cookie names
+unchanged. Set `PORT_NUMBER_IN_COOKIES=1` or `0` to override the default. Login,
+logout, session refresh, OTP, and password-reset pre-auth cookies use the same
+naming helpers, so readers and writers stay on one family per listen port.
+
 ## 5. Verification
 
 Use the lightest checks that prove the changed behavior. Small mechanical CSS

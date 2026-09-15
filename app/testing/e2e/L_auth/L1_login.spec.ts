@@ -54,16 +54,16 @@ test.describe('L1 — Login', () => {
     const cookies = await page.context().cookies();
     const cookieNames = cookies.map((cookie) => cookie.name);
     expect(cookieNames).toEqual(expect.arrayContaining([
-      expect.stringMatching(/^session_.+_[0-9a-f]{10}$/),
-      expect.stringMatching(/^device_id_.+_[0-9a-f]{10}$/),
-      expect.stringMatching(/^fingerprint_.+_[0-9a-f]{10}$/),
+      expect.stringMatching(/^session_.+_[0-9a-f]{10}(?:_[0-9]{1,5})?$/),
+      expect.stringMatching(/^device_id_.+_[0-9a-f]{10}(?:_[0-9]{1,5})?$/),
+      expect.stringMatching(/^fingerprint_.+_[0-9a-f]{10}(?:_[0-9]{1,5})?$/),
     ]));
     for (const legacyName of ['session', 'device_id', 'fingerprint']) {
       expect(cookieNames).not.toContain(legacyName);
     }
 
     const currentAuthCookieNames = cookieNames.filter((name) =>
-      /^(session|device_id|fingerprint)_.+_[0-9a-f]{10}$/.test(name),
+      /^(session|device_id|fingerprint)_.+_[0-9a-f]{10}(?:_[0-9]{1,5})?$/.test(name),
     );
     const siblingCookieNames = [
       'session_sibling_deadbeef00',

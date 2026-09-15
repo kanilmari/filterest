@@ -35,7 +35,7 @@ test.describe('L2 — Logout', () => {
 
     const currentAuthCookieNames = (await page.context().cookies())
       .map((cookie) => cookie.name)
-      .filter((name) => /^(session|device_id|fingerprint)_.+_[0-9a-f]{10}$/.test(name));
+      .filter((name) => /^(session|device_id|fingerprint)_.+_[0-9a-f]{10}(?:_[0-9]{1,5})?$/.test(name));
     const siblingCookieNames = [
       'session_sibling_deadbeef00',
       'device_id_sibling_deadbeef00',

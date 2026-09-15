@@ -23,8 +23,6 @@ type stateResponse struct {
 }
 
 func main() {
-	e_sessions.InitSessionStore()
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", login)
 	mux.HandleFunc("/state", state)
@@ -35,6 +33,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := e_sessions.SetHTTPListenPort(port); err != nil {
+		log.Fatal(err)
+	}
+	e_sessions.InitSessionStore()
 	fmt.Printf("READY http://%s\n", listener.Addr().String())
 	if err := http.Serve(listener, mux); err != nil {
 		log.Fatal(err)
