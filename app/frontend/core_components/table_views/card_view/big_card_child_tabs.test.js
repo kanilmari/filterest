@@ -179,4 +179,76 @@ describe("buildRelatedTabs related-record navigation", () => {
         ]);
         expect(tabs.textContent).not.toContain("palvelukatalogi_riskienhallinta_relation");
     });
+
+    test("renders ticket todos as a checkbox list with verbatim text", async () => {
+        const tabs = await buildRelatedTabs(
+            [{
+                dataset: "dev_agent_task_todos",
+                column: "task_id",
+                row_count: 2,
+                rows: [
+                    { id: 101, todo_text: "  Identifier text stays  ", status: "todo", sort_order: 10 },
+                    { id: 102, todo_text: "needs_review stays secondary", status: "needs_review", sort_order: 20 },
+                ],
+                types: { todo_text: { card_element: "header" } },
+            }],
+            "dev_agent_tasks",
+            889,
+            1,
+        );
+
+        document.querySelector(".active_row_article").appendChild(tabs);
+
+        const checkboxes = tabs.querySelectorAll('input[type="checkbox"][data-testid="task-todo-checkbox"]');
+        expect(checkboxes).toHaveLength(2);
+        expect(tabs.querySelector(".row_article_task_todo_list")).not.toBeNull();
+        expect(tabs.querySelector(".child_record_list_header")).toBeNull();
+        expect(tabs.textContent).toContain("  Identifier text stays  ");
+        expect(tabs.querySelector('[data-todo-id="102"] .row_article_task_todo_status')?.textContent)
+            .toBe("needs_review");
+        expect(checkboxes[0].checked).toBe(false);
+        expect(checkboxes[1].checked).toBe(false);
+    });
+
+    test("toggles a ticket todo checkbox through the existing row update API", async () => {
+        mocks.endpointRouter.mockImplementation((routeName) => {
+            if (routeName === "updateRow") {
+                return Promise.resolve({ status: "ok" });
+            }
+            return Promise.resolve([]);
+        });
+
+        const tabs = await buildRelatedTabs(
+            [{
+                dataset: "dev_agent_task_todos",
+                column: "task_id",
+                row_count: 1,
+                rows: [{ id: 101, todo_text: "Toggle me", status: "todo", sort_order: 10 }],
+                types: { todo_text: { card_element: "header" } },
+            }],
+            "dev_agent_tasks",
+            889,
+            1,
+        );
+        document.querySelector(".active_row_article").appendChild(tabs);
+
+        const checkbox = tabs.querySelector('input[type="checkbox"][data-testid="task-todo-checkbox"]');
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+        await vi.waitFor(() => {
+            expect(mocks.endpointRouter).toHaveBeenCalledWith("updateRow", {
+                method: "POST",
+                url_params: "?dataset=dev_agent_task_todos",
+                body_data: {
+                    id: 101,
+                    column: "status",
+                    value: "done",
+                },
+                suppressAuthRedirect: true,
+            });
+        });
+        expect(tabs.querySelector('[data-todo-id="101"]')?.classList.contains("is-done")).toBe(true);
+        expect(tabs.querySelector(".row_article_task_todo_status")?.textContent).toBe("done");
+    });
 });

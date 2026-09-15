@@ -14,7 +14,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
     endpoint_router: endpointRouterMock,
 }));
 
-import { buildRowArticleTaskProgressSection } from "./row_article_task_progress.js";
+import { applyTaskTodoStatusChangeToArticleProgress, buildRowArticleTaskProgressSection } from "./row_article_task_progress.js";
 
 describe("row_article_task_progress", () => {
     beforeEach(() => {
@@ -65,5 +65,28 @@ describe("row_article_task_progress", () => {
             url_params: "?dataset=dev_agent_tasks&id=853",
             suppressAuthRedirect: true,
         });
+    });
+
+    test("updates percent, ratio, and lights from the same todo status toggle", async () => {
+        endpointRouterMock.mockResolvedValue({
+            total: 2,
+            completed: 0,
+            percent: 0,
+            lit_segments: 0,
+            statuses: [
+                { slug: "todo", title: "Todo", count: 2, is_completion_status: false },
+            ],
+        });
+
+        const section = await buildRowArticleTaskProgressSection("dev_agent_tasks", 889);
+        document.body.appendChild(section);
+
+        applyTaskTodoStatusChangeToArticleProgress(document.body, "todo", "done");
+
+        expect(section.querySelector(".row_article_task_progress_percent")?.textContent).toBe("50%");
+        expect(section.querySelector(".row_article_task_progress_ratio")?.textContent).toBe("1/2");
+        expect(section.querySelectorAll(".row_article_task_progress_light.is-lit")).toHaveLength(5);
+        expect(section.querySelector(".row_article_task_progress_status_chip.is-complete")?.textContent)
+            .toBe("done: 1");
     });
 });
