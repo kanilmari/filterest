@@ -153,7 +153,7 @@ describe('generate_table', () => {
 		expect(contentArea).not.toBeNull();
 		expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
 		expect(contentArea.style.getPropertyValue('--dataset-background-image'))
-			.toContain('/storage/104/dataset_media/background/original/background.webp');
+			.toContain('/storage/104/dataset_media/background/2160/background.webp');
 		expect(document.querySelector('.dataset-results-surface')).not.toBeNull();
 	});
 

@@ -435,6 +435,44 @@ during unattended runs. Test changed multilingual components with non-English
 copy and with both explicit application themes, including forced light over
 an OS dark preference.
 
+### Page-load network waste
+
+When changing catalog/login media, bootstrap GETs, or login-shell imports,
+re-measure a cold load instead of relying on request counts from a warm
+browser. LNCD serves many unbundled modules; production uses `main.*.min.js`.
+Compare waste that remains in both (duplicate APIs, oversized originals,
+cancelled image retries, 404s), not raw script counts.
+
+From the product root, with Playwright pointing at the LNCD origin:
+
+```bash
+FILTEREST_E2E_BASE_URL=https://localhost:8082 PLAYWRIGHT_HTML_OPEN=never \
+  ./filterest test testing/e2e --project=desktop-card -g "network" --workers=1
+```
+
+If no dedicated spec exists, capture one cold Playwright page load:
+
+```js
+const responses = [];
+page.on('response', (response) => responses.push(response));
+await page.goto(url, { waitUntil: 'networkidle' });
+```
+
+Record request count, transferred bytes (`response.headers()['content-length']`
+sum where present), cancelled/aborted image URLs, and HTTP 404s. Repeat for
+`/` (or the service catalog landing path) and `/login`.
+
+Baseline from 2026-09-14 (before LNCD #888):
+
+| Surface | Requests | Transferred | Notable waste |
+|---|---|---|---|
+| LNCD home → service_catalog | ~536 | ~6.6 MB | `/api/translations?lang=en` ×2, `/api/datasets` ×2, background `original` ~1.8 MB |
+| LNCD `/login` | ~408 | ~3.9 MB | `queen_chat_view.js` ~147 KB |
+| Production filterest.com | — | ~3.87 MB | three ~1.1 MB catalog PNGs plus `NS_BINDING_ABORTED` retries; `codex-querydataset=dokumentaatio` 404 |
+
+Do not close #837 from this measurement; that ticket is thumbnail product
+scope. This check is network waste only.
+
 ### Unified QA
 
 `./filterest qa` (or `npm run qa` in app/) checks source without automatic

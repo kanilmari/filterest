@@ -337,7 +337,7 @@ async function pollCodingAgentJob(dataset, jobID) {
         for (;;) {
             if (controller.signal.aborted) throw aborted();
             const response = await endpoint_router("aiChatCodexQuery", {
-                method: "GET", url_params: new URLSearchParams({ dataset, job_id: jobID }).toString(),
+                method: "GET", url_params: `?${new URLSearchParams({ dataset, job_id: jobID }).toString()}`,
                 suppressErrorToast: true, signal: controller.signal,
             });
             if (controller.signal.aborted) throw aborted();

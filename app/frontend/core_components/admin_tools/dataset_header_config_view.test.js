@@ -219,9 +219,9 @@ describe('dataset_header_config_view', () => {
         }));
         expect(tableSpecs.invoices).toEqual({ table_uid: 105 });
         expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
-        expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('new-cover.webp');
+        expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('/cover/1000/new-cover.webp');
         expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
-        expect(contentArea.style.getPropertyValue('--dataset-background-image')).toContain('new-background.webp');
+        expect(contentArea.style.getPropertyValue('--dataset-background-image')).toContain('/background/2160/new-background.webp');
         expect(tabButton.dataset.hasPresentationMedia).toBe('true');
     });
 });

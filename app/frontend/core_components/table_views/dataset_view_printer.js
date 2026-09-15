@@ -4,6 +4,7 @@
 // Exists to keep dataset screen assembly in one place while delegating each concrete view to its own module.
 
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, rememberLoadedDatasetRows } from "./dataset_loaded_rows.js";
+import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from "./storage_media_urls.js";
 
 import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
 import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
@@ -523,7 +524,7 @@ export async function generate_table(
 		if (backgroundImagePath) {
 			contentArea.style.setProperty(
 				"--dataset-background-image",
-				`url("${encodeURI(backgroundImagePath).replaceAll('"', '%22')}")`
+				encodeCssUrlValue(resolveDatasetMediaDisplayPath(backgroundImagePath))
 			);
 		} else {
 			contentArea.style.removeProperty("--dataset-background-image");

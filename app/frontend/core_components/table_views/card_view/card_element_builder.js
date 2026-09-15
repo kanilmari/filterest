@@ -16,6 +16,7 @@ import { extractLangValue } from "../../../reusable_components/lang_value_reader
 import { setElementSvgContent } from "../../../icons/icon_loader.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { buildGoogleMapsEmbedUrl, resolveImagePaths } from "./card_element_builder_helpers.js";
+import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 import { appendTextWithHttpLinks } from "../../../reusable_components/http_text_linkifier.js";
@@ -186,13 +187,12 @@ function updateCardImageSources() {
         .forEach((img) => {
             const newFolder = resolveCardImageFolderForElement(img);
             const url = new URL(img.src, window.location.origin);
-            const match = url.pathname.match(
-                /(\/storage\/\d+\/\d+)\/(300|1000)\/(.+)/
-            );
-            if (match && match[2] !== newFolder) {
-                url.pathname = `${match[1]}/${newFolder}/${match[3]}`;
-                img.src = url.href;
+            const nextPath = resolveRowMediaDisplayPath(url.pathname, newFolder);
+            if (!nextPath || nextPath === url.pathname) {
+                return;
             }
+            url.pathname = nextPath;
+            img.src = url.href;
         });
 }
 

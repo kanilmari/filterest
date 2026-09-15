@@ -22,8 +22,10 @@ describe('card photo presentation', () => {
         expect(normalizeCardImagePresentation(mode)).toBe('contain');
     });
     it('decorates only one accessible photo and follows image load/error changes', () => {
+        applyCardImagePresentationSetting('contain_blur');
         const wrapper = createImageElement('/storage/photo.jpg', true, { renderSlot: 'card_media' });
         const image = wrapper.querySelector('img');
+        image.dispatchEvent(new Event('load'));
         expect(wrapper.classList.contains('card_photo_presentation')).toBe(true);
         expect(wrapper.querySelectorAll('img')).toHaveLength(1);
         expect(image.getAttribute('aria-hidden')).toBeNull();
@@ -33,6 +35,11 @@ describe('card photo presentation', () => {
         image.dispatchEvent(new Event('load'));
         expect(wrapper.style.getPropertyValue('--card-photo-source')).toContain('/storage/large/photo.jpg');
         image.dispatchEvent(new Event('error'));
+        expect(wrapper.style.getPropertyValue('--card-photo-source')).toBe('');
+    });
+    it('does not paint a CSS background copy outside contain_blur', () => {
+        applyCardImagePresentationSetting('contain');
+        const wrapper = createImageElement('/storage/photo.jpg', true, { renderSlot: 'card_media' });
         expect(wrapper.style.getPropertyValue('--card-photo-source')).toBe('');
     });
     it.each(['small_thumbnail', 'row_article_inline', 'row_article_gallery_thumbnail', 'image_first', 'standalone'])(

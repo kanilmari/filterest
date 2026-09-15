@@ -1,6 +1,7 @@
 // card_element_builder_helpers.js
 // Pure helper functions extracted from card_element_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
+import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
 
 /**
  * Build a Google Maps embed URL from address fields on a row item.
@@ -29,13 +30,21 @@ export function buildGoogleMapsEmbedUrl(rowItem) {
     );
 }
 
+function rowMediaPaths(rawSrc, mediaFolder) {
+    return {
+        displaySrc: resolveRowMediaDisplayPath(rawSrc, mediaFolder),
+        originalSrc: resolveRowMediaDisplayPath(rawSrc, "original"),
+    };
+}
+
 /**
  * Resolve a raw image source string into display and original paths.
  * Handles three formats:
  *   1. Full path: "104/133/300/104_133_38.png" → /storage/104/133/{mediaFolder}/filename
  *   2. Flat name: "104_133_38.png" → /storage/104/133/{mediaFolder}/104_133_38.png
  *   3. Fallback: "anything" → /storage/anything
- * External URLs (http://, https://) and rooted paths (./, /) are returned as-is.
+ * External URLs (http://, https://) and non-storage rooted paths (./, /static/…) are returned as-is.
+ * Rooted `/storage/{table}/{row}/{variant}/file` paths are rewritten onto `mediaFolder`.
  *
  * @param {string} rawSrc - Raw image source value (trimmed)
  * @param {string} mediaFolder - Target media folder ("300" or "1000")
@@ -45,33 +54,35 @@ export function resolveImagePaths(rawSrc, mediaFolder) {
     if (
         rawSrc.startsWith("http://") ||
         rawSrc.startsWith("https://") ||
-        rawSrc.startsWith("./") ||
-        rawSrc.startsWith("/")
+        rawSrc.startsWith("./")
     ) {
+        return { displaySrc: rawSrc, originalSrc: rawSrc };
+    }
+
+    if (rawSrc.startsWith("/")) {
+        const rewritten = rowMediaPaths(rawSrc, mediaFolder);
+        if (rewritten.displaySrc !== rawSrc || rewritten.originalSrc !== rawSrc) {
+            return rewritten;
+        }
         return { displaySrc: rawSrc, originalSrc: rawSrc };
     }
 
     // Format: 104/133/300/104_133_38.png
     const pathMatch = rawSrc.match(/^(\d+)\/(\d+)\/(?:\d+|original)\/(.+)$/);
     if (pathMatch) {
-        const mainTableId = pathMatch[1];
-        const mainRowId = pathMatch[2];
-        const filename = pathMatch[3];
-        return {
-            displaySrc: `/storage/${mainTableId}/${mainRowId}/${mediaFolder}/${filename}`,
-            originalSrc: `/storage/${mainTableId}/${mainRowId}/original/${filename}`,
-        };
+        return rowMediaPaths(
+            `/storage/${pathMatch[1]}/${pathMatch[2]}/original/${pathMatch[3]}`,
+            mediaFolder
+        );
     }
 
     // Format: 104_133_38.png
     const fileMatch = rawSrc.match(/^(\d+)_(\d+)_(\d+)\.(\w+)$/);
     if (fileMatch) {
-        const mainTableId = fileMatch[1];
-        const mainRowId = fileMatch[2];
-        return {
-            displaySrc: `/storage/${mainTableId}/${mainRowId}/${mediaFolder}/${rawSrc}`,
-            originalSrc: `/storage/${mainTableId}/${mainRowId}/original/${rawSrc}`,
-        };
+        return rowMediaPaths(
+            `/storage/${fileMatch[1]}/${fileMatch[2]}/original/${rawSrc}`,
+            mediaFolder
+        );
     }
 
     // Fallback

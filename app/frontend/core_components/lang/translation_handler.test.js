@@ -88,6 +88,9 @@ describe('translatePage', () => {
         actionButton.textContent = 'Exclude';
         actionButton.title = 'Exclude this value from results';
         document.body.appendChild(actionButton);
+        const card = document.createElement('div');
+        card.className = 'card';
+        document.body.appendChild(card);
 
         const { translatePage } = await import('./translation_handler.js');
 
@@ -271,6 +274,9 @@ describe('translatePage', () => {
         const label = document.createElement('span');
         label.dataset.langKey = 'exclude';
         document.body.appendChild(label);
+        const card = document.createElement('div');
+        card.className = 'card';
+        document.body.appendChild(card);
 
         let resolveFinnish;
         window.translationPromises.fi = new Promise((resolve) => {
@@ -307,6 +313,30 @@ describe('translatePage', () => {
             expect(section.querySelector('.animated-disclosure-title').textContent).toBe(expected);
         }
         expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
+    test('does not load card-language refresh when the shell has no cards', async () => {
+        const { translatePage } = await import('./translation_handler.js');
+        await translatePage('en');
+        expect(refreshCardLanguages).not.toHaveBeenCalled();
+        expect(refreshLocalizedDatasetValues).toHaveBeenCalledWith('en');
+    });
+
+    test('coalesces concurrent translation GETs for the same language', async () => {
+        delete window.translationPromises;
+        let resolveFetch;
+        endpoint_router.mockImplementation(() => new Promise((resolve) => {
+            resolveFetch = resolve;
+        }));
+        const { translatePage } = await import('./translation_handler.js');
+        const first = translatePage('en');
+        const second = translatePage('en');
+        await Promise.resolve();
+        expect(endpoint_router).toHaveBeenCalledTimes(1);
+        expect(endpoint_router).toHaveBeenCalledWith('translations', { url_params: '?lang=en' });
+        resolveFetch({ exclude: 'Exclude' });
+        await Promise.all([first, second]);
+        expect(endpoint_router).toHaveBeenCalledTimes(1);
     });
 
     test('prefers reviewed runtime article headings over the missing-key fallback', async () => {

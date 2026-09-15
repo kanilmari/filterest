@@ -4,7 +4,6 @@
 // Exists to centralise all frontend localisation so every component can call translatePage without owning fetch logic.
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { renderAllowedHtml } from '../../reusable_components/dom_container_builder.js';
-import { refreshCardLanguages } from '../table_views/card_view/card_view_printer.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { initDevLangKeyEditor } from './dev_lang_key_editor.js';
 import {
@@ -281,6 +280,36 @@ const TRANSLATABLE_ATTRIBUTE_FILTER = [
 ];
 
 
+async function fetchTranslationsForLanguage(language) {
+    if (typeof window === 'undefined') {
+        return _unwrapTranslationResponse(
+            await endpoint_router('translations', { url_params: `?lang=${language}` })
+        );
+    }
+    window.translationPromises = window.translationPromises || {};
+    if (window.translationPromises[language]) {
+        return _unwrapTranslationResponse(await window.translationPromises[language]);
+    }
+    const request = endpoint_router('translations', { url_params: `?lang=${language}` });
+    window.translationPromises[language] = request;
+    try {
+        return _unwrapTranslationResponse(await request);
+    } catch (error) {
+        if (window.translationPromises[language] === request) {
+            delete window.translationPromises[language];
+        }
+        throw error;
+    }
+}
+
+async function refreshVisibleCardLanguages(chosen_language) {
+    if (typeof document === 'undefined' || !document.querySelector('.card')) {
+        return;
+    }
+    const { refreshCardLanguages } = await import('../table_views/card_view/card_view_printer.js');
+    await refreshCardLanguages(chosen_language);
+}
+
 /**
  * Kääntää sivun valitun kielen mukaisesti.
  * Lukee käännökset /api/translations?lang=xxx -endpointista.
@@ -299,11 +328,7 @@ export async function translatePage(chosen_language) {
         // Jos valittu kieli ei ole englanti, haetaan englanninkieliset käännökset fallbackia varten.
         if (chosen_language !== 'en') {
             try {
-                if (window.translationPromises && window.translationPromises['en']) {
-                    nextDefaultTranslations = _unwrapTranslationResponse(await window.translationPromises['en']);
-                } else {
-                    nextDefaultTranslations = _unwrapTranslationResponse(await endpoint_router('translations', { url_params: '?lang=en' }));
-                }
+                nextDefaultTranslations = await fetchTranslationsForLanguage('en');
                 if (!requestIsCurrent()) return;
                 safeDefaultTranslations = nextDefaultTranslations;
                 if (IS_DEV_MODE && debug) console.log('Default English translations loaded', nextDefaultTranslations);
@@ -317,11 +342,7 @@ export async function translatePage(chosen_language) {
         // Haetaan varsinaiset käännökset valitulla kielellä
         let nextTranslations;
         try {
-            if (window.translationPromises && window.translationPromises[chosen_language]) {
-                nextTranslations = _unwrapTranslationResponse(await window.translationPromises[chosen_language]);
-            } else {
-                nextTranslations = _unwrapTranslationResponse(await endpoint_router('translations', { url_params: `?lang=${chosen_language}` }));
-            }
+            nextTranslations = await fetchTranslationsForLanguage(chosen_language);
             if (!requestIsCurrent()) return;
         } catch (errResponse) {
             if (!requestIsCurrent()) return;
@@ -355,7 +376,7 @@ export async function translatePage(chosen_language) {
             translateElements(currentTranslations, chosen_language);
             observeDomChanges();
 
-            await refreshCardLanguages(chosen_language);
+            await refreshVisibleCardLanguages(chosen_language);
             await refreshLocalizedDatasetValues(chosen_language);
 
             if (!requestIsCurrent()) return;
@@ -390,7 +411,7 @@ export async function translatePage(chosen_language) {
 
             document.body.classList.remove('loading');
             void Promise.allSettled([
-                refreshCardLanguages(chosen_language),
+                refreshVisibleCardLanguages(chosen_language),
                 refreshLocalizedDatasetValues(chosen_language),
             ]);
         });

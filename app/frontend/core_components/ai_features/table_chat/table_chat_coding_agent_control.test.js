@@ -32,7 +32,7 @@ test("enabled production with an unready runner explains setup without allowing 
  await vi.waitFor(()=>expect(control.row.hidden).toBe(false));
  await vi.waitFor(()=>expect(control.row.textContent).toContain("ei ole valmis"));
  expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(true);
- expect(request).toHaveBeenCalledWith("aiChatCodexQuery",expect.objectContaining({method:"GET",url_params:"dataset=fixture"}));
+ expect(request).toHaveBeenCalledWith("aiChatCodexQuery",expect.objectContaining({method:"GET",url_params:"?dataset=fixture"}));
  expect(request.mock.calls.every(([, options])=>options.method==="GET")).toBe(true);
  control.destroy();
 });

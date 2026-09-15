@@ -48,7 +48,7 @@ export function createCodingAgentControl(dataset) {
  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
  select.addEventListener("change", () => localStorage.setItem("gptChatMode_" + dataset, select.value));
  render();
- endpoint_router("aiChatCodexQuery", { method: "GET", url_params: new URLSearchParams({ dataset }).toString(), suppressErrorToast: true, suppressAuthRedirect: true }).then(capability => {
+ endpoint_router("aiChatCodexQuery", { method: "GET", url_params: `?${new URLSearchParams({ dataset }).toString()}`, suppressErrorToast: true, suppressAuthRedirect: true }).then(capability => {
   if (destroyed) return;
   if (typeof capability?.feature_enabled !== "boolean") throw new Error("Invalid coding agent availability");
   control.capability = capability;

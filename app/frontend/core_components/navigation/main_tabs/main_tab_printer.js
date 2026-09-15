@@ -139,9 +139,10 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
     // For guests: try fetching datasets (works when login_to_browse=false and guest
     // has permissions). suppressAuthRedirect prevents navigating away on 401/403 —
     // the catch block falls back to static tabs instead.
-    const tabResult = isLoggedIn
-        ? await fetchProjectTabs({ preloadedContentTablesResponse })
-        : await fetchProjectTabs({ suppressAuthRedirect: true });
+    const tabResult = await fetchProjectTabs({
+        preloadedContentTablesResponse,
+        suppressAuthRedirect: !isLoggedIn,
+    });
 
     // Authentication, bootstrap, and tree-refresh paths can request a rebuild
     // concurrently. Only the newest request may append buttons; otherwise an

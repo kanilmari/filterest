@@ -85,6 +85,17 @@ directory, never inside immutable `app/`. Set `FILTEREST_TEST_RUNTIME_ROOT` only
 when a separate mutable test-runtime location is needed; the selected path must
 remain outside `app/`.
 
+### Measuring page-load network waste
+
+Use a cold Playwright page with `waitUntil: 'networkidle'` and listen to
+`request`/`response`/`requestfailed`. Count unique `/api/translations` and
+`/api/datasets` GETs, cancelled catalog PNG URLs, 404s (especially
+`codex-query`), and whether catalog/background URLs use `300`/`1000`/`2160`
+instead of `original`. Compare LNCD and a production Network capture; script
+count is not comparable across unbundled vs bundled builds. See
+[DEV_GUIDE.md](DEV_GUIDE.md) § Page-load network waste for the 2026-09-14
+baseline and the LNCD #888 before/after notes.
+
 The Visual Guardian screenshot flow now reuses the authenticated E2E storage state from `app/testing/e2e/global-setup.ts`, so screenshot captures should reflect a logged-in, app-ready UI rather than an unauthenticated shell by default.
 
 ## Authentication
