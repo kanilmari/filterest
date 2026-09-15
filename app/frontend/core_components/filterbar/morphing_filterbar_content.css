@@ -78,7 +78,7 @@
 	position: relative;
 	isolation: isolate;
 	overflow: hidden;
-  padding: 24px 24px 18px;
+  padding: 12px 24px 18px;
   background:
     linear-gradient(
       180deg,
@@ -86,32 +86,38 @@
       color-mix(in srgb, var(--filter_panel_bg) 94%, transparent 6%) 100%
     );
 }
-.filterbar-inline-hero__config-button {
-	position: absolute;
-	z-index: 2;
-	top: 12px;
-	right: 12px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 42px;
-	height: 42px;
-	padding: 0;
-	color: var(--text_color);
-	background: color-mix(in srgb, var(--filter_panel_bg) 82%, transparent);
-	border: 1px solid var(--filter_panel_border);
-	border-radius: 50%;
-	box-shadow: var(--fw-shadow-raised);
-	backdrop-filter: blur(10px);
+/* The invisible header scrolls with its hero; equal side columns keep the
+   dataset navigation centered independently of the administrator actions. */
+.filterbar-inline-hero__top-row {
+    --hero-action-space: 88px;
+    display: grid;
+    grid-template-columns: minmax(var(--hero-action-space), 1fr) minmax(0, max-content) minmax(var(--hero-action-space), 1fr);
+    align-items: start;
+    gap: 8px;
+    margin-inline: -12px;
 }
-.filterbar-inline-hero__config-button:hover,
-.filterbar-inline-hero__config-button:focus-visible {
-	color: var(--button_hover_text_color, var(--text_color));
-	background: var(--button_hover_bg_color);
+.filterbar-inline-hero__top-row > .hero-dataset-tabs {
+    grid-column: 2;
+}
+.filterbar-inline-hero__actions {
+    grid-column: 3;
+    display: flex;
+    justify-self: end;
+    align-items: center;
+    gap: 8px;
+}
+.filterbar-inline-hero__actions:empty { display: none; }
+@media (width <= 700px) {
+    .filterbar-inline-hero__top-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        margin-inline: 4px;
+    }
+    .filterbar-inline-hero__top-row > .hero-dataset-tabs { grid-column: 1; }
+    .filterbar-inline-hero__actions { grid-column: 2; }
 }
 .filterbar-inline-hero__config-icon {
-	width: 22px;
-	height: 22px;
+	width: 18px;
+	height: 18px;
 	fill: currentcolor;
 }
 .dataset-results-surface {
@@ -358,6 +364,7 @@
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+        margin-inline: 4px;
   align-items: center;
   align-self: start;
   min-width: 0;
@@ -390,6 +397,7 @@
   overflow: visible;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+        margin-inline: 4px;
   grid-template-areas:
     "header actions"
     "content content";

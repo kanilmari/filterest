@@ -1,4 +1,4 @@
-/* A compact main-tab projection in normal hero flow; corner controls stay separate. */
+/* Dataset navigation and administrator actions share the scrolling hero row. */
 .hero-dataset-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -6,11 +6,12 @@
     justify-content: center;
     gap: 8px;
     min-width: 0;
-    margin-block-start: 24px;
+    margin: 0;
 }
 .hero-dataset-tabs[hidden] { display: none; }
 
-.hero-dataset-tabs__button {
+.hero-dataset-tabs__button,
+.filterbar-inline-hero__actions > button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -34,6 +35,13 @@
     appearance: none;
     transition: background-color 120ms ease, border-color 120ms ease;
 }
+.filterbar-inline-hero__actions > button {
+    position: static;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+}
 .hero-dataset-tabs__label {
     min-width: 0;
     overflow-wrap: anywhere;
@@ -46,19 +54,36 @@
 }
 .hero-dataset-tabs__button[aria-current="page"],
 .hero-dataset-tabs__button:hover,
-.hero-dataset-tabs__button:focus-visible {
+.hero-dataset-tabs__button:focus-visible,
+.filterbar-inline-hero__actions > button:hover,
+.filterbar-inline-hero__actions > button:focus-visible {
     background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
     border-color: var(--color-brand);
 }
-.hero-dataset-tabs__button:focus-visible {
+.hero-dataset-tabs__button:focus-visible,
+.filterbar-inline-hero__actions > button:focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
 }
 @media (width <= 700px) {
-    .hero-dataset-tabs__button { min-height: 44px; }
+    .hero-dataset-tabs {
+        flex-wrap: nowrap;
+        justify-content: safe center;
+        overflow-x: auto;
+    }
+    .hero-dataset-tabs__button {
+        min-height: 44px;
+        flex-shrink: 0;
+    }
+    .filterbar-inline-hero__actions > button {
+        flex-basis: 44px;
+        width: 44px;
+        height: 44px;
+    }
 }
 @media (prefers-reduced-motion: reduce) {
-    .hero-dataset-tabs__button { transition: none; }
+    .hero-dataset-tabs__button,
+    .filterbar-inline-hero__actions > button { transition: none; }
 }
 @media (forced-colors: active) {
     .hero-dataset-tabs__button[aria-current="page"] { border-color: Highlight; }

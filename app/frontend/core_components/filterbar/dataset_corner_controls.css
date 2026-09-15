@@ -15,13 +15,21 @@
 .filterbar-scroll-sentinel + .filterbar-inline-hero > .dataset-corner-controls {
   top: calc(12px - 1px);
 }
-/* Keep the toolbar opener in its canonical right corner. Move the gear
-   and its centered palette together to the left only while that slot is used. */
-.filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) > .filterbar-inline-hero__config-button {
-  right: 64px;
+/* Existing sidebar openers keep their corner slots; the normal-flow hero row
+   reserves that space without moving controls into another visual row. */
+.filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) > .filterbar-inline-hero__top-row {
+  --hero-action-space: 140px;
 }
-.filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) > .filterbar-inline-hero__cover-palette-button {
-  right: 69px;
+.filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) .filterbar-inline-hero__actions {
+  margin-right: 52px;
+}
+@media (width <= 700px) {
+  .filterbar-inline-hero:has(> .dataset-corner-controls--start:not([hidden])) > .filterbar-inline-hero__top-row {
+    padding-left: 52px;
+  }
+  .filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])):has(.filterbar-inline-hero__actions:empty) > .filterbar-inline-hero__top-row {
+    padding-right: 52px;
+  }
 }
 .filterbar-fixed-toggle.filterbar-fixed-toggle--hosted {
   position: static;

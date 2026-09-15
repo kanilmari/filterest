@@ -26,30 +26,27 @@ const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
 const PALETTE_ICON_PATH = '/frontend/icons/general/view-palette-icon.svg';
 const TOOLBOX_CHEVRON_PATH = '/frontend/icons/general/chevron-down-icon.svg';
 const TOOLBOX_ICON_PATHS = Object.freeze({
-    themeImage: '/frontend/icons/symbols/image.svg',
-    ovalGeometry: '/frontend/icons/symbols/ruler.svg',
-    ovalGradient: '/frontend/icons/symbols/tune.svg',
-    heroLayout: '/frontend/icons/symbols/layers.svg',
+    backgroundCover: '/frontend/icons/symbols/image.svg',
     cardLayout: '/frontend/icons/symbols/grid_view.svg',
     articleImages: '/frontend/icons/symbols/image.svg',
     navigation: '/frontend/icons/symbols/settings.svg',
 });
 
 const RANGE_CONTROLS = Object.freeze([
-    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', min: 20, max: 140, step: 1, unit: '%', group: 'ovalGeometry' },
-    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', min: 20, max: 140, step: 1, unit: '%', group: 'ovalGeometry' },
-    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGeometry' },
-    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'ovalGradient' },
-    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'ovalGradient' },
-    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'ovalGradient' },
-    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGradient' },
-    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGradient' },
-    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', min: 0, max: 100, step: 1, unit: '%', group: 'ovalGradient' },
-    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'themeImage' },
-    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '', group: 'themeImage' },
-    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true, group: 'heroLayout' },
-    { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'heroLayout' },
-    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', group: 'themeImage' },
+    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', min: 20, max: 140, step: 1, unit: '%', group: 'coverImage' },
+    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', min: 20, max: 140, step: 1, unit: '%', group: 'coverImage' },
+    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
+    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
+    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
+    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
+    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
+    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
+    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
+    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
+    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '', group: 'coverImage' },
+    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true, group: 'coverImage' },
+    { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'coverImage' },
+    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', group: 'backgroundImage' },
     { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
     { id: 'card-detail-columns', key: 'card_detail_columns', label: 'cardDetailColumns', hint: 'cardDetailColumnsHint', css: 'card-detail-columns', min: 1, max: 4, step: 1, unit: '', shared: true, group: 'cardLayout' },
     { id: 'card-description-lines', key: 'card_description_lines', label: 'cardDescriptionLines', css: 'card-description-lines', min: 1, max: 12, step: 1, unit: '', shared: true, group: 'cardLayout' },
@@ -188,7 +185,7 @@ function setupPanelDragging(panel, dragHandle) {
 }
 
 function createPaletteToolbox(title, {
-    iconPath = TOOLBOX_ICON_PATHS.themeImage,
+    iconPath = TOOLBOX_ICON_PATHS.backgroundCover,
     open = false,
     testid = '',
     storageKey = '',
@@ -335,20 +332,29 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
     sharedToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
     sharedToolboxes.dataset.testid = 'dataset-cover-test-palette-shared-controls';
     const toolboxByGroup = new Map();
-    ['themeImage', 'ovalGeometry', 'ovalGradient', 'heroLayout', 'cardLayout', 'articleImages', 'navigation']
+    ['backgroundCover', 'cardLayout', 'articleImages', 'navigation']
         .forEach((groupName) => {
             const toolbox = createPaletteToolbox(copy[groupName], {
                 iconPath: TOOLBOX_ICON_PATHS[groupName],
                 storageKey: `dataset_cover_palette_section_${groupName}`,
             });
             toolboxByGroup.set(groupName, toolbox);
-            const parent = ['themeImage', 'ovalGeometry', 'ovalGradient'].includes(groupName)
+            const parent = groupName === 'backgroundCover'
                 ? themeToolboxes
                 : sharedToolboxes;
             parent.appendChild(toolbox.toolbox);
         });
-    toolboxByGroup.get('ovalGeometry').content.prepend(maskLabel);
-    toolboxByGroup.get('themeImage').content.prepend(coverVisibilityLabel);
+    const imageScopes = new Map(['backgroundImage', 'coverImage'].map((name) => {
+        const fieldset = document.createElement('fieldset');
+        fieldset.className = 'dataset-cover-test-palette__card-scope';
+        fieldset.dataset.testid = `dataset-cover-test-palette-${name}`;
+        const legend = document.createElement('legend');
+        legend.textContent = copy[name];
+        fieldset.appendChild(legend);
+        toolboxByGroup.get('backgroundCover').controls.appendChild(fieldset);
+        return [name, { fieldset, legend }];
+    }));
+    imageScopes.get('coverImage').fieldset.append(coverVisibilityLabel, maskLabel);
     const articleImageControl = buildArticleImageCaptionControl(copy, (value) => {
         draftSettings.dataset_cover_theme.shared.article_image_caption_position = value;
         previewDraft();
@@ -419,7 +425,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
             row.appendChild(hintText);
         }
         const controlParent = control.key === 'card_detail_columns'
-            ? cardScope : toolboxByGroup.get(control.group).controls;
+            ? cardScope : imageScopes.get(control.group)?.fieldset || toolboxByGroup.get(control.group).controls;
         controlParent.appendChild(row);
         return { ...control, input, output, labelText, hintText };
     });
@@ -481,6 +487,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         maskText.textContent = copy.maskEnabled;
         coverVisibilityText.textContent = copy.coverVisible;
         toolboxByGroup.forEach(({ label }, groupName) => { label.textContent = copy[groupName]; });
+        imageScopes.forEach(({ legend }, name) => { legend.textContent = copy[name]; });
         rangeControls.forEach((control) => {
             control.labelText.textContent = copy[control.label];
             control.input.setAttribute('aria-label', copy[control.label]);

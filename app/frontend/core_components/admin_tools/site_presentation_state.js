@@ -56,9 +56,9 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         card_detail_columns: DEFAULT_CARD_DETAIL_COLUMNS,
         active_tab_fade: 25,
         active_tab_max_opacity: 1,
-        active_tab_glow_intensity: 0.3,
-        active_tab_glow_width: 1.5,
-        active_tab_glow_blur: 2,
+        active_tab_glow_intensity: 0.5,
+        active_tab_glow_width: 2,
+        active_tab_glow_blur: 4,
         brand_color: '#1a8fe6',
     }),
 });

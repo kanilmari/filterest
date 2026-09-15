@@ -525,9 +525,16 @@ function createInlineHeroContent(tableName, {
     const inlineHeroHost = document.createElement("div");
     inlineHeroHost.classList.add("filterbar-inline-hero");
     inlineHeroHost.dataset.filterbarInlineHeroFor = tableName;
+    const topRow = document.createElement("div");
+    topRow.className = "filterbar-inline-hero__top-row";
+    const heroActions = document.createElement("div");
+    heroActions.className = "filterbar-inline-hero__actions";
+    const heroDatasetTabs = createHeroDatasetTabs(tableName);
+    topRow.append(heroDatasetTabs.element, heroActions);
+    inlineHeroHost.appendChild(topRow);
 	const configButton = allowDatasetManagement ? createDatasetHeaderConfigHeroButton(tableName) : null;
 	if (configButton) {
-		inlineHeroHost.appendChild(configButton);
+		heroActions.appendChild(configButton);
 	}
 	if (coverImagePath) {
 		inlineHeroHost.classList.add("filterbar-inline-hero--has-cover");
@@ -540,8 +547,6 @@ function createInlineHeroContent(tableName, {
 
     const heroInner = document.createElement("div");
     heroInner.classList.add("filter-content-inner");
-    const heroDatasetTabs = createHeroDatasetTabs(tableName);
-    heroInner.appendChild(heroDatasetTabs.element);
     heroInner.appendChild(
         buildFilterbarHeroHeader(tableName, {
             headerTitleOverride,
@@ -599,6 +604,7 @@ function createInlineHeroContent(tableName, {
                 return;
             }
             paletteControl = control;
+            if (control?.button) heroActions.appendChild(control.button);
         })
         .catch(() => null);
     inlineHeroHost.destroy = () => {
