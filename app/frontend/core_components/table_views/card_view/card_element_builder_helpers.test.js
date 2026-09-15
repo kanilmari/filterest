@@ -84,6 +84,18 @@ describe('resolveImagePaths', () => {
         expect(result.originalSrc).toBe('/static/img.jpg');
     });
 
+    test('rewrites rooted row storage originals onto the display folder', () => {
+        const result = resolveImagePaths('/storage/9/1/original/9_1_1.png', '300');
+        expect(result.displaySrc).toBe('/storage/9/1/300/9_1_1.png');
+        expect(result.originalSrc).toBe('/storage/9/1/original/9_1_1.png');
+    });
+
+    test('keeps rooted SVG storage paths on original', () => {
+        const result = resolveImagePaths('/storage/104/161/original/logo.svg', '300');
+        expect(result.displaySrc).toBe('/storage/104/161/original/logo.svg');
+        expect(result.originalSrc).toBe('/storage/104/161/original/logo.svg');
+    });
+
     test('resolves full path format (tableId/rowId/size/filename)', () => {
         const result = resolveImagePaths('104/133/300/104_133_38.png', '300');
         expect(result.displaySrc).toBe('/storage/104/133/300/104_133_38.png');

@@ -611,6 +611,27 @@ describe("initTabs", () => {
         expect(document.querySelector('.navtablinks[data-id="app_service_catalog"]')).not.toBeNull();
     });
 
+    test("reuses preloaded content-table data for guest public browse", async () => {
+        vi.mocked(getButtonState).mockReturnValue("login");
+        const { initTabs } = await import("./main_tab_printer.js");
+        const preloadedContentTablesResponse = {
+            datasets: [
+                {
+                    dataset_name: "app_service_catalog",
+                    is_in_current_project: true,
+                    is_top_level_in_current_project: true,
+                    icon_key: "shopping_cart",
+                },
+            ],
+            tab_order: null,
+        };
+
+        await initTabs({ preloadedContentTablesResponse });
+
+        expect(endpoint_router).not.toHaveBeenCalledWith("fetchContentTables", expect.anything());
+        expect(document.querySelector('.navtablinks[data-id="app_service_catalog"]')).not.toBeNull();
+    });
+
     test("ignores an older tab request that finishes after a newer render", async () => {
         let resolveOlderRequest;
         vi.mocked(endpoint_router).mockImplementationOnce(() => new Promise((resolve) => {

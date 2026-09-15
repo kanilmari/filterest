@@ -155,7 +155,7 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(heroIcon?.querySelector('svg')).toBeNull();
 		expect(inlineHero?.classList.contains('filterbar-inline-hero--has-cover')).toBe(true);
 		expect(inlineHero?.style.getPropertyValue('--dataset-cover-image'))
-			.toContain('/storage/104/dataset_media/cover/original/cover.webp');
+			.toContain('/storage/104/dataset_media/cover/1000/cover.webp');
         expect(document.documentElement.style.getPropertyValue('--active-dataset-cover-image'))
             .toBe('');
         expect(mountDatasetCoverTestPalette).toHaveBeenCalledWith(inlineHero, 'demo', expect.objectContaining({ canCommit: expect.any(Function) }));

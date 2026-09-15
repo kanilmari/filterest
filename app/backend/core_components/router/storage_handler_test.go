@@ -130,9 +130,20 @@ func TestParseDatasetMediaStoragePathAcceptsOnlyCanonicalRegistryShape(t *testin
 		}
 	}
 
+	for _, variant := range []string{"300", "1000", "2160"} {
+		input := "104/dataset_media/cover/" + variant + "/file.png"
+		parsed, ok := parseDatasetMediaStoragePath(input)
+		if !ok {
+			t.Fatalf("parseDatasetMediaStoragePath(%q) rejected display variant", input)
+		}
+		if parsed.Variant != variant {
+			t.Fatalf("parseDatasetMediaStoragePath(%q) variant = %q", input, parsed.Variant)
+		}
+	}
+
 	for _, input := range []string{
 		"104/dataset_media/cover/original",
-		"104/dataset_media/cover/300/file.png",
+		"104/dataset_media/cover/640/file.png",
 		"104/dataset_media/thumbnail/original/file.png",
 		"0104/dataset_media/background/original/file.png",
 		`104/dataset_media/cover/original/bad\file.png`,
@@ -181,6 +192,41 @@ func TestServeStorageAuthorizesRegistryBackedDatasetMedia(t *testing.T) {
 		t.Fatalf("dataset media response = status %d body %q calls %d, want 200 cover-image and one authorization", rr.Code, rr.Body.String(), authorizationCalls)
 	}
 	assertProtectedStorageHeaders(t, rr)
+}
+
+func TestServeStorageFallsBackToOriginalDatasetMediaWhenDisplayVariantIsMissing(t *testing.T) {
+	setupStorageHandlerTest(t)
+	writeStorageHandlerFixture(t, "104/dataset_media/background/original/background.png", "background-original")
+
+	storageAuthorizeDatasetMediaRead = func(
+		_ dbutils.Querier,
+		_ dbutils.RequestActorContext,
+		request dtt_1_row_read.DatasetMediaStorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		if request.Variant != "2160" || request.Filename != "background.png" {
+			t.Fatalf("display-variant authorization request = %#v", request)
+		}
+		return dtt_1_row_read.StorageReadAllowed, nil
+	}
+	storageAuthorizeRead = func(
+		context.Context,
+		dbutils.Querier,
+		*sql.DB,
+		dbutils.RequestActorContext,
+		dtt_1_row_read.StorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		t.Fatal("row-scoped authorizer must not handle dataset media")
+		return dtt_1_row_read.StorageReadNotFound, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/storage/104/dataset_media/background/2160/background.png", nil)
+	attachRootHandlerSessionUser(t, req, 42)
+	rr := httptest.NewRecorder()
+	ServeStorage(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.String() != "background-original" {
+		t.Fatalf("display-variant fallback = status %d body %q, want 200 background-original", rr.Code, rr.Body.String())
+	}
 }
 
 func writeStorageHandlerFixture(t *testing.T, relativePath, content string) {

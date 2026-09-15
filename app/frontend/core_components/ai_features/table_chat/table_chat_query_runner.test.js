@@ -26,7 +26,7 @@ test("accepted external job polls its exact dataset and clears completed state",
  request.mockResolvedValueOnce({job_id:id,status:"queued"}).mockResolvedValueOnce({job_id:id,status:"completed",answer:"Changed fixture"});
  const result=await runCodexDevChatQuery("fixture","fix",[],{externalRunner:true});
  expect(result.answer).toBe("Changed fixture");
- expect(request.mock.calls[1][1]).toMatchObject({method:"GET",url_params:"dataset=fixture&job_id="+id});
+ expect(request.mock.calls[1][1]).toMatchObject({method:"GET",url_params:"?dataset=fixture&job_id="+id});
  expect(hasPendingCodingAgentJob("fixture")).toBe(false);
 });
 test("a lost acceptance response retains identity and reopening polls without resubmitting",async()=>{

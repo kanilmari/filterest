@@ -263,7 +263,7 @@ func TestAuthorizeDatasetMediaStorageReadRequiresExactRegistryEntryAndDatasetRea
 	t.Run("invalid shape", func(t *testing.T) {
 		permissionDB, state := openStorageAuthorizationTestDB(t, nil)
 		request := canonicalDatasetMediaStorageRequest()
-		request.Variant = "300"
+		request.Variant = "640"
 
 		decision, err := AuthorizeDatasetMediaStorageRead(
 			permissionDB,
@@ -272,6 +272,29 @@ func TestAuthorizeDatasetMediaStorageReadRequiresExactRegistryEntryAndDatasetRea
 		)
 		if err != nil || decision != StorageReadNotFound {
 			t.Fatalf("AuthorizeDatasetMediaStorageRead(invalid) = (%v, %v), want not-found nil", decision, err)
+		}
+		assertStorageAuthorizationQueriesDrained(t, state)
+	})
+
+	t.Run("display variant uses original registry key", func(t *testing.T) {
+		permissionDB, state := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
+			{
+				contains: "media.storage_key = $3",
+				columns:  []string{"table_name"},
+				rows:     [][]driver.Value{{"app_docs"}},
+			},
+			storagePermissionLookup("app_docs"),
+		})
+		request := canonicalDatasetMediaStorageRequest()
+		request.Variant = "1000"
+
+		decision, err := AuthorizeDatasetMediaStorageRead(
+			permissionDB,
+			dbutils.NewRequestActorContext(42, "basic"),
+			request,
+		)
+		if err != nil || decision != StorageReadAllowed {
+			t.Fatalf("AuthorizeDatasetMediaStorageRead(display) = (%v, %v), want allowed nil", decision, err)
 		}
 		assertStorageAuthorizationQueriesDrained(t, state)
 	})

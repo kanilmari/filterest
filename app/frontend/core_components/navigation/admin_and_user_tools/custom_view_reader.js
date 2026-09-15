@@ -29,7 +29,6 @@ import { generate_child_tab_config_form } from '../../admin_tools/child_tab_conf
 import { generate_dataset_alias_management_view } from '../../admin_tools/dataset_alias_management_view.js';
 import { generate_dataset_header_config_view } from '../../admin_tools/dataset_header_config_view.js';
 import { generate_service_catalog_moderation_view } from '../../admin_tools/service_catalog_moderation_view.js';
-import { generate_queen_chat_view } from '../../admin_tools/queen_chat_view.js';
 import { generate_asset_linking_view } from '../../admin_tools/asset_linking/asset_linking_view.js';
 import { generate_site_language_settings_view } from '../../admin_tools/site_language_settings_view.js';
 import { generate_user_authentication_view } from '../../admin_tools/user_authentication_view.js';
@@ -246,6 +245,7 @@ export const custom_views = [
     {
         name: 'queen_chat',
         loadFunction: async () => {
+            const { generate_queen_chat_view } = await import('../../admin_tools/queen_chat_view.js');
             return loadManagementView('queen_chat_container', generate_queen_chat_view);
         },
         containerId: 'queen_chat_container',

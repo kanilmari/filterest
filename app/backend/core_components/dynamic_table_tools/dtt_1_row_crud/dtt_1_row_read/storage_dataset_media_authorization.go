@@ -41,7 +41,7 @@ func AuthorizeDatasetMediaStorageRead(
 		request.TableUID,
 		"dataset_media",
 		request.Role,
-		request.Variant,
+		"original",
 		request.Filename,
 	}, "/")
 	var tableName string
@@ -72,7 +72,7 @@ func AuthorizeDatasetMediaStorageRead(
 }
 
 func validDatasetMediaStorageReadRequest(request DatasetMediaStorageReadRequest) bool {
-	if !isCanonicalPositiveID(request.TableUID) || request.Variant != "original" {
+	if !isCanonicalPositiveID(request.TableUID) || !validDatasetMediaVariant(request.Variant) {
 		return false
 	}
 	if request.Role != "cover" && request.Role != "background" {
@@ -81,4 +81,13 @@ func validDatasetMediaStorageReadRequest(request DatasetMediaStorageReadRequest)
 	filename := strings.TrimSpace(request.Filename)
 	return filename != "" && filename == request.Filename &&
 		!strings.ContainsAny(filename, `/\\`) && filename != "." && filename != ".."
+}
+
+func validDatasetMediaVariant(variant string) bool {
+	switch variant {
+	case "300", "1000", "2160", "original":
+		return true
+	default:
+		return false
+	}
 }

@@ -15,6 +15,7 @@ import { buildFilterSection } from "./filter_list/filter_column_builder.js";
 import { build_favefox_style_filter_bar_from_columns } from "./filter_list/favefox_style_filters_container/accordion_filter_builder.js";
 import { buildColumnViewPresetSelector } from "./filter_list/column_view_preset_builder.js";
 import { setResultsCount } from "../../reusable_components/results_count/results_count_printer.js";
+import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from "../table_views/storage_media_urls.js";
 
 // Refactored imports
 import {
@@ -538,10 +539,9 @@ function createInlineHeroContent(tableName, {
 	}
 	if (coverImagePath) {
 		inlineHeroHost.classList.add("filterbar-inline-hero--has-cover");
-		const encodedCoverImage = `url("${encodeURI(coverImagePath).replaceAll('"', '%22')}")`;
 		inlineHeroHost.style.setProperty(
 			"--dataset-cover-image",
-			encodedCoverImage
+			encodeCssUrlValue(resolveDatasetMediaDisplayPath(coverImagePath))
 		);
 	}
 

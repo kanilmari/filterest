@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	filevalidation "easelect/backend/core_components/filevalidation"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/runtimepaths"
@@ -396,10 +397,16 @@ func saveDatasetMediaFile(storageDir string, tableUID int, role string, fileHead
 	if err != nil {
 		return savedDatasetMediaFile{}, err
 	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, src); err != nil {
-		return savedDatasetMediaFile{}, err
+	_, copyErr := io.Copy(dst, src)
+	closeErr := dst.Close()
+	if copyErr != nil {
+		return savedDatasetMediaFile{}, copyErr
 	}
+	if closeErr != nil {
+		return savedDatasetMediaFile{}, closeErr
+	}
+
+	createDatasetMediaDisplayVariants(storageDir, tableUID, role, fileName, ext)
 
 	return savedDatasetMediaFile{
 		StorageKey:   filepath.ToSlash(filepath.Join(relativeDir, fileName)),
@@ -417,6 +424,27 @@ func datasetMediaMIMEType(ext string) string {
 		".svg":  "image/svg+xml",
 		".gif":  "image/gif",
 	}[ext]
+}
+
+func createDatasetMediaDisplayVariants(storageDir string, tableUID int, role, fileName, ext string) {
+	switch strings.ToLower(ext) {
+	case ".svg", ".gif":
+		return
+	}
+	originalPath := filepath.Join(storageDir, strconv.Itoa(tableUID), "dataset_media", role, "original", fileName)
+	for _, size := range []int{300, 1000, 2160} {
+		variantPath := filepath.Join(
+			storageDir,
+			strconv.Itoa(tableUID),
+			"dataset_media",
+			role,
+			strconv.Itoa(size),
+			fileName,
+		)
+		if err := dtt_1_row_create.CreateImageDisplayVariant(originalPath, variantPath, size); err != nil {
+			log.Printf("dataset media display variant %s/%d: %v", role, size, err)
+		}
+	}
 }
 
 func saveDatasetHeaderLangKeyConfig(tx *sql.Tx, datasetName string, configs []datasetHeaderTextSaveRequest) error {

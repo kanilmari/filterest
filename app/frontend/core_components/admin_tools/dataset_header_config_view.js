@@ -11,6 +11,7 @@ import { translatePage } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js';
 import { refreshMainTabPresentation } from '../navigation/main_tabs/main_tab_active_state.js';
+import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from '../table_views/storage_media_urls.js';
 
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderConfigResponse} DatasetHeaderConfigResponse */
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderTextConfig} DatasetHeaderTextConfig */
@@ -425,7 +426,7 @@ function applyPresentationImage(element, enabledClass, propertyName, path) {
     }
     element.style.setProperty(
         propertyName,
-        `url("${encodeURI(normalizedPath).replaceAll('"', '%22')}")`
+        encodeCssUrlValue(resolveDatasetMediaDisplayPath(normalizedPath))
     );
 }
 

@@ -74,6 +74,18 @@ describe('resolveEndpointUrl', () => {
         expect(resolveEndpointUrl('fetchUsers', '?id=5', map)).toBe('/api/users?id=5');
     });
 
+    test('inserts a query delimiter for bare URLSearchParams strings', () => {
+        expect(resolveEndpointUrl('fetchUsers', 'dataset=dokumentaatio', map))
+            .toBe('/api/users?dataset=dokumentaatio');
+        expect(resolveEndpointUrl('fetchUsers', '&dataset=dokumentaatio', map))
+            .toBe('/api/users?dataset=dokumentaatio');
+    });
+
+    test('keeps path-suffix urlParams without a query delimiter', () => {
+        expect(resolveEndpointUrl('fetchUsers', 'orders', map)).toBe('/api/usersorders');
+        expect(resolveEndpointUrl('fetchUsers', 'node?lines=240', map)).toBe('/api/usersnode?lines=240');
+    });
+
     test('treats null/undefined urlParams as empty string', () => {
         expect(resolveEndpointUrl('fetchUsers', null, map)).toBe('/api/users');
         expect(resolveEndpointUrl('fetchUsers', undefined, map)).toBe('/api/users');

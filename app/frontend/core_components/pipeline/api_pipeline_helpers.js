@@ -18,6 +18,29 @@ export function isMutatingMethod(method) {
 }
 
 /**
+ * Normalize caller url_params so a URLSearchParams string cannot be glued onto
+ * the path as `codex-querydataset=…`. Path suffixes such as `orders` stay intact.
+ *
+ * @param {string} urlParams
+ * @returns {string}
+ */
+export function normalizeEndpointUrlParams(urlParams) {
+    const raw = String(urlParams || '');
+    if (!raw) return '';
+    if (raw.startsWith('?') || raw.startsWith('/') || raw.startsWith('#')) {
+        return raw;
+    }
+    if (raw.startsWith('&') && !raw.includes('?')) {
+        return `?${raw.slice(1)}`;
+    }
+    const looksLikeBareQuery = raw.includes('=') && !raw.includes('/') && !raw.includes('?');
+    if (looksLikeBareQuery) {
+        return `?${raw}`;
+    }
+    return raw;
+}
+
+/**
  * Resolves a route name to a full URL using the endpoint map.
  * Throws for unknown route names (programming error).
  *
@@ -31,7 +54,7 @@ export function resolveEndpointUrl(routeName, urlParams, endpointMap) {
     if (!baseUrl) {
         throw new Error(`api_pipeline: unknown route "${routeName}"`);
     }
-    return baseUrl + (urlParams || '');
+    return baseUrl + normalizeEndpointUrlParams(urlParams);
 }
 
 /**

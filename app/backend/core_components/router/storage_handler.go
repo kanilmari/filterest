@@ -18,6 +18,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/dbutils"
+	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	filevalidation "easelect/backend/core_components/filevalidation"
 	"easelect/backend/core_components/httpresponse"
@@ -108,7 +109,7 @@ func parseDatasetMediaStoragePath(cleanRel string) (dtt_1_row_read.DatasetMediaS
 	if parts[2] != "cover" && parts[2] != "background" {
 		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
 	}
-	if parts[3] != "original" {
+	if _, ok := protectedStorageVariants[parts[3]]; !ok {
 		return dtt_1_row_read.DatasetMediaStorageReadRequest{}, false
 	}
 	filename := parts[4]
@@ -394,6 +395,59 @@ func openContainedStorageFile(storageRoot, cleanRel string) (*os.File, error) {
 	return storageFile, nil
 }
 
+func datasetMediaOriginalRelativePath(request dtt_1_row_read.DatasetMediaStorageReadRequest) string {
+	return strings.Join([]string{
+		request.TableUID,
+		"dataset_media",
+		request.Role,
+		"original",
+		request.Filename,
+	}, "/")
+}
+
+func shouldCopyDatasetMediaOriginal(filename string) bool {
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".svg", ".gif":
+		return true
+	default:
+		return false
+	}
+}
+
+func openDatasetMediaStorageFile(cleanRel string) (*os.File, error) {
+	storageFile, err := openContainedStorageFile(localStorageDir, cleanRel)
+	if err == nil {
+		return storageFile, nil
+	}
+	request, ok := parseDatasetMediaStoragePath(cleanRel)
+	if !ok || request.Variant == "original" {
+		return nil, err
+	}
+
+	originalRel := datasetMediaOriginalRelativePath(request)
+	if !shouldCopyDatasetMediaOriginal(request.Filename) {
+		maxDimension, convErr := strconv.Atoi(request.Variant)
+		if convErr == nil && maxDimension > 0 {
+			originalAbs := filepath.Join(localStorageDir, filepath.FromSlash(originalRel))
+			variantAbs := filepath.Join(localStorageDir, filepath.FromSlash(cleanRel))
+			if genErr := dtt_1_row_create.CreateImageDisplayVariant(originalAbs, variantAbs, maxDimension); genErr != nil {
+				log.Printf("ServeStorage: dataset media display variant %s: %v", cleanRel, genErr)
+			} else if generated, openErr := openContainedStorageFile(localStorageDir, cleanRel); openErr == nil {
+				return generated, nil
+			}
+		}
+	}
+
+	return openContainedStorageFile(localStorageDir, originalRel)
+}
+
+func openAuthorizedStorageFile(cleanRel string) (*os.File, error) {
+	if _, ok := parseDatasetMediaStoragePath(cleanRel); ok {
+		return openDatasetMediaStorageFile(cleanRel)
+	}
+	return openContainedStorageFile(localStorageDir, cleanRel)
+}
+
 // ServeStorage serves public allowlisted files and database-authorized row assets.
 func ServeStorage(w http.ResponseWriter, r *http.Request) {
 	relativePath := strings.TrimPrefix(r.URL.Path, "/storage/")
@@ -417,7 +471,7 @@ func ServeStorage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storageFile, err := openContainedStorageFile(localStorageDir, cleanRel)
+	storageFile, err := openAuthorizedStorageFile(cleanRel)
 	if err != nil {
 		log.Printf("ServeStorage: contained open failed: %v", err)
 		httpresponse.RespondWithError(w, http.StatusNotFound, "file not found")

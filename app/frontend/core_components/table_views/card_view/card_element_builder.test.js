@@ -324,4 +324,53 @@ describe('card_element_builder updateCardImageSources', () => {
         expect(resolveCardMediaFolderMock).toHaveBeenCalledWith(640);
         expect(img.src).toContain('/storage/104/161/1000/logo.png');
     });
+
+    test('does not reassign src when the image is already on the chosen folder', () => {
+        const card = document.createElement('div');
+        card.classList.add('card');
+        card.getBoundingClientRect = vi.fn(() => ({ width: 1300 }));
+
+        const imageSlot = document.createElement('div');
+        imageSlot.classList.add('card_image');
+        const img = document.createElement('img');
+        img.src = '/storage/104/161/300/logo.png';
+        const descriptor = Object.getOwnPropertyDescriptor(window.HTMLImageElement.prototype, 'src');
+        const setSrc = vi.fn(function setSrc(value) {
+            descriptor.set.call(this, value);
+        });
+        Object.defineProperty(img, 'src', {
+            configurable: true,
+            get() {
+                return descriptor.get.call(this);
+            },
+            set: setSrc,
+        });
+        imageSlot.appendChild(img);
+        card.appendChild(imageSlot);
+        document.body.appendChild(card);
+
+        updateCardImageSources();
+
+        expect(resolveCardMediaFolderMock).toHaveBeenCalledWith(1300);
+        expect(img.src).toContain('/storage/104/161/300/logo.png');
+        expect(setSrc).not.toHaveBeenCalled();
+    });
+
+    test('rewrites leftover original paths onto the display folder', () => {
+        const card = document.createElement('div');
+        card.classList.add('card');
+        card.getBoundingClientRect = vi.fn(() => ({ width: 620 }));
+
+        const imageSlot = document.createElement('div');
+        imageSlot.classList.add('card_image');
+        const img = document.createElement('img');
+        img.src = '/storage/9/1/original/9_1_1.png';
+        imageSlot.appendChild(img);
+        card.appendChild(imageSlot);
+        document.body.appendChild(card);
+
+        updateCardImageSources();
+
+        expect(img.src).toContain('/storage/9/1/1000/9_1_1.png');
+    });
 });
