@@ -73,6 +73,35 @@ describe("normalizeFilterbarSectionOrder", () => {
             .toEqual(DEFAULT_FILTERBAR_SECTION_ORDER);
         expect(container.querySelector(".filterbar-section-drag-grip")).toBeNull();
     });
+
+    test("marks sections that replace pending mounts as reorderable", async () => {
+        sessionStorage.setItem("user_permissions", JSON.stringify([
+            "/api/filterbar-section-layout",
+            "/api/filterbar-section-layout/save",
+        ]));
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const pending = document.createElement("div");
+        pending.dataset.filterbarSectionKey = "tools";
+        pending.dataset.filterbarSectionPending = "true";
+        container.appendChild(pending);
+
+        const ordering = setupFilterbarSectionOrdering(container);
+        const section = document.createElement("section");
+        section.dataset.filterbarSectionKey = "tools";
+        const header = document.createElement("button");
+        header.classList.add("animated-disclosure-header");
+        section.appendChild(header);
+        pending.replaceWith(section);
+
+        await vi.waitFor(() => {
+            expect(section.classList.contains("filterbar-disclosure-section--reorderable")).toBe(true);
+        });
+        expect(header.dataset.filterbarDragReady).toBe("true");
+        ordering.destroy();
+        sessionStorage.clear();
+        container.remove();
+    });
 });
 
 describe("normalizeFilterbarSectionCollapsed", () => {
