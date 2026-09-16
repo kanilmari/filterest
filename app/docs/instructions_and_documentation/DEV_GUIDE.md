@@ -489,7 +489,10 @@ scope. This check is network waste only. LNCD #890 follows #888: catalog/home
 display slots request `300`/`1000`/`2160`, and a missing derivative must try a
 sibling sized file before `original`. On-demand variants are written atomically,
 and a source that already fits the requested size is stored unchanged instead of
-being upscaled. Count those URLs with
+being upscaled. Startup maintenance replaces any stored `300`/`1000`/`2160` variant
+that is larger than its original with a copy of the original (row assets, dataset
+cover/background media and the media library); the scan reads image headers only and
+is safe to repeat. Count those URLs with
 `testing/e2e/helpers/storage-media-requests.ts` (see `C11_network_media_variants`).
 
 

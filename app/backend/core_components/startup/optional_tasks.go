@@ -9,7 +9,9 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dynamic_table_tools/ai_features"
+	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
+	"easelect/backend/core_components/runtimepaths"
 	"easelect/backend/core_components/system_table_tools"
 )
 
@@ -31,6 +33,8 @@ func RunOptionalTasks(projectRoot string, appDBCompatibilityManifest ...string) 
 
 func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifest string) {
 	log.Println("[STARTUP] Optional maintenance continues in background.")
+
+	repairUpscaledDisplayVariants(runtimepaths.Current().StorageRoot)
 
 	if cleanupResult, err := dtt_system_table_folders.ReconcileLegacyOtherTablesFolder(backend.Db); err != nil {
 		log.Printf("\033[31merror: [STARTUP] legacy other_tables cleanup failed: %v\033[0m", err)
@@ -77,4 +81,20 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 		log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
 	}
 	log.Println("[STARTUP] Optional maintenance completed.")
+}
+
+// repairUpscaledDisplayVariants replaces display variants that earlier releases
+// enlarged beyond their original, so sized catalog slots stop serving heavier files.
+func repairUpscaledDisplayVariants(storageRoot string) {
+	result, err := dtt_1_row_create.RepairUpscaledDisplayVariants(storageRoot)
+	if err != nil {
+		log.Printf("\033[31merror: [STARTUP] media display variant repair failed: %v\033[0m", err)
+		return
+	}
+	if result.ReplacedVariants > 0 || result.FailedVariants > 0 {
+		log.Printf(
+			"[STARTUP] Media display variants: replaced %d upscaled of %d checked (%d failed)",
+			result.ReplacedVariants, result.CheckedVariants, result.FailedVariants,
+		)
+	}
 }

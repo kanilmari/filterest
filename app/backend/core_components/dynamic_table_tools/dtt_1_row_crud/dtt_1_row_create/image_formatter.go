@@ -31,6 +31,18 @@ const (
 // The variant appears at destinationPath only when complete: storage requests may
 // generate it on demand, so a failed or concurrent write must never be served.
 func CreateImageDisplayVariant(sourcePath, destinationPath string, maxDimension int) error {
+	return publishDisplayVariantAtomically(destinationPath, func(temporaryPath string) error {
+		// A source that already fits is stored unchanged: upscaling only adds bytes.
+		if shouldCopySourceAsDisplayVariant(sourcePath) || sourceFitsWithinDimension(sourcePath, maxDimension) {
+			return copySourceAsDisplayVariant(sourcePath, temporaryPath)
+		}
+		return ResizeImageMaxDimension(sourcePath, temporaryPath, maxDimension)
+	})
+}
+
+// publishDisplayVariantAtomically writes a variant through a same-folder
+// temporary file and renames it into place only after write succeeds.
+func publishDisplayVariantAtomically(destinationPath string, write func(temporaryPath string) error) error {
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return fmt.Errorf("failed to create display variant directory: %w", err)
 	}
@@ -43,13 +55,7 @@ func CreateImageDisplayVariant(sourcePath, destinationPath string, maxDimension 
 	temporary.Close()
 	defer os.Remove(temporaryPath)
 
-	// A source that already fits is stored unchanged: upscaling only adds bytes.
-	if shouldCopySourceAsDisplayVariant(sourcePath) || sourceFitsWithinDimension(sourcePath, maxDimension) {
-		err = copySourceAsDisplayVariant(sourcePath, temporaryPath)
-	} else {
-		err = ResizeImageMaxDimension(sourcePath, temporaryPath, maxDimension)
-	}
-	if err != nil {
+	if err := write(temporaryPath); err != nil {
 		return err
 	}
 	if err := os.Chmod(temporaryPath, 0o644); err != nil {
