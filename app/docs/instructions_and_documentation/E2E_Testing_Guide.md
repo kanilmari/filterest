@@ -96,6 +96,13 @@ count is not comparable across unbundled vs bundled builds. See
 [DEV_GUIDE.md](DEV_GUIDE.md) § Page-load network waste for the 2026-09-14
 baseline and the LNCD #888 before/after notes.
 
+`app/testing/e2e/helpers/storage-media-requests.ts` counts `/storage/.../(original|300|1000|2160)/`
+URLs from a captured request list. `C11_network_media_variants.spec.ts` uses it on
+a local home/catalog load and asserts raster originals stay at zero. SVG/GIF
+originals are reported separately; article/lightbox/download slots may still
+request original after a user opens full-size media.
+
+
 The Visual Guardian screenshot flow now reuses the authenticated E2E storage state from `app/testing/e2e/global-setup.ts`, so screenshot captures should reflect a logged-in, app-ready UI rather than an unauthenticated shell by default.
 
 ## Authentication

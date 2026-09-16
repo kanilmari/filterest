@@ -53,6 +53,7 @@ import {
 import {
     hasFallbackCardImageColumn,
     resolveFallbackCardImageValue,
+    resolveImagePaths,
 } from "./card_element_builder_helpers.js";
 import {
     buildCardImageRenderOptions,
@@ -1061,24 +1062,8 @@ async function createSingleCard(
         if (image_value_small) {
             // Defensive: resolve multilingual JSON that may have slipped through
             let imgSrc = extractLangValue(image_value_small, getLanguageWithBrowserFallback()).trim();
-            if (
-                !/^https?:\/\//.test(imgSrc) &&
-                !imgSrc.startsWith("./") &&
-                !imgSrc.startsWith("/")
-            ) {
-                const mediaFolder = resolveCardMediaFolder();
-                const pathMatch = imgSrc.match(/^(\d+)\/(\d+)\/(?:\d+|original)\/(.+)$/);
-                if (pathMatch) {
-                    const mainTableId = pathMatch[1];
-                    const mainRowId = pathMatch[2];
-                    const filename = pathMatch[3];
-                    imgSrc = `/storage/${mainTableId}/${mainRowId}/${mediaFolder}/${filename}`;
-                } else {
-                    const m = imgSrc.match(/^(\d+)_(\d+)_(\d+)\.(\w+)$/);
-                    imgSrc = m
-                        ? `/storage/${m[1]}/${m[2]}/${mediaFolder}/${imgSrc}`
-                        : `/storage/${imgSrc}`;
-                }
+            if (!/^https?:\/\//.test(imgSrc) && !imgSrc.startsWith("./")) {
+                imgSrc = resolveImagePaths(imgSrc, resolveCardMediaFolder()).displaySrc;
             }
             mediaElement = createImageElement(imgSrc, false, {
                 ...buildCardImageRenderOptions(

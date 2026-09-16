@@ -90,9 +90,9 @@ describe('resolveImagePaths', () => {
         expect(result.originalSrc).toBe('/storage/9/1/original/9_1_1.png');
     });
 
-    test('keeps rooted SVG storage paths on original', () => {
+    test('rewrites rooted SVG storage paths onto the display folder', () => {
         const result = resolveImagePaths('/storage/104/161/original/logo.svg', '300');
-        expect(result.displaySrc).toBe('/storage/104/161/original/logo.svg');
+        expect(result.displaySrc).toBe('/storage/104/161/300/logo.svg');
         expect(result.originalSrc).toBe('/storage/104/161/original/logo.svg');
     });
 

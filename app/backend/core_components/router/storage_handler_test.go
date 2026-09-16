@@ -229,6 +229,90 @@ func TestServeStorageFallsBackToOriginalDatasetMediaWhenDisplayVariantIsMissing(
 	}
 }
 
+func authorizeAnyDatasetMedia(t *testing.T) {
+	t.Helper()
+	storageAuthorizeDatasetMediaRead = func(
+		_ dbutils.Querier,
+		_ dbutils.RequestActorContext,
+		_ dtt_1_row_read.DatasetMediaStorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		return dtt_1_row_read.StorageReadAllowed, nil
+	}
+	storageAuthorizeRead = func(
+		context.Context,
+		dbutils.Querier,
+		*sql.DB,
+		dbutils.RequestActorContext,
+		dtt_1_row_read.StorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		t.Fatal("row-scoped authorizer must not handle dataset media")
+		return dtt_1_row_read.StorageReadNotFound, nil
+	}
+}
+
+func TestServeStoragePrefersSiblingSizedDatasetMediaOverOriginal(t *testing.T) {
+	setupStorageHandlerTest(t)
+	writeStorageHandlerFixture(t, "104/dataset_media/background/original/background.png", "background-original")
+	writeStorageHandlerFixture(t, "104/dataset_media/background/1000/background.png", "background-1000")
+	authorizeAnyDatasetMedia(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/storage/104/dataset_media/background/2160/background.png", nil)
+	attachRootHandlerSessionUser(t, req, 42)
+	rr := httptest.NewRecorder()
+	ServeStorage(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.String() != "background-1000" {
+		t.Fatalf("sibling display-variant fallback = status %d body %q, want 200 background-1000", rr.Code, rr.Body.String())
+	}
+}
+
+func TestServeStoragePrefersSiblingSizedRowMediaOverOriginal(t *testing.T) {
+	setupStorageHandlerTest(t)
+	writeStorageHandlerFixture(t, "104/7/original/104_7_9.png", "row-original")
+	writeStorageHandlerFixture(t, "104/7/1000/104_7_9.png", "row-1000")
+	storageAuthorizeRead = func(
+		context.Context,
+		dbutils.Querier,
+		*sql.DB,
+		dbutils.RequestActorContext,
+		dtt_1_row_read.StorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		return dtt_1_row_read.StorageReadAllowed, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/storage/104/7/300/104_7_9.png", nil)
+	attachRootHandlerSessionUser(t, req, 42)
+	rr := httptest.NewRecorder()
+	ServeStorage(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.String() != "row-1000" {
+		t.Fatalf("row sibling fallback = status %d body %q, want 200 row-1000", rr.Code, rr.Body.String())
+	}
+}
+
+func TestServeStorageDoesNotSubstituteSizedFilesForOriginalRequests(t *testing.T) {
+	setupStorageHandlerTest(t)
+	writeStorageHandlerFixture(t, "104/7/1000/104_7_9.png", "row-1000")
+	storageAuthorizeRead = func(
+		context.Context,
+		dbutils.Querier,
+		*sql.DB,
+		dbutils.RequestActorContext,
+		dtt_1_row_read.StorageReadRequest,
+	) (dtt_1_row_read.StorageReadDecision, error) {
+		return dtt_1_row_read.StorageReadAllowed, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/storage/104/7/original/104_7_9.png", nil)
+	attachRootHandlerSessionUser(t, req, 42)
+	rr := httptest.NewRecorder()
+	ServeStorage(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("original request missing on disk = status %d body %q, want 404", rr.Code, rr.Body.String())
+	}
+}
+
 func writeStorageHandlerFixture(t *testing.T, relativePath, content string) {
 	t.Helper()
 	fullPath := filepath.Join(localStorageDir, filepath.FromSlash(relativePath))

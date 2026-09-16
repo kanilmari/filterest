@@ -485,7 +485,11 @@ Baseline from 2026-09-14 (before LNCD #888):
 | Production filterest.com | — | ~3.87 MB | three ~1.1 MB catalog PNGs plus `NS_BINDING_ABORTED` retries; `codex-querydataset=dokumentaatio` 404 |
 
 Do not close #837 from this measurement; that ticket is thumbnail product
-scope. This check is network waste only.
+scope. This check is network waste only. LNCD #890 follows #888: catalog/home
+display slots request `300`/`1000`/`2160`, and a missing derivative must try a
+sibling sized file before `original`. Count those URLs with
+`testing/e2e/helpers/storage-media-requests.ts` (see `C11_network_media_variants`).
+
 
 ### Unified QA
 

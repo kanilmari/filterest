@@ -8,16 +8,86 @@ export const DATASET_MEDIA_ROLES = Object.freeze(["cover", "background"]);
 export const DATASET_COVER_DISPLAY_FOLDER = "1000";
 export const DATASET_BACKGROUND_DISPLAY_FOLDER = "2160";
 
+export const MEDIA_URL_SLOTS = Object.freeze({
+    GUEST_CATALOG: "guest_catalog",
+    CATALOG: "catalog",
+    LIST: "list",
+    BACKGROUND: "background",
+    COVER: "cover",
+    CARD: "card",
+    SMALL_THUMBNAIL: "small_thumbnail",
+    ARTICLE: "article",
+    LIGHTBOX: "lightbox",
+    DOWNLOAD: "download",
+});
+
+const ORIGINAL_REQUIRED_SLOTS = new Set([
+    MEDIA_URL_SLOTS.ARTICLE,
+    MEDIA_URL_SLOTS.LIGHTBOX,
+    MEDIA_URL_SLOTS.DOWNLOAD,
+]);
+
+const SLOT_DISPLAY_FOLDERS = Object.freeze({
+    [MEDIA_URL_SLOTS.GUEST_CATALOG]: "1000",
+    [MEDIA_URL_SLOTS.CATALOG]: "1000",
+    [MEDIA_URL_SLOTS.LIST]: "300",
+    [MEDIA_URL_SLOTS.BACKGROUND]: DATASET_BACKGROUND_DISPLAY_FOLDER,
+    [MEDIA_URL_SLOTS.COVER]: DATASET_COVER_DISPLAY_FOLDER,
+    [MEDIA_URL_SLOTS.CARD]: "1000",
+    [MEDIA_URL_SLOTS.SMALL_THUMBNAIL]: "300",
+    [MEDIA_URL_SLOTS.ARTICLE]: "original",
+    [MEDIA_URL_SLOTS.LIGHTBOX]: "original",
+    [MEDIA_URL_SLOTS.DOWNLOAD]: "original",
+});
+
 const ROW_STORAGE_PATH_RE = /^(?:\/storage\/)?(\d+)\/(\d+)\/(?:original|300|1000|2160)\/([^/?#]+)([?#].*)?$/i;
 const DATASET_MEDIA_PATH_RE = /^(?:\/storage\/)?(\d+)\/dataset_media\/(cover|background)\/(?:original|300|1000|2160)\/([^/?#]+)([?#].*)?$/i;
-const VECTOR_OR_ANIMATED_RE = /\.(svg|gif)$/i;
+const MEDIA_LIBRARY_PATH_RE = /^(?:\/storage\/)?media\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(?:original|300|1000|2160)\/([^/?#]+)([?#].*)?$/i;
 
 function isDisplayFolder(folder) {
     return ROW_MEDIA_DISPLAY_FOLDERS.includes(String(folder || ""));
 }
 
-function keepOriginalVariant(filename) {
-    return VECTOR_OR_ANIMATED_RE.test(String(filename || ""));
+/**
+ * Choose the on-disk folder for a named display or original-required slot.
+ * Unknown slots still prefer a sized derivative so catalog-like callers cannot
+ * silently fall through to original.
+ *
+ * @param {string} slot
+ * @returns {string}
+ */
+export function displayFolderForSlot(slot) {
+    const normalized = String(slot || "").trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(SLOT_DISPLAY_FOLDERS, normalized)) {
+        return SLOT_DISPLAY_FOLDERS[normalized];
+    }
+    return "1000";
+}
+
+export function slotAllowsOriginal(slot) {
+    return ORIGINAL_REQUIRED_SLOTS.has(String(slot || "").trim().toLowerCase());
+}
+
+/**
+ * Files to try when a requested variant is missing. Original is last except when
+ * the caller asked for original itself.
+ *
+ * @param {string} requested
+ * @returns {string[]}
+ */
+export function mediaVariantFallbackOrder(requested) {
+    switch (String(requested || "")) {
+        case "300":
+            return ["300", "1000", "2160", "original"];
+        case "1000":
+            return ["1000", "300", "2160", "original"];
+        case "2160":
+            return ["2160", "1000", "300", "original"];
+        case "original":
+            return ["original"];
+        default:
+            return ["1000", "300", "2160", "original"];
+    }
 }
 
 /**
@@ -41,13 +111,12 @@ export function resolveRowMediaDisplayPath(rawSrc, mediaFolder) {
 
     const filename = match[3];
     const suffix = match[4] || "";
-    const folder = keepOriginalVariant(filename) ? "original" : mediaFolder;
-    return `/storage/${match[1]}/${match[2]}/${folder}/${filename}${suffix}`;
+    return `/storage/${match[1]}/${match[2]}/${mediaFolder}/${filename}${suffix}`;
 }
 
 /**
  * Point a dataset cover/background URL at a bounded display variant.
- * SVG/GIF covers keep original; raster backgrounds use 2160 and covers use 1000.
+ * Raster backgrounds use 2160 and covers use 1000 unless the caller names a folder.
  *
  * @param {string} rawSrc
  * @param {string} [mediaFolder]
@@ -68,8 +137,41 @@ export function resolveDatasetMediaDisplayPath(rawSrc, mediaFolder) {
         : role === "background"
             ? DATASET_BACKGROUND_DISPLAY_FOLDER
             : DATASET_COVER_DISPLAY_FOLDER;
-    const folder = keepOriginalVariant(filename) ? "original" : requestedFolder;
-    return `/storage/${match[1]}/dataset_media/${role}/${folder}/${filename}${suffix}`;
+    return `/storage/${match[1]}/dataset_media/${role}/${requestedFolder}/${filename}${suffix}`;
+}
+
+function resolveLibraryMediaDisplayPath(rawSrc, mediaFolder) {
+    const source = String(rawSrc || "").trim();
+    if (!isDisplayFolder(mediaFolder)) {
+        return source;
+    }
+    const match = source.match(MEDIA_LIBRARY_PATH_RE);
+    if (!match) {
+        return source;
+    }
+    const suffix = match[3] || "";
+    return `/storage/media/${match[1]}/${mediaFolder}/${match[2]}${suffix}`;
+}
+
+/**
+ * Rewrite any recognized storage URL onto the folder required by a named slot.
+ *
+ * @param {string} rawSrc
+ * @param {string} slot
+ * @returns {string}
+ */
+export function resolveMediaUrlForSlot(rawSrc, slot) {
+    const folder = displayFolderForSlot(slot);
+    const source = String(rawSrc || "").trim();
+    const datasetPath = resolveDatasetMediaDisplayPath(source, folder);
+    if (datasetPath !== source) {
+        return datasetPath;
+    }
+    const libraryPath = resolveLibraryMediaDisplayPath(source, folder);
+    if (libraryPath !== source) {
+        return libraryPath;
+    }
+    return resolveRowMediaDisplayPath(source, folder);
 }
 
 /**

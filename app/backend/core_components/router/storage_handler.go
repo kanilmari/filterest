@@ -22,6 +22,7 @@ import (
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	filevalidation "easelect/backend/core_components/filevalidation"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/media_utils"
 	"easelect/backend/core_components/middlewares"
 	e_sessions "easelect/backend/core_components/sessions"
 
@@ -395,17 +396,7 @@ func openContainedStorageFile(storageRoot, cleanRel string) (*os.File, error) {
 	return storageFile, nil
 }
 
-func datasetMediaOriginalRelativePath(request dtt_1_row_read.DatasetMediaStorageReadRequest) string {
-	return strings.Join([]string{
-		request.TableUID,
-		"dataset_media",
-		request.Role,
-		"original",
-		request.Filename,
-	}, "/")
-}
-
-func shouldCopyDatasetMediaOriginal(filename string) bool {
+func shouldSkipDisplayVariantGeneration(filename string) bool {
 	switch strings.ToLower(filepath.Ext(filename)) {
 	case ".svg", ".gif":
 		return true
@@ -414,38 +405,57 @@ func shouldCopyDatasetMediaOriginal(filename string) bool {
 	}
 }
 
-func openDatasetMediaStorageFile(cleanRel string) (*os.File, error) {
+func tryGenerateDisplayVariant(cleanRel, requestedVariant string) *os.File {
+	maxDimension, convErr := strconv.Atoi(requestedVariant)
+	if convErr != nil || maxDimension <= 0 || shouldSkipDisplayVariantGeneration(filepath.Base(cleanRel)) {
+		return nil
+	}
+	originalRel, ok := media_utils.ReplaceVariantFolder(cleanRel, media_utils.OriginalVariant)
+	if !ok {
+		return nil
+	}
+	originalAbs := filepath.Join(localStorageDir, filepath.FromSlash(originalRel))
+	variantAbs := filepath.Join(localStorageDir, filepath.FromSlash(cleanRel))
+	if genErr := dtt_1_row_create.CreateImageDisplayVariant(originalAbs, variantAbs, maxDimension); genErr != nil {
+		log.Printf("ServeStorage: display variant %s: %v", cleanRel, genErr)
+		return nil
+	}
+	generated, openErr := openContainedStorageFile(localStorageDir, cleanRel)
+	if openErr != nil {
+		return nil
+	}
+	return generated
+}
+
+func openAuthorizedStorageFile(cleanRel string) (*os.File, error) {
 	storageFile, err := openContainedStorageFile(localStorageDir, cleanRel)
 	if err == nil {
 		return storageFile, nil
 	}
-	request, ok := parseDatasetMediaStoragePath(cleanRel)
-	if !ok || request.Variant == "original" {
+
+	requestedVariant, ok := media_utils.VariantFromRelativePath(cleanRel)
+	if !ok || requestedVariant == media_utils.OriginalVariant {
 		return nil, err
 	}
 
-	originalRel := datasetMediaOriginalRelativePath(request)
-	if !shouldCopyDatasetMediaOriginal(request.Filename) {
-		maxDimension, convErr := strconv.Atoi(request.Variant)
-		if convErr == nil && maxDimension > 0 {
-			originalAbs := filepath.Join(localStorageDir, filepath.FromSlash(originalRel))
-			variantAbs := filepath.Join(localStorageDir, filepath.FromSlash(cleanRel))
-			if genErr := dtt_1_row_create.CreateImageDisplayVariant(originalAbs, variantAbs, maxDimension); genErr != nil {
-				log.Printf("ServeStorage: dataset media display variant %s: %v", cleanRel, genErr)
-			} else if generated, openErr := openContainedStorageFile(localStorageDir, cleanRel); openErr == nil {
-				return generated, nil
-			}
+	if generated := tryGenerateDisplayVariant(cleanRel, requestedVariant); generated != nil {
+		return generated, nil
+	}
+
+	for _, variant := range media_utils.FallbackOrder(requestedVariant) {
+		if variant == requestedVariant {
+			continue
+		}
+		candidateRel, replaceOK := media_utils.ReplaceVariantFolder(cleanRel, variant)
+		if !replaceOK {
+			continue
+		}
+		candidate, openErr := openContainedStorageFile(localStorageDir, candidateRel)
+		if openErr == nil {
+			return candidate, nil
 		}
 	}
-
-	return openContainedStorageFile(localStorageDir, originalRel)
-}
-
-func openAuthorizedStorageFile(cleanRel string) (*os.File, error) {
-	if _, ok := parseDatasetMediaStoragePath(cleanRel); ok {
-		return openDatasetMediaStorageFile(cleanRel)
-	}
-	return openContainedStorageFile(localStorageDir, cleanRel)
+	return nil, err
 }
 
 // ServeStorage serves public allowlisted files and database-authorized row assets.

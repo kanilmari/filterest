@@ -126,6 +126,7 @@ vi.mock('../experimental_free_layout_card/experimental_free_layout_card_store.js
 vi.mock('./card_element_builder_helpers.js', () => ({
     hasFallbackCardImageColumn: vi.fn(() => false),
     resolveFallbackCardImageValue: vi.fn(() => ''),
+    resolveImagePaths: vi.fn((src) => ({ displaySrc: src, originalSrc: src })),
 }));
 
 vi.mock('./card_image_render_options.js', () => ({
