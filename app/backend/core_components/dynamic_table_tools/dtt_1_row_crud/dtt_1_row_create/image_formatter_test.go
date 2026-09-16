@@ -125,3 +125,40 @@ func writePNGHeader(t *testing.T, path string, width, height uint32) {
 		t.Fatalf("write PNG header: %v", err)
 	}
 }
+
+func TestCreateImageDisplayVariantKeepsSmallerSourceWithoutUpscaling(t *testing.T) {
+	tempDir := t.TempDir()
+	sourcePath := filepath.Join(tempDir, "small.png")
+	destinationPath := filepath.Join(tempDir, "2160", "small.png")
+	source := image.NewRGBA(image.Rect(0, 0, 40, 20))
+	source.Set(1, 1, color.RGBA{R: 200, A: 255})
+	sourceFile, err := os.Create(sourcePath)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+	if err := png.Encode(sourceFile, source); err != nil {
+		t.Fatalf("encode source: %v", err)
+	}
+	sourceFile.Close()
+
+	if err := CreateImageDisplayVariant(sourcePath, destinationPath, 2160); err != nil {
+		t.Fatalf("CreateImageDisplayVariant returned error: %v", err)
+	}
+	sourceBytes, _ := os.ReadFile(sourcePath)
+	variantBytes, err := os.ReadFile(destinationPath)
+	if err != nil {
+		t.Fatalf("read variant: %v", err)
+	}
+	if string(variantBytes) != string(sourceBytes) {
+		t.Fatal("variant of an already-fitting source must reuse the source bytes, not upscale")
+	}
+
+	resizedPath := filepath.Join(tempDir, "10", "small.png")
+	if err := CreateImageDisplayVariant(sourcePath, resizedPath, 10); err != nil {
+		t.Fatalf("downscale returned error: %v", err)
+	}
+	resized, err := readImageConfig(resizedPath)
+	if err != nil || resized.Width != 10 || resized.Height != 5 {
+		t.Fatalf("downscaled config = %+v, err = %v; want 10x5", resized, err)
+	}
+}

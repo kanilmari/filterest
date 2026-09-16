@@ -219,3 +219,26 @@ func TestLoadFileUploadConfigPropagatesDatabaseErrors(t *testing.T) {
 		t.Fatal("loadFileUploadConfigForUpload() error = nil, want database failure")
 	}
 }
+
+func TestCreateImageDisplayVariantLeavesNoPartialFileOnFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	sourcePath := filepath.Join(tempDir, "original.png")
+	destinationPath := filepath.Join(tempDir, "300", "original.png")
+	if err := os.WriteFile(sourcePath, []byte("not a png"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	if err := CreateImageDisplayVariant(sourcePath, destinationPath, 300); err == nil {
+		t.Fatal("expected undecodable source to fail")
+	}
+	if _, err := os.Stat(destinationPath); !os.IsNotExist(err) {
+		t.Fatalf("destination must not exist after failure, stat err = %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(destinationPath))
+	if err != nil {
+		t.Fatalf("read variant dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("temporary files left behind: %v", entries)
+	}
+}

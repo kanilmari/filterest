@@ -28,11 +28,37 @@ const (
 // CreateImageDisplayVariant creates one stored display variant for uploaded images.
 // Between: upload/media repair flows -> ResizeImageMaxDimension or passthrough storage.
 // Why: Keeps browser-displayable formats working even when local Go decoders cannot resize them yet.
+// The variant appears at destinationPath only when complete: storage requests may
+// generate it on demand, so a failed or concurrent write must never be served.
 func CreateImageDisplayVariant(sourcePath, destinationPath string, maxDimension int) error {
-	if shouldCopySourceAsDisplayVariant(sourcePath) {
-		return copySourceAsDisplayVariant(sourcePath, destinationPath)
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+		return fmt.Errorf("failed to create display variant directory: %w", err)
 	}
-	return ResizeImageMaxDimension(sourcePath, destinationPath, maxDimension)
+	// Keep the extension: the encoders choose the output format from it.
+	temporary, err := os.CreateTemp(filepath.Dir(destinationPath), ".variant-*"+filepath.Ext(destinationPath))
+	if err != nil {
+		return fmt.Errorf("failed to create temporary display variant: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	temporary.Close()
+	defer os.Remove(temporaryPath)
+
+	// A source that already fits is stored unchanged: upscaling only adds bytes.
+	if shouldCopySourceAsDisplayVariant(sourcePath) || sourceFitsWithinDimension(sourcePath, maxDimension) {
+		err = copySourceAsDisplayVariant(sourcePath, temporaryPath)
+	} else {
+		err = ResizeImageMaxDimension(sourcePath, temporaryPath, maxDimension)
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(temporaryPath, 0o644); err != nil {
+		return fmt.Errorf("failed to set display variant permissions: %w", err)
+	}
+	if err := os.Rename(temporaryPath, destinationPath); err != nil {
+		return fmt.Errorf("failed to publish display variant: %w", err)
+	}
+	return nil
 }
 
 // ResizeImageMaxDimension scales an image so its longest side is maxDimension pixels.
@@ -121,15 +147,24 @@ func decodeSourceImage(sourcePath string) (image.Image, error) {
 // Between: stored upload files and imaging.Open's format-specific decoders.
 // Why: Rejects decompression bombs and pathological dimensions before expensive allocations.
 func validateImageDecodeBudget(sourcePath string) error {
+	config, err := readImageConfig(sourcePath)
+	if err != nil {
+		return err
+	}
+	return validateImageDimensionsWithinDecodeBudget(config.Width, config.Height)
+}
+
+// readImageConfig reads image dimensions from the header without decoding pixels.
+func readImageConfig(sourcePath string) (image.Config, error) {
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to open source image for budget validation: %w", err)
+		return image.Config{}, fmt.Errorf("failed to open source image for budget validation: %w", err)
 	}
 	defer sourceFile.Close()
 
 	isWebP, err := readerHasWebPHeader(sourceFile)
 	if err != nil {
-		return fmt.Errorf("failed to inspect source image header: %w", err)
+		return image.Config{}, fmt.Errorf("failed to inspect source image header: %w", err)
 	}
 
 	var config image.Config
@@ -139,10 +174,21 @@ func validateImageDecodeBudget(sourcePath string) error {
 		config, _, err = image.DecodeConfig(sourceFile)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to inspect source image dimensions: %w", err)
+		return image.Config{}, fmt.Errorf("failed to inspect source image dimensions: %w", err)
 	}
+	return config, nil
+}
 
-	return validateImageDimensionsWithinDecodeBudget(config.Width, config.Height)
+// sourceFitsWithinDimension reports whether a readable image already has a
+// longest side of at most maxDimension. Unreadable headers return false so the
+// resize path reports the actual error.
+func sourceFitsWithinDimension(sourcePath string, maxDimension int) bool {
+	config, err := readImageConfig(sourcePath)
+	if err != nil {
+		return false
+	}
+	return config.Width > 0 && config.Height > 0 &&
+		config.Width <= maxDimension && config.Height <= maxDimension
 }
 
 // readerHasWebPHeader detects RIFF/WebP independently of the file extension and rewinds the reader.
