@@ -78,7 +78,7 @@ RUN apk add --no-cache \
     bash=5.3.9-r1 \
     ca-certificates=20260611-r0 \
     libwebp=1.6.0-r0 \
-    tzdata=2026c-r0
+    tzdata=2026d-r0
 
 RUN case "${FILTEREST_RUNTIME_UID}:${FILTEREST_RUNTIME_GID}" in \
         *[!0-9:]*|:*|*:) printf 'runtime UID/GID must be numeric\n' >&2; exit 1 ;; \
