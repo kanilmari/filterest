@@ -1,8 +1,11 @@
 // display_variant_repair.go
-// Replaces stored 300/1000/2160 display variants that are larger than their original image.
+// Replaces stored 300/1000/2160 display variants that are larger than their original image,
+// in pixels or in bytes.
 // Runs between startup maintenance and every media layout below the storage root.
 // Exists because variant generation before 9.3.12 upscaled small originals, and sized
 // catalog/background slots now request those heavier files instead of the original.
+// Variants encoded before 9.3.13 at JPEG quality 95 could also outweigh a strongly
+// compressed original despite having fewer pixels.
 
 package dtt_1_row_create
 
@@ -24,8 +27,8 @@ type DisplayVariantRepairResult struct {
 }
 
 // RepairUpscaledDisplayVariants scans storageRoot for folders that hold an
-// "original" subfolder and replaces each sibling display variant whose width
-// or height exceeds its original with a copy of that original. Only image
+// "original" subfolder and replaces each sibling display variant whose width,
+// height or file size exceeds its original with a copy of that original. Only image
 // headers are read, symlinks are not followed, and unreadable formats (SVG,
 // AVIF, corrupt files) are left untouched. Re-running the scan is harmless.
 func RepairUpscaledDisplayVariants(storageRoot string) (DisplayVariantRepairResult, error) {
@@ -82,7 +85,8 @@ func RepairUpscaledDisplayVariants(storageRoot string) (DisplayVariantRepairResu
 					continue
 				}
 				result.CheckedVariants++
-				if variantConfig.Width <= originalConfig.Width && variantConfig.Height <= originalConfig.Height {
+				if variantConfig.Width <= originalConfig.Width && variantConfig.Height <= originalConfig.Height &&
+					!fileLargerThan(variantPath, originalPath) {
 					continue
 				}
 				if repairErr := publishDisplayVariantAtomically(variantPath, func(temporaryPath string) error {

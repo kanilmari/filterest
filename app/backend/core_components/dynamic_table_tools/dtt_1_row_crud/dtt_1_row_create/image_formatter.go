@@ -18,6 +18,11 @@ import (
 	xwebp "golang.org/x/image/webp"
 )
 
+// displayVariantJPEGQuality keeps sized JPEG variants visually close to typical
+// camera and web originals; the imaging default of 95 often made a downscaled
+// variant heavier than the original it was derived from.
+const displayVariantJPEGQuality = 85
+
 const (
 	maxDecodedImageDimension        = 16_384
 	maxDecodedImagePixels    uint64 = 40_000_000
@@ -36,7 +41,15 @@ func CreateImageDisplayVariant(sourcePath, destinationPath string, maxDimension 
 		if shouldCopySourceAsDisplayVariant(sourcePath) || sourceFitsWithinDimension(sourcePath, maxDimension) {
 			return copySourceAsDisplayVariant(sourcePath, temporaryPath)
 		}
-		return ResizeImageMaxDimension(sourcePath, temporaryPath, maxDimension)
+		if err := ResizeImageMaxDimension(sourcePath, temporaryPath, maxDimension); err != nil {
+			return err
+		}
+		// A display variant exists to transfer fewer bytes. When re-encoding a
+		// strongly compressed original produces a heavier file, serve the original.
+		if fileLargerThan(temporaryPath, sourcePath) {
+			return copySourceAsDisplayVariant(sourcePath, temporaryPath)
+		}
+		return nil
 	})
 }
 
@@ -114,7 +127,7 @@ func ResizeImageMaxDimension(sourcePath, destinationPath string, maxDimension in
 	}
 
 	// imaging handles the remaining registered formats (JPEG, PNG, GIF, TIFF, BMP).
-	if err := imaging.Save(resizedImage, destinationPath); err != nil {
+	if err := imaging.Save(resizedImage, destinationPath, imaging.JPEGQuality(displayVariantJPEGQuality)); err != nil {
 		return fmt.Errorf("failed to save image: %w", err)
 	}
 	return nil
@@ -195,6 +208,14 @@ func sourceFitsWithinDimension(sourcePath string, maxDimension int) bool {
 	}
 	return config.Width > 0 && config.Height > 0 &&
 		config.Width <= maxDimension && config.Height <= maxDimension
+}
+
+// fileLargerThan reports whether candidatePath holds more bytes than referencePath.
+// Unreadable files return false so callers keep the file they already produced.
+func fileLargerThan(candidatePath, referencePath string) bool {
+	candidate, candidateErr := os.Stat(candidatePath)
+	reference, referenceErr := os.Stat(referencePath)
+	return candidateErr == nil && referenceErr == nil && candidate.Size() > reference.Size()
 }
 
 // readerHasWebPHeader detects RIFF/WebP independently of the file extension and rewinds the reader.

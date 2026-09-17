@@ -36,7 +36,8 @@ import { extractLangValue } from "../../../reusable_components/lang_value_reader
 import { hasDatasetPermission } from "../../route_permission_checker.js";
 import {
     always_show_empty_fields_on_cards,
-    resolveCardMediaFolder,
+    predictCardImageCssWidth,
+    resolveCardMediaFolderForImageWidth,
     show_more_button_on_cards,
 } from "../../../ui_config.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
@@ -1063,7 +1064,10 @@ async function createSingleCard(
             // Defensive: resolve multilingual JSON that may have slipped through
             let imgSrc = extractLangValue(image_value_small, getLanguageWithBrowserFallback()).trim();
             if (!/^https?:\/\//.test(imgSrc) && !imgSrc.startsWith("./")) {
-                imgSrc = resolveImagePaths(imgSrc, resolveCardMediaFolder()).displaySrc;
+                imgSrc = resolveImagePaths(
+                    imgSrc,
+                    resolveCardMediaFolderForImageWidth(predictCardImageCssWidth({ large: false }))
+                ).displaySrc;
             }
             mediaElement = createImageElement(imgSrc, false, {
                 ...buildCardImageRenderOptions(

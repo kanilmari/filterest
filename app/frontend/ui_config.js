@@ -39,6 +39,53 @@ export function resolveCardMediaFolder(measuredWidth, { basis = "container" } = 
     return width <= threshold ? "1000" : "300";
 }
 
+// The 300 px variant still looks sharp when the browser enlarges it by up to 20 %.
+export const CARD_COMPACT_MEDIA_MAX_DEVICE_PIXELS = 360;
+const CARD_STACK_IMAGE_MAX_CSS_PX = 1000;
+const CARD_STACK_IMAGE_MAX_VIEWPORT_HEIGHT_SHARE = 0.8;
+const CARD_WIDE_LARGE_IMAGE_CSS_PX = 300;
+const CARD_WIDE_SMALL_IMAGE_CSS_PX = 140;
+
+/**
+ * Choose the card media folder from the width the image is actually drawn at.
+ * Card width alone is misleading: a stacked card image is also capped by
+ * 80 % of the viewport height, so a narrow card can still show a small image.
+ *
+ * @param {number} imageCssWidth - Rendered image box width in CSS pixels.
+ * @param {number} [devicePixelRatio]
+ * @returns {"300"|"1000"}
+ */
+export function resolveCardMediaFolderForImageWidth(
+    imageCssWidth,
+    devicePixelRatio = (typeof window !== "undefined" && window.devicePixelRatio) || 1
+) {
+    const devicePixels = imageCssWidth * (devicePixelRatio > 0 ? devicePixelRatio : 1);
+    return devicePixels <= CARD_COMPACT_MEDIA_MAX_DEVICE_PIXELS ? "300" : "1000";
+}
+
+/**
+ * Predict a card image's CSS width before the card is laid out, mirroring the
+ * stacked-card rule `min(100%, 80vh)` capped at 1000 px and the fixed wide sizes.
+ * Measuring after mount corrects the estimate when the card list is narrower.
+ *
+ * @param {{ large?: boolean, viewportWidth?: number, viewportHeight?: number }} [options]
+ * @returns {number}
+ */
+export function predictCardImageCssWidth({
+    large = true,
+    viewportWidth = window.innerWidth,
+    viewportHeight = window.innerHeight,
+} = {}) {
+    if (isCardStackViewport(viewportWidth)) {
+        return Math.min(
+            viewportWidth,
+            viewportHeight * CARD_STACK_IMAGE_MAX_VIEWPORT_HEIGHT_SHARE,
+            CARD_STACK_IMAGE_MAX_CSS_PX
+        );
+    }
+    return large ? CARD_WIDE_LARGE_IMAGE_CSS_PX : CARD_WIDE_SMALL_IMAGE_CSS_PX;
+}
+
 export function syncGlobalLayoutCssVariables(
     root = typeof document !== "undefined" ? document.documentElement : null
 ) {

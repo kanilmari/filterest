@@ -10,7 +10,8 @@ import { createKeyValueElement } from "./card_field_formatter.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import {
     show_more_button_on_cards,
-    resolveCardMediaFolder,
+    predictCardImageCssWidth,
+    resolveCardMediaFolderForImageWidth,
 } from "../../../ui_config.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 import { setElementSvgContent } from "../../../icons/icon_loader.js";
@@ -122,7 +123,9 @@ async function addImageOrAvatar(
     const resolvedVal = extractLangValue(val_str, getLanguageWithBrowserFallback());
     if (resolvedVal.trim()) {
         foundImage = true;
-        const mediaFolder = resolveCardMediaFolder();
+        const mediaFolder = resolveCardMediaFolderForImageWidth(
+            predictCardImageCssWidth({ large: useLargeSize })
+        );
         const { displaySrc: display_src, originalSrc: original_src } =
             resolveImagePaths(resolvedVal.trim(), mediaFolder);
 
@@ -161,32 +164,36 @@ async function addImageOrAvatar(
     return foundImage;
 }
 
-function resolveCardImageFolderForElement(imageElement) {
-    const card = imageElement?.closest?.(".card");
-    const cardWidth = card?.getBoundingClientRect?.().width || 0;
-    if (cardWidth > 0) {
-        return resolveCardMediaFolder(cardWidth);
-    }
+const CARD_MEDIA_FOLDER_ORDER = ["300", "1000", "2160", "original"];
 
-    const cardContainer = imageElement?.closest?.(".card_container, .card_view_wrapper");
-    const cardContainerWidth = cardContainer?.getBoundingClientRect?.().width || 0;
-    if (cardContainerWidth > 0) {
-        return resolveCardMediaFolder(cardContainerWidth);
-    }
-
-    return resolveCardMediaFolder();
+function storageMediaFolder(pathname) {
+    const folder = pathname.split("/")[4] || "";
+    return CARD_MEDIA_FOLDER_ORDER.includes(folder) ? folder : "";
 }
 
 /**
- * Päivittää korttien kuvien polut kortin käytettävissä olevan leveyden mukaan.
- * Kapealla kortilla käytetään 1000-kansion kuvia ja leveällä 300-kansion.
+ * Päivittää korttien kuvien polut kuvan todellisen piirtoleveyden mukaan.
+ * Pieneksi piirretty kuva käyttää 300-kansiota ja suuri 1000-kansiota.
+ * Valmiiksi ladattua suurempaa kuvaa ei vaihdeta pienempään: vaihto keskeyttäisi
+ * tai toistaisi latauksen eikä säästäisi enää mitään.
  */
 function updateCardImageSources() {
     document
         .querySelectorAll(".card_image img, .card_small_image_inner img")
         .forEach((img) => {
-            const newFolder = resolveCardImageFolderForElement(img);
+            const imageWidth = img.getBoundingClientRect?.().width || 0;
+            if (imageWidth <= 0) {
+                return;
+            }
+            const newFolder = resolveCardMediaFolderForImageWidth(imageWidth);
             const url = new URL(img.src, window.location.origin);
+            const currentFolder = storageMediaFolder(url.pathname);
+            const isDowngrade =
+                CARD_MEDIA_FOLDER_ORDER.indexOf(newFolder) < CARD_MEDIA_FOLDER_ORDER.indexOf(currentFolder)
+                && currentFolder !== "original";
+            if (isDowngrade && img.complete && img.naturalWidth > 0) {
+                return;
+            }
             const nextPath = resolveRowMediaDisplayPath(url.pathname, newFolder);
             if (!nextPath || nextPath === url.pathname) {
                 return;

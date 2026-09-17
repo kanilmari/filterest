@@ -84,7 +84,8 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 }
 
 // repairUpscaledDisplayVariants replaces display variants that earlier releases
-// enlarged beyond their original, so sized catalog slots stop serving heavier files.
+// enlarged beyond their original or encoded heavier than it, so sized catalog
+// slots stop serving more bytes than the original.
 func repairUpscaledDisplayVariants(storageRoot string) {
 	result, err := dtt_1_row_create.RepairUpscaledDisplayVariants(storageRoot)
 	if err != nil {
@@ -93,7 +94,7 @@ func repairUpscaledDisplayVariants(storageRoot string) {
 	}
 	if result.ReplacedVariants > 0 || result.FailedVariants > 0 {
 		log.Printf(
-			"[STARTUP] Media display variants: replaced %d upscaled of %d checked (%d failed)",
+			"[STARTUP] Media display variants: replaced %d oversized of %d checked (%d failed)",
 			result.ReplacedVariants, result.CheckedVariants, result.FailedVariants,
 		)
 	}

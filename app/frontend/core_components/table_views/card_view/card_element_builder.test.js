@@ -15,9 +15,7 @@ const {
     createImageElementMock: vi.fn(),
     createSeededAvatarMock: vi.fn(),
     openImageFirstViewMock: vi.fn(),
-    resolveCardMediaFolderMock: vi.fn((width = window.innerWidth) =>
-        width <= 1060 ? '1000' : '300'
-    ),
+    resolveCardMediaFolderMock: vi.fn((width) => (width <= 360 ? '300' : '1000')),
 }));
 
 vi.mock('./card_avatar_builder.js', () => ({
@@ -62,7 +60,8 @@ vi.mock('../../dev_tools/function_counter.js', () => ({
 
 vi.mock('../../../ui_config.js', () => ({
     show_more_button_on_cards: false,
-    resolveCardMediaFolder: resolveCardMediaFolderMock,
+    resolveCardMediaFolderForImageWidth: resolveCardMediaFolderMock,
+    predictCardImageCssWidth: vi.fn(() => 300),
 }));
 
 vi.mock('../../../reusable_components/lang_value_reader.js', () => ({
@@ -263,18 +262,24 @@ describe('card_element_builder updateCardImageSources', () => {
         resolveCardMediaFolderMock.mockClear();
     });
 
-    test('uses the rendered card width when choosing the large media folder', () => {
+    function mountCardImage(src, imageWidth, { complete = false, naturalWidth = 0 } = {}) {
         const card = document.createElement('div');
         card.classList.add('card');
-        card.getBoundingClientRect = vi.fn(() => ({ width: 620 }));
-
         const imageSlot = document.createElement('div');
         imageSlot.classList.add('card_image');
         const img = document.createElement('img');
-        img.src = '/storage/104/161/300/logo.png';
+        img.src = src;
+        img.getBoundingClientRect = vi.fn(() => ({ width: imageWidth }));
+        Object.defineProperty(img, 'complete', { configurable: true, get: () => complete });
+        Object.defineProperty(img, 'naturalWidth', { configurable: true, get: () => naturalWidth });
         imageSlot.appendChild(img);
         card.appendChild(imageSlot);
         document.body.appendChild(card);
+        return img;
+    }
+
+    test('uses the rendered image width, not the card width, when choosing the folder', () => {
+        const img = mountCardImage('/storage/104/161/300/logo.png', 620);
 
         updateCardImageSources();
 
@@ -282,58 +287,34 @@ describe('card_element_builder updateCardImageSources', () => {
         expect(img.src).toContain('/storage/104/161/1000/logo.png');
     });
 
-    test('switches back to the compact media folder when the card is wide', () => {
-        const card = document.createElement('div');
-        card.classList.add('card');
-        card.getBoundingClientRect = vi.fn(() => ({ width: 1300 }));
-
-        const imageSlot = document.createElement('div');
-        imageSlot.classList.add('card_image');
-        const img = document.createElement('img');
-        img.src = '/storage/104/161/1000/logo.png';
-        imageSlot.appendChild(img);
-        card.appendChild(imageSlot);
-        document.body.appendChild(card);
+    test('moves a small image that is still loading to the compact folder', () => {
+        const img = mountCardImage('/storage/104/161/1000/logo.png', 320);
 
         updateCardImageSources();
 
-        expect(resolveCardMediaFolderMock).toHaveBeenCalledWith(1300);
+        expect(resolveCardMediaFolderMock).toHaveBeenCalledWith(320);
         expect(img.src).toContain('/storage/104/161/300/logo.png');
     });
 
-    test('falls back to the card list width while the card is still measuring', () => {
-        const cardContainer = document.createElement('div');
-        cardContainer.classList.add('card_container');
-        cardContainer.getBoundingClientRect = vi.fn(() => ({ width: 640 }));
-
-        const card = document.createElement('div');
-        card.classList.add('card');
-        card.getBoundingClientRect = vi.fn(() => ({ width: 0 }));
-
-        const imageSlot = document.createElement('div');
-        imageSlot.classList.add('card_image');
-        const img = document.createElement('img');
-        img.src = '/storage/104/161/300/logo.png';
-        imageSlot.appendChild(img);
-        card.appendChild(imageSlot);
-        cardContainer.appendChild(card);
-        document.body.appendChild(cardContainer);
+    test('keeps an already loaded larger image instead of fetching a smaller one', () => {
+        const img = mountCardImage('/storage/104/161/1000/logo.png', 320, { complete: true, naturalWidth: 1000 });
 
         updateCardImageSources();
 
-        expect(resolveCardMediaFolderMock).toHaveBeenCalledWith(640);
         expect(img.src).toContain('/storage/104/161/1000/logo.png');
     });
 
-    test('does not reassign src when the image is already on the chosen folder', () => {
-        const card = document.createElement('div');
-        card.classList.add('card');
-        card.getBoundingClientRect = vi.fn(() => ({ width: 1300 }));
+    test('waits until the image has been laid out', () => {
+        const img = mountCardImage('/storage/104/161/300/logo.png', 0);
 
-        const imageSlot = document.createElement('div');
-        imageSlot.classList.add('card_image');
-        const img = document.createElement('img');
-        img.src = '/storage/104/161/300/logo.png';
+        updateCardImageSources();
+
+        expect(resolveCardMediaFolderMock).not.toHaveBeenCalled();
+        expect(img.src).toContain('/storage/104/161/300/logo.png');
+    });
+
+    test('does not reassign src when the image is already on the chosen folder', () => {
+        const img = mountCardImage('/storage/104/161/300/logo.png', 300);
         const descriptor = Object.getOwnPropertyDescriptor(window.HTMLImageElement.prototype, 'src');
         const setSrc = vi.fn(function setSrc(value) {
             descriptor.set.call(this, value);
@@ -345,29 +326,15 @@ describe('card_element_builder updateCardImageSources', () => {
             },
             set: setSrc,
         });
-        imageSlot.appendChild(img);
-        card.appendChild(imageSlot);
-        document.body.appendChild(card);
 
         updateCardImageSources();
 
-        expect(resolveCardMediaFolderMock).toHaveBeenCalledWith(1300);
         expect(img.src).toContain('/storage/104/161/300/logo.png');
         expect(setSrc).not.toHaveBeenCalled();
     });
 
     test('rewrites leftover original paths onto the display folder', () => {
-        const card = document.createElement('div');
-        card.classList.add('card');
-        card.getBoundingClientRect = vi.fn(() => ({ width: 620 }));
-
-        const imageSlot = document.createElement('div');
-        imageSlot.classList.add('card_image');
-        const img = document.createElement('img');
-        img.src = '/storage/9/1/original/9_1_1.png';
-        imageSlot.appendChild(img);
-        card.appendChild(imageSlot);
-        document.body.appendChild(card);
+        const img = mountCardImage('/storage/9/1/original/9_1_1.png', 620, { complete: true, naturalWidth: 2000 });
 
         updateCardImageSources();
 

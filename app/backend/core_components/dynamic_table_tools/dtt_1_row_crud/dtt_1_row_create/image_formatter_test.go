@@ -6,6 +6,7 @@
 package dtt_1_row_create
 
 import (
+	"bytes"
 	"encoding/binary"
 	"hash/crc32"
 	"image"
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/disintegration/imaging"
 )
 
 func TestValidateImageDimensionsWithinDecodeBudget(t *testing.T) {
@@ -131,7 +134,12 @@ func TestCreateImageDisplayVariantKeepsSmallerSourceWithoutUpscaling(t *testing.
 	sourcePath := filepath.Join(tempDir, "small.png")
 	destinationPath := filepath.Join(tempDir, "2160", "small.png")
 	source := image.NewRGBA(image.Rect(0, 0, 40, 20))
-	source.Set(1, 1, color.RGBA{R: 200, A: 255})
+	// Varied pixels keep the downscaled PNG lighter than its source.
+	for x := 0; x < 40; x++ {
+		for y := 0; y < 20; y++ {
+			source.Set(x, y, color.RGBA{R: uint8(x * 37), G: uint8(y * 53), B: uint8(x * y), A: 255})
+		}
+	}
 	sourceFile, err := os.Create(sourcePath)
 	if err != nil {
 		t.Fatalf("create source: %v", err)
@@ -160,5 +168,56 @@ func TestCreateImageDisplayVariantKeepsSmallerSourceWithoutUpscaling(t *testing.
 	resized, err := readImageConfig(resizedPath)
 	if err != nil || resized.Width != 10 || resized.Height != 5 {
 		t.Fatalf("downscaled config = %+v, err = %v; want 10x5", resized, err)
+	}
+}
+
+func TestCreateImageDisplayVariantServesSourceWhenResizeWouldBeHeavier(t *testing.T) {
+	tempDir := t.TempDir()
+	source := image.NewRGBA(image.Rect(0, 0, 1200, 800))
+	for x := 0; x < 1200; x++ {
+		for y := 0; y < 800; y++ {
+			source.Set(x, y, color.RGBA{R: uint8(x ^ y), G: uint8(x * 3), B: uint8(y * 7), A: 255})
+		}
+	}
+	// A strongly compressed original: re-encoding its downscale at display quality adds bytes.
+	sourcePath := filepath.Join(tempDir, "compressed.jpg")
+	if err := imaging.Save(source, sourcePath, imaging.JPEGQuality(5)); err != nil {
+		t.Fatalf("save source: %v", err)
+	}
+	destinationPath := filepath.Join(tempDir, "1000", "compressed.jpg")
+
+	if err := CreateImageDisplayVariant(sourcePath, destinationPath, 1000); err != nil {
+		t.Fatalf("CreateImageDisplayVariant: %v", err)
+	}
+	sourceBytes, _ := os.ReadFile(sourcePath)
+	variantBytes, _ := os.ReadFile(destinationPath)
+	if !bytes.Equal(sourceBytes, variantBytes) {
+		t.Fatalf("variant has %d bytes, source %d; a heavier resize must be replaced by the source",
+			len(variantBytes), len(sourceBytes))
+	}
+}
+
+func TestResizeImageMaxDimensionEncodesJPEGBelowDefaultQuality(t *testing.T) {
+	tempDir := t.TempDir()
+	source := image.NewRGBA(image.Rect(0, 0, 800, 600))
+	for x := 0; x < 800; x++ {
+		for y := 0; y < 600; y++ {
+			source.Set(x, y, color.RGBA{R: uint8(x ^ y), G: uint8(x * 3), B: uint8(y * 7), A: 255})
+		}
+	}
+	sourcePath := filepath.Join(tempDir, "photo.jpg")
+	if err := imaging.Save(source, sourcePath, imaging.JPEGQuality(100)); err != nil {
+		t.Fatalf("save source: %v", err)
+	}
+	defaultPath := filepath.Join(tempDir, "default.jpg")
+	if err := imaging.Save(imaging.Resize(source, 300, 0, imaging.Lanczos), defaultPath); err != nil {
+		t.Fatalf("save default-quality reference: %v", err)
+	}
+	variantPath := filepath.Join(tempDir, "300", "photo.jpg")
+	if err := ResizeImageMaxDimension(sourcePath, variantPath, 300); err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+	if !fileLargerThan(defaultPath, variantPath) {
+		t.Fatal("display variant JPEG should be lighter than the imaging default quality")
 	}
 }

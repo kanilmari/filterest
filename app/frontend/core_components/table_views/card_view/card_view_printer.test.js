@@ -100,7 +100,8 @@ vi.mock('../../route_permission_checker.js', () => ({
 
 vi.mock('../../../ui_config.js', () => ({
     always_show_empty_fields_on_cards: true,
-    resolveCardMediaFolder: vi.fn(() => 'card_images'),
+    predictCardImageCssWidth: vi.fn(() => 140),
+    resolveCardMediaFolderForImageWidth: vi.fn(() => 'card_images'),
     show_more_button_on_cards: false,
 }));
 

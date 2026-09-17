@@ -114,3 +114,35 @@ func TestRepairUpscaledDisplayVariantsToleratesMissingStorage(t *testing.T) {
 		t.Fatalf("missing storage = %+v, %v", result, err)
 	}
 }
+
+func TestRepairUpscaledDisplayVariantsReplacesVariantsHeavierThanOriginal(t *testing.T) {
+	storage := t.TempDir()
+	original := filepath.Join(storage, "10005", "126", "original", "photo.png")
+	writeTestPNG(t, original, 1280, 836)
+	heavy := filepath.Join(storage, "10005", "126", "1000", "photo.png")
+	if err := os.MkdirAll(filepath.Dir(heavy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Fewer pixels, more bytes: a noisy 1000 px variant next to a flat original.
+	noisy := image.NewRGBA(image.Rect(0, 0, 1000, 653))
+	for index := range noisy.Pix {
+		noisy.Pix[index] = uint8(index * 131)
+	}
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, noisy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(heavy, buffer.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := RepairUpscaledDisplayVariants(storage)
+	if err != nil || result.CheckedVariants != 1 || result.ReplacedVariants != 1 {
+		t.Fatalf("result = %+v, %v; want 1 checked, 1 replaced", result, err)
+	}
+	originalBytes, _ := os.ReadFile(original)
+	variantBytes, _ := os.ReadFile(heavy)
+	if !bytes.Equal(originalBytes, variantBytes) {
+		t.Fatal("variant heavier than its original must be replaced by the original")
+	}
+}
