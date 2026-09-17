@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import re
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -61,6 +62,26 @@ def read_current_app_version(repo_root: Path) -> tuple[str, str]:
             raise RuntimeError(f"{path} is empty")
         return version, file_name
     raise RuntimeError("missing VERSION_EASELECT or VERSION_APP")
+
+
+# Repository-local variables that a calling Git command exports to its hooks.
+# `git commit -a` points GIT_INDEX_FILE at a temporary index of the calling
+# repository; inherited by `git -C <other repo>`, it made tracked artifacts of
+# that repository look untracked. Mirrors `git rev-parse --local-env-vars`.
+GIT_REPOSITORY_LOCAL_ENV_VARS = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX",
+    "GIT_SHALLOW_FILE", "GIT_COMMON_DIR",
+)
+
+
+def git_environment_for_repository() -> dict[str, str]:
+    """Return the process environment without another repository's Git context."""
+    environment = dict(os.environ)
+    for name in GIT_REPOSITORY_LOCAL_ENV_VARS:
+        environment.pop(name, None)
+    return environment
 
 
 def validate_repo_artifact_path(
@@ -116,6 +137,7 @@ def validate_repo_artifact_path(
         check=False,
         capture_output=True,
         text=True,
+        env=git_environment_for_repository(),
     )
     if tracked_result.returncode != 0:
         errors.append(

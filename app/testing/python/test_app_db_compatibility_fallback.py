@@ -58,3 +58,34 @@ def test_public_bootstrap_fallback_needs_no_git_repository(tmp_path: Path) -> No
 
     assert not (tmp_path / ".git").exists()
     assert validator.validate_manifest(tmp_path) == 0
+
+
+def test_tracked_artifact_check_ignores_a_calling_repository_git_context(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A hook in another repository must not make this repository's files look untracked."""
+    import subprocess
+
+    validator = load_validator()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    artifact = repo / "snapshot.sql"
+    artifact.write_text("-- schema\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "snapshot.sql"], check=True)
+
+    # `git commit -a` in a sibling repository exports its temporary index.
+    other = tmp_path / "other"
+    subprocess.run(["git", "init", "-q", str(other)], check=True)
+    monkeypatch.setenv("GIT_INDEX_FILE", str(other / ".git" / "next-index.lock"))
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+
+    errors = validator.validate_repo_artifact_path(
+        repo_root=repo,
+        artifact_root=repo,
+        manifest_path=repo / "manifest.jsonl",
+        line_no=1,
+        field_name="schema_snapshot_path",
+        raw_path="snapshot.sql",
+    )
+    assert errors == []
