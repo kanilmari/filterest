@@ -142,6 +142,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/system/automation-account", systemAutomationAccountHandler, "router.systemAutomationAccountHandler")
 	functionRegisterHandler("/system/update-notice", systemUpdateNoticeHandler, "router.systemUpdateNoticeHandler")
 	functionRegisterHandler("/api/admin/version-info", adminVersionInfoHandler, "router.adminVersionInfoHandler")
+	functionRegisterHandler("/api/admin/site-assistant/api-catalog", siteAssistantAPICatalogHandler, "router.siteAssistantAPICatalogHandler")
 	functionRegisterHandler("/api/admin/update-notice/stream", adminUpdateNoticeStreamHandler, "router.adminUpdateNoticeStreamHandler")
 	functionRegisterHandler("/api/admin/openai-api-key", saveOpenAIAPIKeyHandler, "router.saveOpenAIAPIKeyHandler")
 	functionRegisterHandler("/sitemap.xml", sitemapHandler, "router.sitemapHandler")

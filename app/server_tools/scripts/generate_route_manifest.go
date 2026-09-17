@@ -1,5 +1,5 @@
 // generate_route_manifest.go
-// Generates a checked-in JSON route manifest from the backend runtime registry.
+// Generates the checked-in route manifest and route handler docs from the backend runtime registry.
 // Bridges router registration, pipeline profiles, and future frontend client generation.
 // Exists to replace old router AST assumptions with a reproducible runtime inventory.
 // Its location makes the canonical Filterest source tree the generator's project root.
@@ -44,20 +44,43 @@ func run() error {
 	}
 	output = append(output, '\n')
 
-	outputPath := filepath.Join(projectRoot, "frontend", "generated", "backend_route_manifest.json")
-	if *checkOnly {
-		current, err := os.ReadFile(outputPath)
-		if err != nil {
-			return fmt.Errorf("read current route manifest: %w", err)
-		}
-		if !bytes.Equal(current, output) {
-			return fmt.Errorf("route manifest drift detected in %s", outputPath)
-		}
-		return nil
+	handlerNames := make([]string, 0, len(manifest.Routes))
+	for _, route := range manifest.Routes {
+		handlerNames = append(handlerNames, route.HandlerName)
+	}
+	docs, err := router.ExtractRouteHandlerDocs(filepath.Join(projectRoot, "backend"), handlerNames)
+	if err != nil {
+		return fmt.Errorf("extract route handler docs: %w", err)
+	}
+	docsOutput, err := router.MarshalRouteHandlerDocs(docs)
+	if err != nil {
+		return fmt.Errorf("marshal route handler docs: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, output, 0o644); err != nil {
-		return fmt.Errorf("write route manifest: %w", err)
+	outputs := []struct {
+		path    string
+		content []byte
+	}{
+		{filepath.Join(projectRoot, "frontend", "generated", "backend_route_manifest.json"), output},
+		{filepath.Join(projectRoot, "backend", "core_components", "router", "generated", "route_handler_docs.json"), docsOutput},
+	}
+	for _, generated := range outputs {
+		if *checkOnly {
+			current, err := os.ReadFile(generated.path)
+			if err != nil {
+				return fmt.Errorf("read current generated file: %w", err)
+			}
+			if !bytes.Equal(current, generated.content) {
+				return fmt.Errorf("generated route data drift detected in %s", generated.path)
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(generated.path), 0o755); err != nil {
+			return fmt.Errorf("create generated directory: %w", err)
+		}
+		if err := os.WriteFile(generated.path, generated.content, 0o644); err != nil {
+			return fmt.Errorf("write generated file: %w", err)
+		}
 	}
 	return nil
 }

@@ -26,6 +26,7 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	"router.systemAutomationAccountHandler":    {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"router.systemUpdateNoticeHandler":         {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"router.adminVersionInfoHandler":           {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"router.siteAssistantAPICatalogHandler":    {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"router.adminUpdateNoticeStreamHandler":    {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"router.saveOpenAIAPIKeyHandler":           {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"router.GetDatasetAliasesHandler":          {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
