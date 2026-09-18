@@ -118,12 +118,13 @@ vi.mock("../../filterbar/filterbar_engine/filterbar_visibility_handler.js", () =
     resolveFilterBarElement: vi.fn(() => null),
 }));
 
+function setViewportWidth(width) {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+}
+
 describe("initTabs", () => {
     beforeEach(() => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 1024,
-        });
+        setViewportWidth(1024);
         localStorage.clear();
         document.body.innerHTML = `
             <div id="navbarAuthActions" class="navbar-auth-actions"></div>
@@ -423,10 +424,7 @@ describe("initTabs", () => {
     });
 
     test("uses button tabs on wide grid-like views even with physical navbar space", async () => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 1920,
-        });
+        setViewportWidth(1920);
         localStorage.setItem("app_service_catalog_view", "table");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
@@ -454,10 +452,7 @@ describe("initTabs", () => {
     });
 
     test("uses right-opening tabs for card view when the desktop navbar has physical space", async () => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 1920,
-        });
+        setViewportWidth(1920);
         localStorage.setItem("app_service_catalog_view", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
@@ -477,10 +472,7 @@ describe("initTabs", () => {
     });
 
     test("uses rectangular tabs for every dataset when the active dataset has cover or background media", async () => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 1920,
-        });
+        setViewportWidth(1920);
         localStorage.setItem("media_dataset_view", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
         await initTabs({
@@ -515,10 +507,7 @@ describe("initTabs", () => {
     });
 
     test("uses button tabs for card view when the navbar is in overlay layout", async () => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 1024,
-        });
+        setViewportWidth(1024);
         localStorage.setItem("app_service_catalog_view", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
@@ -539,10 +528,7 @@ describe("initTabs", () => {
     });
 
     test("recalculates tab shape when a hidden desktop navbar becomes visible", async () => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 1920,
-        });
+        setViewportWidth(1920);
         document.getElementById("tabs_container")?.classList.add("navbar_hidden");
         localStorage.setItem("app_service_catalog_view", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
@@ -568,10 +554,7 @@ describe("initTabs", () => {
     });
 
     test("uses full-width button tabs on narrow screens", async () => {
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 640,
-        });
+        setViewportWidth(640);
         localStorage.setItem("app_service_catalog_view", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
