@@ -99,7 +99,8 @@ class CodingJobs:
 
     def public(self, state):
         return {key: state[key] for key in
-                ("job_id", "status", "dataset", "answer", "error_code", "changed_files", "maintenance")
+                ("job_id", "status", "dataset", "answer", "error_code", "changed_files", "maintenance",
+                 "plan", "api_calls")
                 if key in state}
 
     def submit(self, actor, payload):
@@ -146,6 +147,11 @@ class CodingJobs:
         workspace = directory / "workspace"
         try:
             self.update(job_id, status="running", started_at=time.time())
+            if json.loads((directory / "request.json").read_text()).get("site_assistant"):
+                # A site assistant job works through the site API, not a source worktree.
+                from site_assistant_jobs import run_site_assistant_job
+                run_site_assistant_job(self, job_id)
+                return
             subprocess.run(["git", "-C", self.config["repository"], "worktree", "add", "--detach",
                             str(workspace), self.config["source_revision"]],
                            check=True, capture_output=True, timeout=60)
@@ -213,6 +219,30 @@ class CodingJobs:
         finally:
             with self.lock:
                 self.busy = False
+
+    def apply_plan(self, job_id, actor, dataset, access):
+        """Run one job's approved plan; the administrator's approval lives in the app."""
+        if not isinstance(access, dict) or not isinstance(access.get("delegation_code"), str) \
+                or not isinstance(access.get("site_base_url"), str):
+            raise JobError(400, "fresh site access is required")
+        with self.lock:
+            state = self.read(job_id, actor, dataset)
+            if state.get("status") != "awaiting_approval":
+                raise JobError(409, "this job has no plan waiting for approval")
+            if self.busy:
+                raise JobError(429, "one coding job is already running")
+            self.busy = True
+        try:
+            from site_assistant_jobs import apply_site_assistant_plan
+            apply_site_assistant_plan(self, job_id, access)
+        except JobError:
+            raise
+        except Exception:
+            self.update(job_id, status="apply_failed", error_code="apply_failed", finished_at=time.time())
+        finally:
+            with self.lock:
+                self.busy = False
+        return self.public(self.read(job_id))
 
     def close(self):
         fcntl.flock(self.process_lock, fcntl.LOCK_UN)

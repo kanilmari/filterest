@@ -229,6 +229,11 @@ class RunnerRequest(BaseHTTPRequestHandler):
                 if not readiness(config)["runner_ready"]:
                     raise JobError(503, "runner is not ready")
                 return self.reply(202, self.server.jobs.submit(actor, self.body()))
+            if self.command == "POST" and parts.path.startswith("/v1/jobs/") and parts.path.endswith("/apply"):
+                job_id = parts.path.removeprefix("/v1/jobs/").removesuffix("/apply")
+                body = self.body()
+                return self.reply(200, self.server.jobs.apply_plan(
+                    job_id, actor, str(body.get("dataset", "")), body.get("site_assistant")))
             if self.command == "GET" and parts.path.startswith("/v1/jobs/"):
                 dataset = parse_qs(parts.query).get("dataset", [""])[0]
                 state = self.server.jobs.read(parts.path.removeprefix("/v1/jobs/"), actor, dataset)
