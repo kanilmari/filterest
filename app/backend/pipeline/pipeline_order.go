@@ -18,6 +18,7 @@ import (
 	"easelect/backend/pipeline/rate_limiting"
 	"easelect/backend/pipeline/request_logging"
 	"easelect/backend/pipeline/request_size_limit"
+	"easelect/backend/pipeline/site_assistant_guard"
 	"net/http"
 )
 
@@ -69,6 +70,13 @@ var PipelineOrder = []Stage{
 		AlwaysEnforced: true,
 		Fn: func(next http.HandlerFunc, ctx RouteContext) http.HandlerFunc {
 			return automation_check.WithAutomationCheck(ctx.URLPattern, next)
+		},
+	},
+	{
+		Name:           "site_assistant_guard",
+		AlwaysEnforced: true,
+		Fn: func(next http.HandlerFunc, ctx RouteContext) http.HandlerFunc {
+			return site_assistant_guard.WithSiteAssistantGuard(next)
 		},
 	},
 	{

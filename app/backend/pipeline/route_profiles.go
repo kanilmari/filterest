@@ -116,18 +116,20 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.datasetsRedirectHandler":        PublicProfile,
 
 	// Auth endpoints (must be accessible before login)
-	"auth.LoginHandler":                   PublicProfile,
-	"auth.LoginAPIHandler":                PublicProfile,
-	"auth.FirstRunAdminHandler":           PublicProfile,
-	"auth.RequestPasswordResetOTPHandler": PublicProfile,
-	"auth.ResetPasswordWithOTPHandler":    PublicProfile,
-	"auth.RegisterHandler":                PublicProfile,
-	"auth.RegisterAPIHandler":             PublicProfile,
-	"auth.LogoutHandler":                  PublicProfile,
-	"auth.CSRFTokenHandler":               PublicProfile,
-	"auth.GetAuthModesHandler":            PublicProfile,
-	"auth.CheckFingerprintHandler":        PublicProfile,
-	"product_identity.Handler":            PublicProfile,
+	"auth.LoginHandler": PublicProfile,
+	// The one-time job code is the credential; the exchanged session then carries ordinary rights.
+	"auth.SiteAssistantDelegationExchangeHandler": PublicProfile,
+	"auth.LoginAPIHandler":                        PublicProfile,
+	"auth.FirstRunAdminHandler":                   PublicProfile,
+	"auth.RequestPasswordResetOTPHandler":         PublicProfile,
+	"auth.ResetPasswordWithOTPHandler":            PublicProfile,
+	"auth.RegisterHandler":                        PublicProfile,
+	"auth.RegisterAPIHandler":                     PublicProfile,
+	"auth.LogoutHandler":                          PublicProfile,
+	"auth.CSRFTokenHandler":                       PublicProfile,
+	"auth.GetAuthModesHandler":                    PublicProfile,
+	"auth.CheckFingerprintHandler":                PublicProfile,
+	"product_identity.Handler":                    PublicProfile,
 
 	// Session management
 	"e_sessions.ResetSessionHandler": PublicProfile,

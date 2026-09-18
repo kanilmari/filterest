@@ -21,6 +21,7 @@
   "auth.RequestPasswordChangeOTPHandler": "RequestPasswordChangeOTPHandler sends an OTP to the user's current email for password change verification.",
   "auth.RequestPasswordResetOTPHandler": "",
   "auth.ResetPasswordWithOTPHandler": "",
+  "auth.SiteAssistantDelegationExchangeHandler": "SiteAssistantDelegationExchangeHandler turns a job's one-time code into a session that acts as the administrator who asked for the job. The session expires with the delegation, reads with that administrator's own rights and may write only calls the administrator has approved.",
   "auth.UserPermissionsHandler": "UserPermissionsHandler returns url_route_endpoint values that the current user is allowed to access.",
   "auth.UserProfileFetchHandler": "UserProfileFetchHandler returns the authenticated user's username and email.",
   "auth.UserProfileUpdateHandler": "UserProfileUpdateHandler updates the authenticated user's username, email, and/or password.",
