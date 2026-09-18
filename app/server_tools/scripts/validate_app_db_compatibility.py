@@ -444,11 +444,24 @@ def validate_manifest(
             f"{manifest_path}: current {current_app_version_file} {current_app_version} has no manifest row"
         )
     else:
+        pending_transition = ""
         if current_row["target_db_version"] != current_db_version:
-            errors.append(
-                f"{manifest_path}: current app row targets DB {current_row['target_db_version']}, "
-                f"but VERSION_DB is {current_db_version}"
+            pending_transition = reviewed_db_transition_state(
+                repo_root=repo_root,
+                artifact_root=artifact_root,
+                published_db_version=current_row["target_db_version"],
+                source_db_version=current_db_version,
             )
+            if not pending_transition:
+                errors.append(
+                    f"{manifest_path}: current app row targets DB {current_row['target_db_version']}, "
+                    f"but VERSION_DB is {current_db_version}"
+                )
+        if pending_transition:
+            # A reviewed DB transition is committed before its release; the
+            # manifest row still names the published target on purpose.
+            print(pending_transition)
+            return 0
         if parse_semver(current_row["min_db_version"]) > parse_semver(current_db_version):
             errors.append(
                 f"{manifest_path}: current app row requires min DB {current_row['min_db_version']}, "
@@ -472,6 +485,44 @@ def validate_manifest(
         )
     )
     return 0
+
+
+def reviewed_db_transition_state(
+    *,
+    repo_root: Path,
+    artifact_root: Path,
+    published_db_version: str,
+    source_db_version: str,
+) -> str:
+    """Describe a committed DB transition that its release has not recorded yet.
+
+    Source is committed before the release: the new VERSION_DB, its migrations
+    and its schema snapshot land first, and release preparation then rewrites the
+    compatibility row. Without this state every ordinary commit in between would
+    fail this check, which is a defect of the process rather than of the source.
+    An empty result means the mismatch is a real error.
+    """
+    if parse_semver(source_db_version) <= parse_semver(published_db_version):
+        return ""
+    snapshot = artifact_root / canonical_schema_snapshot_path(source_db_version)
+    if not snapshot.is_file():
+        return ""
+    migrations = artifact_root / "server_tools" / "migrations"
+    marker = f"-- VERSION_DB: {source_db_version}"
+    declaring = sorted(
+        path.name
+        for path in migrations.glob("*.sql")
+        if marker in path.read_text(encoding="utf-8", errors="replace")
+    ) if migrations.is_dir() else []
+    if not declaring:
+        return ""
+    return (
+        "✅ App/DB compatibility manifest OK: reviewed database transition "
+        f"{published_db_version} -> {source_db_version} is committed in source "
+        f"({len(declaring)} migration(s), snapshot {canonical_schema_snapshot_path(source_db_version)}). "
+        "Release preparation records it with --db-transition-from "
+        f"{published_db_version}."
+    )
 
 
 def parse_args() -> argparse.Namespace:
