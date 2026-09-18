@@ -375,6 +375,13 @@ inspection is read-only: no ad hoc DML, grants or deletes instead of an API
 repair or reviewed migration. Existing workflows are described in
 [API CRUD examples](API_CRUD_Examples.md) and [core workflows](Core_Workflows.md).
 
+To see what this installation's API actually offers, browse the `system_functions`
+dataset: its `url_route_endpoint` column holds every registered address, and a
+text search for `api` lists the API routes because addresses are indexed word by
+word. An administrator can also read the same inventory, with access levels,
+methods and handler descriptions, from
+`/api/admin/site-assistant/api-catalog`, or as prompt text with `?format=markdown`.
+
 Shared migrations live in `app/server_tools/migrations/` with globally unique
 timestamped filenames and explicit ownership/version conventions; use the
 [migration sample](../reference_implementations/golden_sample_migration.sql.md).
