@@ -55,6 +55,46 @@ func isIntegerType(dataType string) bool {
 	return strings.Contains(dataType, "int")
 }
 
+// isJSONType tunnistaa json/jsonb-sarakkeet
+// Between: insertDataAccordingToPayload -> Logic
+// Why: Helper to identify JSON columns, whose form values arrive as text.
+func isJSONType(dataType string) bool {
+	dataType = strings.ToLower(strings.TrimSpace(dataType))
+	return dataType == "json" || dataType == "jsonb"
+}
+
+// normalizeJSONInsertValue prepares one value for a JSON column. An empty form
+// field is missing data, so a nullable column keeps NULL instead of storing the
+// empty text the database refuses. Structured values are encoded as JSON text,
+// and text that is not JSON is reported by column name instead of failing the
+// whole insert with a database-level message.
+// Between: insertDataAccordingToPayload -> Database
+// Why: Keeps a JSON column's bad value an understandable request error.
+func normalizeJSONInsertValue(value interface{}, nullable bool) (interface{}, error) {
+	switch typed := value.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			if nullable {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("a JSON value is required")
+		}
+		if !json.Valid([]byte(trimmed)) {
+			return nil, fmt.Errorf("the value is not JSON")
+		}
+		return trimmed, nil
+	default:
+		encoded, err := json.Marshal(typed)
+		if err != nil {
+			return nil, fmt.Errorf("the value is not JSON")
+		}
+		return string(encoded), nil
+	}
+}
+
 // getCurrentUserID hakee sessiosta user_id:n (int) tai virheen
 // Between: insertDataAccordingToPayload -> Session
 // Why: Retrieves the current user's ID from the session.

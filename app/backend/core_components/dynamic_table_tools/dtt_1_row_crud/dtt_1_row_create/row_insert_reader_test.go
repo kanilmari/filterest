@@ -355,3 +355,39 @@ func TestGetCurrentUsername(t *testing.T) {
 		}
 	})
 }
+
+// ── isJSONType / normalizeJSONInsertValue ────────────────────────────────────
+
+func TestIsJSONType(t *testing.T) {
+	for dataType, want := range map[string]bool{
+		"json": true, "jsonb": true, "JSONB": true, " json ": true,
+		"text": false, "integer": false, "": false, "json_notes": false,
+	} {
+		if got := isJSONType(dataType); got != want {
+			t.Errorf("isJSONType(%q) = %v, want %v", dataType, got, want)
+		}
+	}
+}
+
+// An empty price field must stay missing data rather than fail the whole row,
+// and text that is not JSON must be named instead of reaching the database.
+func TestNormalizeJSONInsertValue(t *testing.T) {
+	if got, err := normalizeJSONInsertValue("", true); err != nil || got != nil {
+		t.Errorf("empty nullable = %#v, %v; want nil, nil", got, err)
+	}
+	if _, err := normalizeJSONInsertValue("   ", false); err == nil {
+		t.Error("an empty value for a required JSON column must be refused")
+	}
+	if _, err := normalizeJSONInsertValue("9,90 e/kk", true); err == nil {
+		t.Error("plain text must be refused as JSON")
+	}
+	if got, err := normalizeJSONInsertValue(` {"amount": 9.9} `, true); err != nil || got != `{"amount": 9.9}` {
+		t.Errorf("valid JSON text = %#v, %v", got, err)
+	}
+	if got, err := normalizeJSONInsertValue(map[string]interface{}{"amount": 1}, true); err != nil || got != `{"amount":1}` {
+		t.Errorf("structured value = %#v, %v", got, err)
+	}
+	if got, err := normalizeJSONInsertValue(nil, false); err != nil || got != nil {
+		t.Errorf("missing value = %#v, %v", got, err)
+	}
+}

@@ -155,6 +155,16 @@ func insertDataAccordingToPayload(
 			}
 		}
 
+		// --- JSON/JSONB: "" → NULL, muu teksti tarkistetaan --------
+		if isJSONType(colType) {
+			normalized, jsonErr := normalizeJSONInsertValue(val, colNullableMap[colName])
+			if jsonErr != nil {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid JSON value for "+colName)
+				return 0, nil, jsonErr
+			}
+			val = normalized
+		}
+
 		// --- Integer: "" → NULL jos sarake on nullable -------------
 		if isIntegerType(colType) {
 			if s, ok := val.(string); ok {
@@ -345,6 +355,17 @@ func insertDataAccordingToPayload(
 					child.Data[colName] = nil
 					continue
 				}
+			}
+
+			// json/jsonb
+			if isJSONType(colType) {
+				normalized, jsonErr := normalizeJSONInsertValue(raw, childNull[colName])
+				if jsonErr != nil {
+					httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid JSON value for "+colName)
+					return 0, nil, jsonErr
+				}
+				child.Data[colName] = normalized
+				continue
 			}
 
 			// integer

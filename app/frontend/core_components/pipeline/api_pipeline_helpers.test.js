@@ -64,6 +64,7 @@ describe('resolveEndpointUrl', () => {
     const map = {
         fetchUsers: '/api/users',
         fetchItems: '/api/items',
+        searchStream: '/api/get-intelligent-results?stream=1',
     };
 
     test('resolves known route to base URL', () => {
@@ -79,6 +80,17 @@ describe('resolveEndpointUrl', () => {
             .toBe('/api/users?dataset=dokumentaatio');
         expect(resolveEndpointUrl('fetchUsers', '&dataset=dokumentaatio', map))
             .toBe('/api/users?dataset=dokumentaatio');
+    });
+
+    // A route variant with its own query must keep the caller's dataset name
+    // inside the same query string; a second '?' hid it from the permission check.
+    test('continues a route variant that already carries a query', () => {
+        expect(resolveEndpointUrl('searchStream', '&dataset=system_functions&query=api', map))
+            .toBe('/api/get-intelligent-results?stream=1&dataset=system_functions&query=api');
+        expect(resolveEndpointUrl('searchStream', '?dataset=system_functions', map))
+            .toBe('/api/get-intelligent-results?stream=1&dataset=system_functions');
+        expect(resolveEndpointUrl('searchStream', '', map))
+            .toBe('/api/get-intelligent-results?stream=1');
     });
 
     test('keeps path-suffix urlParams without a query delimiter', () => {

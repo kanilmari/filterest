@@ -44,6 +44,11 @@ export function normalizeEndpointUrlParams(urlParams) {
  * Resolves a route name to a full URL using the endpoint map.
  * Throws for unknown route names (programming error).
  *
+ * A route variant can already carry its own query, such as the streaming search
+ * at `/api/get-intelligent-results?stream=1`. The caller's parameters then
+ * continue that query instead of starting a second one, so the dataset name
+ * stays readable for permission checks.
+ *
  * @param {string} routeName - Logical route name from endpoint_map
  * @param {string} urlParams - URL suffix to append (e.g. '?id=1')
  * @param {Object} endpointMap - Map of route names to base URLs
@@ -54,7 +59,11 @@ export function resolveEndpointUrl(routeName, urlParams, endpointMap) {
     if (!baseUrl) {
         throw new Error(`api_pipeline: unknown route "${routeName}"`);
     }
-    return baseUrl + normalizeEndpointUrlParams(urlParams);
+    const suffix = normalizeEndpointUrlParams(urlParams);
+    if (suffix.startsWith('?') && baseUrl.includes('?')) {
+        return `${baseUrl}&${suffix.slice(1)}`;
+    }
+    return baseUrl + suffix;
 }
 
 /**

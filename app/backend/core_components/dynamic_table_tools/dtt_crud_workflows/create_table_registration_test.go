@@ -101,12 +101,16 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 	}
 	mustExec(`
         CREATE TABLE system_db_tables(table_uid integer PRIMARY KEY,table_name text,schema_name text);
-        CREATE TABLE system_functions(id integer PRIMARY KEY,name text);
+        CREATE TABLE system_functions(id integer PRIMARY KEY,name text,specific_table_related boolean,disabled boolean);
         CREATE TABLE system_user_groups(id integer PRIMARY KEY,name text);
         CREATE TABLE system_group_table_func_rights(user_group_id integer,function_id integer,target_table_uid integer,target_schema_name text);
         CREATE UNIQUE INDEX fixture_permission_identity ON system_group_table_func_rights(user_group_id,function_id,COALESCE(target_table_uid,0));
         INSERT INTO system_user_groups VALUES(1,'admins'),(2,'users'),(3,'guests');
-        INSERT INTO system_functions VALUES(1,'dtt_1_row_read.GetResultsHandlerWrapper');
+        INSERT INTO system_functions VALUES
+            (1,'dtt_1_row_read.GetResultsHandlerWrapper',true,false),
+            (4,'dtt_1_row_read.FilterbarAICodexQueryHandler',true,false),
+            (5,'router.RetiredHandler',true,true),
+            (6,'system_table_tools.GetGroupedTables',false,false);
         CREATE TABLE existing_dataset(id integer PRIMARY KEY,title text);
         INSERT INTO existing_dataset VALUES(1,'preserved');
     `)
@@ -189,6 +193,17 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 				if _, err := reader.pool.Exec("INSERT INTO " + pq.QuoteIdentifier(name) + "(title) VALUES('forbidden')"); err == nil {
 					t.Fatal("reader could write")
 				}
+			}
+			// A dataset-specific route registered after this code was written
+			// must still work for administrators on a brand-new dataset, while
+			// retired and dataset-independent routes stay out of the grant.
+			var adminFunctions string
+			if err := db.QueryRow(`SELECT COALESCE(string_agg(function_id::text,',' ORDER BY function_id),'')
+                FROM system_group_table_func_rights WHERE user_group_id=1 AND target_table_uid=$1`, i+1).Scan(&adminFunctions); err != nil {
+				t.Fatal(err)
+			}
+			if adminFunctions != "1,4" {
+				t.Fatalf("admin dataset rights = %q, want the enabled dataset-specific functions", adminFunctions)
 			}
 		})
 	}

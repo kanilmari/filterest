@@ -45,45 +45,6 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 
 	// 2. Määrittele tarvittavat funktiot ja ryhmät
 
-	// Funktiot, jotka annetaan Adminille — kaikki table-specific handlerit
-	adminFuncNames := []string{
-		// dtt_1_row_read
-		"dtt_1_row_read.GetResultsHandlerWrapper",
-		"dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
-		"dtt_1_row_read.GetRowCountHandlerWrapper",
-		"dtt_1_row_read.GetFilterOptionsHandler",
-		"dtt_1_row_read.GetDynamicChildItemsHandler",
-		"dtt_1_row_read.GetResultsVector",
-		// dtt_1_row_create
-		"dtt_1_row_create.AddRowMultipartHandlerWrapper",
-		"dtt_1_row_create.GetAddRowColumnsHandlerWrapper",
-		"dtt_1_row_create.GetAddRowMetadataHandlerWrapper",
-		"dtt_1_row_create.GetOneToManyRelationsHandlerWrapper",
-		"dtt_1_row_create.GetManyToManyTablesHandlerWrapper",
-		"dtt_1_row_create.GetReferencedTableData",
-		"dtt_1_row_create.GeocodeAddressHandler",
-		// dtt_1_row_update
-		"dtt_1_row_update.UpdateRowHandlerWrapper",
-		// dtt_1_row_delete
-		"dtt_1_row_delete.DeleteRowsHandlerWrapper",
-		// dtt_2_column_crud
-		"dtt_2_column_crud.GetTableColumnsHandler",
-		// dtt_crud_workflows
-		"dtt_crud_workflows.ModifyColumnsHandler",
-		"dtt_crud_workflows.SetCommentsHandler",
-		"dtt_crud_workflows.CreateIndexesHandler",
-		// dtt_3_table_read / dtt_3_table_delete
-		"dtt_3_table_read.GetTableViewHandlerWrapper",
-		"dtt_3_table_delete.DropTableHandler",
-		// dtt_foreign_keys
-		"dtt_foreign_keys.GetForeignKeys",
-		"dtt_foreign_keys.AddForeignKeyHandler",
-		"dtt_foreign_keys.DeleteForeignKeyHandler",
-		// dtt_triggers
-		"dtt_triggers.CreateTriggerHandler",
-		"dtt_triggers.GetTriggersHandler",
-	}
-
 	// Funktiot, jotka annetaan Users/Guests (vain luku)
 	readFuncNames := []string{
 		"dtt_1_row_read.GetResultsHandlerWrapper",
@@ -115,15 +76,14 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 		return err
 	}
 
-	// Lisää Admin-oikeudet
-	for _, fnName := range adminFuncNames {
-		fid, err := getFuncID(fnName)
-		if err != nil {
-			log.Printf("warning: function %q not found, skipping admin permission", fnName)
-			continue
-		}
+	// Lisää Admin-oikeudet: kaikki käytössä olevat taulukohtaiset funktiot.
+	adminFuncIDs, err := tableSpecificFunctionIDs(q)
+	if err != nil {
+		return fmt.Errorf("reading table-specific functions: %w", err)
+	}
+	for _, fid := range adminFuncIDs {
 		if err := insertPerm(q, adminGroupID, fid, tableUID); err != nil {
-			return fmt.Errorf("inserting admin permission for %q: %w", fnName, err)
+			return fmt.Errorf("inserting admin permission for function %d: %w", fid, err)
 		}
 	}
 
@@ -207,6 +167,42 @@ func ensureRegisteredTableUID(q dbutils.Querier, tableName string) (int, error) 
 	}
 
 	return tableUID, nil
+}
+
+// tableSpecificFunctionIDs lists every enabled function that acts on a single
+// dataset. Administrators receive all of them for a new dataset, exactly as the
+// startup safety net (EnsureAdminTablePermissions) does for existing datasets.
+// A hand-kept name list used to drift here: a route added later stayed unusable
+// on new datasets until the next restart.
+// Between: ensureTablePermissions -> Database
+// Why: Keeps creation-time rights identical to the startup reconciliation rule.
+func tableSpecificFunctionIDs(q dbutils.Querier) ([]int, error) {
+	rows, err := q.Query(`
+		SELECT id
+		  FROM system_functions
+		 WHERE COALESCE(specific_table_related, true) = true
+		   AND COALESCE(disabled, false) = false
+		 ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	functionIDs := []int{}
+	for rows.Next() {
+		var functionID int
+		if err := rows.Scan(&functionID); err != nil {
+			return nil, err
+		}
+		functionIDs = append(functionIDs, functionID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(functionIDs) == 0 {
+		log.Printf("warning: no table-specific functions registered; new dataset gets no admin permissions")
+	}
+	return functionIDs, nil
 }
 
 func insertPerm(q dbutils.Querier, groupID, funcID, tableUID int) error {

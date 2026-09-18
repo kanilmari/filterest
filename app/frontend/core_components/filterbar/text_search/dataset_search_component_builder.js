@@ -407,6 +407,15 @@ export function createDatasetSearchComponent(tableName, options = {}) {
             componentId
         );
         localStorage.setItem(STORAGE_KEY_DRAFT, globalSearchInput.value);
+        // Erasing the whole field expresses the same intent as the clear
+        // button: the dataset returns to its ordinary results immediately,
+        // instead of leaving the previous search's rows on screen.
+        if (
+            globalSearchInput.value.trim() === "" &&
+            hasCommittedDatasetSearch(tableName)
+        ) {
+            clearCommittedSearch();
+        }
     }
     addManagedListener(globalSearchInput, "input", handleInput);
 

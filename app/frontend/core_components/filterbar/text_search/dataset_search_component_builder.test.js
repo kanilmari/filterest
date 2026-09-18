@@ -188,6 +188,37 @@ describe("createDatasetSearchComponent", () => {
         component.destroy();
     });
 
+    test("erasing the field returns the dataset to its ordinary results", async () => {
+        hasCommittedDatasetSearchMock.mockReturnValue(true);
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+
+        const component = createDatasetSearchComponent("app_users");
+        document.body.appendChild(component.element);
+
+        component.input.value = "ap";
+        component.input.dispatchEvent(new Event("input"));
+        expect(clearCommittedDatasetSearchMock).not.toHaveBeenCalled();
+
+        component.input.value = "  ";
+        component.input.dispatchEvent(new Event("input"));
+
+        expect(clearCommittedDatasetSearchMock).toHaveBeenCalledWith("app_users");
+        expect(renderActiveFiltersMock).toHaveBeenCalledWith("app_users");
+        component.destroy();
+    });
+
+    test("an already cleared search is not cleared again while typing", async () => {
+        hasCommittedDatasetSearchMock.mockReturnValue(false);
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+
+        const component = createDatasetSearchComponent("app_users");
+        component.input.value = "";
+        component.input.dispatchEvent(new Event("input"));
+
+        expect(clearCommittedDatasetSearchMock).not.toHaveBeenCalled();
+        component.destroy();
+    });
+
     test("keeps the X hidden when no committed search exists", async () => {
         const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
 
