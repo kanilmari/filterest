@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.3.13",
-  "db_version": "9.7.15",
+  "db_version": "9.7.16",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -99,7 +99,9 @@
     "20260914000003_add_coding_agent_dev_only.sql",
     "20260914000004_add_automation_api_only.sql",
     "20260914000005_inherit_card_field_labels.sql",
-    "20260914000006_add_article_section_initial_open.sql"
+    "20260914000006_add_article_section_initial_open.sql",
+    "20260918000001_record_site_assistant_release.sql",
+    "20260918000002_seed_site_assistant_language_keys.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -225,7 +227,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 93,
+    "public.system_schema_migrations": 95,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -240,7 +242,7 @@
       "sha256": "be4c9735a1f856de732d2b47eb885c4b28c391ee3186bf11e0150914f41c4e7a"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "193ec95adfe0b467ece4b15008273a98153185d65eade3668b394d048ad731b5"
+      "sha256": "26b0c0cbf9fff671a3a637f02ac1d63e31958b18e4a4cc78e640defa94cc551f"
     }
   },
   "source_files": {
@@ -591,6 +593,12 @@
     },
     "filterest/app/server_tools/migrations/20260914000006_add_article_section_initial_open.sql": {
       "sha256": "1dd0b21c9256796f4b769c7ec6740b16c336cfcdf7d2339a82914f6b963d6de4"
+    },
+    "filterest/app/server_tools/migrations/20260918000001_record_site_assistant_release.sql": {
+      "sha256": "eea2f5902ad69f388f1daaaad1bf3b507740d1d352decff92dee8fea81ad5bfd"
+    },
+    "filterest/app/server_tools/migrations/20260918000002_seed_site_assistant_language_keys.sql": {
+      "sha256": "a9536eccf960a055bcf9d53bceaf58a591f961b0441637d45c9be1933a592d9a"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

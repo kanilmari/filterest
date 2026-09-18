@@ -3,16 +3,28 @@
 // Bridges server policy/readiness, existing chat preferences and localized copy.
 // Keeps production permission distinct from missing runner configuration.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
+import { getTranslationForKey } from "../../lang/translation_handler.js";
 
-const copy = {
- en: { failed: "The coding job stopped or failed. Its log remains available to the administrator.", label: "AI service", api: "API AI", agent: "Coding agent (Codex)", waiting: "Checking availability…", unavailable: "Coding agent is not ready. An administrator must finish its setup.", dev: "Coding agent is restricted to development.", pending: "A coding job is still running. Reopening this chat resumes its status." },
- fi: { failed: "Koodaustyö keskeytyi tai epäonnistui. Sen loki säilyy ylläpitäjälle.", label: "Tekoälypalvelu", api: "API-tekoäly", agent: "Koodausagentti (Codex)", waiting: "Tarkistetaan saatavuutta…", unavailable: "Koodausagentti ei ole valmis. Ylläpitäjän on viimeisteltävä sen käyttöönotto.", dev: "Koodausagentti on rajattu kehitysympäristöön.", pending: "Koodaustyö on yhä käynnissä. Keskustelun avaaminen jatkaa sen tilan seurantaa." },
- sv: { failed: "Kodningsjobbet avbröts eller misslyckades. Loggen finns kvar för administratören.", label: "AI-tjänst", api: "API-AI", agent: "Kodningsagent (Codex)", waiting: "Kontrollerar tillgänglighet…", unavailable: "Kodningsagenten är inte redo. En administratör måste slutföra installationen.", dev: "Kodningsagenten är begränsad till utvecklingsmiljön.", pending: "Ett kodningsjobb pågår. Öppna chatten igen för att följa statusen." },
- de: { failed: "Der Programmierauftrag wurde beendet oder ist fehlgeschlagen. Das Protokoll bleibt für den Administrator verfügbar.", label: "KI-Dienst", api: "API-KI", agent: "Programmieragent (Codex)", waiting: "Verfügbarkeit wird geprüft…", unavailable: "Der Programmieragent ist noch nicht bereit. Ein Administrator muss die Einrichtung abschließen.", dev: "Der Programmieragent ist auf die Entwicklungsumgebung beschränkt.", pending: "Ein Programmierauftrag läuft. Öffnen Sie den Chat erneut, um den Status zu verfolgen." },
-};
+// The site's own language keys carry the translations; the English text here is
+// the fallback an installation without these keys still shows.
+const COPY_KEYS = Object.freeze({
+ failed: ["coding_agent_job_failed", "The coding job stopped or failed. Its log remains available to the administrator."],
+ label: ["coding_agent_service_label", "AI service"],
+ api: ["coding_agent_service_api", "API AI"],
+ agent: ["coding_agent_service_agent", "Coding agent (Codex)"],
+ waiting: ["coding_agent_checking", "Checking availability…"],
+ unavailable: ["coding_agent_not_ready", "Coding agent is not ready. An administrator must finish its setup."],
+ dev: ["coding_agent_dev_only", "Coding agent is restricted to development."],
+ pending: ["coding_agent_job_pending", "A coding job is still running. Reopening this chat resumes its status."],
+});
+
+/** Read this control's copy from the language keys of the current interface language. */
 export function codingAgentCopy() {
- const language = String(document.documentElement.lang || "en").split("-")[0];
- return copy[language] || copy.en;
+ const text = {};
+ for (const [name, [key, fallback]] of Object.entries(COPY_KEYS)) {
+  text[name] = getTranslationForKey(key, { fallback }) || fallback;
+ }
+ return text;
 }
 
 /** Server availability is advisory; the same admin/policy checks run per request. */

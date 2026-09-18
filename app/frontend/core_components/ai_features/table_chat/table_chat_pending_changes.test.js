@@ -10,6 +10,13 @@ vi.mock('../../endpoints/endpoint_router.js', () => ({
     endpoint_router: (...args) => endpointRouterMock(...args),
 }));
 
+// The view reads its copy from the site's language keys; the fixture supplies
+// one Finnish key and lets the rest fall back to the built-in English.
+const translations = vi.hoisted(() => new Map());
+vi.mock('../../lang/translation_handler.js', () => ({
+    getTranslationForKey: (key, { fallback } = {}) => translations.get(key) ?? fallback,
+}));
+
 const { renderPendingChanges, describePendingChange, pendingChangesCopy } = await import(
     './table_chat_pending_changes.js'
 );
@@ -37,6 +44,7 @@ beforeEach(() => {
     document.body.innerHTML = '';
     document.documentElement.lang = 'fi';
     endpointRouterMock.mockReset();
+    translations.clear();
 });
 
 describe('pending changes view', () => {
@@ -47,7 +55,7 @@ describe('pending changes view', () => {
         expect(container.querySelector('.chat_pending_changes_heading').textContent).toBe(text.heading);
         expect(container.querySelectorAll('.chat_pending_change')).toHaveLength(1);
         expect(container.querySelector('.chat_pending_change_summary').textContent)
-            .toBe('POST /api/update-row · Aineisto: app_notes');
+            .toBe('POST /api/update-row · Dataset: app_notes');
         expect(container.querySelector('.chat_pending_change_body').textContent).toContain('Muistiinpano');
         expect(container.querySelector('.chat_pending_changes_approve').textContent).toBe(text.approveOne);
     });
@@ -122,10 +130,16 @@ describe('pending changes view', () => {
         expect(approvals[0].body_sha256).toBe('b'.repeat(64));
     });
 
-    test('copy follows the document language', () => {
-        document.documentElement.lang = 'en';
+    test('copy comes from the site language keys with an English fallback', () => {
         expect(pendingChangesCopy().heading).toBe('Waiting for your approval');
         expect(describePendingChange({ method: 'post', path: '/api/delete-rows', query: {} }))
             .toBe('POST /api/delete-rows');
+
+        translations.set('site_assistant_pending_heading', 'Odottaa hyväksyntääsi');
+        translations.set('site_assistant_pending_dataset', 'Aineisto');
+        expect(pendingChangesCopy().heading).toBe('Odottaa hyväksyntääsi');
+        expect(describePendingChange({ method: 'POST', path: '/api/update-row', query: { dataset: 'app_notes' } }))
+            .toBe('POST /api/update-row · Aineisto: app_notes');
+        expect(pendingChangesCopy().done).toBe('Done');
     });
 });

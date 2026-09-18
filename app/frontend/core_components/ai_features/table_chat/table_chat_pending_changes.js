@@ -3,62 +3,30 @@
 // Bridges the chat's job answer and the approval route that runs the approved calls.
 // Exists so a change is visible in the administrator's own language before anything is written.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
+import { getTranslationForKey } from "../../lang/translation_handler.js";
 
-const copy = {
-    en: {
-        heading: "Waiting for your approval",
-        intro: "The assistant prepared these changes but has not made them.",
-        approve: "Approve and run",
-        approveOne: "Approve this change",
-        running: "Running…",
-        done: "Done",
-        failed: "This change failed. Nothing after it was run.",
-        error: "Approval failed. Nothing was changed.",
-        target: "Dataset",
-        details: "Show the exact call",
-    },
-    fi: {
-        heading: "Odottaa hyväksyntääsi",
-        intro: "Avustaja valmisteli nämä muutokset, mutta ei ole tehnyt niitä.",
-        approve: "Hyväksy ja suorita",
-        approveOne: "Hyväksy tämä muutos",
-        running: "Suoritetaan…",
-        done: "Tehty",
-        failed: "Tämä muutos epäonnistui. Sen jälkeisiä ei suoritettu.",
-        error: "Hyväksyntä epäonnistui. Mitään ei muutettu.",
-        target: "Aineisto",
-        details: "Näytä tarkka kutsu",
-    },
-    sv: {
-        heading: "Väntar på ditt godkännande",
-        intro: "Assistenten förberedde dessa ändringar men har inte gjort dem.",
-        approve: "Godkänn och kör",
-        approveOne: "Godkänn den här ändringen",
-        running: "Körs…",
-        done: "Klar",
-        failed: "Ändringen misslyckades. Inget efter den kördes.",
-        error: "Godkännandet misslyckades. Inget ändrades.",
-        target: "Datamängd",
-        details: "Visa det exakta anropet",
-    },
-    de: {
-        heading: "Wartet auf Ihre Freigabe",
-        intro: "Der Assistent hat diese Änderungen vorbereitet, aber nicht ausgeführt.",
-        approve: "Freigeben und ausführen",
-        approveOne: "Diese Änderung freigeben",
-        running: "Wird ausgeführt…",
-        done: "Erledigt",
-        failed: "Diese Änderung ist fehlgeschlagen. Nachfolgende wurden nicht ausgeführt.",
-        error: "Die Freigabe ist fehlgeschlagen. Es wurde nichts geändert.",
-        target: "Datensatz",
-        details: "Genauen Aufruf anzeigen",
-    },
-};
+// The site's own language keys carry the translations; the English text here is
+// the fallback an installation without these keys still shows.
+const COPY_KEYS = Object.freeze({
+    heading: ["site_assistant_pending_heading", "Waiting for your approval"],
+    intro: ["site_assistant_pending_intro", "The assistant prepared these changes but has not made them."],
+    approve: ["site_assistant_pending_approve_all", "Approve and run"],
+    approveOne: ["site_assistant_pending_approve_one", "Approve this change"],
+    running: ["site_assistant_pending_running", "Running…"],
+    done: ["site_assistant_pending_done", "Done"],
+    failed: ["site_assistant_pending_failed", "This change failed. Nothing after it was run."],
+    error: ["site_assistant_pending_error", "Approval failed. Nothing was changed."],
+    target: ["site_assistant_pending_dataset", "Dataset"],
+    details: ["site_assistant_pending_details", "Show the exact call"],
+});
 
-/** Localized copy follows the document language like the rest of the chat. */
+/** Read the view's copy from the language keys of the current interface language. */
 export function pendingChangesCopy() {
-    const language = String(document.documentElement.lang || "en").split("-")[0];
-    return copy[language] || copy.en;
+    const text = {};
+    for (const [name, [key, fallback]] of Object.entries(COPY_KEYS)) {
+        text[name] = getTranslationForKey(key, { fallback }) || fallback;
+    }
+    return text;
 }
 
 /** A plain-language line for one waiting call, with the address as the detail. */

@@ -654,7 +654,7 @@ WHERE f.name = 'system_table_tools.AdminDatasetUIVisibilityHandler'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.7.15', 'Filterest generated public bootstrap');
+VALUES ('9.7.16', 'Filterest generated public bootstrap');
 
 -- Administrator coding agents require an explicit production opt-in.
 INSERT INTO public.system_config (key, value_type, boolean_value, text_value, json_value)
@@ -3407,5 +3407,7 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260914000003_add_coding_agent_dev_only.sql'),
   ('20260914000004_add_automation_api_only.sql'),
   ('20260914000005_inherit_card_field_labels.sql'),
-  ('20260914000006_add_article_section_initial_open.sql')
+  ('20260914000006_add_article_section_initial_open.sql'),
+  ('20260918000001_record_site_assistant_release.sql'),
+  ('20260918000002_seed_site_assistant_language_keys.sql')
 ON CONFLICT (filename) DO NOTHING;

@@ -9,11 +9,18 @@ const permission = vi.hoisted(() => vi.fn());
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: request }));
 vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: permission }));
 vi.mock("../../../ui_config.js", () => ({ FILTERBAR_AI_CHAT_MODE: "api_tools" }));
+// The control reads its copy from the site's language keys; the fixture answers
+// Finnish for one key and lets the rest fall back to the built-in English.
+const translations = vi.hoisted(() => new Map());
+vi.mock("../../lang/translation_handler.js", () => ({
+ getTranslationForKey: (key, { fallback } = {}) => translations.get(key) ?? fallback,
+}));
 import { createCodingAgentControl } from "./table_chat_coding_agent_control.js";
 beforeEach(() => {
  document.head.innerHTML='<meta name="app-env" content="prod">';
  document.documentElement.lang="fi";document.body.innerHTML="";localStorage.clear();
  request.mockReset();permission.mockReturnValue(true);
+ translations.clear();
 });
 test("a denied administrator request leaves controls hidden even with stale route access", async () => {
  document.head.innerHTML='<meta name="app-env" content="dev">';
@@ -27,6 +34,7 @@ test("a denied administrator request leaves controls hidden even with stale rout
  control.destroy();
 });
 test("enabled production with an unready runner explains setup without allowing sends", async () => {
+ translations.set("coding_agent_not_ready","Koodausagentti ei ole valmis. Ylläpitäjän on viimeisteltävä sen käyttöönotto.");
  request.mockResolvedValue({feature_enabled:true,runner_ready:false,dev_only:false});
  const control=createCodingAgentControl("fixture");document.body.append(control.row);
  await vi.waitFor(()=>expect(control.row.hidden).toBe(false));
@@ -43,6 +51,7 @@ test("ready production selection persists and FI to EN keeps focus and value", a
  control.select.value="codex_dev";control.select.dispatchEvent(new Event("change"));control.select.focus();
  document.documentElement.lang="en";
  await vi.waitFor(()=>expect(control.row.textContent).toContain("Coding agent (Codex)"));
+ expect(control.row.textContent).toContain("AI service");
  expect(control.select.value).toBe("codex_dev");expect(document.activeElement).toBe(control.select);
  expect(localStorage.getItem("gptChatMode_fixture")).toBe("codex_dev");
  control.destroy();
@@ -65,7 +74,7 @@ test("fresh administrator availability recovers missing route cache without earl
  expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(true);
  resolve({feature_enabled:true,runner_ready:false,dev_only:false});
  await vi.waitFor(()=>expect(control.row.hidden).toBe(false));
- expect(control.row.textContent).toContain("ei ole valmis");
+ expect(control.row.textContent).toContain("is not ready");
  expect(control.select.value).toBe("api_tools");
  expect(request.mock.calls).toHaveLength(1);
  control.destroy();
