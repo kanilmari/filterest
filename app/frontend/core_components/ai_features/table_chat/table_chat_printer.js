@@ -4,6 +4,8 @@
 // Exists to keep the filterbar chat pinned to the API-first ai-chat facade.
 
 import { createCodingAgentControl } from './table_chat_coding_agent_control.js';
+import { renderPendingChanges } from './table_chat_pending_changes.js';
+import { refreshTableUnified } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import {
@@ -83,9 +85,26 @@ async function start_codex_dev_query(table_name, user_message, pending_message =
     if (chatResponse?.memory) {
         replace_result_context_in_conversation(table_name, chatResponse.memory);
     }
-    finish_pending_chat_message(table_name, pending_message, 'assistant', visibleAssistantReply, {
+    const message_div = finish_pending_chat_message(table_name, pending_message, 'assistant', visibleAssistantReply, {
         created_at: assistantCreatedAt,
         usage: chatResponse?.usage || null,
+    });
+    show_pending_changes(table_name, message_div, chatResponse);
+}
+
+/** A job that prepared changes shows them for the administrator's approval. */
+function show_pending_changes(table_name, message_div, chatResponse) {
+    if (!message_div || !Array.isArray(chatResponse?.pendingChanges) || chatResponse.pendingChanges.length === 0) {
+        return;
+    }
+    renderPendingChanges(message_div, {
+        dataset: table_name,
+        jobId: chatResponse.jobId,
+        changes: chatResponse.pendingChanges,
+        onApproved: async () => {
+            // Approved changes alter the dataset, so the open view is reloaded.
+            await refreshTableUnified(table_name, { skipUrlParams: true });
+        },
     });
 }
 
@@ -1029,10 +1048,10 @@ function append_pending_chat_message(table_name, mode) {
     return pending_message;
 }
 
+/** Returns the finished message element so callers can attach follow-up UI. */
 function finish_pending_chat_message(table_name, pending_message, sender, message_text, metadata = {}) {
     if (!pending_message || pending_message.done || !pending_message.element?.isConnected) {
-        append_chat_message(table_name, sender, message_text, '', metadata);
-        return;
+        return append_chat_message(table_name, sender, message_text, '', metadata);
     }
     pending_message.done = true;
     window.clearInterval(pending_message.interval_id);
@@ -1053,6 +1072,7 @@ function finish_pending_chat_message(table_name, pending_message, sender, messag
     if (chat_container) {
         scroll_chat_to_bottom(chat_container);
     }
+    return pending_message.element;
 }
 
 // Tallennus

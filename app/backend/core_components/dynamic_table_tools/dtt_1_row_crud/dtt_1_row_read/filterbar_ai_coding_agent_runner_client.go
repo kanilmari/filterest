@@ -40,10 +40,12 @@ type codingAgentJobResult struct {
 	ErrorCode    string                   `json:"error_code,omitempty"`
 	ChangedFiles []string                 `json:"changed_files,omitempty"`
 	Maintenance  []map[string]interface{} `json:"maintenance,omitempty"`
-	// Plan lists the write calls the assistant wants the administrator to approve.
-	Plan    []codingAgentPlanEntry `json:"plan,omitempty"`
-	Mode    string                 `json:"mode"`
-	DevOnly bool                   `json:"dev_only"`
+	// PendingChanges lists write calls the assistant wants the administrator to
+	// approve. The chat's own filter plan keeps the name "plan", so this field
+	// deliberately differs from it.
+	PendingChanges []codingAgentPlanEntry `json:"pending_changes,omitempty"`
+	Mode    string `json:"mode"`
+	DevOnly bool   `json:"dev_only"`
 }
 
 // codingAgentPlanEntry describes one waiting write in the words of the API call

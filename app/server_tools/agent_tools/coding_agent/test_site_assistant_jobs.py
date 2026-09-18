@@ -139,7 +139,7 @@ def test_job_reads_live_data_and_returns_a_plan_for_writes(tmp_path):
     assert session.exchanged == "fsa1_code"
     assert jobs.state["status"] == "awaiting_approval"
     assert jobs.state["answer"].startswith("I read the row")
-    plan = jobs.state["plan"]
+    plan = jobs.state["pending_changes"]
     assert len(plan) == 1 and plan[0]["path"] == "/api/update-row" and plan[0]["status"] == "pending"
     assert plan[0]["body"]["updates"][0]["value"] == "Muistiinpano"
     assert [call["path"] for call in jobs.state["api_calls"]] == ["/api/get-results", "/api/update-row"]
@@ -159,7 +159,7 @@ def test_read_only_job_completes_without_a_plan(tmp_path):
         run_engine=engine_that_calls(["--method", "GET", "--path", "/api/dataset-names"]),
     )
 
-    assert jobs.state["status"] == "completed" and jobs.state.get("plan") == []
+    assert jobs.state["status"] == "completed" and jobs.state.get("pending_changes") == []
 
 
 def test_engine_failure_and_timeout_are_recorded(tmp_path):
@@ -186,7 +186,7 @@ def test_engine_failure_and_timeout_are_recorded(tmp_path):
 
 def test_approved_plan_runs_without_a_new_model_request(tmp_path):
     jobs, _ = prepare_job(tmp_path)
-    jobs.state["plan"] = [
+    jobs.state["pending_changes"] = [
         {"method": "POST", "path": "/api/update-row", "body_sha256": "c" * 64,
          "query": {"dataset": "app_notes"}, "body": {"id": 1}, "status": "pending"},
     ]
@@ -199,13 +199,13 @@ def test_approved_plan_runs_without_a_new_model_request(tmp_path):
     )
 
     assert result["status"] == "applied" and jobs.state["status"] == "applied"
-    assert jobs.state["plan"][0]["status"] == "done"
+    assert jobs.state["pending_changes"][0]["status"] == "done"
     assert session.calls[0]["body"] == {"id": 1}
 
 
 def test_apply_stops_at_the_first_refused_call(tmp_path):
     jobs, _ = prepare_job(tmp_path)
-    jobs.state["plan"] = [
+    jobs.state["pending_changes"] = [
         {"method": "POST", "path": "/api/update-row", "query": {}, "body": {"id": 1}, "status": "pending"},
         {"method": "POST", "path": "/api/delete-rows", "query": {}, "body": {"ids": [1]}, "status": "pending"},
     ]
@@ -218,7 +218,7 @@ def test_apply_stops_at_the_first_refused_call(tmp_path):
     )
 
     assert result["status"] == "apply_failed" and jobs.state["status"] == "apply_failed"
-    assert jobs.state["plan"][0]["status"] == "failed"
+    assert jobs.state["pending_changes"][0]["status"] == "failed"
     assert len(session.calls) == 1, "a failed change must not be followed by the next one"
 
 
@@ -289,7 +289,7 @@ def test_runner_applies_a_plan_only_for_its_owner_and_waiting_state(tmp_path, mo
     directory.mkdir()
     jobs_store.atomic_json(directory / "status.json", {
         "job_id": job_id, "actor": 42, "dataset": "app_notes", "status": "awaiting_approval",
-        "plan": [{"method": "POST", "path": "/api/update-row", "query": {}, "body": {"id": 1}, "status": "pending"}],
+        "pending_changes": [{"method": "POST", "path": "/api/update-row", "query": {}, "body": {"id": 1}, "status": "pending"}],
     })
     access = {"delegation_code": "fsa1_second", "site_base_url": "http://127.0.0.1:8193"}
     applied = {}

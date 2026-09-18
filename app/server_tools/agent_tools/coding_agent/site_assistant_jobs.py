@@ -116,8 +116,8 @@ def build_prompt(payload, catalog, tool_path, images=()):
     ])
 
 
-def plan_entries(session):
-    """Turn refused writes into plan rows the chat can show for approval."""
+def pending_change_entries(session):
+    """Turn refused writes into rows the chat can show for approval."""
     entries = []
     for attempt in session.planned_writes():
         approval = attempt["approval"]
@@ -181,16 +181,16 @@ def run_site_assistant_job(jobs, job_id, *, session_factory=SiteAPISession, run_
         stop.set()
         server.join(5)
 
-    plan = plan_entries(session)
+    pending = pending_change_entries(session)
     answer = answer_file.read_text().strip() if answer_file.is_file() else ""
     if completed != 0 and not answer:
         jobs.update(job_id, status="failed", error_code="assistant_command_failed",
                     api_calls=call_summary(calls), finished_at=time.time())
         return
     jobs.update(job_id,
-                status="awaiting_approval" if plan else "completed",
+                status="awaiting_approval" if pending else "completed",
                 answer=answer[:ANSWER_LIMIT],
-                plan=plan,
+                pending_changes=pending,
                 api_calls=call_summary(calls),
                 finished_at=time.time())
 
@@ -198,14 +198,14 @@ def run_site_assistant_job(jobs, job_id, *, session_factory=SiteAPISession, run_
 def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=SiteAPISession):
     """Run the approved plan with fresh site access and no new model request."""
     state = jobs.read(job_id)
-    plan = state.get("plan") or []
-    if not plan:
-        return {"status": "failed", "error_code": "no_plan"}
+    pending = state.get("pending_changes") or []
+    if not pending:
+        return {"status": "failed", "error_code": "no_pending_changes"}
 
     session = session_factory(access["site_base_url"])
     session.exchange(access["delegation_code"])
     results = []
-    for entry in plan:
+    for entry in pending:
         if entry.get("status") == "done":
             results.append(entry)
             continue
@@ -220,9 +220,10 @@ def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=SiteAPISe
             # Stop at the first failure; the rest stays approved but unrun.
             break
 
-    done = all(entry.get("status") == "done" for entry in results) and len(results) == len(plan)
-    jobs.update(job_id, status="applied" if done else "apply_failed", plan=results, finished_at=time.time())
-    return {"status": "applied" if done else "apply_failed", "plan": results}
+    done = all(entry.get("status") == "done" for entry in results) and len(results) == len(pending)
+    jobs.update(job_id, status="applied" if done else "apply_failed",
+                pending_changes=results, finished_at=time.time())
+    return {"status": "applied" if done else "apply_failed", "pending_changes": results}
 
 
 def store_attached_images(payload, workspace):

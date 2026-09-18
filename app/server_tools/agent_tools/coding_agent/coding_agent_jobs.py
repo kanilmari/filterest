@@ -100,7 +100,7 @@ class CodingJobs:
     def public(self, state):
         return {key: state[key] for key in
                 ("job_id", "status", "dataset", "answer", "error_code", "changed_files", "maintenance",
-                 "plan", "api_calls")
+                 "pending_changes", "api_calls")
                 if key in state}
 
     def submit(self, actor, payload):
@@ -228,7 +228,7 @@ class CodingJobs:
         with self.lock:
             state = self.read(job_id, actor, dataset)
             if state.get("status") != "awaiting_approval":
-                raise JobError(409, "this job has no plan waiting for approval")
+                raise JobError(409, "this job has no changes waiting for approval")
             if self.busy:
                 raise JobError(429, "one coding job is already running")
             self.busy = True

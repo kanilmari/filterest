@@ -54,6 +54,10 @@ func RegisterAppRoutes() {
 		dtt_1_row_read.FilterbarAICodexQueryHandler,
 		"dtt_1_row_read.FilterbarAICodexQueryHandler")
 
+	functionRegisterHandler("/api/app/ai-chat/site-assistant-approval",
+		dtt_1_row_read.SiteAssistantApprovalHandler,
+		"dtt_1_row_read.SiteAssistantApprovalHandler")
+
 	functionRegisterHandler("/api/app/ai-chat/conversation",
 		dtt_1_row_read.FilterbarAIConversationHandler,
 		"dtt_1_row_read.FilterbarAIConversationHandler")

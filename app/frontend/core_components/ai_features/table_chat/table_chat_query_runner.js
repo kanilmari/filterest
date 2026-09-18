@@ -310,6 +310,8 @@ export async function runCodexDevChatQuery(table_name, user_message, conversatio
         memory: response?.memory || null,
         usage: response?.usage || null,
         resultActionTaken,
+        pendingChanges: Array.isArray(response?.pending_changes) ? response.pending_changes : [],
+        jobId: typeof response?.job_id === "string" ? response.job_id : "",
     };
 }
 
@@ -341,7 +343,7 @@ async function pollCodingAgentJob(dataset, jobID) {
                 suppressErrorToast: true, signal: controller.signal,
             });
             if (controller.signal.aborted) throw aborted();
-            if (response?.status === "completed") {
+            if (["completed", "awaiting_approval", "applied", "apply_failed"].includes(response?.status)) {
                 localStorage.removeItem(codingAgentJobKey(dataset));
                 return response;
             }
