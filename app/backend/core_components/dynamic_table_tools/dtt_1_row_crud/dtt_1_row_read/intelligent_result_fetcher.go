@@ -15,6 +15,7 @@ import (
 
 	dbutils "easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_read"
+	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 
 	"github.com/lib/pq"
 	pgvector "github.com/pgvector/pgvector-go"
@@ -213,7 +214,9 @@ func buildSimpleSearchVectorExpression(tableAlias string, cols []string) string 
 		parts = append(parts, fmt.Sprintf("coalesce(%s.%s::text, '')", quotedAlias, pq.QuoteIdentifier(col)))
 	}
 
-	return fmt.Sprintf("to_tsvector('simple', concat_ws(' ', %s))", strings.Join(parts, ", "))
+	// The same definition as the stored vector, so a row without one is found
+	// by the same words.
+	return dtt_search_vectors.SearchVectorExpressionForValues(parts)
 }
 
 func quoteDerivedTableName(baseTable string, suffix string) string {

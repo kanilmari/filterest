@@ -19,14 +19,23 @@ const searchVectorSeparators = `/\_.-:@`
 
 // searchVectorExpression returns the tsvector expression for the given columns.
 func searchVectorExpression(columns []string) string {
-	if len(columns) == 0 {
+	values := make([]string, 0, len(columns))
+	for _, column := range columns {
+		values = append(values, fmt.Sprintf("coalesce(%s::text,'')", pq.QuoteIdentifier(column)))
+	}
+	return SearchVectorExpressionForValues(values)
+}
+
+// SearchVectorExpressionForValues builds the same tsvector from ready-made value
+// expressions, for example alias-qualified columns in a search query.
+// Between: stored search vectors and the search fallback for rows without one.
+// Why: both must split paths and identifiers the same way, or a word found in
+// one place stays missing in the other.
+func SearchVectorExpressionForValues(values []string) string {
+	if len(values) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(columns))
-	for _, column := range columns {
-		parts = append(parts, fmt.Sprintf("coalesce(%s::text,'')", pq.QuoteIdentifier(column)))
-	}
-	joined := strings.Join(parts, " || ' ' || ")
+	joined := strings.Join(values, " || ' ' || ")
 	spaces := strings.Repeat(" ", len([]rune(searchVectorSeparators)))
 	return fmt.Sprintf(
 		"to_tsvector('simple', (%s) || ' ' || translate((%s), %s, %s))",

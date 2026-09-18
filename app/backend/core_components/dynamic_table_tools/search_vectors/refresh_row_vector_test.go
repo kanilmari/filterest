@@ -262,3 +262,15 @@ func TestSearchVectorExpressionAlsoIndexesSeparatedWords(t *testing.T) {
 		t.Fatal("a table without queryable columns has no expression")
 	}
 }
+
+// A row without a stored vector is searched through the same definition.
+func TestSearchVectorExpressionForValuesMatchesTheStoredDefinition(t *testing.T) {
+	stored := searchVectorExpression([]string{"url_route_endpoint"})
+	fallback := SearchVectorExpressionForValues([]string{`coalesce("url_route_endpoint"::text,'')`})
+	if stored != fallback {
+		t.Fatalf("stored and fallback expressions differ:\n%s\n%s", stored, fallback)
+	}
+	if SearchVectorExpressionForValues(nil) != "" {
+		t.Fatal("no values means no expression")
+	}
+}
