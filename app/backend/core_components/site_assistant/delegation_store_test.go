@@ -169,3 +169,20 @@ func TestRequestIsWriteCoversReadMethods(t *testing.T) {
 		}
 	}
 }
+
+func TestByJobFindsOnlyLiveDelegations(t *testing.T) {
+	store, _ := newTestStore(t)
+	_, delegation := issueTestDelegation(t, store)
+
+	found, err := store.ByJob("job-1")
+	if err != nil || found.ID != delegation.ID {
+		t.Fatalf("ByJob = %+v, %v", found, err)
+	}
+	if _, err := store.ByJob("job-unknown"); !errors.Is(err, ErrUnknownDelegation) {
+		t.Fatalf("unknown job = %v", err)
+	}
+	store.Revoke(delegation.ID)
+	if _, err := store.ByJob("job-1"); !errors.Is(err, ErrUnknownDelegation) {
+		t.Fatalf("revoked job = %v", err)
+	}
+}

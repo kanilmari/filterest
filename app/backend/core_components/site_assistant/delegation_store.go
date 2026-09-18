@@ -161,6 +161,20 @@ func (store *Store) Lookup(delegationID string) (*Delegation, error) {
 	return delegation.copyLocked(), nil
 }
 
+// ByJob returns the live delegation of one job, so the chat can approve its plan
+// without the browser ever seeing a delegation identifier.
+func (store *Store) ByJob(jobID string) (*Delegation, error) {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	jobID = strings.TrimSpace(jobID)
+	for _, delegation := range store.delegations {
+		if delegation.JobID == jobID && store.liveLocked(delegation) {
+			return delegation.copyLocked(), nil
+		}
+	}
+	return nil, ErrUnknownDelegation
+}
+
 // Approve records the exact write calls the administrator accepted. Each call
 // may run once; approving again replaces the remaining plan.
 func (store *Store) Approve(delegationID string, calls []ApprovedCall) error {
