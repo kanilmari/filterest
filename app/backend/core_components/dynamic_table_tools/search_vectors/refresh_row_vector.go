@@ -56,12 +56,8 @@ func RefreshRowSearchVector(ctx context.Context, execer rowVectorUpdater, table 
 		return nil
 	}
 
-	var parts []string
-	for _, c := range cols {
-		parts = append(parts, fmt.Sprintf("coalesce(%s::text,'')", pq.QuoteIdentifier(c)))
-	}
-	concat := strings.Join(parts, " || ' ' || ")
-	update := fmt.Sprintf(`UPDATE %s SET search_vector_simple = to_tsvector('simple', %s) WHERE id = $1`, pq.QuoteIdentifier(table), concat)
+	update := fmt.Sprintf(`UPDATE %s SET search_vector_simple = %s WHERE id = $1`,
+		pq.QuoteIdentifier(table), searchVectorExpression(cols))
 	if _, err := execer.ExecContext(ctx, update, rowID); err != nil {
 		return fmt.Errorf("update search_vector_simple: %w", err)
 	}
@@ -96,4 +92,39 @@ func searchVectorColumnExists(ctx context.Context, execer rowVectorUpdater, sche
 		return true, rows.Err()
 	}
 	return false, rows.Err()
+}
+
+// RefreshTableRowVectors recalculates search_vector_simple for every row of a
+// small registry table.
+// Between: rows written outside the row APIs (for example the startup route
+// registry) and dataset text search.
+// Why: a row without a vector cannot be found by text search at all, and a
+// vector written by an older release keeps that release's word splitting.
+func RefreshTableRowVectors(ctx context.Context, execer rowVectorUpdater, table string) (int64, error) {
+	schema, plainTable := splitTableName(table)
+	exists, err := searchVectorColumnExistsFunc(ctx, execer, schema, plainTable)
+	if err != nil {
+		return 0, fmt.Errorf("check search_vector_simple column: %w", err)
+	}
+	if !exists {
+		return 0, nil
+	}
+	cols, err := filteredColumnsFunc(table, execer, false)
+	if err != nil {
+		return 0, fmt.Errorf("get filtered columns: %w", err)
+	}
+	if len(cols) == 0 {
+		return 0, nil
+	}
+	update := fmt.Sprintf(`UPDATE %s SET search_vector_simple = %s`,
+		pq.QuoteIdentifier(table), searchVectorExpression(cols))
+	result, err := execer.ExecContext(ctx, update)
+	if err != nil {
+		return 0, fmt.Errorf("refresh table search_vector_simple: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return 0, nil
+	}
+	return updated, nil
 }

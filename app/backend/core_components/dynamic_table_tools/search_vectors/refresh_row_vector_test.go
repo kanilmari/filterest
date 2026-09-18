@@ -149,7 +149,8 @@ func TestRefreshRowSearchVectorUpdatesVector(t *testing.T) {
 	if len(driver.execQueries) != 1 {
 		t.Fatalf("expected 1 exec, got %d", len(driver.execQueries))
 	}
-	expected := `UPDATE "dev_todo" SET search_vector_simple = to_tsvector('simple', coalesce("header"::text,'') || ' ' || coalesce("description"::text,'')) WHERE id = $1`
+	expected := fmt.Sprintf(`UPDATE "dev_todo" SET search_vector_simple = %s WHERE id = $1`,
+		searchVectorExpression([]string{"header", "description"}))
 	if driver.execQueries[0] != expected {
 		t.Fatalf("unexpected update query: %s", driver.execQueries[0])
 	}
@@ -244,4 +245,20 @@ func buildTestTsQuery(input string) string {
 		words[i] = w + ":*"
 	}
 	return strings.Join(words, " | ")
+}
+
+// Route addresses, file names and identifiers must also be findable word by word.
+func TestSearchVectorExpressionAlsoIndexesSeparatedWords(t *testing.T) {
+	expression := searchVectorExpression([]string{"url_route_endpoint"})
+	if !strings.Contains(expression, "translate(") {
+		t.Fatalf("expression must index a separated copy as well: %s", expression)
+	}
+	for _, separator := range []string{"/", "_", "-", "."} {
+		if !strings.Contains(searchVectorSeparators, separator) {
+			t.Fatalf("separator %q must be split for word search", separator)
+		}
+	}
+	if searchVectorExpression(nil) != "" {
+		t.Fatal("a table without queryable columns has no expression")
+	}
 }

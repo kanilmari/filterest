@@ -68,12 +68,8 @@ func rebuildSearchVector(db *sql.Tx, table string) error {
 		return fmt.Errorf("get filtered columns: %w", err)
 	}
 	if len(cols) > 0 {
-		var parts []string
-		for _, c := range cols {
-			parts = append(parts, fmt.Sprintf("coalesce(%s::text,'')", pq.QuoteIdentifier(c)))
-		}
-		concat := strings.Join(parts, " || ' ' || ")
-		update := fmt.Sprintf(`UPDATE %s SET search_vector_simple = to_tsvector('simple', %s)`, pq.QuoteIdentifier(table), concat)
+		update := fmt.Sprintf(`UPDATE %s SET search_vector_simple = %s`,
+			pq.QuoteIdentifier(table), searchVectorExpression(cols))
 		if _, err := db.Exec(update); err != nil {
 			return fmt.Errorf("update search_vector_simple: %w", err)
 		}

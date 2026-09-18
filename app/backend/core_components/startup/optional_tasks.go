@@ -5,12 +5,14 @@
 package startup
 
 import (
+	"context"
 	"log"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dynamic_table_tools/ai_features"
 	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
+	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/runtimepaths"
 	"easelect/backend/core_components/system_table_tools"
 )
@@ -35,6 +37,7 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	log.Println("[STARTUP] Optional maintenance continues in background.")
 
 	repairUpscaledDisplayVariants(runtimepaths.Current().StorageRoot)
+	refreshFunctionSearchVectors()
 
 	if cleanupResult, err := dtt_system_table_folders.ReconcileLegacyOtherTablesFolder(backend.Db); err != nil {
 		log.Printf("\033[31merror: [STARTUP] legacy other_tables cleanup failed: %v\033[0m", err)
@@ -81,6 +84,20 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 		log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
 	}
 	log.Println("[STARTUP] Optional maintenance completed.")
+}
+
+// refreshFunctionSearchVectors keeps the route registry findable by text search.
+// Startup registration writes those rows directly, so without this they carry no
+// vector at all, or one written by an older release's word splitting.
+func refreshFunctionSearchVectors() {
+	updated, err := dtt_search_vectors.RefreshTableRowVectors(context.Background(), backend.Db, "system_functions")
+	if err != nil {
+		log.Printf("\033[31merror: [STARTUP] function search vectors could not be refreshed: %v\033[0m", err)
+		return
+	}
+	if updated > 0 {
+		log.Printf("[STARTUP] Search index: refreshed %d function search vectors", updated)
+	}
 }
 
 // repairUpscaledDisplayVariants replaces display variants that earlier releases
