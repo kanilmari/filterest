@@ -236,3 +236,19 @@ describe('card role request validation', () => {
         expect(buildTableCreationRequestData(base).requestData).not.toHaveProperty('column_card_roles');
     });
 });
+
+describe('dataset language default at creation', () => {
+    const base = { tableName: 'demo', columnNames: ['id', 'title'], dataTypes: ['SERIAL', 'TEXT'] };
+
+    test('a dataset born multilingual says so in its request', () => {
+        expect(buildTableCreationRequestData({ ...base, newColumnsMultilingual: true })
+            .requestData.new_columns_multilingual).toBe(true);
+    });
+
+    test('an unticked choice keeps the previous request untouched', () => {
+        for (const choice of [false, undefined, null]) {
+            expect(buildTableCreationRequestData({ ...base, newColumnsMultilingual: choice }).requestData)
+                .not.toHaveProperty('new_columns_multilingual');
+        }
+    });
+});

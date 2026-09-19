@@ -223,5 +223,9 @@ export const MANAGE_TABLE_TRANSLATION_FALLBACKS = {
     "en": "Table permanently deleted.",
     "ch": "数据表已永久删除。",
     "yue": "資料表已永久刪除。"
+  },
+  "manage_table_settings_need_attention": {
+    "fi": "Sarakkeet tallennettiin. Yksi aineiston asetus jäi kesken – katso lomakkeen viesti.",
+    "en": "The columns were saved. One dataset setting still needs attention — see the message in the form."
   }
 };

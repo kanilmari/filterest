@@ -36,8 +36,12 @@ type CreateTableRequest struct {
 	GrantUsersRead  bool              `json:"grant_users_read"`
 	GrantGuestsRead bool              `json:"grant_guests_read"`
 	PreventDeletion bool              `json:"prevent_deletion"`
-	FolderID        *int              `json:"folder_id"`
-	CreateFolder    *CreateFolderDef  `json:"create_folder"`
+	// NewColumnsMultilingual sets the dataset's own text-language default, the
+	// same choice the editing form offers, so a dataset can be born
+	// multilingual instead of having to be corrected right afterwards.
+	NewColumnsMultilingual *bool            `json:"new_columns_multilingual,omitempty"`
+	FolderID               *int             `json:"folder_id"`
+	CreateFolder           *CreateFolderDef `json:"create_folder"`
 }
 
 type CreateFolderDef struct {
@@ -314,6 +318,19 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The dataset's text-language default belongs to its definition, so the
+	// creation form owns it too. A request that stays silent about languages
+	// leaves the metadata default untouched.
+	if req.NewColumnsMultilingual != nil {
+		if err := configureNewColumnDefaults(
+			tx, tableName, createdColumnsForLanguageDefaults(sanitizedColumns), req.NewColumnsMultilingual,
+		); err != nil {
+			_ = tx.Rollback()
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
 	if _, err := tx.Exec("UPDATE system_db_tables SET folder_id = $1 WHERE table_name = $2", targetFolderID, tableName); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but folder assignment failed: %v", err))
@@ -370,11 +387,21 @@ type ModifyColumnsRequest struct {
 	// same choice the creation form offers, so both forms describe a dataset
 	// with one vocabulary.
 	ColumnCardRoles map[string]string `json:"column_card_roles,omitempty"`
+	// PreventDeletion carries the deletion-protection switch the creation form
+	// already offers. An omitted switch leaves the dataset's protection alone.
+	PreventDeletion *bool `json:"prevent_deletion,omitempty"`
 }
 
 func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
+	// A read of this route reports the dataset-level settings it can write, so
+	// the editing form can show them before offering a change.
+	if r.Method == http.MethodGet {
+		respondDatasetSettings(w, r)
+		return
+	}
 	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
+		w.Header().Set("Allow", "GET, POST")
+		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET and POST allowed")
 		return
 	}
 
@@ -490,6 +517,14 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// DDL, metadata defaults and existing view memberships share this transaction.
 	if err := configureNewColumnDefaults(tx, sanitizedTableName, req.AddedCols, req.NewColumnsMultilingual); err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Deletion protection travels with the rest of the dataset's definition, so
+	// a refused schema change never leaves the switch half-applied.
+	if err := applyDatasetDeletionProtection(tx, sanitizedTableName, req.PreventDeletion); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return

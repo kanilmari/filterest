@@ -229,6 +229,24 @@ export async function generate_table_creation_view(container) {
     setCreationText(enableImagesText, 'create_table_enable_images');
     enableImagesLabel.append(enableImagesCheckbox, enableImagesText);
     capabilitiesContainer.appendChild(enableImagesLabel);
+
+    // A dataset's text-language default is part of its definition, so it is
+    // chosen while the dataset is created as well as when it is edited. The
+    // editing form's own label names the same choice.
+    const multilingualDefaultLabel = document.createElement('label');
+    multilingualDefaultLabel.style.display = 'flex';
+    multilingualDefaultLabel.style.alignItems = 'center';
+    multilingualDefaultLabel.style.gap = '5px';
+    const multilingualDefaultCheckbox = document.createElement('input');
+    multilingualDefaultCheckbox.type = 'checkbox';
+    multilingualDefaultCheckbox.id = 'new_columns_multilingual';
+    multilingualDefaultCheckbox.name = 'new_columns_multilingual';
+    multilingualDefaultCheckbox.dataset.testid = 'create-table-multilingual-default';
+    const multilingualDefaultText = document.createElement('span');
+    multilingualDefaultText.dataset.langKey = 'manage_table_multilingual_default';
+    setCreationText(multilingualDefaultText, 'manage_table_multilingual_default');
+    multilingualDefaultLabel.append(multilingualDefaultCheckbox, multilingualDefaultText);
+    capabilitiesContainer.appendChild(multilingualDefaultLabel);
     form.appendChild(capabilitiesContainer);
 
     // Lähetä-painike
@@ -480,6 +498,7 @@ async function submitTableCreationForm(form) {
         grantGuestsRead: form.querySelector('#grant_guests_read').checked,
         preventDeletion: form.querySelector('#prevent_deletion').checked,
         enableImages: form.querySelector('#enable_images').checked,
+        newColumnsMultilingual: form.querySelector('#new_columns_multilingual')?.checked === true,
         folderId: formData.get('table_folder_id'),
         createFolderName: formData.get('create_table_new_folder_name'),
         createFolderParentId: formData.get('create_table_new_folder_parent_id'),

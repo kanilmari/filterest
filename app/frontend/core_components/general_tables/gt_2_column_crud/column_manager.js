@@ -12,11 +12,9 @@ import { drop_table } from '../gt_3_table_crud/gt_3_2_table_delete/table_remover
 import { managementText, managementLabel, setManagementText, observeManagementLanguage } from './manage_table_i18n.js';
 import { getDatasetUIVisibility, setDatasetUIVisibility } from './dataset_ui_visibility.js';
 import { refreshTableUnified } from '../gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
-import { getUnifiedTableState, setUnifiedTableState } from '../../state_stores/table_state_store.js';
-import { getHiddenColumns } from '../../filterbar/filter_list/column_visibility_handler.js';
-import { getOpenedFilters, saveOpenedFilters } from '../../filterbar/filterbar_engine/filterbar_state_saver.js';
 import { invalidateDatabaseCatalogTreeCache } from '../../table_views/tree_view/tree_view_printer.js';
-import { createDatasetSymbolPicker, readDatasetSymbol } from '../dataset_form/dataset_symbol_picker.js';
+import { purgeStaleColumnState } from './column_manager_state_cleanup.js';
+import { createDatasetDimensionPanels } from '../dataset_form/dataset_dimension_panels.js';
 import { getCardRoleOptions, isValidCardRole } from '../../table_views/card_view/card_role_catalog.js';
 import {
     COLUMN_TYPE_PARAMETER,
@@ -27,135 +25,6 @@ import {
     getColumnTypeParameter,
     getDatasetColumnTypeOptions,
 } from '../dataset_form/dataset_column_type_catalog.js';
-
-/**
- * Rewrites persisted dataset UI state after schema changes remove or rename columns.
- * Keeps sort/filter/visibility UI storage aligned with the latest column names.
- * Exists so column-management saves can stay inside the SPA shell without stale localStorage keys.
- * @param {string} key
- * @param {Set<string>} removedSet
- * @param {Record<string, string>} renameIndex
- * @returns {string | null}
- */
-function rewriteStoredFilterKey(key, removedSet, renameIndex) {
-    let suffix = '';
-    let baseKey = key;
-
-    if (key.endsWith('_from')) {
-        suffix = '_from';
-        baseKey = key.slice(0, -suffix.length);
-    } else if (key.endsWith('_to')) {
-        suffix = '_to';
-        baseKey = key.slice(0, -suffix.length);
-    }
-
-    if (removedSet.has(baseKey)) {
-        return null;
-    }
-
-    return `${renameIndex[baseKey] || baseKey}${suffix}`;
-}
-
-/**
- * Rewrites persisted dataset UI state after schema changes remove or rename columns.
- * Keeps sort/filter/visibility UI storage aligned with the latest column names.
- * Exists so column-management saves can stay inside the SPA shell without stale localStorage keys.
- * @param {string} tableName
- * @param {string[]} removedColumns
- * @param {{ old_name: string, new_name: string }[]} renamedMap
- */
-function purgeStaleColumnState(tableName, removedColumns, renamedMap) {
-    if (!removedColumns.length && !renamedMap.length) return;
-
-    const removedSet = new Set(removedColumns);
-    const renameIndex = Object.fromEntries(renamedMap.map(r => [r.old_name, r.new_name]));
-
-    // --- A. Unified table state (sort + filters) ---
-    const state = getUnifiedTableState(tableName);
-    let stateChanged = false;
-
-    if (state.sort && state.sort.column) {
-        if (removedSet.has(state.sort.column)) {
-            state.sort.column = null;
-            state.sort.direction = null;
-            stateChanged = true;
-        } else if (renameIndex[state.sort.column]) {
-            state.sort.column = renameIndex[state.sort.column];
-            stateChanged = true;
-        }
-    }
-
-    if (state.filters) {
-        const nextFilters = {};
-        for (const [key, value] of Object.entries(state.filters)) {
-            const nextKey = rewriteStoredFilterKey(key, removedSet, renameIndex);
-            if (!nextKey) {
-                stateChanged = true;
-                continue;
-            }
-            if (nextKey !== key) {
-                stateChanged = true;
-            }
-            nextFilters[nextKey] = value;
-        }
-        state.filters = nextFilters;
-    }
-
-    if (stateChanged) {
-        state.offset = 0;
-        setUnifiedTableState(tableName, state);
-    }
-
-    // --- B. Hidden columns ---
-    const hiddenMap = getHiddenColumns(tableName);
-    let hiddenChanged = false;
-
-    for (const col of removedColumns) {
-        if (hiddenMap[col]) {
-            delete hiddenMap[col];
-            hiddenChanged = true;
-        }
-    }
-    for (const { old_name, new_name } of renamedMap) {
-        if (hiddenMap[old_name]) {
-            hiddenMap[new_name] = true;
-            delete hiddenMap[old_name];
-            hiddenChanged = true;
-        }
-    }
-
-    if (hiddenChanged) {
-        localStorage.setItem(`${tableName}_hide_columns`, JSON.stringify(hiddenMap));
-    }
-
-    // --- C. Open filters ---
-    const openFilters = getOpenedFilters(tableName);
-    const seenFilters = new Set();
-    const updatedFilters = [];
-    let openFiltersChanged = false;
-
-    for (const filterName of openFilters) {
-        if (removedSet.has(filterName)) {
-            openFiltersChanged = true;
-            continue;
-        }
-
-        const nextFilterName = renameIndex[filterName] || filterName;
-        if (nextFilterName !== filterName || seenFilters.has(nextFilterName)) {
-            openFiltersChanged = true;
-        }
-        if (seenFilters.has(nextFilterName)) {
-            continue;
-        }
-
-        seenFilters.add(nextFilterName);
-        updatedFilters.push(nextFilterName);
-    }
-
-    if (openFiltersChanged) {
-        saveOpenedFilters(tableName, updatedFilters);
-    }
-}
 
 export async function open_column_management_modal(table_name) {
     const columns = await fetch_columns_for_table(table_name);
@@ -207,21 +76,15 @@ export async function open_column_management_modal(table_name) {
     visibilityPanel.append(visibilityStatus, restoreButton);
     form.appendChild(visibilityPanel);
 
-    // The dataset's own symbol belongs where the dataset is defined, so it is
-    // chosen here rather than only in the separate symbol tool.
-    const symbolPicker = createDatasetSymbolPicker();
-    form.appendChild(symbolPicker.element);
-    let symbolTableUID = 0;
-    void readDatasetSymbol(table_name)
-        .then(async ({ iconKey, tableUID }) => {
-            symbolTableUID = tableUID;
-            await symbolPicker.ready;
-            if (iconKey) {
-                symbolPicker.select.value = iconKey;
-                symbolPicker.select.dispatchEvent(new Event('change'));
-            }
-        })
-        .catch(error => console.warn('Dataset symbol lookup failed:', error));
+    // Every dataset-level dimension is described once, by the controls both
+    // dataset forms share, instead of being wired separately here.
+    const datasetDimensions = createDatasetDimensionPanels({
+        datasetName: table_name,
+        columnNames: () => [...form.querySelectorAll('.column-row input[name="column_name"]')]
+            .map(input => input.value.trim())
+            .filter(Boolean),
+    });
+    form.append(...datasetDimensions.elements);
 
     const multilingualDefaultLabel = managementLabel('manage_table_multilingual_default');
     multilingualDefaultLabel.style.display = 'flex';
@@ -434,6 +297,10 @@ export async function open_column_management_modal(table_name) {
     });
     form.appendChild(addRowButton);
 
+    // The links to other datasets sit after the columns, because a link names a
+    // column of this dataset — including one this same Save is about to add.
+    form.appendChild(datasetDimensions.foreignKeysElement);
+
     // Keep Save last and aligned to the right.
     const buttonRow = document.createElement('div');
     buttonRow.classList.add('form-actions');
@@ -470,7 +337,9 @@ export async function open_column_management_modal(table_name) {
         titleDataLangKey: 'manage_table_title',
         titlePlainText: managementText('manage_table_title'),
         contentElements: [form],
-        maxWidth: '768px',
+        // The same width the creation form uses, so one dataset is described in
+        // one layout rather than two.
+        maxWidth: '968px',
         cleanupCallback: () => { disposed = true; disposeLanguage(); },
     });
     disposeLanguage = observeManagementLanguage(form);
@@ -629,6 +498,11 @@ export async function open_column_management_modal(table_name) {
             requestData.new_columns_multilingual = multilingualDefaultInput.checked;
         }
 
+        const preventDeletion = datasetDimensions.preventDeletionChange();
+        if (preventDeletion !== undefined) {
+            requestData.prevent_deletion = preventDeletion;
+        }
+
         saveButton.disabled = true;
         try {
             await endpoint_router('modifyColumns', {
@@ -636,15 +510,21 @@ export async function open_column_management_modal(table_name) {
                 body_data: requestData,
                 suppressErrorToast: true,
             });
+            datasetDimensions.acceptPreventDeletion();
 
-            // The navigation trees read the dataset list and its symbols from
-            // the cached catalog, so it is forgotten here: a renamed dataset or
-            // a changed symbol appears in the navigation at once.
-            // A changed symbol is saved with the rest of the dataset's definition.
-            if (symbolTableUID) await symbolPicker.save(symbolTableUID);
+            // Every remaining dimension owns its own route and is saved after
+            // the schema change. The navigation trees read the dataset list and
+            // its symbols from the cached catalog, so it is forgotten here: a
+            // renamed dataset or a changed symbol appears in the navigation at once.
+            const settled = await datasetDimensions.saveAll();
+
             invalidateDatabaseCatalogTreeCache();
             showSuccessToast(managementText('manage_table_saved'));
-            hideModal();
+            if (settled) {
+                hideModal();
+            } else {
+                showWarningToast(managementText('manage_table_settings_need_attention'));
+            }
 
             const renamedMap = modified_columns
                 .filter(c => c.original_name !== c.new_name)

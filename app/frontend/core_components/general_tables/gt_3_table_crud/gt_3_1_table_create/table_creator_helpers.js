@@ -138,6 +138,7 @@ function normalizeOptionalPositiveInteger(value) {
  * @param {boolean} formSnapshot.grantGuestsRead - Guests read permission toggle
  * @param {boolean} formSnapshot.preventDeletion - Prevent deletion toggle
  * @param {boolean} formSnapshot.enableImages - Enable image uploads after table creation
+ * @param {boolean} formSnapshot.newColumnsMultilingual - Dataset default for multilingual text columns
  * @param {string|number|null} formSnapshot.folderId - Selected existing target folder id
  * @param {string} formSnapshot.createFolderName - Optional inline new folder name
  * @param {string|number|null} formSnapshot.createFolderParentId - Optional parent id for inline folder creation
@@ -158,6 +159,7 @@ export function buildTableCreationRequestData({
     grantGuestsRead,
     preventDeletion,
     enableImages,
+    newColumnsMultilingual,
     folderId,
     createFolderName,
     createFolderParentId,
@@ -206,6 +208,9 @@ export function buildTableCreationRequestData({
         grant_users_read: Boolean(grantUsersRead),
         grant_guests_read: Boolean(grantGuestsRead),
         prevent_deletion: Boolean(preventDeletion),
+        // A dataset born multilingual says so; a dataset that stays silent
+        // keeps the metadata default, exactly as before this choice existed.
+        ...(newColumnsMultilingual ? { new_columns_multilingual: true } : {}),
         folder_id: normalizedCreateFolderName ? null : normalizedFolderId,
         create_folder: normalizedCreateFolderName ? {
             folder_name: normalizedCreateFolderName,

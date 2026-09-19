@@ -118,8 +118,7 @@ describe('open_column_management_modal', () => {
 
         const form = document.querySelector('#column_management_form_demo_table');
         form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        await Promise.resolve();
-        await Promise.resolve();
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
 
         expect(endpointRouterMock).toHaveBeenCalledWith('modifyColumns', expect.objectContaining({
             method: 'POST',
@@ -343,7 +342,9 @@ describe('open_column_management_modal', () => {
             expect(input.checked).toBe(true);
             expect(document.activeElement).toBe(input);
         }
-        expect(endpointRouterMock.mock.calls.filter(([route]) => route === 'modifyColumns')).toHaveLength(0);
+        // Reading the dataset's own settings is allowed; saving is not.
+        expect(endpointRouterMock.mock.calls
+            .filter(([route, options]) => route === 'modifyColumns' && options?.method === 'POST')).toHaveLength(0);
     });
 
     test('restores only the exact hidden dataset and verifies readback', async () => {
@@ -485,6 +486,105 @@ describe('open_column_management_modal', () => {
                 ],
             }),
         }));
+    });
+
+    // The dimensions below used to exist only while a dataset was being created.
+    const datasetNodes = [
+        { id: 'f_4', name: 'database', parent_id: 'null', db_id: 4 },
+        { id: 'f_7', name: 'other_tables', parent_id: 'f_4', db_id: 7 },
+        { id: 't_demo_table', name: 'demo_table', parent_id: 'f_7', db_id: 91, table_uid: '3470' },
+    ];
+
+    function answerEveryDatasetDimension(overrides = {}) {
+        endpointRouterMock.mockImplementation(async (route, options) => {
+            if (overrides[route]) return overrides[route](options);
+            if (route === 'adminDatasetUiVisibility') return { dataset_name: 'demo_table', ui_hidden: false };
+            if (route === 'adminSymbols') {
+                return { symbols: [], datasets: [{ dataset_name: 'demo_table', table_uid: 3470 }], fields: [] };
+            }
+            if (route === 'modifyColumns' && options?.method !== 'POST') {
+                return { dataset_name: 'demo_table', prevent_deletion: false };
+            }
+            if (route === 'fetchTreeData') return { nodes: datasetNodes };
+            if (route === 'imageAssetLinkingStatus') {
+                return { asset_linkings: [{ parent_table: 'demo_table', enabled: false }] };
+            }
+            if (route === 'fetchForeignKeys') return { data: [] };
+            if (route === 'datasetNames') return ['users'];
+            return { message: 'ok' };
+        });
+    }
+
+    test('the deletion switch is shown and travels inside the schema request', async () => {
+        answerEveryDatasetDimension();
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        const protection = document.querySelector('[data-testid="dataset-deletion-protection-input"]');
+        await vi.waitFor(() => expect(protection.disabled).toBe(false));
+        expect(protection.checked).toBe(false);
+        protection.checked = true;
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+
+        const [, saved] = endpointRouterMock.mock.calls
+            .filter(([route, options]) => route === 'modifyColumns' && options?.method === 'POST').at(-1);
+        expect(saved.body_data.prevent_deletion).toBe(true);
+    });
+
+    test('folder, pictures and a new link are saved through their own routes after the columns', async () => {
+        answerEveryDatasetDimension();
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        const folder = document.querySelector('[data-testid="dataset-folder-select"]');
+        await vi.waitFor(() => expect(folder.disabled).toBe(false));
+        expect(folder.value).toBe('7');
+        folder.value = '4';
+
+        const pictures = document.querySelector('[data-testid="dataset-image-attachments-input"]');
+        await vi.waitFor(() => expect(pictures.disabled).toBe(false));
+        pictures.checked = true;
+
+        const panel = document.querySelector('[data-testid="dataset-foreign-keys"]');
+        panel.querySelector('[name="fk_referencing_column"]').value = 'legacy_col';
+        const target = panel.querySelector('[name="fk_referenced_dataset"]');
+        await vi.waitFor(() => expect(target.options.length).toBe(2));
+        target.value = 'users';
+        const targetColumn = panel.querySelector('[name="fk_referenced_column"]');
+        targetColumn.appendChild(Object.assign(document.createElement('option'), { value: 'id' }));
+        targetColumn.value = 'id';
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+
+        const order = endpointRouterMock.mock.calls
+            .filter(([route, options]) => options?.method === 'POST')
+            .map(([route]) => route);
+        expect(order).toEqual(['modifyColumns', 'updateTableFolder', 'enableImageAssetLinking', 'addForeignKey']);
+        expect(hideModalMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('a setting the server refuses keeps the dialog open instead of hiding the problem', async () => {
+        answerEveryDatasetDimension({
+            updateTableFolder: () => { throw new Error('refused'); },
+        });
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        const folder = document.querySelector('[data-testid="dataset-folder-select"]');
+        await vi.waitFor(() => expect(folder.disabled).toBe(false));
+        folder.value = '4';
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+
+        expect(hideModalMock).not.toHaveBeenCalled();
+        expect(showWarningToastMock).toHaveBeenCalledWith(
+            'The columns were saved. One dataset setting still needs attention — see the message in the form.'
+        );
+        expect(document.querySelector('.dataset-folder-status').hidden).toBe(false);
     });
 
     test('preserves existing SQL types outside creation choices on an unchanged Save', async () => {
