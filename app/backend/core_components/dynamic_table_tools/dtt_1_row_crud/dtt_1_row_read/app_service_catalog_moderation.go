@@ -203,7 +203,12 @@ func enrichServiceCatalogModerationDataTypes(
 	enrichedDataTypes := cloneServiceCatalogModerationDataTypes(dataTypes)
 	for _, columnName := range serviceCatalogModerationColumns {
 		columnInfo := map[string]interface{}{
-			"data_type":                  "boolean",
+			"data_type": "boolean",
+			// This overlay exists so a moderator can change these switches, so it
+			// says so. A description that leaves editability unstated forces every
+			// reader to guess, and a browser that guesses "no" silently removes
+			// the control the moderator came for.
+			"editable_in_ui":             true,
 			"card_element":               "details",
 			"show_key_on_card":           true,
 			"show_value_on_card":         true,

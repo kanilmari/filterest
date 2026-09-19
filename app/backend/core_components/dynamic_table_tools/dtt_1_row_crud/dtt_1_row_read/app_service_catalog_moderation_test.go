@@ -204,6 +204,12 @@ func TestEnrichServiceCatalogModerationDataTypesAddsBigCardMetadata(t *testing.T
 		if columnInfo["hide_on_small_card"] != true {
 			t.Fatalf("%s hide_on_small_card = %#v, want true", columnName, columnInfo["hide_on_small_card"])
 		}
+		// The overlay exists so a moderator can change these switches, so the
+		// description says they can be edited. Leaving it unstated made the
+		// article view drop the control entirely.
+		if columnInfo["editable_in_ui"] != true {
+			t.Fatalf("%s editable_in_ui = %#v, want true", columnName, columnInfo["editable_in_ui"])
+		}
 	}
 
 	if dataTypes["published"] != nil || dataTypes["enabled"] != nil {
