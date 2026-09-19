@@ -392,7 +392,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 			return nil, fmt.Errorf("getColumnDataTypesWithFK: %v", err)
 		}
 
-		columnInfo := map[string]interface{}{
+		columnInfo := buildColumnDescription(map[string]interface{}{
 			"data_type":                  dataType,
 			"card_element":               cardElement,
 			"show_key_on_card":           showKeyOnCard,
@@ -412,7 +412,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 			"card_detail_capitalization": cardDetailCapitalization,
 			"card_detail_label_mode":     normalizeCardDetailLabelMode(cardDetailLabelMode),
 			"label_value_layout":         labelValueLayout,
-		}
+		})
 		if foreignTableName.Valid && foreignColumnName.Valid {
 			columnInfo["foreign_table"] = foreignTableName.String
 			columnInfo["foreign_column"] = foreignColumnName.String

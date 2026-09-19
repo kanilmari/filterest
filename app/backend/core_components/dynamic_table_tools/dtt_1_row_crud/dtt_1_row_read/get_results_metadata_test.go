@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -337,6 +338,52 @@ func TestColumnMetadataCarriesExplicitEditability(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDatasetColumnDescriptionsConformToBuilderFieldSet prevents an ordinary
+// dataset column and a dataset-specific overlay from publishing different
+// description contracts. The builder owns the expected fields, so adding a
+// field there automatically extends this check without another hand-kept list.
+func TestDatasetColumnDescriptionsConformToBuilderFieldSet(t *testing.T) {
+	query := ""
+	const driverName = "column-description-conformance"
+	sql.Register(driverName, &layoutMetadataDriver{query: &query})
+	db, err := sql.Open(driverName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	metadata, err := getColumnDataTypesWithFK(serviceCatalogModerationTableName, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metadata) != len(serviceCatalogModerationColumns)+1 {
+		t.Fatalf("metadata returned %d columns, want one ordinary column and %d moderation columns", len(metadata), len(serviceCatalogModerationColumns))
+	}
+
+	expectedFields := sortedColumnDescriptionFields(buildColumnDescription(nil))
+	for columnName, rawColumnInfo := range metadata {
+		columnInfo, ok := rawColumnInfo.(map[string]interface{})
+		if !ok {
+			t.Errorf("column %q description has type %T, want map[string]interface{}", columnName, rawColumnInfo)
+			continue
+		}
+
+		actualFields := sortedColumnDescriptionFields(columnInfo)
+		if !reflect.DeepEqual(actualFields, expectedFields) {
+			t.Errorf("column %q description fields = %v, want complete builder contract %v", columnName, actualFields, expectedFields)
+		}
+	}
+}
+
+func sortedColumnDescriptionFields(description map[string]interface{}) []string {
+	fields := make([]string, 0, len(description))
+	for fieldName := range description {
+		fields = append(fields, fieldName)
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 func TestTableMetadataPreservesNullableCardStyle(t *testing.T) {

@@ -202,30 +202,14 @@ func enrichServiceCatalogModerationDataTypes(
 
 	enrichedDataTypes := cloneServiceCatalogModerationDataTypes(dataTypes)
 	for _, columnName := range serviceCatalogModerationColumns {
-		columnInfo := map[string]interface{}{
+		columnInfo := buildColumnDescription(map[string]interface{}{
 			"data_type": "boolean",
 			// This overlay exists so a moderator can change these switches, so it
 			// says so. A description that leaves editability unstated forces every
 			// reader to guess, and a browser that guesses "no" silently removes
 			// the control the moderator came for.
-			"editable_in_ui":             true,
-			"card_element":               "details",
-			"show_key_on_card":           true,
-			"show_value_on_card":         true,
-			"hide_in_filter_panel":       true,
-			"hide_everywhere":            false,
-			"hide_on_small_card":         true,
-			"hide_false_null_on_sml_crd": false,
-			"hide_false_null_on_big_crd": false,
-			"hide_on_bg_crd_if_not_own":  false,
-			"co_number":                  0,
-			"fco_number":                 0,
-			"is_multilingual":            false,
-			"card_detail_icon_svg":       "",
-			"card_detail_icon_key":       "",
-			"card_detail_label_mode":     "label",
-		}
-
+			"editable_in_ui": true,
+		})
 		if existing, ok := enrichedDataTypes[columnName].(map[string]interface{}); ok {
 			for key, value := range existing {
 				columnInfo[key] = value
