@@ -376,6 +376,28 @@ describe('open_column_management_modal', () => {
     });
 
 
+    test('a saved schema change forgets the cached catalog so a new column is editable at once', async () => {
+        localStorage.setItem('full_tree_data', JSON.stringify({ nodes: [], column_details: [] }));
+        localStorage.setItem('full_tree_data_cached_at', String(Date.now()));
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'title', data_type: 'TEXT', character_maximum_length: null },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        const newRow = document.querySelectorAll('.column-row')[1];
+        newRow.querySelector('[name="column_name"]').value = 're_examine_date';
+        const type = newRow.querySelector('[name="data_type"]');
+        type.value = 'DATE';
+        type.dispatchEvent(new Event('change'));
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(localStorage.getItem('full_tree_data')).toBeNull();
+        expect(localStorage.getItem('full_tree_data_cached_at')).toBeNull();
+    });
+
     test('switching a column to a decimal type sends its two numbers', async () => {
         fetchColumnsMock.mockResolvedValue([
             { column_name: 'amount', data_type: 'TEXT', character_maximum_length: null },

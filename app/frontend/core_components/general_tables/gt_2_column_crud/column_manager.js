@@ -15,6 +15,7 @@ import { refreshTableUnified } from '../gt_1_row_crud/gt_1_2_row_read/table_refr
 import { getUnifiedTableState, setUnifiedTableState } from '../../state_stores/table_state_store.js';
 import { getHiddenColumns } from '../../filterbar/filter_list/column_visibility_handler.js';
 import { getOpenedFilters, saveOpenedFilters } from '../../filterbar/filterbar_engine/filterbar_state_saver.js';
+import { invalidateDatabaseCatalogTreeCache } from '../../table_views/tree_view/tree_view_printer.js';
 import {
     COLUMN_TYPE_PARAMETER,
     DEFAULT_NUMERIC_PRECISION,
@@ -575,6 +576,10 @@ export async function open_column_management_modal(table_name) {
                 suppressErrorToast: true,
             });
 
+            // The article view reads each column's type from the cached database
+            // catalog, and a column it does not know gets no editor at all. The
+            // cache is forgotten here so a column added now can be filled in now.
+            invalidateDatabaseCatalogTreeCache();
             showSuccessToast(managementText('manage_table_saved'));
             hideModal();
 

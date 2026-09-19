@@ -39,6 +39,22 @@ function persistDatabaseCatalogTreeData(treeData) {
     localStorage.setItem(DATABASE_CATALOG_TREE_CACHE_TS_KEY, String(Date.now()));
 }
 
+/**
+ * Forget the cached database catalog so the next read fetches it again.
+ * Between a schema change and every surface that reads column metadata from
+ * this cache, including the article view's editable fields.
+ * Exists because a column added minutes ago would otherwise stay unknown, and
+ * an unknown column is silently skipped instead of getting an editor.
+ */
+export function invalidateDatabaseCatalogTreeCache() {
+    try {
+        localStorage.removeItem(DATABASE_CATALOG_TREE_CACHE_KEY);
+        localStorage.removeItem(DATABASE_CATALOG_TREE_CACHE_TS_KEY);
+    } catch (error) {
+        console.warn('tree_view_printer: failed to clear cached database catalog tree data', error);
+    }
+}
+
 function isDatabaseCatalogTreeCacheFresh() {
     const cachedAt = Number.parseInt(
         localStorage.getItem(DATABASE_CATALOG_TREE_CACHE_TS_KEY) || '',
