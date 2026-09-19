@@ -3409,5 +3409,6 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260914000005_inherit_card_field_labels.sql'),
   ('20260914000006_add_article_section_initial_open.sql'),
   ('20260918000001_record_site_assistant_release.sql'),
-  ('20260918000002_seed_site_assistant_language_keys.sql')
+  ('20260918000002_seed_site_assistant_language_keys.sql'),
+  ('20260919000001_seed_chat_attachment_language_keys.sql')
 ON CONFLICT (filename) DO NOTHING;

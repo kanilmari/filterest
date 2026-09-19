@@ -101,7 +101,8 @@
     "20260914000005_inherit_card_field_labels.sql",
     "20260914000006_add_article_section_initial_open.sql",
     "20260918000001_record_site_assistant_release.sql",
-    "20260918000002_seed_site_assistant_language_keys.sql"
+    "20260918000002_seed_site_assistant_language_keys.sql",
+    "20260919000001_seed_chat_attachment_language_keys.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -227,7 +228,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 95,
+    "public.system_schema_migrations": 96,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -242,7 +243,7 @@
       "sha256": "be4c9735a1f856de732d2b47eb885c4b28c391ee3186bf11e0150914f41c4e7a"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "26b0c0cbf9fff671a3a637f02ac1d63e31958b18e4a4cc78e640defa94cc551f"
+      "sha256": "2523f1c13b8f6257db179ad913f8599463681fe210065f1e8a03b1d05221ed51"
     }
   },
   "source_files": {
@@ -599,6 +600,9 @@
     },
     "filterest/app/server_tools/migrations/20260918000002_seed_site_assistant_language_keys.sql": {
       "sha256": "a9536eccf960a055bcf9d53bceaf58a591f961b0441637d45c9be1933a592d9a"
+    },
+    "filterest/app/server_tools/migrations/20260919000001_seed_chat_attachment_language_keys.sql": {
+      "sha256": "18a749dfb93db02bf6197e7a083415ef20838be8b41f2011bf156c4485216a0b"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

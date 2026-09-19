@@ -308,8 +308,72 @@ body.dark-mode {
 
 .chat_action_row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The composer carries two or three actions depending on whether the site
+     assistant, and with it the attach control, is offered in this view. */
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
   gap: 0.5rem;
+}
+
+.chat_attachments[hidden] {
+  display: none;
+}
+
+.chat_attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.chat_attachment_list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat_attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.2rem 0.35rem 0.2rem 0.5rem;
+  border: 1px solid var(--border_color);
+  border-radius: var(--border_radius_small, 4px);
+  background: var(--input_bg_color, var(--bg_color_extreme));
+  color: var(--text_color);
+  font-size: 0.82rem;
+}
+
+.chat_attachment_name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+.chat_attachment_remove {
+  min-height: 1.5rem;
+  padding: 0 0.35rem;
+  border: none;
+  border-radius: var(--border_radius_small, 4px);
+  background: transparent;
+  color: var(--text_color);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.chat_attachment_remove:hover {
+  background: var(--button_hover_bg_color);
+  color: var(--button_hover_text_color);
+}
+
+.chat_attachment_status {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--empty_field_text_color, var(--chat-bubble-text));
 }
 
 .chat_action_row button {

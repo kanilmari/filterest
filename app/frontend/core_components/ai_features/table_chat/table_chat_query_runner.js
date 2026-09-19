@@ -251,11 +251,21 @@ export async function runApiToolsChatQuery(table_name, user_message, conversatio
     };
 }
 
-export async function runCodexDevChatQuery(table_name, user_message, conversationMessages = [], { externalRunner = false } = {}) {
+export async function runCodexDevChatQuery(
+    table_name,
+    user_message,
+    conversationMessages = [],
+    { externalRunner = false, imageTokens = [] } = {}
+) {
     const payload = {
         dataset: table_name,
         query: user_message,
     };
+    // The attachments belong to this question only; the server resolves each
+    // token to a stored image of the asking administrator.
+    if (Array.isArray(imageTokens) && imageTokens.length > 0) {
+        payload.image_tokens = imageTokens;
+    }
     const currentLang = String(document.documentElement.lang || "").trim();
     if (currentLang) {
         payload.lang = currentLang;

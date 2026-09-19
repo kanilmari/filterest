@@ -64,7 +64,10 @@
     gap: 8px;
     min-width: 0;
 }
-#table_creation_form .column-field__parameters > label { flex: 1 1 70px; min-width: 0; }
+#table_creation_form .column-field__parameters > label {
+    flex: 1 1 70px;
+    min-width: 0;
+}
 #table_creation_form .column-field input,
 #table_creation_form .column-field select,
 #table_creation_form .column-field button {

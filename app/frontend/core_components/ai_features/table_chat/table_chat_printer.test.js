@@ -142,7 +142,9 @@ describe("create_chat_ui", () => {
             Array.from(document.querySelectorAll(".chat_action_row button")).map(
                 (button) => button.textContent
             )
-        ).toEqual(["Poista historia", "Send message"]);
+        // The attach control sits between clearing the history and sending,
+        // because it belongs to the question being written.
+        ).toEqual(["Poista historia", "Attach an image", "Send message"]);
     });
 
     test("keeps Enter available for new lines and sends textarea content with Ctrl Enter", async () => {

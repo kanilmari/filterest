@@ -5,6 +5,7 @@
 
 import { createCodingAgentControl } from './table_chat_coding_agent_control.js';
 import { renderPendingChanges } from './table_chat_pending_changes.js';
+import { createChatAttachments } from './table_chat_attachments.js';
 import { refreshTableUnified } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../../lang/translation_handler.js';
@@ -63,12 +64,15 @@ async function start_api_tools_query(table_name, user_message, pending_message =
     });
 }
 
-async function start_codex_dev_query(table_name, user_message, pending_message = null) {
+async function start_codex_dev_query(table_name, user_message, pending_message = null, imageTokens = []) {
     const chatResponse = await runCodexDevChatQuery(
         table_name,
         user_message,
         conversation_map.get(table_name) || [],
-        { externalRunner: codingAgentControls.get(table_name)?.capability?.runner_kind === 'external' }
+        {
+            externalRunner: codingAgentControls.get(table_name)?.capability?.runner_kind === 'external',
+            imageTokens,
+        }
     );
     const assistantReply = String(chatResponse?.answer || 'Codex completed without a visible answer.').trim();
     const visibleAssistantReply = append_no_result_fetch_notice(
@@ -545,6 +549,10 @@ export function create_chat_ui(table_name, parent_element) {
     const chat_mode_select = createCodingAgentControl(table_name);
     if (chat_mode_select) codingAgentControls.set(table_name, chat_mode_select);
 
+    // Images are for the site assistant, so the control appears only where that
+    // assistant is offered at all.
+    const chat_attachments = chat_mode_select ? createChatAttachments(table_name) : null;
+
     const chat_send_btn = document.createElement('button');
     chat_send_btn.id = `${table_name}_chat_sendBtn`;
     chat_send_btn.classList.add('chat_send_button');
@@ -572,6 +580,11 @@ export function create_chat_ui(table_name, parent_element) {
     const chat_action_row = document.createElement('div');
     chat_action_row.classList.add('chat_action_row');
     chat_action_row.appendChild(clear_history_btn);
+    if (chat_attachments) {
+        chat_input_row.appendChild(chat_attachments.row);
+        chat_input_row.appendChild(chat_attachments.input);
+        chat_action_row.appendChild(chat_attachments.button);
+    }
     chat_action_row.appendChild(chat_send_btn);
     chat_input_row.appendChild(chat_action_row);
 
@@ -618,8 +631,12 @@ export function create_chat_ui(table_name, parent_element) {
 
         if (chatMode !== 'api_tools') {
             if (chatMode === 'codex_dev') {
+                const attached_tokens = chat_attachments ? chat_attachments.tokens() : [];
                 try {
-                    await start_codex_dev_query(table_name, user_message, pending_message);
+                    // The tokens leave the composer with their question, so the
+                    // next question does not silently reuse the same images.
+                    chat_attachments?.clear();
+                    await start_codex_dev_query(table_name, user_message, pending_message, attached_tokens);
                 } catch (error) {
                     console.warn('Codex chat query error:', error);
                     finish_pending_chat_message(

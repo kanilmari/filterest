@@ -18,6 +18,24 @@ its source and development tools.
   retain release-specific evidence and review records; historical generation
   descriptions do not authorize replacing the maintained checkout.
 
+Architecture and behaviour guides in
+[instructions_and_documentation/](instructions_and_documentation/) include:
+
+- [Permission_Model.md](instructions_and_documentation/Permission_Model.md) —
+  the authorization model across capabilities, datasets, scopes, rows and fields.
+- [Frontend_Guide.md](instructions_and_documentation/Frontend_Guide.md) —
+  frontend architecture, interface components, configuration and accessibility.
+- [Asset_Linking_Architecture.md](instructions_and_documentation/Asset_Linking_Architecture.md) —
+  per-dataset image and attachment support, cache fields, storage and media profiles.
+- [Table_Creation_Protocol.md](instructions_and_documentation/Table_Creation_Protocol.md) —
+  how a dataset is created and registered.
+- [Payment_Architecture.md](instructions_and_documentation/Payment_Architecture.md) —
+  the payment capability's structure.
+- [Go_Type_Bridge_Audit.md](instructions_and_documentation/Go_Type_Bridge_Audit.md) —
+  how backend types reach the browser without drifting.
+- [SPA_Immediate_UI_Update_Inventory.md](instructions_and_documentation/SPA_Immediate_UI_Update_Inventory.md) —
+  which actions update the open view without a reload.
+
 Technical guides, design proposals, reference implementations, and tests live
 under `app/`. A proposal describes intended behavior until its implementation
 and validation are recorded; reading a design document does not make a feature
