@@ -135,6 +135,13 @@ ON CONFLICT (lang_key) DO UPDATE SET description = ...
 
 ## 3. Source Tracking
 
+**One form for a code source: the file.** A `code` source records `source_high`
+as the path of the file that uses the key, and `source_low` empty. The start-up
+scan writes this form, so a seed migration that records a folder instead creates
+a second record for the same use, and its hand-written usage explanation expires
+after seven days while the scan's record survives. Write the file path.
+
+
 Every lang key can have **multiple** source records. A key like `updated` may appear in code, as a column name in 10 tables, and have been manually edited in the admin UI — that's 12+ sources.
 
 ### Source Types

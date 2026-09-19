@@ -5,6 +5,8 @@
 package dtt_2_column_crud
 
 import (
+	"database/sql"
+
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
@@ -57,6 +59,8 @@ func GetTableColumnsWithTypesAndIDs(tableName string) ([]map[string]interface{},
 	// Hae saraketiedot liittymällä system_column_details ja information_schema.columns
 	query := `
         SELECT cd.column_uid, cd.column_name, c.data_type, cd.co_number,
+               COALESCE(cd.card_element, ''),
+               c.character_maximum_length,
                COALESCE(cd.is_multilingual, FALSE),
                COALESCE(dt.new_columns_multilingual, EXISTS (
                    SELECT 1 FROM system_column_details source
@@ -82,19 +86,29 @@ func GetTableColumnsWithTypesAndIDs(tableName string) ([]map[string]interface{},
 			columnName             string
 			dataType               string
 			coNumber               int
+			cardElement            string
+			maximumLength          sql.NullInt64
 			isMultilingual         bool
 			newColumnsMultilingual bool
 		)
-		if err := rows.Scan(&columnUid, &columnName, &dataType, &coNumber, &isMultilingual, &newColumnsMultilingual); err != nil {
+		if err := rows.Scan(&columnUid, &columnName, &dataType, &coNumber, &cardElement, &maximumLength, &isMultilingual, &newColumnsMultilingual); err != nil {
 			return nil, err
 		}
+		// The dataset's editing dialog shows a column's stored presentation role
+		// and, for limited text, its length. Without them the dialog showed a
+		// default and described the dataset wrongly.
 		columnInfo := map[string]interface{}{
 			"column_uid":               columnUid,
 			"column_name":              columnName,
 			"data_type":                dataType,
+			"card_element":             cardElement,
+			"character_maximum_length": nil,
 			"is_multilingual":          isMultilingual,
 			"new_columns_multilingual": newColumnsMultilingual,
 			"co_number":                coNumber, // ( = column order number )
+		}
+		if maximumLength.Valid {
+			columnInfo["character_maximum_length"] = maximumLength.Int64
 		}
 		columns = append(columns, columnInfo)
 	}
