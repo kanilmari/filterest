@@ -26,6 +26,7 @@ import { getCardRoleTranslationFallbacks } from '../table_views/card_view/card_r
 import { TABLE_CREATION_TRANSLATION_FALLBACKS } from '../general_tables/gt_3_table_crud/gt_3_1_table_create/table_creation_translation_fallbacks.js';
 
 import { MANAGE_TABLE_TRANSLATION_FALLBACKS } from '../general_tables/gt_2_column_crud/manage_table_translation_fallbacks.js';
+import { getDatasetColumnTypeTranslationFallbacks } from '../general_tables/dataset_form/dataset_column_type_catalog.js';
 
 const LOCAL_TRANSLATION_FALLBACKS = {
     delete_confirm_title: {
@@ -48,6 +49,7 @@ const LOCAL_TRANSLATION_FALLBACKS = {
     },
     ...MANAGE_TABLE_TRANSLATION_FALLBACKS,
     ...getCardRoleTranslationFallbacks(),
+    ...getDatasetColumnTypeTranslationFallbacks(),
     ...TABLE_CREATION_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),
     // Existing installations or cached responses may predate this bootstrap

@@ -376,6 +376,30 @@ describe('open_column_management_modal', () => {
     });
 
 
+    test('switching a column to a decimal type sends its two numbers', async () => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'amount', data_type: 'TEXT', character_maximum_length: null },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+        const row = document.querySelector('.column-row');
+        const type = row.querySelector('[name="data_type"]');
+        type.value = 'NUMERIC';
+        type.dispatchEvent(new Event('change'));
+        expect(row.querySelector('[name="precision"]').value).toBe('12');
+        expect(row.querySelector('[name="scale"]').value).toBe('2');
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(endpointRouterMock).toHaveBeenCalledWith('modifyColumns', expect.objectContaining({
+            body_data: expect.objectContaining({
+                modified_columns: [
+                    { original_name: 'amount', new_name: 'amount', data_type: 'NUMERIC(12,2)', length: null },
+                ],
+            }),
+        }));
+    });
+
     test('preserves existing SQL types outside creation choices on an unchanged Save', async () => {
         fetchColumnsMock.mockResolvedValue([
             { column_name: 'created', data_type: 'timestamp without time zone', character_maximum_length: null },

@@ -2,6 +2,13 @@
 // Updates text-only nodes in open management dialogs without replacing inputs.
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { MANAGE_TABLE_TRANSLATION_FALLBACKS } from './manage_table_translation_fallbacks.js';
+import { getDatasetColumnTypeTranslationFallbacks } from '../dataset_form/dataset_column_type_catalog.js';
+
+// The column types are named once, in the catalogue both dataset forms share.
+const DIALOG_FALLBACKS = {
+    ...MANAGE_TABLE_TRANSLATION_FALLBACKS,
+    ...getDatasetColumnTypeTranslationFallbacks(),
+};
 
 export function managementText(key) {
     const raw = document.documentElement.lang || localStorage.getItem('chosen_language') || 'en';
@@ -9,7 +16,9 @@ export function managementText(key) {
     const locale = lang.startsWith('fi') ? 'fi'
         : lang.startsWith('yue') || lang.startsWith('zh-hk') ? 'yue'
         : lang.startsWith('ch') || lang.startsWith('zh') ? 'ch' : 'en';
-    const fallback = MANAGE_TABLE_TRANSLATION_FALLBACKS[key]?.[locale] || key;
+    // English stands in for a language this bootstrap copy does not carry, so a
+    // dialog never shows a raw key.
+    const fallback = DIALOG_FALLBACKS[key]?.[locale] || DIALOG_FALLBACKS[key]?.en || key;
     const translated = getTranslationForKey(key, { fallback, countUsage: false });
     return !translated || translated === key ? fallback : translated;
 }

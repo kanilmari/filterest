@@ -108,6 +108,42 @@ describe('dataset creation card roles', () => {
         expect(endpoint_router.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
     });
 
+    test('a decimal column offers its two numbers and reaches the request complete', async () => {
+        await translatePage('fi');
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        await generate_table_creation_view(host);
+        const form = host.querySelector('form');
+        form.querySelector('[name="table_name"]').value = 'invoices';
+
+        const rows = form.querySelectorAll('.column-field');
+        const priceRow = rows[3];
+        priceRow.querySelector('[name="column_name"]').value = 'price';
+        const type = priceRow.querySelector('[name="data_type"]');
+        type.value = 'NUMERIC';
+        type.dispatchEvent(new Event('change'));
+
+        const precision = priceRow.querySelector('[name="precision"]');
+        const scale = priceRow.querySelector('[name="scale"]');
+        expect(precision.style.display).not.toBe('none');
+        expect(priceRow.querySelector('.column-field__length').style.display).toBe('none');
+        expect(precision.value).toBe('12');
+        expect(scale.value).toBe('2');
+        scale.value = '4';
+
+        vi.spyOn(console, 'debug').mockImplementation(() => {});
+        endpoint_router.mockImplementation(async (name) => {
+            if (name === 'createDataset') throw new Error('test stops before creation');
+            return [];
+        });
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(endpoint_router).toHaveBeenCalledWith('createDataset', expect.objectContaining({
+            body_data: expect.objectContaining({
+                columns: expect.objectContaining({ price: 'NUMERIC(12,4)' }),
+            }),
+        })));
+    });
+
     test('retains supported legacy combinations and rejects unknown protocol values', () => {
         for (const role of ['details1100','description2','details_link10','header+lang_key','image,header+lang-key','\tdescription']) {
             expect(isValidCardRole(role), role).toBe(true);

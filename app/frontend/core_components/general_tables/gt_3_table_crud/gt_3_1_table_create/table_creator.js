@@ -464,6 +464,8 @@ async function submitTableCreationForm(form) {
         columnNames: formData.getAll('column_name'),
         dataTypes: formData.getAll('data_type'),
         lengths: formData.getAll('length'),
+        precisions: formData.getAll('precision'),
+        scales: formData.getAll('scale'),
         cardRoles: formData.getAll('card_role'),
         referencingColumns: formData.getAll('fk_referencing_column'),
         referencedTables: formData.getAll('fk_referenced_table'),

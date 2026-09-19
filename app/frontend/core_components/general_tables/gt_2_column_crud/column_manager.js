@@ -15,6 +15,15 @@ import { refreshTableUnified } from '../gt_1_row_crud/gt_1_2_row_read/table_refr
 import { getUnifiedTableState, setUnifiedTableState } from '../../state_stores/table_state_store.js';
 import { getHiddenColumns } from '../../filterbar/filter_list/column_visibility_handler.js';
 import { getOpenedFilters, saveOpenedFilters } from '../../filterbar/filterbar_engine/filterbar_state_saver.js';
+import {
+    COLUMN_TYPE_PARAMETER,
+    DEFAULT_NUMERIC_PRECISION,
+    DEFAULT_NUMERIC_SCALE,
+    composeColumnTypeDefinition,
+    findDatasetColumnType,
+    getColumnTypeParameter,
+    getDatasetColumnTypeOptions,
+} from '../dataset_form/dataset_column_type_catalog.js';
 
 /**
  * Rewrites persisted dataset UI state after schema changes remove or rename columns.
@@ -151,11 +160,11 @@ export async function open_column_management_modal(table_name) {
     const initialMultilingualDefault = typeof declaredDefault === 'boolean'
         ? declaredDefault : columns.some(column => column.is_multilingual === true);
 
-    // Muunna character varying -> VARCHAR
+    // Spell every stored type the way the shared catalogue does, so an
+    // unrelated Save cannot rewrite a column merely because PostgreSQL and the
+    // form use different names for the same type.
     columns.forEach(col => {
-        if (col.data_type.toLowerCase() === "character varying") {
-            col.data_type = "VARCHAR";
-        }
+        col.data_type = findDatasetColumnType(col.data_type)?.value || col.data_type;
     });
 
     const initial_columns = columns.map(col => ({
@@ -213,7 +222,9 @@ export async function open_column_management_modal(table_name) {
         });
     });
 
-    const allowedTypes = ['INTEGER', 'VARCHAR', 'TEXT', 'BOOLEAN', 'DATE'];
+    // The same catalogue the creation form offers, minus the types that only
+    // describe how a column is born and cannot be a conversion target.
+    const allowedTypeEntries = getDatasetColumnTypeOptions('edit');
 
     function createColumnRow(column_name_value, data_type_value, length_value, original = true) {
         const row = document.createElement('div');
@@ -239,11 +250,12 @@ export async function open_column_management_modal(table_name) {
         setManagementText(emptyOpt, 'manage_table_select_type');
         typeSelect.appendChild(emptyOpt);
 
-        allowedTypes.forEach(t => {
+        const knownExistingType = findDatasetColumnType(data_type_value)?.value || '';
+        allowedTypeEntries.forEach(entry => {
             const opt = document.createElement('option');
-            opt.value = t;
-            setManagementText(opt, 'manage_table_type_' + t.toLowerCase());
-            if (data_type_value && t === data_type_value.toUpperCase()) {
+            opt.value = entry.value;
+            setManagementText(opt, entry.labelKey);
+            if (entry.value === knownExistingType) {
                 opt.selected = true;
             }
             typeSelect.appendChild(opt);
@@ -252,7 +264,7 @@ export async function open_column_management_modal(table_name) {
         // Existing PostgreSQL types outside the editor's creation choices must
         // remain selected, so an unrelated Save cannot reinterpret their schema.
         const existingType = String(data_type_value || '').toUpperCase();
-        if (existingType && !allowedTypes.includes(existingType)) {
+        if (existingType && !knownExistingType) {
             const existingOption = document.createElement('option');
             existingOption.value = existingType;
             existingOption.textContent = existingType;
@@ -272,18 +284,46 @@ export async function open_column_management_modal(table_name) {
         lengthLabel.appendChild(lengthInput);
         row.appendChild(lengthLabel);
 
-        // Piilotetaan pituuskenttä, jos tyyppi ei ole VARCHAR
-        if (data_type_value !== 'VARCHAR') {
-            lengthLabel.style.display = 'none';
-        }
-        typeSelect.addEventListener('change', () => {
-            if (typeSelect.value === 'VARCHAR') {
-                lengthLabel.style.display = 'block';
-            } else {
-                lengthLabel.style.display = 'none';
-                lengthInput.value = '';
+        // A decimal column carries its own two numbers, because the database
+        // refuses a decimal type without them.
+        const precisionLabel = managementLabel('dataset_column_type_precision');
+        const precisionInput = document.createElement('input');
+        precisionInput.type = 'number';
+        precisionInput.name = 'precision';
+        precisionInput.min = '1';
+        precisionInput.max = '1000';
+        precisionLabel.appendChild(precisionInput);
+        row.appendChild(precisionLabel);
+
+        const scaleLabel = managementLabel('dataset_column_type_scale');
+        const scaleInput = document.createElement('input');
+        scaleInput.type = 'number';
+        scaleInput.name = 'scale';
+        scaleInput.min = '0';
+        scaleLabel.appendChild(scaleInput);
+        row.appendChild(scaleLabel);
+
+        // An untouched decimal column keeps its stored precision: this form
+        // does not read it, so leaving the fields empty is what tells a Save
+        // that nothing about the type changed.
+        const syncTypeParameters = ({ prefill = false } = {}) => {
+            const parameter = getColumnTypeParameter(typeSelect.value);
+            const usesLength = parameter === COLUMN_TYPE_PARAMETER.LENGTH;
+            const usesPrecision = parameter === COLUMN_TYPE_PARAMETER.PRECISION;
+            lengthLabel.style.display = usesLength ? 'block' : 'none';
+            if (!usesLength) lengthInput.value = '';
+            precisionLabel.style.display = usesPrecision ? 'block' : 'none';
+            scaleLabel.style.display = usesPrecision ? 'block' : 'none';
+            if (!usesPrecision) {
+                precisionInput.value = '';
+                scaleInput.value = '';
+            } else if (prefill && !precisionInput.value) {
+                precisionInput.value = String(DEFAULT_NUMERIC_PRECISION);
+                scaleInput.value = String(DEFAULT_NUMERIC_SCALE);
             }
-        });
+        };
+        typeSelect.addEventListener('change', () => syncTypeParameters({ prefill: true }));
+        syncTypeParameters();
 
         if (!original) {
             const multilingualLabel = managementLabel('manage_table_column_multilingual');
@@ -441,10 +481,24 @@ export async function open_column_management_modal(table_name) {
                 return;
             }
 
+            // A decimal type travels complete, because the server builds the
+            // length only for limited text. Empty fields mean the stored
+            // precision stays untouched.
+            const precisionInput = r.querySelector('input[name="precision"]');
+            const scaleInput = r.querySelector('input[name="scale"]');
+            const usesPrecision =
+                getColumnTypeParameter(typeSelect.value) === COLUMN_TYPE_PARAMETER.PRECISION &&
+                String(precisionInput?.value || '').trim() !== '';
+
             currentColumns.push({
                 original_name: nameInput.dataset.originalName || null,
                 new_name: newName,
-                data_type: typeSelect.value,
+                data_type: usesPrecision
+                    ? composeColumnTypeDefinition(typeSelect.value, {
+                        precision: precisionInput?.value,
+                        scale: scaleInput?.value,
+                    })
+                    : typeSelect.value,
                 length: lengthInput.value ? parseInt(lengthInput.value, 10) : null,
                 is_multilingual: r.querySelector('input[name="is_multilingual"]')?.checked
             });

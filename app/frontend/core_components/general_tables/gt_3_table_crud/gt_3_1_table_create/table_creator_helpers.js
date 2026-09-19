@@ -4,6 +4,7 @@
 // Stays free of DOM and network access so Vitest can cover the core logic.
 
 import { isValidCardRole } from '../../../table_views/card_view/card_role_catalog.js';
+import { composeColumnTypeDefinition } from '../../dataset_form/dataset_column_type_catalog.js';
 
 import { isValidIdentifier } from '../../../../reusable_components/dom_container_builder_helpers.js';
 
@@ -19,7 +20,14 @@ function createTableCreationFailure(warningKey, warningFallback) {
     };
 }
 
-function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths = [], cardRoles }) {
+function buildTableCreationColumns({
+    columnNames = [],
+    dataTypes = [],
+    lengths = [],
+    precisions = [],
+    scales = [],
+    cardRoles,
+}) {
     const columns = {};
     const roles = {};
     const names = new Set();
@@ -28,6 +36,8 @@ function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths =
         const colName = trimToEmpty(columnNames[i]);
         const dataType = trimToEmpty(dataTypes[i]);
         const length = trimToEmpty(lengths[i]);
+        const precision = trimToEmpty(precisions[i]);
+        const scale = trimToEmpty(scales[i]);
 
         if (!colName) {
             continue;
@@ -56,7 +66,7 @@ function buildTableCreationColumns({ columnNames = [], dataTypes = [], lengths =
             }
             roles[colName] = role;
         }
-        columns[colName] = dataType === 'VARCHAR' && length ? `${dataType}(${length})` : dataType;
+        columns[colName] = composeColumnTypeDefinition(dataType, { length, precision, scale });
     }
 
     if (Object.keys(columns).length === 0) {
@@ -119,6 +129,8 @@ function normalizeOptionalPositiveInteger(value) {
  * @param {Array<string>} formSnapshot.columnNames - Column name inputs
  * @param {Array<string>} formSnapshot.dataTypes - Column type inputs
  * @param {Array<string>} formSnapshot.lengths - Column length inputs
+ * @param {Array<string>} formSnapshot.precisions - Decimal column total-digit inputs
+ * @param {Array<string>} formSnapshot.scales - Decimal column decimal-place inputs
  * @param {Array<string>} formSnapshot.referencingColumns - FK source column inputs
  * @param {Array<string>} formSnapshot.referencedTables - FK target table inputs
  * @param {Array<string>} formSnapshot.referencedColumns - FK target column inputs
@@ -136,6 +148,8 @@ export function buildTableCreationRequestData({
     columnNames,
     dataTypes,
     lengths,
+    precisions,
+    scales,
     cardRoles,
     referencingColumns,
     referencedTables,
@@ -166,6 +180,8 @@ export function buildTableCreationRequestData({
         columnNames,
         dataTypes,
         lengths,
+        precisions,
+        scales,
         cardRoles,
     });
     if (!columnsResult.ok) {
