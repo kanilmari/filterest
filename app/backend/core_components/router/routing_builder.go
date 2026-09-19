@@ -409,6 +409,10 @@ func defaultSpecificTableRelated(handlerName string) bool {
 // upserts the corresponding rows in the system_functions table.
 func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 	log.Printf("RegisterAllRoutesAndUpdateFunctions called with %d routes", len(routeDefinitions))
+	registeredHandlerNames := make(map[string]bool, len(routeDefinitions))
+	for _, rd := range routeDefinitions {
+		registeredHandlerNames[rd.HandlerName] = true
+	}
 
 	// Apply dev-mode profile overrides (makes certain admin routes public in dev)
 	pipeline.ApplyDevOverrides()
@@ -456,32 +460,16 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 			)
 		switch {
 		case err == sql.ErrNoRows:
-			specificTableRelated := defaultSpecificTableRelated(handlerName)
-
-			err = db.QueryRow(`
-				INSERT INTO system_functions (
-					name,
-					"package",
-					disabled,
-					specific_table_related,
-					url_route_endpoint,
-					rate_limit_amount,
-					rate_limit_minutes,
-					ui_only
-				)
-				VALUES ($1, $2, false, $3, $4, $5, $6, $7)
-				RETURNING id
-			`,
-				handlerName,
+			existingID, err = registerMissingRouteFunction(
+				db,
+				rd,
+				registeredHandlerNames,
 				packageName,
-				specificTableRelated,
-				rd.UrlPattern,
 				newRateLimitAmount,
 				newRateLimitMinutes,
-				false,
-			).Scan(&existingID)
+			)
 			if err != nil {
-				log.Printf("error inserting function %s: %v", handlerName, err)
+				log.Printf("error registering function %s: %v", handlerName, err)
 			}
 		case err != nil:
 			log.Printf("error fetching function %s: %v", handlerName, err)
