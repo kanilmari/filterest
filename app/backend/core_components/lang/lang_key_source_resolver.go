@@ -4,24 +4,16 @@
 // Exists so dynamic dataset keys like add_row_<dataset> inherit the same ownership rules as startup scans.
 package lang
 
-import "strings"
+import (
+	"strings"
+
+	"easelect/backend/core_components/lang_key_naming"
+)
 
 type langKeySourceRef struct {
 	sourceType string
 	sourceHigh string
 	sourceLow  string
-}
-
-var langKeyDynamicPrefixes = []string{
-	"add_row_",
-	"search_for_",
-	"search_slogan_",
-}
-
-var langKeyDynamicSuffixes = []string{
-	"_asc",
-	"_desc",
-	"_front_page",
 }
 
 func resolveSchemaSourceRefsForLangKey(
@@ -74,20 +66,13 @@ func resolveSchemaSourceRefsForLangKey(
 	appendColumnSources(key)
 	appendTableSource(key)
 
-	for _, prefix := range langKeyDynamicPrefixes {
-		if !strings.HasPrefix(key, prefix) {
-			continue
-		}
-		remainder := key[len(prefix):]
+	// The shared naming rule decides what a dynamic key was built from.
+	if remainder, ok := lang_key_naming.TrimDynamicPrefix(key); ok {
 		appendColumnSources(remainder)
 		appendTableSource(remainder)
 	}
 
-	for _, suffix := range langKeyDynamicSuffixes {
-		if !strings.HasSuffix(key, suffix) {
-			continue
-		}
-		base := key[:len(key)-len(suffix)]
+	if base, ok := lang_key_naming.TrimDynamicSuffix(key); ok {
 		appendColumnSources(base)
 		appendTableSource(base)
 	}
@@ -96,14 +81,5 @@ func resolveSchemaSourceRefsForLangKey(
 }
 
 func datasetOwnedDynamicLangKeyNames(datasetName string) []string {
-	trimmedDatasetName := strings.TrimSpace(datasetName)
-	if trimmedDatasetName == "" {
-		return nil
-	}
-	return []string{
-		"add_row_" + trimmedDatasetName,
-		"search_for_" + trimmedDatasetName,
-		"search_slogan_" + trimmedDatasetName,
-		trimmedDatasetName + "_front_page",
-	}
+	return lang_key_naming.DatasetOwnedKeyNames(datasetName)
 }

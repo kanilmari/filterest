@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/lang_key_naming"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -317,7 +318,7 @@ func buildDynamicDatasetTranslationContexts(
 				),
 			},
 			{
-				LangKey:     "search_for_" + datasetName,
+				LangKey:     lang_key_naming.SearchPlaceholderKey(datasetName),
 				DatasetName: datasetName,
 				FieldName:   "search_placeholder",
 				UsageExplanation: fmt.Sprintf(

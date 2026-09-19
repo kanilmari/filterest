@@ -15,6 +15,7 @@ import (
 	"time"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/lang_key_naming"
 	"easelect/backend/core_components/runtimepaths"
 
 	"github.com/lib/pq"
@@ -337,9 +338,8 @@ func PopulateLangKeySources() (total int, scanErr error) {
 			updateSourceUsageExplanationIfEmpty(id, "table", key, fmt.Sprintf("Table '%s'", key))
 		}
 		// Dynaaminen etuliite + sarake/taulu: "add_row_users", "search_for_name"
-		for _, prefix := range dynamicPrefixes {
-			if strings.HasPrefix(key, prefix) {
-				remainder := key[len(prefix):]
+		if remainder, hasPrefix := lang_key_naming.TrimDynamicPrefix(key); hasPrefix {
+			{
 				if tables, ok := columnToTables[remainder]; ok {
 					for _, tbl := range tables {
 						if upsertSource(id, "column", tbl, remainder) {
@@ -357,9 +357,8 @@ func PopulateLangKeySources() (total int, scanErr error) {
 			}
 		}
 		// Dynaaminen loppuliite + sarake/taulu: "name_asc", "users_front_page"
-		for _, suffix := range dynamicSuffixes {
-			if strings.HasSuffix(key, suffix) {
-				base := key[:len(key)-len(suffix)]
+		if base, hasSuffix := lang_key_naming.TrimDynamicSuffix(key); hasSuffix {
+			{
 				if tables, ok := columnToTables[base]; ok {
 					for _, tbl := range tables {
 						if upsertSource(id, "column", tbl, base) {

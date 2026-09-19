@@ -92,7 +92,7 @@ func buildWhereClause(
 	for param, values := range queryParams {
 		// Skip bare controls before stripping the dataset prefix; qualified
 		// keys still address real fields with the same name.
-		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey {
+		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey || param == datasetSearchQueryKey {
 			continue
 		}
 		if len(values) == 0 {
@@ -550,6 +550,16 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	)
 	if err != nil {
 		return "", nil, 0, nil, fmt.Errorf("error building where clause: %w", err)
+	}
+	where_clause, query_args, err = appendDatasetTextSearchToWhereClause(
+		ctx.DB,
+		ctx.QueryParams,
+		ctx.TableName,
+		where_clause,
+		query_args,
+	)
+	if err != nil {
+		return "", nil, 0, nil, fmt.Errorf("error building text search: %w", err)
 	}
 	where_clause, query_args, err = appendRowGroupFilterToWhereClause(
 		ctx.QueryParams,

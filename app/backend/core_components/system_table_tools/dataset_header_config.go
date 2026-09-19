@@ -11,6 +11,7 @@ import (
 	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	filevalidation "easelect/backend/core_components/filevalidation"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/lang_key_naming"
 	"easelect/backend/core_components/runtimepaths"
 	"errors"
 	"fmt"
@@ -267,7 +268,7 @@ func datasetHeaderLangKeys(datasetName string) datasetHeaderLangKeySet {
 	return datasetHeaderLangKeySet{
 		Title:             datasetName + "_front_page",
 		Slogan:            "search_slogan_" + datasetName,
-		SearchPlaceholder: "search_for_" + datasetName,
+		SearchPlaceholder: lang_key_naming.SearchPlaceholderKey(datasetName),
 	}
 }
 

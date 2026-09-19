@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/lang_key_naming"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -52,22 +53,13 @@ var treeNodeNamePattern = regexp.MustCompile(`name:\s*'([^']+)'`)
 // esim. "<h2>Summary</h2>" avaimen nimenä.
 var htmlFragmentPattern = regexp.MustCompile(`[<>]|^.{200,}$`)
 
-// dynamicPrefixes — dynaamisesti generoitavien avainten etuliitteet.
-// Frontendissä luodaan dynaamisia avaimia yhdistämällä etuliite + taulu/sarakenimi.
-// Esim. button_factory.js: "add_row_" + table_name, create_filter_bar_text_search.js: "search_for_" + tableName
-var dynamicPrefixes = []string{
-	"add_row_",
-	"search_for_",
-	"search_slogan_",
-}
+// The names of dynamically generated keys are defined once, in
+// lang_key_naming, so the startup scan and the runtime ownership resolver
+// cannot drift apart. Examples: button_factory.js builds "add_row_" +
+// table_name, create_sort_dropdown.js builds col + "_asc".
+var dynamicPrefixes = lang_key_naming.DynamicPrefixes()
 
-// dynamicSuffixes — dynaamisesti generoitavien avainten loppuliitteet.
-// Esim. create_sort_dropdown.js: col + "_asc"/"_desc", create_filter_bar.js: tableName + "_front_page"
-var dynamicSuffixes = []string{
-	"_asc",
-	"_desc",
-	"_front_page",
-}
+var dynamicSuffixes = lang_key_naming.DynamicSuffixes()
 
 // goTemplateKeyPattern — Go-templaateissa käytetyt dynaamiset avaimet,
 // esim. register.html: data-lang-key="{{.UsernameErr}}"
