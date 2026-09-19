@@ -1,9 +1,15 @@
 // dataset_search_executor.js
-// Runs streaming intelligent search, appends rows to active views, and keeps results counters in sync.
-// Bridges text and AI search phases, inserting stage notices and rendering each phase into separate tables.
-// Exists to isolate streaming execution and UI-update behaviour from component building.
+// Runs one dataset search and arranges the three groups of results it produces.
+// Bridges the dataset's own listing, the streamed AI answer and the other
+// datasets' groups with the active view, its notices and its results counter.
+//
+// Searching a dataset is a way of browsing it. The dataset's own matches are
+// therefore ordinary listing rows: the server counts and pages them, endless
+// scrolling stays connected, and this module never holds them back. Only the
+// AI group and the other datasets' groups belong to the search itself, and they
+// are placed after the dataset's own rows in that order.
 
-import { appendDataToView, disconnectInfiniteScroll } from "../../infinite_scroll/infinite_scroll_handler.js";
+import { appendDataToView, reloadDatasetRowsFromListing } from "../../infinite_scroll/infinite_scroll_handler.js";
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
@@ -16,28 +22,50 @@ import {
 } from "../filter_list/row_group_facet_printer.js";
 import {
     deduplicateRows,
-    filterRows,
     initSearchCache,
 } from "./dataset_search_executor_helpers.js";
 import {
+    clearSearchResultsCount,
     getCurrentSearchView,
     getPrimaryCardContainer,
     getSearchAiHostId,
     getSearchFilterContext,
+    getSearchPresentationRows,
     getSearchStageContainer,
     getSearchViewContainer,
-    getVisibleSearchCounts,
     isCurrentSearchCache,
     ongoingSearchResultsStore,
     removeSearchNotice,
-    syncSearchResultsCount,
+    setSearchDatasetMatchCount,
     syncSearchPresentationFilters,
-    getSearchPresentationRows,
+    syncSearchResultsCount,
 } from "./dataset_search_runtime_state.js";
 
 import { getDatasetQueryAdapter } from '../dataset_surface_provider/dataset_query_adapter_registry.js';
 
 export const _ongoingSearchResults = ongoingSearchResultsStore;
+
+// The two messages that divide the result groups from one another.
+const NO_DATASET_MATCHES_NOTICE = "text_search_no_results";
+const AI_GROUP_NOTICE = "see_also";
+const NOTICE_FALLBACK_TEXTS = {
+    [NO_DATASET_MATCHES_NOTICE]: {
+        fi: "Tekstihaku ei löytänyt tuloksia",
+        en: "Text search returned no results",
+    },
+    [AI_GROUP_NOTICE]: {
+        fi: "Katso myös",
+        en: "See also",
+    },
+};
+
+/** Show one stage message in the reader's own language. */
+function insertLocalizedNotice(tableName, langKey) {
+    const texts = NOTICE_FALLBACK_TEXTS[langKey] || {};
+    const isFinnish = String(getLanguageWithBrowserFallback()).toLowerCase().startsWith("fi");
+    const fallback = (isFinnish ? texts.fi : texts.en) || texts.en || "";
+    insertNotice(tableName, langKey, getTranslationForKey(langKey, { fallback }) || fallback);
+}
 
 async function renderRowsIntoTarget(
     tableName,
@@ -156,6 +184,12 @@ async function openFirstPendingSearchArticle(
     await openRowArticleView(firstRow, tableName, selectedCard, { isCurrent });
 }
 
+/**
+ * Put one streamed packet of rows on screen and keep the counter in step.
+ * A search uses this for its AI group, which has a host of its own; rows the
+ * AI already suggested and rows the dataset's own listing put on screen are
+ * not repeated.
+ */
 export async function update_table_ui(tableName, incoming, targetTable, expectedCache = null) {
     const inColumns = Array.isArray(incoming?.columns) ? incoming.columns : [];
     const inData = Array.isArray(incoming?.data) ? incoming.data : [];
@@ -248,13 +282,6 @@ export function insertNotice(tableName, langKey, fallbackText) {
     notice.dataset.langKey = langKey;
     notice.setAttribute("role", "status");
     notice.textContent = fallbackText;
-
-    // Explain relaxed user filters before their results, including the card
-    // sidebar count. Text/AI stage notices keep their existing section positions.
-    if (langKey === "search_results_without_filters") {
-        stageContainer.prepend(notice);
-        return;
-    }
 
     if (currentView === "table") {
         const aiTable = stageContainer.querySelector(
@@ -430,107 +457,97 @@ function cleanupSearchArtifacts(tableName) {
     }
 }
 
-export async function rerenderCachedSearchResults(tableName, expectedCache = null) {
-    const cache = _ongoingSearchResults[tableName];
-    if (!cache || !isCurrentSearchCache(tableName, expectedCache)) return;
-    if (cache.serverFiltersApplied && getSearchFilterContext(tableName).signature !== cache.filterSignature) {
-        await do_intelligent_search(tableName, cache.query, cache.searchOptions || {});
-        return;
-    }
+/**
+ * Load the dataset's own matches from its ordinary listing and show them.
+ * The listing answers with the true number of matches and stays connected to
+ * endless scrolling, so the reader can browse every match instead of a top few.
+ */
+async function loadDatasetMatches(tableName, cache, isCurrent) {
+    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
+    if (!isCurrent()) return;
 
-    syncSearchPresentationFilters(tableName, cache);
-    cleanupSearchArtifacts(tableName);
-
-    const visibleTextRows = getSearchPresentationRows(tableName, cache, cache.data);
-    const visibleAiRows = getSearchPresentationRows(tableName, cache, cache.aiData);
-
-    if (["card", "article_view"].includes(getCurrentSearchView(tableName))) {
-        if (!await renderRowsIntoTarget(tableName, getPrimaryCardContainer(tableName), visibleTextRows, cache.columns, cache.types, cache)) return;
-    } else {
-        appendDataToView(tableName, visibleTextRows, false);
-    }
+    const rows = Array.isArray(result?.data) ? result.data : [];
+    if (Array.isArray(result?.columns) && result.columns.length) cache.columns = result.columns;
+    cache.types = { ...(cache.types || {}), ...(result?.types || {}) };
+    // Only the rows the search itself put on screen are remembered here. Later
+    // pages belong to the listing, which renders and counts them on its own.
+    cache.data = rows;
     cache.renderedOnce = true;
-    if (cache.fallbackWithoutFilters) {
-        const fi = String(getLanguageWithBrowserFallback()).toLowerCase().startsWith("fi");
-        const fallback = fi
-            ? "Valituilla suodattimilla ei löytynyt tekstiosumia. Näytetään tulokset ilman suodattimia. Valinnat säilyvät seuraavaa hakua varten."
-            : "No text matches with the selected filters. Showing results without filters. Your selections are kept for the next search.";
-        insertNotice(tableName, "search_results_without_filters", getTranslationForKey("search_results_without_filters", { fallback }) || fallback);
-    }
+    setSearchDatasetMatchCount(cache, result?.row_count);
+}
 
-    const aiHost = createSecondSearchResultsHost(tableName);
-    const supportsSeparateAiSection = Boolean(aiHost);
+/**
+ * Read the streamed answer for its AI stage only and show it under the
+ * dataset's own matches. The streamed text stage is a separate top-few answer
+ * to the same question and would only repeat rows the listing already has.
+ */
+async function streamAiSearchResults(tableName, cache, context, opts, isCurrent) {
+    const requestOptions = {
+        ...opts,
+        filters: Object.fromEntries(
+            Object.entries(context.clientFilters).map(([key, value]) => [key, String(value)])
+        ),
+        rowGroupSlug: context.rowGroupSlug,
+        view: getCurrentSearchView(tableName),
+    };
 
-    if (visibleAiRows.length > 0) {
-        if (supportsSeparateAiSection) {
-            if (visibleTextRows.length === 0) {
-                insertNotice(
-                    tableName,
-                    "text_search_no_results",
-                    "Text search returned no results"
-                );
-            }
-            insertNotice(tableName, "see_also", "See also");
-            await renderRowsIntoTarget(
-                tableName,
-                aiHost,
-                visibleAiRows,
-                cache.columns,
-                cache.types,
-                cache
-            );
-        } else {
-            appendDataToView(tableName, visibleAiRows, visibleTextRows.length > 0);
+    for await (const packet of readDatasetSearchResponse(tableName, cache.query, requestOptions, isCurrent)) {
+        if (!isCurrent()) return;
+        if (packet.stage !== "ai") continue;
+        const hadAiRows = cache.aiData.length > 0;
+        const aiHost = createSecondSearchResultsHost(tableName);
+        await update_table_ui(tableName, packet, aiHost, cache);
+        if (!isCurrent()) return;
+        if (!hadAiRows && cache.aiData.length > 0 && aiHost) {
+            insertLocalizedNotice(tableName, AI_GROUP_NOTICE);
         }
-    } else if (visibleTextRows.length === 0) {
-        insertNotice(
-            tableName,
-            "text_search_no_results",
-            "Text search returned no results"
-        );
-    }
-
-    if (!isCurrentSearchCache(tableName, cache)) return;
-    await openFirstPendingSearchArticle(tableName, visibleTextRows, cache);
-    if (isCurrentSearchCache(tableName, cache)) {
-        syncSearchResultsCount(tableName, cache);
-        cache.supplemental?.place();
+        cache.supplemental.place();
     }
 }
 
+/**
+ * Show the current search again after something it depends on changed.
+ * The dataset's own rows live in the server's listing now, so a changed filter,
+ * sort or language means asking for them again rather than re-arranging a page
+ * that is already in the browser.
+ */
+export async function rerenderCachedSearchResults(tableName, expectedCache = null) {
+    const cache = _ongoingSearchResults[tableName];
+    if (!cache?.query || !isCurrentSearchCache(tableName, expectedCache)) return;
+    await do_intelligent_search(tableName, cache.query, cache.searchOptions || {});
+}
+
+/**
+ * Hand the search's rows to a caller that rebuilds the whole dataset view.
+ * The dataset's own matches come first and the AI group after them, in the
+ * order they are shown, and the count is the dataset's true number of matches.
+ */
 export function getCachedSearchResultForRender(tableName, { query = null } = {}) {
     const cache = _ongoingSearchResults[tableName];
     if (!cache || (query !== null && cache.query !== String(query).trim())
-        || (cache.serverFiltersApplied && getSearchFilterContext(tableName).signature !== cache.filterSignature)) {
+        || getSearchFilterContext(tableName).signature !== cache.filterSignature) {
         return null;
     }
 
     syncSearchPresentationFilters(tableName, cache);
-    const visibleTextRows = getSearchPresentationRows(tableName, cache, cache.data);
+    const datasetRows = Array.isArray(cache.data) ? [...cache.data] : [];
     const visibleAiRows = getSearchPresentationRows(tableName, cache, cache.aiData);
-    const data = [...visibleTextRows, ...visibleAiRows];
+    const data = [...datasetRows, ...visibleAiRows];
 
     return {
         columns: Array.isArray(cache.columns) ? [...cache.columns] : [],
         data,
         types: { ...(cache.types || {}) },
-        row_count: data.length,
+        row_count: Number.isFinite(cache.datasetMatchCount) ? cache.datasetMatchCount : data.length,
         complete: cache.complete !== false,
         requestIdentity: cache,
         isCurrent: () => isCurrentSearchCache(tableName, cache),
     };
 }
 
+/** Whether a search currently owns what this dataset is showing. */
 export function hasCachedSearchResults(tableName) {
-    const cache = _ongoingSearchResults[tableName];
-    if (!cache) {
-        return false;
-    }
-
-    return (
-        (Array.isArray(cache.data) && cache.data.length > 0) ||
-        (Array.isArray(cache.aiData) && cache.aiData.length > 0)
-    );
+    return Boolean(_ongoingSearchResults[tableName]?.query);
 }
 
 export async function sortCachedSearchResults(
@@ -544,83 +561,75 @@ export async function sortCachedSearchResults(
         return false;
     }
 
-    // Keep cache order as original relevance; sort only the rendered projection.
+    // Sorting reorders every match, not only the page in the browser, so the
+    // listing is asked again with the selection that is now in effect.
     await rerenderCachedSearchResults(tableName, cache);
     return true;
 }
 
+/** Let the article view know it should open the first match once it arrives. */
+function awaitFirstSearchResultInArticleView(tableName) {
+    const currentView = getCurrentSearchView(tableName);
+    if (!["card", "article_view"].includes(currentView)) return;
+    const stateKey = currentView === "article_view" ? "articleView" : "cardView";
+    const articleState = getUnifiedTableState(tableName)?.[stateKey];
+    if (!articleState?.collapsed) return;
+    setUnifiedTableState(tableName, {
+        [stateKey]: {
+            ...articleState, expandedId: null,
+            pendingAutoOpenFirstSearchResult: true, pendingAutoOpenFirstRenderedResult: false,
+        },
+    });
+}
 
 /**
- * Search selected filters first, then show authorized text matches without them.
- * The fallback owns only presentation state; selected filters and URL stay intact.
- * A new cache identity invalidates every delayed stream, fallback and article open.
+ * Run one search and arrange its three groups of results.
+ * First the dataset's own matches from its listing, browsable to the last one;
+ * then the AI group; then the other datasets' groups. A new cache identity
+ * invalidates every delayed answer, render and article open from an older one.
  */
 export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     const adapter = getDatasetQueryAdapter(tableName);
     if (adapter) return adapter.refresh({ search: userQuery.trim() });
-    if (!userQuery.trim()) return;
+    const query = userQuery.trim();
+    if (!query) return;
     clearRowGroupFacets(tableName);
-    disconnectInfiniteScroll(tableName);
     cleanupSearchArtifacts(tableName);
     const context = getSearchFilterContext(tableName);
+    // A different question starts from its first result; the same question
+    // asked again, after a changed filter or sort, leaves the reader where
+    // they already are.
+    const isNewQuestion = _ongoingSearchResults[tableName]?.query !== query;
     _ongoingSearchResults[tableName]?.supplemental?.destroy();
     const cache = initSearchCache();
     Object.assign(cache, {
-        query: userQuery.trim(), filterSignature: context.signature,
-        filters: context.clientFilters, complete: false, fallbackWithoutFilters: false,
+        query, filterSignature: context.signature,
+        // The selected filters reach the dataset's rows through the listing's
+        // own query, so its rows are never filtered a second time here.
+        filters: context.clientFilters, complete: false,
         searchOptions: opts, serverFiltersApplied: false,
     });
     _ongoingSearchResults[tableName] = cache;
-    const stateKey = getCurrentSearchView(tableName) === "article_view" ? "articleView" : "cardView";
-    const articleState = getUnifiedTableState(tableName)?.[stateKey];
-    if (["card", "article_view"].includes(getCurrentSearchView(tableName)) && articleState?.collapsed) {
-        setUnifiedTableState(tableName, { [stateKey]: {
-            ...articleState, expandedId: null,
-            pendingAutoOpenFirstSearchResult: true, pendingAutoOpenFirstRenderedResult: false,
-        } });
-    }
-    syncSearchResultsCount(tableName, cache);
+    // The previous search's AI number describes rows that are already gone.
+    clearSearchResultsCount(tableName);
+    if (isNewQuestion) awaitFirstSearchResultInArticleView(tableName);
     const isCurrent = () => isCurrentSearchCache(tableName, cache);
     cache.supplemental = createSupplementalDatasetSearch(tableName, cache.query, {
         isCurrent, getContainer: () => getSearchStageContainer(tableName),
     });
-    const requestOptions = { ...opts, filters: Object.fromEntries(Object.entries(context.clientFilters).map(([key, value]) => [key, String(value)])), rowGroupSlug: context.rowGroupSlug, view: getCurrentSearchView(tableName) };
+
     try {
-        for await (const packet of readDatasetSearchResponse(tableName, cache.query, requestOptions, isCurrent)) {
-            if (!isCurrent()) return;
-            const aiHost = packet.stage === "ai" ? createSecondSearchResultsHost(tableName) : null;
-            await update_table_ui(tableName, packet, aiHost, cache);
-            if (isCurrent()) cache.supplemental.place();
-        }
+        await loadDatasetMatches(tableName, cache, isCurrent);
         if (!isCurrent()) return;
-        const hasFilters = Object.keys(context.clientFilters).length > 0 || Boolean(context.rowGroupSlug);
-        const visibleText = cache.serverFiltersApplied ? cache.data : filterRows(cache.data, context.clientFilters, tableName, cache.types);
-        if (hasFilters && visibleText.length === 0) {
-            // Membership is a user-selected classification. Both requests retain
-            // the same actor, route permission, row policy and server-side RLS.
-            if (cache.serverFiltersApplied || context.rowGroupSlug) {
-                const candidate = initSearchCache();
-                for await (const packet of readDatasetSearchResponse(
-                    tableName, cache.query, { ...requestOptions, rowGroupSlug: "", filters: {} }, isCurrent
-                )) {
-                    const rows = deduplicateRows(candidate.data, candidate.aiData, packet.data, packet.columns);
-                    (packet.stage === "ai" ? candidate.aiData : candidate.data).push(...rows);
-                    if (packet.columns?.length) candidate.columns = packet.columns;
-                    candidate.types = { ...candidate.types, ...packet.types };
-                }
-                if (!isCurrent()) return;
-                if (candidate.data.length > 0 && getSearchFilterContext(tableName).signature === context.signature) {
-                    Object.assign(cache, {
-                        data: candidate.data, aiData: candidate.aiData,
-                        columns: candidate.columns, types: candidate.types,
-                        fallbackWithoutFilters: true, serverFiltersApplied: true,
-                    });
-                }
-            }
-        }
-        if (!isCurrent()) return;
+        // The dataset's own answer is complete as soon as its listing replies;
+        // the AI group arrives afterwards and adds to it.
         cache.complete = true;
-        await rerenderCachedSearchResults(tableName, cache);
+        syncSearchResultsCount(tableName, cache);
+        if (cache.data.length === 0) insertLocalizedNotice(tableName, NO_DATASET_MATCHES_NOTICE);
+        await openFirstPendingSearchArticle(tableName, cache.data, cache);
+        if (!isCurrent()) return;
+        cache.supplemental.place();
+        await streamAiSearchResults(tableName, cache, context, opts, isCurrent);
     } catch (error) {
         if (isCurrent()) console.warn("do_intelligent_search failed:", error);
     }

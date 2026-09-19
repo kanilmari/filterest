@@ -1,5 +1,6 @@
 // infinite_scroll_handler.test.js
-// Verifies wide table infinite-scroll sentinels span the horizontal scroll range.
+// Verifies wide table infinite-scroll sentinels span the horizontal scroll range,
+// and that a committed search is paged like any other condition of the listing.
 // Uses jsdom with mocked render/fetch dependencies so sentinel layout can be tested in isolation.
 // Exists to keep vertical infinite scroll working after users scroll wide tables horizontally.
 // @vitest-environment jsdom
@@ -79,6 +80,14 @@ function createWideTableView(tableName, widths) {
     setReadOnlyNumber(table, "offsetWidth", () => widths.table);
 
     return { container, table };
+}
+
+/** Put a committed text search on a dataset, the way the search field does. */
+function commitSearch(tableName, search) {
+    localStorage.setItem(
+        "dataset_query_params",
+        JSON.stringify({ [tableName]: { search } })
+    );
 }
 
 function createCardView(tableName, { collapsed = false } = {}) {
@@ -317,6 +326,93 @@ describe("initializeInfiniteScroll", () => {
         release();
         await vi.waitFor(() => expect(setUnifiedTableStateMock).toHaveBeenCalledWith("async_cards", expect.objectContaining({ offset: 21 })));
         scroll.disconnectInfiniteScroll("async_cards");
+    });
+
+    test("keeps paging a dataset that is showing a search", async () => {
+        // A committed search used to switch endless scrolling off, which left
+        // every match after the first batch unreachable.
+        commitSearch("searched_orders", "api");
+        createWideTableView("searched_orders", { container: 480, table: 900 });
+        getUnifiedTableStateMock.mockReturnValue({
+            offset: 20,
+            filters: { status: "open" },
+            sort: { column: "id", direction: "ASC" },
+        });
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 21 }], row_count: 251 });
+
+        const { disconnectInfiniteScroll, initializeInfiniteScroll } = await import(
+            "./infinite_scroll_handler.js"
+        );
+        initializeInfiniteScroll("searched_orders");
+
+        const sentinel = document.getElementById("searched_orders_infinite_scroll_sentinel");
+        expect(sentinel).not.toBeNull();
+        intersectionObservers.at(-1).callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(fetchDatasetDataMock).toHaveBeenCalled());
+
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
+            dataset_name: "searched_orders",
+            offset: 20,
+            filters: { status: "open", search: "api" },
+        }));
+        expect(setResultsCountMock).toHaveBeenCalledWith("searched_orders", 251);
+
+        disconnectInfiniteScroll("searched_orders");
+    });
+
+    test("reloads a searched dataset from its listing and reconnects endless scrolling", async () => {
+        commitSearch("reloaded_orders", "api");
+        createWideTableView("reloaded_orders", { container: 480, table: 900 });
+        getUnifiedTableStateMock.mockReturnValue({ offset: 40, filters: {}, sort: {} });
+        fetchDatasetDataMock.mockResolvedValue({
+            data: [{ id: 1 }, { id: 2 }], row_count: 251, types: {},
+        });
+
+        const { disconnectInfiniteScroll, reloadDatasetRowsFromListing } = await import(
+            "./infinite_scroll_handler.js"
+        );
+        const result = await reloadDatasetRowsFromListing("reloaded_orders");
+
+        // The listing starts again from the first match and reports how many
+        // matches there are in total, not how many are on screen.
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
+            offset: 0, filters: { search: "api" }, row_count: null,
+        }));
+        expect(result.row_count).toBe(251);
+        expect(setResultsCountMock).toHaveBeenCalledWith("reloaded_orders", 251);
+        expect(appendDataToTableMock).toHaveBeenCalledWith(
+            document.querySelector("#reloaded_orders_table_view_container table"),
+            [{ id: 1 }, { id: 2 }],
+            ["id"],
+            { id: "integer" },
+            "reloaded_orders"
+        );
+        expect(setUnifiedTableStateMock).toHaveBeenCalledWith(
+            "reloaded_orders",
+            expect.objectContaining({ offset: 2 })
+        );
+        expect(document.getElementById("reloaded_orders_infinite_scroll_sentinel")).not.toBeNull();
+
+        disconnectInfiniteScroll("reloaded_orders");
+    });
+
+    test("a reload with no matching rows empties the list instead of keeping the old rows", async () => {
+        commitSearch("empty_orders", "nonsense");
+        createWideTableView("empty_orders", { container: 480, table: 900 });
+        document.querySelector("#empty_orders_table_view_container tbody")
+            .innerHTML = "<tr><td>Stale row</td></tr>";
+        getUnifiedTableStateMock.mockReturnValue({ offset: 0, filters: {}, sort: {} });
+        fetchDatasetDataMock.mockResolvedValue({ data: [], row_count: 0 });
+
+        const { disconnectInfiniteScroll, reloadDatasetRowsFromListing } = await import(
+            "./infinite_scroll_handler.js"
+        );
+        await reloadDatasetRowsFromListing("empty_orders");
+
+        expect(document.querySelector("#empty_orders_table_view_container tbody").innerHTML).toBe("");
+        expect(setResultsCountMock).toHaveBeenCalledWith("empty_orders", 0);
+
+        disconnectInfiniteScroll("empty_orders");
     });
 
     test("a stale async append cannot advance the restored list offset", async () => {

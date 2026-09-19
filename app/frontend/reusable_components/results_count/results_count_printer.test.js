@@ -4,10 +4,14 @@
 // Exists to prevent regressions when search UIs show separate text and AI result totals.
 // @vitest-environment jsdom
 
-import { describe, expect, test } from "vitest";
-import { setResultsCount } from "./results_count_printer.js";
+import { afterEach, describe, expect, test } from "vitest";
+import { setResultsCount, setSearchAiResultsCount } from "./results_count_printer.js";
 
 describe("setResultsCount", () => {
+    afterEach(() => {
+        setSearchAiResultsCount("tasks", null);
+    });
+
     test("renders the legacy numeric count unchanged", () => {
         document.documentElement.lang = "en";
         document.body.innerHTML = `
@@ -89,5 +93,57 @@ describe("setResultsCount", () => {
         const primary = document.getElementById("tasks_results_count");
         expect(primary.textContent).toBe("1 tulos tekstihaulla + 0 tulosta tekoälyhaulla");
         expect(primary.querySelector(".results-count-breakdown-label")?.textContent).toBe("tulos tekstihaulla");
+    });
+
+    test("keeps the search's AI number beside the dataset's own count", () => {
+        // The listing publishes the true number of matches whenever another
+        // batch arrives; the AI number registered by the search must survive it.
+        document.documentElement.lang = "fi";
+        document.body.innerHTML = `<div id="tasks_results_count"></div>`;
+
+        setSearchAiResultsCount("tasks", 8);
+        setResultsCount("tasks", 251);
+
+        const primary = document.getElementById("tasks_results_count");
+        expect(primary.textContent).toBe("251 tulosta tekstihaulla + 8 tulosta tekoälyhaulla");
+        expect(primary.classList.contains("results-count--search-breakdown")).toBe(true);
+    });
+
+    test("returns to a single number once the search's AI group is withdrawn", () => {
+        document.documentElement.lang = "fi";
+        document.body.innerHTML = `<div id="tasks_results_count"></div>`;
+
+        setSearchAiResultsCount("tasks", 8);
+        setResultsCount("tasks", 251);
+        setSearchAiResultsCount("tasks", null);
+        setResultsCount("tasks", 313);
+
+        const primary = document.getElementById("tasks_results_count");
+        expect(primary.textContent).toBe("313 tulosta");
+        expect(primary.classList.contains("results-count--search-breakdown")).toBe(false);
+    });
+
+    test("an empty AI group is not a second number", () => {
+        document.documentElement.lang = "fi";
+        document.body.innerHTML = `<div id="tasks_results_count"></div>`;
+
+        setSearchAiResultsCount("tasks", 0);
+        setResultsCount("tasks", 251);
+
+        expect(document.getElementById("tasks_results_count").textContent).toBe("251 tulosta");
+    });
+
+    test("one dataset's AI group never reaches another dataset's counter", () => {
+        document.documentElement.lang = "fi";
+        document.body.innerHTML = `
+            <div id="tasks_results_count"></div>
+            <div id="orders_results_count"></div>
+        `;
+
+        setSearchAiResultsCount("tasks", 8);
+        setResultsCount("tasks", 251);
+        setResultsCount("orders", 12);
+
+        expect(document.getElementById("orders_results_count").textContent).toBe("12 tulosta");
     });
 });

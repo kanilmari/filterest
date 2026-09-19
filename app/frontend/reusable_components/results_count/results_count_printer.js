@@ -37,6 +37,35 @@ const BREAKDOWN_FALLBACKS = {
     },
 };
 
+// While a search is showing a group of AI results under the dataset's own
+// matches, the counter describes two different things at once. The dataset's
+// listing knows the true number of matches and the search knows how many AI
+// rows it put on screen, and both of them update the counter at their own
+// moments. Registering the AI part here lets either one publish without
+// erasing the other's number, so the counter never contradicts the page.
+const searchAiResultCounts = new Map();
+
+/**
+ * Register, or with a null or zero value withdraw, the AI part of a dataset's
+ * counter. Only a search sets this; clearing the search withdraws it.
+ */
+export function setSearchAiResultsCount(tableName, aiCount) {
+    if (Number.isFinite(aiCount) && aiCount > 0) {
+        searchAiResultCounts.set(tableName, aiCount);
+        return;
+    }
+    searchAiResultCounts.delete(tableName);
+}
+
+function composeResultsCount(tableName, count) {
+    const aiCount = searchAiResultCounts.get(tableName);
+    if (!Number.isFinite(aiCount) || typeof count !== "number") {
+        return count;
+    }
+
+    return { mode: SEARCH_BREAKDOWN_MODE, textCount: count, aiCount };
+}
+
 function getResultsCountLanguage() {
     const lang = String(document.documentElement?.lang || "")
         .trim()
@@ -151,11 +180,12 @@ function renderResultsCountIntoElement(el, count) {
 }
 
 export function setResultsCount(tableName, count) {
+    const composedCount = composeResultsCount(tableName, count);
     const primaryEl = document.getElementById(`${tableName}_results_count`);
-    renderResultsCountIntoElement(primaryEl, count);
+    renderResultsCountIntoElement(primaryEl, composedCount);
 
     const mirrorEls = document.querySelectorAll(
         `[data-results-count-for="${tableName}"]`
     );
-    mirrorEls.forEach((el) => renderResultsCountIntoElement(el, count));
+    mirrorEls.forEach((el) => renderResultsCountIntoElement(el, composedCount));
 }

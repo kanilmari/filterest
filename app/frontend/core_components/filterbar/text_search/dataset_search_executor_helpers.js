@@ -17,6 +17,9 @@ export function initSearchCache() {
         types: {},
         filters: {},
         renderedOnce: false,
+        // How many rows of the dataset the search matches in total, as the
+        // dataset's own listing counted them. Null until that answer arrives.
+        datasetMatchCount: null,
     };
 }
 

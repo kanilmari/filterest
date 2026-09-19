@@ -21,6 +21,7 @@ describe("dataset_search_executor_helpers", () => {
             types: {},
             filters: {},
             renderedOnce: false,
+            datasetMatchCount: null,
         });
     });
 

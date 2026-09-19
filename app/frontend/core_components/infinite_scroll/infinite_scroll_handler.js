@@ -2,9 +2,11 @@
 // Manages per-table infinite scroll using IntersectionObserver, fetching more rows as the user scrolls.
 // Bridges endpoint data fetching and table/card-view renderers with scroll sentinel lifecycle events.
 // Exists to decouple scroll setup, teardown, and per-table state from rendering and data layers.
+// A committed text search travels with every page as an ordinary condition of
+// the listing, so searching a dataset stays a way of browsing it.
 
-import { appendLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection } from "../table_views/dataset_loaded_rows.js";
-import { getDatasetViewContainerId } from "../table_views/dataset_view_registry.js";
+import { appendLoadedDatasetRows, clearLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection } from "../table_views/dataset_loaded_rows.js";
+import { getDatasetViewContainerId, getDatasetViewScrollDirection } from "../table_views/dataset_view_registry.js";
 import { getParams } from "../navigation/nav_engine/query_params.js";
 
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
@@ -98,8 +100,8 @@ function ensureArticleToggleListener() {
 
 /**
  * Disconnects the infinite scroll observer for a table, stopping further
- * automatic data fetches. Used when intelligent search takes over rendering
- * to prevent normal data fetches from racing with search results.
+ * automatic data fetches. Used whenever the visible list is about to be
+ * replaced, so a page still in flight cannot append rows to the new list.
  */
 export function disconnectInfiniteScroll(tableName) {
     const state = getScrollState(tableName);
@@ -178,8 +180,6 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     const state = getScrollState(tableName);
     state.orientation = orientation;
     clearFillScreenTimers(tableName);
-    // Intelligent search owns its streamed rows and must never fetch ordinary pages.
-    if (String(getParams(tableName)?.search || "").trim()) return;
 
     // Jos observer on olemassa, tuhotaan se ensin (estää tuplahavainnoinnin)
     if (state.observer) {
@@ -269,35 +269,58 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     }, 10000);
 }
 
+/**
+ * Loads the dataset's own rows again from the beginning and reconnects endless
+ * scrolling to them. A committed search is carried into that request like any
+ * other condition, so the first page, the row count and every later page all
+ * describe the same set of matches.
+ *
+ * @param {string} tableName
+ * @param {{ isCurrent?: () => boolean }} [options] caller's own freshness check,
+ *        so a replaced search cannot commit its rows after a newer one.
+ * @returns {Promise<Object|null>} the listing's answer, or null if it was abandoned.
+ */
+export async function reloadDatasetRowsFromListing(tableName, { isCurrent } = {}) {
+    disconnectInfiniteScroll(tableName);
+    resetOffset(tableName);
+    const result = await fetchMoreData(tableName, { replace: true, isCurrent });
+    if (isCurrent && !isCurrent()) return result;
+    const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+    initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(currentView));
+    return result;
+}
+
 //  * Varsinainen “hae lisää dataa” -funktio.
-async function fetchMoreData(tableName, options = {}) {
-    const {
-        isInfiniteScroll = true,
-        searchType = null,
-        append = true,
-    } = options;
+//  * replace=true aloittaa listauksen alusta ja korvaa näkyvät rivit;
+//  * muuten haetaan seuraava sivu nykyisen offsetin jälkeen.
+async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCurrent = null } = {}) {
     // BUG FIX: renamed to scrollSt/tableState to avoid variable shadowing.
     // Previously both were called "state", causing the observer disconnect
     // (line ~183) to reference the wrong object — unifiedTableState instead
     // of scrollState — so the observer was never disconnected when data
     // ran out, leading to an infinite fill-screen loop (~75 duplicate calls).
     const scrollSt = getScrollState(tableName);
-    if (scrollSt.isLoading) return;
+    if (scrollSt.isLoading) return null;
     scrollSt.isLoading = true;
     const generation = scrollSt.generation;
 
     try {
         const tableState = getUnifiedTableState(tableName);
         const currentView = localStorage.getItem(`${tableName}_view`) || "table";
-        if (isInfiniteScroll && String(getParams(tableName)?.search || "").trim()) return;
         const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
         const isCurrent = () => scrollSt.generation === generation
             && (localStorage.getItem(tableName + "_view") || "table") === currentView
             && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
-            && container?.isConnected;
-        const offsetVal = isInfiniteScroll ? tableState.offset || 0 : 0;
-        const filters = tableState.filters || {};
-        if (searchType) filters.searchType = searchType;
+            && container?.isConnected
+            && (!callerIsCurrent || callerIsCurrent());
+        const offsetVal = replace ? 0 : tableState.offset || 0;
+        // The committed search is one more condition of this listing, next to
+        // the selected filters, so it is sent with every page.
+        const committedSearch = String(getParams(tableName)?.search || "").trim();
+        const filters = {
+            ...(tableState.filters || {}),
+            ...(committedSearch ? { search: committedSearch } : {}),
+        };
         const sort_column = tableState.sort?.column || null;
         const sort_order = tableState.sort?.direction || null;
 
@@ -307,42 +330,48 @@ async function fetchMoreData(tableName, options = {}) {
             sort_column,
             sort_order,
             filters,
-            callerName: `fetchMoreData (${
-                isInfiniteScroll ? "infinite scroll" : "search"
-            })`,
-            row_count: isInfiniteScroll ? scrollSt.lastRowCount : null,
+            callerName: `fetchMoreData (${replace ? "reload" : "infinite scroll"})`,
+            row_count: replace ? null : scrollSt.lastRowCount,
             include_card_support: ["card", "article_view"].includes(currentView),
             view_key: getLoadedDatasetProjection(container, tableName) || currentView,
         });
-        if (!isCurrent()) return;
+        if (!isCurrent()) return null;
         setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;
 
         if (!result.data || result.data.length === 0) {
+            // A reload still has to empty the view: an answer with no rows is
+            // the result, not a reason to leave the previous rows on screen.
+            if (replace) await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types });
             // Kaikki rivit ladattu — pysäytetään infinite scroll kokonaan.
             // disconnect() + null estää myös fillScreenInterval-silmukan jatkumisen.
-            if (isInfiniteScroll && scrollSt.observer) {
+            if (!replace && scrollSt.observer) {
                 scrollSt.observer.disconnect();
                 scrollSt.observer = null;
                 scrollSt.sentinel?.remove();
                 scrollSt.sentinel = null;
             }
-            return;
+            return result;
         }
 
-        const rows = append
-            ? filterLoadedDatasetDuplicates(container, tableName, result.data)
-            : result.data;
-        await appendDataToView(tableName, rows, append, { isCurrent, dataTypes: result.types });
-        if (!isCurrent()) return;
-        if (isInfiniteScroll) updateOffset(tableName, result.data.length);
+        const rows = replace
+            ? result.data
+            : filterLoadedDatasetDuplicates(container, tableName, result.data);
+        await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types });
+        if (!isCurrent()) return result;
+        // A replaced list no longer continues the remembered row prefix, so the
+        // article navigation must not inherit rows that are no longer on screen.
+        if (replace) clearLoadedDatasetRows(container);
+        updateOffset(tableName, result.data.length);
         appendLoadedDatasetRows(container, tableName, rows, getUnifiedTableState(tableName).offset);
-        if (isInfiniteScroll && Number.isFinite(result.row_count)
+        if (!replace && Number.isFinite(result.row_count)
             && getUnifiedTableState(tableName).offset >= result.row_count) {
             disconnectInfiniteScroll(tableName);
         }
+        return result;
     } catch (err) {
         console.warn("error fetching more data:", err);
+        return null;
     } finally {
         if (scrollSt.generation === generation) scrollSt.isLoading = false;
     }

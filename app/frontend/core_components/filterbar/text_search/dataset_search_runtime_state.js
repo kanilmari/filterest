@@ -6,7 +6,7 @@
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
-import { setResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
+import { setResultsCount, setSearchAiResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
 import { ROW_GROUP_FILTER_KEY } from "../filter_list/row_group_facet_printer.js";
 import { getActiveFiltersSnapshot, RESERVED_PARAM_KEYS } from "./dataset_search_state_reader.js";
 import {
@@ -15,8 +15,6 @@ import {
     sortRows,
     initSearchCache,
 } from "./dataset_search_executor_helpers.js";
-
-const SEARCH_BREAKDOWN_MODE = "search-breakdown";
 
 export const ongoingSearchResultsStore = {};
 
@@ -100,18 +98,33 @@ export function removeSearchNotice(tableName, langKey) {
     });
 }
 
+/**
+ * Remember how many rows of this dataset the search actually matches.
+ * The number comes from the dataset's own listing, which counts every match
+ * rather than the handful of rows that happen to be loaded, so the counter can
+ * keep telling the truth while the reader scrolls further into the results.
+ */
+export function setSearchDatasetMatchCount(cache, rowCount) {
+    if (!cache) return;
+    cache.datasetMatchCount = Number.isFinite(rowCount) ? rowCount : null;
+}
+
 export function getVisibleSearchCounts(
     tableName,
     cache = ongoingSearchResultsStore[tableName]
 ) {
     const searchCache = cache || initSearchCache();
     return {
-        textCount: countVisibleRows(
-            searchCache.data,
-            searchCache.filters,
-            tableName,
-            searchCache.types
-        ),
+        // The listing's own count when it is known; otherwise the rows the
+        // search itself is holding, which is all there is to report yet.
+        textCount: Number.isFinite(searchCache.datasetMatchCount)
+            ? searchCache.datasetMatchCount
+            : countVisibleRows(
+                searchCache.data,
+                searchCache.filters,
+                tableName,
+                searchCache.types
+            ),
         aiCount: countVisibleRows(
             searchCache.aiData,
             searchCache.filters,
@@ -121,29 +134,29 @@ export function getVisibleSearchCounts(
     };
 }
 
-function buildSearchResultsCountPayload(
-    tableName,
-    cache = ongoingSearchResultsStore[tableName]
-) {
-    return {
-        mode: SEARCH_BREAKDOWN_MODE,
-        ...getVisibleSearchCounts(tableName, cache),
-    };
-}
-
 export function syncSearchResultsCount(
     tableName,
     cache = ongoingSearchResultsStore[tableName]
 ) {
-    setResultsCount(tableName, buildSearchResultsCountPayload(tableName, cache));
+    const { textCount, aiCount } = getVisibleSearchCounts(tableName, cache);
+    setSearchAiResultsCount(tableName, aiCount);
+    setResultsCount(tableName, textCount);
 }
 
-/** Resolve presentation filters without changing the selected filters or URL. */
+/** Withdraw the search's own part of the counter when the search ends. */
+export function clearSearchResultsCount(tableName) {
+    setSearchAiResultsCount(tableName, null);
+}
+
+/**
+ * Resolve presentation filters without changing the selected filters or URL.
+ * Only the AI result group is filtered in the browser; the dataset's own rows
+ * arrive from a listing that already applied the selected filters.
+ */
 export function syncSearchPresentationFilters(tableName, cache) {
     const context = getSearchFilterContext(tableName);
-    if (cache.filterSignature !== context.signature) cache.fallbackWithoutFilters = false;
     const serverScopeMatches = cache.serverFiltersApplied && cache.filterSignature === context.signature;
-    cache.filters = cache.fallbackWithoutFilters || serverScopeMatches ? {} : context.clientFilters;
+    cache.filters = serverScopeMatches ? {} : context.clientFilters;
     return cache.filters;
 }
 

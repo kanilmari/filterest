@@ -13,6 +13,7 @@ import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation
 import { getUnifiedTableState, setUnifiedTableState, refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { datasetSearchState } from "./dataset_search_state_reader.js";
 import { ongoingSearchResults } from "./dataset_search_executor.js";
+import { clearSearchResultsCount } from "./dataset_search_runtime_state.js";
 
 import { resolveSortSelection } from "../top_row_buttons/sort_sync_state_helpers.js";
 
@@ -102,6 +103,9 @@ export function clearCommittedDatasetSearch(tableName) {
     // while preserving that history for ArrowUp/ArrowDown recall.
     localStorage.setItem(`int_search_draft_${tableName}`, "");
     ongoingSearchResults[tableName] = null;
+    // Without the search there is no AI group, so the counter goes back to the
+    // dataset's own single number instead of keeping a stale second part.
+    clearSearchResultsCount(tableName);
     removeDatasetSearchArtifacts(tableName);
     notifyCommittedDatasetSearchChanged(tableName);
     void refreshTableUnified(tableName, { skipUrlParams: true });
