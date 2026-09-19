@@ -8,7 +8,9 @@ This is the constitution for Filterest. It defines durable product principles. T
 
 ## 1. Build a dependable, understandable product
 
-Prefer clarity, maintainability and useful capability. Avoid multiple sources of truth and unnecessary moving parts. Centralize complexity when doing so makes the rest of the system simpler.
+Prefer clarity, maintainability and useful capability. Avoid multiple sources of truth and unnecessary moving parts. Centralize complexity when doing so makes the rest of the system simpler. Let components meet through a stated boundary rather than reaching into each other, so one can be replaced without opening the other.
+
+Finding these faults is part of maintaining the product, not a favour to it. A place where the same thing is decided twice, or where nothing decides it at all, is a defect worth locating and naming before anything visibly fails, whoever wrote it and however long it has stood.
 
 Design complete features with predictable behavior, clear language and consistent interaction. Preserve supported languages, accessibility, and the application's explicit light and dark themes. Keep detailed visual rules in the design guide and reusable code patterns in the reference implementations.
 
