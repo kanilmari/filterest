@@ -3,7 +3,7 @@ import {
     resolveMultilingualValue,
     reconstructMultilingualValue,
     resolveInputType,
-    buildColumnInfoMap,
+    buildColumnInfoMapFromDataTypes,
     buildGeneratedForeignDisplayAliasBase,
     normalizeGeneratedForeignDisplayAliasKey,
     getGeneratedForeignDisplayColumn,
@@ -182,59 +182,37 @@ describe('resolveInputType', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildColumnInfoMap
+// buildColumnInfoMapFromDataTypes
 // ---------------------------------------------------------------------------
-describe('buildColumnInfoMap', () => {
-    const sampleColumns = [
-        { table_name: 'users', column_name: 'name', editable_in_ui: true, data_type: 'text', is_multilingual: false },
-        { table_name: 'users', column_name: 'email', editable_in_ui: false, data_type: 'text', is_multilingual: false },
-        { table_name: 'users', column_name: 'title', editable_in_ui: true, data_type: 'text', is_multilingual: true },
-        { table_name: 'orders', column_name: 'total', editable_in_ui: true, data_type: 'numeric', is_multilingual: false },
-    ];
-
-    test('builds map for matching table only', () => {
-        const map = buildColumnInfoMap(sampleColumns, 'users');
-        expect(Object.keys(map)).toEqual(['name', 'email', 'title']);
-        expect(map.name).toEqual({ editable_in_ui: true, data_type: 'text', is_multilingual: false });
-        expect(map.email).toEqual({ editable_in_ui: false, data_type: 'text', is_multilingual: false });
-        expect(map.title).toEqual({ editable_in_ui: true, data_type: 'text', is_multilingual: true });
+describe('buildColumnInfoMapFromDataTypes', () => {
+    test('reads each column from the description the dataset was rendered with', () => {
+        expect(buildColumnInfoMapFromDataTypes({
+            title: { data_type: 'text', editable_in_ui: true, is_multilingual: true },
+            id: { data_type: 'integer', editable_in_ui: false },
+        })).toEqual({
+            title: { editable_in_ui: true, data_type: 'text', is_multilingual: true },
+            id: { editable_in_ui: false, data_type: 'integer', is_multilingual: false },
+        });
     });
 
-    test('returns empty map when no columns match', () => {
-        expect(buildColumnInfoMap(sampleColumns, 'nonexistent')).toEqual({});
+    test('a description that does not state editability is allowed, not refused', () => {
+        // Some columns arrive through an overlay that states only what it knows,
+        // for example the service catalogue's moderation switches. Refusing them
+        // would take away an editor the person had, and the server is the guard.
+        expect(buildColumnInfoMapFromDataTypes({
+            admin_approved: { data_type: 'boolean', card_element: 'details' },
+        })).toEqual({
+            admin_approved: { editable_in_ui: true, data_type: 'boolean', is_multilingual: false },
+        });
     });
 
-    test('returns empty map for null/undefined input', () => {
-        expect(buildColumnInfoMap(null, 'users')).toEqual({});
-        expect(buildColumnInfoMap(undefined, 'users')).toEqual({});
-    });
-
-    test('handles missing data_type (defaults to text)', () => {
-        const cols = [{ table_name: 't', column_name: 'c', editable_in_ui: true }];
-        const map = buildColumnInfoMap(cols, 't');
-        expect(map.c.data_type).toBe('text');
-    });
-
-    test('coerces truthy/falsy editable_in_ui and is_multilingual', () => {
-        const cols = [
-            { table_name: 't', column_name: 'a', editable_in_ui: 1, data_type: 'int', is_multilingual: 0 },
-            { table_name: 't', column_name: 'b', editable_in_ui: null, data_type: 'text', is_multilingual: undefined },
-        ];
-        const map = buildColumnInfoMap(cols, 't');
-        expect(map.a.editable_in_ui).toBe(true);
-        expect(map.a.is_multilingual).toBe(false);
-        expect(map.b.editable_in_ui).toBe(false);
-        expect(map.b.is_multilingual).toBe(false);
-    });
-
-    test('skips entries without column_name', () => {
-        const cols = [
-            { table_name: 't', column_name: '', editable_in_ui: true, data_type: 'text' },
-            { table_name: 't', column_name: null, editable_in_ui: true, data_type: 'text' },
-        ];
-        expect(buildColumnInfoMap(cols, 't')).toEqual({});
+    test('nothing to describe gives an empty map', () => {
+        expect(buildColumnInfoMapFromDataTypes(null)).toEqual({});
+        expect(buildColumnInfoMapFromDataTypes({ broken: 'not an object' })).toEqual({});
     });
 });
+
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // FK display alias helpers

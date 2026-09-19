@@ -153,8 +153,14 @@ export function buildColumnInfoMapFromDataTypes(dataTypes) {
     }
     for (const [columnName, columnMeta] of Object.entries(dataTypes)) {
         if (!columnName || !columnMeta || typeof columnMeta !== 'object') continue;
+        // A description without the editable flag is not a refusal. Some columns
+        // reach the browser through an overlay that states only what it knows,
+        // for example the service catalogue's moderation switches, and refusing
+        // them here would silently take away an editor the person had. The
+        // server remains the final guard, as it is for the table view.
+        const editableStated = Object.prototype.hasOwnProperty.call(columnMeta, 'editable_in_ui');
         columnInfoMap[columnName] = {
-            editable_in_ui: !!columnMeta.editable_in_ui,
+            editable_in_ui: editableStated ? !!columnMeta.editable_in_ui : true,
             data_type: columnMeta.data_type || 'text',
             is_multilingual: !!columnMeta.is_multilingual,
         };
@@ -162,32 +168,6 @@ export function buildColumnInfoMapFromDataTypes(dataTypes) {
     return columnInfoMap;
 }
 
-/**
- * Builds a lookup map from column_details array for a given table.
- *
- * @param {Array<{table_name: string, column_name: string, editable_in_ui: any, data_type: string, is_multilingual: any}>} columnDetails
- * @param {string} tableName
- * @returns {Object<string, {editable_in_ui: boolean, data_type: string, is_multilingual: boolean}>}
- */
-export function buildColumnInfoMap(columnDetails, tableName) {
-    const columnInfoMap = {};
-
-    if (!Array.isArray(columnDetails)) {
-        return columnInfoMap;
-    }
-
-    for (const colObj of columnDetails) {
-        if (colObj.table_name === tableName && colObj.column_name) {
-            columnInfoMap[colObj.column_name] = {
-                editable_in_ui: !!colObj.editable_in_ui,
-                data_type: colObj.data_type || 'text',
-                is_multilingual: !!colObj.is_multilingual,
-            };
-        }
-    }
-
-    return columnInfoMap;
-}
 
 /**
  * Build the backend-generated FK display alias base for a foreign-key column.

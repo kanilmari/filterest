@@ -415,6 +415,11 @@ export function normalizeCardUpdateTransportValue(value) {
 /**
  * Korvaa tekstisisällöt <input>- tai <textarea>-kentillä,
  * mutta vain, jos rakenteessa editable_in_ui on true kyseiselle sarakkeelle ja taululle.
+ * @param {HTMLElement} container
+ * @param {string} table_name
+ * @param {Object<string, {data_type?: string, editable_in_ui?: any, is_multilingual?: any}>} dataTypes
+ *        The per-column description the dataset response carried; editing
+ *        depends on it entirely.
  */
 export function enableEditing(container, table_name, dataTypes) {
     if (IS_DEV_MODE) console.log('enabling editing... table= ' + table_name);

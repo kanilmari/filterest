@@ -110,14 +110,15 @@ export function resolveInlineEditTargetColumn(columnName, columns, dataTypes = {
 }
 
 /**
- * Determines whether the UI should allow inline editing for a table cell based
- * on cached column metadata. Missing metadata returns true so the backend keeps
- * being the final authority instead of blocking unexpectedly.
+ * Determines whether the interface should allow inline editing for a table cell,
+ * based on the column description the dataset response carried. A column the
+ * response does not describe returns true, so the server keeps being the final
+ * authority instead of the browser blocking unexpectedly.
  *
  * @param {Object} options
  * @param {string} options.columnName
  * @param {string[]} options.columns
- * @param {Object<string, {foreign_table?: string}>} [options.dataTypes]
+ * @param {Object<string, {foreign_table?: string, editable_in_ui?: any}>} [options.dataTypes]
  * @param {string} options.tableName
  * @returns {boolean}
  */

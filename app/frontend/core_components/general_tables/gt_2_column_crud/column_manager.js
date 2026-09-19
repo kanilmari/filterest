@@ -372,7 +372,7 @@ export async function open_column_management_modal(table_name) {
         const roleLabel = managementLabel('card_role');
         const roleSelect = document.createElement('select');
         roleSelect.name = 'card_role';
-        for (const { value, labelKey } of getCardRoleOptions()) {
+        for (const { value, labelKey } of getCardRoleOptions({ includeLegacyVariants: true })) {
             const option = document.createElement('option');
             option.value = value;
             setManagementText(option, labelKey);
@@ -594,15 +594,21 @@ export async function open_column_management_modal(table_name) {
             }
         }
 
+        // A role can only be assigned to a column that will exist after this
+        // save. A half-finished new row — named, but without a chosen type — is
+        // not created, so sending its role would make the server refuse the
+        // whole request and lose every other change in it.
+        const createdColumnNames = new Set(added_columns.map(column => column.new_name));
         const column_card_roles = {};
         currentRows.forEach(r => {
             const nameInput = r.querySelector('input[name="column_name"]');
             const roleSelect = r.querySelector('select[name="card_role"]');
             const columnName = nameInput?.value.trim();
             if (!columnName || !roleSelect) return;
-            // Only a role the person actually changed, or a new column's choice,
-            // is sent; an untouched column keeps whatever it has.
             const isNewColumn = !nameInput.dataset.originalName;
+            if (isNewColumn && !createdColumnNames.has(columnName)) return;
+            // Otherwise: a new column's choice, or a role the person changed on
+            // an existing column. An untouched column keeps whatever it has.
             if (isNewColumn || roleSelect.value !== roleSelect.dataset.originalRole) {
                 column_card_roles[columnName] = roleSelect.value;
             }
@@ -631,9 +637,9 @@ export async function open_column_management_modal(table_name) {
                 suppressErrorToast: true,
             });
 
-            // The article view reads each column's type from the cached database
-            // catalog, and a column it does not know gets no editor at all. The
-            // cache is forgotten here so a column added now can be filled in now.
+            // The navigation trees read the dataset list and its symbols from
+            // the cached catalog, so it is forgotten here: a renamed dataset or
+            // a changed symbol appears in the navigation at once.
             // A changed symbol is saved with the rest of the dataset's definition.
             if (symbolTableUID) await symbolPicker.save(symbolTableUID);
             invalidateDatabaseCatalogTreeCache();

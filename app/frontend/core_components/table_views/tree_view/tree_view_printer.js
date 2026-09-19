@@ -41,10 +41,10 @@ function persistDatabaseCatalogTreeData(treeData) {
 
 /**
  * Forget the cached database catalog so the next read fetches it again.
- * Between a schema change and every surface that reads column metadata from
- * this cache, including the article view's editable fields.
- * Exists because a column added minutes ago would otherwise stay unknown, and
- * an unknown column is silently skipped instead of getting an editor.
+ * Between a schema or symbol change and the navigation trees, which are the
+ * only readers of this catalog left.
+ * Exists so a renamed dataset, a new one, or a changed symbol appears in the
+ * navigation at once rather than after the cache's own lifetime.
  */
 export function invalidateDatabaseCatalogTreeCache() {
     try {

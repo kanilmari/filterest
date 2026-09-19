@@ -401,6 +401,46 @@ describe('open_column_management_modal', () => {
         expect(body.column_card_roles).toEqual({ note: 'image' });
     });
 
+    test('a half-finished new row does not carry a role that would refuse the whole save', async () => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'title', data_type: 'TEXT', card_element: 'header' },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        // The person names a new column but has not chosen its type yet.
+        const newRow = document.querySelectorAll('.column-row')[1];
+        newRow.querySelector('[name="column_name"]').value = 'not_finished_yet';
+        // Meanwhile they do change an existing column's role, which must survive.
+        document.querySelectorAll('.column-row')[0].querySelector('[name="card_role"]').value = 'image';
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const body = endpointRouterMock.mock.calls
+            .filter(([route]) => route === 'modifyColumns').at(-1)[1].body_data;
+        expect(body.added_columns).toEqual([]);
+        expect(body.column_card_roles).toEqual({ title: 'image' });
+    });
+
+    test('a stored role variant is shown as itself, not flattened to the plain role', async () => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'summary', data_type: 'TEXT', card_element: 'description1+lang_key' },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        const role = document.querySelector('.column-row [name="card_role"]');
+        expect(role.value).toBe('description1+lang_key');
+
+        // An untouched row still sends nothing.
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const body = endpointRouterMock.mock.calls
+            .filter(([route]) => route === 'modifyColumns').at(-1)[1].body_data;
+        expect(body.column_card_roles).toBeUndefined();
+    });
+
     test('a saved schema change forgets the cached catalog so a new column is editable at once', async () => {
         localStorage.setItem('full_tree_data', JSON.stringify({ nodes: [], column_details: [] }));
         localStorage.setItem('full_tree_data_cached_at', String(Date.now()));
