@@ -17,6 +17,7 @@ import { getHiddenColumns } from '../../filterbar/filter_list/column_visibility_
 import { getOpenedFilters, saveOpenedFilters } from '../../filterbar/filterbar_engine/filterbar_state_saver.js';
 import { invalidateDatabaseCatalogTreeCache } from '../../table_views/tree_view/tree_view_printer.js';
 import { createDatasetSymbolPicker, readDatasetSymbol } from '../dataset_form/dataset_symbol_picker.js';
+import { getCardRoleOptions, isValidCardRole } from '../../table_views/card_view/card_role_catalog.js';
 import {
     COLUMN_TYPE_PARAMETER,
     DEFAULT_NUMERIC_PRECISION,
@@ -244,7 +245,7 @@ export async function open_column_management_modal(table_name) {
     // describe how a column is born and cannot be a conversion target.
     const allowedTypeEntries = getDatasetColumnTypeOptions('edit');
 
-    function createColumnRow(column_name_value, data_type_value, length_value, original = true) {
+    function createColumnRow(column_name_value, data_type_value, length_value, original = true, card_role_value = 'details') {
         const row = document.createElement('div');
         row.classList.add('column-row');
         const nameLabel = managementLabel('manage_table_column_name');
@@ -366,6 +367,24 @@ export async function open_column_management_modal(table_name) {
             row.append(multilingualLabel);
         }
 
+        // How the column is presented on a card is part of the dataset's
+        // definition, so it is set here as well as when the dataset is created.
+        const roleLabel = managementLabel('card_role');
+        const roleSelect = document.createElement('select');
+        roleSelect.name = 'card_role';
+        for (const { value, labelKey } of getCardRoleOptions()) {
+            const option = document.createElement('option');
+            option.value = value;
+            setManagementText(option, labelKey);
+            roleSelect.appendChild(option);
+        }
+        const storedRole = String(card_role_value || 'details');
+        roleSelect.value = isValidCardRole(storedRole) ? storedRole : 'details';
+        if (roleSelect.value !== storedRole) roleSelect.value = 'details';
+        roleSelect.dataset.originalRole = roleSelect.value;
+        roleLabel.appendChild(roleSelect);
+        row.appendChild(roleLabel);
+
         // Keep the removal control available to touch and keyboard users.
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
@@ -385,7 +404,9 @@ export async function open_column_management_modal(table_name) {
 
     // Luo rivit olemassa oleville sarakkeille
     columns.forEach(col => {
-        const r = createColumnRow(col.column_name, col.data_type, col.character_maximum_length, true);
+        const r = createColumnRow(
+            col.column_name, col.data_type, col.character_maximum_length, true, col.card_element
+        );
         form.appendChild(r);
     });
 
@@ -573,12 +594,29 @@ export async function open_column_management_modal(table_name) {
             }
         }
 
+        const column_card_roles = {};
+        currentRows.forEach(r => {
+            const nameInput = r.querySelector('input[name="column_name"]');
+            const roleSelect = r.querySelector('select[name="card_role"]');
+            const columnName = nameInput?.value.trim();
+            if (!columnName || !roleSelect) return;
+            // Only a role the person actually changed, or a new column's choice,
+            // is sent; an untouched column keeps whatever it has.
+            const isNewColumn = !nameInput.dataset.originalName;
+            if (isNewColumn || roleSelect.value !== roleSelect.dataset.originalRole) {
+                column_card_roles[columnName] = roleSelect.value;
+            }
+        });
+
         const requestData = {
             dataset_name: table_name,
             modified_columns: modified_columns,
             added_columns: added_columns,
             removed_columns: removed_columns
         };
+        if (Object.keys(column_card_roles).length > 0) {
+            requestData.column_card_roles = column_card_roles;
+        }
 
 
         if (multilingualDefaultInput.checked !== initialMultilingualDefault) {

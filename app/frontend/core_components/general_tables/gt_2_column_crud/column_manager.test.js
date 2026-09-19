@@ -296,6 +296,9 @@ describe('open_column_management_modal', () => {
                     { original_name: '', new_name: 'code', data_type: 'VARCHAR', length: 30, is_multilingual: false },
                     { original_name: '', new_name: 'when', data_type: 'DATE', length: null },
                 ],
+                // A new column always carries its card role, as it does when a
+                // dataset is created.
+                column_card_roles: { title: 'details', code: 'details', when: 'details' },
             },
         }));
     });
@@ -377,6 +380,26 @@ describe('open_column_management_modal', () => {
         expect(document.querySelector('[role="status"]').textContent).toContain('Could not check visibility');
     });
 
+
+    test('an existing column sends its card role only when the person changes it', async () => {
+        fetchColumnsMock.mockResolvedValue([
+            { column_name: 'title', data_type: 'TEXT', card_element: 'header' },
+            { column_name: 'note', data_type: 'TEXT', card_element: 'details' },
+        ]);
+        const mod = await loadModule();
+        await mod.open_column_management_modal('demo_table');
+
+        const rows = document.querySelectorAll('.column-row');
+        expect(rows[0].querySelector('[name="card_role"]').value).toBe('header');
+        rows[1].querySelector('[name="card_role"]').value = 'image';
+
+        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const body = endpointRouterMock.mock.calls
+            .filter(([route]) => route === 'modifyColumns').at(-1)[1].body_data;
+        expect(body.column_card_roles).toEqual({ note: 'image' });
+    });
 
     test('a saved schema change forgets the cached catalog so a new column is editable at once', async () => {
         localStorage.setItem('full_tree_data', JSON.stringify({ nodes: [], column_details: [] }));

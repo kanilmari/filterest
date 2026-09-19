@@ -4,7 +4,7 @@ import {
     deriveForeignKeyColumnName,
     hasValueChanged,
     formatDateForInput,
-    buildEditableColumnMapFromFullTreeData,
+    buildEditableColumnMap,
     resolveInlineEditTargetColumn,
     canInlineEditCell,
 } from './cell_editor_helpers.js';
@@ -158,27 +158,22 @@ describe('formatDateForInput', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildEditableColumnMapFromFullTreeData
+// buildEditableColumnMap
 // ---------------------------------------------------------------------------
-describe('buildEditableColumnMapFromFullTreeData', () => {
-    test('builds editable flags for the requested table only', () => {
-        const raw = JSON.stringify({
-            column_details: [
-                { table_name: 'users', column_name: 'name', editable_in_ui: true },
-                { table_name: 'users', column_name: 'role_id', editable_in_ui: false },
-                { table_name: 'orders', column_name: 'status', editable_in_ui: true },
-            ],
-        });
-
-        expect(buildEditableColumnMapFromFullTreeData(raw, 'users')).toEqual({
+describe('buildEditableColumnMap', () => {
+    test('reads the editable flag from the metadata the dataset was rendered with', () => {
+        expect(buildEditableColumnMap({
+            name: { data_type: 'text', editable_in_ui: true },
+            role_id: { data_type: 'integer', editable_in_ui: false },
+        })).toEqual({
             name: { editable_in_ui: true },
             role_id: { editable_in_ui: false },
         });
     });
 
-    test('returns empty map for malformed or missing cache', () => {
-        expect(buildEditableColumnMapFromFullTreeData('{broken', 'users')).toEqual({});
-        expect(buildEditableColumnMapFromFullTreeData(null, 'users')).toEqual({});
+    test('a column the response does not describe is left out rather than guessed', () => {
+        expect(buildEditableColumnMap({ note: { data_type: 'text' } })).toEqual({});
+        expect(buildEditableColumnMap(null)).toEqual({});
     });
 });
 
@@ -204,11 +199,10 @@ describe('resolveInlineEditTargetColumn', () => {
 // canInlineEditCell
 // ---------------------------------------------------------------------------
 describe('canInlineEditCell', () => {
-    const fullTreeData = {
-        column_details: [
-            { table_name: 'users', column_name: 'name', editable_in_ui: true },
-            { table_name: 'users', column_name: 'status_id', editable_in_ui: false },
-        ],
+    // The dataset response describes its own columns; nothing else is consulted.
+    const datasetTypes = {
+        name: { data_type: 'text', editable_in_ui: true },
+        status_id: { data_type: 'integer', editable_in_ui: false, foreign_table: 'statuses' },
     };
 
     test('returns false for non-editable direct columns', () => {
@@ -216,9 +210,8 @@ describe('canInlineEditCell', () => {
             canInlineEditCell({
                 columnName: 'status_id',
                 columns: ['name', 'status_id'],
-                dataTypes: {},
+                dataTypes: datasetTypes,
                 tableName: 'users',
-                fullTreeDataRaw: fullTreeData,
             })
         ).toBe(false);
     });
@@ -228,11 +221,8 @@ describe('canInlineEditCell', () => {
             canInlineEditCell({
                 columnName: 'status_name',
                 columns: ['status_id', 'status_name'],
-                dataTypes: {
-                    status_id: { foreign_table: 'statuses' },
-                },
+                dataTypes: datasetTypes,
                 tableName: 'users',
-                fullTreeDataRaw: fullTreeData,
             })
         ).toBe(false);
     });
@@ -242,9 +232,8 @@ describe('canInlineEditCell', () => {
             canInlineEditCell({
                 columnName: 'unknown',
                 columns: ['unknown'],
-                dataTypes: {},
+                dataTypes: datasetTypes,
                 tableName: 'users',
-                fullTreeDataRaw: fullTreeData,
             })
         ).toBe(true);
     });

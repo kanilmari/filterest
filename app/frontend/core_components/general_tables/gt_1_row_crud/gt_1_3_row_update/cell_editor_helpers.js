@@ -70,45 +70,23 @@ export function formatDateForInput(value, inputType, dataType = '') {
 }
 
 /**
- * Builds a simple { column_name -> { editable_in_ui } } lookup from cached
- * full_tree_data payloads. Returns an empty map if the cache is missing or
- * malformed so callers can fall back to backend enforcement.
+ * Reads each column's editability from the per-column metadata the dataset was
+ * rendered with, so the table view and the article view describe a dataset the
+ * same way and neither depends on a separately cached catalog.
  *
- * @param {string|object|null} fullTreeDataRaw
- * @param {string} tableName
+ * @param {Object<string, {editable_in_ui?: any}>} dataTypes
  * @returns {Object<string, {editable_in_ui: boolean}>}
  */
-export function buildEditableColumnMapFromFullTreeData(fullTreeDataRaw, tableName) {
-    if (!fullTreeDataRaw || !tableName) {
-        return {};
-    }
-
-    let parsed;
-    if (typeof fullTreeDataRaw === 'string') {
-        try {
-            parsed = JSON.parse(fullTreeDataRaw);
-        } catch {
-            return {};
-        }
-    } else if (typeof fullTreeDataRaw === 'object') {
-        parsed = fullTreeDataRaw;
-    } else {
-        return {};
-    }
-
-    if (!Array.isArray(parsed?.column_details)) {
-        return {};
-    }
-
+export function buildEditableColumnMap(dataTypes) {
     const columnInfoMap = {};
-    for (const colObj of parsed.column_details) {
-        if (colObj?.table_name === tableName && colObj.column_name) {
-            columnInfoMap[colObj.column_name] = {
-                editable_in_ui: !!colObj.editable_in_ui,
-            };
-        }
+    if (!dataTypes || typeof dataTypes !== 'object') {
+        return columnInfoMap;
     }
-
+    for (const [columnName, columnMeta] of Object.entries(dataTypes)) {
+        if (!columnName || !columnMeta || typeof columnMeta !== 'object') continue;
+        if (!Object.prototype.hasOwnProperty.call(columnMeta, 'editable_in_ui')) continue;
+        columnInfoMap[columnName] = { editable_in_ui: !!columnMeta.editable_in_ui };
+    }
     return columnInfoMap;
 }
 
@@ -141,7 +119,6 @@ export function resolveInlineEditTargetColumn(columnName, columns, dataTypes = {
  * @param {string[]} options.columns
  * @param {Object<string, {foreign_table?: string}>} [options.dataTypes]
  * @param {string} options.tableName
- * @param {string|object|null} options.fullTreeDataRaw
  * @returns {boolean}
  */
 export function canInlineEditCell({
@@ -149,17 +126,13 @@ export function canInlineEditCell({
     columns = [],
     dataTypes = {},
     tableName,
-    fullTreeDataRaw,
 }) {
     if (!columnName || !tableName) {
         return true;
     }
 
     const targetColumn = resolveInlineEditTargetColumn(columnName, columns, dataTypes);
-    const columnInfoMap = buildEditableColumnMapFromFullTreeData(
-        fullTreeDataRaw,
-        tableName
-    );
+    const columnInfoMap = buildEditableColumnMap(dataTypes);
     const metadata = columnInfoMap[targetColumn];
 
     if (!metadata) {

@@ -35,7 +35,7 @@ func TestCreationCardRolesKeepLegacyDefaultsAndAcceptExistingVariants(t *testing
 		}
 	}
 	q := &roleRecorder{}
-	if err := applyCreationCardRoles(q, "sample", nil); err != nil || len(q.args) != 0 {
+	if err := applyColumnCardRoles(q, "sample", nil); err != nil || len(q.args) != 0 {
 		t.Fatal("omitted roles should not change metadata defaults")
 	}
 	if err := validateCreationCardRoles(map[string]string{"title": strings.Repeat("details,", 40) + "details"}, columns); err == nil {
@@ -63,7 +63,7 @@ func (*roleRecorder) QueryRow(string, ...interface{}) *sql.Row        { panic("u
 
 func TestCreationCardRoleAssignmentChecksEveryTargetAndUsesBoundValues(t *testing.T) {
 	q := &roleRecorder{rows: 1}
-	err := applyCreationCardRoles(q, "Sample", map[string]string{"Title": "header", "id": "details"})
+	err := applyColumnCardRoles(q, "Sample", map[string]string{"Title": "header", "id": "details"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestCreationCardRoleAssignmentChecksEveryTargetAndUsesBoundValues(t *testin
 		t.Fatalf("args=%v", q.args)
 	}
 	for _, q := range []*roleRecorder{{rows: 0}, {rows: 2}, {err: errors.New("write failed")}} {
-		if err := applyCreationCardRoles(q, "sample", map[string]string{"title": "header"}); err == nil {
+		if err := applyColumnCardRoles(q, "sample", map[string]string{"title": "header"}); err == nil {
 			t.Fatal("unmatched/failed assignment must abort creation")
 		}
 	}
@@ -82,7 +82,7 @@ func TestCreationRoleAssignmentPreservesRawLabelOverrides(t *testing.T) {
 	q := &roleRecorder{rows: 1}
 	roles := map[string]string{"id": "details", "location": "details_link10", "title": "header",
 		"description": "description", "keywords": "keywords", "image": "image"}
-	if err := applyCreationCardRoles(q, "sample", roles); err != nil {
+	if err := applyColumnCardRoles(q, "sample", roles); err != nil {
 		t.Fatal(err)
 	}
 	for index, args := range q.args {
@@ -92,5 +92,22 @@ func TestCreationRoleAssignmentPreservesRawLabelOverrides(t *testing.T) {
 		if strings.Contains(q.queries[index], "show_key_on_card") {
 			t.Fatal("role assignment must not materialize or overwrite raw label choices")
 		}
+	}
+}
+
+// A change to an existing dataset carries only the roles it sets, without the
+// dataset's full column list, so the role values themselves are what is checked.
+func TestValidateCardRoleValuesAcceptsSupportedRolesOnly(t *testing.T) {
+	if err := validateCardRoleValues(map[string]string{"title": "header", "note": "details"}); err != nil {
+		t.Fatalf("supported roles were refused: %v", err)
+	}
+	if err := validateCardRoleValues(nil); err != nil {
+		t.Fatalf("no roles must be accepted: %v", err)
+	}
+	if err := validateCardRoleValues(map[string]string{"title": "not_a_role"}); err == nil {
+		t.Fatal("an unsupported role must be refused")
+	}
+	if err := validateCardRoleValues(map[string]string{"  ": "header"}); err == nil {
+		t.Fatal("a role without a column must be refused")
 	}
 }

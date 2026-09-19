@@ -11,6 +11,20 @@ import (
 	"strings"
 )
 
+// validateCardRoleValues checks the roles themselves, for a request that does
+// not carry the dataset's full column list.
+func validateCardRoleValues(roles map[string]string) error {
+	for column, role := range roles {
+		if strings.TrimSpace(column) == "" {
+			return fmt.Errorf("card role refers to an unnamed column")
+		}
+		if len(role) > 255 || !card_roles.IsValid(role) {
+			return fmt.Errorf("unsupported card role for column %q", column)
+		}
+	}
+	return nil
+}
+
 func validateCreationCardRoles(roles, columns map[string]string) error {
 	for column, role := range roles {
 		if _, exists := columns[column]; !exists {
@@ -23,7 +37,7 @@ func validateCreationCardRoles(roles, columns map[string]string) error {
 	return nil
 }
 
-func applyCreationCardRoles(q dbutils.Querier, tableName string, roles map[string]string) error {
+func applyColumnCardRoles(q dbutils.Querier, tableName string, roles map[string]string) error {
 	columns := make([]string, 0, len(roles))
 	for column := range roles {
 		columns = append(columns, column)

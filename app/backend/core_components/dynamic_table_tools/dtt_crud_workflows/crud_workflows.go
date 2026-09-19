@@ -308,7 +308,7 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := applyCreationCardRoles(tx, tableName, req.ColumnCardRoles); err != nil {
+	if err := applyColumnCardRoles(tx, tableName, req.ColumnCardRoles); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "card role assignment failed")
 		return
@@ -366,6 +366,10 @@ type ModifyColumnsRequest struct {
 	AddedCols              []dtt_2_column_crud.ModifiedCol `json:"added_columns"`
 	RemovedCols            []string                        `json:"removed_columns"`
 	NewColumnsMultilingual *bool                           `json:"new_columns_multilingual,omitempty"`
+	// ColumnCardRoles sets how each named column is presented on a card, the
+	// same choice the creation form offers, so both forms describe a dataset
+	// with one vocabulary.
+	ColumnCardRoles map[string]string `json:"column_card_roles,omitempty"`
 }
 
 func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
@@ -413,6 +417,11 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validateNewColumnLanguages(req.AddedCols); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := validateCardRoleValues(req.ColumnCardRoles); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -468,6 +477,14 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 		err = metaErr
 		log.Printf("\033[31merror updating column metadata: %v\033[0m", metaErr)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error updating column metadata: %v", metaErr))
+		return
+	}
+
+	// Card roles are applied after the column metadata exists for every column,
+	// including the ones this request just added.
+	if err := applyColumnCardRoles(tx, sanitizedTableName, req.ColumnCardRoles); err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

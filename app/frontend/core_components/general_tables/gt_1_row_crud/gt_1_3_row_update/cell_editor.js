@@ -48,7 +48,6 @@ export async function editCell(cell, columns, data, dataTypes, table_name) {
     }
     const columnName = columns[colIndex];
     const dataTypeInfo = safeDataTypes[columnName];
-    const fullTreeDataRaw = localStorage.getItem('full_tree_data');
     const userPermissions = readCachedUserPermissions();
 
     if (
@@ -59,7 +58,6 @@ export async function editCell(cell, columns, data, dataTypes, table_name) {
             columns,
             dataTypes: safeDataTypes,
             tableName: table_name,
-            fullTreeDataRaw,
         })
     ) {
         showWarningToast(
