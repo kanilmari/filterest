@@ -12,7 +12,9 @@ This document describes the Pipeline Mediator pattern used in Filterest's backen
 
 Every HTTP request in Filterest flows through a **pipeline** — an ordered sequence of middleware stages. Each stage performs one concern (rate limiting, logging, authentication, etc.) and wraps the next stage in the chain.
 
-The pipeline is **declarative**: the stage order is defined in a single file (`pipeline_order.go`), and per-route configuration is defined in another single file (`route_profiles.go`). There are no scattered `switch` statements or map literals.
+The pipeline is **declarative**: the stage order is defined in a single file (`pipeline_order.go`), and a route's access profile is defined in another single file (`route_profiles.go`), where a conformance test requires every route to have an explicit entry.
+
+The profile is the part that is governed this way. A route's other properties are not yet: its permitted methods, whether it acts on one dataset, and its permission identity are decided in further lists across several files. Treat the access profile as the model the rest should follow, not as a description of the whole route story.
 
 ### The Ice Cream Kiosk Metaphor
 
@@ -420,7 +422,7 @@ Place it in the correct position relative to existing stages. Consider:
 
 ### Add a New Route
 
-1. **Register the route** in `routing_builder.go` as usual (add to `routeDefinitions`).
+1. **Register the route** in `router.go` (or `router_for_apps.go` for an application route), with `functionRegisterHandler`. `routing_builder.go` holds no registrations: it is what turns them into database rows and middleware chains.
 2. **Add a profile entry** in `route_profiles.go` — **every route must have an explicit entry** (enforced by the conformance test):
 
 ```go
