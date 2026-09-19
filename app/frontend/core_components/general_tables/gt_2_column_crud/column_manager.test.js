@@ -346,6 +346,8 @@ describe('open_column_management_modal', () => {
     test('restores only the exact hidden dataset and verifies readback', async () => {
         let hidden = true;
         endpointRouterMock.mockImplementation(async (route, options) => {
+            // The dialog also reads the dataset's symbol; this test is about visibility.
+            if (route === 'adminSymbols') return { symbols: [], datasets: [], fields: [] };
             if (route !== 'adminDatasetUiVisibility') throw new Error('unexpected route');
             if (options.method === 'POST') hidden = options.body_data.ui_hidden;
             return { dataset_name: 'demo_table', ui_hidden: hidden };
@@ -354,7 +356,7 @@ describe('open_column_management_modal', () => {
         await mod.open_column_management_modal('demo_table');
         const restore = document.querySelector('[data-testid="manage-table-restore"]');
         expect(restore.hidden).toBe(false);
-        expect(endpointRouterMock.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(0);
+        expect(endpointRouterMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(0);
         restore.click();
         await new Promise(resolve => setTimeout(resolve, 0));
         expect(endpointRouterMock).toHaveBeenCalledWith('adminDatasetUiVisibility', expect.objectContaining({

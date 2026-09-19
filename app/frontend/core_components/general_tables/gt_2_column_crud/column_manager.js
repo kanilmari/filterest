@@ -16,6 +16,7 @@ import { getUnifiedTableState, setUnifiedTableState } from '../../state_stores/t
 import { getHiddenColumns } from '../../filterbar/filter_list/column_visibility_handler.js';
 import { getOpenedFilters, saveOpenedFilters } from '../../filterbar/filterbar_engine/filterbar_state_saver.js';
 import { invalidateDatabaseCatalogTreeCache } from '../../table_views/tree_view/tree_view_printer.js';
+import { createDatasetSymbolPicker, readDatasetSymbol } from '../dataset_form/dataset_symbol_picker.js';
 import {
     COLUMN_TYPE_PARAMETER,
     DEFAULT_NUMERIC_PRECISION,
@@ -204,6 +205,22 @@ export async function open_column_management_modal(table_name) {
     restoreButton.hidden = true;
     visibilityPanel.append(visibilityStatus, restoreButton);
     form.appendChild(visibilityPanel);
+
+    // The dataset's own symbol belongs where the dataset is defined, so it is
+    // chosen here rather than only in the separate symbol tool.
+    const symbolPicker = createDatasetSymbolPicker();
+    form.appendChild(symbolPicker.element);
+    let symbolTableUID = 0;
+    void readDatasetSymbol(table_name)
+        .then(async ({ iconKey, tableUID }) => {
+            symbolTableUID = tableUID;
+            await symbolPicker.ready;
+            if (iconKey) {
+                symbolPicker.select.value = iconKey;
+                symbolPicker.select.dispatchEvent(new Event('change'));
+            }
+        })
+        .catch(error => console.warn('Dataset symbol lookup failed:', error));
 
     const multilingualDefaultLabel = managementLabel('manage_table_multilingual_default');
     multilingualDefaultLabel.style.display = 'flex';
@@ -579,6 +596,8 @@ export async function open_column_management_modal(table_name) {
             // The article view reads each column's type from the cached database
             // catalog, and a column it does not know gets no editor at all. The
             // cache is forgotten here so a column added now can be filled in now.
+            // A changed symbol is saved with the rest of the dataset's definition.
+            if (symbolTableUID) await symbolPicker.save(symbolTableUID);
             invalidateDatabaseCatalogTreeCache();
             showSuccessToast(managementText('manage_table_saved'));
             hideModal();

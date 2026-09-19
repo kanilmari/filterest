@@ -3411,5 +3411,6 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260918000001_record_site_assistant_release.sql'),
   ('20260918000002_seed_site_assistant_language_keys.sql'),
   ('20260919000001_seed_chat_attachment_language_keys.sql'),
-  ('20260919000002_repair_chat_attachment_translations.sql')
+  ('20260919000002_repair_chat_attachment_translations.sql'),
+  ('20260919000003_seed_dataset_symbol_language_keys.sql')
 ON CONFLICT (filename) DO NOTHING;

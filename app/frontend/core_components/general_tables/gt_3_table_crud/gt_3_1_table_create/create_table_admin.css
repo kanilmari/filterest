@@ -99,3 +99,19 @@
     #table_creation_form .column-field,
     #table_creation_form .foreign-key-field { grid-template-columns: minmax(0, 1fr); }
 }
+
+.dataset-symbol-picker {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+.dataset-symbol-preview {
+    width: 24px;
+    height: 24px;
+}
+.dataset-symbol-status {
+    grid-column: 1 / -1;
+    color: var(--empty_field_text_color, var(--text_color));
+    font-size: 0.85rem;
+}

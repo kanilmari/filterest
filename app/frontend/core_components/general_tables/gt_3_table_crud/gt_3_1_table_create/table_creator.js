@@ -17,6 +17,7 @@ import { getTranslationForKey } from '../../../lang/translation_handler.js';
 import { showSuccessToast, showWarningToast } from '../../../../reusable_components/notifications/toast_notification_printer.js';
 import { addColumnField } from './table_creation_column_builder.js';
 import { createCreationLabel, setCreationText } from './table_creation_labels.js';
+import { assignDatasetSymbol, createDatasetSymbolPicker, readDatasetSymbol } from '../../dataset_form/dataset_symbol_picker.js';
 import { initializeTreeCallAdmin } from '../../../vanilla_tree/van_tr_components/admin_tree_builder.js';
 import { buildTableCreationRequestData } from './table_creator_helpers.js';
 import {
@@ -54,10 +55,15 @@ export async function generate_table_creation_view(container) {
     tableNameLabel.appendChild(tableNameInput);
     form.appendChild(tableNameLabel);
 
+    // The dataset's symbol is chosen where the dataset is defined; it is assigned
+    // once the dataset exists, because the assignment names that dataset.
+    const symbolPicker = createDatasetSymbolPicker();
+
     const datasetRouteHint = document.createElement('p');
     datasetRouteHint.className = 'table-name-route-hint';
     datasetRouteHint.dataset.testid = 'create-table-route-hint';
     setCreationText(datasetRouteHint, 'create_dataset_route_hint');
+    form.appendChild(symbolPicker.element);
     Object.assign(datasetRouteHint.style, {
         margin: '0',
         fontSize: '0.9em',
@@ -489,6 +495,18 @@ async function submitTableCreationForm(form) {
             method: 'POST',
             body_data: result.requestData,
         });
+
+        const chosenSymbol = form.querySelector('[name="icon_key"]')?.value || '';
+        if (chosenSymbol) {
+            try {
+                const { tableUID } = await readDatasetSymbol(result.tableName);
+                if (tableUID) await assignDatasetSymbol(tableUID, chosenSymbol);
+            } catch (symbolError) {
+                // The dataset exists; only its symbol is missing, and it can be
+                // chosen again from the dataset's own management dialog.
+                console.warn('Dataset symbol assignment failed:', symbolError);
+            }
+        }
 
         if (result.enableImages) {
             try {
