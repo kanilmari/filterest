@@ -208,10 +208,10 @@ func TestMarkOrphanLangKeysUsesBulkDatabaseOperations(t *testing.T) {
 	}()
 
 	pushOrphanQuery(orphanQueuedQuery{
-		cols: []string{"id", "lang_key", "en", "lang_key_type"},
+		cols: []string{"id", "lang_key", "en", "lang_key_type", "has_live_usage"},
 		rows: [][]driver.Value{
-			{int64(10), "orphan_alpha", "Alpha", "ui"},
-			{int64(11), "orphan_beta", "Beta", "ui"},
+			{int64(10), "orphan_alpha", "Alpha", "ui", false},
+			{int64(11), "orphan_beta", "Beta", "ui", false},
 		},
 	})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 2})

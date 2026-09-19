@@ -155,6 +155,42 @@ func readCanonicalTranslationMap(languageCode string) (map[string]string, error)
 	return translationMapFromRows(rows)
 }
 
+// fillGapsFromAuthoredTranslations adds copy that exists only in the normalized
+// translation table, and changes nothing a site already shows.
+//
+// Finnish, English, Chinese and Cantonese are served from their own columns on
+// system_lang_keys. A seed migration that writes only system_lang_key_translations
+// therefore appears to succeed while its copy never reaches the interface. Filling
+// the gaps here means authored text is served either way, and a value the site
+// already has always wins over the one in the normalized table.
+func fillGapsFromAuthoredTranslations(servedMap map[string]string, authoredMap map[string]string) map[string]string {
+	for langKey, authored := range authoredMap {
+		if strings.TrimSpace(authored) == "" {
+			continue
+		}
+		if strings.TrimSpace(servedMap[langKey]) != "" {
+			continue
+		}
+		servedMap[langKey] = authored
+	}
+	return servedMap
+}
+
+// readServedTranslationMap returns the copy one interface language is served.
+func readServedTranslationMap(languageCode string) (map[string]string, error) {
+	servedMap, err := readLegacyTranslationMap(languageCode)
+	if err != nil {
+		return nil, err
+	}
+	authoredMap, err := readCanonicalTranslationMap(languageCode)
+	if err != nil {
+		// The language's own column still serves the interface on its own.
+		log.Printf("[readServedTranslationMap] authored translations for %q unavailable: %v", languageCode, err)
+		return servedMap, nil
+	}
+	return fillGapsFromAuthoredTranslations(servedMap, authoredMap), nil
+}
+
 // GetTranslationsHandler returns the chosen language map and optional dev-only orphan-key metadata.
 func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	chosenLang := normalizeRequestedLanguageCode(r.URL.Query().Get("lang"))
@@ -162,7 +198,7 @@ func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	var translationMap map[string]string
 	var err error
 	if _, isLegacyColumn := legacyLanguageColumns[chosenLang]; isLegacyColumn {
-		translationMap, err = readLegacyTranslationMap(chosenLang)
+		translationMap, err = readServedTranslationMap(chosenLang)
 	} else {
 		translationMap, err = readCanonicalTranslationMap(chosenLang)
 		if err != nil {

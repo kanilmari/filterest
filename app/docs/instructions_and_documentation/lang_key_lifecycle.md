@@ -150,7 +150,8 @@ Every lang key can have **multiple** source records. A key like `updated` may ap
 | `view` | view name | `''` | Startup scanner |
 | `group` | group name | `''` | Startup scanner |
 | `manual_crud` | `'admin_ui'` | normalized username | `EnsureLangKeySourceForCRUDMutation()` |
-| `orphan` | `'system'` | `''` | `MarkOrphanLangKeys()` |
+| `foreign_key` | `schema.table.column` | column name | Startup scanner |
+| `orphan` | `'consistency_scan'` | `''` | `MarkOrphanLangKeys()` |
 
 ### UPSERT Pattern
 
@@ -218,11 +219,38 @@ Practical consequence:
 
 ## 5. Translation Serving
 
+### Two stores, and which one serves a language
+
+Translations live in two places, and this is the single most common way seeded
+copy goes missing:
+
+| Store | What is in it | Which languages it serves |
+|---|---|---|
+| `system_lang_keys.fi` / `.en` / `.ch` / `.yue` | the original per-language columns | **Finnish, English, Chinese, Cantonese** — the languages installations actually run |
+| `system_lang_key_translations` | the normalized `(lang_key_id, language_code)` table | every other locale tag, for example `zh-CN`, `zh-TW`, `zh-HK` |
+
+**A migration that seeds interface copy must write both stores.** Writing only
+`system_lang_key_translations` succeeds, leaves visible rows behind, and still
+never reaches a screen in Finnish or English, because those languages are served
+from their own columns. `20260918000002_seed_site_assistant_language_keys.sql`
+is the shape to copy: it inserts `lang_key, fi, en, creation_spec` into
+`system_lang_keys` and *then* mirrors the same values into the normalized table.
+`/api/admin/lang-key` writes both for the same reason.
+
+`readServedTranslationMap()` softens the trap: for a language served from a
+column it also reads the normalized table and fills only the keys whose column
+is empty, so authored copy reaches the interface either way. A value the site
+already shows always wins, so the fallback never overwrites a site's own
+translation. It is a safety net, not a licence to seed one store.
+
+`20260919000004_serve_authored_seed_translations.sql` repaired the rows that had
+been written to the normalized table alone.
+
 ### Bulk Fetch — `GetTranslationsHandler`
 
 `GET /api/get-translations?lang=fi`
 
-Returns all translations as `{lang_key: translation}` for the requested language column. The column name is validated against `langColRegexp` (`^[a-z]{2}$`) to prevent SQL injection.
+Returns all translations as `{lang_key: translation}` for the requested language. The requested tag is normalized first (`normalizeRequestedLanguageCode`), then routed to the store above.
 
 ### Single Key — `GetLangKeyTranslationsHandler`
 
@@ -399,7 +427,24 @@ On every server startup, `optional_tasks.go` runs a three-step pipeline:
 
 Scans all sources and UPSERTS records into `system_lang_key_sources`:
 
-1. **Code scan** — Walks `app/frontend/` and `app/backend/` directories, scans `.js`, `.html`, `.go` files for lang key patterns (`data-lang-key`, `dataset.langKey`, `langKey=`, `I("...")` etc.). Creates `source_type='code'` records.
+1. **Code scan** — Walks `app/frontend/` and `app/backend/` directories, scans `.js`, `.html`, `.go` files for lang key patterns (`data-lang-key`, `dataset.langKey`, `getTranslationForKey("...")` etc.). Creates `source_type='code'` records.
+
+   A module that gathers its copy into one catalogue passes a *variable* to the
+   translation call, so the key literal never sits beside it. The scan therefore
+   also reads the catalogue itself. These three shapes are recognised, which is
+   why a new module needs no convention its author has to remember:
+
+   ```js
+   attach: ["chat_attach_image", "Attach an image"]      // catalogue entry with fallback copy
+   labelKey: "dataset_column_type_text"                  // a property whose name ends in Key
+   image_ready: { fi: "Kuva on valmis", en: "Image is ready" }  // fallback translations
+   ```
+
+   In each shape the key is recognised by its own snake_case name, so ordinary
+   identifiers (`apiKey: "abc123"`) and short values (`["png", "jpeg"]`) stay
+   out. A key written as a single word with no underscore is not read from a
+   catalogue; give such a key an ordinary `dataset.langKey` or
+   `getTranslationForKey("…")` reference somewhere.
 2. **Schema scan** — Queries `information_schema.columns` to find all dynamic table columns. Creates `source_type='column'` records with `source_high=table_name`, `source_low=column_name`.
 3. **Table scan** — Queries `system_db_tables`. Creates `source_type='table'` records.
 4. **View scan** — Queries `system_views`. Creates `source_type='view'` records.
@@ -433,12 +478,37 @@ WHERE id NOT IN (
 ```
 
 For each orphan:
-- **UPSERT** a `source_type='orphan'`, `source_high='system'` record.
+- **INSERT** a `source_type='orphan'`, `source_high='consistency_scan'` record,
+  with `ON CONFLICT DO NOTHING` so the original `last_seen` is kept. On an orphan
+  record `last_seen` means *first seen as an orphan*, which is what the
+  retirement age is counted from. Stale-source cleanup deliberately leaves
+  `orphan` rows alone, so the age really does accumulate.
 
 For keys that are **no longer** orphans (they gained a source since last startup):
 - **DELETE** the orphan source record.
 
 Returns `(marked, unmarked)` counts logged at startup.
+
+#### Retirement of a long-standing orphan
+
+An orphan is not kept for ever. `archiveExpiredOrphans()` runs in the same
+transaction and retires a key that has carried its orphan record for more than
+`orphanTTLDays` (**90 days**): the row is copied to `system_lang_keys_archive`
+with its `orphan_since` date, and then deleted from `system_lang_keys`, where the
+foreign-key cascade removes its sources. Nothing is lost silently — the archive
+keeps the key and every translation column.
+
+Two rules make retirement safe:
+
+- **Never a key that is still used.** Both the selection and the delete require
+  that the key has no source outside `orphan` and `manual_crud`. This matters
+  because a *synthetic test key* (`e2e_…`, `test_…`) is listed as a cleanup
+  candidate even while code still refers to it — that listing is an invitation
+  for a person to clean up, never a licence for automatic deletion.
+- **Never a surprise.** The consistency check's category 8 shows every orphan
+  with its age and, for the keys retirement will actually take, a countdown:
+  *"orphan for 84 days, will be archived and deleted in 6 day(s)"*. A key that is
+  kept because code or schema still uses it says so instead.
 
 ### Step 3: Stale Source Cleanup
 
@@ -550,8 +620,10 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 
 6. **FK CASCADE as safety net.** `system_lang_key_sources.lang_key_id` references `system_lang_keys.id ON DELETE CASCADE`. Even if cleanup code misses something, deleting the lang key cleans up all sources automatically.
 
-7. **Orphan marking, not immediate deletion.** Keys without sources are marked with `source_type='orphan'` rather than immediately deleted. This provides a review window — admins can see orphans in the consistency check tool and decide whether to delete them.
+7. **Orphan marking, then retirement — never immediate deletion.** Keys without sources are marked with `source_type='orphan'` rather than deleted. That gives a 90-day review window with a visible countdown in the consistency check tool; only then is the key archived and removed, and only if nothing uses it. Admins can still delete an orphan by hand at any point.
 
-8. **One canonical JS syntax for lang keys.** All JS code uses `el.dataset.langKey = 'x'` — never `setAttribute('data-lang-key', ...)`. This keeps the scanner simple (one pattern instead of three) and makes grep/search predictable. The scanner currently uses 6 patterns (down from 7) — see `langKeyPatterns` in `lang_key_consistency_checks.go`.
+8. **One canonical JS syntax for lang keys.** All JS code uses `el.dataset.langKey = 'x'` — never `setAttribute('data-lang-key', ...)`. This keeps grep/search predictable. A module that keeps its copy in a catalogue is read from the catalogue instead — see the three shapes in §8 — so a key never has to be repeated just to be seen. See `langKeyPatterns` in `lang_key_consistency_checks.go`.
 
-9. **Same-request readback must share visibility with the write.** Handlers that write lang keys and immediately return the saved payload should read through the same transaction (or after commit). A pooled read on `backend.Db` can legitimately return stale dataset-header values even though the write itself succeeded.
+9. **Seeded copy goes into both translation stores.** See §5: Finnish, English, Chinese and Cantonese are served from columns on `system_lang_keys`, so a migration that writes only `system_lang_key_translations` succeeds without changing a single screen.
+
+10. **Same-request readback must share visibility with the write.** Handlers that write lang keys and immediately return the saved payload should read through the same transaction (or after commit). A pooled read on `backend.Db` can legitimately return stale dataset-header values even though the write itself succeeded.

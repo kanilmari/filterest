@@ -39,7 +39,28 @@ var langKeyPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?:const|let|var)\s+[A-Z0-9_]*LANG_KEY\s*=\s*["']([a-zA-Z0-9_-]+)["']`),
 	regexp.MustCompile(`data-html-lang-key["\s]*[=:]\s*["']([a-zA-Z0-9_-]+)["']`),
 	regexp.MustCompile(`dataset\.langKeyFallback\s*=\s*["']([a-zA-Z0-9_-]+)["']`),
+
+	// A module that gathers its copy into one catalogue passes a variable to the
+	// translation call, so the key literal never sits beside it. The three
+	// shapes below are what such a catalogue already looks like, which is why a
+	// new module is scanned correctly without its author having to remember a
+	// convention:
+	//
+	//     attach:   ["chat_attach_image", "Attach an image"]
+	//     labelKey: "dataset_column_type_text"
+	//     image_ready: { fi: "Kuva on valmis", en: "Image is ready" }
+	//
+	// Each one reads the name by its own snake_case shape, so an ordinary
+	// identifier such as apiKey or a list such as ["png", "jpeg"] stays out.
+	regexp.MustCompile(`[A-Za-z_$][\w$]*\s*:\s*\[\s*["'](` + snakeCaseLangKeySource + `)["']\s*,\s*["']`),
+	regexp.MustCompile(`[A-Za-z_$][\w$]*[Kk]ey\s*:\s*["'](` + snakeCaseLangKeySource + `)["']`),
+	regexp.MustCompile(`["']?(` + snakeCaseLangKeySource + `)["']?\s*:\s*\{\s*["']?(?:fi|en|ch|yue)["']?\s*:`),
 }
+
+// snakeCaseLangKeySource — how a product language key is written: lowercase
+// words joined by underscores. The underscore is what separates a key from the
+// ordinary identifiers and short values that share a catalogue with it.
+const snakeCaseLangKeySource = `[a-z][a-z0-9]*(?:_[a-z0-9]+)+`
 
 // treeNodeNamePattern — tunnistaa tree-rakenteen solmunimet JS-tiedostoista.
 // Esim. nav_builder.js: { id: 'check_json_columns', name: 'Check JSON Columns' }
@@ -113,12 +134,16 @@ func checkGarbageLangKeys() CategoryResult {
 	return cat
 }
 
-// langKeyRow — sisäinen rakenne orpoavain-ehdokkaille (metadata mukaan lukien)
+// langKeyRow — sisäinen rakenne orpoavain-ehdokkaille (metadata mukaan lukien).
+// hasLiveUsage kertoo, löytyykö avaimelle yhä koodi- tai skeemalähde. Synteettinen
+// testavain voi olla siivousehdokas vaikka lähde on olemassa; automaattinen
+// poisto ei koskaan koske sellaista avainta.
 type langKeyRow struct {
-	id          int
-	key         string
-	en          string
-	langKeyType string
+	id           int
+	key          string
+	en           string
+	langKeyType  string
+	hasLiveUsage bool
 }
 
 var syntheticTestLangKeyPattern = regexp.MustCompile(`(^|_)(e2e|test)(_|-)`)
@@ -139,12 +164,18 @@ func buildLangKeyConsistencyDescription(r langKeyRow, orphanAges map[int]int) st
 	if r.langKeyType != "" {
 		originParts = append(originParts, fmt.Sprintf("type: %s", r.langKeyType))
 	}
+	// The countdown is the administrator's warning before a key is retired, so
+	// it is shown only for a key that automatic retirement will actually take.
 	if ageDays, ok := orphanAges[r.id]; ok {
-		remaining := orphanTTLDays - ageDays
-		if remaining < 0 {
-			remaining = 0
+		if r.hasLiveUsage {
+			originParts = append(originParts, fmt.Sprintf("orphan for %d days, kept because code or schema still uses it", ageDays))
+		} else {
+			remaining := orphanTTLDays - ageDays
+			if remaining < 0 {
+				remaining = 0
+			}
+			originParts = append(originParts, fmt.Sprintf("orphan for %d days, will be archived and deleted in %d day(s)", ageDays, remaining))
 		}
-		originParts = append(originParts, fmt.Sprintf("orphan for %d days, will be deleted in %d day(s)", ageDays, remaining))
 	}
 	originInfo := ""
 	if len(originParts) > 0 {
@@ -170,7 +201,12 @@ func findOrphanLangKeys() []langKeyRow {
 	rows, err := backend.Db.Query(`
 		SELECT slk.id, slk.lang_key,
 		       COALESCE(slk.en, '') AS en,
-		       COALESCE(slk.lang_key_type::text, '') AS lang_key_type
+		       COALESCE(slk.lang_key_type::text, '') AS lang_key_type,
+		       EXISTS (
+		         SELECT 1 FROM system_lang_key_sources live
+		         WHERE live.lang_key_id = slk.id
+		           AND live.source_type NOT IN ('orphan', 'manual_crud')
+		       ) AS has_live_usage
 		FROM system_lang_keys slk
 		WHERE NOT (slk.lang_key ~ '[<>]' OR length(slk.lang_key) > 200)
 		  AND (
@@ -192,7 +228,7 @@ func findOrphanLangKeys() []langKeyRow {
 	var orphans []langKeyRow
 	for rows.Next() {
 		var r langKeyRow
-		if err := rows.Scan(&r.id, &r.key, &r.en, &r.langKeyType); err != nil {
+		if err := rows.Scan(&r.id, &r.key, &r.en, &r.langKeyType, &r.hasLiveUsage); err != nil {
 			continue
 		}
 		orphans = append(orphans, r)
@@ -292,6 +328,11 @@ func MarkOrphanLangKeys() (orphanCount int, deOrphanedCount int) {
 // archiveExpiredOrphans siirtää yli orphanTTLDays päivää vanhat orpoavaimet
 // system_lang_keys_archive-tauluun ja poistaa ne system_lang_keys:stä.
 // Palauttaa arkistoitujen avainten lukumäärän.
+//
+// A key is retired only when nothing outside the orphan bookkeeping refers to
+// it any more. A synthetic test key is listed as a cleanup candidate even while
+// code still references it, and automatic retirement must not act on that
+// listing: removing a key the interface still asks for would lose its copy.
 func archiveExpiredOrphans(tx *sql.Tx) int {
 	// Hae orpoavaimet joiden orphan-merkintä on yli TTL päivää vanha
 	rows, err := tx.Query(fmt.Sprintf(`
@@ -300,6 +341,11 @@ func archiveExpiredOrphans(tx *sql.Tx) int {
 		WHERE src.source_type = 'orphan'
 		  AND src.source_high = 'consistency_scan'
 		  AND src.last_seen < CURRENT_DATE - INTERVAL '%d days'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM system_lang_key_sources live
+		    WHERE live.lang_key_id = src.lang_key_id
+		      AND live.source_type NOT IN ('orphan', 'manual_crud')
+		  )
 	`, orphanTTLDays))
 	if err != nil {
 		log.Printf("[archiveExpiredOrphans] query error: %v", err)
@@ -339,10 +385,24 @@ func archiveExpiredOrphans(tx *sql.Tx) int {
 			log.Printf("[archiveExpiredOrphans] archive error id=%d: %v — aborting archive batch", e.langKeyID, err)
 			return -1 // signaloi virhe kutsujalle → rollback
 		}
-		// Poista avain (CASCADE poistaa myös sources-rivit)
-		_, err = tx.Exec("DELETE FROM system_lang_keys WHERE id = $1", e.langKeyID)
+		// Poista avain (CASCADE poistaa myös sources-rivit). The guard repeats
+		// here so an archive row can never outlive a key that gained a source
+		// while this batch was running.
+		deleteResult, err := tx.Exec(`
+			DELETE FROM system_lang_keys
+			WHERE id = $1
+			  AND NOT EXISTS (
+			    SELECT 1 FROM system_lang_key_sources live
+			    WHERE live.lang_key_id = system_lang_keys.id
+			      AND live.source_type NOT IN ('orphan', 'manual_crud')
+			  )
+		`, e.langKeyID)
 		if err != nil {
 			log.Printf("[archiveExpiredOrphans] delete error id=%d: %v — aborting archive batch", e.langKeyID, err)
+			return -1
+		}
+		if deletedRows, rowsErr := deleteResult.RowsAffected(); rowsErr == nil && deletedRows == 0 {
+			log.Printf("[archiveExpiredOrphans] key id=%d gained a source during the batch — aborting so it is not archived without being retired", e.langKeyID)
 			return -1
 		}
 		archived++
