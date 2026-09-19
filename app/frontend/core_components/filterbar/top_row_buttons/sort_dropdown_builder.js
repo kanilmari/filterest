@@ -44,6 +44,8 @@ export function createSortDropdown(tableName, columns, dataTypes, { allowPersist
     wrapper.appendChild(dropdownContainer);
 
     const sortableColumns = filterSortableColumns(columns, dataTypes);
+    // An API-backed surface advertises the sorts it can actually execute, so its
+    // own list still decides there; ordinary datasets keep every option.
     const options = buildSortOptions(sortableColumns, columns)
         .filter((option) => !allowedSortColumns || (option.value && allowedSortColumns.includes(option.value.split(':')[0])))
         .map((option) => {
@@ -52,9 +54,11 @@ export function createSortDropdown(tableName, columns, dataTypes, { allowPersist
                 ? { ...option, label: `${columnLabels[column]} ${direction === 'DESC' ? '↓' : '↑'}`, langKey: undefined }
                 : option;
         });
-    const contextualOptions = () => options.filter((option) =>
-        option.value !== "" || String(getParams(tableName).search || "").trim()
-    );
+    // Relevance stays selectable whether or not a search is running: without a
+    // search it is the dataset's ordinary order, and with one it ranks by how
+    // well each row matches. A dataset without meaning vectors simply ranks by
+    // the text score alone.
+    const contextualOptions = () => options;
     const availableValues = new Set(options.map((option) => option.value));
     const representableValues = new Set(availableValues);
     columns.forEach((column) => {

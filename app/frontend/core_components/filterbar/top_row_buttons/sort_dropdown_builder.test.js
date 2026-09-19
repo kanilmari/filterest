@@ -138,7 +138,7 @@ describe("sort_dropdown_builder", () => {
         expect(mocks.dropdown.setValue).toHaveBeenCalledWith("id:ASC");
         expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
     });
-    test("relevance is offered only during text search and preserves the last ordinary sort", async () => {
+    test("relevance stays offered without a search and preserves the last ordinary sort", async () => {
         const params = { search: "hello", sort_column: "title", sort_order: "DESC" };
         const state = { sort: { column: "title", direction: "DESC" } };
         mocks.getParams.mockReturnValue(params);
@@ -153,7 +153,8 @@ describe("sort_dropdown_builder", () => {
         delete params.search;
         const sync = mocks.subscribeDatasetSortSelection.mock.calls[0][1];
         sync("title:DESC");
-        expect(mocks.dropdown.setOptions.mock.calls.at(-1)[0].some((option) => option.value === "")).toBe(false);
+        // Relevance belongs to every dataset, with or without a running search.
+        expect(mocks.dropdown.setOptions.mock.calls.at(-1)[0].some((option) => option.value === "")).toBe(true);
     });
 
 });

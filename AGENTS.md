@@ -23,6 +23,8 @@ Read before changing anything:
   shared product and interface terms.
 - [Documentation index](app/docs/README.md) — the architecture, permission,
   frontend and dataset-creation guides.
+- [CHANGELOG.md](CHANGELOG.md) — what each released version changed. Record a
+  change that alters shipped behaviour under `[Unreleased]` when it is accepted.
 
 ## Absolute Rules
 
