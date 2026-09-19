@@ -21,7 +21,7 @@ import {
     resolveMultilingualValue,
     reconstructMultilingualValue,
     resolveInputType,
-    buildColumnInfoMap,
+    buildColumnInfoMapFromDataTypes,
     getTicketStatusOptions,
     getTicketStatusTone,
     isTicketStatusField,
@@ -416,26 +416,15 @@ export function normalizeCardUpdateTransportValue(value) {
  * Korvaa tekstisisällöt <input>- tai <textarea>-kentillä,
  * mutta vain, jos rakenteessa editable_in_ui on true kyseiselle sarakkeelle ja taululle.
  */
-export function enableEditing(container, table_name) {
+export function enableEditing(container, table_name, dataTypes) {
     if (IS_DEV_MODE) console.log('enabling editing... table= ' + table_name);
     container.dataset.cardEditTable = table_name;
-    let parsedFullTreeData = null;
     const userPermissions = readCachedUserPermissions();
 
-    // Haetaan schema-/column-tiedot localStoragesta
-    try {
-        const rawFullTreeData = localStorage.getItem('full_tree_data');
-        if (rawFullTreeData) {
-            parsedFullTreeData = JSON.parse(rawFullTreeData);
-        }
-    } catch (e) {
-        console.warn(`enableEditing: ei voitu jäsentää full_tree_data taululle ${table_name}:`, e);
-    }
-
-    // Muodostetaan nopeat hakurakenteet: { column_name -> { editable_in_ui, data_type } }
-    const columnInfoMap = parsedFullTreeData
-        ? buildColumnInfoMap(parsedFullTreeData.column_details, table_name)
-        : {};
+    // The schema comes from the response this row was rendered with, so a column
+    // added moments ago is editable at once and there is no second, separately
+    // cached description of the same dataset to fall behind.
+    const columnInfoMap = buildColumnInfoMapFromDataTypes(dataTypes);
 
     // Käydään läpi kaikki elementit, joissa data-column-attribuutti
     const textFields = container.querySelectorAll('[data-column]');

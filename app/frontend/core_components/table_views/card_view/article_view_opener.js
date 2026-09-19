@@ -313,7 +313,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             };
             editButton.addEventListener("click", async () => {
                 if (!edit) {
-                    enableEditing(rowArticleContentElement, table_name);
+                    enableEditing(rowArticleContentElement, table_name, data_types);
                     syncEditUi(true);
                     return;
                 }

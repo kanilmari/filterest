@@ -36,8 +36,16 @@ function displayDateTime(dateText, timeText) {
     return `${dateText}${DATE_TIME_DISPLAY_SEPARATOR}${timeText}`;
 }
 
+let currentDataTypes = {};
+
 function setColumnDetails(columnDetails) {
-    localStorage.setItem('full_tree_data', JSON.stringify({ column_details: columnDetails }));
+    currentDataTypes = Object.fromEntries(
+        (columnDetails || []).map((column) => [column.column_name, {
+            data_type: column.data_type,
+            editable_in_ui: column.editable_in_ui,
+            is_multilingual: column.is_multilingual,
+        }])
+    );
 }
 
 function createEditableField(columnName, rawValue) {
@@ -58,6 +66,37 @@ function buildMultilangContainer() {
 
     return container;
 }
+
+describe('card_field_formatter schema source', () => {
+    test('a column known only to the rendered response is editable, whatever a cached catalog says', () => {
+        // A column added moments ago is in the dataset's own response before any
+        // cached catalog knows about it, so editing must follow the response.
+        localStorage.setItem('full_tree_data', JSON.stringify({ column_details: [] }));
+        const container = document.createElement('div');
+        container.appendChild(createEditableField('re_examine_date', '2026-10-05'));
+        document.body.appendChild(container);
+
+        enableEditing(container, 'subscriptions', {
+            re_examine_date: { data_type: 'date', editable_in_ui: true, is_multilingual: false },
+        });
+
+        const input = container.querySelector('[data-column="re_examine_date"] input');
+        expect(input).not.toBeNull();
+        expect(input.type).toBe('date');
+        container.remove();
+    });
+
+    test('a column the response does not describe is left untouched', () => {
+        const container = document.createElement('div');
+        container.appendChild(createEditableField('unknown_column', 'x'));
+        document.body.appendChild(container);
+
+        enableEditing(container, 'subscriptions', {});
+
+        expect(container.querySelector('[data-column="unknown_column"] input')).toBeNull();
+        container.remove();
+    });
+});
 
 describe('card_field_formatter multilingual editing', () => {
     const originalTimezone = process.env.TZ;
@@ -103,7 +142,7 @@ describe('card_field_formatter multilingual editing', () => {
     test('renders a stacked checkbox selector and initializes fields to one active language', () => {
         const container = buildMultilangContainer();
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         const selector = container.querySelector('.multilang-selector');
         const selectorHeading = container.querySelector('.multilang-selector__heading');
@@ -127,7 +166,7 @@ describe('card_field_formatter multilingual editing', () => {
     test('switches the active language with single-selection checkboxes and preserves other translations on save', () => {
         const container = buildMultilangContainer();
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         const titleField = container.querySelector('[data-column="title"]');
         const titleInput = titleField.querySelector('input');
@@ -182,7 +221,7 @@ describe('card_field_formatter multilingual editing', () => {
         keywordTag.dataset.articleEditReadonly = 'true';
         container.append(titleField, keywordTag);
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         expect(titleField.querySelector('input')?.value).toBe('Matkatarjous');
         expect(keywordTag.querySelector('input, textarea, select')).toBeNull();
@@ -202,7 +241,7 @@ describe('card_field_formatter multilingual editing', () => {
         getLanguageWithBrowserFallbackMock.mockReturnValue('en');
         const container = buildMultilangContainer();
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         const titleField = container.querySelector('[data-column="title"]');
         const titleInput = titleField.querySelector('input');
@@ -214,7 +253,7 @@ describe('card_field_formatter multilingual editing', () => {
         expect(titleField.textContent).toBe('Hello updated');
         expect(titleField.getAttribute('data-raw-value')).toBe(updatedValues.title);
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         expect(titleField.querySelector('input')?.value).toBe('Hello updated');
     });
@@ -223,7 +262,7 @@ describe('card_field_formatter multilingual editing', () => {
         const container = buildMultilangContainer();
         const originalTitleValue = JSON.stringify({ fi: 'Hei', en: 'Hello' });
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         const titleField = container.querySelector('[data-column="title"]');
         const titleInput = titleField.querySelector('input');
@@ -240,7 +279,7 @@ describe('card_field_formatter multilingual editing', () => {
         expect(titleField.textContent).toBe('Hei');
         expect(titleField.getAttribute('data-raw-value')).toBe(originalTitleValue);
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         expect(titleField.querySelector('input')?.value).toBe('Hei');
         expect(titleField.getAttribute('data-multilang-edit-lang')).toBe('fi');
@@ -261,7 +300,7 @@ describe('card_field_formatter multilingual editing', () => {
         const container = document.createElement('div');
         container.appendChild(createEditableField('admin_approved', 'false'));
 
-        enableEditing(container, 'app_service_catalog');
+        enableEditing(container, 'app_service_catalog', currentDataTypes);
 
         expect(container.querySelector('[data-column="admin_approved"] input')).toBeNull();
         expect(container.querySelector('[data-column="admin_approved"]')?.textContent).toBe('false');
@@ -282,7 +321,7 @@ describe('card_field_formatter multilingual editing', () => {
         const container = document.createElement('div');
         container.appendChild(createEditableField('published', 'false'));
 
-        enableEditing(container, 'app_service_catalog');
+        enableEditing(container, 'app_service_catalog', currentDataTypes);
 
         expect(container.querySelector('[data-column="published"] input[type="checkbox"]')).not.toBeNull();
     });
@@ -302,7 +341,7 @@ describe('card_field_formatter multilingual editing', () => {
         const container = document.createElement('div');
         container.appendChild(createEditableField('admin_approved', 'false'));
 
-        enableEditing(container, 'app_service_catalog');
+        enableEditing(container, 'app_service_catalog', currentDataTypes);
 
         expect(container.querySelector('[data-column="admin_approved"] input[type="checkbox"]')).not.toBeNull();
     });
@@ -328,7 +367,7 @@ describe('card_field_formatter multilingual editing', () => {
         container.appendChild(createEditableField('status', 'in_progress'));
         container.appendChild(createEditableField('title', 'Aborted status acceptance test'));
 
-        enableEditing(container, 'dev_agent_tasks');
+        enableEditing(container, 'dev_agent_tasks', currentDataTypes);
 
         const statusSelect = container.querySelector('[data-column="status"] select');
         const titleInput = container.querySelector('[data-column="title"] input');
@@ -359,7 +398,7 @@ describe('card_field_formatter multilingual editing', () => {
         statusBadge.title = 'in_progress';
         container.appendChild(statusBadge);
 
-        enableEditing(container, 'dev_agent_tasks');
+        enableEditing(container, 'dev_agent_tasks', currentDataTypes);
 
         const statusSelect = container.querySelector('[data-column="status"] select');
         statusSelect.value = 'aborted';
@@ -409,7 +448,7 @@ describe('card_field_formatter multilingual editing', () => {
         container.appendChild(createEditableField('due_date', '2026-01-15'));
         container.appendChild(createEditableField('scheduled_at', '2026-06-14 09:30:00'));
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
 
         expect(container.querySelector('[data-column="due_date"] input')?.value).toBe('2026-01-15');
         expect(container.querySelector('[data-column="scheduled_at"] input')?.value).toBe('2026-06-14T09:30');
@@ -433,7 +472,7 @@ describe('card_field_formatter multilingual editing', () => {
         field.title = '2026-06-14 09:30:00';
         container.appendChild(field);
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
         const input = container.querySelector('[data-column="scheduled_at"] input');
         input.value = '2026-06-15T14:30';
 
@@ -457,12 +496,12 @@ describe('card_field_formatter multilingual editing', () => {
         const field = createEditableField('published_at', '2026-06-14T01:30:45Z');
         container.appendChild(field);
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
         expect(field.querySelector('input')?.value).toBe('2026-06-14T09:30');
         expect(disableEditing(container)).toEqual({});
         expect(field.getAttribute('data-raw-value')).toBe('2026-06-14T01:30:45Z');
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
         const input = field.querySelector('input');
         input.value = '2026-06-14T10:30';
 
@@ -484,7 +523,7 @@ describe('card_field_formatter multilingual editing', () => {
         const field = createEditableField('scheduled_at', '2026-06-14 09:30:45');
         container.appendChild(field);
 
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
         const input = field.querySelector('input');
         input.value = '';
 
@@ -494,7 +533,7 @@ describe('card_field_formatter multilingual editing', () => {
 
     test('collects card drafts without leaving edit mode or replacing live inputs', () => {
         const container = buildMultilangContainer();
-        enableEditing(container, 'demo_dataset');
+        enableEditing(container, 'demo_dataset', currentDataTypes);
         const titleInput = container.querySelector('[data-column="title"] input');
         titleInput.value = 'Luonnos';
 
@@ -514,7 +553,7 @@ describe('card_field_formatter multilingual editing', () => {
         const container = document.createElement('div');
         container.append(createEditableField('id', '869'), createEditableField('title', 'Original'));
 
-        enableEditing(container, 'dev_agent_tasks');
+        enableEditing(container, 'dev_agent_tasks', currentDataTypes);
         expect(container.querySelector('[data-column="id"] input')).toBeNull();
         container.querySelector('[data-column="title"] input').value = 'Updated';
         expect(collectCardUpdates(container)).toEqual({ title: 'Updated' });
@@ -527,7 +566,7 @@ describe('card_field_formatter multilingual editing', () => {
         const container = document.createElement('div');
         container.append(createKeyValueElement('Assigned to', null, 'assigned_to', false));
 
-        enableEditing(container, 'dev_agent_tasks');
+        enableEditing(container, 'dev_agent_tasks', currentDataTypes);
 
         expect(container.querySelector('[data-column="assigned_to"] input')?.value).toBe('');
         expect(collectCardUpdates(container)).toEqual({});

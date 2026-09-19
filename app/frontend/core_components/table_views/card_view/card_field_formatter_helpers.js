@@ -139,6 +139,30 @@ export function resolveInputType(dataType, textLength) {
 }
 
 /**
+ * Builds the same lookup map from the per-column metadata the dataset was
+ * rendered with, so editing reads the schema from the response that produced
+ * the row instead of a separately cached catalog.
+ *
+ * @param {Object<string, {data_type?: string, editable_in_ui?: any, is_multilingual?: any}>} dataTypes
+ * @returns {Object<string, {editable_in_ui: boolean, data_type: string, is_multilingual: boolean}>}
+ */
+export function buildColumnInfoMapFromDataTypes(dataTypes) {
+    const columnInfoMap = {};
+    if (!dataTypes || typeof dataTypes !== 'object') {
+        return columnInfoMap;
+    }
+    for (const [columnName, columnMeta] of Object.entries(dataTypes)) {
+        if (!columnName || !columnMeta || typeof columnMeta !== 'object') continue;
+        columnInfoMap[columnName] = {
+            editable_in_ui: !!columnMeta.editable_in_ui,
+            data_type: columnMeta.data_type || 'text',
+            is_multilingual: !!columnMeta.is_multilingual,
+        };
+    }
+    return columnInfoMap;
+}
+
+/**
  * Builds a lookup map from column_details array for a given table.
  *
  * @param {Array<{table_name: string, column_name: string, editable_in_ui: any, data_type: string, is_multilingual: any}>} columnDetails
