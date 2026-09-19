@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.3.13",
-  "db_version": "9.7.16",
+  "db_version": "9.8.0",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -107,10 +107,30 @@
     "20260919000003_seed_dataset_symbol_language_keys.sql",
     "20260919000004_serve_authored_seed_translations.sql",
     "20260919000005_seed_dataset_form_dimension_language_keys.sql",
-    "20260919000006_record_lang_key_sources_by_file.sql"
+    "20260919000006_record_lang_key_sources_by_file.sql",
+    "20260919000007_create_developer_ticket_schema.sql",
+    "20260919000008_create_developer_workline_schema.sql",
+    "20260919000009_seed_developer_workflow_metadata.sql",
+    "20260919000010_record_developer_workflow_schema_release.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
+    "public.dev_agent_handover_report_items",
+    "public.dev_agent_handover_reports",
+    "public.dev_agent_release_goal_contracts",
+    "public.dev_agent_release_goals",
+    "public.dev_agent_task_group_relations",
+    "public.dev_agent_task_groups",
+    "public.dev_agent_task_queues",
+    "public.dev_agent_task_runs",
+    "public.dev_agent_task_statuses",
+    "public.dev_agent_task_todo_statuses",
+    "public.dev_agent_task_todos",
+    "public.dev_agent_tasks",
+    "public.dev_agent_tasks_assets",
+    "public.dev_agent_workline_reports",
+    "public.dev_agent_workline_tasks",
+    "public.dev_agent_worklines",
     "public.dokumentaatio",
     "public.dokumentaatio_assets",
     "public.dokumentaatio_tiketit_relation",
@@ -172,6 +192,9 @@
     "restricted.verification_codes"
   ],
   "allowed_seed_tables": [
+    "public.dev_agent_task_groups",
+    "public.dev_agent_task_statuses",
+    "public.dev_agent_task_todo_statuses",
     "public.dokumentaatio",
     "public.dokumentaatio_tiketit_relation",
     "public.palvelukatalogi",
@@ -208,6 +231,7 @@
     "public.tiketit_assets"
   ],
   "seed_row_counts": {
+    "public.dev_agent_task_statuses": 181,
     "public.dokumentaatio": 3,
     "public.dokumentaatio_tiketit_relation": 1,
     "public.palvelukatalogi": 1,
@@ -233,7 +257,6 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 101,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -245,10 +268,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "be4c9735a1f856de732d2b47eb885c4b28c391ee3186bf11e0150914f41c4e7a"
+      "sha256": "d6a21b196cca49537969de2104f37013d0a4c298b709459d2ee63dc6df914081"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "116533878dce985016b01d51b302f96e059e64fec47e45b75443d47cb559f03e"
+      "sha256": "1cfbccb392cc6f3ff55fabae7cc1803dcfed5068c6418581d6d1bf7c6d7c6004"
     }
   },
   "source_files": {
@@ -265,10 +288,10 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "9c7373b6963a831e0e6aa303c43e0253b22b359731e61e2f32ec4445a87bf0c0"
+      "sha256": "826aa71629e2aefe7b40bb87fa538b8121b0bd0d68b4418ccbcadfd62ca362e2"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
-      "sha256": "59dddf49224c36bb8233f45b8e5e198ea15b4531b90f69bc88d51470e70c833f"
+      "sha256": "c6cd8b8f48e3be6868c232785c8f4c2bd59c045b214deedbb7cca42605225f2f"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.schema.sql": {
       "sha256": "d78b9e231e499f7982c15231722450020b7844386fb31d98067f625891a33801"
@@ -623,6 +646,18 @@
     },
     "filterest/app/server_tools/migrations/20260919000006_record_lang_key_sources_by_file.sql": {
       "sha256": "6044ced3d2d2b51064e5fe637a622fd6474e83001b93e66560ef0b9191bef80a"
+    },
+    "filterest/app/server_tools/migrations/20260919000007_create_developer_ticket_schema.sql": {
+      "sha256": "893f186b4780e76404b637fc875da24de1666876659bb11a6e8de0c341285873"
+    },
+    "filterest/app/server_tools/migrations/20260919000008_create_developer_workline_schema.sql": {
+      "sha256": "333e5feb2f4e501b3ea541791280a0b4cc9b624c0f2029cdf0da812db45045fe"
+    },
+    "filterest/app/server_tools/migrations/20260919000009_seed_developer_workflow_metadata.sql": {
+      "sha256": "531b5dfb5b35ad22554628dccce9fd8c4bcc5fa832059c95e416c1d774f9b5d0"
+    },
+    "filterest/app/server_tools/migrations/20260919000010_record_developer_workflow_schema_release.sql": {
+      "sha256": "a2d929fd582a155e55a3d87e8af547865c0e3d97cb874e4ad6e3a677f6691f17"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

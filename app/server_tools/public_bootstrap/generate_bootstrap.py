@@ -32,6 +32,13 @@ for path in (bootstrap_dir.parent.parent, bootstrap_dir.parent, bootstrap_dir,
 
 schema_sources = ("base.schema.sql", "runtime.schema.sql", "db_9_7_0.schema.sql", "app_tables.schema.sql", "column_supported_views.schema.sql", "media_assets.schema.sql")
 seed_sources = ("base.seed.sql", "runtime.seed.sql", "app_tables.seed.sql", "app_tables.lang_keys.sql", "db_9_7_0.seed.sql", "db_9_7_0.lang_keys.sql", "field_settings.lang_keys.sql", "label_value_layout.lang_keys.sql", "article_view.seed.sql", "column_supported_views.seed.sql", "media_library.lang_keys.sql", "image_picker.lang_keys.sql", "search_filter_fallback.lang_keys.sql", "article_editor.lang_keys.sql")
+developer_workflow_schema_migrations = (
+    "20260919000007_create_developer_ticket_schema.sql",
+    "20260919000008_create_developer_workline_schema.sql",
+)
+developer_workflow_seed_migrations = (
+    "20260919000009_seed_developer_workflow_metadata.sql",
+)
 
 def reviewed_source(name: str) -> str:
     path = public_bootstrap_sources / name
@@ -39,8 +46,20 @@ def reviewed_source(name: str) -> str:
         parser.error(f"Reviewed public source missing or not regular: {name}")
     return path.read_text(encoding="utf-8")
 
-schema_sql = "".join(reviewed_source(name) for name in schema_sources)
-seed_sql = "".join(reviewed_source(name).replace("__FILTEREST_DB_VERSION__", db_version) for name in seed_sources)
+def reviewed_public_migration(name: str) -> str:
+    path = public_migrations / name
+    if path.is_symlink() or not path.is_file():
+        parser.error(f"Reviewed public migration missing or not regular: {name}")
+    return path.read_text(encoding="utf-8")
+
+schema_sql = (
+    "".join(reviewed_source(name) for name in schema_sources)
+    + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
+)
+seed_sql = (
+    "".join(reviewed_source(name).replace("__FILTEREST_DB_VERSION__", db_version) for name in seed_sources)
+    + "".join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)
+)
 
 # Enforce the same explicit content boundary used by the public release audit.
 sys.path.insert(0, str(public_root / "app/server_tools/public_slice_export"))

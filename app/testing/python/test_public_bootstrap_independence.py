@@ -46,7 +46,7 @@ def test_public_generation_rejects_private_fixture_before_output_write(tmp_path)
     output = root / "app/server_tools/public_bootstrap"
     original = (output / "seed_data.sql").read_bytes()
     with (output / "source/base.seed.sql").open("a") as stream:
-        stream.write("\nINSERT INTO public.dev_agent_tasks (id) VALUES (1);\n")
+        stream.write("\nINSERT INTO public.dev_projects (id) VALUES (1);\n")
     result = generate(root)
     assert result.returncode != 0
     assert "Unreviewed seed tables" in result.stderr

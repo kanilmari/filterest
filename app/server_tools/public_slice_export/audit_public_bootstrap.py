@@ -18,6 +18,22 @@ from dataclasses import dataclass
 
 ALLOWED_SCHEMA_TABLES = {
     "public.ai_chat_conversations",
+    "public.dev_agent_handover_report_items",
+    "public.dev_agent_handover_reports",
+    "public.dev_agent_release_goal_contracts",
+    "public.dev_agent_release_goals",
+    "public.dev_agent_task_group_relations",
+    "public.dev_agent_task_groups",
+    "public.dev_agent_task_queues",
+    "public.dev_agent_task_runs",
+    "public.dev_agent_task_statuses",
+    "public.dev_agent_task_todo_statuses",
+    "public.dev_agent_task_todos",
+    "public.dev_agent_tasks",
+    "public.dev_agent_tasks_assets",
+    "public.dev_agent_workline_reports",
+    "public.dev_agent_workline_tasks",
+    "public.dev_agent_worklines",
     "public.dokumentaatio",
     "public.dokumentaatio_assets",
     "public.dokumentaatio_tiketit_relation",
@@ -80,6 +96,9 @@ ALLOWED_SCHEMA_TABLES = {
 }
 
 ALLOWED_SEED_TABLES = {
+    "public.dev_agent_task_groups",
+    "public.dev_agent_task_statuses",
+    "public.dev_agent_task_todo_statuses",
     "public.dokumentaatio",
     "public.dokumentaatio_tiketit_relation",
     "public.palvelukatalogi",
@@ -117,11 +136,8 @@ ALLOWED_SEED_TABLES = {
 }
 
 FORBIDDEN_CONTENT_PATTERNS = {
-    "private/dev table": re.compile(
-        r"\b(dev_agent_tasks|dev_agent_worklines|dev_agent_workline_reports|"
-        r"dev_agent_release_goals|dev_agent_release_goal_contracts|"
-        r"dev_agent_workline_tasks|dev_agent_handover_reports|"
-        r"dev_agent_handover_report_items|dev_projects|dev_milestones|app_notes|"
+    "private table": re.compile(
+        r"\b(dev_projects|dev_milestones|app_notes|"
         r"app_service_catalog|app_service_catalog_assets|"
         r"app_service_child_items|app_service_locations)\b",
         re.IGNORECASE,

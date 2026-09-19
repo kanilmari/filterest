@@ -11,6 +11,40 @@ APP = Path(__file__).resolve().parents[2]
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
 
+DEVELOPER_WORKFLOW_TABLES = {
+    "dev_agent_handover_report_items",
+    "dev_agent_handover_reports",
+    "dev_agent_release_goal_contracts",
+    "dev_agent_release_goals",
+    "dev_agent_task_group_relations",
+    "dev_agent_task_groups",
+    "dev_agent_task_queues",
+    "dev_agent_task_runs",
+    "dev_agent_task_statuses",
+    "dev_agent_task_todo_statuses",
+    "dev_agent_task_todos",
+    "dev_agent_tasks",
+    "dev_agent_tasks_assets",
+    "dev_agent_workline_reports",
+    "dev_agent_workline_tasks",
+    "dev_agent_worklines",
+}
+
+DB_TASK_SELECTED_COLUMNS = {
+    "id",
+    "title",
+    "issue_type",
+    "status",
+    "created",
+    "updated",
+    "content",
+    "priority",
+    "tags",
+    "parent_id",
+    "assigned_to",
+    "queue_id",
+}
+
 
 def test_fresh_bootstrap_contains_features_and_repair_is_repeatable(database):
     database("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
@@ -56,6 +90,42 @@ def test_fresh_bootstrap_contains_features_and_repair_is_repeatable(database):
         JOIN system_db_tables tables ON tables.table_uid=rights.target_table_uid
         JOIN system_user_groups groups ON groups.id=rights.user_group_id
         WHERE tables.table_name='system_column_supported_views' AND groups.name<>'admins'""") == "0"
+
+
+def test_fresh_bootstrap_contains_empty_developer_workflow_schema(database):
+    database("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    database((BOOTSTRAP / "schema.sql").read_text())
+    database((BOOTSTRAP / "seed_data.sql").read_text())
+
+    table_names = set(database("""
+        SELECT relname
+        FROM pg_catalog.pg_class AS tables
+        JOIN pg_catalog.pg_namespace AS schemas ON schemas.oid = tables.relnamespace
+        WHERE schemas.nspname = 'public'
+          AND tables.relkind = 'r'
+          AND tables.relname LIKE 'dev_agent_%'
+        ORDER BY relname
+    """).splitlines())
+    assert table_names == DEVELOPER_WORKFLOW_TABLES
+
+    task_columns = set(database("""
+        SELECT attributes.attname
+        FROM pg_catalog.pg_attribute AS attributes
+        WHERE attributes.attrelid = 'public.dev_agent_tasks'::regclass
+          AND attributes.attnum > 0
+          AND NOT attributes.attisdropped
+        ORDER BY attributes.attnum
+    """).splitlines())
+    assert DB_TASK_SELECTED_COLUMNS <= task_columns
+
+    assert database("SELECT count(*) FROM dev_agent_task_statuses") == "12"
+    assert database("SELECT count(*) FROM dev_agent_task_todo_statuses") == "5"
+    assert database("SELECT count(*) FROM dev_agent_task_groups") == "7"
+    assert database("SELECT count(*) FROM dev_agent_task_queues") == "0"
+    assert database("SELECT count(*) FROM dev_agent_tasks") == "0"
+    assert database("SELECT count(*) FROM dev_agent_worklines") == "0"
+    assert database("SELECT count(*) FROM dev_agent_workline_reports") == "0"
+    assert database("SELECT count(*) FROM dev_agent_handover_reports") == "0"
 
 
 def test_upgrade_restores_a_view_omitted_by_an_older_bootstrap(database):
