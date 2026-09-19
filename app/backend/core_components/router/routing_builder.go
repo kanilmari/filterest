@@ -366,6 +366,16 @@ func getPackageNameFromHandler(handlerName string) string {
 	return "default"
 }
 
+// tablelessReconciliationHandlers are routes whose stored dataset-scoped flag
+// must be corrected on an existing installation, not only on a fresh one. A
+// route that takes no dataset can never satisfy a dataset-scoped permission
+// check, so leaving the stored value would keep refusing every request.
+var tablelessReconciliationHandlers = map[string]bool{
+	"dtt_crud_workflows.SimpleCreateTableHandler": true,
+	"dtt_crud_workflows.SimpleQueryTableHandler":  true,
+	"dtt_1_row_read.ChatAttachmentHandler":        true,
+}
+
 func defaultSpecificTableRelated(handlerName string) bool {
 	packageName := getPackageNameFromHandler(handlerName)
 	specificTableRelated := defaultTableSpecificPackages[packageName]
@@ -384,7 +394,10 @@ func defaultSpecificTableRelated(handlerName string) bool {
 		"dtt_1_row_read.CommentListHandler",
 		"dtt_1_row_read.CommentCreateHandler",
 		"dtt_1_row_read.CommentDeleteHandler",
-		"dtt_1_row_read.CommentCountHandler":
+		"dtt_1_row_read.CommentCountHandler",
+		// An attached image belongs to the administrator who uploaded it, not to
+		// any one dataset, so its permission is not dataset-scoped either.
+		"dtt_1_row_read.ChatAttachmentHandler":
 		return false
 	default:
 		return specificTableRelated
@@ -478,7 +491,7 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 				existingRateLimitAmount,
 				existingRateLimitMinutes,
 			)
-			if handlerName == "dtt_crud_workflows.SimpleCreateTableHandler" || handlerName == "dtt_crud_workflows.SimpleQueryTableHandler" {
+			if tablelessReconciliationHandlers[handlerName] {
 				_, err = db.Exec(`
 					UPDATE system_functions
 					SET disabled = false,
