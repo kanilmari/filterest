@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -344,10 +345,15 @@ func Run(options Options) {
 	if err := router.ReactivateUIRoutes(backend.Db); err != nil {
 		log.Printf("virhe UI-reittien aktivoinnissa: %v", err)
 	}
+	// Startup reports what looks stale and removes nothing. An administrator's
+	// permission settings are their own data, and a grant deleted on boot is
+	// gone with no record of what it was; the operator applies a removal
+	// deliberately by starting once with FILTEREST_APPLY_PERMISSION_CLEANUP=1.
 	cleanupOptions := backend.PermissionCleanupOptions{
 		RemoveMissingTables: true,
 		RemoveDisabledFuncs: true,
 		RemoveMismatchedUID: true,
+		ReportOnly:          !permissionCleanupApprovedByOperator(),
 	}
 	if err := backend.CleanGroupTableFuncRights(backend.Db, cleanupOptions); err != nil {
 		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
@@ -439,4 +445,15 @@ func Run(options Options) {
 	}
 
 	log.Println("[INFO] Server stopped.")
+}
+
+// permissionCleanupApprovedByOperator reports whether this start was asked to
+// apply the permission cleanup rather than only report on them.
+func permissionCleanupApprovedByOperator() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("FILTEREST_APPLY_PERMISSION_CLEANUP"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
