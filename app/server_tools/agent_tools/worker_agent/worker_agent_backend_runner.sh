@@ -54,6 +54,12 @@ write_run_status() {
         printf 'status=%s\n' "$status"
         printf 'backend=%s\n' "$BACKEND"
         printf 'research_mode=%s\n' "$RESEARCH_MODE"
+        if [[ -n "${CODEX_ACTUAL_VERSION:-}" ]]; then
+            printf 'codex_executable=%s\n' "$CODEX_BIN"
+            printf 'codex_version=%s\n' "$CODEX_ACTUAL_VERSION"
+            printf 'codex_model_requested=%s\n' "${CODEX_MODEL:-Codex config default}"
+            printf 'codex_reasoning_effort_requested=%s\n' "${CODEX_REASONING_EFFORT:-Codex config default}"
+        fi
         if [[ -n "${TICKET_FILE:-}" ]]; then
             printf 'ticket_file=%s\n' "$TICKET_FILE"
         else
@@ -141,14 +147,47 @@ finalize_run() {
     cleanup_worker_server
 }
 
+# Resolve once before dispatch so foreground and detached runs use the same
+# installed tool. Never repair a missing installation by fetching a package.
+prepare_codex_backend() {
+    local executable version_output
+    executable=$(type -P -- "$CODEX_BIN") || {
+        err "Codex executable not found: $CODEX_BIN. Install @openai/codex@$CODEX_REQUIRED_VERSION and authenticate first."
+        return 127
+    }
+    CODEX_BIN=$(realpath -e -- "$executable") || return 127
+    if ! version_output=$("$CODEX_BIN" --version 2>&1); then
+        err "Cannot read Codex version from $CODEX_BIN: $version_output"
+        return 1
+    fi
+    if [[ "$version_output" != "codex-cli $CODEX_REQUIRED_VERSION" ]]; then
+        err "Codex version mismatch: expected codex-cli $CODEX_REQUIRED_VERSION; got $version_output. No worker was started."
+        return 1
+    fi
+    CODEX_ACTUAL_VERSION="$CODEX_REQUIRED_VERSION"
+    write_run_status "running"
+}
+
 run_codex_exec() {
     local sandbox_mode="workspace-write"
     if [[ "$FULL_ACCESS" == true ]]; then
         sandbox_mode="danger-full-access"
     fi
-    local full_prompt
-    full_prompt=$(cat "$PROMPT_SAVE_FILE")
-    npx @openai/codex exec --sandbox "$sandbox_mode" "$full_prompt" >> "$LOG_FILE" 2>&1
+    local -a codex_args=(exec --sandbox "$sandbox_mode")
+    if [[ -n "$CODEX_MODEL" ]]; then
+        codex_args+=(--model "$CODEX_MODEL")
+    fi
+    if [[ -n "$CODEX_REASONING_EFFORT" ]]; then
+        codex_args+=(-c "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"")
+    fi
+    {
+        printf 'Worker Codex executable: %s\n' "$CODEX_BIN"
+        printf 'Worker Codex version: %s\n' "$CODEX_ACTUAL_VERSION"
+        printf 'Worker Codex model requested: %s\n' "${CODEX_MODEL:-Codex config default}"
+        printf 'Worker Codex reasoning effort requested: %s\n' "${CODEX_REASONING_EFFORT:-Codex config default}"
+    } >> "$LOG_FILE"
+    # stdin preserves multiline/large prompts and cannot turn prompt text into flags.
+    "$CODEX_BIN" "${codex_args[@]}" - < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
     return $?
 }
 
@@ -271,6 +310,7 @@ run_background() {
     export WORKSPACE_ROOT SCRIPT_DIR TASK_ID OUTPUT_DIR SUMMARY_FILE LOG_FILE DONE_FILE RUN_STATUS_FILE
     export PROGRESS_FILE PID_FILE PROMPT_SAVE_FILE FULL_ACCESS RESEARCH_MODE BACKEND
     export CLAUDE_MODEL FINALIZER_WRITE_SENTINEL
+    export CODEX_BIN CODEX_ACTUAL_VERSION CODEX_MODEL CODEX_REASONING_EFFORT
     export RUN_FN="$run_fn"
     export -f \
         find_claude_bin \
@@ -325,6 +365,9 @@ show_backend_info() {
                 access_label="${access_label% sandbox} — research mode"
             fi
             info "Backend: Codex CLI ($access_label)"
+            info "Codex executable: $CODEX_BIN ($CODEX_ACTUAL_VERSION)"
+            info "Codex model requested: ${CODEX_MODEL:-Codex config default}"
+            info "Codex reasoning effort requested: ${CODEX_REASONING_EFFORT:-Codex config default}"
             ;;
     esac
 }
@@ -335,7 +378,10 @@ execute_with_backend() {
 
     case "$backend_name" in
         claude) run_fn="run_claude_exec" ;;
-        codex) run_fn="run_codex_exec" ;;
+        codex)
+            prepare_codex_backend || return $?
+            run_fn="run_codex_exec"
+            ;;
         *)
             err "Unknown backend: $backend_name"
             return 1

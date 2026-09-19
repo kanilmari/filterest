@@ -46,6 +46,11 @@ REQUESTED_BACKEND=""
 BACKEND="${WORKER_AGENT_BACKEND:-$DEFAULT_BACKEND}"
 DRY_RUN="${WORKER_AGENT_DRY_RUN:-0}"
 CLAUDE_MODEL="${WORKER_CLAUDE_MODEL:-$DEFAULT_CLAUDE_MODEL}"
+CODEX_MODEL="${WORKER_CODEX_MODEL:-}"
+CODEX_REASONING_EFFORT="${WORKER_CODEX_REASONING_EFFORT:-}"
+CODEX_BIN="${WORKER_CODEX_BIN:-codex}"
+CODEX_REQUIRED_VERSION="${WORKER_CODEX_VERSION:-$DEFAULT_CODEX_VERSION}"
+CODEX_ACTUAL_VERSION=""
 DEFAULT_OUTPUT_DIR_REL="${FILTEREST_WORKER_OUTPUT_DIR_REL:-agent_tasks/_artifacts/worker_runs}"
 LEGACY_OUTPUT_DIR_REL="${FILTEREST_WORKER_LEGACY_OUTPUT_DIR_REL:-agent_tasks/20_in_progress}"
 WORKER_DEV_PORT="${FILTEREST_WORKER_DEV_PORT:-8100}"
@@ -304,6 +309,9 @@ OPTIONS:
   --no-full-access          Restrict Codex to workspace-write sandbox (no DB, no network).
   --dry-run                 Print prompt and exit without running worker
   --no-summary-instr        Don't append summary instruction (advanced)
+  --codex-model <model>     Explicit Codex model ID (overrides Codex configuration).
+  --codex-reasoning-effort <effort>
+                            Codex effort, e.g. xhigh (Extra high); model must support it.
   --claude-model <model>    Claude model alias or full ID.
                             Examples: sonnet, opus, claude-sonnet-4-6, claude-opus-4-6
   --output-dir <path>       Override output directory (default: agent_tasks/_artifacts/worker_runs/).
@@ -313,11 +321,21 @@ ENVIRONMENT:
   WORKER_AGENT_BACKEND    Override: codex, claude, or auto (default in worker_agent_defaults.sh)
   WORKER_AGENT_DRY_RUN    Set to "1" for dry-run mode
   WORKER_CLAUDE_MODEL     Claude model override (default in worker_agent_defaults.sh)
+  WORKER_CODEX_MODEL     Codex model; --codex-model takes precedence.
+  WORKER_CODEX_REASONING_EFFORT  Codex effort; CLI option takes precedence.
+  WORKER_CODEX_BIN       Installed executable name/path (default: codex on PATH).
+  WORKER_CODEX_VERSION   Exact required CLI version (default in worker_agent_defaults.sh).
+
+  Codex is never downloaded during a worker run. Missing/wrong versions fail.
+  Omitted model/effort use Codex configuration and are recorded as defaults.
+  For a review attributed to a particular model, specify BOTH model and effort.
+  Inspect the Codex startup header in worker_log for the effective settings.
 
 EXAMPLES:
   ./worker_agent "Audit all foreign keys in the SQL dump"
   ./worker_agent family=claude "Refactor the payment handler"
-  ./worker_agent family=codex --full-access "Analyze orphan lang keys from DB"
+  ./worker_agent family=codex --codex-model gpt-5.6-sol --codex-reasoning-effort xhigh "Review the change"
+  ./worker_agent family=codex --codex-model gpt-6-astra --codex-reasoning-effort xhigh "Review the change"
   ./worker_agent --background "Long running task" && ./worker_agent --wait
   ./worker_agent --stop long_running_task
   ./worker_agent --prompt-file prompts/fk_audit.md
@@ -405,6 +423,14 @@ while [[ $# -gt 0 ]]; do
         --no-full-access)
             FULL_ACCESS=false
             ;;
+        --codex-model)
+            shift
+            CODEX_MODEL="${1:?--codex-model requires a model ID}"
+            ;;
+        --codex-reasoning-effort)
+            shift
+            CODEX_REASONING_EFFORT="${1:?--codex-reasoning-effort requires an effort (e.g. xhigh)}"
+            ;;
         --claude-model)
             shift
             CLAUDE_MODEL="${1:?--claude-model requires a model name (e.g. sonnet, opus, claude-sonnet-4-6)}"
@@ -456,6 +482,19 @@ fi
 # ---------------------------------------------------------------------------- #
 # Resolve prompt from the chosen input mode
 # ---------------------------------------------------------------------------- #
+if [[ -n "$CODEX_MODEL" && ! "$CODEX_MODEL" =~ ^[[:alnum:]][[:alnum:]_./:-]*$ ]]; then
+    err "Invalid Codex model ID: $CODEX_MODEL"
+    exit 1
+fi
+case "$CODEX_REASONING_EFFORT" in
+    ""|none|minimal|low|medium|high|xhigh|max|ultra) ;;
+    *) err "Invalid Codex reasoning effort: $CODEX_REASONING_EFFORT"; exit 1 ;;
+esac
+if [[ ! "$CODEX_REQUIRED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][[:alnum:].-]+)?$ ]]; then
+    err "WORKER_CODEX_VERSION must be an exact CLI version, not a tag or range."
+    exit 1
+fi
+
 INPUT_MODES=0
 [[ -n "$PROMPT" ]] && INPUT_MODES=$((INPUT_MODES + 1))
 [[ -n "$PROMPT_FILE" ]] && INPUT_MODES=$((INPUT_MODES + 1))
@@ -574,6 +613,11 @@ if [[ "$DRY_RUN" == "1" ]]; then
     info "Task ID: $TASK_ID"
     info "Output dir: $OUTPUT_DIR_NAME/"
     info "Backend: $BACKEND"
+    if [[ "$BACKEND" != claude ]]; then
+        info "Codex executable: $CODEX_BIN (required version: $CODEX_REQUIRED_VERSION; not checked in dry-run)"
+        info "Codex model requested: ${CODEX_MODEL:-Codex config default}"
+        info "Codex reasoning effort requested: ${CODEX_REASONING_EFFORT:-Codex config default}"
+    fi
     exit 0
 fi
 

@@ -340,6 +340,30 @@ local runtime directories; copying the source does not copy another
 installation's workline data or credentials. The worker command requires a
 separately installed and authenticated supported AI command-line client.
 
+For Codex, install the exact CLI version declared by `DEFAULT_CODEX_VERSION` in
+`app/server_tools/agent_tools/worker_agent_defaults.sh`, then run `codex login`.
+The worker launches the installed `codex` executable directly and verifies its
+version before starting; it never downloads a package during a run.
+`WORKER_CODEX_BIN` can select an explicit executable path, and
+`WORKER_CODEX_VERSION` can select another deliberately installed exact version.
+A missing executable or version mismatch stops the run.
+
+Select both the model and reasoning effort when the result must be attributable
+to a specific configuration (`xhigh` is Extra high):
+
+```bash
+./worker_agent family=codex --codex-model gpt-5.6-sol --codex-reasoning-effort xhigh "Review the change"
+./worker_agent family=codex --codex-model gpt-6-astra --codex-reasoning-effort xhigh "Review the change"
+```
+
+`WORKER_CODEX_MODEL` and `WORKER_CODEX_REASONING_EFFORT` provide process defaults;
+the corresponding CLI options take precedence. Omitting them retains Codex's
+own configuration defaults. The wrapper records the requested settings and
+verified CLI path/version in the log and `run_status.txt`, including background
+runs. Check Codex's startup header in `worker_log_*.txt` for the effective model
+and effort before attributing a review. The chosen account/model must support
+the requested effort; errors are not silently retried with another model.
+
 Local API maintenance commands default to `https://localhost:8100` and read the
 protected account values from `keys/filterest_runtime/`. Deliberate process-level
 overrides use `FILTEREST_API_BASE_URL`, `FILTEREST_API_USERNAME`,

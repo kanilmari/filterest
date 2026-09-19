@@ -34,7 +34,7 @@ _worker_agent_completions() {
     # Top-level flags (before --routine is seen)
     local top_flags="--help --list --status --wait --prompt-file --ticket
         --task-id --background --research --dry-run --no-summary-instr
-        --full-access --claude-model --routine"
+        --full-access --claude-model --codex-model --codex-reasoning-effort --routine"
 
     # Routine sub-flags (after --routine <name>)
     local routine_flags="--list --dry-run --help --backend"
@@ -92,6 +92,16 @@ _worker_agent_completions() {
 
     # ── Context: after --status or --wait → no completion ──
     if [[ "$prev" == "--status" || "$prev" == "-s" || "$prev" == "--wait" || "$prev" == "-w" ]]; then
+        return
+    fi
+
+    if [[ "$prev" == "--codex-reasoning-effort" ]]; then
+        COMPREPLY=( $(compgen -W "none minimal low medium high xhigh max ultra" -- "$cur") )
+        return
+    fi
+    if [[ "$prev" == "--codex-model" ]]; then
+        # Suggestions only; the CLI accepts other installed-account model IDs.
+        COMPREPLY=( $(compgen -W "gpt-5.6-sol gpt-6-astra" -- "$cur") )
         return
     fi
 

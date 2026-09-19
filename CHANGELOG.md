@@ -24,6 +24,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 Database compatibility moves from 9.7.15 to 9.7.16.
 
+- **Reproducible Codex workers** — Worker runs accept explicit Codex model and reasoning-effort choices, verify the installed CLI against an exact version before dispatch, and record those choices for foreground and background runs. They no longer resolve or download Codex through npm at run time.
+
 - **Dataset text search works again** — A search address whose route already carried a parameter of its own lost the dataset name, so the server refused every text search as a permission problem. Erasing the search field now also returns the dataset to its ordinary results immediately.
 - **A JSON column no longer breaks adding a row** — An empty JSON field is stored as missing data, a structured value is encoded, and a value that is not JSON is reported by column name instead of failing the whole row with a database message.
 - **A new dataset is immediately usable by administrators** — Creating a dataset grants administrators every dataset-specific route in use, instead of a hand-kept list that had fallen behind.
