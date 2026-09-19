@@ -53,6 +53,7 @@
   "dtt_1_row_create.GetOneToManyRelationsHandlerWrapper": "GetOneToManyRelationsHandlerWrapper hakee system_foreign_key_relations_1_m -taulusta kaikki 1-\u003em-suhteet, joissa target_table_uid = annettu taulu.",
   "dtt_1_row_create.GetReferencedTableData": "",
   "dtt_1_row_delete.DeleteRowsHandlerWrapper": "",
+  "dtt_1_row_read.ChatAttachmentHandler": "ChatAttachmentHandler stores one image for the asking administrator and answers with the token that names it in the next question. The image is kept only on this machine and only until the question is asked or it expires.",
   "dtt_1_row_read.CommentCountHandler": "Request body: { dataset, row_ids: [...] } Response body: { counts: { \"\u003crow_id\u003e\": \u003ccount\u003e } } CommentCountHandler handles POST /api/comment-counts",
   "dtt_1_row_read.CommentCreateHandler": "CommentCreateHandler handles POST /api/comments",
   "dtt_1_row_read.CommentDeleteHandler": "CommentDeleteHandler handles DELETE /api/comments?id=N",

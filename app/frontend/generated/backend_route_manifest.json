@@ -837,6 +837,35 @@
       ]
     },
     {
+      "path_pattern": "/api/app/ai-chat/attachments",
+      "match_type": "exact",
+      "handler_name": "dtt_1_row_read.ChatAttachmentHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "explicit_stable_contract",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/app/ai-chat/capabilities",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAICapabilitiesHandler",

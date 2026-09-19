@@ -271,6 +271,7 @@ export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
         'aiChatCodexQuery',
         'aiChatConversation',
         'aiChatSiteAssistantApproval',
+        'aiChatAttachment',
         'geocodeAddress',
         'embeddingDatasets',
         'embeddingSourcePolicy',

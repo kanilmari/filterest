@@ -179,6 +179,7 @@ var RouteProfiles = map[string]RouteProfile{
 	// DEV-only local AI tooling
 	"dtt_1_row_read.FilterbarAICodexQueryHandler": AdminProfile,
 	"dtt_1_row_read.SiteAssistantApprovalHandler": AdminProfile,
+	"dtt_1_row_read.ChatAttachmentHandler":        AdminProfile,
 
 	// Database administration
 	"system_table_tools.FixDatabaseConsistencyHandler":         AdminProfile,

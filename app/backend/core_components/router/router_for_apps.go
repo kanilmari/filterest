@@ -58,6 +58,10 @@ func RegisterAppRoutes() {
 		dtt_1_row_read.SiteAssistantApprovalHandler,
 		"dtt_1_row_read.SiteAssistantApprovalHandler")
 
+	functionRegisterHandler("/api/app/ai-chat/attachments",
+		dtt_1_row_read.ChatAttachmentHandler,
+		"dtt_1_row_read.ChatAttachmentHandler")
+
 	functionRegisterHandler("/api/app/ai-chat/conversation",
 		dtt_1_row_read.FilterbarAIConversationHandler,
 		"dtt_1_row_read.FilterbarAIConversationHandler")

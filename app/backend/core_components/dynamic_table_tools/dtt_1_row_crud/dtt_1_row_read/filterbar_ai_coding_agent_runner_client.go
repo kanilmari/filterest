@@ -31,6 +31,9 @@ var codingAgentJobIDPattern = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0
 type codingAgentJobRequest struct {
 	filterbarAICodexQueryRequest
 	RequestID string `json:"request_id"`
+	// ImageTokens name the administrator's own waiting attachments. They are
+	// resolved to paths here and never forwarded to the runner as tokens.
+	ImageTokens []string `json:"image_tokens,omitempty"`
 }
 type codingAgentJobResult struct {
 	JobID        string                   `json:"job_id"`
@@ -65,6 +68,14 @@ type codingAgentPlanEntry struct {
 type codingAgentRunnerPayload struct {
 	codingAgentJobRequest
 	SiteAssistant *codingAgentSiteAccess `json:"site_assistant,omitempty"`
+	// Images are the administrator's own attachments, named by a path on this
+	// machine. The browser never sees or supplies a path.
+	Images []codingAgentImage `json:"images,omitempty"`
+}
+
+type codingAgentImage struct {
+	Path string `json:"path"`
+	Name string `json:"name,omitempty"`
 }
 
 type codingAgentSiteAccess struct {
@@ -136,7 +147,17 @@ func dispatchCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, d
 	}
 	payload.Messages = trimFilterbarAICodexMessages(payload.Messages)
 
-	runnerPayload := codingAgentRunnerPayload{codingAgentJobRequest: payload}
+	// The attachments belong to the asking administrator, so an unknown or
+	// someone else's token stops the job instead of silently dropping an image
+	// the person believes the assistant can see.
+	images, imageErr := resolveCodingAgentImages(actor, payload.ImageTokens)
+	if imageErr != nil {
+		httpresponse.RespondWithError(w, 400, "an attached image is no longer available")
+		return
+	}
+	payload.ImageTokens = nil
+
+	runnerPayload := codingAgentRunnerPayload{codingAgentJobRequest: payload, Images: images}
 	access, delegationID, accessErr := issueCodingAgentSiteAccess(r, actor, payload.RequestID)
 	if accessErr != nil {
 		httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "Site access for this job could not be prepared")

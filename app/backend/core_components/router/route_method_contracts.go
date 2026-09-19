@@ -45,6 +45,7 @@ var explicitRouteMethodContracts = map[string]RouteMethodContract{
 	// Stable admin maintenance routes.
 	"dtt_1_row_read.FilterbarAICodexQueryHandler":            {Methods: []string{http.MethodGet, http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"dtt_1_row_read.SiteAssistantApprovalHandler":            {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
+	"dtt_1_row_read.ChatAttachmentHandler":                   {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.ListFKCacheTriggersHandler":          {Methods: []string{http.MethodGet}, Source: RouteMethodSourceExplicitStableContract},
 	"system_table_tools.RefreshFKCacheHandler":               {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
 	"dtt_system_table_folders.HandleSetCurrentProjectFolder": {Methods: []string{http.MethodPost}, Source: RouteMethodSourceExplicitStableContract},
