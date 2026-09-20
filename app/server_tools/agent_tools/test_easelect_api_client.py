@@ -244,7 +244,11 @@ class EaselectAPIClientTest(unittest.TestCase):
             project_root.mkdir()
             (project_root / ".git").mkdir()
             (project_root / "filterest.source-roots").write_text(
-                "filterest_private\nfilterest_candidates\n", encoding="utf-8",
+                # Any names will do: the client reads whatever this file
+                # lists, and naming the real private roots here made the
+                # public boundary audit report this test as a dependency
+                # on the maintenance shell, which it is not.
+                "composed_source_a\ncomposed_source_b\n", encoding="utf-8",
             )
             (project_root / "filterest.source-roots").chmod(0o644)
             (project_root / "VERSION_EASELECT").write_text("1.0.0\n", encoding="utf-8")
@@ -282,7 +286,11 @@ class EaselectAPIClientTest(unittest.TestCase):
             project_root.mkdir()
             (project_root / ".git").mkdir()
             (project_root / "filterest.source-roots").write_text(
-                "filterest_private\nfilterest_candidates\n", encoding="utf-8",
+                # Any names will do: the client reads whatever this file
+                # lists, and naming the real private roots here made the
+                # public boundary audit report this test as a dependency
+                # on the maintenance shell, which it is not.
+                "composed_source_a\ncomposed_source_b\n", encoding="utf-8",
             )
             (project_root / "filterest.source-roots").chmod(0o644)
             (project_root / "VERSION_EASELECT").write_text(
@@ -479,7 +487,11 @@ class EaselectAPIClientTest(unittest.TestCase):
             project_root.mkdir()
             (project_root / ".git").mkdir()
             (project_root / "filterest.source-roots").write_text(
-                "filterest_private\nfilterest_candidates\n", encoding="utf-8",
+                # Any names will do: the client reads whatever this file
+                # lists, and naming the real private roots here made the
+                # public boundary audit report this test as a dependency
+                # on the maintenance shell, which it is not.
+                "composed_source_a\ncomposed_source_b\n", encoding="utf-8",
             )
             (project_root / "filterest.source-roots").chmod(0o644)
             (project_root / "VERSION_EASELECT").write_text(
