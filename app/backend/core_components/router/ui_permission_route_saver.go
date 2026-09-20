@@ -50,7 +50,6 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "ui.admin.dataset_alias_management", URLRouteEndpoint: "/ui/admin/dataset_alias_management", SpecificTableRelated: false},
 	{Name: "ui.admin.dataset_header_config", URLRouteEndpoint: "/ui/admin/dataset_header_config", SpecificTableRelated: false},
 	{Name: "ui.admin.service_catalog_moderation", URLRouteEndpoint: "/ui/admin/service_catalog_moderation", SpecificTableRelated: false},
-	{Name: "ui.admin.queen_chat", URLRouteEndpoint: "/ui/admin/queen_chat", SpecificTableRelated: false},
 }
 
 const reconcileUIPermissionRouteSQL = `

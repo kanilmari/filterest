@@ -1,12 +1,11 @@
 // workline_observatory_detail_modal.js
-// Presents immutable report history, release decisions and scoped chat in the shared modal.
-// Connects a current visible workline identity with existing goal, report and conversation APIs.
+// Presents immutable report history and release decisions in the shared modal.
+// Connects a current visible workline identity with existing goal and report APIs.
 // Keeps lifecycle status separate from the latest reported phase and rejects stale history loads.
 
 import { createModal, showModal, hideModal } from '../../reusable_components/modal/modal_builder.js';
 import { applyWorklineReleaseGoalAction, createWorklineReleaseGoal, fetchWorklineObservatoryReportHistory, saveWorklineReleaseContract } from './workline_observatory_api_adapter.js';
-import { startWorklineConversation } from './workline_observatory_chat_adapter.js';
-import { buildWorklinePriorityEditor, describeWorklineStatus, describeStatusChange, formatCopy } from './workline_observatory_actions.js';
+import { buildWorklinePriorityEditor, describeWorklineStatus, describeStatusChange } from './workline_observatory_actions.js';
 
 // The shared modal owns focus trapping, Escape, overlay close and focus restoration.
 export function createWorklineObservatoryDetailModal({ getState, copy, actions, getMessage = () => '', restoreFocus = () => {} }) {
@@ -21,8 +20,6 @@ export function createWorklineObservatoryDetailModal({ getState, copy, actions, 
     const reportHistoryByWorklineID = new Map();
     const reportHistoryStatusByWorklineID = new Map();
     const selectedReportIDByWorklineID = new Map();
-    const chatDrafts = new Map();
-    const chatBusy = new Set();
     const renderReport = (workline) => {
         if (!reportSurface) return;
         reportSurface.replaceChildren();
@@ -78,7 +75,7 @@ export function createWorklineObservatoryDetailModal({ getState, copy, actions, 
         reportSurface.className = 'workline-observatory__report';
         body.append(reportSurface);
         renderReport(workline);
-        body.append(buildContractEditor(workline), buildChatPanel(workline));
+        body.append(buildContractEditor(workline));
         // DOM and keyboard order put the requested workline before release administration.
         detail.append(body, goalPanel);
         return detail;
@@ -214,34 +211,6 @@ export function createWorklineObservatoryDetailModal({ getState, copy, actions, 
             }
         });
         panel.append(select, phase, save, status);
-        return panel;
-    };
-
-    const buildChatPanel = (workline) => {
-        const panel = document.createElement('section'); panel.className = 'workline-observatory__chat';
-        const heading = document.createElement('h4'); heading.textContent = copy.ask;
-        const input = document.createElement('textarea'); input.rows = 3;
-        input.setAttribute('aria-label', copy.ask);
-        input.value = chatDrafts.get(workline.id) || '';
-        input.addEventListener('input', () => chatDrafts.set(workline.id, input.value));
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const send = document.createElement('button'); send.type = 'button'; send.className = 'button'; send.textContent = copy.send;
-        send.addEventListener('click', async () => {
-            if (chatBusy.has(workline.id)) return;
-            chatBusy.add(workline.id);
-            send.disabled = true;
-            try {
-                const response = await startWorklineConversation({ ...workline, current_phase: workline.reported_current_phase }, state.releaseGoal, input.value);
-                const session = response?.session || response;
-                status.textContent = formatCopy(copy.conversationStarted, { id: session?.id || session?.status || '—' });
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-            } finally {
-                chatBusy.delete(workline.id);
-                send.disabled = false;
-            }
-        });
-        panel.append(heading, input, send, status);
         return panel;
     };
 

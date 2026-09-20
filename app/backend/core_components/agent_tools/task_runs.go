@@ -1,6 +1,6 @@
 // task_runs.go
 // Serves backend endpoints for DB-native task run records.
-// Bridges dev_agent_tasks ticket rows, Queen dispatch state, and worker artifact paths.
+// Bridges dev_agent_tasks ticket rows, historical execution state, and worker artifact paths.
 // Exists so execution attempts can be tracked in DB without using markdown tickets as state.
 
 package agent_tools

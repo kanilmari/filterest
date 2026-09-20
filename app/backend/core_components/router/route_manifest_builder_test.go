@@ -253,15 +253,6 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 		t.Fatalf("expected CreateTableHandler development profile to be public")
 	}
 
-	queenRuns := mustFindManifestRoute(t, manifest, "devtools.QueenRunsHandler")
-	assertScenarioNames(t, queenRuns, []string{"development"})
-	if queenRuns.ConditionalSource != "ENVIRONMENT_TYPE='dev'" {
-		t.Fatalf("expected devtools.QueenRunsHandler conditional source to describe dev-only registration, got %q", queenRuns.ConditionalSource)
-	}
-	if mustFindScenarioProfile(t, queenRuns, "development").ProfileName != "admin" {
-		t.Fatalf("expected devtools.QueenRunsHandler development profile to be admin")
-	}
-
 	simpleCreateTable := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.SimpleCreateTableHandler")
 	assertScenarioNames(t, simpleCreateTable, []string{"api_language"})
 	if simpleCreateTable.ConditionalSource != "ENABLE_API_LANGUAGE=true" {

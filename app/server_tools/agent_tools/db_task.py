@@ -2341,7 +2341,7 @@ def main():
     todos_import_p.add_argument("--dry-run", action="store_true", help="Print parsed todos without creating rows")
 
     # runs
-    runs_p = subparsers.add_parser("runs", help="Inspect DB-native worker/queen runs for tasks")
+    runs_p = subparsers.add_parser("runs", help="Inspect DB-native agent execution runs for tasks")
     runs_sub = runs_p.add_subparsers(dest="runs_command")
 
     runs_list_p = runs_sub.add_parser("list", help="List runs for one task")

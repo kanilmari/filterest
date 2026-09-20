@@ -62,12 +62,6 @@ func Register() {
 			HandoverReportsHandler,
 			"agent_tools.HandoverReportsHandler",
 		)
-		appregistry.RegisterRoute(
-			"/api/app/bee/messages",
-			BeeMessagesHandler,
-			"agent_tools.BeeMessagesHandler",
-		)
-
 		loginOnlyHandlers := []string{
 			"agent_tools.TasksHandler",
 			"agent_tools.TaskRunsHandler",
@@ -76,7 +70,6 @@ func Register() {
 			"agent_tools.WorklineReportsHandler",
 			"agent_tools.WorklineTasksHandler",
 			"agent_tools.HandoverReportsHandler",
-			"agent_tools.BeeMessagesHandler",
 		}
 		for _, handlerName := range loginOnlyHandlers {
 			pipeline.RegisterRouteProfile(handlerName, pipeline.LoginOnlyProfile)

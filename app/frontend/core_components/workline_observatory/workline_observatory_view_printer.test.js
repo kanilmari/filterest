@@ -1,12 +1,12 @@
 // workline_observatory_view_printer.test.js
-// Verifies the board renders selected goal, exact NOW tracks, detail, and scoped chat controls.
+// Verifies the board renders selected goal, exact NOW tracks and workline detail controls.
 // Bridges normalized state with the private management-view DOM contract.
 // Exists so V1 remains browsable without depending on a live backend in unit tests.
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, priorityActionMock, saveContractMock, startConversationMock, statusActionMock } = vi.hoisted(() => ({
+const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, priorityActionMock, saveContractMock, statusActionMock } = vi.hoisted(() => ({
     createGoalMock: vi.fn(),
     fetchBoardMock: vi.fn(),
     fetchHistoryMock: vi.fn(),
@@ -14,7 +14,6 @@ const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, langua
     languageMock: vi.fn(),
     priorityActionMock: vi.fn(),
     saveContractMock: vi.fn(),
-    startConversationMock: vi.fn(),
     statusActionMock: vi.fn(),
 }));
 
@@ -32,10 +31,6 @@ vi.mock('./workline_observatory_api_adapter.js', () => ({
     fetchWorklineObservatoryReportHistory: fetchHistoryMock,
     saveWorklineReleaseContract: saveContractMock,
 }));
-vi.mock('./workline_observatory_chat_adapter.js', () => ({
-    startWorklineConversation: startConversationMock,
-}));
-
 import { hideModal } from '../../reusable_components/modal/modal_builder.js';
 import { buildWorklineObservatoryState } from './workline_observatory_state_builder.js';
 import { generate_workline_observatory_view, renderWorklineObservatory } from './workline_observatory_view_printer.js';
@@ -86,7 +81,7 @@ describe('workline observatory view', () => {
         expect(container.querySelector('.workline-observatory__target-row').textContent).toBe('Must be in phase · Phase 5');
         expect(container.querySelector('.workline-observatory__track').style.getPropertyValue('--history-links')).toBe('2');
         expect(container.querySelector('.workline-observatory__track').style.getPropertyValue('--future-links')).toBe('3');
-        expect(document.querySelector('#custom_modal .workline-observatory__chat textarea')).not.toBeNull();
+        expect(document.querySelector('#custom_modal .workline-observatory__chat')).toBeNull();
     });
 
     test('selected workline precedes goal administration in mobile and keyboard DOM order', () => {
@@ -475,7 +470,7 @@ describe('workline observatory view', () => {
         expect(fetchBoardMock).not.toHaveBeenCalled();
     });
 
-    test('keeps release contract editing and scoped chat attached to the modal workline', async () => {
+    test('keeps release contract editing attached to the modal workline', async () => {
         const container = document.getElementById('view');
         const row = { id: 9, title: 'Discarded design', status: 'archived', current_phase: 2, latest_report: { context: 'Immutable report' } };
         const snapshot = { worklines: [row], release_goal: { id: 7, title: 'Demo', decision_state: 'draft' } };
@@ -488,13 +483,6 @@ describe('workline observatory view', () => {
         contract.querySelector('button').click();
         await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
         expect(saveContractMock).toHaveBeenCalledWith({ release_goal_id: 7, workline_id: 9, completion_rule: 'must_be_in_phase', target_phase: 3 });
-        startConversationMock.mockResolvedValue({ session: { id: 'chat-9' } });
-        const chat = document.querySelector('#custom_modal .workline-observatory__chat');
-        chat.querySelector('textarea').value = 'Review this design';
-        chat.querySelector('button').click();
-        await vi.waitFor(() => expect(startConversationMock).toHaveBeenCalledOnce());
-        expect(startConversationMock.mock.calls[0][0]).toMatchObject({ id: 9, current_phase: 2, status: 'archived' });
-        expect(startConversationMock.mock.calls[0][2]).toBe('Review this design');
         expect(document.querySelector('#custom_modal .workline-observatory__report').querySelector('input,textarea')).toBeNull();
     });
     test('preserves a release-goal draft and exposes an API error inside its modal', async () => {

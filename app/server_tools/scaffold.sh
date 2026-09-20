@@ -219,12 +219,6 @@ cmd_setup() {
     )
   fi
 
-  # Optional source compositions may declare their own local workflow state.
-  # A standalone Filterest checkout has no extension root and creates none.
-  if [[ "$HAS_SCAFFOLD_EXTENSION" -eq 1 ]]; then
-    dirs+=(".queen")
-  fi
-
   for dir in "${dirs[@]}"; do
     if [[ -d "$dir" ]]; then
       skip "Hakemisto jo olemassa: $dir"

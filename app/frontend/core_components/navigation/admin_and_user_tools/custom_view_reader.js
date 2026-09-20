@@ -243,16 +243,6 @@ export const custom_views = [
         requiredPermission: '/ui/admin/service_catalog_moderation',
     },
     {
-        name: 'queen_chat',
-        loadFunction: async () => {
-            const { generate_queen_chat_view } = await import('../../admin_tools/queen_chat_view.js');
-            return loadManagementView('queen_chat_container', generate_queen_chat_view);
-        },
-        containerId: 'queen_chat_container',
-        group: 'admin_tools',
-        requiredPermission: '/ui/admin/queen_chat',
-    },
-    {
         name: 'site_languages',
         loadFunction: async () => {
             return loadManagementView('site_languages_container', generate_site_language_settings_view);

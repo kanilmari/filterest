@@ -488,7 +488,7 @@ Baseline from 2026-09-14 (before LNCD #888):
 | Surface | Requests | Transferred | Notable waste |
 |---|---|---|---|
 | LNCD home → service_catalog | ~536 | ~6.6 MB | `/api/translations?lang=en` ×2, `/api/datasets` ×2, background `original` ~1.8 MB |
-| LNCD `/login` | ~408 | ~3.9 MB | `queen_chat_view.js` ~147 KB |
+| LNCD `/login` | ~408 | ~3.9 MB | retired Queen chat bundle ~147 KB (historical measurement) |
 | Production filterest.com | — | ~3.87 MB | three ~1.1 MB catalog PNGs plus `NS_BINDING_ABORTED` retries; `codex-querydataset=dokumentaatio` 404 |
 
 Do not close #837 from this measurement; that ticket is thumbnail product

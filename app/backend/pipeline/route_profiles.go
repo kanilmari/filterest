@@ -370,15 +370,6 @@ func ApplyDevOverrides() {
 		return
 	}
 
-	RouteProfiles["devtools.QueenRunsHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenSessionsHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenSessionHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenSessionMessageHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenSessionStreamHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenSessionStopHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenTranscriptHandler"] = AdminProfile
-	RouteProfiles["devtools.QueenTranscriptStreamHandler"] = AdminProfile
-
 	// Dev tool profiles — only relevant when dev routes are registered
 	devToolProfiles := map[string]RouteProfile{
 		"devtools.SessionHandler":                AdminProfile,

@@ -36,7 +36,6 @@ func TestAgentToolsRequireExplicitActivation(t *testing.T) {
 		"/api/app/agent-tools/workline-reports": "agent_tools.WorklineReportsHandler",
 		"/api/app/agent-tools/workline-tasks":   "agent_tools.WorklineTasksHandler",
 		"/api/app/agent-tools/handover-reports": "agent_tools.HandoverReportsHandler",
-		"/api/app/bee/messages":                 "agent_tools.BeeMessagesHandler",
 	}
 	if len(routes) != len(want) {
 		t.Fatalf("registered routes = %#v, want %#v", routes, want)
@@ -55,7 +54,6 @@ func TestAgentToolsRequireExplicitActivation(t *testing.T) {
 		"agent_tools.WorklineReportsHandler",
 		"agent_tools.WorklineTasksHandler",
 		"agent_tools.HandoverReportsHandler",
-		"agent_tools.BeeMessagesHandler",
 	} {
 		if got := pipeline.DescribeRouteProfile(handlerName).ProfileName; got != "login_only" {
 			t.Fatalf("%s profile = %q, want login_only", handlerName, got)

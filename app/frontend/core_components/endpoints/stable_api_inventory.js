@@ -171,16 +171,6 @@ export const SUPPORTING_ROUTE_GROUPS = Object.freeze({
         'login',
         'fetchAboutContent',
     ]),
-    queenAndAgentTools: Object.freeze([
-        'queenRuns',
-        'queenSessions',
-        'queenSession',
-        'queenSessionMessage',
-        'queenSessionStream',
-        'stopQueenSession',
-        'queenTranscript',
-        'queenTranscriptStream',
-    ]),
     translationAndLanguageTools: Object.freeze([
         'translations',
         'publicUiLanguages',

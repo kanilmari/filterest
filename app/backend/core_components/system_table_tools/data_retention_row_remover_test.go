@@ -141,8 +141,6 @@ func (c *dataRetentionMockConn) ExecContext(_ context.Context, query string, arg
 	switch {
 	case strings.Contains(query, `DELETE FROM "regfetch_conversations"`):
 		return driver.RowsAffected(c.state.counts["regfetch_conversations"]), nil
-	case strings.Contains(query, `DELETE FROM bee_messages`):
-		return driver.RowsAffected(2), nil
 	case strings.Contains(query, `DELETE FROM system_comments`):
 		return driver.RowsAffected(2), nil
 	case strings.Contains(query, `DELETE FROM dev_agent_tasks`):
@@ -242,7 +240,7 @@ func TestRunDataRetentionDryRunCountsGenericRows(t *testing.T) {
 	}
 }
 
-func TestRunDataRetentionPrunesTicketRowsAndRelatedMessages(t *testing.T) {
+func TestRunDataRetentionPrunesTicketRowsAndRelatedComments(t *testing.T) {
 	db, state := openDataRetentionMockDB(t, map[string]int64{
 		"dev_agent_tasks": 2,
 	})
@@ -269,7 +267,7 @@ func TestRunDataRetentionPrunesTicketRowsAndRelatedMessages(t *testing.T) {
 
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	if len(state.execs) != 3 {
-		t.Fatalf("exec count = %d, want 3 (comments, bee_messages, tasks)", len(state.execs))
+	if len(state.execs) != 2 {
+		t.Fatalf("exec count = %d, want 2 (comments, tasks)", len(state.execs))
 	}
 }

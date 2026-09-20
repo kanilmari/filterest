@@ -41,7 +41,7 @@ under `app/`. A proposal describes intended behavior until its implementation
 and validation are recorded; reading a design document does not make a feature
 available or authorize migrating existing data.
 
-Queen, database-backed development tasks, and the Workline Observatory ship as
+Database-backed development tasks and the Workline Observatory ship as
 Filterest capabilities. Their records and local worker output belong to the
 installation's ignored database and runtime storage. Optional worker commands
 also need a separately installed and authenticated AI command-line client.

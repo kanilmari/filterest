@@ -164,7 +164,6 @@ def _write_python_fixture(application_root: Path) -> None:
     for package_directory in (
         application_root / "server_tools",
         application_root / "server_tools/agent_tools",
-        application_root / "server_tools/queen",
     ):
         package_directory.mkdir(parents=True, exist_ok=True)
         (package_directory / "__init__.py").write_text("", encoding="utf-8")
@@ -178,10 +177,6 @@ def _write_python_fixture(application_root: Path) -> None:
             "from server_tools.cache_probe import VALUE\nprint(VALUE)\n",
             encoding="utf-8",
         )
-    (application_root / "server_tools/queen/__main__.py").write_text(
-        "from server_tools.cache_probe import VALUE\nprint(VALUE)\n",
-        encoding="utf-8",
-    )
     scripts_root = application_root / "server_tools/scripts"
     scripts_root.mkdir(parents=True)
     (scripts_root / "cache_probe.py").write_text(
@@ -223,8 +218,6 @@ def _make_writable(root: Path) -> None:
         ("app", "db_task", ("--help",)),
         ("root", "db_report", ("--help",)),
         ("app", "db_report", ("--help",)),
-        ("root", "queen", ("--help",)),
-        ("app", "queen", ("--help",)),
     ],
 )
 def test_python_launchers_write_bytecode_beside_read_only_app(
@@ -239,7 +232,7 @@ def test_python_launchers_write_bytecode_beside_read_only_app(
     _copy_helper(application_root)
     _write_python_fixture(application_root)
 
-    for launcher in ("filterest", "db_task", "db_report", "queen"):
+    for launcher in ("filterest", "db_task", "db_report"):
         shutil.copy2(PUBLIC_SOURCE_ROOT / launcher, installation_root / launcher)
         shutil.copy2(APPLICATION_SOURCE_ROOT / launcher, application_root / launcher)
 
@@ -264,11 +257,11 @@ def test_python_launchers_write_bytecode_beside_read_only_app(
 
 
 def test_all_public_python_launchers_install_the_cache_contract() -> None:
-    for launcher in ("filterest", "ctl", "db_task", "db_report", "queen", "worker_agent"):
+    for launcher in ("filterest", "ctl", "db_task", "db_report", "worker_agent"):
         root_source = (PUBLIC_SOURCE_ROOT / launcher).read_text(encoding="utf-8")
         assert "PYTHONPYCACHEPREFIX" in root_source, launcher
 
-    for launcher in ("filterest", "ctl", "db_task", "db_report", "queen", "worker_agent"):
+    for launcher in ("filterest", "ctl", "db_task", "db_report", "worker_agent"):
         app_source = (APPLICATION_SOURCE_ROOT / launcher).read_text(encoding="utf-8")
         assert "python_bytecode_cache.sh" in app_source, launcher
         assert "filterest_configure_python_bytecode_cache" in app_source, launcher

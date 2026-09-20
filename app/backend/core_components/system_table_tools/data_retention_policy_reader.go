@@ -78,18 +78,6 @@ var dataRetentionTableSpecs = map[string]dataRetentionTableSpec{
 		},
 		DeleteStrategy: "generic",
 	},
-	"bee_messages": {
-		TableName: "bee_messages",
-		AllowedTimestampColumns: map[string]bool{
-			"created": true,
-		},
-		AllowedFilterColumns: map[string]string{
-			"task_id":   "int",
-			"user_id":   "int",
-			"thread_id": "text",
-		},
-		DeleteStrategy: "generic",
-	},
 	"dev_agent_tasks": {
 		TableName: "dev_agent_tasks",
 		AllowedTimestampColumns: map[string]bool{
@@ -99,7 +87,7 @@ var dataRetentionTableSpecs = map[string]dataRetentionTableSpec{
 		AllowedFilterColumns: map[string]string{
 			"queue_id": "int",
 		},
-		DeleteStrategy: "ticket_with_related_messages",
+		DeleteStrategy: "ticket_with_related_comments",
 	},
 }
 

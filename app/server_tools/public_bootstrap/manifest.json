@@ -111,7 +111,8 @@
     "20260919000007_create_developer_ticket_schema.sql",
     "20260919000008_create_developer_workline_schema.sql",
     "20260919000009_seed_developer_workflow_metadata.sql",
-    "20260919000010_record_developer_workflow_schema_release.sql"
+    "20260919000010_record_developer_workflow_schema_release.sql",
+    "20260920000001_retire_queen_permissions.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -231,7 +232,7 @@
     "public.tiketit_assets"
   ],
   "seed_row_counts": {
-    "public.dev_agent_task_statuses": 181,
+    "public.dev_agent_task_statuses": 182,
     "public.dokumentaatio": 3,
     "public.dokumentaatio_tiketit_relation": 1,
     "public.palvelukatalogi": 1,
@@ -271,7 +272,7 @@
       "sha256": "d6a21b196cca49537969de2104f37013d0a4c298b709459d2ee63dc6df914081"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "1cfbccb392cc6f3ff55fabae7cc1803dcfed5068c6418581d6d1bf7c6d7c6004"
+      "sha256": "1458eae6d7dad6276b03c253bc242567f7df7a5de5ad55c8dd92ec378052c948"
     }
   },
   "source_files": {
@@ -315,7 +316,7 @@
       "sha256": "97a592f3abbc577b65b01c51398f7b265813fcdc2687dc211f8a68f7070558e9"
     },
     "filterest/app/server_tools/public_bootstrap/source/app_tables.lang_keys.sql": {
-      "sha256": "4f592ae23204d452d334069183c8b1811ad3b8a30e25109a7d9bb020a086cc8a"
+      "sha256": "f6f0b52e54ba291d93a3f2036fdf19e5e8c83b2cd1a8dfa74bb4af7b11fc9247"
     },
     "filterest/app/server_tools/public_bootstrap/source/article_view.seed.sql": {
       "sha256": "48c5d8df03bc513121b5314eeb82fd4779534bf0af5e4f1c56e8c0e56a6a1b8c"
@@ -658,6 +659,9 @@
     },
     "filterest/app/server_tools/migrations/20260919000010_record_developer_workflow_schema_release.sql": {
       "sha256": "a2d929fd582a155e55a3d87e8af547865c0e3d97cb874e4ad6e3a677f6691f17"
+    },
+    "filterest/app/server_tools/migrations/20260920000001_retire_queen_permissions.sql": {
+      "sha256": "2b827a4e87228d717278d5f3e4b6e216f110f54bdbf2ab205926e8afd27161fc"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

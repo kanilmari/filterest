@@ -296,7 +296,6 @@ for shared coding conventions, QA and verification.
 (cd app && go test ./...)      # run Go tests
 ./filterest build               # build frontend assets
 ./filterest qa                  # run the broader project QA suite
-./queen status        # inspect the built-in persistent agent runtime
 ./db_report workline board  # inspect the canonical workline observatory state
 ./db_task list        # inspect database-backed development tasks
 ./worker_agent --help # inspect the optional local AI-worker command
@@ -333,11 +332,11 @@ other Node tools to that mutable location without creating a compatibility link
 or cache below immutable `app/`. The browser-administration profile does not
 install or use the source-development dependency tree.
 
-Queen, database-backed tasks, and the browser Workline Observatory are part of
+Database-backed tasks and the browser Workline Observatory are part of
 Filterest's development and administration surface. Their durable records stay
-in the installation database. Queen sessions and worker output use ignored
-local runtime directories; copying the source does not copy another
-installation's workline data or credentials. The worker command requires a
+in the installation database. Worker output uses ignored local runtime
+directories; copying the source does not copy another installation's workline
+data or credentials. The worker command requires a
 separately installed and authenticated supported AI command-line client.
 
 For Codex, install the exact CLI version declared by `DEFAULT_CODEX_VERSION` in

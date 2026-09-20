@@ -37,7 +37,7 @@ LANGUAGE_MIGRATION = (
 REQUIRED_ARTICLE_RUNTIME_KEYS = frozenset(
     """
     account logout system_config users admin_and_development_tools admin_tools
-    permissions queen_chat table_tools create_table foreign_keys asset_linking
+    permissions table_tools create_table foreign_keys asset_linking
     card_visibility service_catalog_moderation child_tab_config
     dataset_alias_management dataset_header_config maintenance
     add_notification_trigger refresh_embeddings check_json_columns
@@ -181,7 +181,7 @@ def test_public_article_runtime_keys_have_complete_four_language_seed_rows() -> 
     rows = _seed_rows()
     rows_by_key = {row[0]: row for row in rows}
 
-    assert len(REQUIRED_ARTICLE_RUNTIME_KEYS) == 113
+    assert len(REQUIRED_ARTICLE_RUNTIME_KEYS) == 112
     assert REQUIRED_ARTICLE_RUNTIME_KEYS <= rows_by_key.keys()
     for lang_key in REQUIRED_ARTICLE_RUNTIME_KEYS:
         _, fi, en, ch, yue, creation_spec = rows_by_key[lang_key]

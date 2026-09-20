@@ -25,8 +25,6 @@ LEGACY_VIOLATIONS=0
 # Known legacy violations — these warn but don't fail in strict mode.
 # Remove entries as files are refactored under the limit.
 KNOWN_LEGACY=(
-    "backend/core_components/dev_tools/queen_session_handler.go"
-    "backend/core_components/dev_tools/queen_session_handler_test.go"
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_delete/delete_row.go"
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_delete/delete_row_test.go"
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/card_support_enrichment.go"
@@ -41,9 +39,6 @@ KNOWN_LEGACY=(
     "backend/core_components/dynamic_table_tools/dtt_table_folders/table_folders_test.go"
     "backend/core_components/router/health_handler_test.go"
     "backend/core_components/router/routing_builder.go"
-    "frontend/core_components/admin_tools/queen_chat_helpers.js"
-    "frontend/core_components/admin_tools/queen_chat_helpers.test.js"
-    "frontend/core_components/admin_tools/queen_chat_view.js"
     "frontend/core_components/ai_features/table_chat/table_chat_printer.js"
     "frontend/core_components/ai_features/table_chat/table_chat_printer.test.js"
     "frontend/core_components/auth/auth.css"

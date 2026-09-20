@@ -26,7 +26,6 @@ RELEASE_ARTIFACT_TOKENS = (
 
 AGENT_WORKFLOW_TOKENS = (
     "db_task",
-    "queen",
     "worker_agent",
 )
 

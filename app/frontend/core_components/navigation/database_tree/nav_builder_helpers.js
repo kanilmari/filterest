@@ -93,7 +93,6 @@ export function appendMissingAdminViews(structure, views) {
 export function getAdminToolsStructure() {
     return [
         { id: 'permissions', name: 'permissions' },
-        { id: 'queen_chat', name: 'queen_chat' },
         {
             id: 'site_settings', name: 'site_settings', children: [
                 { id: 'site_languages', name: 'site_languages' },

@@ -129,7 +129,6 @@ func TestAgentToolDispatchersRejectAnonymousRequestsBeforeDBAccess(t *testing.T)
 		{name: "workline reports", handler: WorklineReportsHandler, path: "/api/app/agent-tools/workline-reports"},
 		{name: "workline tasks", handler: WorklineTasksHandler, path: "/api/app/agent-tools/workline-tasks"},
 		{name: "handover reports", handler: HandoverReportsHandler, path: "/api/app/agent-tools/handover-reports"},
-		{name: "bee messages", handler: BeeMessagesHandler, path: "/api/app/bee/messages"},
 	}
 
 	for _, tt := range tests {

@@ -446,8 +446,7 @@
 
 .workline-observatory__goal,
 .workline-observatory__selected-workline,
-.workline-observatory__contract,
-.workline-observatory__chat {
+.workline-observatory__contract {
     padding: .75rem;
     margin-bottom: .85rem;
     border: 1px solid var(--border_color);
@@ -503,14 +502,8 @@
 }
 
 .workline-observatory__contract input,
-.workline-observatory__contract select,
-.workline-observatory__chat textarea {
+.workline-observatory__contract select {
     width: 100%;
-}
-
-.workline-observatory__chat {
-    display: grid;
-    gap: .5rem;
 }
 
 .workline-observatory-view {

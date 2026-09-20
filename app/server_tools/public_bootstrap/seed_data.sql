@@ -1315,7 +1315,6 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('admin_and_development_tools', 'Ylläpidon ja kehityksen työkalut', 'Admin and development tools', '管理和开发工具', '管理及開發工具', 'public fixture seed'),
   ('admin_tools', 'Ylläpidon työkalut', 'Admin tools', '管理工具', '管理工具', 'public fixture seed'),
   ('permissions', 'Käyttöoikeudet', 'Permissions', '权限', '權限', 'public fixture seed'),
-  ('queen_chat', 'Queen-keskustelu', 'Queen chat', 'Queen 聊天', 'Queen 傾偈', 'public fixture seed'),
   ('table_tools', 'Taulutyökalut', 'Table tools', '表格工具', '資料表工具', 'public fixture seed'),
   ('create_table', 'Luo taulu', 'Create table', '创建表格', '建立資料表', 'public fixture seed'),
   ('foreign_keys', 'Vierasavaimet', 'Foreign keys', '外键', '外鍵', 'public fixture seed'),
@@ -3851,5 +3850,6 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260919000007_create_developer_ticket_schema.sql'),
   ('20260919000008_create_developer_workline_schema.sql'),
   ('20260919000009_seed_developer_workflow_metadata.sql'),
-  ('20260919000010_record_developer_workflow_schema_release.sql')
+  ('20260919000010_record_developer_workflow_schema_release.sql'),
+  ('20260920000001_retire_queen_permissions.sql')
 ON CONFLICT (filename) DO NOTHING;

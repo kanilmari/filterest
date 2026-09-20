@@ -19,7 +19,7 @@ import (
 
 const (
 	dataRetentionDeleteStrategyGeneric       = "generic"
-	dataRetentionDeleteStrategyTickets       = "ticket_with_related_messages"
+	dataRetentionDeleteStrategyTickets       = "ticket_with_related_comments"
 	dataRetentionAutomaticInterval           = 24 * time.Hour
 	dataRetentionAutomaticInitialDelay       = 90 * time.Second
 	dataRetentionAdvisoryLockKey       int64 = 80428021
@@ -309,13 +309,6 @@ func deleteTicketRowsForDataRetention(q dbutils.Querier, policy dataRetentionPol
 		  AND row_id = ANY($1)
 	`, pq.Array(ids)); err != nil {
 		return 0, fmt.Errorf("ticket comment retention delete failed: %w", err)
-	}
-
-	if _, err := q.Exec(`
-		DELETE FROM bee_messages
-		WHERE task_id = ANY($1)
-	`, pq.Array(ids)); err != nil {
-		return 0, fmt.Errorf("ticket message retention delete failed: %w", err)
 	}
 
 	result, err := q.Exec(`
