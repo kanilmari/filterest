@@ -13,17 +13,32 @@ import {
   dropTempDataset,
 } from '../helpers/temp-dataset';
 
-async function callTextEndpoint(page: import('@playwright/test').Page, url: string) {
-  return page.evaluate(async (targetUrl) => {
+async function callTextEndpoint(
+  page: import('@playwright/test').Page,
+  url: string,
+  method: 'GET' | 'POST' = 'GET',
+) {
+  return page.evaluate(async ({ targetUrl, requestMethod }) => {
+    // Importing writes rows, so it answers only a POST. The token comes from
+    // the application's own endpoint rather than a second copy of the rule.
+    let csrfToken = '';
+    if (requestMethod !== 'GET') {
+      const tokenResponse = await fetch('/api/csrf-token', { credentials: 'include' });
+      if (tokenResponse.ok) {
+        csrfToken = (await tokenResponse.json()).csrf_token || '';
+      }
+    }
     const response = await fetch(targetUrl, {
+      method: requestMethod,
       credentials: 'include',
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
     });
     return {
       status: response.status,
       ok: response.ok,
       body: await response.text(),
     };
-  }, url);
+  }, { targetUrl: url, requestMethod: method });
 }
 
 test.describe('U2 — Import CSV', () => {
@@ -63,6 +78,7 @@ test.describe('U2 — Import CSV', () => {
       const importResponse = await callTextEndpoint(
         page,
         `/api/import-table-csv?dataset=${encodeURIComponent(datasetName)}`,
+        'POST',
       );
 
       expect(importResponse.status, importResponse.body).toBe(200);

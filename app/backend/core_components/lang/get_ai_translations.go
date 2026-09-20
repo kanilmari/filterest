@@ -86,6 +86,15 @@ func filterAIEligibleMissingKeys(keys []string) ([]string, int) {
 
 // GenerateTranslationsHandler generates missing translations, saves them, and returns the same items to the frontend.
 func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
+	// This handler changes stored data, so it must not answer a read. A read
+	// method is also how the site assistant reaches a route without asking
+	// anyone to approve the change, because approval is only required of
+	// writes.
+	if r.Method != http.MethodPost {
+		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
 	// 1. Luetaan body heti alussa, jotta saadaan puuttuvat avaimet lokiin
 	// riippumatta siitä, onko käyttäjä kirjautunut vai ei.
 	bodyBytes, err := io.ReadAll(r.Body)

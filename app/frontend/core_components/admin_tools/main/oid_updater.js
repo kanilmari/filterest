@@ -2,11 +2,14 @@
 // Triggers the admin action that refreshes backend OIDs and table-name mappings.
 // Bridges the OID update endpoint with lightweight frontend action handling.
 // Exists to keep this maintenance action isolated from larger admin view builders.
-// PIPELINE_EXCEPTION: /api/update-oids is a best-effort GET maintenance refresh
-// that needs a local AbortController timeout so slow catalog syncs do not
-// prolong reloads or pagehide churn.
+// PIPELINE_EXCEPTION: /api/update-oids is a best-effort maintenance refresh that
+// needs a local AbortController timeout so slow catalog syncs do not prolong
+// reloads or pagehide churn. It is sent as POST because it rewrites stored
+// catalog metadata; it borrows the pipeline's own token cache rather than
+// keeping a second one.
 
 import { get_endpoint_url } from '../../endpoints/endpoint_router.js';
+import { ensureCsrfToken } from '../../pipeline/api_pipeline.js';
 
 const OID_REFRESH_CACHE_KEY = 'easelect_oid_refresh_started_at';
 const OID_REFRESH_TAB_SESSION_KEY = 'easelect_oid_refresh_started_this_tab_session';
@@ -75,10 +78,13 @@ function createOidRefreshAbortContext(timeoutMs = OID_REFRESH_TIMEOUT_MS) {
 }
 
 async function fetchOidRefresh({ signal } = {}) {
+    const csrfToken = await ensureCsrfToken();
     const response = await fetch(get_endpoint_url('updateOids'), {
+        method: 'POST',
         credentials: 'include',
         headers: {
             'X-Ignore-Network-Abort': '1',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
         },
         signal,
     });

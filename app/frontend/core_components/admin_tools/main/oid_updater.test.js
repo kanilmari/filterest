@@ -8,19 +8,38 @@ import { describe, test, expect, beforeEach, vi } from 'vitest';
 const getEndpointUrlMock = vi.fn(() => '/api/update-oids');
 const fetchMock = vi.fn();
 
+// The refresh rewrites catalog metadata, so it is a POST and carries the
+// pipeline's CSRF token. Stubbing the token keeps these tests about the
+// refresh itself rather than about how a token is fetched.
+const ensureCsrfTokenMock = vi.fn(async () => 'test-token');
+
 async function loadModule() {
   vi.resetModules();
   vi.doMock('../../endpoints/endpoint_router.js', () => ({
     get_endpoint_url: getEndpointUrlMock,
   }));
+  vi.doMock('../../pipeline/api_pipeline.js', () => ({
+    ensureCsrfToken: ensureCsrfTokenMock,
+  }));
   return import('./oid_updater.js');
 }
+
+const expectedRequest = {
+  method: 'POST',
+  credentials: 'include',
+  headers: {
+    'X-Ignore-Network-Abort': '1',
+    'X-CSRF-Token': 'test-token',
+  },
+  signal: expect.any(AbortSignal),
+};
 
 describe('update_oids_and_table_names', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     getEndpointUrlMock.mockClear();
+    ensureCsrfTokenMock.mockClear();
     fetchMock.mockReset();
     globalThis.fetch = fetchMock;
     vi.restoreAllMocks();
@@ -35,13 +54,7 @@ describe('update_oids_and_table_names', () => {
     await mod.update_oids_and_table_names();
 
     expect(getEndpointUrlMock).toHaveBeenCalledWith('updateOids');
-    expect(fetchMock).toHaveBeenCalledWith('/api/update-oids', {
-      credentials: 'include',
-      headers: {
-        'X-Ignore-Network-Abort': '1',
-      },
-      signal: expect.any(AbortSignal),
-    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/update-oids', expectedRequest);
     expect(logSpy).not.toHaveBeenCalled();
   });
 

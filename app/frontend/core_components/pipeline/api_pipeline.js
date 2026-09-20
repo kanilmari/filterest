@@ -272,7 +272,7 @@ let _csrfTokenCache = null;
  */
 // PIPELINE_EXCEPTION: api_pipeline.js implements the pipeline itself; this fetch bootstraps the CSRF token
 // before any pipeline run is possible. See docs/instructions_and_documentation/PIPELINE_EXCEPTIONS.md.
-async function ensureCsrfToken({ forceRefresh = false } = {}) {
+export async function ensureCsrfToken({ forceRefresh = false } = {}) {
     if (forceRefresh) {
         _csrfTokenCache = null;
     }

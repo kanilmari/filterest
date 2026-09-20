@@ -38,6 +38,15 @@ const translationSystemMessageRelativePath = "docs/instructions_and_documentatio
 
 // FixTableTranslationsHandler repairs the requested row/column cells and persists completed translation JSON.
 func FixTableTranslationsHandler(w http.ResponseWriter, r *http.Request) {
+	// This handler changes stored data, so it must not answer a read. A read
+	// method is also how the site assistant reaches a route without asking
+	// anyone to approve the change, because approval is only required of
+	// writes.
+	if r.Method != http.MethodPost {
+		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
 	var req FixTranslationsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("\033[31merror: %v\033[0m", err))
