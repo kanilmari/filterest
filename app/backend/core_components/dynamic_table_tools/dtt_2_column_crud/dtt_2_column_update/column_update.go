@@ -8,6 +8,7 @@ package dtt_2_column_update
 import (
 	"database/sql"
 	"easelect/backend/core_components/dbutils"
+	"errors"
 	dtt_2_column_crud "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"easelect/backend/core_components/lang"
 	"fmt"
@@ -284,6 +285,20 @@ func UpdateColumns(
 		}
 		alterTypeStmt := fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s",
 			sanitizedTableName, sNewName, newType)
+
+		// A column that stores JSON has no automatic conversion into a scalar
+		// type, so PostgreSQL refuses the plain statement. The clause below
+		// reads the stored JSON value out as text first, which treats 10 and
+		// "10" alike and lets the ordinary cast finish the change.
+		jsonConversion, convErr := jsonScalarConversion(tx, sanitizedTableName, sNewName, newType)
+		if convErr != nil {
+			fmt.Printf("\033[31merror preparing column type change: %s\033[0m\n", convErr.Error())
+			return convErr
+		}
+		if jsonConversion != "" {
+			alterTypeStmt += " " + jsonConversion
+		}
+
 		fmt.Println("Modifying column type:", alterTypeStmt)
 
 		_, err = tx.Exec(alterTypeStmt)
@@ -293,4 +308,54 @@ func UpdateColumns(
 		}
 	}
 	return nil
+}
+
+// jsonScalarConversion returns the USING clause a JSON column needs before it
+// can become a scalar column, and an empty string when the type change needs no
+// help. Only this direction needs one: PostgreSQL turns a scalar into JSON by
+// itself, and every other pair of types keeps the conversion it has always had.
+func jsonScalarConversion(
+	tx *sql.Tx,
+	sanitizedTableName string,
+	sanitizedColumnName string,
+	newType string,
+) (string, error) {
+	var currentType string
+
+	// Identifiers are composed unquoted here, so PostgreSQL has folded the
+	// stored column name to lower case.
+	err := tx.QueryRow(`
+        SELECT pg_catalog.format_type(a.atttypid, a.atttypmod)
+        FROM pg_attribute a
+        WHERE a.attrelid = pg_catalog.to_regclass($1)
+          AND a.attname = lower($2)
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+    `, sanitizedTableName, sanitizedColumnName).Scan(&currentType)
+	if errors.Is(err, sql.ErrNoRows) {
+		// The ALTER statement reports a missing table or column by itself.
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("error reading current type of column %s.%s: %w",
+			sanitizedTableName, sanitizedColumnName, err)
+	}
+
+	if !isJSONTypeName(currentType) || isJSONTypeName(newType) {
+		return "", nil
+	}
+
+	// An empty JSON string leaves the column empty instead of failing the whole
+	// change, the same way an empty form field leaves a value unset.
+	return fmt.Sprintf("USING NULLIF(%s #>> '{}', '')::%s",
+		sanitizedColumnName, newType), nil
+}
+
+// isJSONTypeName reports whether a PostgreSQL type name is one of the JSON types.
+func isJSONTypeName(typeName string) bool {
+	baseName := strings.ToUpper(strings.TrimSpace(typeName))
+	if parenIndex := strings.Index(baseName, "("); parenIndex != -1 {
+		baseName = strings.TrimSpace(baseName[:parenIndex])
+	}
+	return baseName == "JSON" || baseName == "JSONB"
 }
