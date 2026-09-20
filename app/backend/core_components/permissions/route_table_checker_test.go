@@ -61,7 +61,7 @@ func TestBuildRouteTablePermissionQueryUsesBatchRouteAndTableNameScope(t *testin
 		"",
 		42,
 		RouteTableScope{TableName: "dev_agent_tasks"},
-		DisabledFunctionIgnored,
+		DisabledFunctionFalseOrNull,
 		true,
 	)
 
@@ -77,8 +77,10 @@ func TestBuildRouteTablePermissionQueryUsesBatchRouteAndTableNameScope(t *testin
 	if !strings.Contains(query, "sdt.table_name = $3") {
 		t.Fatalf("query should check table name placeholder at $3: %s", query)
 	}
-	if strings.Contains(query, "f.disabled") {
-		t.Fatalf("ignored disabled policy should not add a disabled predicate: %s", query)
+	// A retired route keeps its grants now that startup no longer deletes them,
+	// so the batch lookup must exclude it rather than answer for the address.
+	if !strings.Contains(query, "f.disabled = false OR f.disabled IS NULL") {
+		t.Fatalf("batch lookup should exclude retired routes and keep unset ones: %s", query)
 	}
 
 	wantArgs := []interface{}{42, "dev_agent_tasks"}

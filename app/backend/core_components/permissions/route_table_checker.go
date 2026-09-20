@@ -23,8 +23,6 @@ const (
 	DisabledFunctionStrictFalse DisabledFunctionPolicy = iota
 	// DisabledFunctionFalseOrNull matches access-control's legacy enabled-route lookup.
 	DisabledFunctionFalseOrNull
-	// DisabledFunctionIgnored preserves legacy access-control permission-row lookups.
-	DisabledFunctionIgnored
 )
 
 // Principal identifies the current permission actor.
@@ -68,9 +66,16 @@ func StrictRouteTableOptions() RouteTablePermissionOptions {
 }
 
 // AccessControlRouteTableOptions returns the behavior used by the route pipeline.
+//
+// A grant on a retired route must not authorize the address it used to serve.
+// Startup no longer deletes such grants, and a route can be retired while its
+// address stays in service under a different handler, so the check has to read
+// the flag rather than trust that the row is gone. An unset flag still counts
+// as live: the column is nullable, and an installation that never wrote it has
+// working routes, not retired ones.
 func AccessControlRouteTableOptions(allowMissingPermission bool) RouteTablePermissionOptions {
 	return RouteTablePermissionOptions{
-		DisabledPolicy:         DisabledFunctionIgnored,
+		DisabledPolicy:         DisabledFunctionFalseOrNull,
 		AllowMissingPermission: allowMissingPermission,
 	}
 }
@@ -289,8 +294,6 @@ func disabledColumnClause(policy DisabledFunctionPolicy, qualifier string) strin
 		return ` AND ` + columnName + ` = false`
 	case DisabledFunctionFalseOrNull:
 		return ` AND (` + columnName + ` = false OR ` + columnName + ` IS NULL)`
-	case DisabledFunctionIgnored:
-		return ``
 	default:
 		return ` AND ` + columnName + ` = false`
 	}

@@ -103,7 +103,9 @@ func articleSectionFixture(t *testing.T) *sql.DB {
  CREATE TABLE system_db_tables(table_uid integer PRIMARY KEY,table_name text,schema_name text DEFAULT 'public',metadata jsonb);
  CREATE TABLE system_user_groups(id integer PRIMARY KEY,name text);
  CREATE TABLE system_user_group_memberships(user_id integer,group_id integer);
- CREATE TABLE system_functions(id integer PRIMARY KEY,url_route_endpoint text);
+ -- disabled mirrors the real column: the permission check reads it, so a
+ -- fixture without it would pass for a reason production does not share.
+ CREATE TABLE system_functions(id integer PRIMARY KEY,url_route_endpoint text,disabled boolean DEFAULT false);
  CREATE TABLE system_group_table_func_rights(function_id integer,user_group_id integer,target_table_uid integer);
  CREATE TABLE system_column_details(column_uid integer,metadata jsonb);
  INSERT INTO system_db_tables VALUES(1,'fixture','public','{"card_style_variant":"modern","layout":"stacked"}'),(2,'other','public','{}'),(3,'private_dataset','public','{}');

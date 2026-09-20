@@ -148,7 +148,9 @@ CREATE TABLE system_foreign_key_relations_1_m(id bigint PRIMARY KEY,source_table
 CREATE TABLE system_permission_actions(id bigint PRIMARY KEY,action_key text,enabled boolean DEFAULT true,scope_type text DEFAULT 'row');
 CREATE TABLE system_row_access_rules(table_uid bigint,action_id bigint,row_id bigint DEFAULT 1,user_id bigint DEFAULT 2,group_id bigint,effect text DEFAULT 'deny',valid_from timestamptz DEFAULT now(),valid_until timestamptz);
 CREATE TABLE system_row_group_memberships(table_uid bigint);
-CREATE TABLE system_functions(id bigint PRIMARY KEY,url_route_endpoint text);
+-- disabled mirrors the real column: the permission check reads it, so a
+-- fixture without it would pass for a reason production does not share.
+CREATE TABLE system_functions(id bigint PRIMARY KEY,url_route_endpoint text,disabled boolean DEFAULT false);
 CREATE TABLE system_group_table_func_rights(user_group_id bigint,function_id bigint,target_table_uid bigint);
 CREATE TABLE system_user_group_memberships(user_id bigint,group_id bigint);
 CREATE TABLE specimen_parent(id bigint PRIMARY KEY,cached_image text);

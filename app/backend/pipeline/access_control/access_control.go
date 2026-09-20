@@ -406,7 +406,7 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 		specificTableRelated, err := permissions.FunctionSpecificTableRelated(
 			backend.Db,
 			urlRoute,
-			permissions.DisabledFunctionIgnored,
+			permissions.DisabledFunctionFalseOrNull,
 		)
 		if err != nil {
 			log.Printf("\033[31m[WithAccessControl][%s] specific_table_related fetch error: %v\033[0m", handlerName, err)
