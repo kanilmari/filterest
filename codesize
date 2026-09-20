@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# codesize
+# Reports how much source code lives under one or more paths.
+# Bridges the public installation root with the measurement implementation.
+# Exists so the question is asked the same way from any directory, with the
+# repository root as the default subject and any path as an argument.
+set -euo pipefail
+INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+exec python3 "$INSTALLATION_ROOT/app/server_tools/scripts/codesize.py" "$@"
