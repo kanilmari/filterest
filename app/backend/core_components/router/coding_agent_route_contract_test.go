@@ -24,7 +24,8 @@ func TestCodingAgentGETAndPOSTRemainAdminOnly(t *testing.T) {
 		if route.PathPattern != "/api/app/ai-chat/codex-query" {
 			t.Fatal(route.PathPattern)
 		}
-		if len(route.Methods) != 2 || route.Methods[0] != http.MethodGet || route.Methods[1] != http.MethodPost {
+		if len(route.Methods) != 3 || route.Methods[0] != http.MethodGet ||
+			route.Methods[1] != http.MethodHead || route.Methods[2] != http.MethodPost {
 			t.Fatal(route.Methods)
 		}
 		for _, scenario := range route.Scenarios {

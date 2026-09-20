@@ -5,6 +5,7 @@
 package dtt_1_row_create
 
 import (
+	"strconv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -53,6 +54,44 @@ func isDateLikeType(dataType string) bool {
 func isIntegerType(dataType string) bool {
 	dataType = strings.ToLower(dataType)
 	return strings.Contains(dataType, "int")
+}
+
+// isDecimalType recognises the exact-decimal columns, which a form sends as
+// text like an integer does but which strconv.Atoi cannot parse.
+// Between: insertDataAccordingToPayload -> Logic
+// Why: A price of 22.39 is not an integer and is not text either.
+func isDecimalType(dataType string) bool {
+	dataType = strings.ToLower(strings.TrimSpace(dataType))
+	return strings.HasPrefix(dataType, "numeric") ||
+		strings.HasPrefix(dataType, "decimal") ||
+		dataType == "real" ||
+		strings.HasPrefix(dataType, "double")
+}
+
+// normalizeDecimalInsertValue prepares one value for an exact-decimal column.
+// An empty form field is missing data, exactly as it is for a date, a JSON
+// value or an integer; the database refuses the empty text it would otherwise
+// receive. A column that forbids NULL keeps the zero its integer sibling uses.
+// Between: insertDataAccordingToPayload -> Database
+// Why: Keeps an empty price an understood absence rather than a 500.
+func normalizeDecimalInsertValue(value interface{}, nullable bool) (interface{}, error) {
+	text, isText := value.(string)
+	if !isText {
+		return value, nil
+	}
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		if nullable {
+			return nil, nil
+		}
+		return "0", nil
+	}
+	// The database does the conversion; this only refuses what it would refuse
+	// anyway, so the person is told which column rather than reading pq's text.
+	if _, err := strconv.ParseFloat(strings.Replace(trimmed, ",", ".", 1), 64); err != nil {
+		return nil, fmt.Errorf("the value is not a number")
+	}
+	return strings.Replace(trimmed, ",", ".", 1), nil
 }
 
 // isJSONType tunnistaa json/jsonb-sarakkeet

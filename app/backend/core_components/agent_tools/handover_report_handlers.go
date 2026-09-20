@@ -42,8 +42,7 @@ func HandoverReportsHandler(w http.ResponseWriter, r *http.Request) {
 		createHandoverReportHandler(w, r)
 	case http.MethodPatch, http.MethodPut:
 		updateHandoverReportStateHandler(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+
 	}
 }
 

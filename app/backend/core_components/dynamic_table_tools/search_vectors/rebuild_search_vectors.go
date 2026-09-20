@@ -24,10 +24,7 @@ type rebuildRequest struct {
 }
 
 func RebuildSearchVectorHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
+
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 0 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "unauthorized")

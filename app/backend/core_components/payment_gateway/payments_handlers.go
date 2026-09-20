@@ -323,10 +323,7 @@ func CreatePayment(req PaymentRequest) (*PaymentResponse, error) {
 
 // CreatePaymentHandler handles POST /api/payments/create
 func CreatePaymentHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	if !validateCreatePaymentServiceToken(r) {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "service_token_invalid")
 		return
@@ -365,10 +362,6 @@ func CreatePaymentHandler(w http.ResponseWriter, r *http.Request) {
 
 // GetPaymentStatusHandler handles GET /api/payments/:token or /api/payments/:token/status
 func GetPaymentStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	// Extract token from URL path: /api/payments/{token} or /api/payments/{token}/status
 	path := strings.TrimSuffix(r.URL.Path, "/")
@@ -445,10 +438,6 @@ func GetPaymentStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 // WebhookHandler handles POST /api/payments/webhook
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxPaymentWebhookBodyBytes))
 	if err != nil {

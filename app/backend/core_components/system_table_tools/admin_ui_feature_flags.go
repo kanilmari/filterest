@@ -37,10 +37,6 @@ var readAdminUIFeatureFlags = func() (AdminUIFeatureFlagsResponse, error) {
 // GetAdminUIFeatureFlagsHandler returns only explicitly allowlisted admin UI flags.
 // The router assigns this handler the admin profile before it can read configuration.
 func GetAdminUIFeatureFlagsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	flags, err := readAdminUIFeatureFlags()
 	if err != nil {

@@ -8,9 +8,9 @@ package dtt_2_column_update
 import (
 	"database/sql"
 	"easelect/backend/core_components/dbutils"
-	"errors"
 	dtt_2_column_crud "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"easelect/backend/core_components/lang"
+	"errors"
 	"fmt"
 	"log"
 	"strings"

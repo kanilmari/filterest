@@ -62,10 +62,6 @@ type FKCacheRefreshResponse struct {
 // Between: HTTP Request (admin) -> Database (system_fk_cache_triggers + pg_trigger)
 // Why: Gives admin visibility into which cache triggers exist and if they're active.
 func ListFKCacheTriggersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
 
 	rows, err := backend.Db.Query(`
 		SELECT id, source_table, source_column, target_table, target_column,
@@ -128,10 +124,6 @@ func ListFKCacheTriggersHandler(w http.ResponseWriter, r *http.Request) {
 // Between: HTTP Request (admin) -> Database (UPDATE target SET cached_col = source_val)
 // Why: Allows manual cache refresh when automatic triggers haven't caught all cases.
 func RefreshFKCacheHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	var req FKCacheRefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

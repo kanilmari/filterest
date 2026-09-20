@@ -23,10 +23,7 @@ const maxChatAttachmentRequestBytes = site_assistant.MaxAttachmentBytes + (1 << 
 // only on this machine and only until the question is asked or it expires.
 func ChatAttachmentHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST accepted")
-		return
-	}
+
 	actor, ok := dbutils.GetRequestActorContext(r.Context())
 	if !ok || !actor.IsAdmin || actor.UserID <= 1 {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "administrator access is required")

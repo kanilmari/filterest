@@ -217,10 +217,6 @@ func publicTableColumnExists(db *sql.DB, tableName, columnName string) (bool, er
 // GetCardVisibilityHandler returns card visibility flags for all columns of a table.
 // GET /api/card-visibility/{tableName}
 func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	tableName := strings.TrimPrefix(r.URL.Path, "/api/card-visibility/")
 	if tableName == "" {
@@ -386,10 +382,6 @@ func scheduleCardVisibilitySchemaCacheInvalidation(
 // UpdateCardVisibilityHandler batch-updates card visibility flags for a table.
 // POST /api/card-visibility/update
 func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req updateCardVisibilityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

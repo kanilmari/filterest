@@ -156,10 +156,6 @@ func ImportTableCSVHandler(w http.ResponseWriter, r *http.Request) {
 	// method is also how the site assistant reaches a route without asking
 	// anyone to approve the change, because approval is only required of
 	// writes.
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	tableName := r.URL.Query().Get("dataset")
 	tx, ok := dbutils.GetTx(r.Context())

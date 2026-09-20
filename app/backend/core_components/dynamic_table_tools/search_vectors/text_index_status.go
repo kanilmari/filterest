@@ -19,10 +19,7 @@ type textIndexInfo struct {
 }
 
 func TextIndexStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
+
 	query := `
 SELECT t.table_name,
        EXISTS (

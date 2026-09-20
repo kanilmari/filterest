@@ -16,10 +16,6 @@ import (
 
 // CSRFTokenHandler returns (and lazily creates) the current session CSRF token.
 func CSRFTokenHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {

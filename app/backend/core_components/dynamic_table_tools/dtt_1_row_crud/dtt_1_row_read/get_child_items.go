@@ -305,10 +305,6 @@ func isRelatedParentRowVisible(
 // joilla referenced_table = parent_table, ja hakee viittaavat rivit,
 // joissa referencing_column = parent_pk_value.
 func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodPost {
-		httpresponse.RespondWithError(response_writer, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	// Luetaan body
 	var body_data struct {
@@ -1125,14 +1121,6 @@ func buildRelatedSelectColumnsWithFKLabels(
 	return strings.Join(selectParts, ", "), joinClauses
 }
 
-func buildChildSelectColumnsWithFKLabels(
-	tableName string,
-	columns []string,
-	foreignKeys map[string]dtt_utils.ForeignKey,
-) (string, string) {
-	return buildRelatedSelectColumnsWithFKLabels(tableName, columns, foreignKeys)
-}
-
 // buildRelatedItemsQuery creates the related-row SELECT and always qualifies the
 // FK filter column with the base table name so self-FK label joins stay unambiguous.
 func buildRelatedItemsQuery(
@@ -1203,15 +1191,6 @@ func buildRelatedItemsWhereClause(
 	return appendReadPolicyToWhereClause(tableName, userRole, userID, readPolicy, whereClause, queryArgs)
 }
 
-func buildChildItemsQuery(
-	selectColumns string,
-	tableName string,
-	joinClauses string,
-	referencingColumn string,
-) string {
-	return buildRelatedItemsQuery(selectColumns, tableName, joinClauses, referencingColumn)
-}
-
 func buildRelatedFKDisplayAlias(
 	columnName string,
 	existingColumns map[string]struct{},
@@ -1239,14 +1218,6 @@ func buildRelatedFKDisplayAlias(
 	}
 }
 
-func buildChildFKDisplayAlias(
-	columnName string,
-	existingColumns map[string]struct{},
-	usedDisplayAliases map[string]struct{},
-) string {
-	return buildRelatedFKDisplayAlias(columnName, existingColumns, usedDisplayAliases)
-}
-
 func relatedFKDisplayAliasBase(columnName string) string {
 	switch {
 	case strings.HasSuffix(columnName, "_id"):
@@ -1256,8 +1227,4 @@ func relatedFKDisplayAliasBase(columnName string) string {
 	default:
 		return columnName + "_name"
 	}
-}
-
-func childFKDisplayAliasBase(columnName string) string {
-	return relatedFKDisplayAliasBase(columnName)
 }

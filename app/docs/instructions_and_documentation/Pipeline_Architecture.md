@@ -422,7 +422,13 @@ Place it in the correct position relative to existing stages. Consider:
 
 ### Add a New Route
 
-1. **Register the route** in `router.go` (or `router_for_apps.go` for an application route), with `functionRegisterHandler`. `routing_builder.go` holds no registrations: it is what turns them into database rows and middleware chains.
+1. **Register the route and its allowed methods** in `router.go` (or `router_for_apps.go` for an application route), with `functionRegisterHandler`:
+
+```go
+functionRegisterHandler("/api/my-route", mypackage.MyHandler, "mypackage.MyHandler", http.MethodPost)
+```
+
+The router boundary rejects every undeclared method before handler code runs. Declaring `GET` also declares `HEAD`; handlers receive those permitted `HEAD` requests with GET semantics. The generated route manifest and assistant API catalog read this same declaration. Do not repeat method switches inside the handler. `routing_builder.go` holds no registrations: it turns the registered definitions into database rows and middleware chains.
 2. **Add a profile entry** in `route_profiles.go` — **every route must have an explicit entry** (enforced by the conformance test):
 
 ```go

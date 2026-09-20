@@ -82,10 +82,3 @@ export async function fetch_user_groups() {
         throw new Error(`virhe käyttäjäryhmien haussa: ${error.message}`);
     }
 }
-
-// Re-exported from permission_checker_helpers.js for backward compatibility.
-export { computeMultipleTableState } from "./permission_checker_helpers.js";
-
-export async function fetch_permissions(endpoint_router) {
-    return await endpoint_router("datasetPermissions");
-}

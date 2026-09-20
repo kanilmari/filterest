@@ -187,7 +187,7 @@ func TestCreateTableInDatabaseRejectsInvalidIdentifiersAndMissingPrimaryKey(t *t
 }
 
 func TestCreateTableInDatabaseBuildsCreateTableAndUpdatedTriggerQueries(t *testing.T) {
-	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}, {}})
+	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}, {}, {}})
 
 	err := CreateTableInDatabase(db, "users", map[string]string{
 		"id":      "serial",
@@ -204,8 +204,8 @@ func TestCreateTableInDatabaseBuildsCreateTableAndUpdatedTriggerQueries(t *testi
 		t.Fatalf("CreateTableInDatabase returned error: %v", err)
 	}
 
-	if len(state.execCalls) != 3 {
-		t.Fatalf("exec calls = %d, want 3", len(state.execCalls))
+	if len(state.execCalls) != 4 {
+		t.Fatalf("exec calls = %d, want 4", len(state.execCalls))
 	}
 
 	createQuery := state.execCalls[0]
@@ -229,10 +229,13 @@ func TestCreateTableInDatabaseBuildsCreateTableAndUpdatedTriggerQueries(t *testi
 	if !strings.Contains(state.execCalls[2], "CREATE TRIGGER update_users_timestamp") {
 		t.Fatalf("trigger statement query = %q, want users timestamp trigger", state.execCalls[2])
 	}
+	if !strings.Contains(state.execCalls[3], "INSERT INTO system_lang_key_translations") {
+		t.Fatalf("interface-label query = %q, want synchronized translation insert", state.execCalls[3])
+	}
 }
 
 func TestCreateTableInDatabaseAddsCascadeOnlyWhenExplicitlyRequested(t *testing.T) {
-	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}})
+	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}})
 
 	err := CreateTableInDatabase(db, "article_assets", map[string]string{
 		"id":         "serial",
@@ -248,8 +251,8 @@ func TestCreateTableInDatabaseAddsCascadeOnlyWhenExplicitlyRequested(t *testing.
 	if err != nil {
 		t.Fatalf("CreateTableInDatabase returned error: %v", err)
 	}
-	if len(state.execCalls) != 1 {
-		t.Fatalf("exec calls = %d, want 1", len(state.execCalls))
+	if len(state.execCalls) != 2 {
+		t.Fatalf("exec calls = %d, want 2", len(state.execCalls))
 	}
 
 	want := "CONSTRAINT fk_article_assets_article_id FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE"

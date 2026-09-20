@@ -22,10 +22,10 @@ func TestSitePresentationSettingsRouteContract(t *testing.T) {
 		methods []string
 	}{
 		"system_table_tools.GetSitePresentationSettingsHandler": {
-			path: "/api/site-presentation-settings", profile: "public", methods: []string{http.MethodGet},
+			path: "/api/site-presentation-settings", profile: "public", methods: []string{http.MethodGet, http.MethodHead},
 		},
 		"system_table_tools.AdminSitePresentationSettingsHandler": {
-			path: "/api/admin/site-presentation-settings", profile: "admin", methods: []string{http.MethodGet, http.MethodPost},
+			path: "/api/admin/site-presentation-settings", profile: "admin", methods: []string{http.MethodGet, http.MethodHead, http.MethodPost},
 		},
 	}
 
@@ -46,14 +46,6 @@ func TestSitePresentationSettingsRouteContract(t *testing.T) {
 		}
 		if !foundDefinition {
 			t.Fatalf("%s route definition is missing", handlerName)
-		}
-
-		contract, ok := router.GetRouteMethodContract(handlerName)
-		if !ok {
-			t.Fatalf("%s method contract is missing", handlerName)
-		}
-		if !equalStringSlices(contract.Methods, expected.methods) {
-			t.Fatalf("%s methods = %#v, want %#v", handlerName, contract.Methods, expected.methods)
 		}
 
 		foundManifest := false

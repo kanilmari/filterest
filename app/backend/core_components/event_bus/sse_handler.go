@@ -43,10 +43,6 @@ func serveSSESubscription(
 	subscribe sseDatasetSubscriber,
 	authorizeEvent sseEventAuthorizer,
 ) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {

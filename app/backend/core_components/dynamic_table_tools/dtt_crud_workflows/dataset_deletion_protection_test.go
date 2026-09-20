@@ -93,14 +93,6 @@ func TestDatasetSettingsReadRefusesAMissingOrUnsafeName(t *testing.T) {
 	}
 }
 
-func TestModifyColumnsStillRefusesOtherMethods(t *testing.T) {
-	rec := httptest.NewRecorder()
-	ModifyColumnsHandler(rec, httptest.NewRequest(http.MethodDelete, "/api/modify-columns", nil))
-	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET, POST" {
-		t.Fatalf("status = %d allow = %q", rec.Code, rec.Header().Get("Allow"))
-	}
-}
-
 func TestModifyColumnsCarriesTheDeletionSwitchOnlyWhenItIsSent(t *testing.T) {
 	var silent ModifyColumnsRequest
 	if err := json.Unmarshal([]byte(`{"dataset_name":"demo"}`), &silent); err != nil {

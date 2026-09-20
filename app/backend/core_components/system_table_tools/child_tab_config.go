@@ -30,10 +30,6 @@ type childTabConfigRow struct {
 // GetChildTabConfigHandler returns all legacy-named child-tab config rows for a parent table.
 // GET /api/child-tab-config/{parentTable}
 func GetChildTabConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	parentTable := strings.TrimPrefix(r.URL.Path, "/api/child-tab-config/")
 	if parentTable == "" {
@@ -75,10 +71,6 @@ type saveChildTabConfigRequest struct {
 // SaveChildTabConfigHandler bulk-upserts the legacy-named child-tab config rows for a parent table.
 // POST /api/child-tab-config/save
 func SaveChildTabConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req saveChildTabConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

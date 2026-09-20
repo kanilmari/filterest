@@ -157,26 +157,6 @@ func TestGetSitePresentationSettingsHandlerReturnsOnlyTypedAllowlist(t *testing.
 	}
 }
 
-func TestSitePresentationHandlersEnforceMethodContract(t *testing.T) {
-	publicResponse := httptest.NewRecorder()
-	GetSitePresentationSettingsHandler(
-		publicResponse,
-		httptest.NewRequest(http.MethodPost, "/api/site-presentation-settings", nil),
-	)
-	if publicResponse.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("public POST status = %d", publicResponse.Code)
-	}
-
-	adminResponse := httptest.NewRecorder()
-	AdminSitePresentationSettingsHandler(
-		adminResponse,
-		httptest.NewRequest(http.MethodDelete, "/api/admin/site-presentation-settings", nil),
-	)
-	if adminResponse.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("admin DELETE status = %d", adminResponse.Code)
-	}
-}
-
 func TestAdminSitePresentationSettingsHandlerPersistsValidatedWholeObject(t *testing.T) {
 	originalPersist := persistSitePresentationSettings
 	t.Cleanup(func() { persistSitePresentationSettings = originalPersist })

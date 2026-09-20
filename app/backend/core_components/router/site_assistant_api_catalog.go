@@ -83,7 +83,7 @@ var siteAssistantAccessNotes = []string{
 	"Calls run with the asking user's own rights; a route the user cannot use fails with 401 or 403.",
 	"access public: no login; login_only: any signed-in user; default and access_control_no_tx: signed-in user with the route or dataset permission; admin and admin_no_tx: administrator only.",
 	"Routes ending in / match every path below them; the handler reads the rest of the path.",
-	"Methods are listed only where the route has a curated method contract; otherwise read the summary.",
+	"Every route lists the request methods it accepts; HEAD accompanies ordinary GET reads.",
 	"Never change data with SQL; use these routes, read before writing and read back after writing.",
 }
 
@@ -109,10 +109,8 @@ func BuildSiteAssistantAPICatalog() (SiteAssistantAPICatalog, error) {
 			Handler:   definition.HandlerName,
 			Summary:   docs[definition.HandlerName],
 		}
-		if contract, ok := GetRouteMethodContract(definition.HandlerName); ok {
-			route.Methods = append([]string{}, contract.Methods...)
-			route.MethodSource = contract.Source
-		}
+		route.Methods = append([]string{}, definition.Methods...)
+		route.MethodSource = definition.MethodSource
 		routes = append(routes, route)
 	}
 	sort.Slice(routes, func(i, j int) bool { return routes[i].Path < routes[j].Path })
@@ -164,10 +162,7 @@ func RenderSiteAssistantAPICatalogMarkdown(catalog SiteAssistantAPICatalog) stri
 // this installation's HTTP API routes, access levels, methods and core request
 // shapes as JSON, or as Markdown with ?format=markdown for site assistant context.
 func siteAssistantAPICatalogHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	catalog, err := BuildSiteAssistantAPICatalog()
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "API catalog is unavailable")

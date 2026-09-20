@@ -13,10 +13,6 @@ import (
 // Between HTTP callers and DetectFromWorkingDirectory, it exposes a stable
 // public contract without requiring database access or private imports.
 func Handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(DetectFromWorkingDirectory()); err != nil {

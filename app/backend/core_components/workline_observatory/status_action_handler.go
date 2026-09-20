@@ -51,10 +51,7 @@ type worklineStatusActionResponse struct {
 
 // WorklineStatusActionsHandler applies one owner-confirmed status to a bounded selection.
 func WorklineStatusActionsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
-		return
-	}
+
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 1 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "not_authenticated")

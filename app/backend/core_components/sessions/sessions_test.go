@@ -377,16 +377,8 @@ func TestGetUserIDFromSessionHandlesSuccessAndValidationErrors(t *testing.T) {
 	}
 }
 
-func TestResetSessionHandlerRejectsInvalidRequests(t *testing.T) {
+func TestResetSessionHandlerRejectsCrossOriginPost(t *testing.T) {
 	initSessionTestStore(t)
-
-	getReq := httptest.NewRequest(http.MethodGet, "https://example.com/api/reset-session", nil)
-	getReq.Host = "example.com"
-	getRec := httptest.NewRecorder()
-	ResetSessionHandler(getRec, getReq)
-	if getRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET ResetSessionHandler status = %d, want 405", getRec.Code)
-	}
 
 	postReq := httptest.NewRequest(http.MethodPost, "https://example.com/api/reset-session", nil)
 	postReq.Host = "example.com"

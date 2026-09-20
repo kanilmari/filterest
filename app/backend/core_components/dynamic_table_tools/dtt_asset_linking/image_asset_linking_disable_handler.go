@@ -16,10 +16,6 @@ import (
 
 // DisableImageAssetLinkingHandler hides the upload UI by setting the image profile enabled flag to false.
 func DisableImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req disableImageAssetLinkingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

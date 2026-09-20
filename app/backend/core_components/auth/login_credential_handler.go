@@ -18,7 +18,6 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
-	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/otp"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -31,10 +30,7 @@ import (
 const localLoginFactorMaxAttempts = 5
 
 func LoginAPIHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	// AJAX JSON flow (new 2-step OTP login)
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "application/json") {

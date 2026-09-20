@@ -443,16 +443,3 @@ func TestAdminUserAuthenticationPostValidation(t *testing.T) {
 		})
 	}
 }
-
-func TestAdminUserAuthenticationHandlerMethodContract(t *testing.T) {
-	request := httptest.NewRequest(http.MethodDelete, "/api/admin/user-authentication", nil)
-	recorder := httptest.NewRecorder()
-	AdminUserAuthenticationHandler(recorder, request)
-
-	if recorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", recorder.Code)
-	}
-	if recorder.Header().Get("Allow") != "GET, POST" {
-		t.Fatalf("Allow = %q, want GET, POST", recorder.Header().Get("Allow"))
-	}
-}

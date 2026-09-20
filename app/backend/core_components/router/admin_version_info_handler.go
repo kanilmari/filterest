@@ -55,10 +55,6 @@ func currentAdminRuntimeMode() string {
 }
 
 func adminVersionInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	readiness := systemReadinessProbe()
 	var updateStatus releaseupdates.Status

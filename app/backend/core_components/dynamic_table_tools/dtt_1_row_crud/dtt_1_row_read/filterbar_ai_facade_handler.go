@@ -113,10 +113,6 @@ var errFilterbarAIForbidden = errors.New("forbidden")
 
 // FilterbarAICapabilitiesHandler returns the first narrow AI-facing capability contract for one dataset.
 func FilterbarAICapabilitiesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET accepted")
-		return
-	}
 
 	dataset := strings.TrimSpace(r.URL.Query().Get("dataset"))
 	if dataset == "" {
@@ -170,10 +166,6 @@ func FilterbarAICapabilitiesHandler(w http.ResponseWriter, r *http.Request) {
 
 // FilterbarAIQueryHandler delegates narrow AI read intents to canonical dataset read handlers.
 func FilterbarAIQueryHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST accepted")
-		return
-	}
 
 	var payload filterbarAIQueryRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {

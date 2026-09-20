@@ -24,10 +24,6 @@ type saveDatasetAliasManagementRequest struct {
 
 // GetDatasetAliasManagementHandler returns the admin alias editor read-model for all datasets.
 func GetDatasetAliasManagementHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	snapshot, err := dataset_routes.LoadDatasetAliasManagementSnapshot(backend.Db)
 	if err != nil {
@@ -41,10 +37,6 @@ func GetDatasetAliasManagementHandler(w http.ResponseWriter, r *http.Request) {
 
 // SaveDatasetAliasManagementHandler creates, replaces, or clears one dataset's primary alias.
 func SaveDatasetAliasManagementHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req saveDatasetAliasManagementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -36,10 +36,6 @@ var siteAssistantIdentitySetter = setAuthenticatedSessionIdentity
 // may write only calls the administrator has approved.
 func SiteAssistantDelegationExchangeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != http.MethodPost {
-		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"error": "method_not_allowed"})
-		return
-	}
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, siteAssistantExchangeBodyLimit+1))
 	if err != nil || len(body) > siteAssistantExchangeBodyLimit {

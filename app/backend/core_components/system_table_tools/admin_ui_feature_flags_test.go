@@ -35,27 +35,6 @@ func TestGetAdminUIFeatureFlagsHandlerReturnsOnlyAllowlistedFlag(t *testing.T) {
 	}
 }
 
-func TestGetAdminUIFeatureFlagsHandlerRejectsNonGetWithoutReadingConfig(t *testing.T) {
-	originalReader := readAdminUIFeatureFlags
-	readCalled := false
-	readAdminUIFeatureFlags = func() (AdminUIFeatureFlagsResponse, error) {
-		readCalled = true
-		return AdminUIFeatureFlagsResponse{}, nil
-	}
-	t.Cleanup(func() { readAdminUIFeatureFlags = originalReader })
-
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/ui-feature-flags", nil)
-	response := httptest.NewRecorder()
-	GetAdminUIFeatureFlagsHandler(response, request)
-
-	if response.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
-	}
-	if readCalled {
-		t.Fatal("non-GET request read protected configuration")
-	}
-}
-
 func TestGetAdminUIFeatureFlagsHandlerFailsClosedOnReadError(t *testing.T) {
 	originalReader := readAdminUIFeatureFlags
 	readAdminUIFeatureFlags = func() (AdminUIFeatureFlagsResponse, error) {

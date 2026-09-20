@@ -138,14 +138,3 @@ func TestAdminVersionInfoHandlerPostChecksAgain(t *testing.T) {
 		t.Fatalf("POST response = %#v, want forced upstream snapshot", response)
 	}
 }
-
-func TestAdminVersionInfoHandlerRejectsUnsupportedMethod(t *testing.T) {
-	request := httptest.NewRequest(http.MethodDelete, "/api/admin/version-info", nil)
-	recorder := httptest.NewRecorder()
-
-	adminVersionInfoHandler(recorder, request)
-
-	if recorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("adminVersionInfoHandler status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
-	}
-}

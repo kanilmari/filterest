@@ -123,10 +123,6 @@ func WithSystemActiveRequestTracking(next http.Handler) http.Handler {
 
 // healthHandler returns a simple readiness payload for infrastructure probes.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{
 		"status": "ok",
@@ -134,10 +130,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func systemHealthHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	if rejectDisallowedSystemManagerRequest(w, r) {
 		return
 	}
@@ -152,10 +145,7 @@ func systemHealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func systemReadyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	if rejectDisallowedSystemManagerRequest(w, r) {
 		return
 	}
@@ -173,10 +163,7 @@ func systemReadyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func systemInstanceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	if rejectDisallowedSystemManagerRequest(w, r) {
 		return
 	}

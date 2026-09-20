@@ -24,10 +24,6 @@ import (
 
 // UserProfileFetchHandler returns the authenticated user's username and email.
 func UserProfileFetchHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
@@ -78,10 +74,6 @@ type profileUpdateRequest struct {
 
 // UserProfileUpdateHandler updates the authenticated user's username, email, and/or password.
 func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
@@ -328,10 +320,6 @@ type emailChangeOTPRequest struct {
 
 // RequestEmailChangeOTPHandler sends an OTP to the new email address for verification.
 func RequestEmailChangeOTPHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
@@ -431,10 +419,6 @@ type passwordChangeOTPRequest struct {
 
 // RequestPasswordChangeOTPHandler sends an OTP to the user's current email for password change verification.
 func RequestPasswordChangeOTPHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {

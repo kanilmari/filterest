@@ -4,6 +4,10 @@
 // Keeps production permission distinct from missing runner configuration.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
+import {
+ isKnownCodingAgentRunnerKind,
+ getCodingAgentRunnerCopy,
+} from "./table_chat_coding_agent_copy.js";
 
 // The site's own language keys carry the translations; the English text here is
 // the fallback an installation without these keys still shows.
@@ -11,7 +15,6 @@ const COPY_KEYS = Object.freeze({
  failed: ["coding_agent_job_failed", "The coding job stopped or failed. Its log remains available to the administrator."],
  label: ["coding_agent_service_label", "AI service"],
  api: ["coding_agent_service_api", "API AI"],
- agent: ["coding_agent_service_agent", "Coding agent (Codex)"],
  waiting: ["coding_agent_checking", "Checking availability…"],
  unavailable: ["coding_agent_not_ready", "Coding agent is not ready. An administrator must finish its setup."],
  dev: ["coding_agent_dev_only", "Coding agent is restricted to development."],
@@ -46,13 +49,15 @@ export function createCodingAgentControl(dataset) {
  function render() {
   if (destroyed) return;
   const text = codingAgentCopy(), capability = control.capability;
-  label.textContent = text.label; api.textContent = text.api; agent.textContent = text.agent;
+  const runnerCopy = getCodingAgentRunnerCopy(capability?.runner_kind);
+  label.textContent = text.label; api.textContent = text.api; agent.textContent = runnerCopy.selectorLabel;
   // The administrator-protected GET is authoritative even when the older
   // synchronous route cache has not loaded or lacks this newly shipped route.
   const permitted = capability?.feature_enabled === true;
   row.hidden = !permitted;
-  agent.disabled = !(permitted && capability?.runner_ready === true);
-  status.textContent = capability ? (permitted && !capability.runner_ready ? text.unavailable : "") : "";
+  const supportedRunner = isKnownCodingAgentRunnerKind(capability?.runner_kind);
+  agent.disabled = !(permitted && capability?.runner_ready === true && supportedRunner);
+  status.textContent = capability ? (permitted && agent.disabled ? text.unavailable : "") : "";
   status.hidden = !status.textContent;
   if (!permitted || agent.disabled) select.value = "api_tools";
  }

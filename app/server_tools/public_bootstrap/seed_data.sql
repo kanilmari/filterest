@@ -3851,5 +3851,7 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260919000008_create_developer_workline_schema.sql'),
   ('20260919000009_seed_developer_workflow_metadata.sql'),
   ('20260919000010_record_developer_workflow_schema_release.sql'),
-  ('20260920000001_retire_queen_permissions.sql')
+  ('20260920000001_retire_queen_permissions.sql'),
+  ('20260920000002_create_dataset_interface_labels.sql'),
+  ('20260920000003_name_site_assistant_runtimes.sql')
 ON CONFLICT (filename) DO NOTHING;

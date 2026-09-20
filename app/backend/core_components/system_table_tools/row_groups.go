@@ -114,18 +114,13 @@ func AdminRowGroupsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		httpresponse.RespondWithJSON(w, http.StatusCreated, group)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+
 	}
 }
 
 // AdminRowGroupMembershipsHandler assigns or removes a group from a dataset row.
 // POST|DELETE /api/admin/row-group-memberships
 func AdminRowGroupMembershipsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	request, err := decodeRowGroupMembershipRequest(r.Body)
 	if err != nil {

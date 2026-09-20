@@ -26,10 +26,6 @@ import (
 // kokoaa vain tekstisarakkeet (VARCHAR/TEXT) yhdeksi tekstilauseeksi ja generoi
 // embeddingin embedding_vector-sarakkeeseen (lisää sarakkeen jos sitä ei ole).
 func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET method allowed for SSE")
-		return
-	}
 
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 0 {

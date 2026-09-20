@@ -76,10 +76,7 @@ var errProductionUpdateNoticeConflict = errors.New("production update notice con
 // The public route profile is intentional: the bearer/peer guard is narrower
 // than browser authentication and keeps this endpoint usable during API drain.
 func systemUpdateNoticeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	if rejectDisallowedSystemDrainManagerRequest(w, r) {
 		return
 	}
@@ -347,10 +344,7 @@ func applyProductionUpdateNoticeToDatabase(ctx context.Context, request producti
 // Subscribing before the first read prevents a local write between snapshot and
 // subscription from being missed; periodic snapshots cover other app nodes.
 func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Streaming not supported")

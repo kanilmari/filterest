@@ -45,10 +45,7 @@ func SaveSiteViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func saveViewFieldSet(w http.ResponseWriter, r *http.Request, siteDefault bool) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	userID, err := authenticatedViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())
@@ -321,10 +318,7 @@ func AssignSiteViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func assignViewFieldSet(w http.ResponseWriter, r *http.Request, siteDefault bool) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	userID, err := authenticatedViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())
@@ -415,10 +409,7 @@ func assignViewFieldSet(w http.ResponseWriter, r *http.Request, siteDefault bool
 // ResetPersonalViewFieldSetHandler removes only the session user's assignment;
 // the site default or metadata default becomes effective immediately.
 func ResetPersonalViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	userID, err := authenticatedViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())
@@ -462,10 +453,7 @@ func ResetPersonalViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
 // or group assignments. It leaves reusable field collections and every other
 // target intact so an override can be removed without deleting shared content.
 func ResetSharedViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	userID, err := authenticatedViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())
@@ -559,10 +547,7 @@ func DeleteSharedViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteViewFieldSet(w http.ResponseWriter, r *http.Request, shared bool) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	userID, err := authenticatedViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())

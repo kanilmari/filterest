@@ -4,6 +4,7 @@
 // Exists to keep the filterbar chat pinned to the API-first ai-chat facade.
 
 import { createCodingAgentControl } from './table_chat_coding_agent_control.js';
+import { getCodingAgentRunnerCopy } from './table_chat_coding_agent_copy.js';
 import { renderPendingChanges } from './table_chat_pending_changes.js';
 import { createChatAttachments } from './table_chat_attachments.js';
 import { refreshTableUnified } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
@@ -596,7 +597,9 @@ export function create_chat_ui(table_name, parent_element) {
     chat_ui_wrapper.appendChild(chat_container_full);
     parent_element.appendChild(chat_ui_wrapper);
     if (hasPendingCodingAgentJob(table_name)) {
-        const pending = append_pending_chat_message(table_name, 'codex_dev');
+        // Only external jobs survive a page reload; the local repository agent
+        // has no durable browser-side job identity to resume.
+        const pending = append_pending_chat_message(table_name, 'codex_dev', 'external');
         setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
         void start_codex_dev_query(table_name, '', pending).catch(error => {
             finish_pending_chat_message(table_name, pending, 'error', String(error.message));
@@ -626,7 +629,11 @@ export function create_chat_ui(table_name, parent_element) {
             configuredMode: configuredChatMode,
             codingAgentCapability: chat_mode_select?.capability,
         });
-        const pending_message = append_pending_chat_message(table_name, chatMode || configuredChatMode);
+        const pending_message = append_pending_chat_message(
+            table_name,
+            chatMode || configuredChatMode,
+            chat_mode_select?.capability?.runner_kind
+        );
         setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
 
         if (chatMode !== 'api_tools') {
@@ -963,24 +970,10 @@ function scroll_chat_to_bottom(chat_container) {
     }, 0);
 }
 
-function getPendingStatusMessages(mode) {
+function getPendingStatusMessages(mode, runnerKind) {
     const isEnglish = String(document.documentElement.lang || '').toLowerCase().startsWith('en');
     if (mode === 'codex_dev') {
-        return isEnglish
-            ? [
-                'Codex started working.',
-                'Codex is reading the chat and context.',
-                'Codex may inspect and edit the configured code workspace.',
-                'Codex is still working.',
-                'Long coding jobs may take up to 40 minutes.',
-            ]
-            : [
-                'Codex aloitti työn.',
-                'Codex lukee keskustelua ja kontekstia.',
-                'Codex voi tarkistaa ja muokata sille määritettyä koodityötilaa.',
-                'Codex työskentelee edelleen.',
-                'Pitkä koodaustyö voi kestää enintään 40 minuuttia.',
-            ];
+        return getCodingAgentRunnerCopy(runnerKind).pendingStatusMessages;
     }
     return isEnglish
         ? [
@@ -1014,7 +1007,7 @@ function render_pending_chat_message(pending_message) {
     pending_message.elapsed_text.textContent = formatPendingElapsed(pending_message.started_at_ms);
 }
 
-function append_pending_chat_message(table_name, mode) {
+function append_pending_chat_message(table_name, mode, runnerKind = '') {
     const chat_container = document.getElementById(`${table_name}_chat_container`);
     if (!chat_container) return null;
 
@@ -1049,7 +1042,7 @@ function append_pending_chat_message(table_name, mode) {
         text_elem,
         status_text,
         elapsed_text,
-        status_messages: getPendingStatusMessages(mode),
+        status_messages: getPendingStatusMessages(mode, runnerKind),
         status_index: 0,
         started_at_ms: Date.now(),
         interval_id: 0,

@@ -72,18 +72,6 @@ func TestSystemAutomationAccountHandlerRejectsWrongPeerOrToken(t *testing.T) {
 	}
 }
 
-func TestSystemAutomationAccountHandlerRejectsWrongMethodBeforeCredentialWork(t *testing.T) {
-	request := newAutomationAccountManagerRequest(http.MethodDelete, "")
-	recorder := httptest.NewRecorder()
-	systemAutomationAccountHandler(recorder, request)
-	if recorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
-	}
-	if recorder.Header().Get("Allow") != "GET, POST" {
-		t.Fatalf("Allow = %q", recorder.Header().Get("Allow"))
-	}
-}
-
 func TestSystemAutomationAccountHandlerRejectsMalformedOrUnknownPayload(t *testing.T) {
 	t.Setenv("EASELECT_SYSTEM_MANAGER_TOKEN", automationAccountTestManagerToken)
 	secret := "do-not-echo-this-password-41"
@@ -144,8 +132,9 @@ func TestSystemAutomationAccountRouteAndProfileContract(t *testing.T) {
 	}
 
 	contract, ok := GetRouteMethodContract("router.systemAutomationAccountHandler")
-	if !ok || contract.Source != RouteMethodSourceExplicitStableContract ||
-		len(contract.Methods) != 2 || contract.Methods[0] != http.MethodGet || contract.Methods[1] != http.MethodPost {
+	if !ok || contract.Source != RouteMethodSourceRegistration ||
+		len(contract.Methods) != 3 || contract.Methods[0] != http.MethodGet ||
+		contract.Methods[1] != http.MethodHead || contract.Methods[2] != http.MethodPost {
 		t.Fatalf("method contract = %#v, found=%v", contract, ok)
 	}
 	profile := pipeline.GetProfile("router.systemAutomationAccountHandler")

@@ -111,6 +111,15 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
             (4,'dtt_1_row_read.FilterbarAICodexQueryHandler',true,false),
             (5,'router.RetiredHandler',true,true),
             (6,'system_table_tools.GetGroupedTables',false,false);
+        -- Creating a dataset now also names it and its columns for the
+        -- interface, so the fixture carries the two stores those names live in.
+        -- Without them the fixture passes for a reason production does not share.
+        CREATE TABLE system_lang_keys(id bigserial PRIMARY KEY,lang_key text UNIQUE,fi text,en text,ch text,yue text,lang_key_type integer,creation_spec text,created timestamp DEFAULT now(),updated timestamp DEFAULT now());
+        CREATE TABLE system_lang_key_translations(id bigserial PRIMARY KEY,lang_key_id bigint REFERENCES system_lang_keys(id) ON DELETE CASCADE,language_code text,translation text,source_kind text,review_status text,created timestamptz DEFAULT now(),updated timestamptz DEFAULT now(),UNIQUE(lang_key_id,language_code));
+        CREATE TABLE system_lang_key_sources(id serial PRIMARY KEY,lang_key_id integer,source_type text,source_high text,source_low text,last_seen date,usage_explanation text,UNIQUE(lang_key_id,source_type,source_high));
+        CREATE TABLE system_languages(id bigserial PRIMARY KEY,language_code text UNIQUE,english_name text,native_name text,is_enabled boolean DEFAULT false,is_default boolean DEFAULT false,sort_order integer DEFAULT 0);
+        INSERT INTO system_languages(language_code,english_name,native_name,is_enabled,is_default,sort_order)
+            VALUES ('fi','Finnish','suomi',true,true,10),('en','English','English',true,false,20);
         CREATE TABLE existing_dataset(id integer PRIMARY KEY,title text);
         INSERT INTO existing_dataset VALUES(1,'preserved');
     `)

@@ -77,10 +77,6 @@ func updateColumnMultilingual(
 // used instead of the legacy system_column_details.id compatibility field.
 // POST /api/admin/column-multilingual
 func UpdateColumnMultilingualHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()

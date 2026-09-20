@@ -227,7 +227,7 @@ class CodingJobs:
             raise JobError(400, "fresh site access is required")
         with self.lock:
             state = self.read(job_id, actor, dataset)
-            if state.get("status") != "awaiting_approval":
+            if state.get("status") not in {"awaiting_approval", "apply_failed"}:
                 raise JobError(409, "this job has no changes waiting for approval")
             if self.busy:
                 raise JobError(429, "one coding job is already running")

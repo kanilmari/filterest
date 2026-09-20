@@ -45,6 +45,7 @@ export function renderPendingChanges(container, { dataset, jobId, changes, onApp
         return null;
     }
     const text = pendingChangesCopy();
+    let currentChanges = changes;
     const section = document.createElement("section");
     section.className = "chat_pending_changes";
     section.dataset.jobId = String(jobId || "");
@@ -100,15 +101,18 @@ export function renderPendingChanges(container, { dataset, jobId, changes, onApp
         status.hidden = false;
         status.textContent = text.running;
         try {
-            const result = await approvePendingChanges({ dataset, jobId, changes });
+            const result = await approvePendingChanges({ dataset, jobId, changes: currentChanges });
             const applied = Array.isArray(result?.pending_changes) ? result.pending_changes : [];
+            currentChanges = applied;
             applied.forEach((change, index) => {
                 const item = list.children[index];
                 if (item) item.dataset.status = String(change?.status || "pending");
             });
             const failed = applied.find((change) => change?.status === "failed");
             status.textContent = failed ? text.failed : text.done;
-            if (failed) approve.disabled = false;
+            const canRetry = result?.status === "apply_failed" &&
+                applied.some((change) => change?.status !== "done");
+            approve.disabled = !canRetry;
             if (typeof onApproved === "function") await onApproved(result);
         } catch (error) {
             status.textContent = text.error;
@@ -134,6 +138,7 @@ export function approvePendingChanges({ dataset, jobId, changes }) {
                 .map((change) => ({
                     method: String(change?.method || "").toUpperCase(),
                     path: String(change?.path || ""),
+                    query: String(change?.approval_query || ""),
                     body_sha256: String(change?.body_sha256 || ""),
                 })),
         },

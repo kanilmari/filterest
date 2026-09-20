@@ -28,10 +28,6 @@ type queryer interface {
 
 // GetTriggersHandler lukee kaikki herätteet (GET /api/system_triggers/list)
 func GetTriggersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	tx, ok := dbutils.GetTx(r.Context())
 	if !ok {
@@ -55,10 +51,6 @@ func GetTriggersHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateTriggerHandler luo uuden herätteen (POST /api/system_triggers/create)
 func CreateTriggerHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	tx, ok := dbutils.GetTx(r.Context())
 	if !ok {

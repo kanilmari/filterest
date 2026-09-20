@@ -50,10 +50,6 @@ var datasetSortDefaultSave = saveDatasetSortDefault
 // GetDatasetSortDefaultHandler returns the current user's override when one exists,
 // otherwise the site-wide default. Anonymous visitors receive only the site default.
 func GetDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	dataset, err := security.SanitizeIdentifier(strings.TrimSpace(r.URL.Query().Get("dataset")))
 	if err != nil {
@@ -123,10 +119,6 @@ func GetDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
 // SaveDatasetSortDefaultHandler saves an administrator's own default or the
 // site-wide default. The route uses the administrator pipeline profile.
 func SaveDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var request saveDatasetSortDefaultRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -151,10 +143,6 @@ func SaveDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
 // default. Its request intentionally has no scope field, so the login-only route
 // cannot be used to select or overwrite the site-wide row.
 func SavePersonalDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var request savePersonalDatasetSortDefaultRequest
 	decoder := json.NewDecoder(r.Body)

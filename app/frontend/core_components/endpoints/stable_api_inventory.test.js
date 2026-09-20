@@ -55,8 +55,8 @@ describe('stable_api_inventory', () => {
             handlerName: 'auth.UserPermissionsHandler',
             backendPath: '/api/user-permissions',
             accessProfile: 'login_only',
-            methods: ['GET'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD'],
+            methodSource: 'route_registration',
             responseShape: 'UserPermissionsResponse',
         });
         expect(getTypedStableRouteDescriptor('getResults')).toBeNull();
@@ -88,7 +88,7 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/dataset-alias-management/save',
             accessProfile: 'admin',
             methods: ['POST'],
-            methodSource: 'explicit_stable_contract',
+            methodSource: 'route_registration',
             availableScenarios: ['production', 'development', 'api_language'],
         });
 
@@ -96,8 +96,8 @@ describe('stable_api_inventory', () => {
             handlerName: 'router.adminVersionInfoHandler',
             backendPath: '/api/admin/version-info',
             accessProfile: 'admin',
-            methods: ['GET', 'POST'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD', 'POST'],
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('savePersonalDatasetSortDefault')).toMatchObject({
@@ -105,23 +105,23 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/dataset-sort-default/personal',
             accessProfile: 'login_only',
             methods: ['POST'],
-            methodSource: 'explicit_stable_contract',
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('adminSymbols')).toMatchObject({
             handlerName: 'symbol_registry.AdminHandler',
             backendPath: '/api/admin/symbols',
             accessProfile: 'admin',
-            methods: ['GET', 'POST'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD', 'POST'],
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('adminUiFeatureFlags')).toMatchObject({
             handlerName: 'system_table_tools.GetAdminUIFeatureFlagsHandler',
             backendPath: '/api/admin/ui-feature-flags',
             accessProfile: 'admin',
-            methods: ['GET'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD'],
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('adminLangKey')).toMatchObject({
@@ -129,31 +129,31 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/admin/lang-key',
             accessProfile: 'admin',
             methods: ['POST'],
-            methodSource: 'explicit_stable_contract',
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('sitePresentationSettings')).toMatchObject({
             handlerName: 'system_table_tools.GetSitePresentationSettingsHandler',
             backendPath: '/api/site-presentation-settings',
             accessProfile: 'public',
-            methods: ['GET'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD'],
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('adminSitePresentationSettings')).toMatchObject({
             handlerName: 'system_table_tools.AdminSitePresentationSettingsHandler',
             backendPath: '/api/admin/site-presentation-settings',
             accessProfile: 'admin',
-            methods: ['GET', 'POST'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD', 'POST'],
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('adminRowGroups')).toMatchObject({
             handlerName: 'system_table_tools.AdminRowGroupsHandler',
             backendPath: '/api/admin/row-groups',
             accessProfile: 'admin',
-            methods: ['GET', 'POST'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD', 'POST'],
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('adminRowGroupMemberships')).toMatchObject({
@@ -161,7 +161,7 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/admin/row-group-memberships',
             accessProfile: 'admin',
             methods: ['POST', 'DELETE'],
-            methodSource: 'explicit_stable_contract',
+            methodSource: 'route_registration',
         });
 
         expect(getStableCandidateRouteDescriptor('saveDatasetHeaderConfig')).toMatchObject({
@@ -169,7 +169,7 @@ describe('stable_api_inventory', () => {
             backendPath: '/api/dataset-header-config/save',
             accessProfile: 'admin',
             methods: ['POST'],
-            methodSource: 'explicit_stable_contract',
+            methodSource: 'route_registration',
             availableScenarios: ['production', 'development', 'api_language'],
         });
 
@@ -177,8 +177,8 @@ describe('stable_api_inventory', () => {
             handlerName: 'auth.AdminUserAuthenticationHandler',
             backendPath: '/api/admin/user-authentication',
             accessProfile: 'admin',
-            methods: ['GET', 'POST'],
-            methodSource: 'explicit_stable_contract',
+            methods: ['GET', 'HEAD', 'POST'],
+            methodSource: 'route_registration',
             availableScenarios: ['production', 'development', 'api_language'],
         });
 
@@ -186,8 +186,8 @@ describe('stable_api_inventory', () => {
             handlerName: 'devtools.CheckJsonInTextColumnsHandler',
             backendPath: '/api/check-json-columns',
             accessProfile: 'admin',
-            methods: [],
-            methodSource: null,
+            methods: ['GET', 'HEAD'],
+            methodSource: 'route_registration',
             availableScenarios: ['development'],
         });
     });

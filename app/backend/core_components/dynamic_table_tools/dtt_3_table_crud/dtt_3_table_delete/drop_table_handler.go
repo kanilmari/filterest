@@ -24,10 +24,6 @@ type DropTableRequest struct {
 }
 
 func DropTableHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	var req DropTableRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

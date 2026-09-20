@@ -124,6 +124,7 @@ def pending_change_entries(session):
         entries.append({
             "method": approval["method"],
             "path": approval["path"],
+            "approval_query": approval.get("query", ""),
             "body_sha256": approval["body_sha256"],
             "query": attempt.get("query") or {},
             "body": attempt.get("body"),
@@ -205,7 +206,7 @@ def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=SiteAPISe
     session = session_factory(access["site_base_url"])
     session.exchange(access["delegation_code"])
     results = []
-    for entry in pending:
+    for index, entry in enumerate(pending):
         if entry.get("status") == "done":
             results.append(entry)
             continue
@@ -217,7 +218,9 @@ def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=SiteAPISe
         applied["result"] = result.get("body")
         results.append(applied)
         if applied["status"] == "failed":
-            # Stop at the first failure; the rest stays approved but unrun.
+            # Stop at the first failure. The approval ends with this apply
+            # request, so untouched calls remain pending for fresh approval.
+            results.extend(dict(remaining) for remaining in pending[index + 1:])
             break
 
     done = all(entry.get("status") == "done" for entry in results) and len(results) == len(pending)

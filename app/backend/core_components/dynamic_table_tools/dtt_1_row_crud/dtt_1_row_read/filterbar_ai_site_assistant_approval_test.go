@@ -19,19 +19,20 @@ const approvalJobID = "00000000-0000-0000-0000-0000000000ab"
 
 func waitingChange() codingAgentPlanEntry {
 	return codingAgentPlanEntry{
-		Method:   http.MethodPost,
-		Path:     "/api/update-row",
-		BodyHash: strings.Repeat("d", 64),
-		Query:    map[string]interface{}{"dataset": "app_notes"},
-		Body:     map[string]interface{}{"id": 1},
-		Status:   "pending",
+		Method:        http.MethodPost,
+		Path:          "/api/update-row",
+		ApprovalQuery: "dataset=app_notes",
+		BodyHash:      strings.Repeat("d", 64),
+		Query:         map[string]interface{}{"dataset": "app_notes"},
+		Body:          map[string]interface{}{"id": 1},
+		Status:        "pending",
 	}
 }
 
 func approvalBody(hash string) string {
 	payload, _ := json.Marshal(siteAssistantApprovalRequest{
 		Dataset: "app_notes", JobID: approvalJobID,
-		Approvals: []siteAssistantApprovalEntry{{Method: "post", Path: "/api/update-row", BodyHash: hash}},
+		Approvals: []siteAssistantApprovalEntry{{Method: "post", Path: "/api/update-row", Query: "dataset=app_notes", BodyHash: hash}},
 	})
 	return string(payload)
 }
@@ -98,6 +99,23 @@ func TestApprovalRefusesChangesTheJobNeverPrepared(t *testing.T) {
 	}
 }
 
+func TestApprovalMatchesOnlyTheCanonicalWaitingQuery(t *testing.T) {
+	waiting := waitingChange()
+	waiting.ApprovalQuery = "label=some+value&dataset=app_notes"
+	matching := siteAssistantApprovalEntry{
+		Method: "post", Path: waiting.Path, Query: "dataset=app_notes&label=some%20value", BodyHash: waiting.BodyHash,
+	}
+	approved, err := matchWaitingChanges([]codingAgentPlanEntry{waiting}, []siteAssistantApprovalEntry{matching})
+	if err != nil || len(approved) != 1 || approved[0].Query != "dataset=app_notes&label=some+value" {
+		t.Fatalf("equivalent query should match canonically: %+v, %v", approved, err)
+	}
+
+	matching.Query = "dataset=app_tasks&label=some+value"
+	if _, err := matchWaitingChanges([]codingAgentPlanEntry{waiting}, []siteAssistantApprovalEntry{matching}); err == nil {
+		t.Fatal("approval for another query target must be refused")
+	}
+}
+
 func TestApprovalRequiresAdministratorAndValidRequest(t *testing.T) {
 	var applied siteAssistantApplyRequest
 	withFakeRunner(t, &applied, []codingAgentPlanEntry{waitingChange()})
@@ -122,13 +140,7 @@ func TestApprovalRequiresAdministratorAndValidRequest(t *testing.T) {
 		}
 	}
 
-	getRecorder := httptest.NewRecorder()
-	SiteAssistantApprovalHandler(getRecorder, codingAgentSessionRequest(t, http.MethodGet,
-		"/api/app/ai-chat/site-assistant-approval", "", "admin", "test_admin_12"))
-	if getRecorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET = %d", getRecorder.Code)
-	}
 	if applied.SiteAssistant != nil {
-		t.Fatal("a refused approval must not reach the runner")
+		t.Fatal("an invalid approval must not reach the runner")
 	}
 }

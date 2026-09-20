@@ -1,5 +1,5 @@
 // dataset_search_component_builder.js
-// Builds dataset-search UI components and composes panel and header structures.
+// Builds dataset-search UI components and composes their panel structures.
 // Bridges component events with shared search state, URL synchronisation, and location/execution helpers.
 // Exists to isolate DOM construction from shared state and streaming implementation details.
 
@@ -24,10 +24,6 @@ import {
     registerDatasetSearchComponent,
     shouldRenderLocationCheckbox,
 } from "./dataset_search_state_reader.js";
-import {
-    DEFAULT_TITLE_LANG_KEY_MODE,
-    buildDatasetSearchHeader,
-} from "./dataset_search_header_builder.js";
 import {
     getStoredGpsCoords,
     requestGpsPosition,
@@ -543,19 +539,8 @@ export function createDatasetSearchPanel(tableName, options = {}) {
     const {
         variant = "filterbar",
         panelClasses = ["dataset-search-panel"],
-        titleLangKeyMode = DEFAULT_TITLE_LANG_KEY_MODE,
-        headerClassList = [],
-        titleWrapperClasses = ["dataset-search-title"],
-        titleTextClasses = ["dataset-search-title-text"],
-        subtitleWrapperClasses = ["dataset-search-subtitle"],
-        subtitleTextClasses = ["dataset-search-subtitle-text"],
-        subtitleLangKey = null,
-        subtitleFallbackText = "",
-        actionsWrapperClasses = [],
-        headerActions = [],
         searchComponentOptions = {},
         placeholder = undefined,
-        skipHeader = false,
     } = options;
 
     const normalizedVariant = normalizeVariantName(variant);
@@ -564,22 +549,6 @@ export function createDatasetSearchPanel(tableName, options = {}) {
     searchPanel.classList.add(...panelClasses.filter(Boolean));
     searchPanel.dataset.datasetSearch = tableName;
     searchPanel.dataset.datasetSearchVariant = normalizedVariant;
-
-    if (!skipHeader) {
-        const titleRow = buildDatasetSearchHeader(tableName, {
-            titleLangKeyMode,
-            headerClassList,
-            titleWrapperClasses,
-            titleTextClasses,
-            subtitleWrapperClasses,
-            subtitleTextClasses,
-            subtitleLangKey,
-            subtitleFallbackText,
-            actionsWrapperClasses,
-            headerActions,
-        });
-        searchPanel.appendChild(titleRow);
-    }
 
     const searchComponent = createDatasetSearchComponent(tableName, {
         placeholder,

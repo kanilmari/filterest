@@ -52,6 +52,8 @@ class FakeSite:
                 })
                 key = (request.get_method(), urllib.parse.urlsplit(request.full_url).path)
                 status, payload = site.responses[key]
+                if callable(payload):
+                    payload = payload(request)
                 if status >= 400:
                     raise urllib.error.HTTPError(request.full_url, status, "error", {},
                                                  io.BytesIO(json.dumps(payload).encode()))
@@ -91,7 +93,7 @@ def test_refused_write_becomes_a_plan_entry_without_repeats():
         ("GET", "/api/csrf-token"): (200, {"csrf_token": "token-1"}),
         ("POST", "/api/update-row"): (403, {
             "error": "site_assistant_approval_required",
-            "call": {"method": "POST", "path": "/api/update-row", "body_sha256": "a" * 64},
+            "call": {"method": "POST", "path": "/api/update-row", "query": "dataset=app_notes", "body_sha256": "a" * 64},
         }),
     })
     session.exchange("fsa1_code")
@@ -103,6 +105,40 @@ def test_refused_write_becomes_a_plan_entry_without_repeats():
     assert second["needs_approval"]
     plan = session.planned_writes()
     assert len(plan) == 1 and plan[0]["body"] == body and plan[0]["query"] == {"dataset": "app_notes"}
+
+
+def test_query_target_is_part_of_the_plan_identity_and_is_canonical():
+    body = {"ids": [7]}
+
+    def refusal(request):
+        pairs = urllib.parse.parse_qsl(urllib.parse.urlsplit(request.full_url).query, keep_blank_values=True)
+        return {
+            "error": "site_assistant_approval_required",
+            "call": {
+                "method": "POST",
+                "path": "/api/delete-rows",
+                "query": urllib.parse.urlencode(sorted(pairs)),
+                "body_sha256": "b" * 64,
+            },
+        }
+
+    session, _ = make_session({
+        ("POST", "/api/site-assistant/delegation/exchange"): (200, {"authenticated": True, "delegation_id": "abc"}),
+        ("GET", "/api/csrf-token"): (200, {"csrf_token": "token-1"}),
+        ("POST", "/api/delete-rows"): (403, refusal),
+    })
+    session.exchange("fsa1_code")
+
+    session.call("POST", "/api/delete-rows", query={"dataset": "app_notes", "label": "some value"}, body=body)
+    session.call("POST", "/api/delete-rows", query={"label": "some value", "dataset": "app_notes"}, body=body)
+    session.call("POST", "/api/delete-rows", query={"dataset": "app_tasks", "label": "some value"}, body=body)
+
+    plan = session.planned_writes()
+    assert len(plan) == 2
+    assert [entry["approval"]["query"] for entry in plan] == [
+        "dataset=app_notes&label=some+value",
+        "dataset=app_tasks&label=some+value",
+    ]
 
 
 def test_writes_carry_a_csrf_token_and_reads_do_not():

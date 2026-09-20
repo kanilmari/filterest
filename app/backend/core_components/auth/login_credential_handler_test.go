@@ -162,21 +162,6 @@ func decodeJSONBody(t *testing.T, rr *httptest.ResponseRecorder) map[string]inte
 	return payload
 }
 
-func TestLoginAPIHandler_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/login", nil)
-	rr := httptest.NewRecorder()
-
-	LoginAPIHandler(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusMethodNotAllowed)
-	}
-	body := decodeJSONBody(t, rr)
-	if body["error"] != "Method not allowed" {
-		t.Fatalf("unexpected body: %#v", body)
-	}
-}
-
 func TestLoginAPIHandler_JSONRateLimitBlocked(t *testing.T) {
 	resetRateLimiter()
 	ip := "10.10.10.10"

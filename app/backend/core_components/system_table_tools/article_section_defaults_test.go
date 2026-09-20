@@ -86,16 +86,6 @@ func TestArticleSectionDefaultsMissingKeysOpenAndViewsStayIndependent(t *testing
 	}
 }
 
-func TestArticleSectionHandlersRejectUnsupportedMethods(t *testing.T) {
-	for _, handler := range []http.HandlerFunc{GetArticleSectionDefaultsHandler, SaveArticleSectionDefaultsHandler} {
-		rec := httptest.NewRecorder()
-		handler(rec, httptest.NewRequest(http.MethodDelete, "/", nil))
-		if rec.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("status=%d", rec.Code)
-		}
-	}
-}
-
 func articleSectionFixture(t *testing.T) *sql.DB {
 	t.Helper()
 	db := sitePresentationDisposableDB(t)

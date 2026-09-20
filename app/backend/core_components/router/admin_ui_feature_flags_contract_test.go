@@ -32,8 +32,8 @@ func TestAdminUIFeatureFlagsRouteContract(t *testing.T) {
 		if !ok {
 			t.Fatal("method contract is missing")
 		}
-		if len(contract.Methods) != 1 || contract.Methods[0] != http.MethodGet {
-			t.Fatalf("methods = %#v, want GET", contract.Methods)
+		if len(contract.Methods) != 2 || contract.Methods[0] != http.MethodGet || contract.Methods[1] != http.MethodHead {
+			t.Fatalf("methods = %#v, want GET and HEAD", contract.Methods)
 		}
 
 		manifest, err := router.BuildDefaultRouteManifest()
@@ -44,8 +44,8 @@ func TestAdminUIFeatureFlagsRouteContract(t *testing.T) {
 			if manifestRoute.HandlerName != handlerName {
 				continue
 			}
-			if len(manifestRoute.Methods) != 1 || manifestRoute.Methods[0] != http.MethodGet {
-				t.Fatalf("manifest methods = %#v, want GET", manifestRoute.Methods)
+			if len(manifestRoute.Methods) != 2 || manifestRoute.Methods[0] != http.MethodGet || manifestRoute.Methods[1] != http.MethodHead {
+				t.Fatalf("manifest methods = %#v, want GET and HEAD", manifestRoute.Methods)
 			}
 			for _, scenario := range manifestRoute.Scenarios {
 				if scenario.ProfileName != "admin" {

@@ -1,0 +1,24 @@
+{
+    "name": "file_name_convention_checker",
+    "description": "Audit frontend filename meaning and import integrity, then fix only verified violations",
+    "steps": [
+        {
+            "name": "audit_naming_and_imports",
+            "description": "Audit frontend JavaScript filenames against the open naming contract and check imports",
+            "backend": "claude",
+            "fallback_backend": "",
+            "research": true,
+            "full_access": false,
+            "prompt_template": "You are auditing the Filterest frontend for filename clarity and import integrity.\n\nFilterest application source: `{{FILTEREST_APPLICATION_ROOT}}`\n\n## Step 1: Read the canonical rules\n\nRead `{{FILTEREST_APPLICATION_ROOT}}/docs/instructions_and_documentation/DEV_GUIDE.md` section 3, especially Cross-Language Naming Contract, and `{{FILTEREST_APPLICATION_ROOT}}/docs/instructions_and_documentation/Frontend_Guide.md` section 6. Do not rely on historical filename audits as current policy.\n\nKey rules:\n- Human-maintained production JavaScript normally uses `[subject]_[role].js`.\n- The documented 13 roles are a core palette, not a closed whitelist. A precise agent-noun extension is valid when it describes one coherent responsibility better.\n- Subject-qualified `_helpers`, `_utils`, and `_common` are discouraged but valid only for a small cohesive same-subject collection with no dominant role. Bare generic names are prohibited. `_misc` is prohibited.\n- `_factory`, `_store`, `_service`, and `_manager` require the same evidence as any other broad role; prefer a more exact role when available.\n- Use snake_case. Pure data/config, generated/vendor files, required entrypoints, and tests that mirror a production basename are structural exceptions.\n- A filename must pass the Boss PowerPoint Test: a non-technical executive can explain it in one sentence.\n\n## Step 2: Audit frontend JavaScript\n\nList human-maintained `.js` files under `{{FILTEREST_APPLICATION_ROOT}}/frontend/core_components/` and `{{FILTEREST_APPLICATION_ROOT}}/frontend/reusable_components/`. For each file, read its header and enough implementation to determine its real responsibility. Classify it as COMPLIANT, VIOLATION, NEEDS_SPLIT, or EXCEPTION. Do not flag a filename solely because its accurate role is outside the core palette. For a constrained collection suffix, prove or reject each required condition.\n\n## Step 3: Check imports\n\nRun:\n```bash\ncd \"{{FILTEREST_APPLICATION_ROOT}}\"\nnode frontend/check_js_imports.js frontend/main.js --exclude=node_modules/**,dist/**,frontend/check_js_imports.js\n```\n\n## Output\n\nReport counts, evidence for every violation or split, a precise suggested name, its one-sentence explanation, constrained-exception reasoning where relevant, and the complete import-check result. Date: {{DATE}}"
+        },
+        {
+            "name": "fix_violations",
+            "description": "Rename only confirmed violations, update references, and verify integrity",
+            "backend": "claude",
+            "fallback_backend": "",
+            "research": false,
+            "full_access": false,
+            "prompt_template": "You are reviewing and, where safe, fixing the Filterest frontend naming audit below.\n\nFilterest application source: `{{FILTEREST_APPLICATION_ROOT}}`\n\n{{PREVIOUS_OUTPUT}}\n\nRead the current naming rules again before editing. Confirm every finding against the file's actual responsibility. Do not rename a file merely because its precise role is outside the core palette, and do not rename a valid subject-qualified `_helpers`, `_utils`, or `_common` collection. Do not split multi-role files automatically or touch generated, vendored, required entrypoint, test-pair, or historical evidence filenames. Defer ambiguous cases and any rename with more than 15 importers for human review.\n\nFor each clear violation, use `git mv`, update its header and every reference found with `rg`, and verify after each rename with:\n```bash\ncd \"{{FILTEREST_APPLICATION_ROOT}}\"\nnode frontend/check_js_imports.js frontend/main.js --exclude=node_modules/**,dist/**,frontend/check_js_imports.js\n```\n\nAfter all safe renames, run the import check once more and `npm run build` from `{{FILTEREST_APPLICATION_ROOT}}`. Report renamed files, false positives, deferred findings, updated non-JavaScript references, build/import results, and anything still non-compliant. Preserve historical statements about earlier names instead of rewriting history."
+        }
+    ]
+}

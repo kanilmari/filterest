@@ -341,7 +341,7 @@ func TestParseAdvancedSearch(t *testing.T) {
 			want:  []Token{inc(strings.Repeat("a", 1000))},
 		},
 		{
-			name:  "many space-separated words",
+			name: "many space-separated words",
 			input: strings.Join(func() []string {
 				words := make([]string, 50)
 				for i := range words {

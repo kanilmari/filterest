@@ -89,6 +89,7 @@ class SiteAPISession:
             result["approval"] = {
                 "method": call.get("method", method),
                 "path": call.get("path", path),
+                "query": call.get("query", ""),
                 "body_sha256": call.get("body_sha256", ""),
             }
             self._record_plan_entry(result["approval"], query, body)

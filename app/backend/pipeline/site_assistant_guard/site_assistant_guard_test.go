@@ -115,7 +115,7 @@ func TestGuardAllowsAssistantReadsAndBlocksUnapprovedWrites(t *testing.T) {
 
 	writeRecorder := httptest.NewRecorder()
 	WithSiteAssistantGuardStore(delegationStore, echoHandler(&seen))(writeRecorder,
-		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row", `{"id":3}`, sessionValues))
+		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row?label=some%20value&dataset=app_notes", `{"id":3}`, sessionValues))
 	if writeRecorder.Code != http.StatusForbidden {
 		t.Fatalf("unapproved assistant write = %d", writeRecorder.Code)
 	}
@@ -128,6 +128,7 @@ func TestGuardAllowsAssistantReadsAndBlocksUnapprovedWrites(t *testing.T) {
 	}
 	if refusal.Error != "site_assistant_approval_required" ||
 		refusal.Call["path"] != "/api/update-row" ||
+		refusal.Call["query"] != "dataset=app_notes&label=some+value" ||
 		refusal.Call["body_sha256"] != site_assistant.HashRequestBody([]byte(`{"id":3}`)) {
 		t.Fatalf("refusal must describe the call for the plan: %+v", refusal)
 	}
@@ -138,7 +139,8 @@ func TestGuardRunsAnApprovedWriteExactlyOnceAndKeepsTheBody(t *testing.T) {
 	delegationStore, delegation := issueGuardDelegation(t)
 	body := `{"id":4,"updates":[{"column":"header","value":"New"}]}`
 	if err := delegationStore.Approve(delegation.ID, []site_assistant.ApprovedCall{{
-		Method: http.MethodPost, Path: "/api/update-row", BodyHash: site_assistant.HashRequestBody([]byte(body)),
+		Method: http.MethodPost, Path: "/api/update-row", Query: "dataset=app_notes&label=some%20value",
+		BodyHash: site_assistant.HashRequestBody([]byte(body)),
 	}}); err != nil {
 		t.Fatalf("Approve: %v", err)
 	}
@@ -148,16 +150,23 @@ func TestGuardRunsAnApprovedWriteExactlyOnceAndKeepsTheBody(t *testing.T) {
 	}
 	var seen string
 
+	wrongTarget := httptest.NewRecorder()
+	WithSiteAssistantGuardStore(delegationStore, echoHandler(&seen))(wrongTarget,
+		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row?dataset=app_tasks&label=some+value", body, sessionValues))
+	if wrongTarget.Code != http.StatusForbidden {
+		t.Fatalf("write to another query target = %d, want 403", wrongTarget.Code)
+	}
+
 	first := httptest.NewRecorder()
 	WithSiteAssistantGuardStore(delegationStore, echoHandler(&seen))(first,
-		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row", body, sessionValues))
+		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row?label=some+value&dataset=app_notes", body, sessionValues))
 	if first.Code != http.StatusOK || seen != body {
 		t.Fatalf("approved write = %d, handler saw %q", first.Code, seen)
 	}
 
 	second := httptest.NewRecorder()
 	WithSiteAssistantGuardStore(delegationStore, echoHandler(&seen))(second,
-		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row", body, sessionValues))
+		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row?dataset=app_notes&label=some%20value", body, sessionValues))
 	if second.Code != http.StatusForbidden {
 		t.Fatalf("a repeated approved write = %d, want 403", second.Code)
 	}

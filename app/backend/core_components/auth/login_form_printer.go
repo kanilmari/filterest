@@ -125,7 +125,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		handleLoginPost(w, r)
 		return
 	}
-	httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 }
 
 func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {

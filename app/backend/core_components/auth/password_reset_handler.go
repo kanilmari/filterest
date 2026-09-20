@@ -47,10 +47,6 @@ func clearPendingPasswordResetState(session *sessions.Session) {
 }
 
 func RequestPasswordResetOTPHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
@@ -117,10 +113,6 @@ func RequestPasswordResetOTPHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ResetPasswordWithOTPHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {

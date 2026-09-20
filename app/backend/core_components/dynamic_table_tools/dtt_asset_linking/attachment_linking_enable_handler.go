@@ -17,10 +17,6 @@ import (
 
 // EnableAttachmentLinkingHandler creates or re-enables the shared attachment asset table for one parent table.
 func EnableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req enableAttachmentLinkingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

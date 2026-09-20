@@ -20,10 +20,6 @@ import (
 // Response body: { counts: { "<row_id>": <count> } }
 // CommentCountHandler handles POST /api/comment-counts
 func CommentCountHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var body struct {
 		Dataset string `json:"dataset"`

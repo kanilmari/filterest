@@ -62,11 +62,7 @@ func handleConfiguredCodingAgent(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == http.MethodPost && codingAgentIsDev() && socket == "" {
 		return false
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		w.Header().Set("Allow", "GET, POST")
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET and POST accepted")
-		return true
-	}
+
 	devOnly, err := codingAgentPolicyReader(r.Context())
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "Coding agent configuration is unavailable")

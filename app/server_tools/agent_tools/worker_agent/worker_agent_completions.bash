@@ -9,17 +9,18 @@
 #
 # Supports:
 #   ./worker_agent --r<TAB>                → --routine --research
-#   ./worker_agent --routine doc<TAB>      → documentation_audit
+#   ./worker_agent --routine file<TAB>     → file_name_convention_checker
 #   ./worker_agent --routine --l<TAB>      → --list
 #   ./worker_agent family=cl<TAB>          → family=claude
 # ==============================================================================
 
-# Resolve the routines directory once at source time
-_WORKER_AGENT_ROUTINES_DIR="${FILTEREST_WORKER_ROUTINES_DIR:-${_WORKER_AGENT_ROUTINES_DIR:-}}"
-if [[ -z "$_WORKER_AGENT_ROUTINES_DIR" ]]; then
-    # Try relative to this script
-    _WORKER_AGENT_ROUTINES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/routines"
+# Resolve the optional installation overrides before the product routines.
+_WORKER_AGENT_PUBLIC_ROUTINES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/routines"
+_WORKER_AGENT_ROUTINES_DIRS=()
+if [[ -n "${FILTEREST_WORKER_ROUTINES_DIR:-}" && "$FILTEREST_WORKER_ROUTINES_DIR" != "$_WORKER_AGENT_PUBLIC_ROUTINES_DIR" ]]; then
+    _WORKER_AGENT_ROUTINES_DIRS+=("$FILTEREST_WORKER_ROUTINES_DIR")
 fi
+_WORKER_AGENT_ROUTINES_DIRS+=("$_WORKER_AGENT_PUBLIC_ROUTINES_DIR")
 
 _worker_agent_completions() {
     local cur prev words cword
@@ -37,7 +38,7 @@ _worker_agent_completions() {
         --full-access --claude-model --codex-model --codex-reasoning-effort --routine"
 
     # Routine sub-flags (after --routine <name>)
-    local routine_flags="--list --dry-run --help --backend"
+    local routine_flags="--list --dry-run --quicktest --claude-model --help"
 
     # Check if --routine appears in previous words
     local in_routine=false
@@ -61,16 +62,21 @@ _worker_agent_completions() {
 
         # Complete routine names (from JSON files)
         if ! $routine_name_given; then
-            if [[ -d "$_WORKER_AGENT_ROUTINES_DIR" ]]; then
-                local names=()
-                local f
-                for f in "$_WORKER_AGENT_ROUTINES_DIR"/*.json; do
-                    [[ -f "$f" ]] || continue
-                    local basename="${f##*/}"
-                    names+=("${basename%.json}")
+            local names=()
+            local routine_dir routine_file routine_basename routine_name
+            declare -A seen_routine_names=()
+            for routine_dir in "${_WORKER_AGENT_ROUTINES_DIRS[@]}"; do
+                [[ -d "$routine_dir" ]] || continue
+                for routine_file in "$routine_dir"/*.json; do
+                    [[ -f "$routine_file" ]] || continue
+                    routine_basename="${routine_file##*/}"
+                    routine_name="${routine_basename%.json}"
+                    [[ -n "${seen_routine_names[$routine_name]:-}" ]] && continue
+                    seen_routine_names["$routine_name"]=1
+                    names+=("$routine_name")
                 done
-                COMPREPLY=( $(compgen -W "${names[*]}" -- "$cur") )
-            fi
+            done
+            COMPREPLY=( $(compgen -W "${names[*]}" -- "$cur") )
             return
         fi
         return

@@ -21,15 +21,16 @@ func Register() {
 			path        string
 			handlerName string
 			handler     func(http.ResponseWriter, *http.Request)
+			methods     []string
 		}{
-			{"/api/app/workline-observatory/board", "workline_observatory.BoardHandler", BoardHandler},
-			{"/api/app/workline-observatory/priority-actions", "workline_observatory.WorklinePriorityActionsHandler", WorklinePriorityActionsHandler},
-			{"/api/app/workline-observatory/status-actions", "workline_observatory.WorklineStatusActionsHandler", WorklineStatusActionsHandler},
-			{"/api/app/workline-observatory/release-goals", "workline_observatory.ReleaseGoalsHandler", ReleaseGoalsHandler},
-			{"/api/app/workline-observatory/contracts", "workline_observatory.ReleaseContractsHandler", ReleaseContractsHandler},
+			{"/api/app/workline-observatory/board", "workline_observatory.BoardHandler", BoardHandler, []string{http.MethodGet}},
+			{"/api/app/workline-observatory/priority-actions", "workline_observatory.WorklinePriorityActionsHandler", WorklinePriorityActionsHandler, []string{http.MethodPost}},
+			{"/api/app/workline-observatory/status-actions", "workline_observatory.WorklineStatusActionsHandler", WorklineStatusActionsHandler, []string{http.MethodPost}},
+			{"/api/app/workline-observatory/release-goals", "workline_observatory.ReleaseGoalsHandler", ReleaseGoalsHandler, []string{http.MethodPost, http.MethodPatch}},
+			{"/api/app/workline-observatory/contracts", "workline_observatory.ReleaseContractsHandler", ReleaseContractsHandler, []string{http.MethodPut}},
 		}
 		for _, route := range routes {
-			appregistry.RegisterRoute(route.path, route.handler, route.handlerName)
+			appregistry.RegisterRoute(route.path, route.handler, route.handlerName, route.methods...)
 			pipeline.RegisterRouteProfile(route.handlerName, pipeline.AdminProfile)
 		}
 	})

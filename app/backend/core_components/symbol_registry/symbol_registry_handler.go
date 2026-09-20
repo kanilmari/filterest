@@ -45,10 +45,7 @@ type assignmentRequest struct {
 
 // AssetHandler serves a validated SVG and uses the table icon for stale or unknown keys.
 func AssetHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	fileName := strings.TrimPrefix(r.URL.Path, "/symbol-assets/")
 	if strings.Contains(fileName, "/") || strings.ToLower(filepathExtension(fileName)) != ".svg" {
 		httpresponse.RespondWithError(w, http.StatusNotFound, "symbol not found")
@@ -77,8 +74,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		serveAdminSnapshot(w)
 	case http.MethodPost:
 		assignSymbol(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+
 	}
 }
 

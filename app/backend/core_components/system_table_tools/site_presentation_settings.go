@@ -205,10 +205,7 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 // GetSitePresentationSettingsHandler returns only public-safe presentation values.
 // GET /api/site-presentation-settings
 func GetSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	respondWithSitePresentationSettings(w)
 }
 
@@ -231,8 +228,7 @@ func AdminSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 		httpresponse.RespondWithJSON(w, http.StatusOK, settings)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+
 	}
 }
 

@@ -94,10 +94,6 @@ func FilterbarAICodexQueryHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusNotFound, "Codex chat is available only in DEV mode")
 		return
 	}
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST accepted")
-		return
-	}
 
 	var payload filterbarAICodexQueryRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {

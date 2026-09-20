@@ -90,10 +90,6 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	// method is also how the site assistant reaches a route without asking
 	// anyone to approve the change, because approval is only required of
 	// writes.
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	// 1. Luetaan body heti alussa, jotta saadaan puuttuvat avaimet lokiin
 	// riippumatta siitä, onko käyttäjä kirjautunut vai ei.

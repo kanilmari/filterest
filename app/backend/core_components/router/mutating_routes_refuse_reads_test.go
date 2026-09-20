@@ -10,33 +10,43 @@ package router
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-
-	"easelect/backend/core_components/dev_tools"
-	"easelect/backend/core_components/lang"
-	"easelect/backend/core_components/system_table_tools"
 )
 
 // readMethods are the methods the assistant guard lets through unapproved.
 var readMethods = []string{http.MethodGet, http.MethodHead}
 
 func TestHandlersThatChangeDataRefuseReadMethods(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "dev")
+	RegisterRoutes(t.TempDir(), t.TempDir())
+	t.Cleanup(ResetRouteDefinitions)
+
 	// Each of these rewrites stored data: catalog metadata, translations, or
 	// whole rows. None of them has a meaning as a read.
-	mutatingHandlers := map[string]http.HandlerFunc{
-		"/api/update-oids":            system_table_tools.HandleUpdateOidsAndTableNames,
-		"/api/generate-translations":  lang.GenerateTranslationsHandler,
-		"/api/fix-table-translations": lang.FixTableTranslationsHandler,
-		"/api/import-table-csv":       devtools.ImportTableCSVHandler,
+	mutatingRoutes := map[string]string{
+		"/api/update-oids":            "system_table_tools.HandleUpdateOidsAndTableNames",
+		"/api/generate-translations":  "lang.GenerateTranslationsHandler",
+		"/api/fix-table-translations": "lang.FixTableTranslationsHandler",
+		"/api/import-table-csv":       "devtools.ImportTableCSVHandler",
 	}
 
-	for address, handler := range mutatingHandlers {
+	for address, handlerName := range mutatingRoutes {
+		var route *RouteDefinition
+		for _, definition := range GetRouteDefinitions() {
+			if definition.HandlerName == handlerName {
+				definitionCopy := definition
+				route = &definitionCopy
+				break
+			}
+		}
+		if route == nil {
+			t.Fatalf("route %s (%s) is not registered", address, handlerName)
+		}
 		for _, method := range readMethods {
-			request := httptest.NewRequest(method, address, strings.NewReader(""))
+			request := httptest.NewRequest(method, address, nil)
 			recorder := httptest.NewRecorder()
 
-			handler(recorder, request)
+			route.HandlerFunc(recorder, request)
 
 			if recorder.Code != http.StatusMethodNotAllowed {
 				t.Errorf("%s %s answered %d; a handler that changes data must refuse a read with %d",

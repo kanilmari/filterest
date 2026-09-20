@@ -6,20 +6,16 @@ package system_table_tools
 
 import (
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"log"
 	"net/http"
-	"easelect/backend/core_components/httpresponse"
 	"strconv"
 )
 
 // GetAboutRowHandler palauttaa yhden system_about-rivin id:n perusteella.
 // GET /api/about?id=4 → { "id": 4, "title": "{...}", "description": "{...}" }
 func GetAboutRowHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	idStr := r.URL.Query().Get("id")
 	if idStr == "" {

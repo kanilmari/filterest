@@ -104,10 +104,7 @@ type deleteViewFieldSetRequest struct {
 // GetViewFieldSetsHandler resolves personal > group > site > metadata defaults.
 // Guest readers receive the applicable shared/default layer without personal data.
 func GetViewFieldSetsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	userID, err := readableViewFieldSetUserID(r)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, err.Error())

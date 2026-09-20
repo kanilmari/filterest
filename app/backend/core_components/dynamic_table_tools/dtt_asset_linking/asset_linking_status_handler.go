@@ -64,10 +64,6 @@ func buildAttachmentLinkingInfos(statuses []FileUploadRelationStatus) []Attachme
 
 // GetAssetLinkingStatusHandler returns both image and attachment status payloads for one or all tables.
 func GetAssetLinkingStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET method is allowed")
-		return
-	}
 
 	tableName := r.URL.Query().Get("table")
 	statuses, err := ListFileUploadRelationStatuses(backend.Db, tableName)

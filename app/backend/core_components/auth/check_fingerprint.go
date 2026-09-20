@@ -21,10 +21,6 @@ func setFingerprintCookie(w http.ResponseWriter, hmacVal string) {
 }
 
 func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {

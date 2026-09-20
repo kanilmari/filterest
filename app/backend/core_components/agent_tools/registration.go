@@ -5,6 +5,7 @@
 package agent_tools
 
 import (
+	"net/http"
 	"sync"
 
 	appregistry "easelect/backend/core_components/app_registry"
@@ -26,41 +27,49 @@ func Register() {
 			"/api/app/agent-tools/tasks",
 			TasksHandler,
 			"agent_tools.TasksHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/task-runs",
 			TaskRunsHandler,
 			"agent_tools.TaskRunsHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/task-todos",
 			TaskTodosHandler,
 			"agent_tools.TaskTodosHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/task-groups",
 			TaskGroupsHandler,
 			"agent_tools.TaskGroupsHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/worklines",
 			WorklinesHandler,
 			"agent_tools.WorklinesHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/workline-reports",
 			WorklineReportsHandler,
 			"agent_tools.WorklineReportsHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/workline-tasks",
 			WorklineTasksHandler,
 			"agent_tools.WorklineTasksHandler",
+			http.MethodGet, http.MethodPost, http.MethodDelete,
 		)
 		appregistry.RegisterRoute(
 			"/api/app/agent-tools/handover-reports",
 			HandoverReportsHandler,
 			"agent_tools.HandoverReportsHandler",
+			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
 		)
 		loginOnlyHandlers := []string{
 			"agent_tools.TasksHandler",

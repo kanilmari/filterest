@@ -299,6 +299,7 @@ for shared coding conventions, QA and verification.
 ./db_report workline board  # inspect the canonical workline observatory state
 ./db_task list        # inspect database-backed development tasks
 ./worker_agent --help # inspect the optional local AI-worker command
+./worker_agent --routine --list  # list reusable multi-step worker routines
 ./filterest asset-linking status  # inspect shared media-linking readiness
 ```
 
@@ -346,6 +347,12 @@ version before starting; it never downloads a package during a run.
 `WORKER_CODEX_BIN` can select an explicit executable path, and
 `WORKER_CODEX_VERSION` can select another deliberately installed exact version.
 A missing executable or version mismatch stops the run.
+
+Reusable product routines live beside the worker implementation under
+`app/server_tools/agent_tools/worker_agent/routines/`. A downstream composition
+may set `FILTEREST_WORKER_ROUTINES_DIR` to add installation-specific routines;
+those definitions are searched first, so a same-named private routine can
+override the product default without hiding unrelated product routines.
 
 Select both the model and reasoning effort when the result must be attributable
 to a specific configuration (`xhigh` is Extra high):

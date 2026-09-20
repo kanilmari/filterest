@@ -7,7 +7,6 @@ package router
 import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
-	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -25,10 +24,6 @@ func resolvePublicDatasetName(datasetName string) string {
 
 // GetDatasetAliasesHandler serves the dedicated dataset alias registry read surface.
 func GetDatasetAliasesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	registry, err := dataset_routes.LoadAliasRegistry(backend.Db)
 	if err != nil {

@@ -35,8 +35,7 @@ func TasksHandler(w http.ResponseWriter, r *http.Request) {
 		UpdateTaskHandler(w, r)
 	case http.MethodDelete:
 		DeleteTaskHandler(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
 	}
 }
 
@@ -348,10 +347,6 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateTaskHandler creates a new task
 func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var input agentTaskCreate
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -453,10 +448,6 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 // UpdateTaskHandler updates an existing task
 func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut && r.Method != http.MethodPatch {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var patch agentTaskPatch
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
@@ -541,10 +532,6 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTaskHandler deletes a task
 func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	idStr := r.URL.Query().Get("id")
 	if idStr == "" {

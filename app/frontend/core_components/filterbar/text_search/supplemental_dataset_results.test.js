@@ -13,7 +13,11 @@ vi.mock("../../navigation/nav_engine/dataset_aliases.js", () => ({ buildDatasetP
 vi.mock("../../table_views/card_view/row_article_opener_helpers.js", () => ({
     buildCardUrl: (_prefix, name, id) => "/alias-" + name + "/" + id,
 }));
-import { createSupplementalDatasetGroup, getSupplementalSearchCopy } from "./supplemental_dataset_results.js";
+import {
+    buildSupplementalSearchExcerpt,
+    createSupplementalDatasetGroup,
+    getSupplementalSearchCopy,
+} from "./supplemental_dataset_results.js";
 import { refreshLocalizedDatasetValues } from "../../table_views/dataset_value_localizer.js";
 const types = { title: { card_element: "header+lang_key", is_multilingual: true, show_value_on_card: true },
     description: { card_element: "description2", is_multilingual: true, show_value_on_card: true } };
@@ -42,6 +46,31 @@ test("refreshes one-language titles and plain descriptions without JSON, markup 
     await refreshLocalizedDatasetValues("en");
     expect(group.element.querySelector("li a").textContent).toBe("English title");
     expect(group.element.querySelector("p").textContent).toBe("Brief description");
+});
+test("shows a short extract around the matching words instead of the document beginning", () => {
+    const longBeginning = "Opening material without the searched phrase. ".repeat(8);
+    const longEnding = " Closing material after the searched phrase.".repeat(8);
+    const fullText = `${longBeginning}Claude appears in the relevant sentence.${longEnding}`;
+    const group = createSupplementalDatasetGroup(
+        { dataset: "tickets", text: "Tickets", langKey: "tickets" }, "claude"
+    );
+    document.body.append(group.element);
+    group.render(
+        [{ id: 9, title: "Matching ticket", description: fullText }],
+        ["id", "title", "description"],
+        {
+            title: { card_element: "header", show_value_on_card: true },
+            description: { card_element: "description", show_value_on_card: true },
+        }
+    );
+    const excerpt = group.element.querySelector("li p").textContent;
+
+    expect(excerpt.toLowerCase()).toContain("claude");
+    expect(excerpt).not.toContain(longBeginning.trim());
+    expect(excerpt).not.toBe(fullText);
+    expect(excerpt.length).toBeLessThanOrEqual(180);
+    expect(excerpt.startsWith("…")).toBe(true);
+    expect(excerpt.endsWith("…")).toBe(true);
 });
 test.each(["fi", "en", "ch", "yue", "zh-Hant"])("localizes Show all in %s", async language => {
     const group = mount();

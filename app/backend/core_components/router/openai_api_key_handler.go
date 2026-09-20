@@ -20,10 +20,6 @@ type saveOpenAIAPIKeyRequest struct {
 var openAIAPIKeySaver = backend.SaveOpenAIAPIKey
 
 func saveOpenAIAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST accepted")
-		return
-	}
 
 	var payload saveOpenAIAPIKeyRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))

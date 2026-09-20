@@ -339,10 +339,6 @@ func GetAddRowMetadataHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "missing 'table_uid' query parameter")
 		return
 	}
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET requests are allowed")
-		return
-	}
 
 	if err := GetAddRowMetadataHandler(w, tableUID); err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error()) // punainen virhe

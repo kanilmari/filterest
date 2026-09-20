@@ -25,6 +25,7 @@ function waitingChange(overrides = {}) {
     return {
         method: 'POST',
         path: '/api/update-row',
+        approval_query: 'dataset=app_notes',
         body_sha256: 'a'.repeat(64),
         query: { dataset: 'app_notes' },
         body: { id: 1, updates: [{ column: 'fi', value: 'Muistiinpano' }] },
@@ -82,7 +83,12 @@ describe('pending changes view', () => {
             body_data: {
                 dataset: 'app_notes',
                 job_id: 'job-1',
-                approvals: [{ method: 'POST', path: '/api/update-row', body_sha256: 'a'.repeat(64) }],
+                approvals: [{
+                    method: 'POST',
+                    path: '/api/update-row',
+                    query: 'dataset=app_notes',
+                    body_sha256: 'a'.repeat(64),
+                }],
             },
         });
         expect(container.querySelector('.chat_pending_change').dataset.status).toBe('done');
@@ -103,6 +109,61 @@ describe('pending changes view', () => {
                 .toBe(pendingChangesCopy().failed));
         expect(approve.disabled).toBe(false);
         expect(container.querySelector('.chat_pending_change').dataset.status).toBe('failed');
+    });
+
+    test('retry sends the server-returned remainder and never replays completed changes', async () => {
+        const completed = waitingChange({ status: 'done', body_sha256: 'a'.repeat(64) });
+        const failed = waitingChange({ status: 'failed', body_sha256: 'b'.repeat(64) });
+        const untouched = waitingChange({
+            status: 'pending', path: '/api/delete-rows', body_sha256: 'c'.repeat(64),
+        });
+        endpointRouterMock
+            .mockResolvedValueOnce({
+                status: 'apply_failed',
+                pending_changes: [completed, failed, untouched],
+            })
+            .mockResolvedValueOnce({
+                status: 'applied',
+                pending_changes: [
+                    completed,
+                    { ...failed, status: 'done' },
+                    { ...untouched, status: 'done' },
+                ],
+            });
+        const container = render([
+            waitingChange({ body_sha256: 'a'.repeat(64) }),
+            waitingChange({ body_sha256: 'b'.repeat(64) }),
+            waitingChange({ path: '/api/delete-rows', body_sha256: 'c'.repeat(64) }),
+        ]);
+        const approve = container.querySelector('.chat_pending_changes_approve');
+
+        approve.click();
+        await vi.waitFor(() => expect(approve.disabled).toBe(false));
+        approve.click();
+        await vi.waitFor(() => expect(endpointRouterMock).toHaveBeenCalledTimes(2));
+
+        const retryApprovals = endpointRouterMock.mock.calls[1][1].body_data.approvals;
+        expect(retryApprovals.map((approval) => approval.body_sha256)).toEqual([
+            'b'.repeat(64),
+            'c'.repeat(64),
+        ]);
+        expect(approve.disabled).toBe(true);
+        expect(container.querySelector('.chat_pending_changes_status').textContent)
+            .toBe(pendingChangesCopy().done);
+    });
+
+    test('does not offer retry when the server reports a non-retryable state', async () => {
+        endpointRouterMock.mockResolvedValue({
+            status: 'applied',
+            pending_changes: [waitingChange({ status: 'failed' })],
+        });
+        const container = render([waitingChange()]);
+        const approve = container.querySelector('.chat_pending_changes_approve');
+
+        approve.click();
+        await vi.waitFor(() => expect(container.querySelector('.chat_pending_changes_status').textContent)
+            .toBe(pendingChangesCopy().failed));
+        expect(approve.disabled).toBe(true);
     });
 
     test('a failed request reports that nothing was changed', async () => {

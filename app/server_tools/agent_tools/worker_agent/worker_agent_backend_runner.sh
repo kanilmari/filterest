@@ -44,6 +44,20 @@ cleanup_worker_server() {
     fi
 }
 
+# describe_write_access names what a run may change, in the same words for the
+# status file, the log header and the finished-run report. It reads every flag
+# with a default: this line is written from more than one context, and a run's
+# record must never be truncated because one variable was not exported.
+describe_write_access() {
+    if [[ "${RESEARCH_MODE:-false}" == true ]]; then
+        printf 'forbidden by instruction; sandbox still permits workspace writes'
+    elif [[ "${FULL_ACCESS:-true}" == true ]]; then
+        printf 'full (workspace, database and network)'
+    else
+        printf 'workspace only (no database, no network)'
+    fi
+}
+
 write_run_status() {
     local status="$1"
     local exit_code="${2:-}"
@@ -170,18 +184,6 @@ prepare_codex_backend() {
     fi
     CODEX_ACTUAL_VERSION="$CODEX_REQUIRED_VERSION"
     write_run_status "running"
-}
-
-# describe_write_access names what a run may change, in the same words for the
-# status file, the log header and the finished-run report.
-describe_write_access() {
-    if [[ "$RESEARCH_MODE" == true ]]; then
-        printf 'forbidden by instruction; sandbox still permits workspace writes'
-    elif [[ "$FULL_ACCESS" == true ]]; then
-        printf 'full (workspace, database and network)'
-    else
-        printf 'workspace only (no database, no network)'
-    fi
 }
 
 run_codex_exec() {
@@ -339,6 +341,7 @@ run_background() {
     export CODEX_BIN CODEX_ACTUAL_VERSION CODEX_MODEL CODEX_REASONING_EFFORT
     export RUN_FN="$run_fn"
     export -f \
+        describe_write_access \
         find_claude_bin \
         run_codex_exec \
         run_claude_exec \

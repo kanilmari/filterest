@@ -29,11 +29,7 @@ type systemAutomationAccountRequest struct {
 // the same exact trusted peer and bearer token as the system drain endpoint.
 func systemAutomationAccountHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		w.Header().Set("Allow", "GET, POST")
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
-		return
-	}
+
 	if rejectDisallowedSystemAutomationAccountRequest(w, r) {
 		return
 	}

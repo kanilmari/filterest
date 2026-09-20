@@ -93,10 +93,7 @@ const embeddingDatasetCatalogQuery = `
 		ORDER BY sdt.table_name`
 
 func GetEmbeddingDatasetsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
+
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 0 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "unauthorized")
@@ -139,10 +136,7 @@ func GetEmbeddingDatasetsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func RefreshLangEmbeddingsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
+
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 0 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "unauthorized")
@@ -192,10 +186,7 @@ func RefreshLangEmbeddingsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CountLangEmbeddingsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
+
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 0 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "unauthorized")

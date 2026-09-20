@@ -464,10 +464,11 @@ function routeThroughManifestBackedDescriptor(routeName, descriptor, options = {
  */
 function resolveManifestBackedRouteMethod(routeName, descriptor, requestedMethod) {
     const declaredMethods = Array.isArray(descriptor.methods) ? descriptor.methods : [];
+    const requestMethods = declaredMethods.filter((method) => method !== 'HEAD');
 
     if (!requestedMethod) {
-        if (declaredMethods.length === 1) {
-            return declaredMethods[0];
+        if (requestMethods.length === 1) {
+            return requestMethods[0];
         }
         return undefined;
     }

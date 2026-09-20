@@ -223,16 +223,9 @@ func namedArgsToFolderValues(args []driver.NamedValue) []driver.Value {
 	return values
 }
 
-func TestHandleCreateFolderRejectsMethodJSONAndEmptyName(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/create-folder", nil)
+func TestHandleCreateFolderRejectsInvalidJSONAndEmptyName(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/create-folder", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	HandleCreateFolder(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/create-folder", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	HandleCreateFolder(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
@@ -562,16 +555,9 @@ func TestCreateFolderWithQuerierValidatesAndCreatesFolders(t *testing.T) {
 	})
 }
 
-func TestHandleDeleteFolderRejectsMethodJSONAndInvalidID(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/delete-folder", nil)
+func TestHandleDeleteFolderRejectsInvalidJSONAndInvalidID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/delete-folder", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	HandleDeleteFolder(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/delete-folder", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	HandleDeleteFolder(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
@@ -712,16 +698,9 @@ func TestHandleDeleteFolderHandlesNotFoundConflictAndSuccess(t *testing.T) {
 	})
 }
 
-func TestHandleUpdateFolderRejectsMethodJSONAndNonFolderType(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/update-folder", nil)
+func TestHandleUpdateFolderRejectsInvalidJSONAndNonFolderType(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/update-folder", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	HandleUpdateFolder(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/update-folder", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	HandleUpdateFolder(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
@@ -1000,16 +979,9 @@ func TestHandleUpdateFolderRequiresCrossProjectConfirmation(t *testing.T) {
 }
 
 func TestHandleSetCurrentProjectFolder(t *testing.T) {
-	t.Run("rejects method and invalid JSON", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/set-current-project-folder", nil)
+	t.Run("rejects invalid JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/set-current-project-folder", strings.NewReader("{"))
 		rec := httptest.NewRecorder()
-		HandleSetCurrentProjectFolder(rec, req)
-		if rec.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("status = %d, want 405", rec.Code)
-		}
-
-		req = httptest.NewRequest(http.MethodPost, "/api/set-current-project-folder", strings.NewReader("{"))
-		rec = httptest.NewRecorder()
 		HandleSetCurrentProjectFolder(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -1077,16 +1049,9 @@ func TestHandleSetCurrentProjectFolder(t *testing.T) {
 	})
 }
 
-func TestHandleRenameTreeNodeRejectsGuardBranches(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/rename-tree-node", nil)
+func TestHandleRenameTreeNodeRejectsInvalidInputs(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/rename-tree-node", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	HandleRenameTreeNode(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/rename-tree-node", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	HandleRenameTreeNode(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)

@@ -106,15 +106,23 @@ def test_background_preserves_explicit_executable_and_environment_settings(worke
     assert 'Worker Codex version: 0.155.1' in log
 
 
-def test_omitted_model_effort_leave_codex_defaults_explicitly_unresolved(worker):
+def test_omitted_model_takes_codex_default_while_effort_takes_the_project_default(worker):
+    """The model is Codex's to choose; the amount of thinking is not.
+
+    Codex's own reasoning default is its lowest setting, and a batch of workers
+    once ran that way before anyone noticed. The project therefore sets the
+    effort and leaves the model alone, so a run that names neither still thinks
+    hard. A run may still name its own effort.
+    """
     run, env, output, _ = worker
     result = run()
     assert result.returncode == 0, result.stderr
     assert json.loads(Path(env['CODEX_CAPTURE']).read_text())['args'] == [
-        'exec', '--sandbox', 'workspace-write', '-']
+        'exec', '--sandbox', 'workspace-write',
+        '-c', 'model_reasoning_effort="xhigh"', '-']
     status = next(output.glob('*/run_status.txt')).read_text()
     assert 'codex_model_requested=Codex config default' in status
-    assert 'codex_reasoning_effort_requested=Codex config default' in status
+    assert 'codex_reasoning_effort_requested=xhigh' in status
 
 
 @pytest.mark.parametrize('overrides,diagnostic', [

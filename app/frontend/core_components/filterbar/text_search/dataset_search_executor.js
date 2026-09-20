@@ -31,6 +31,7 @@ import {
     getSearchAiHostId,
     getSearchFilterContext,
     getSearchPresentationRows,
+    getSearchResultsFlowContainer,
     getSearchStageContainer,
     getSearchViewContainer,
     isCurrentSearchCache,
@@ -123,7 +124,7 @@ function findRenderedCardForRow(tableName, row) {
     }
 
     return Array.from(
-        document.querySelectorAll(`#${tableName}_${getCurrentSearchView(tableName)}_view_container .card[data-id]`)
+        getSearchViewContainer(tableName)?.querySelectorAll(".card[data-id]") || []
     ).find((card) => String(card.dataset.id) === String(rowId)) || null;
 }
 
@@ -294,21 +295,20 @@ export function insertNotice(tableName, langKey, fallbackText) {
 
         stageContainer.appendChild(notice);
     } else if (["card", "article_view"].includes(currentView)) {
-        const primaryCardContainer = getPrimaryCardContainer(tableName);
-        const aiCardContainer = stageContainer.querySelector(
+        const resultsFlow = getSearchResultsFlowContainer(tableName, currentView);
+        if (!resultsFlow) return;
+        const aiCardContainer = resultsFlow.querySelector(
             `#${getSearchAiHostId(tableName, currentView)}`
         );
         if (aiCardContainer) {
-            stageContainer.insertBefore(notice, aiCardContainer);
+            resultsFlow.insertBefore(notice, aiCardContainer);
             return;
         }
 
-        if (primaryCardContainer?.nextSibling) {
-            stageContainer.insertBefore(notice, primaryCardContainer.nextSibling);
-            return;
-        }
-
-        stageContainer.appendChild(notice);
+        // Current-dataset cards, any search notice, the AI group and finally
+        // the other-dataset group must share the same sidebar scroll flow.
+        // The supplemental controller re-appends itself last after this.
+        resultsFlow.appendChild(notice);
         return;
     }
 
@@ -383,23 +383,25 @@ function createSecondSearchCardContainer(tableName) {
     const currentView = getCurrentSearchView(tableName);
     if (!["card", "article_view"].includes(currentView)) return null;
 
-    const sidebarPanel = getSearchStageContainer(tableName, currentView);
-    const primaryCardContainer = getPrimaryCardContainer(tableName);
-    if (!sidebarPanel || !primaryCardContainer) return null;
+    const resultsFlow = getSearchResultsFlowContainer(tableName, currentView);
+    if (!resultsFlow || !getPrimaryCardContainer(tableName)) return null;
 
-    const existing = sidebarPanel.querySelector(
+    const existing = resultsFlow.querySelector(
         `#${getSearchAiHostId(tableName, currentView)}`
     );
     if (existing) return existing;
 
     const cardContainer = document.createElement("div");
-    cardContainer.classList.add("card_container", "search-ai-results-card-container");
+    cardContainer.classList.add("search-ai-results-card-container");
     cardContainer.id = getSearchAiHostId(tableName, currentView);
 
-    if (primaryCardContainer.nextSibling) {
-        sidebarPanel.insertBefore(cardContainer, primaryCardContainer.nextSibling);
+    const supplementalResults = resultsFlow.querySelector(
+        ":scope > .supplemental-dataset-results"
+    );
+    if (supplementalResults) {
+        resultsFlow.insertBefore(cardContainer, supplementalResults);
     } else {
-        sidebarPanel.appendChild(cardContainer);
+        resultsFlow.appendChild(cardContainer);
     }
 
     return cardContainer;
@@ -463,8 +465,16 @@ function cleanupSearchArtifacts(tableName) {
  * endless scrolling, so the reader can browse every match instead of a top few.
  */
 async function loadDatasetMatches(tableName, cache, isCurrent) {
-    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
-    if (!isCurrent()) return;
+    let result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
+    if (!isCurrent()) return false;
+    // A URL-seeded search can begin while the route's first ordinary view
+    // build is still replacing its container. That invalidates the listing
+    // reload even though its server answer was correct. Once the build has
+    // settled, one fresh reload attaches the same answer to the live panel.
+    if (!result) {
+        result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
+    }
+    if (!isCurrent() || !result) return false;
 
     const rows = Array.isArray(result?.data) ? result.data : [];
     if (Array.isArray(result?.columns) && result.columns.length) cache.columns = result.columns;
@@ -474,6 +484,7 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
     cache.data = rows;
     cache.renderedOnce = true;
     setSearchDatasetMatchCount(cache, result?.row_count);
+    return true;
 }
 
 /**
@@ -594,8 +605,19 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     const query = userQuery.trim();
     if (!query) return;
     clearRowGroupFacets(tableName);
-    cleanupSearchArtifacts(tableName);
     const context = getSearchFilterContext(tableName);
+    const executionSignature = `${context.signature}\n${JSON.stringify(opts)}`;
+    const runningCache = _ongoingSearchResults[tableName];
+    // The filter bar, shared top bar and article hero can all initialize from
+    // the same URL. They are synchronized controls, not three search engines:
+    // let the first request own the result list instead of racing identical
+    // reloads against one another.
+    if (runningCache?.query === query
+        && runningCache.executionSignature === executionSignature
+        && runningCache.executionPromise) {
+        return runningCache.executionPromise;
+    }
+    cleanupSearchArtifacts(tableName);
     // A different question starts from its first result; the same question
     // asked again, after a changed filter or sort, leaves the reader where
     // they already are.
@@ -607,32 +629,42 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
         // The selected filters reach the dataset's rows through the listing's
         // own query, so its rows are never filtered a second time here.
         filters: context.clientFilters, complete: false,
-        searchOptions: opts, serverFiltersApplied: false,
+        searchOptions: opts, serverFiltersApplied: false, executionSignature,
     });
     _ongoingSearchResults[tableName] = cache;
     // The previous search's AI number describes rows that are already gone.
     clearSearchResultsCount(tableName);
+    // Withdraw the unfiltered listing's old number immediately. Until the
+    // searched listing replies, zero current-dataset matches are known; other
+    // datasets load independently and never get a chance to fill this count.
+    syncSearchResultsCount(tableName, cache);
     if (isNewQuestion) awaitFirstSearchResultInArticleView(tableName);
     const isCurrent = () => isCurrentSearchCache(tableName, cache);
     cache.supplemental = createSupplementalDatasetSearch(tableName, cache.query, {
-        isCurrent, getContainer: () => getSearchStageContainer(tableName),
+        isCurrent, getContainer: () => getSearchResultsFlowContainer(tableName),
     });
 
-    try {
-        await loadDatasetMatches(tableName, cache, isCurrent);
-        if (!isCurrent()) return;
-        // The dataset's own answer is complete as soon as its listing replies;
-        // the AI group arrives afterwards and adds to it.
-        cache.complete = true;
-        syncSearchResultsCount(tableName, cache);
-        if (cache.data.length === 0) insertLocalizedNotice(tableName, NO_DATASET_MATCHES_NOTICE);
-        await openFirstPendingSearchArticle(tableName, cache.data, cache);
-        if (!isCurrent()) return;
-        cache.supplemental.place();
-        await streamAiSearchResults(tableName, cache, context, opts, isCurrent);
-    } catch (error) {
-        if (isCurrent()) console.warn("do_intelligent_search failed:", error);
-    }
+    const executionPromise = (async () => {
+        try {
+            const listingLoaded = await loadDatasetMatches(tableName, cache, isCurrent);
+            if (!isCurrent() || !listingLoaded) return;
+            // The dataset's own answer is complete as soon as its listing replies;
+            // the AI group arrives afterwards and adds to it.
+            cache.complete = true;
+            syncSearchResultsCount(tableName, cache);
+            if (cache.data.length === 0) insertLocalizedNotice(tableName, NO_DATASET_MATCHES_NOTICE);
+            await openFirstPendingSearchArticle(tableName, cache.data, cache);
+            if (!isCurrent()) return;
+            cache.supplemental.place();
+            await streamAiSearchResults(tableName, cache, context, opts, isCurrent);
+        } catch (error) {
+            if (isCurrent()) console.warn("do_intelligent_search failed:", error);
+        } finally {
+            if (isCurrent()) cache.executionPromise = null;
+        }
+    })();
+    cache.executionPromise = executionPromise;
+    return executionPromise;
 }
 
 export const ongoingSearchResults = _ongoingSearchResults;

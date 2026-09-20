@@ -43,12 +43,6 @@ These files use `fetch()` because they implement the pipeline itself:
 |------|-----------|------|
 | `app/frontend/core_components/navigation/nav_engine/navigation_handler.js` | `performNavigation()` export | Legacy public API that bypasses the navigation pipeline (skips permissionCheck, urlUpdate). It still has active callers, so new navigation work should prefer `handle_all_navigation()` -> `runNavigationPipeline()` and any removal must first migrate callers intentionally. |
 
-## Review Needed
-
-| File | Issue |
-|------|-------|
-| `app/frontend/core_components/dev_tools/session_details_printer.js` | Contains a commented-out `fetch()`; if re-enabled it should use `endpoint_router`. |
-
 ## How to Add a New Exception
 
 1. Add `// PIPELINE_EXCEPTION: <reason>` near the file header.

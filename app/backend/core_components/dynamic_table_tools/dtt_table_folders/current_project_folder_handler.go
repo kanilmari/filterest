@@ -36,10 +36,6 @@ func validateSetCurrentProjectFolderRequest(req setCurrentProjectFolderRequest) 
 // HandleSetCurrentProjectFolder handles POST /api/set-current-project-folder and marks
 // one project-root folder under Apps as the active current project.
 func HandleSetCurrentProjectFolder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	req, err := decodeSetCurrentProjectFolderRequest(r)
 	if err != nil {

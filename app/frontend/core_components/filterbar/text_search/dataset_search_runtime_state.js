@@ -67,6 +67,21 @@ export function getPrimaryCardContainer(tableName) {
     );
 }
 
+/**
+ * Return the one scroll flow that owns every visible search group.
+ * Article and card views scroll inside their primary card list; placing
+ * notices or supplemental groups beside that list can shrink it out of view.
+ */
+export function getSearchResultsFlowContainer(
+    tableName,
+    currentView = getCurrentSearchView(tableName)
+) {
+    if (["card", "article_view"].includes(currentView)) {
+        return getPrimaryCardContainer(tableName);
+    }
+    return getSearchStageContainer(tableName, currentView);
+}
+
 export function getSearchAiHostId(
     tableName,
     currentView = getCurrentSearchView(tableName)

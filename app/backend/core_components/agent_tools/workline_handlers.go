@@ -43,8 +43,7 @@ func WorklinesHandler(w http.ResponseWriter, r *http.Request) {
 		createWorklineHandler(w, r)
 	case http.MethodPatch, http.MethodPut:
 		updateWorklineHandler(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+
 	}
 }
 
@@ -372,8 +371,7 @@ func WorklineTasksHandler(w http.ResponseWriter, r *http.Request) {
 		createWorklineTaskLinkHandler(w, r)
 	case http.MethodDelete:
 		deleteWorklineTaskLinkHandler(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+
 	}
 }
 

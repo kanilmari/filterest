@@ -70,8 +70,7 @@ func UserVisualPreferenceHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		httpresponse.RespondWithJSON(w, http.StatusOK, preference)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+
 	}
 }
 

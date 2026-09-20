@@ -109,12 +109,6 @@ func TestExchangeRefusesBadRequests(t *testing.T) {
 		t.Fatalf("invalid JSON = %d, want 400", broken.Code)
 	}
 
-	getRecorder := httptest.NewRecorder()
-	SiteAssistantDelegationExchangeHandler(getRecorder, httptest.NewRequest(http.MethodGet, "/api/site-assistant/delegation/exchange", nil))
-	if getRecorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET = %d, want 405", getRecorder.Code)
-	}
-
 	// The valid code still works, so the refusals above consumed nothing.
 	if ok := exchange(t, `{"code":`+quoteForJSON(code)+`}`); ok.Code != http.StatusOK {
 		t.Fatalf("valid code after refusals = %d", ok.Code)

@@ -39,10 +39,6 @@ type CategoryResult struct {
 
 // CheckDatabaseConsistencyHandler palauttaa kaikki löydetyt epäyhtenäisyydet JSON-muodossa.
 func CheckDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
 
 	result := ConsistencyCheckResult{}
 
@@ -101,10 +97,6 @@ func CheckDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
 // FixDatabaseConsistencyHandler korjaa yksittäisen tai kaikki löydetyt ongelmat.
 // Pyyntö: POST { "fix_ids": ["cat1_tablename", ...], "fix_action": {"cat2_table": "drop|register"} } tai { "fix_all": true }
 func FixDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	var req struct {
 		FixIDs    []string          `json:"fix_ids"`

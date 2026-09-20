@@ -49,10 +49,7 @@ func decodeRequest(r *http.Request) (Request, error) {
 // ListHandler returns only authorized candidates; filtering precedes the bounded
 // page. No global counts, invisible filenames, storage journal, or captions leak.
 func ListHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, 405, "method_not_allowed")
-		return
-	}
+
 	actor := dbutils.RequestActorContextFromRequest(r)
 	if actor.UserID <= 1 {
 		respondError(w, ErrDenied)
@@ -137,10 +134,7 @@ func ListHandler(w http.ResponseWriter, r *http.Request) {
 
 // AttachHandler links one existing image to an existing editable parent.
 func AttachHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, 405, "method_not_allowed")
-		return
-	}
+
 	req, e := decodeRequest(r)
 	if e != nil {
 		respondError(w, e)
@@ -161,10 +155,7 @@ func AttachHandler(w http.ResponseWriter, r *http.Request) {
 
 // DetachHandler removes one exact use; it never removes physical image bytes.
 func DetachHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, 405, "method_not_allowed")
-		return
-	}
+
 	req, e := decodeRequest(r)
 	if e != nil {
 		respondError(w, e)

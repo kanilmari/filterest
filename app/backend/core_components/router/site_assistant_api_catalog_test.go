@@ -74,7 +74,7 @@ func TestSiteAssistantCatalogDescribesLiveRoutesAndValidCoreOperations(t *testin
 	}
 
 	self, ok := byPath["/api/admin/site-assistant/api-catalog"]
-	if !ok || self.Access != "admin" || !self.AdminOnly || strings.Join(self.Methods, ",") != http.MethodGet {
+	if !ok || self.Access != "admin" || !self.AdminOnly || strings.Join(self.Methods, ",") != http.MethodGet+","+http.MethodHead {
 		t.Fatalf("catalog route must be admin-only GET, got %+v", self)
 	}
 	if self.Summary == "" {
@@ -88,7 +88,7 @@ func TestSiteAssistantCatalogDescribesLiveRoutesAndValidCoreOperations(t *testin
 	}
 
 	markdown := router.RenderSiteAssistantAPICatalogMarkdown(catalog)
-	for _, expected := range []string{"## Core operations", "update_row: POST /api/update-row", "/api/admin/site-assistant/api-catalog [admin; GET]"} {
+	for _, expected := range []string{"## Core operations", "update_row: POST /api/update-row", "/api/admin/site-assistant/api-catalog [admin; GET,HEAD]"} {
 		if !strings.Contains(markdown, expected) {
 			t.Fatalf("markdown catalog is missing %q", expected)
 		}

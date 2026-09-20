@@ -405,13 +405,6 @@ func TestEnableImageAssetLinkingHandlerRejectsGuardBranches(t *testing.T) {
 		wantBody   string
 	}{
 		{
-			name:       "wrong method",
-			method:     http.MethodGet,
-			body:       "",
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody:   "only POST method is allowed",
-		},
-		{
 			name:       "invalid json",
 			method:     http.MethodPost,
 			body:       "{",
@@ -499,16 +492,9 @@ func TestRemoveImageAssetLinkingHandlerRejectsGuardBranches(t *testing.T) {
 	}
 }
 
-func TestDisableImageAssetLinkingHandlerRejectsWrongMethodAndInvalidJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/asset-linking/images/disable", nil)
+func TestDisableImageAssetLinkingHandlerRejectsInvalidJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/asset-linking/images/disable", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	DisableImageAssetLinkingHandler(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/asset-linking/images/disable", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	DisableImageAssetLinkingHandler(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
@@ -757,14 +743,7 @@ func TestGetImageAssetLinkingStatusHandlerReturnsParsedRows(t *testing.T) {
 	}
 }
 
-func TestGetImageAssetLinkingStatusHandlerRejectsWrongMethodAndQueryFailure(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/asset-linking/images/status", nil)
-	rec := httptest.NewRecorder()
-	GetImageAssetLinkingStatusHandler(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
+func TestGetImageAssetLinkingStatusHandlerHandlesQueryFailure(t *testing.T) {
 	db, _ := openImageLinkingMockDB(t, []imageAssetLinkingQueryResponse{
 		{
 			match: "FROM system_foreign_key_relations_1_m",
@@ -773,8 +752,8 @@ func TestGetImageAssetLinkingStatusHandlerRejectsWrongMethodAndQueryFailure(t *t
 	}, nil)
 	withImageLinkingDB(t, db)
 
-	req = httptest.NewRequest(http.MethodGet, "/api/asset-linking/images/status", nil)
-	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/asset-linking/images/status", nil)
+	rec := httptest.NewRecorder()
 	GetImageAssetLinkingStatusHandler(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("query-failure status = %d, want 500", rec.Code)

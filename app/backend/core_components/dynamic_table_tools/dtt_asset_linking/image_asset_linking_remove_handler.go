@@ -20,10 +20,6 @@ import (
 
 // RemoveImageAssetLinkingHandler drops the image asset capability for one parent table.
 func RemoveImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req removeImageAssetLinkingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

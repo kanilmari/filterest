@@ -16,10 +16,6 @@ import (
 
 // UpdateImageAssetLinkingHandler edits file_upload configuration for one image asset relation.
 func UpdateImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req updateImageAssetLinkingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

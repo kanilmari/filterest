@@ -103,31 +103,11 @@ The next useful slice is now in place as backend infrastructure, not yet as a ge
   - optional `conditional_source`
   - per-scenario `profile_name`, `skip_stages`, and `admin_only`
 
-### Explicit method metadata slice
+### Registration-owned method metadata
 
-The manifest now also carries curated `methods` + `method_source` fields for the small stable auth/admin subset where we want to publish a trustworthy method contract without pretending the whole backend is method-typed.
+Every public route now declares its allowed methods in the runtime registration call. The router enforces that declaration before the handler runs, `GET` declarations include `HEAD`, and the generated manifest records the same `methods` with the `route_registration` source label. Manifest generation fails if a registered route lacks a declaration.
 
-Current source label:
-
-- `explicit_stable_contract`
-
-Current explicit-method subset includes:
-
-- auth bootstrap / permission cache:
-  - `auth.GetAuthModesHandler` → `GET`
-  - `auth.UserPermissionsHandler` → `GET`
-- FK cache maintenance:
-  - `system_table_tools.ListFKCacheTriggersHandler` → `GET`
-  - `system_table_tools.RefreshFKCacheHandler` → `POST`
-- next admin-configuration candidates:
-  - card visibility (`GET` / `POST`)
-  - dataset header config (`GET` / `POST`)
-  - child-tab config (`GET` / `POST`)
-  - column-view presets (`GET` / `POST`)
-
-Routes outside that curated subset intentionally omit method metadata for now. This keeps the manifest honest while the wider backend still relies on handler-local method checks.
-
-This still stops short of a generated typed client because HTTP methods are not yet a trustworthy centralized contract in the backend. Many handlers still enforce methods internally, so a method-safe generated client would be premature without an explicit method metadata pass.
+This removes the earlier curated subset and makes the method inventory trustworthy across the public backend. Stable frontend wrappers continue to select their callable method from the same manifest, ignoring `HEAD` as the transport-level companion to `GET`.
 
 ### Frontend pilot status
 

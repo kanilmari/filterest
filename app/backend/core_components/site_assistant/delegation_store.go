@@ -16,6 +16,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,10 +41,12 @@ var (
 )
 
 // ApprovedCall is one write request the administrator accepted from a plan.
-// Body is matched by hash so an approved plan cannot be executed with other content.
+// Query and body are matched canonically so the approval names one exact target
+// without depending on query-parameter order or equivalent URL encoding.
 type ApprovedCall struct {
 	Method   string `json:"method"`
 	Path     string `json:"path"`
+	Query    string `json:"query"`
 	BodyHash string `json:"body_sha256"`
 	used     bool
 }
@@ -197,7 +201,7 @@ func (store *Store) Approve(delegationID string, calls []ApprovedCall) error {
 }
 
 // UseWriteApproval consumes the approval matching one request, or reports why not.
-func (store *Store) UseWriteApproval(delegationID string, method string, path string, bodyHash string) error {
+func (store *Store) UseWriteApproval(delegationID string, method string, path string, rawQuery string, bodyHash string) error {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	delegation, ok := store.delegations[delegationID]
@@ -205,10 +209,14 @@ func (store *Store) UseWriteApproval(delegationID string, method string, path st
 		return ErrUnknownDelegation
 	}
 	method = strings.ToUpper(strings.TrimSpace(method))
+	query, err := CanonicalQuery(rawQuery)
+	if err != nil {
+		return ErrWriteNotApproved
+	}
 	bodyHash = strings.ToLower(strings.TrimSpace(bodyHash))
 	for index := range delegation.approved {
 		call := &delegation.approved[index]
-		if call.used || call.Method != method || call.Path != path || call.BodyHash != bodyHash {
+		if call.used || call.Method != method || call.Path != path || call.Query != query || call.BodyHash != bodyHash {
 			continue
 		}
 		call.used = true
@@ -235,7 +243,7 @@ func (store *Store) PendingApprovals(delegationID string) ([]ApprovedCall, error
 	pending := make([]ApprovedCall, 0, len(delegation.approved))
 	for _, call := range delegation.approved {
 		if !call.used {
-			pending = append(pending, ApprovedCall{Method: call.Method, Path: call.Path, BodyHash: call.BodyHash})
+			pending = append(pending, ApprovedCall{Method: call.Method, Path: call.Path, Query: call.Query, BodyHash: call.BodyHash})
 		}
 	}
 	return pending, nil
@@ -257,9 +265,24 @@ func HashRequestBody(body []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// CanonicalQuery normalizes an encoded query for approval comparison. Sorting
+// both names and repeated values makes pair order irrelevant; decoding and
+// encoding again also removes harmless differences such as %20 versus +.
+func CanonicalQuery(rawQuery string) (string, error) {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return "", err
+	}
+	for key := range values {
+		sort.Strings(values[key])
+	}
+	return values.Encode(), nil
+}
+
 func normalizeApprovedCall(call ApprovedCall) (ApprovedCall, error) {
 	method := strings.ToUpper(strings.TrimSpace(call.Method))
 	path := strings.TrimSpace(call.Path)
+	query, queryErr := CanonicalQuery(call.Query)
 	bodyHash := strings.ToLower(strings.TrimSpace(call.BodyHash))
 	if !RequestIsWrite(method) {
 		return ApprovedCall{}, fmt.Errorf("only write calls need approval, got %q", call.Method)
@@ -267,13 +290,16 @@ func normalizeApprovedCall(call ApprovedCall) (ApprovedCall, error) {
 	if !strings.HasPrefix(path, "/api/") {
 		return ApprovedCall{}, fmt.Errorf("approved call path must be an API path, got %q", call.Path)
 	}
+	if queryErr != nil {
+		return ApprovedCall{}, fmt.Errorf("approved call query is invalid for %s %s", method, path)
+	}
 	if len(bodyHash) != hex.EncodedLen(sha256.Size) {
 		return ApprovedCall{}, fmt.Errorf("approved call needs a SHA-256 body hash for %s %s", method, path)
 	}
 	if _, err := hex.DecodeString(bodyHash); err != nil {
 		return ApprovedCall{}, fmt.Errorf("approved call body hash is not hexadecimal for %s %s", method, path)
 	}
-	return ApprovedCall{Method: method, Path: path, BodyHash: bodyHash}, nil
+	return ApprovedCall{Method: method, Path: path, Query: query, BodyHash: bodyHash}, nil
 }
 
 func (store *Store) liveLocked(delegation *Delegation) bool {

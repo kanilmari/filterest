@@ -19,10 +19,6 @@ import (
 )
 
 func AddForeignKeyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	var requestData struct {
 		ReferencingTable  string `json:"referencing_dataset"`
@@ -256,10 +252,6 @@ func GetForeignKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteForeignKeyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Metodi ei ole sallittu")
-		return
-	}
 
 	var requestData struct {
 		ConstraintName   string `json:"constraint_name"`

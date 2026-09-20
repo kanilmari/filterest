@@ -176,8 +176,7 @@ func TaskRunsHandler(w http.ResponseWriter, r *http.Request) {
 		CreateTaskRunHandler(w, r)
 	case http.MethodPut, http.MethodPatch:
 		UpdateTaskRunHandler(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
 	}
 }
 

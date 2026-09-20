@@ -117,7 +117,6 @@ func TestDatasetUIVisibilityRejectsUnsafePayloadWithoutWrites(t *testing.T) {
 		method, url, body string
 		status            int
 	}{
-		{"DELETE", "/api/admin/dataset-ui-visibility", "", 405},
 		{"GET", "/api/admin/dataset-ui-visibility", "", 400},
 		{"POST", "/api/admin/dataset-ui-visibility", `{"dataset_name":"fixture"}`, 400},
 		{"POST", "/api/admin/dataset-ui-visibility", `{"dataset_name":"fixture","ui_hidden":null}`, 400},

@@ -34,18 +34,12 @@ type sourceRequest struct {
 }
 
 func ProvidersHandler(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodGet {
-		writeMethodNotAllowed(writer, http.MethodGet)
-		return
-	}
+
 	writeJSON(writer, http.StatusOK, map[string]any{"providers": serviceForRequest().Providers()})
 }
 
 func ResolveHandler(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodPost {
-		writeMethodNotAllowed(writer, http.MethodPost)
-		return
-	}
+
 	payload, err := decodeSourceRequest(writer, request)
 	if err != nil {
 		writeAPIError(writer, err)
@@ -60,10 +54,7 @@ func ResolveHandler(writer http.ResponseWriter, request *http.Request) {
 }
 
 func FileHandler(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodPost {
-		writeMethodNotAllowed(writer, http.MethodPost)
-		return
-	}
+
 	payload, err := decodeSourceRequest(writer, request)
 	if err != nil {
 		writeAPIError(writer, err)
@@ -98,11 +89,6 @@ func decodeSourceRequest(writer http.ResponseWriter, request *http.Request) (sou
 		return sourceRequest{}, &resolverError{Status: http.StatusBadRequest, Code: "invalid_request", Message: "The request body must contain exactly one JSON object."}
 	}
 	return payload, nil
-}
-
-func writeMethodNotAllowed(writer http.ResponseWriter, method string) {
-	writer.Header().Set("Allow", method)
-	writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{"error": map[string]string{"code": "method_not_allowed", "message": "Method not allowed."}})
 }
 
 func writeJSON(writer http.ResponseWriter, status int, payload any) {

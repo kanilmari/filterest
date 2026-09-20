@@ -10,6 +10,11 @@
       "path_pattern": "/",
       "match_type": "prefix",
       "handler_name": "router.rootHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -56,6 +61,11 @@
       "path_pattern": "/admin/",
       "match_type": "prefix",
       "handler_name": "router.adminHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -81,6 +91,11 @@
       "path_pattern": "/api/about",
       "match_type": "exact",
       "handler_name": "system_table_tools.GetAboutRowHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -127,6 +142,10 @@
       "path_pattern": "/api/add-row-multipart",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.AddRowMultipartHandlerWrapper",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -152,6 +171,10 @@
       "path_pattern": "/api/add_foreign_key",
       "match_type": "exact",
       "handler_name": "dtt_foreign_keys.AddForeignKeyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -180,7 +203,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -209,7 +232,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -238,7 +261,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -264,6 +287,12 @@
       "path_pattern": "/api/admin/dataset-ui-visibility",
       "match_type": "exact",
       "handler_name": "system_table_tools.AdminDatasetUIVisibilityHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -289,6 +318,12 @@
       "path_pattern": "/api/admin/embedding-source-policy",
       "match_type": "exact",
       "handler_name": "ai_features.ExternalEmbeddingSourcePolicyHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -317,7 +352,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -346,7 +381,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -372,6 +407,12 @@
       "path_pattern": "/api/admin/row-access-rules",
       "match_type": "exact",
       "handler_name": "system_table_tools.AdminRowAccessRulesHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -401,7 +442,7 @@
         "POST",
         "DELETE"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -429,9 +470,10 @@
       "handler_name": "system_table_tools.AdminRowGroupsHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -458,9 +500,10 @@
       "match_type": "exact",
       "handler_name": "router.siteAssistantAPICatalogHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -488,9 +531,10 @@
       "handler_name": "system_table_tools.AdminSitePresentationSettingsHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -518,9 +562,10 @@
       "handler_name": "symbol_registry.AdminHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -547,9 +592,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetAdminUIFeatureFlagsHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -575,6 +621,12 @@
       "path_pattern": "/api/admin/ui-languages",
       "match_type": "exact",
       "handler_name": "lang.AdminUILanguagesHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -601,9 +653,10 @@
       "match_type": "exact",
       "handler_name": "router.adminUpdateNoticeStreamHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -637,9 +690,10 @@
       "handler_name": "auth.AdminUserAuthenticationHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -667,9 +721,10 @@
       "handler_name": "router.adminVersionInfoHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -698,7 +753,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -727,7 +782,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -756,7 +811,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -785,7 +840,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -814,7 +869,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -843,7 +898,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -869,6 +924,11 @@
       "path_pattern": "/api/app/ai-chat/capabilities",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAICapabilitiesHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -896,9 +956,10 @@
       "handler_name": "dtt_1_row_read.FilterbarAICodexQueryHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -924,6 +985,12 @@
       "path_pattern": "/api/app/ai-chat/conversation",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAIConversationHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -958,6 +1025,10 @@
       "path_pattern": "/api/app/ai-chat/query",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.FilterbarAIQueryHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -986,7 +1057,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1012,6 +1083,10 @@
       "path_pattern": "/api/archive-media-tables",
       "match_type": "exact",
       "handler_name": "system_table_tools.ArchiveMediaTableFoldersHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1037,6 +1112,10 @@
       "path_pattern": "/api/asset-linking/attachments/disable",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.DisableAttachmentLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1062,6 +1141,10 @@
       "path_pattern": "/api/asset-linking/attachments/enable",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.EnableAttachmentLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1087,6 +1170,10 @@
       "path_pattern": "/api/asset-linking/attachments/remove",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.RemoveAttachmentLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1112,6 +1199,11 @@
       "path_pattern": "/api/asset-linking/attachments/status",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.GetAttachmentLinkingStatusHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1137,6 +1229,10 @@
       "path_pattern": "/api/asset-linking/images/disable",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.DisableImageAssetLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1162,6 +1258,10 @@
       "path_pattern": "/api/asset-linking/images/enable",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.EnableImageAssetLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1187,6 +1287,10 @@
       "path_pattern": "/api/asset-linking/images/remove",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.RemoveImageAssetLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1212,6 +1316,11 @@
       "path_pattern": "/api/asset-linking/images/status",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.GetImageAssetLinkingStatusHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1237,6 +1346,10 @@
       "path_pattern": "/api/asset-linking/images/update",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.UpdateImageAssetLinkingHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1262,6 +1375,11 @@
       "path_pattern": "/api/asset-linking/status",
       "match_type": "exact",
       "handler_name": "dtt_asset_linking.GetAssetLinkingStatusHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1288,9 +1406,10 @@
       "match_type": "exact",
       "handler_name": "auth.GetAuthModesHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1338,9 +1457,10 @@
       "match_type": "prefix",
       "handler_name": "system_table_tools.GetCardVisibilityHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1369,7 +1489,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1395,6 +1515,11 @@
       "path_pattern": "/api/check-archived-media-tables",
       "match_type": "exact",
       "handler_name": "system_table_tools.CheckArchivedMediaTableFoldersHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1420,6 +1545,11 @@
       "path_pattern": "/api/check-db-consistency",
       "match_type": "exact",
       "handler_name": "system_table_tools.CheckDatabaseConsistencyHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1445,6 +1575,10 @@
       "path_pattern": "/api/check-fingerprint",
       "match_type": "exact",
       "handler_name": "auth.CheckFingerprintHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1491,6 +1625,11 @@
       "path_pattern": "/api/check-json-columns",
       "match_type": "exact",
       "handler_name": "devtools.CheckJsonInTextColumnsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -1505,6 +1644,11 @@
       "path_pattern": "/api/check-media-rows",
       "match_type": "exact",
       "handler_name": "system_table_tools.CheckMediaRowFoldersHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1530,6 +1674,11 @@
       "path_pattern": "/api/check-media-subfolders",
       "match_type": "exact",
       "handler_name": "system_table_tools.CheckMediaSubfoldersHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1555,6 +1704,11 @@
       "path_pattern": "/api/check-media-tables",
       "match_type": "exact",
       "handler_name": "system_table_tools.CheckMediaTableFoldersHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1580,6 +1734,11 @@
       "path_pattern": "/api/check-table-right",
       "match_type": "exact",
       "handler_name": "auth.CheckTableRightHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1614,6 +1773,10 @@
       "path_pattern": "/api/check-table-rights",
       "match_type": "exact",
       "handler_name": "auth.CheckTableRightsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1648,6 +1811,10 @@
       "path_pattern": "/api/check-table-rights-multi",
       "match_type": "exact",
       "handler_name": "auth.CheckTableRightsMultiHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1683,9 +1850,10 @@
       "match_type": "prefix",
       "handler_name": "system_table_tools.GetChildTabConfigHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1723,7 +1891,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1749,6 +1917,10 @@
       "path_pattern": "/api/comment-counts",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.CommentCountHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1774,6 +1946,11 @@
       "path_pattern": "/api/comments",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.CommentListHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1799,6 +1976,10 @@
       "path_pattern": "/api/comments/create",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.CommentCreateHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1824,6 +2005,10 @@
       "path_pattern": "/api/comments/delete",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.CommentDeleteHandler",
+      "methods": [
+        "DELETE"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1849,6 +2034,10 @@
       "path_pattern": "/api/count-lang-embeddings",
       "match_type": "exact",
       "handler_name": "ai_features.CountLangEmbeddingsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1874,6 +2063,10 @@
       "path_pattern": "/api/create-folder",
       "match_type": "exact",
       "handler_name": "dtt_system_table_folders.HandleCreateFolder",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1899,6 +2092,10 @@
       "path_pattern": "/api/create-indexes",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.CreateIndexesHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1931,6 +2128,10 @@
       "path_pattern": "/api/create-table",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.SimpleCreateTableHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENABLE_API_LANGUAGE=true",
       "scenarios": [
         {
@@ -1945,6 +2146,10 @@
       "path_pattern": "/api/create_dataset",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.CreateTableHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -1977,6 +2182,11 @@
       "path_pattern": "/api/csrf-token",
       "match_type": "exact",
       "handler_name": "auth.CSRFTokenHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2023,6 +2233,11 @@
       "path_pattern": "/api/data-retention/preview",
       "match_type": "exact",
       "handler_name": "system_table_tools.PreviewDataRetentionHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2048,6 +2263,10 @@
       "path_pattern": "/api/data-retention/prune",
       "match_type": "exact",
       "handler_name": "system_table_tools.PruneDataRetentionHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2074,9 +2293,10 @@
       "match_type": "exact",
       "handler_name": "router.GetDatasetAliasManagementHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2105,7 +2325,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2132,9 +2352,10 @@
       "match_type": "exact",
       "handler_name": "router.GetDatasetAliasesHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2160,6 +2381,11 @@
       "path_pattern": "/api/dataset-columns/",
       "match_type": "prefix",
       "handler_name": "dtt_2_column_crud.GetTableColumnsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2186,9 +2412,10 @@
       "match_type": "prefix",
       "handler_name": "system_table_tools.GetDatasetHeaderConfigHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2217,7 +2444,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2243,6 +2470,11 @@
       "path_pattern": "/api/dataset-names",
       "match_type": "exact",
       "handler_name": "dtt_foreign_keys.GetTableNamesHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2269,9 +2501,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetDatasetSortDefaultHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2321,7 +2554,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2356,6 +2589,13 @@
       "path_pattern": "/api/dataset_permissions",
       "match_type": "exact",
       "handler_name": "backend.PermissionsHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PATCH"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2381,6 +2621,11 @@
       "path_pattern": "/api/datasets",
       "match_type": "exact",
       "handler_name": "system_table_tools.GetGroupedTables",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2406,6 +2651,11 @@
       "path_pattern": "/api/db-roles",
       "match_type": "exact",
       "handler_name": "db_admin.ListRolesHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2431,6 +2681,10 @@
       "path_pattern": "/api/db-roles/create",
       "match_type": "exact",
       "handler_name": "db_admin.CreateRoleHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2456,6 +2710,10 @@
       "path_pattern": "/api/db-roles/delete",
       "match_type": "exact",
       "handler_name": "db_admin.DeleteRoleHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2481,6 +2739,10 @@
       "path_pattern": "/api/db-roles/update",
       "match_type": "exact",
       "handler_name": "db_admin.UpdateRoleHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2506,6 +2768,10 @@
       "path_pattern": "/api/delete-folder",
       "match_type": "exact",
       "handler_name": "dtt_system_table_folders.HandleDeleteFolder",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2531,6 +2797,10 @@
       "path_pattern": "/api/delete-rows",
       "match_type": "exact",
       "handler_name": "dtt_1_row_delete.DeleteRowsHandlerWrapper",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2556,6 +2826,10 @@
       "path_pattern": "/api/delete_foreign_key",
       "match_type": "exact",
       "handler_name": "dtt_foreign_keys.DeleteForeignKeyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2581,6 +2855,10 @@
       "path_pattern": "/api/dev-ai-translate-single",
       "match_type": "exact",
       "handler_name": "lang.AiTranslateSingleHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -2595,6 +2873,10 @@
       "path_pattern": "/api/drop-dataset",
       "match_type": "exact",
       "handler_name": "dtt_3_table_delete.DropTableHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2620,6 +2902,11 @@
       "path_pattern": "/api/embedding-datasets",
       "match_type": "exact",
       "handler_name": "ai_features.GetEmbeddingDatasetsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2645,6 +2932,11 @@
       "path_pattern": "/api/embedding_stream_handler",
       "match_type": "exact",
       "handler_name": "ai_features.EmbeddingStreamHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2670,6 +2962,11 @@
       "path_pattern": "/api/empty-rows",
       "match_type": "exact",
       "handler_name": "system_table_tools.GetEmptyRowsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2695,6 +2992,11 @@
       "path_pattern": "/api/export-table-csv",
       "match_type": "exact",
       "handler_name": "devtools.ExportTableCSVHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -2709,6 +3011,10 @@
       "path_pattern": "/api/fetch-dynamic-children",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetDynamicChildItemsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2735,9 +3041,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetFilterbarSectionLayoutHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2766,7 +3073,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2792,6 +3099,10 @@
       "path_pattern": "/api/fix-db-consistency",
       "match_type": "exact",
       "handler_name": "system_table_tools.FixDatabaseConsistencyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2817,6 +3128,10 @@
       "path_pattern": "/api/fix-media-subfolders",
       "match_type": "exact",
       "handler_name": "system_table_tools.FixMediaSubfoldersHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2842,6 +3157,10 @@
       "path_pattern": "/api/fix-translations",
       "match_type": "exact",
       "handler_name": "lang.FixTableTranslationsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2870,7 +3189,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2897,9 +3216,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.ListFKCacheTriggersHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2925,6 +3245,11 @@
       "path_pattern": "/api/foreign_keys",
       "match_type": "exact",
       "handler_name": "dtt_foreign_keys.GetForeignKeys",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2950,6 +3275,10 @@
       "path_pattern": "/api/generateTranslations",
       "match_type": "exact",
       "handler_name": "lang.GenerateTranslationsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -2982,6 +3311,10 @@
       "path_pattern": "/api/geocode-address",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.GeocodeAddressHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3007,6 +3340,11 @@
       "path_pattern": "/api/get-1m-relations",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.GetOneToManyRelationsHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3032,6 +3370,11 @@
       "path_pattern": "/api/get-add-row-metadata",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.GetAddRowMetadataHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3057,6 +3400,11 @@
       "path_pattern": "/api/get-columns",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.GetAddRowColumnsHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3082,6 +3430,11 @@
       "path_pattern": "/api/get-filter-options",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetFilterOptionsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3107,6 +3460,11 @@
       "path_pattern": "/api/get-intelligent-results",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3132,6 +3490,11 @@
       "path_pattern": "/api/get-lang-key-translations",
       "match_type": "exact",
       "handler_name": "lang.GetLangKeyTranslationsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3157,6 +3520,11 @@
       "path_pattern": "/api/get-many-to-many",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.GetManyToManyTablesHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3182,6 +3550,11 @@
       "path_pattern": "/api/get-metadata",
       "match_type": "exact",
       "handler_name": "dtt_3_table_read.GetTableViewHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3207,6 +3580,11 @@
       "path_pattern": "/api/get-results",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetResultsHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3232,6 +3610,11 @@
       "path_pattern": "/api/get-results-vector",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetResultsVector",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3257,6 +3640,11 @@
       "path_pattern": "/api/get-row-count",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetRowCountHandlerWrapper",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3282,6 +3670,11 @@
       "path_pattern": "/api/get-view-data",
       "match_type": "exact",
       "handler_name": "vanilla_tree.GetViewDataHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3307,6 +3700,10 @@
       "path_pattern": "/api/image-source-picker/file",
       "match_type": "exact",
       "handler_name": "image_source_picker.FileHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3341,6 +3738,11 @@
       "path_pattern": "/api/image-source-picker/providers",
       "match_type": "exact",
       "handler_name": "image_source_picker.ProvidersHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3375,6 +3777,10 @@
       "path_pattern": "/api/image-source-picker/resolve",
       "match_type": "exact",
       "handler_name": "image_source_picker.ResolveHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3409,6 +3815,10 @@
       "path_pattern": "/api/import-table-csv",
       "match_type": "exact",
       "handler_name": "devtools.ImportTableCSVHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -3423,6 +3833,10 @@
       "path_pattern": "/api/log-client-error",
       "match_type": "exact",
       "handler_name": "devtools.LogClientError",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -3444,6 +3858,11 @@
       "path_pattern": "/api/log-retention/preview",
       "match_type": "exact",
       "handler_name": "system_table_tools.PreviewLogRetentionHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3469,6 +3888,10 @@
       "path_pattern": "/api/log-retention/prune",
       "match_type": "exact",
       "handler_name": "system_table_tools.PruneLogRetentionHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3494,6 +3917,10 @@
       "path_pattern": "/api/login",
       "match_type": "exact",
       "handler_name": "auth.LoginAPIHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3540,6 +3967,11 @@
       "path_pattern": "/api/logout",
       "match_type": "exact",
       "handler_name": "auth.LogoutHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3586,6 +4018,10 @@
       "path_pattern": "/api/media-library/attach",
       "match_type": "exact",
       "handler_name": "media_library.AttachHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3620,6 +4056,10 @@
       "path_pattern": "/api/media-library/detach",
       "match_type": "exact",
       "handler_name": "media_library.DetachHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3654,6 +4094,11 @@
       "path_pattern": "/api/media-library/list",
       "match_type": "exact",
       "handler_name": "media_library.ListHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3688,6 +4133,12 @@
       "path_pattern": "/api/modify-columns",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.ModifyColumnsHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3713,6 +4164,11 @@
       "path_pattern": "/api/payments/",
       "match_type": "prefix",
       "handler_name": "payment_gateway.GetPaymentStatusHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3759,6 +4215,10 @@
       "path_pattern": "/api/payments/create",
       "match_type": "exact",
       "handler_name": "payment_gateway.CreatePaymentHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3805,6 +4265,10 @@
       "path_pattern": "/api/payments/webhook",
       "match_type": "exact",
       "handler_name": "payment_gateway.WebhookHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3851,6 +4315,11 @@
       "path_pattern": "/api/pipeline-info",
       "match_type": "exact",
       "handler_name": "pipeline.IntrospectionHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -3866,9 +4335,10 @@
       "match_type": "exact",
       "handler_name": "product_identity.Handler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3915,6 +4385,10 @@
       "path_pattern": "/api/prune-archived-media-tables",
       "match_type": "exact",
       "handler_name": "system_table_tools.PruneArchivedMediaTableFoldersHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3940,6 +4414,10 @@
       "path_pattern": "/api/query-table",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.SimpleQueryTableHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENABLE_API_LANGUAGE=true",
       "scenarios": [
         {
@@ -3954,6 +4432,10 @@
       "path_pattern": "/api/rebuild-search-vectors",
       "match_type": "exact",
       "handler_name": "dtt_search_vectors.RebuildSearchVectorHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -3979,6 +4461,11 @@
       "path_pattern": "/api/referenced-data",
       "match_type": "exact",
       "handler_name": "dtt_1_row_create.GetReferencedTableData",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4004,6 +4491,10 @@
       "path_pattern": "/api/refresh-lang-embeddings",
       "match_type": "exact",
       "handler_name": "ai_features.RefreshLangEmbeddingsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4029,6 +4520,10 @@
       "path_pattern": "/api/register_ndYOyXV0INOK3F",
       "match_type": "exact",
       "handler_name": "auth.RegisterAPIHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4075,6 +4570,10 @@
       "path_pattern": "/api/rename-tree-node",
       "match_type": "exact",
       "handler_name": "dtt_system_table_folders.HandleRenameTreeNode",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4100,6 +4599,10 @@
       "path_pattern": "/api/request-email-change-otp",
       "match_type": "exact",
       "handler_name": "auth.RequestEmailChangeOTPHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4134,6 +4637,10 @@
       "path_pattern": "/api/request-password-change-otp",
       "match_type": "exact",
       "handler_name": "auth.RequestPasswordChangeOTPHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4168,6 +4675,10 @@
       "path_pattern": "/api/request-password-reset-otp",
       "match_type": "exact",
       "handler_name": "auth.RequestPasswordResetOTPHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4214,6 +4725,10 @@
       "path_pattern": "/api/reset-password",
       "match_type": "exact",
       "handler_name": "auth.ResetPasswordWithOTPHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4260,6 +4775,10 @@
       "path_pattern": "/api/reset-session",
       "match_type": "exact",
       "handler_name": "e_sessions.ResetSessionHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4306,6 +4825,10 @@
       "path_pattern": "/api/save-usergroup-right",
       "match_type": "exact",
       "handler_name": "backend.SaveUserGroupRight",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4331,6 +4854,10 @@
       "path_pattern": "/api/scan-lang-sources",
       "match_type": "exact",
       "handler_name": "system_table_tools.ScanLangSourcesHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4356,6 +4883,11 @@
       "path_pattern": "/api/sessioninfo",
       "match_type": "exact",
       "handler_name": "devtools.SessionHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -4370,6 +4902,10 @@
       "path_pattern": "/api/set-comments",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.SetCommentsHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4405,7 +4941,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4434,7 +4970,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4482,9 +5018,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetSitePresentationSettingsHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4532,9 +5069,10 @@
       "match_type": "exact",
       "handler_name": "event_bus.SSESubscribeHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4569,6 +5107,10 @@
       "path_pattern": "/api/system_triggers/create",
       "match_type": "exact",
       "handler_name": "dtt_triggers.CreateTriggerHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4594,6 +5136,11 @@
       "path_pattern": "/api/system_triggers/list",
       "match_type": "exact",
       "handler_name": "dtt_triggers.GetTriggersHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4620,9 +5167,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetTaskTodoProgressHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4657,6 +5205,11 @@
       "path_pattern": "/api/text-index-status",
       "match_type": "exact",
       "handler_name": "dtt_search_vectors.TextIndexStatusHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4682,6 +5235,11 @@
       "path_pattern": "/api/translations",
       "match_type": "exact",
       "handler_name": "lang.GetTranslationsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4728,6 +5286,11 @@
       "path_pattern": "/api/tree_data",
       "match_type": "exact",
       "handler_name": "vanilla_tree.GetTreeDataHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4753,6 +5316,11 @@
       "path_pattern": "/api/ui-languages",
       "match_type": "exact",
       "handler_name": "lang.GetPublicUILanguagesHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4799,6 +5367,10 @@
       "path_pattern": "/api/update-folder",
       "match_type": "exact",
       "handler_name": "dtt_system_table_folders.HandleUpdateFolder",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4824,6 +5396,10 @@
       "path_pattern": "/api/update-lang-key",
       "match_type": "exact",
       "handler_name": "lang.UpdateLangKeyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
@@ -4838,6 +5414,10 @@
       "path_pattern": "/api/update-oids",
       "match_type": "exact",
       "handler_name": "system_table_tools.HandleUpdateOidsAndTableNames",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4863,6 +5443,10 @@
       "path_pattern": "/api/update-profile",
       "match_type": "exact",
       "handler_name": "auth.UserProfileUpdateHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4897,6 +5481,10 @@
       "path_pattern": "/api/update-row",
       "match_type": "exact",
       "handler_name": "dtt_1_row_update.UpdateRowHandlerWrapper",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4922,6 +5510,10 @@
       "path_pattern": "/api/update-tab-order",
       "match_type": "exact",
       "handler_name": "system_table_tools.UpdateTabOrderHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4947,6 +5539,10 @@
       "path_pattern": "/api/update-table-folder",
       "match_type": "exact",
       "handler_name": "dtt_system_table_folders.HandleUpdateTableFolder",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -4973,9 +5569,10 @@
       "match_type": "exact",
       "handler_name": "auth.UserPermissionsHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5010,6 +5607,11 @@
       "path_pattern": "/api/user-profile",
       "match_type": "exact",
       "handler_name": "auth.UserProfileFetchHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5044,6 +5646,13 @@
       "path_pattern": "/api/user-visual-preference",
       "match_type": "exact",
       "handler_name": "auth.UserVisualPreferenceHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PATCH",
+        "DELETE"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5079,9 +5688,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetViewFieldSetsHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5119,7 +5729,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5157,7 +5767,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5195,7 +5805,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5233,7 +5843,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5269,9 +5879,10 @@
       "match_type": "exact",
       "handler_name": "system_table_tools.GetArticleSectionDefaultsHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5306,6 +5917,11 @@
       "path_pattern": "/apps/",
       "match_type": "prefix",
       "handler_name": "router.handleApps",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5352,6 +5968,11 @@
       "path_pattern": "/datasets/",
       "match_type": "prefix",
       "handler_name": "router.datasetsRedirectHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5398,6 +6019,11 @@
       "path_pattern": "/favicon4S.png",
       "match_type": "exact",
       "handler_name": "router.faviconHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5446,9 +6072,10 @@
       "handler_name": "auth.FirstRunAdminHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5495,6 +6122,11 @@
       "path_pattern": "/frontend/",
       "match_type": "prefix",
       "handler_name": "router.handleFrontend",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5542,9 +6174,10 @@
       "match_type": "exact",
       "handler_name": "router.healthHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5591,6 +6224,12 @@
       "path_pattern": "/login",
       "match_type": "exact",
       "handler_name": "auth.LoginHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5637,6 +6276,11 @@
       "path_pattern": "/register_ndYOyXV0INOK3F",
       "match_type": "exact",
       "handler_name": "auth.RegisterHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5683,6 +6327,11 @@
       "path_pattern": "/robots.txt",
       "match_type": "exact",
       "handler_name": "router.robotsHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5729,6 +6378,11 @@
       "path_pattern": "/sitemap.xml",
       "match_type": "exact",
       "handler_name": "router.sitemapHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5775,6 +6429,11 @@
       "path_pattern": "/storage/",
       "match_type": "prefix",
       "handler_name": "router.ServeStorage",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5822,9 +6481,10 @@
       "match_type": "prefix",
       "handler_name": "symbol_registry.AssetHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5873,9 +6533,10 @@
       "handler_name": "router.systemAutomationAccountHandler",
       "methods": [
         "GET",
+        "HEAD",
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5925,7 +6586,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -5973,9 +6634,10 @@
       "match_type": "exact",
       "handler_name": "router.systemHealthHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -6023,9 +6685,10 @@
       "match_type": "exact",
       "handler_name": "router.systemInstanceStatusHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -6073,9 +6736,10 @@
       "match_type": "exact",
       "handler_name": "router.systemReadyHandler",
       "methods": [
-        "GET"
+        "GET",
+        "HEAD"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
@@ -6125,7 +6789,7 @@
       "methods": [
         "POST"
       ],
-      "method_source": "explicit_stable_contract",
+      "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",

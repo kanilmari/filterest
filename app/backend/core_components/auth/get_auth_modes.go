@@ -5,7 +5,6 @@
 package auth
 
 import (
-	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/httpresponse"
@@ -32,10 +31,7 @@ type AuthModesResponse struct {
 
 // GetAuthModesHandler tallentaa käyttäjän roolin sessioon
 func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodGet {
-		httpresponse.RespondWithError(response_writer, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	loginSettings, policyErr := backend.ReadLoginAccessSettings(request.Context(), backend.Db)
 	if policyErr != nil {
 		httpresponse.RespondWithError(response_writer, http.StatusServiceUnavailable, "authentication_policy_unavailable")
@@ -185,37 +181,6 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding auth modes")
 		return
 	}
-}
-
-// authenticatedUserExists verifies that a stored logged-in session still points
-// at an enabled user row between the auth cookie and system_users.
-// It exists so stale cookies for deleted/reseeded dev users do not bootstrap a
-// logout shell with an empty permission cache.
-func authenticatedUserExists(userID int) (bool, error) {
-	if userID <= 1 {
-		return true, nil
-	}
-
-	roleDB := backend.Db
-	if roleDB == nil {
-		roleDB = backend.DbGuest
-	}
-	if roleDB == nil {
-		return false, fmt.Errorf("auth modes database unavailable")
-	}
-
-	var dummy int
-	err := roleDB.QueryRow(
-		`SELECT 1 FROM system_users WHERE id = $1 AND enabled IS TRUE`,
-		userID,
-	).Scan(&dummy)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // clearAuthSessionValues removes authenticated identity keys between a stale

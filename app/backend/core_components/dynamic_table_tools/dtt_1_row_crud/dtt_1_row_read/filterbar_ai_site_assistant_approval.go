@@ -25,6 +25,7 @@ type siteAssistantApprovalRequest struct {
 type siteAssistantApprovalEntry struct {
 	Method   string `json:"method"`
 	Path     string `json:"path"`
+	Query    string `json:"query"`
 	BodyHash string `json:"body_sha256"`
 }
 
@@ -39,10 +40,7 @@ type siteAssistantApplyRequest struct {
 // and each approved call runs once.
 func SiteAssistantApprovalHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST accepted")
-		return
-	}
+
 	actor, ok := dbutils.GetRequestActorContext(r.Context())
 	if !ok || !actor.IsAdmin || actor.UserID <= 1 {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "administrator access is required")
@@ -109,10 +107,13 @@ func matchWaitingChanges(waiting []codingAgentPlanEntry, requested []siteAssista
 	for _, entry := range requested {
 		method := strings.ToUpper(strings.TrimSpace(entry.Method))
 		path := strings.TrimSpace(entry.Path)
+		query, queryErr := site_assistant.CanonicalQuery(entry.Query)
 		hash := strings.ToLower(strings.TrimSpace(entry.BodyHash))
 		found := false
 		for _, candidate := range waiting {
+			candidateQuery, candidateQueryErr := site_assistant.CanonicalQuery(candidate.ApprovalQuery)
 			if strings.EqualFold(candidate.Method, method) && candidate.Path == path &&
+				queryErr == nil && candidateQueryErr == nil && candidateQuery == query &&
 				strings.EqualFold(candidate.BodyHash, hash) && candidate.Status != "done" {
 				found = true
 				break
@@ -121,7 +122,7 @@ func matchWaitingChanges(waiting []codingAgentPlanEntry, requested []siteAssista
 		if !found {
 			return nil, errUnknownWaitingChange
 		}
-		approved = append(approved, site_assistant.ApprovedCall{Method: method, Path: path, BodyHash: hash})
+		approved = append(approved, site_assistant.ApprovedCall{Method: method, Path: path, Query: query, BodyHash: hash})
 	}
 	return approved, nil
 }

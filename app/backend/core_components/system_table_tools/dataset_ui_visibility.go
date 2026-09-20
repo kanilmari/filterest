@@ -67,10 +67,7 @@ func AdminDatasetUIVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, "explicit ui_hidden boolean is required")
 			return
 		}
-	default:
-		w.Header().Set("Allow", "GET, POST")
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
+
 	}
 	if req.DatasetName == "" {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "dataset_name is required")

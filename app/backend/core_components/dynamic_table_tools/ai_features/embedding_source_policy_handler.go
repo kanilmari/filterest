@@ -37,8 +37,7 @@ func ExternalEmbeddingSourcePolicyHandler(w http.ResponseWriter, r *http.Request
 		getExternalEmbeddingSourcePolicy(w, r)
 	case http.MethodPost:
 		saveExternalEmbeddingSourcePolicy(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET and POST allowed")
+
 	}
 }
 

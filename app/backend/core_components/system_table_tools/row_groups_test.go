@@ -73,13 +73,3 @@ func TestAdminRowGroupsHandlerListsThroughExplicitAdminRoute(t *testing.T) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }
-
-func TestAdminRowGroupHandlersRejectUnsupportedMethods(t *testing.T) {
-	for _, handler := range []http.HandlerFunc{AdminRowGroupsHandler, AdminRowGroupMembershipsHandler} {
-		response := httptest.NewRecorder()
-		handler(response, httptest.NewRequest(http.MethodPatch, "/api/admin/row-groups", nil))
-		if response.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
-		}
-	}
-}

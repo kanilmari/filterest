@@ -169,10 +169,6 @@ func buildTopTabVisibilityMessage(tableName string, willBecomeVisible bool) stri
 // HandleUpdateFolder handles POST /api/update-folder for moving folders under another folder.
 // Body: { "item_id": 123, "item_type": "folder", "new_folder_id": 456 }
 func HandleUpdateFolder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	req, err := decodeUpdateFolderRequest(r)
 	if err != nil {
@@ -229,10 +225,6 @@ func HandleUpdateFolder(w http.ResponseWriter, r *http.Request) {
 // HandleUpdateTableFolder handles POST /api/update-table-folder for moving a table into a folder.
 // Body: { "item_id": 123, "item_type": "table", "dataset_uid": 456, "new_folder_id": 789 }
 func HandleUpdateTableFolder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	req, err := decodeUpdateFolderRequest(r)
 	if err != nil {

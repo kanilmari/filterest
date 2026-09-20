@@ -47,6 +47,12 @@
 
 .supplemental-dataset-group p {
   margin: 0.25rem 0 0;
+  color: var(--empty_field_text_color);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.4;
 }
 
 .supplemental-dataset-group a {

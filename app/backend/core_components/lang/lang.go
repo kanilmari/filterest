@@ -331,10 +331,6 @@ func UpdateLangKeyHandler(w http.ResponseWriter, r *http.Request) {
 
 // AiTranslateSingleHandler returns AI suggestions for one lang key before the user saves them.
 func AiTranslateSingleHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "POST only")
-		return
-	}
 
 	var req aiTranslateSingleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

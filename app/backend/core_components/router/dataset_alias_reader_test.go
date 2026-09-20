@@ -101,17 +101,6 @@ func TestGetDatasetAliasesHandlerReturnsRegistryPayload(t *testing.T) {
 	}
 }
 
-func TestGetDatasetAliasesHandlerRejectsNonGETMethods(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/dataset-aliases", nil)
-	rec := httptest.NewRecorder()
-
-	GetDatasetAliasesHandler(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", rec.Code)
-	}
-}
-
 type routerAliasDriver struct{}
 type routerAliasConn struct{}
 type routerAliasStmt struct{ query string }

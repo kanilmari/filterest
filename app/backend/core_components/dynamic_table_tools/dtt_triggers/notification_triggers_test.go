@@ -120,17 +120,6 @@ type triggerResultStub int64
 func (r triggerResultStub) LastInsertId() (int64, error) { return 0, errors.New("not implemented") }
 func (r triggerResultStub) RowsAffected() (int64, error) { return int64(r), nil }
 
-func TestGetTriggersHandlerRejectsWrongMethod(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/system_triggers/list", nil)
-	rec := httptest.NewRecorder()
-
-	GetTriggersHandler(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", rec.Code)
-	}
-}
-
 func TestGetTriggersHandlerRequiresTransaction(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/system_triggers/list", nil)
 	rec := httptest.NewRecorder()
@@ -139,17 +128,6 @@ func TestGetTriggersHandlerRequiresTransaction(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
-	}
-}
-
-func TestCreateTriggerHandlerRejectsWrongMethod(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/system_triggers/create", nil)
-	rec := httptest.NewRecorder()
-
-	CreateTriggerHandler(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", rec.Code)
 	}
 }
 

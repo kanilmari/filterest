@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 
 import pytest
 
@@ -52,7 +53,12 @@ class FakeSession:
             return {"method": method, "path": path, "status": 200, "body": {"data": [{"id": 1}]}}
         if path in self.approved:
             return {"method": method, "path": path, "status": 200, "body": {"updated": 1}}
-        approval = {"method": method, "path": path, "body_sha256": "c" * 64}
+        approval = {
+            "method": method,
+            "path": path,
+            "query": urllib.parse.urlencode(sorted((query or {}).items())),
+            "body_sha256": "c" * 64,
+        }
         self.attempted_writes.append({"approval": approval, "query": query or {}, "body": body})
         return {"method": method, "path": path, "status": 403, "needs_approval": True, "approval": approval}
 
@@ -141,6 +147,7 @@ def test_job_reads_live_data_and_returns_a_plan_for_writes(tmp_path):
     assert jobs.state["answer"].startswith("I read the row")
     plan = jobs.state["pending_changes"]
     assert len(plan) == 1 and plan[0]["path"] == "/api/update-row" and plan[0]["status"] == "pending"
+    assert plan[0]["approval_query"] == "dataset=app_notes"
     assert plan[0]["body"]["updates"][0]["value"] == "Muistiinpano"
     assert [call["path"] for call in jobs.state["api_calls"]] == ["/api/get-results", "/api/update-row"]
 
@@ -203,13 +210,14 @@ def test_approved_plan_runs_without_a_new_model_request(tmp_path):
     assert session.calls[0]["body"] == {"id": 1}
 
 
-def test_apply_stops_at_the_first_refused_call(tmp_path):
+def test_apply_failure_keeps_remainder_and_retry_skips_completed(tmp_path):
     jobs, _ = prepare_job(tmp_path)
     jobs.state["pending_changes"] = [
         {"method": "POST", "path": "/api/update-row", "query": {}, "body": {"id": 1}, "status": "pending"},
         {"method": "POST", "path": "/api/delete-rows", "query": {}, "body": {"ids": [1]}, "status": "pending"},
+        {"method": "POST", "path": "/api/add-row", "query": {}, "body": {"title": "Later"}, "status": "pending"},
     ]
-    session = FakeSession("http://127.0.0.1:8193")  # nothing approved
+    session = FakeSession("http://127.0.0.1:8193", approved=["/api/update-row"])
 
     result = jobs_module.apply_site_assistant_plan(
         jobs, "job",
@@ -218,8 +226,20 @@ def test_apply_stops_at_the_first_refused_call(tmp_path):
     )
 
     assert result["status"] == "apply_failed" and jobs.state["status"] == "apply_failed"
-    assert jobs.state["pending_changes"][0]["status"] == "failed"
-    assert len(session.calls) == 1, "a failed change must not be followed by the next one"
+    assert [entry["status"] for entry in jobs.state["pending_changes"]] == ["done", "failed", "pending"]
+    assert [call["path"] for call in session.calls] == ["/api/update-row", "/api/delete-rows"]
+
+    retry_session = FakeSession(
+        "http://127.0.0.1:8193", approved=["/api/delete-rows", "/api/add-row"])
+    retried = jobs_module.apply_site_assistant_plan(
+        jobs, "job",
+        {"delegation_code": "fsa1_third", "site_base_url": "http://127.0.0.1:8193"},
+        session_factory=lambda base_url: retry_session,
+    )
+
+    assert retried["status"] == "applied" and jobs.state["status"] == "applied"
+    assert [entry["status"] for entry in jobs.state["pending_changes"]] == ["done", "done", "done"]
+    assert [call["path"] for call in retry_session.calls] == ["/api/delete-rows", "/api/add-row"]
 
 
 def test_engine_command_and_environment_come_from_configuration(tmp_path):
@@ -278,8 +298,8 @@ def test_attached_images_are_copied_into_the_workspace(tmp_path):
     assert images[0].read_bytes() == b"\x89PNG fixture"
 
 
-def test_runner_applies_a_plan_only_for_its_owner_and_waiting_state(tmp_path, monkeypatch):
-    """CodingJobs.apply_plan guards ownership, state and fresh access."""
+def test_runner_applies_a_plan_only_for_its_owner_and_retryable_state(tmp_path, monkeypatch):
+    """CodingJobs.apply_plan guards ownership, retry state and fresh access."""
     jobs_store = load("coding_agent_jobs")
     root = tmp_path / "jobs"
     root.mkdir()
@@ -292,11 +312,10 @@ def test_runner_applies_a_plan_only_for_its_owner_and_waiting_state(tmp_path, mo
         "pending_changes": [{"method": "POST", "path": "/api/update-row", "query": {}, "body": {"id": 1}, "status": "pending"}],
     })
     access = {"delegation_code": "fsa1_second", "site_base_url": "http://127.0.0.1:8193"}
-    applied = {}
+    applied = []
 
     def fake_apply(jobs, requested_job, requested_access):
-        applied["job"] = requested_job
-        applied["access"] = requested_access
+        applied.append((requested_job, requested_access))
         jobs.update(requested_job, status="applied")
         return {"status": "applied"}
 
@@ -309,8 +328,13 @@ def test_runner_applies_a_plan_only_for_its_owner_and_waiting_state(tmp_path, mo
         store.apply_plan(job_id, 42, "app_notes", {"delegation_code": "fsa1_second"})
 
     result = store.apply_plan(job_id, 42, "app_notes", access)
-    assert applied["job"] == job_id and applied["access"] == access
+    assert applied == [(job_id, access)]
     assert result["status"] == "applied"
+
+    store.update(job_id, status="apply_failed")
+    retried = store.apply_plan(job_id, 42, "app_notes", access)
+    assert applied == [(job_id, access), (job_id, access)]
+    assert retried["status"] == "applied"
 
     with pytest.raises(jobs_store.JobError):
         store.apply_plan(job_id, 42, "app_notes", access)

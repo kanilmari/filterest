@@ -27,8 +27,7 @@ func TaskGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		updateTaskGroup(w, r)
 	case http.MethodDelete:
 		deleteTaskGroup(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
 	}
 }
 

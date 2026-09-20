@@ -71,10 +71,6 @@ const uiLanguageSettingsUpdateSQL = `
 // GetPublicUILanguagesHandler returns only fully approved languages that may appear in public selectors.
 // GET /api/ui-languages
 func GetPublicUILanguagesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	languages, err := readUILanguageSettings(r.Context(), backend.Db)
 	if err != nil {
@@ -102,8 +98,7 @@ func AdminUILanguagesHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithJSON(w, http.StatusOK, uiLanguageSettingsResponse{Languages: languages})
 	case http.MethodPost:
 		saveAdminUILanguageSettings(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
+
 	}
 }
 

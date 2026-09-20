@@ -199,10 +199,6 @@ func isSimpleNumericLiteral(expr string) bool {
 }
 
 func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req CreateTableRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -399,11 +395,6 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 		respondDatasetSettings(w, r)
 		return
 	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "GET, POST")
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET and POST allowed")
-		return
-	}
 
 	var req ModifyColumnsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -560,10 +551,6 @@ type SimpleCreateTableRequest struct {
 }
 
 func SimpleCreateTableHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	// Tarkista autentikointi: vaadi kirjautuminen
 	session, err := e_sessions.GetOrCreateSession(w, r)
@@ -684,10 +671,6 @@ type SimpleQueryTableRequest struct {
 }
 
 func SimpleQueryTableHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req SimpleQueryTableRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

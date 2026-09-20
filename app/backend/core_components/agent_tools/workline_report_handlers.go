@@ -40,8 +40,7 @@ func WorklineReportsHandler(w http.ResponseWriter, r *http.Request) {
 		createWorklineReportHandler(w, r)
 	case http.MethodPatch, http.MethodPut:
 		updateWorklineReportStateHandler(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+
 	}
 }
 

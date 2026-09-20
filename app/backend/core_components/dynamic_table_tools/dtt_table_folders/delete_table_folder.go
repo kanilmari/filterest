@@ -21,10 +21,6 @@ import (
 //  1. Kansiolla ei ole lapsikansioita (system_table_folders.parent_id = folder_id)
 //  2. Kansiossa ei ole tauluja (system_db_tables.folder_id = folder_id)
 func HandleDeleteFolder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req struct {
 		FolderID int `json:"folder_id"`

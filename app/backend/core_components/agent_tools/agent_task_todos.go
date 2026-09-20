@@ -114,8 +114,7 @@ func TaskTodosHandler(w http.ResponseWriter, r *http.Request) {
 		UpdateTaskTodoHandler(w, r)
 	case http.MethodDelete:
 		DeleteTaskTodoHandler(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
 	}
 }
 

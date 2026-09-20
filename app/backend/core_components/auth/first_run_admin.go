@@ -91,8 +91,7 @@ func FirstRunAdminHandler(w http.ResponseWriter, r *http.Request) {
 		showFirstRunAdminForm(w, r, firstRunAdminInput{}, firstRunAdminErrors{}, http.StatusOK)
 	case http.MethodPost:
 		handleFirstRunAdminPost(w, r)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+
 	}
 }
 

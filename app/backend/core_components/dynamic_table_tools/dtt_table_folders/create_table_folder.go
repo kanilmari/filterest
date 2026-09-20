@@ -169,10 +169,6 @@ func CreateFolderWithQuerier(q dbutils.Querier, req CreateFolderRequest) (int, e
 // Body: { "folder_name": "Uusi kansio", "parent_id": 0 }
 // parent_id=0 tai puuttuu → juuri (NULL)
 func HandleCreateFolder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req struct {
 		FolderName string `json:"folder_name"`

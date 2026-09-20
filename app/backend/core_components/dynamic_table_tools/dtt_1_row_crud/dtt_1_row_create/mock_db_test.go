@@ -125,8 +125,8 @@ func (t *queueTx) Rollback() error { return nil }
 // queueStmt dispatches to the queue on Query vs Exec.
 type queueStmt struct{}
 
-func (s *queueStmt) Close() error    { return nil }
-func (s *queueStmt) NumInput() int   { return -1 }
+func (s *queueStmt) Close() error  { return nil }
+func (s *queueStmt) NumInput() int { return -1 }
 
 func (s *queueStmt) Exec(args []driver.Value) (driver.Result, error) {
 	e, ok := popExec()

@@ -73,7 +73,12 @@ func WithSiteAssistantGuardStore(store *site_assistant.Store, next http.HandlerF
 		r.ContentLength = int64(len(body))
 
 		bodyHash := site_assistant.HashRequestBody(body)
-		if approvalErr := store.UseWriteApproval(delegationID, r.Method, r.URL.Path, bodyHash); approvalErr != nil {
+		canonicalQuery, queryErr := site_assistant.CanonicalQuery(r.URL.RawQuery)
+		if queryErr != nil {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid query parameters")
+			return
+		}
+		if approvalErr := store.UseWriteApproval(delegationID, r.Method, r.URL.Path, canonicalQuery, bodyHash); approvalErr != nil {
 			log.Printf("[site_assistant_guard] unapproved %s %s for delegation %s", r.Method, r.URL.Path, delegationID)
 			httpresponse.RespondWithJSON(w, http.StatusForbidden, map[string]any{
 				"error": "site_assistant_approval_required",
@@ -81,6 +86,7 @@ func WithSiteAssistantGuardStore(store *site_assistant.Store, next http.HandlerF
 				"call": map[string]string{
 					"method":      r.Method,
 					"path":        r.URL.Path,
+					"query":       canonicalQuery,
 					"body_sha256": bodyHash,
 				},
 			})

@@ -53,10 +53,6 @@ type datasetHeaderQueryer interface {
 // GetDatasetHeaderConfigHandler returns dataset header copy overrides for one dataset.
 // GET /api/dataset-header-config/{datasetName}
 func GetDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	datasetName := strings.TrimPrefix(r.URL.Path, "/api/dataset-header-config/")
 	if datasetName == "" {
@@ -81,10 +77,6 @@ func GetDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 // SaveDatasetHeaderConfigHandler stores header copy, shared branding, and dataset-specific presentation media.
 // POST /api/dataset-header-config/save
 func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] multipart parse failed: %v\033[0m", err)

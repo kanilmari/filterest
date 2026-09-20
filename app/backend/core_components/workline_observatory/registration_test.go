@@ -14,7 +14,7 @@ import (
 
 func TestWorklineObservatoryRequiresActivationAndAdminPipeline(t *testing.T) {
 	routes := map[string]string{}
-	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string) {
+	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string, methods ...string) {
 		routes[pattern] = handlerName
 	})
 	if len(routes) != 0 {
@@ -22,7 +22,7 @@ func TestWorklineObservatoryRequiresActivationAndAdminPipeline(t *testing.T) {
 	}
 
 	Register()
-	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string) {
+	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string, methods ...string) {
 		routes[pattern] = handlerName
 	})
 	want := map[string]string{

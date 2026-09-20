@@ -16,10 +16,7 @@ import (
 
 // BoardHandler returns the board or the bounded report history of one workline.
 func BoardHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
-		return
-	}
+
 	if rawWorklineID := strings.TrimSpace(r.URL.Query().Get("workline_id")); rawWorklineID != "" {
 		worklineID, err := parseReportHistoryWorklineID(rawWorklineID)
 		if err != nil {

@@ -64,10 +64,7 @@ func DeleteRowsHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	if row_mutation_policy.RequiresDedicatedMutationAPI(table_name) {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
 		return

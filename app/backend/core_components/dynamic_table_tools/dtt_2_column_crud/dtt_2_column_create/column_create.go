@@ -8,6 +8,7 @@ package dtt_2_column_create
 import (
 	"database/sql"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud" // esim. täältä saa ModifiedCol
+	"easelect/backend/core_components/lang"
 	security "easelect/backend/core_components/security"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 func AddNewColumns(tx *sql.Tx, sanitizedTableName string, addedCols []dtt_2_column_crud.ModifiedCol) error {
 	fmt.Println("Adding new columns (if any):", addedCols)
+	addedColumnNames := make([]string, 0, len(addedCols))
 	for _, acol := range addedCols {
 		fmt.Println("Adding column:", acol)
 		sNewName, err2 := security.SanitizeIdentifier(acol.NewName)
@@ -36,6 +38,7 @@ func AddNewColumns(tx *sql.Tx, sanitizedTableName string, addedCols []dtt_2_colu
 			fmt.Println("Error adding new column:", err2)
 			return err2
 		}
+		addedColumnNames = append(addedColumnNames, sNewName)
 	}
-	return nil
+	return lang.EnsureColumnInterfaceLabels(tx, sanitizedTableName, addedColumnNames)
 }

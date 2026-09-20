@@ -52,21 +52,15 @@ func TestNormalizeWorklinePriorityActionRejectsUnsafeSelections(t *testing.T) {
 	}
 }
 
-func TestPriorityActionRejectsUnauthenticatedAndReadRequestsBeforeMutation(t *testing.T) {
+func TestPriorityActionRejectsUnauthenticatedRequestsBeforeMutation(t *testing.T) {
 	oldStore := e_sessions.Store
 	e_sessions.Store = sessions.NewCookieStore([]byte("priority-actions-fixture-only-key"))
 	t.Cleanup(func() { e_sessions.Store = oldStore })
-	for _, method := range []string{http.MethodGet, http.MethodPost} {
-		req := httptest.NewRequest(method, "/api/app/workline-observatory/priority-actions", nil)
-		recorder := httptest.NewRecorder()
-		WorklinePriorityActionsHandler(recorder, req)
-		expected := http.StatusUnauthorized
-		if method == http.MethodGet {
-			expected = http.StatusMethodNotAllowed
-		}
-		if recorder.Code != expected {
-			t.Fatalf("method %s: got %d want %d", method, recorder.Code, expected)
-		}
+	req := httptest.NewRequest(http.MethodPost, "/api/app/workline-observatory/priority-actions", nil)
+	recorder := httptest.NewRecorder()
+	WorklinePriorityActionsHandler(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d want %d", recorder.Code, http.StatusUnauthorized)
 	}
 }
 func TestPriorityActionRejectsOversizedSelection(t *testing.T) {

@@ -19,13 +19,6 @@ func TestDropTableHandlerRejectsInvalidRequestsBeforeDatabaseWork(t *testing.T) 
 		wantBody   string
 	}{
 		{
-			name:       "method not allowed",
-			method:     http.MethodGet,
-			body:       "",
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody:   "only POST allowed",
-		},
-		{
 			name:       "invalid json",
 			method:     http.MethodPost,
 			body:       "{",

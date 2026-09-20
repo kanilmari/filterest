@@ -14,10 +14,6 @@ import (
 
 // GetAttachmentLinkingStatusHandler returns the current attachment-linking configuration for one or all tables.
 func GetAttachmentLinkingStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET method is allowed")
-		return
-	}
 
 	tableName := r.URL.Query().Get("table")
 

@@ -8,7 +8,6 @@ import {
 } from "../admin_tools/admin_button_builder.js";
 import {
     createDatasetSearchPanel,
-    DEFAULT_TITLE_LANG_KEY_MODE,
     tableMetaCache,
 } from "./text_search/create_text_search_panel.js";
 import { buildFilterSection } from "./filter_list/filter_column_builder.js";
@@ -325,7 +324,6 @@ function buildClockBar() {
     return bar;
 }
 
-const FILTERBAR_TITLE_LANG_KEY_MODE = DEFAULT_TITLE_LANG_KEY_MODE;
 const FILTERBAR_COLUMN_WIDTH_CSS = `${FILTERBAR_COLUMN_WIDTH_PX}px`;
 const FILTERBAR_PANEL_MODES = Object.freeze({
     MORPHING: "morphing",
@@ -558,7 +556,6 @@ function createInlineHeroContent(tableName, {
     const searchPanel = createDatasetSearchPanel(tableName, {
         variant: "content-hero",
         panelClasses: ["dataset-search-panel", "dataset-search-panel--content-hero"],
-        skipHeader: true,
         placeholder,
     });
     heroInner.appendChild(searchPanel.element);
@@ -634,7 +631,6 @@ export function buildTextSearchFilterSection(tableName, {
             "dataset-search-panel",
             "dataset-search-panel--filter-stack",
         ],
-        skipHeader: true,
         placeholder,
         searchComponentOptions: {
             showLocationCheckbox,
@@ -683,7 +679,6 @@ function buildStandardFilterbarContent(container, {
     rowCount,
     hasGeo,
     currentView,
-    headerActions = [],
     variant = "filterbar",
     includeOverviewSearch = show_filterbar_search_overview_section,
 }) {
@@ -700,15 +695,8 @@ function buildStandardFilterbarContent(container, {
     let searchPanel = null;
     if (includeOverviewSearch) {
         /* ---------- Search Panel ----------------------------------- */
-        const titleLangKeyMode =
-            tableSpecs[tableName]?.filterbar_title_lang_key_mode ||
-            FILTERBAR_TITLE_LANG_KEY_MODE;
-
         const searchPanelOptions = {
             variant,
-            titleLangKeyMode,
-            headerActions,
-            skipHeader: true,
             placeholder: tableSpec.search_placeholder || undefined,
         };
 
@@ -922,7 +910,6 @@ export function create_filter_bar(
         rowCount,
         hasGeo,
         currentView,
-        headerActions: [hideFilterBtn],
         variant: "filterbar",
         includeOverviewSearch: show_filterbar_search_overview_section,
         surfaceProviderKey: typeof tableSpec.dataset_surface_provider_key === "string"
@@ -1112,7 +1099,6 @@ export function create_filter_bar(
     const sharedTopBarSearch = createDatasetSearchPanel(tableName, {
         variant: "search-only",
         panelClasses: ["dataset-search-panel"],
-        skipHeader: true,
         placeholder: searchPlaceholder,
         searchComponentOptions: {
             showLocationCheckbox: false,

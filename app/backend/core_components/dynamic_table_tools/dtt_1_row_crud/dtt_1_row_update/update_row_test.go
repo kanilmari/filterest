@@ -515,15 +515,6 @@ func TestWrapperMissingDataset(t *testing.T) {
 	}
 }
 
-func TestHandlerWrongMethod(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	UpdateRowHandler(rec, req, "users")
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", rec.Code)
-	}
-}
-
 func TestHandlerUnauthorizedNoSession(t *testing.T) {
 	ensureTestSessionStore(t)
 	body := `{"id": 1, "column": "name", "value": "test"}`

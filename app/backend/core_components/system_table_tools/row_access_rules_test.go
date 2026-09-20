@@ -155,18 +155,3 @@ func TestAdminRowAccessRulesHandlerRequiresTransaction(t *testing.T) {
 		t.Fatalf("status = %d, want 500", recorder.Code)
 	}
 }
-
-func TestAdminRowAccessRulesHandlerRejectsUnsupportedMethodBeforeTransaction(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPut, "/api/admin/row-access-rules", nil)
-	request = request.WithContext(dbutils.SetRequestActorContext(
-		context.Background(),
-		dbutils.NewRequestActorContext(12, "admin"),
-	))
-	recorder := httptest.NewRecorder()
-
-	AdminRowAccessRulesHandler(recorder, request)
-
-	if recorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", recorder.Code)
-	}
-}

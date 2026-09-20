@@ -202,15 +202,6 @@ func TestWrapperMissingDataset(t *testing.T) {
 	}
 }
 
-func TestHandlerWrongMethod(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/delete-rows?dataset=users", nil)
-	rec := httptest.NewRecorder()
-	DeleteRowsHandler(rec, req, "users")
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", rec.Code)
-	}
-}
-
 func TestHandlerBadJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{bad"))
 	rec := httptest.NewRecorder()

@@ -18,7 +18,8 @@ vi.mock("../../lang/translation_handler.js", () => ({
 import { createCodingAgentControl } from "./table_chat_coding_agent_control.js";
 beforeEach(() => {
  document.head.innerHTML='<meta name="app-env" content="prod">';
- document.documentElement.lang="fi";document.body.innerHTML="";localStorage.clear();
+ document.documentElement.lang="fi";delete document.documentElement.dataset.theme;
+ document.body.innerHTML="";localStorage.clear();
  request.mockReset();permission.mockReturnValue(true);
  translations.clear();
 });
@@ -44,16 +45,32 @@ test("enabled production with an unready runner explains setup without allowing 
  expect(request.mock.calls.every(([, options])=>options.method==="GET")).toBe(true);
  control.destroy();
 });
-test("ready production selection persists and FI to EN keeps focus and value", async () => {
+test.each(["light","dark"])("ready site-assistant selection is explicit in the %s theme and survives FI to EN", async theme => {
+ document.documentElement.dataset.theme=theme;
+ translations.set("site_assistant_api_label","Sivustoavustaja (vain sivuston API)");
  request.mockResolvedValue({feature_enabled:true,runner_ready:true,runner_kind:"external"});
  const control=createCodingAgentControl("fixture");document.body.append(control.row);
  await vi.waitFor(()=>expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(false));
+ expect(control.row.textContent).toContain("Sivustoavustaja (vain sivuston API)");
  control.select.value="codex_dev";control.select.dispatchEvent(new Event("change"));control.select.focus();
+ translations.delete("site_assistant_api_label");
  document.documentElement.lang="en";
- await vi.waitFor(()=>expect(control.row.textContent).toContain("Coding agent (Codex)"));
+ await vi.waitFor(()=>expect(control.row.textContent).toContain("Site assistant (site API only)"));
  expect(control.row.textContent).toContain("AI service");
  expect(control.select.value).toBe("codex_dev");expect(document.activeElement).toBe(control.select);
  expect(localStorage.getItem("gptChatMode_fixture")).toBe("codex_dev");
+ control.destroy();
+});
+test("ready development selection names the repository-capable agent", async () => {
+ document.head.innerHTML='<meta name="app-env" content="dev">';
+ translations.set("coding_agent_repository_label","Repositorioagentti (Codex)");
+ request.mockResolvedValue({feature_enabled:true,runner_ready:true,runner_kind:"legacy_dev"});
+ const control=createCodingAgentControl("fixture");document.body.append(control.row);
+ await vi.waitFor(()=>expect(control.select.querySelector('[value="codex_dev"]').disabled).toBe(false));
+ expect(control.row.textContent).toContain("Repositorioagentti (Codex)");
+ translations.delete("coding_agent_repository_label");
+ document.documentElement.lang="en";
+ await vi.waitFor(()=>expect(control.row.textContent).toContain("Repository agent (Codex)"));
  control.destroy();
 });
 test("a late availability response cannot revive destroyed controls", async () => {

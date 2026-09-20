@@ -7,9 +7,10 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	dtt_2_column_crud "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"errors"
 	"fmt"
-	dtt_2_column_crud "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -138,7 +139,7 @@ func TestAddNewColumnsRejectsInvalidIdentifier(t *testing.T) {
 
 func TestAddNewColumnsBuildsExpectedStatements(t *testing.T) {
 	varcharLength := 255
-	_, tx, state := openAddColumnsTestTx(t, []addColumnsExecResponse{{}, {}})
+	_, tx, state := openAddColumnsTestTx(t, []addColumnsExecResponse{{}, {}, {}})
 
 	err := AddNewColumns(tx, "users", []dtt_2_column_crud.ModifiedCol{
 		{NewName: "title", DataType: "varchar", Length: &varcharLength},
@@ -148,8 +149,8 @@ func TestAddNewColumnsBuildsExpectedStatements(t *testing.T) {
 		t.Fatalf("AddNewColumns returned error: %v", err)
 	}
 
-	if len(state.execCalls) != 2 {
-		t.Fatalf("exec calls = %d, want 2", len(state.execCalls))
+	if len(state.execCalls) != 3 {
+		t.Fatalf("exec calls = %d, want 3", len(state.execCalls))
 	}
 
 	if got := state.execCalls[0].query; got != "ALTER TABLE users ADD COLUMN title VARCHAR(255)" {
@@ -157,6 +158,9 @@ func TestAddNewColumnsBuildsExpectedStatements(t *testing.T) {
 	}
 	if got := state.execCalls[1].query; got != "ALTER TABLE users ADD COLUMN is_active BOOLEAN" {
 		t.Fatalf("second query = %q, want BOOLEAN statement", got)
+	}
+	if got := state.execCalls[2].query; !strings.Contains(got, "INSERT INTO system_lang_key_translations") {
+		t.Fatalf("third query = %q, want synchronized interface-label write", got)
 	}
 }
 

@@ -41,10 +41,6 @@ func CheckMediaTableFoldersHandler(w http.ResponseWriter, r *http.Request) {
 
 // ArchiveMediaTableFoldersHandler moves top-level storage folders without a matching live table_uid into storage_deleted/.
 func ArchiveMediaTableFoldersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	archivedFolders, err := storagecleanup.ArchiveUnknownStorageTableFolders()
 	if err != nil {
@@ -88,10 +84,6 @@ func CheckArchivedMediaTableFoldersHandler(w http.ResponseWriter, r *http.Reques
 // PruneArchivedMediaTableFoldersHandler permanently removes archived top-level dataset folders
 // whose table_uid no longer maps to a live dataset.
 func PruneArchivedMediaTableFoldersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	var requestBody struct {
 		Folders []string `json:"folders"`
@@ -170,10 +162,6 @@ func CheckMediaRowFoldersHandler(w http.ResponseWriter, r *http.Request) {
 
 // CheckMediaSubfoldersHandler verifies that each row folder has required subfolders.
 func CheckMediaSubfoldersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
 
 	table := r.URL.Query().Get("dataset")
 	if table == "" {
@@ -233,10 +221,6 @@ func CheckMediaSubfoldersHandler(w http.ResponseWriter, r *http.Request) {
 
 // FixMediaSubfoldersHandler ensures required subfolders and thumbnails exist for each media row.
 func FixMediaSubfoldersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	table := r.URL.Query().Get("dataset")
 	if table == "" {

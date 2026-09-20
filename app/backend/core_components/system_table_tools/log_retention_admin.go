@@ -69,10 +69,7 @@ var defaultLogRetentionTableOrder = []string{
 
 // PreviewLogRetentionHandler calculates how many rows would be pruned from each allowed log table.
 func PreviewLogRetentionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
+
 	if backend.Db == nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "database unavailable")
 		return
@@ -103,10 +100,6 @@ func PreviewLogRetentionHandler(w http.ResponseWriter, r *http.Request) {
 
 // PruneLogRetentionHandler deletes rows older than the given cutoff from allowed log tables.
 func PruneLogRetentionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	var req logRetentionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

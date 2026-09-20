@@ -1204,9 +1204,31 @@ describe("create_chat_ui", () => {
         );
     });
 
-    test("shows a pending Codex heartbeat bubble while the request is running", async () => {
-        document.head.innerHTML = '<meta name="app-env" content="dev">';
-        document.documentElement.lang = "fi";
+    test.each([
+        {
+            theme: "light",
+            environment: "dev",
+            runnerKind: "legacy_dev",
+            startedText: "Repository agent started working.",
+            otherAgentText: "Site assistant started working.",
+        },
+        {
+            theme: "dark",
+            environment: "prod",
+            runnerKind: "external",
+            startedText: "Site assistant started working.",
+            otherAgentText: "Repository agent started working.",
+        },
+    ])("shows the $runnerKind waiting text in the $theme theme", async ({
+        theme,
+        environment,
+        runnerKind,
+        startedText,
+        otherAgentText,
+    }) => {
+        document.head.innerHTML = `<meta name="app-env" content="${environment}">`;
+        document.documentElement.lang = "en";
+        document.documentElement.dataset.theme = theme;
         hasRoutePermissionMock.mockImplementation((route) =>
             [
                 "/api/app/ai-chat/query",
@@ -1232,7 +1254,14 @@ describe("create_chat_ui", () => {
                     updated_at: options.body_data.updated_at,
                 });
             }
-            if (routeName === "aiChatCodexQuery") {
+            if (routeName === "aiChatCodexQuery" && options.method === "GET") {
+                return Promise.resolve({
+                    feature_enabled: true,
+                    runner_ready: true,
+                    runner_kind: runnerKind,
+                });
+            }
+            if (routeName === "aiChatCodexQuery" && options.method === "POST") {
                 return new Promise((resolve) => {
                     resolveCodexQuery = resolve;
                 });
@@ -1246,6 +1275,9 @@ describe("create_chat_ui", () => {
         create_chat_ui("app_service_catalog", host);
 
         const modeSelect = document.getElementById("app_service_catalog_chat_mode");
+        await vi.waitFor(() => {
+            expect(modeSelect.querySelector('[value="codex_dev"]').disabled).toBe(false);
+        });
         modeSelect.value = "codex_dev";
         modeSelect.dispatchEvent(new Event("change"));
         refreshTableUnifiedMock.mockClear();
@@ -1258,7 +1290,8 @@ describe("create_chat_ui", () => {
         await vi.waitFor(() => {
             const containerText =
                 document.getElementById("app_service_catalog_chat_container")?.textContent || "";
-            expect(containerText).toContain("Codex aloitti työn.");
+            expect(containerText).toContain(startedText);
+            expect(containerText).not.toContain(otherAgentText);
             expect(containerText).toContain("00:00");
         });
         expect(sendButton.disabled).toBe(true);
@@ -1275,7 +1308,7 @@ describe("create_chat_ui", () => {
             const containerText =
                 document.getElementById("app_service_catalog_chat_container")?.textContent || "";
             expect(containerText).toContain("Valmis vastaus Codexilta.");
-            expect(containerText).not.toContain("Codex aloitti työn.");
+            expect(containerText).not.toContain(startedText);
         });
         expect(sendButton.disabled).toBe(false);
         expect(document.querySelector(".chat-bubble-pending")).toBeNull();

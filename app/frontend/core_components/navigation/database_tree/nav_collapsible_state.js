@@ -18,34 +18,6 @@ function getAnimatedDisclosureSection(toggleButton, contentPanel) {
 }
 
 /**
- * Returns whether the sidebar group is currently expanded.
- *
- * @param {HTMLElement | null | undefined} toggleButton
- * @param {HTMLElement | null | undefined} contentPanel
- * @returns {boolean}
- */
-export function isSidebarGroupExpanded(toggleButton, contentPanel) {
-    const disclosureSection = getAnimatedDisclosureSection(toggleButton, contentPanel);
-    if (disclosureSection) {
-        return disclosureSection.dataset.disclosureState === 'expanded';
-    }
-
-    const isContentPanelExpanded = Boolean(contentPanel?.style.maxHeight);
-
-    if (toggleButton instanceof HTMLElement) {
-        const ariaExpanded = toggleButton.getAttribute('aria-expanded');
-        if (ariaExpanded === 'true') {
-            return true;
-        }
-        if (ariaExpanded === 'false' && !isContentPanelExpanded) {
-            return false;
-        }
-    }
-
-    return isContentPanelExpanded;
-}
-
-/**
  * Applies one expanded/collapsed state to both the group button and content panel.
  *
  * @param {HTMLElement | null | undefined} toggleButton

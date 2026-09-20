@@ -57,7 +57,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		showRegisterForm(w, r, registerErrors{}, string(defaultRegistrationVerificationMethod))
 		return
 	}
-	httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 }
 
 func RegisterAPIHandler(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +65,7 @@ func RegisterAPIHandler(w http.ResponseWriter, r *http.Request) {
 	// Closed public signup still permits explicit administrator account creation.
 	// Keep the existing admin-access gate and the same CSRF/rate-limited writer.
 	if !registrationEnabledFunc() {
-		if r.Method != http.MethodPost || !registrationHasCurrentAdministrator(w, r) {
+		if !registrationHasCurrentAdministrator(w, r) {
 			httpresponse.RespondWithError(w, http.StatusForbidden, "Registration is disabled")
 			return
 		}
@@ -78,7 +77,6 @@ func RegisterAPIHandler(w http.ResponseWriter, r *http.Request) {
 		handleRegisterPost(w, r)
 		return
 	}
-	httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 }
 
 // registrationHasCurrentAdministrator requires the canonical current identity and role.

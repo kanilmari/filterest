@@ -23,10 +23,6 @@ type ClientLogEntry struct {
 
 // LogClientError accepts a forwarded frontend log entry and prints it with level-specific formatting.
 func LogClientError(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	var entry ClientLogEntry
 	if err := json.NewDecoder(r.Body).Decode(&entry); err != nil {

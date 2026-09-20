@@ -115,10 +115,6 @@ func updateColumnInsertable(
 // checked together, and the updated metadata is returned from the same write.
 // POST /api/admin/column-insertable
 func UpdateColumnInsertableHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()

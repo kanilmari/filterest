@@ -42,10 +42,6 @@ func FixTableTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	// method is also how the site assistant reaches a route without asking
 	// anyone to approve the change, because approval is only required of
 	// writes.
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req FixTranslationsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

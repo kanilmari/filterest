@@ -31,10 +31,6 @@ type RenameTreeNodeRequest struct {
 
 // HandleRenameTreeNode käsittelee POST /api/rename-tree-node
 func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req RenameTreeNodeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -94,10 +94,6 @@ func AdminRowAccessRulesHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "administrator access required")
 		return
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {

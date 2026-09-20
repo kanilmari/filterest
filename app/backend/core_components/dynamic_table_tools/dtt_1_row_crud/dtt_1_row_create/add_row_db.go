@@ -165,6 +165,16 @@ func insertDataAccordingToPayload(
 			val = normalized
 		}
 
+		// --- Decimal: "" → NULL, muu teksti tarkistetaan -----------
+		if isDecimalType(colType) {
+			normalized, decErr := normalizeDecimalInsertValue(val, colNullableMap[colName])
+			if decErr != nil {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid number for "+colName)
+				return 0, nil, decErr
+			}
+			val = normalized
+		}
+
 		// --- Integer: "" → NULL jos sarake on nullable -------------
 		if isIntegerType(colType) {
 			if s, ok := val.(string); ok {
@@ -358,6 +368,14 @@ func insertDataAccordingToPayload(
 			}
 
 			// json/jsonb
+			if isDecimalType(colType) {
+				normalized, decErr := normalizeDecimalInsertValue(raw, childNull[colName])
+				if decErr != nil {
+					httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid number for "+colName)
+					return 0, nil, decErr
+				}
+				raw = normalized
+			}
 			if isJSONType(colType) {
 				normalized, jsonErr := normalizeJSONInsertValue(raw, childNull[colName])
 				if jsonErr != nil {

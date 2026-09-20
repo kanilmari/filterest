@@ -125,10 +125,7 @@ func admitSystemAPIRequest(r *http.Request) (bool, *http.Request, func()) {
 
 // systemDrainHandler lets an authenticated exact host peer change drain state.
 func systemDrainHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
+
 	if rejectDisallowedSystemDrainManagerRequest(w, r) {
 		return
 	}

@@ -233,10 +233,7 @@ func respondArticleSectionDefaultsError(w http.ResponseWriter, err error) {
 // GetArticleSectionDefaultsHandler returns one presentation's effective initial states.
 // GET /api/view-field-settings/article-section-defaults?dataset=...&presentation_key=...
 func GetArticleSectionDefaultsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	presentation := r.URL.Query().Get("presentation_key")
 	dataset, err := validateArticleSectionTarget(r.URL.Query().Get("dataset"), presentation)
 	if err != nil {
@@ -273,10 +270,7 @@ func GetArticleSectionDefaultsHandler(w http.ResponseWriter, r *http.Request) {
 // SaveArticleSectionDefaultsHandler patches or resets the administrator's site default.
 // POST /api/admin/view-field-settings/article-section-defaults
 func SaveArticleSectionDefaultsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+
 	input, err := decodeArticleSectionPatch(r.Body)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())

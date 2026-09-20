@@ -178,7 +178,6 @@ func TestAdminLangKeyHandlerRejectsNonPostUnknownAndTrailingJSON(t *testing.T) {
 		body       string
 		wantStatus int
 	}{
-		{name: "GET", method: http.MethodGet, body: "", wantStatus: http.StatusMethodNotAllowed},
 		{name: "unknown field", method: http.MethodPost, body: `{"lang_key":"link","fi":"Linkki","unknown":true}`, wantStatus: http.StatusBadRequest},
 		{name: "trailing object", method: http.MethodPost, body: `{"lang_key":"link","fi":"Linkki"}{}`, wantStatus: http.StatusBadRequest},
 		{name: "blank key", method: http.MethodPost, body: `{"lang_key":"  ","fi":"Linkki"}`, wantStatus: http.StatusBadRequest},

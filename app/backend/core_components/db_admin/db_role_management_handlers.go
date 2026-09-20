@@ -85,10 +85,6 @@ func jsonOK(w http.ResponseWriter, data interface{}) {
 
 // ListRolesHandler returns a JSON array of all non-internal PostgreSQL roles.
 func ListRolesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	query := `
 		SELECT
@@ -139,10 +135,6 @@ func ListRolesHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateRoleHandler creates a new PostgreSQL role with LOGIN and a password.
 func CreateRoleHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var req CreateRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -212,10 +204,6 @@ func CreateRoleHandler(w http.ResponseWriter, r *http.Request) {
 
 // UpdateRoleHandler modifies an existing PostgreSQL role.
 func UpdateRoleHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var req UpdateRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -282,10 +270,6 @@ func UpdateRoleHandler(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRoleHandler drops a PostgreSQL role. Protected roles cannot be deleted.
 func DeleteRoleHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var req DeleteRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

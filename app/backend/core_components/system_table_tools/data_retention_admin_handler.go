@@ -22,10 +22,7 @@ type dataRetentionRequest struct {
 
 // PreviewDataRetentionHandler calculates how many rows each configured policy would prune.
 func PreviewDataRetentionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET allowed")
-		return
-	}
+
 	if backend.Db == nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "database unavailable")
 		return
@@ -58,10 +55,6 @@ func PreviewDataRetentionHandler(w http.ResponseWriter, r *http.Request) {
 
 // PruneDataRetentionHandler deletes rows matched by the selected retention policies.
 func PruneDataRetentionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	var req dataRetentionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

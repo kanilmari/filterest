@@ -97,10 +97,24 @@ These keys are **declarative** — they're used in code but may not exist in `sy
 
 ### 2.3 Table/Folder/Column Creation
 
-When new database objects are created, lang keys are implicitly created for their display names. The keys follow naming conventions (e.g., the table name itself becomes a lang key). These are populated during:
+When the supported dataset-creation or column-addition workflow creates schema
+objects, it also writes readable schema-derived labels in the same transaction.
+The write covers the dataset/column name plus the search, sort, add-row, and
+dataset-heading keys the interface constructs from it.
 
-- **Startup scanning** (`PopulateLangKeySources`) — creates `source_type='table'`, `'column'`, or `'folder'` records.
+- **Creation-time label persistence** (`EnsureDatasetInterfaceLabels` /
+  `EnsureColumnInterfaceLabels`) — fills only languages enabled for the site and
+  writes both `system_lang_keys` language columns and matching
+  `system_lang_key_translations` rows. It never overwrites authored copy.
+- **Startup scanning** (`PopulateLangKeySources`) — refreshes
+  `source_type='table'`, `'column'`, or `'folder'` records for keys that already
+  exist. It does not create a missing key or translation value.
 - **Primary key check** (`EnsurePrimaryKeyLangKeys`) — ensures PK columns like `id` have lang keys.
+
+Migration `20260920000002_create_dataset_interface_labels.sql` applies the same
+schema-derived fallback to already registered datasets. The deterministic labels
+remain editable through the language-key API when a site wants more natural or
+fully translated copy.
 
 ### 2.4 Tree Node Rename (`upsertLangKey`)
 

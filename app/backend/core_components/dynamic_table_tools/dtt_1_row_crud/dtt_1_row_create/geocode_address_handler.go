@@ -6,12 +6,12 @@
 package dtt_1_row_create
 
 import (
+	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"easelect/backend/core_components/httpresponse"
 	"net/url"
 	"os"
 	"time"
@@ -42,10 +42,6 @@ type GeocodeSuggestion struct {
 }
 
 func GeocodeAddressHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Only POST allowed")
-		return
-	}
 
 	var req GeocodeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

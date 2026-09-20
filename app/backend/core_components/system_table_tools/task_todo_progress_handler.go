@@ -49,10 +49,6 @@ type taskTodoProgressResponse struct {
 // It operates between article-view requests and the task todo tables.
 // It exists to keep status visual calculation server-side and permission-aware.
 func GetTaskTodoProgressHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	tableRef, rowID, err := resolveTaskTodoProgressRequestTarget(r)
 	if err != nil {

@@ -13,7 +13,7 @@
 #   ./worker_agent --prompt-file path/to/prompt.md      # prompt from file
 #   ./worker_agent --ticket agent_tasks/_db_dump/<id-slug>/ticket.md
 #   echo "do something" | ./worker_agent -              # stdin
-#   ./worker_agent --routine documentation_audit        # run a multi-step routine
+#   ./worker_agent --routine file_name_convention_checker  # run a multi-step routine
 #   ./worker_agent --routine --list                     # list available routines
 #   ./worker_agent --list                               # list recent runs
 #   ./worker_agent --status <task_id>                   # check run status
@@ -58,6 +58,7 @@ filterest_configure_python_bytecode_cache "$FILTEREST_APPLICATION_ROOT"
 
 WORKER_DIR="$FILTEREST_APPLICATION_ROOT/server_tools/agent_tools/worker_agent"
 COMP_SCRIPT="$WORKER_DIR/worker_agent_completions.bash"
+ROUTINE_RUNNER="${FILTEREST_WORKER_ROUTINE_RUNNER:-$WORKER_DIR/routine_runner.sh}"
 
 # --setup-completion: install tab-completion permanently
 if [[ "${1:-}" == "--setup-completion" ]]; then
@@ -77,11 +78,11 @@ fi
 # Route --routine to the routine runner, everything else to the core
 if [[ "${1:-}" == "--routine" ]]; then
     shift
-    if [[ -z "${FILTEREST_WORKER_ROUTINE_RUNNER:-}" || ! -f "$FILTEREST_WORKER_ROUTINE_RUNNER" ]]; then
-        echo "Error: This Filterest checkout has no project-specific worker routines configured." >&2
+    if [[ ! -f "$ROUTINE_RUNNER" ]]; then
+        echo "Error: Worker routine runner not found: $ROUTINE_RUNNER" >&2
         exit 2
     fi
-    exec bash "$FILTEREST_WORKER_ROUTINE_RUNNER" "$@"
+    exec bash "$ROUTINE_RUNNER" "$@"
 else
     exec bash "$WORKER_DIR/worker_agent_core.sh" "$@"
 fi

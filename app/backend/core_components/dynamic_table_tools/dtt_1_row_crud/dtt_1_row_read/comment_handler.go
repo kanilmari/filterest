@@ -22,10 +22,6 @@ const commentsPageSize = 50
 
 // CommentListHandler handles GET /api/comments
 func CommentListHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	dataset := r.URL.Query().Get("dataset")
 	rowIDStr := r.URL.Query().Get("row_id")
@@ -116,10 +112,6 @@ func CommentListHandler(w http.ResponseWriter, r *http.Request) {
 
 // CommentCreateHandler handles POST /api/comments
 func CommentCreateHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil {
@@ -168,10 +160,6 @@ func CommentCreateHandler(w http.ResponseWriter, r *http.Request) {
 
 // CommentDeleteHandler handles DELETE /api/comments?id=N
 func CommentDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil {

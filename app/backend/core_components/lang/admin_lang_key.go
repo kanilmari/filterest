@@ -39,10 +39,6 @@ func AdminLangKeyHandler(w http.ResponseWriter, r *http.Request) {
 // Between either approved editor route and the transactional store, it fixes the source identity server-side.
 // This prevents callers from selecting an untrusted provenance label or sending undeclared fields.
 func handleLangKeyUpdate(w http.ResponseWriter, r *http.Request, sourceType, sourceHigh string) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()

@@ -57,8 +57,7 @@ func ReleaseGoalsHandler(w http.ResponseWriter, r *http.Request) {
 		createReleaseGoal(w, r, userID)
 	case http.MethodPatch:
 		applyReleaseGoalAction(w, r, userID)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+
 	}
 }
 
@@ -185,10 +184,7 @@ func ReleaseContractsHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "not_authenticated")
 		return
 	}
-	if r.Method != http.MethodPut {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
-		return
-	}
+
 	var input releaseContractRequest
 	if json.NewDecoder(r.Body).Decode(&input) != nil || input.ReleaseGoalID <= 0 || input.WorklineID <= 0 {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid_release_contract")

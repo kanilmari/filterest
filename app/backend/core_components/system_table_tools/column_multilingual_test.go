@@ -92,7 +92,6 @@ func TestUpdateColumnMultilingualHandlerValidatesMethodBodyAndTransaction(t *tes
 		body       string
 		wantStatus int
 	}{
-		{name: "method", method: http.MethodGet, body: "{}", wantStatus: http.StatusMethodNotAllowed},
 		{name: "malformed", method: http.MethodPost, body: "{", wantStatus: http.StatusBadRequest},
 		{name: "missing dataset", method: http.MethodPost, body: `{"column_uid":526,"is_multilingual":true}`, wantStatus: http.StatusBadRequest},
 		{name: "nonpositive uid", method: http.MethodPost, body: `{"dataset":"travel_deals","column_uid":0,"is_multilingual":true}`, wantStatus: http.StatusBadRequest},

@@ -14,7 +14,7 @@ import (
 
 func collectRegisteredAgentToolRoutes() map[string]string {
 	routes := map[string]string{}
-	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string) {
+	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string, methods ...string) {
 		routes[pattern] = handlerName
 	})
 	return routes

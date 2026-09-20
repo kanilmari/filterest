@@ -7,8 +7,10 @@ package dtt_3_table_create
 import (
 	"easelect/backend/core_components/dbutils"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
+	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/security"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -182,6 +184,15 @@ func createTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 		if err != nil {
 			return fmt.Errorf("error creating trigger: %w", err)
 		}
+	}
+
+	columnNames := make([]string, 0, len(sanitizedColumns))
+	for columnName := range sanitizedColumns {
+		columnNames = append(columnNames, columnName)
+	}
+	sort.Strings(columnNames)
+	if err := lang.EnsureDatasetInterfaceLabels(db, sanitizedTableName, columnNames); err != nil {
+		return err
 	}
 
 	return nil

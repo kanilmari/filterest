@@ -116,16 +116,17 @@ function createTableViewDom(tableName) {
     localStorage.setItem(`${tableName}_view`, "table");
 }
 
-function createCardViewDom(tableName) {
+function createCardViewDom(tableName, viewKey = "card") {
+    const containerView = viewKey === "article_view" ? "article" : "card";
     document.body.innerHTML = `
         <div id="${tableName}_results_count"></div>
-        <div id="${tableName}_card_view_container">
+        <div id="${tableName}_${containerView}_view_container">
             <div class="card_sidebar_panel">
                 <div class="card_container"></div>
             </div>
         </div>
     `;
-    localStorage.setItem(`${tableName}_view`, "card");
+    localStorage.setItem(`${tableName}_view`, viewKey);
 }
 
 describe("do_intelligent_search", () => {
@@ -196,6 +197,86 @@ describe("do_intelligent_search", () => {
 
         expect(setResultsCountMock).toHaveBeenCalledWith("dev_agent_tasks", 251);
         expect(setResultsCountMock).not.toHaveBeenCalledWith("dev_agent_tasks", 10);
+    });
+
+    test("withdraws the old dataset total before other-dataset searches can appear", async () => {
+        document.getElementById("dev_agent_tasks_results_count").textContent = "3 results";
+        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
+            data: [{ id: 14 }], row_count: 1, columns: ["id"],
+        }));
+
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "claude");
+
+        expect(setResultsCountMock.mock.calls[0]).toEqual(["dev_agent_tasks", 0]);
+        expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
+    });
+
+    test("coalesces identical URL searches from synchronized panel instances", async () => {
+        let releaseListing;
+        reloadDatasetRowsFromListingMock.mockImplementation(() => new Promise(resolve => {
+            releaseListing = resolve;
+        }));
+
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        const firstSearch = do_intelligent_search("dev_agent_tasks", "claude", { useLocation: false });
+        const repeatedSearch = do_intelligent_search("dev_agent_tasks", "claude", { useLocation: false });
+        await vi.waitFor(() => expect(releaseListing).toBeTypeOf("function"));
+
+        expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(1);
+        releaseListing(listingAnswer({ data: [{ id: 14 }], row_count: 1, columns: ["id"] }));
+        await Promise.all([firstSearch, repeatedSearch]);
+        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
+        expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
+    });
+
+    test("retries once when the route's first article build invalidates the listing reload", async () => {
+        reloadDatasetRowsFromListingMock
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(listingAnswer({
+                data: [{ id: 1, header: "Claude.ai Max 5x monthly" }],
+                row_count: 1,
+                columns: ["id", "header"],
+            }));
+
+        const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "claude");
+
+        expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(2);
+        expect(ongoingSearchResults.dev_agent_tasks.data).toEqual([
+            { id: 1, header: "Claude.ai Max 5x monthly" },
+        ]);
+        expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
+    });
+
+    test("keeps an article-view dataset match before other datasets in the same scroll flow", async () => {
+        const tableName = "subscriptions";
+        createCardViewDom(tableName, "article_view");
+        getUnifiedTableStateMock.mockReturnValue({
+            articleView: { collapsed: false, expandedId: 1 },
+        });
+        reloadDatasetRowsFromListingMock.mockImplementation(async () => {
+            const card = document.createElement("article");
+            card.className = "card small-card";
+            card.dataset.id = "1";
+            card.textContent = "Claude.ai Max 5x monthly";
+            document.querySelector(`#${tableName}_article_view_container .card_container`)
+                .replaceChildren(card);
+            return listingAnswer({ data: [{ id: 1 }], row_count: 1, columns: ["id"] });
+        });
+
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        await do_intelligent_search(tableName, "claude");
+
+        const resultsFlow = document.querySelector(
+            `#${tableName}_article_view_container .card_container`
+        );
+        const match = resultsFlow.querySelector('.card[data-id="1"]');
+        const supplemental = resultsFlow.querySelector('.supplemental-dataset-results');
+        expect(match?.textContent).toContain("Claude.ai Max 5x monthly");
+        expect(supplemental?.parentElement).toBe(resultsFlow);
+        expect(match.compareDocumentPosition(supplemental) & Node.DOCUMENT_POSITION_FOLLOWING)
+            .toBeTruthy();
     });
 
     test("keeps only the AI stage of the streamed answer, and shows it after the dataset's rows", async () => {
@@ -579,89 +660,4 @@ describe("do_intelligent_search", () => {
         expect(setResultsCountMock).toHaveBeenCalledWith("dev_agent_tasks", 251);
         expect(document.querySelector('[data-lang-key="text_search_no_results"]')).toBeNull();
     });
-});
-
-
-describe("search stage notice placement", () => {
-    beforeEach(() => {
-        vi.resetModules();
-        vi.clearAllMocks();
-        localStorage.clear();
-        document.body.replaceChildren();
-    });
-
-    test.each(["table", "card", "article_view"])(
-        "divides the dataset's own %s results from the AI group in its real host",
-        async (view) => {
-            const tableName = "app_service_catalog";
-            localStorage.setItem(tableName + "_view", view);
-            const primaryCount = document.createElement("div");
-            primaryCount.id = tableName + "_results_count";
-            primaryCount.textContent = "2 results";
-            document.body.append(primaryCount);
-
-            // These are the registry's real container IDs, including the
-            // article_view key's single article_view_container suffix.
-            const viewContainer = document.createElement("div");
-            viewContainer.id = tableName + "_" + (view === "article_view" ? "article" : view) + "_view_container";
-            document.body.append(viewContainer);
-            let stage = viewContainer;
-            let primary;
-            let firstResult;
-            if (view === "table") {
-                primary = document.createElement("table");
-                const body = document.createElement("tbody");
-                firstResult = document.createElement("tr");
-                const cell = document.createElement("td");
-                cell.textContent = "Firefox";
-                firstResult.append(cell);
-                body.append(firstResult);
-                primary.append(body);
-            } else {
-                stage = document.createElement("div");
-                stage.className = "card_sidebar_panel";
-                viewContainer.append(stage);
-                const header = document.createElement("div");
-                header.className = "card_sidebar_header";
-                stage.append(header);
-                primary = document.createElement("div");
-                primary.className = "card_container";
-                firstResult = document.createElement("article");
-                firstResult.className = "card";
-                firstResult.textContent = "Firefox";
-                primary.append(firstResult);
-            }
-            stage.append(primary);
-            const aiHost = document.createElement(view === "table" ? "table" : "div");
-            aiHost.id = tableName + (view === "table" ? "_search_ai_table" : "_search_ai_cards");
-            stage.append(aiHost);
-
-            const { insertNotice } = await import("./dataset_search_executor.js");
-            const runtime = await import("./dataset_search_runtime_state.js");
-            expect(runtime.getSearchViewContainer(tableName)).toBe(viewContainer);
-            expect(runtime.getSearchStageContainer(tableName)).toBe(stage);
-            if (view !== "table") expect(runtime.getPrimaryCardContainer(tableName)).toBe(primary);
-
-            // The AI group's heading follows the dataset's own results and
-            // introduces the AI host, twice inserted but shown only once.
-            insertNotice(tableName, "see_also", "See also");
-            insertNotice(tableName, "see_also", "See also");
-            const seeAlso = stage.querySelector('[data-lang-key="see_also"]');
-            expect(seeAlso).not.toBeNull();
-            expect(seeAlso.getAttribute("role")).toBe("status");
-            expect(stage.querySelectorAll('[data-lang-key="see_also"]')).toHaveLength(1);
-            expect(primary.compareDocumentPosition(seeAlso) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-            expect(seeAlso.nextElementSibling).toBe(aiHost);
-
-            insertNotice(tableName, "text_search_no_results", "Text search returned no results");
-            const noResults = stage.querySelector('[data-lang-key="text_search_no_results"]');
-            expect(primary.compareDocumentPosition(noResults) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-            expect(noResults.nextElementSibling).toBe(aiHost);
-
-            runtime.removeSearchNotice(tableName, "see_also");
-            expect(stage.querySelector('[data-lang-key="see_also"]')).toBeNull();
-            expect(stage.contains(firstResult)).toBe(true);
-            expect(stage.contains(noResults)).toBe(true);
-        },
-    );
 });

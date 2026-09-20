@@ -47,20 +47,21 @@ type codingAgentJobResult struct {
 	// approve. The chat's own filter plan keeps the name "plan", so this field
 	// deliberately differs from it.
 	PendingChanges []codingAgentPlanEntry `json:"pending_changes,omitempty"`
-	Mode    string `json:"mode"`
-	DevOnly bool   `json:"dev_only"`
+	Mode           string                 `json:"mode"`
+	DevOnly        bool                   `json:"dev_only"`
 }
 
 // codingAgentPlanEntry describes one waiting write in the words of the API call
 // itself. The browser sees the call, never the delegation behind it.
 type codingAgentPlanEntry struct {
-	Method      string                 `json:"method"`
-	Path        string                 `json:"path"`
-	BodyHash    string                 `json:"body_sha256"`
-	Query       map[string]interface{} `json:"query,omitempty"`
-	Body        interface{}            `json:"body,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Status      string                 `json:"status,omitempty"`
+	Method        string                 `json:"method"`
+	Path          string                 `json:"path"`
+	ApprovalQuery string                 `json:"approval_query"`
+	BodyHash      string                 `json:"body_sha256"`
+	Query         map[string]interface{} `json:"query,omitempty"`
+	Body          interface{}            `json:"body,omitempty"`
+	Description   string                 `json:"description,omitempty"`
+	Status        string                 `json:"status,omitempty"`
 }
 
 // codingAgentRunnerPayload adds the job's own short-lived site access to the

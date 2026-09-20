@@ -529,10 +529,6 @@ func fetchSchemaTableNames() map[string]bool {
 // on-demand ilman palvelimen uudelleenkäynnistystä. Palauttaa JSON-tuloksen.
 // POST /api/scan-lang-sources
 func ScanLangSourcesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
 
 	sourceCount, err := PopulateLangKeySources()
 	if err != nil {

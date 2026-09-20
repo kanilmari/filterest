@@ -16,10 +16,6 @@ import (
 
 // DisableAttachmentLinkingHandler hides attachment upload UI by setting file_upload.enabled to false.
 func DisableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req disableAttachmentLinkingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -105,9 +105,10 @@ def build_route_specs() -> list[RouteSpec]:
             raise ValueError(f"Missing backend manifest entry for handler {handler_name}")
 
         methods = route_manifest.get("methods") or []
-        if len(methods) != 1:
+        request_methods = [method for method in methods if method != "HEAD"]
+        if len(request_methods) != 1:
             raise ValueError(
-                f"Stable client route {route_name} expected exactly one method, got {methods!r}"
+                f"Stable client route {route_name} expected exactly one non-HEAD method, got {methods!r}"
             )
 
         specs.append(
@@ -117,7 +118,7 @@ def build_route_specs() -> list[RouteSpec]:
                 request_shape=request_shape,
                 response_shape=response_shape,
                 path=route_manifest["path_pattern"],
-                method=methods[0],
+                method=request_methods[0],
                 method_source=route_manifest.get("method_source"),
             )
         )

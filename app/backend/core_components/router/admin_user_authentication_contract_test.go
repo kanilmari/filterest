@@ -40,8 +40,9 @@ func TestAdminUserAuthenticationRouteContract(t *testing.T) {
 	if contract.Source != router.RouteMethodSourceExplicitStableContract {
 		t.Fatalf("contract source = %q", contract.Source)
 	}
-	if len(contract.Methods) != 2 || contract.Methods[0] != http.MethodGet || contract.Methods[1] != http.MethodPost {
-		t.Fatalf("methods = %#v, want GET and POST", contract.Methods)
+	if len(contract.Methods) != 3 || contract.Methods[0] != http.MethodGet ||
+		contract.Methods[1] != http.MethodHead || contract.Methods[2] != http.MethodPost {
+		t.Fatalf("methods = %#v, want GET, HEAD and POST", contract.Methods)
 	}
 
 	manifest, err := router.BuildDefaultRouteManifest()
@@ -50,7 +51,8 @@ func TestAdminUserAuthenticationRouteContract(t *testing.T) {
 	}
 	for _, route := range manifest.Routes {
 		if route.HandlerName == "auth.AdminUserAuthenticationHandler" {
-			if len(route.Methods) != 2 || route.Methods[0] != http.MethodGet || route.Methods[1] != http.MethodPost {
+			if len(route.Methods) != 3 || route.Methods[0] != http.MethodGet ||
+				route.Methods[1] != http.MethodHead || route.Methods[2] != http.MethodPost {
 				t.Fatalf("manifest methods = %#v", route.Methods)
 			}
 			return

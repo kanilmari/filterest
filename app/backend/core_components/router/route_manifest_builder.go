@@ -95,23 +95,21 @@ func BuildRouteManifest(scenarios []RouteManifestScenario, frontendDir string, s
 		pipeline.ApplyDevOverrides()
 
 		for _, route := range GetRouteDefinitions() {
+			if err := validateRouteMethodContract(route); err != nil {
+				return RouteManifest{}, fmt.Errorf("build route manifest: %w", err)
+			}
 			entryKey := route.UrlPattern + "\n" + route.HandlerName
 			descriptor := pipeline.DescribeRouteProfile(route.HandlerName)
 
 			entry, exists := entryIndex[entryKey]
 			if !exists {
-				methodContract, hasMethodContract := GetRouteMethodContract(route.HandlerName)
 				entry = &RouteManifestEntry{
 					PathPattern:       route.UrlPattern,
 					MatchType:         route.MatchType,
 					HandlerName:       route.HandlerName,
-					Methods:           nil,
-					MethodSource:      "",
+					Methods:           append([]string{}, route.Methods...),
+					MethodSource:      route.MethodSource,
 					ConditionalSource: route.ConditionalSource,
-				}
-				if hasMethodContract {
-					entry.Methods = append([]string{}, methodContract.Methods...)
-					entry.MethodSource = methodContract.Source
 				}
 				entryIndex[entryKey] = entry
 			}
@@ -119,12 +117,8 @@ func BuildRouteManifest(scenarios []RouteManifestScenario, frontendDir string, s
 			if entry.MatchType != route.MatchType {
 				return RouteManifest{}, fmt.Errorf("build route manifest: conflicting match type for %s", route.HandlerName)
 			}
-			if methodContract, ok := GetRouteMethodContract(route.HandlerName); ok {
-				if !equalStringSlices(entry.Methods, methodContract.Methods) || entry.MethodSource != methodContract.Source {
-					return RouteManifest{}, fmt.Errorf("build route manifest: conflicting method contract for %s", route.HandlerName)
-				}
-			} else if len(entry.Methods) > 0 || entry.MethodSource != "" {
-				return RouteManifest{}, fmt.Errorf("build route manifest: unexpected residual method contract for %s", route.HandlerName)
+			if !equalStringSlices(entry.Methods, route.Methods) || entry.MethodSource != route.MethodSource {
+				return RouteManifest{}, fmt.Errorf("build route manifest: conflicting method contract for %s", route.HandlerName)
 			}
 			if entry.ConditionalSource != route.ConditionalSource {
 				return RouteManifest{}, fmt.Errorf("build route manifest: conflicting conditional source for %s", route.HandlerName)

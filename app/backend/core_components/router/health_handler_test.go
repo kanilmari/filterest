@@ -138,17 +138,6 @@ func TestHealthHandlerReturnsOKJSON(t *testing.T) {
 	}
 }
 
-func TestHealthHandlerRejectsNonGet(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/health", nil)
-	recorder := httptest.NewRecorder()
-
-	healthHandler(recorder, request)
-
-	if recorder.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("healthHandler status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
-	}
-}
-
 func TestSystemHealthHandlerReturnsManagerPayload(t *testing.T) {
 	t.Setenv("INSTANCE_NAME", "easelect-a")
 
@@ -257,29 +246,6 @@ func TestSystemReadyHandlerReturnsServiceUnavailableWhenProbeNotReady(t *testing
 	}
 	if !strings.Contains(recorder.Body.String(), "database_unavailable") {
 		t.Fatalf("systemReadyHandler body = %q, want database_unavailable", recorder.Body.String())
-	}
-}
-
-func TestSystemHandlersRejectNonGet(t *testing.T) {
-	for name, handler := range map[string]http.HandlerFunc{
-		"systemHealthHandler":         systemHealthHandler,
-		"systemReadyHandler":          systemReadyHandler,
-		"systemInstanceStatusHandler": systemInstanceStatusHandler,
-		"systemDrainHandler":          systemDrainHandler,
-	} {
-		t.Run(name, func(t *testing.T) {
-			request := newSystemRequest(http.MethodGet, "/", "")
-			if name != "systemDrainHandler" {
-				request = newSystemRequest(http.MethodPost, "/", "")
-			}
-			recorder := httptest.NewRecorder()
-
-			handler(recorder, request)
-
-			if recorder.Code != http.StatusMethodNotAllowed {
-				t.Fatalf("%s status = %d, want %d", name, recorder.Code, http.StatusMethodNotAllowed)
-			}
-		})
 	}
 }
 

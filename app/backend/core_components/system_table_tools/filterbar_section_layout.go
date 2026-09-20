@@ -67,10 +67,6 @@ type filterbarSectionLayoutConfig struct {
 // GetFilterbarSectionLayoutHandler returns the global admin-managed compact filterbar section layout.
 // GET /api/filterbar-section-layout
 func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	config, err := readFilterbarSectionLayout()
 	if err != nil {
@@ -85,10 +81,6 @@ func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 // SaveFilterbarSectionLayoutHandler stores the global admin-managed compact filterbar section layout.
 // POST /api/filterbar-section-layout/save
 func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 
 	var req filterbarSectionLayoutConfig
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

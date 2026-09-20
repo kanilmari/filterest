@@ -43,10 +43,6 @@ type ColumnComment struct {
 // Sets COMMENT ON TABLE and/or COMMENT ON COLUMN for a given table.
 // All identifiers are sanitized. Comment text is parameterized (no injection risk).
 func SetCommentsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	var req SetCommentsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -135,10 +131,6 @@ type IndexDef struct {
 // Creates one or more indexes on a given table. All identifiers are sanitized.
 // Uses CREATE INDEX IF NOT EXISTS for idempotent operations.
 func CreateIndexesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
 
 	var req CreateIndexesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

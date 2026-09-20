@@ -42,9 +42,7 @@ func AdminUserAuthenticationHandler(w http.ResponseWriter, r *http.Request) {
 		listAdminUserAuthentication(w, r)
 	case http.MethodPost:
 		provisionAdminUserAuthentication(w, r)
-	default:
-		w.Header().Set("Allow", "GET, POST")
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+
 	}
 }
 

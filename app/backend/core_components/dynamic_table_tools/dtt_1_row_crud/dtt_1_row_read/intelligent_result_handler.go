@@ -63,10 +63,7 @@ func prioritizeNumericIDResultFirst(rowOrder []int, numericID int, hasNumericID 
  * =========================================================*/
 
 func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET accepted")
-		return
-	}
+
 	if _, err := parseIntelligentSearchFilters(r.URL.Query().Get("filters")); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid search filters")
 		return

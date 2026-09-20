@@ -49,8 +49,7 @@ func FilterbarAIConversationHandler(w http.ResponseWriter, r *http.Request) {
 		handleGetAIChatConversation(w, r, userID)
 	case http.MethodPut:
 		handlePutAIChatConversation(w, r, userID)
-	default:
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only GET and PUT accepted")
+
 	}
 }
 

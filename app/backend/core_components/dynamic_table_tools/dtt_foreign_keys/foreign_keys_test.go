@@ -251,16 +251,9 @@ func decodeForeignKeyJSONArray(t *testing.T, rec *httptest.ResponseRecorder) []s
 	return body
 }
 
-func TestAddForeignKeyHandlerRejectsMethodJSONAndMissingFields(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/add-foreign-key", nil)
+func TestAddForeignKeyHandlerRejectsInvalidJSONAndMissingFields(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/add-foreign-key", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	AddForeignKeyHandler(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/add-foreign-key", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	AddForeignKeyHandler(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
@@ -564,16 +557,9 @@ func TestGetForeignKeysHandlesQueryErrorAndDatasetFilterSuccess(t *testing.T) {
 	})
 }
 
-func TestDeleteForeignKeyHandlerRejectsMethodAndHandlesExecBranches(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/delete-foreign-key", nil)
+func TestDeleteForeignKeyHandlerRejectsInvalidJSONAndHandlesExecBranches(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/delete-foreign-key", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	DeleteForeignKeyHandler(rec, req)
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("wrong-method status = %d, want 405", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/delete-foreign-key", strings.NewReader("{"))
-	rec = httptest.NewRecorder()
 	DeleteForeignKeyHandler(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)

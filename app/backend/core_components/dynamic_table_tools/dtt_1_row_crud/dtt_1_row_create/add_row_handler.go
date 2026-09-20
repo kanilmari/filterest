@@ -32,10 +32,6 @@ func AddRowMultipartHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "missing 'dataset' or 'table_uid' query parameter")
 		return
 	}
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST requests are allowed")
-		return
-	}
 
 	if tableName == "" {
 		tx, ok := dbutils.GetTx(r.Context())

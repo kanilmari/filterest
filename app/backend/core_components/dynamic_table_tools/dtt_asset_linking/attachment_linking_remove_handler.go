@@ -20,10 +20,6 @@ import (
 
 // RemoveAttachmentLinkingHandler removes attachment-linking metadata and drops the asset table if no other profiles use it.
 func RemoveAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "only POST method is allowed")
-		return
-	}
 
 	var req removeAttachmentLinkingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

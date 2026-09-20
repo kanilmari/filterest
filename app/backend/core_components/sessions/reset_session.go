@@ -6,7 +6,6 @@ package e_sessions
 
 import (
 	"easelect/backend/core_components/httpresponse"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -16,13 +15,8 @@ import (
 )
 
 func ResetSessionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		// virheilmoitus (Go: punaisella, pienellä alkukirjaimella)
-		errMsg := "unsupported method, only POST allowed"
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", errMsg)
-		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, errMsg)
-		return
-	}
+
+	// virheilmoitus (Go: punaisella, pienellä alkukirjaimella)
 
 	// Basic CSRF protection: verify Origin or Referer matches our host.
 	// Cannot use session-based CSRF here since the session may be corrupted.

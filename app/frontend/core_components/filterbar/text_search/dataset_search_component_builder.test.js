@@ -72,11 +72,6 @@ vi.mock("./dataset_search_state_reader.js", () => ({
     shouldRenderLocationCheckbox: () => true,
 }));
 
-vi.mock("./dataset_search_header_builder.js", () => ({
-    DEFAULT_TITLE_LANG_KEY_MODE: "dataset",
-    buildDatasetSearchHeader: () => document.createElement("div"),
-}));
-
 vi.mock("./dataset_search_location_handler.js", () => ({
     getStoredGpsCoords: () => null,
     requestGpsPosition: vi.fn().mockResolvedValue({ lat: 60.17, lon: 24.94 }),

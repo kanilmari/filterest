@@ -333,15 +333,6 @@ func TestVerifyWebhookSignature(t *testing.T) {
 
 // ── WebhookHandler tests ──────────────────────────────────────────────────
 
-func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/payments/webhook", nil)
-	rr := httptest.NewRecorder()
-	WebhookHandler(rr, req)
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405 for GET, got %d", rr.Code)
-	}
-}
-
 func TestCreatePaymentHandler_MissingAuthorizationRejectedWhenTokenConfigured(t *testing.T) {
 	t.Setenv("MCP_SERVICE_TOKEN", "test-token")
 	t.Setenv("ENVIRONMENT_TYPE", "prod")

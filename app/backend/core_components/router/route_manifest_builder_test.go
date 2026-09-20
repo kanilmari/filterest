@@ -105,7 +105,7 @@ func TestUpdateNoticeRoutesExposeManagerAndAdminNoTransactionContracts(t *testin
 	}
 
 	stream := mustFindManifestRoute(t, manifest, "router.adminUpdateNoticeStreamHandler")
-	assertRouteMethods(t, stream, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, stream, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	profile := mustFindScenarioProfile(t, stream, "production")
 	if stream.PathPattern != "/api/admin/update-notice/stream" || profile.ProfileName != "admin_no_tx" || !profile.AdminOnly {
 		t.Fatalf("admin notice stream = %+v/%+v, want admin_no_tx GET route", stream, profile)
@@ -126,7 +126,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	if loginAPI.MatchType != router.RouteMatchExact {
 		t.Fatalf("expected auth.LoginAPIHandler to use exact match, got %s", loginAPI.MatchType)
 	}
-	assertRouteMethods(t, loginAPI, nil, "")
+	assertRouteMethods(t, loginAPI, []string{"POST"}, router.RouteMethodSourceRegistration)
 	if mustFindScenarioProfile(t, loginAPI, "production").ProfileName != "public" {
 		t.Fatalf("expected auth.LoginAPIHandler production profile to be public")
 	}
@@ -144,10 +144,10 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	authModes := mustFindManifestRoute(t, manifest, "auth.GetAuthModesHandler")
-	assertRouteMethods(t, authModes, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, authModes, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 
 	firstRunAdmin := mustFindManifestRoute(t, manifest, "auth.FirstRunAdminHandler")
-	assertRouteMethods(t, firstRunAdmin, []string{"GET", "POST"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, firstRunAdmin, []string{"GET", "HEAD", "POST"}, router.RouteMethodSourceExplicitStableContract)
 	if firstRunAdmin.PathPattern != "/first-run" {
 		t.Fatalf("expected auth.FirstRunAdminHandler path to be /first-run, got %q", firstRunAdmin.PathPattern)
 	}
@@ -157,14 +157,14 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 
 	health := mustFindManifestRoute(t, manifest, "router.healthHandler")
 	assertScenarioNames(t, health, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, health, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, health, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, health, "production").ProfileName != "public" {
 		t.Fatalf("expected router.healthHandler production profile to be public")
 	}
 
 	systemHealth := mustFindManifestRoute(t, manifest, "router.systemHealthHandler")
 	assertScenarioNames(t, systemHealth, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, systemHealth, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, systemHealth, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if systemHealth.PathPattern != "/system/health" {
 		t.Fatalf("expected router.systemHealthHandler path to be /system/health, got %q", systemHealth.PathPattern)
 	}
@@ -174,7 +174,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 
 	systemReady := mustFindManifestRoute(t, manifest, "router.systemReadyHandler")
 	assertScenarioNames(t, systemReady, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, systemReady, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, systemReady, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if systemReady.PathPattern != "/system/ready" {
 		t.Fatalf("expected router.systemReadyHandler path to be /system/ready, got %q", systemReady.PathPattern)
 	}
@@ -184,7 +184,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 
 	systemInstanceStatus := mustFindManifestRoute(t, manifest, "router.systemInstanceStatusHandler")
 	assertScenarioNames(t, systemInstanceStatus, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, systemInstanceStatus, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, systemInstanceStatus, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if systemInstanceStatus.PathPattern != "/system/instance-status" {
 		t.Fatalf("expected router.systemInstanceStatusHandler path to be /system/instance-status, got %q", systemInstanceStatus.PathPattern)
 	}
@@ -204,7 +204,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 
 	adminVersionInfo := mustFindManifestRoute(t, manifest, "router.adminVersionInfoHandler")
 	assertScenarioNames(t, adminVersionInfo, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, adminVersionInfo, []string{"GET", "POST"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, adminVersionInfo, []string{"GET", "HEAD", "POST"}, router.RouteMethodSourceExplicitStableContract)
 	if adminVersionInfo.PathPattern != "/api/admin/version-info" {
 		t.Fatalf("expected router.adminVersionInfoHandler path to be /api/admin/version-info, got %q", adminVersionInfo.PathPattern)
 	}
@@ -223,7 +223,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	userPermissions := mustFindManifestRoute(t, manifest, "auth.UserPermissionsHandler")
-	assertRouteMethods(t, userPermissions, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, userPermissions, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 
 	personalSortDefault := mustFindManifestRoute(t, manifest, "system_table_tools.SavePersonalDatasetSortDefaultHandler")
 	assertRouteMethods(t, personalSortDefault, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
@@ -245,7 +245,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 
 	createDataset := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.CreateTableHandler")
 	assertScenarioNames(t, createDataset, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, createDataset, nil, "")
+	assertRouteMethods(t, createDataset, []string{"POST"}, router.RouteMethodSourceRegistration)
 	if mustFindScenarioProfile(t, createDataset, "production").ProfileName != "admin" {
 		t.Fatalf("expected CreateTableHandler production profile to be admin")
 	}
@@ -263,25 +263,25 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	fkCacheTriggers := mustFindManifestRoute(t, manifest, "system_table_tools.ListFKCacheTriggersHandler")
-	assertRouteMethods(t, fkCacheTriggers, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, fkCacheTriggers, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 
 	sseSubscribe := mustFindManifestRoute(t, manifest, "event_bus.SSESubscribeHandler")
 	assertScenarioNames(t, sseSubscribe, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, sseSubscribe, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, sseSubscribe, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, sseSubscribe, "production").ProfileName != "access_control_no_tx" {
 		t.Fatalf("expected event_bus.SSESubscribeHandler production profile to be access_control_no_tx")
 	}
 
 	datasetAliases := mustFindManifestRoute(t, manifest, "router.GetDatasetAliasesHandler")
 	assertScenarioNames(t, datasetAliases, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, datasetAliases, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, datasetAliases, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, datasetAliases, "production").ProfileName != "default" {
 		t.Fatalf("expected router.GetDatasetAliasesHandler production profile to be default")
 	}
 
 	datasetAliasManagementGet := mustFindManifestRoute(t, manifest, "router.GetDatasetAliasManagementHandler")
 	assertScenarioNames(t, datasetAliasManagementGet, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, datasetAliasManagementGet, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, datasetAliasManagementGet, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, datasetAliasManagementGet, "production").ProfileName != "admin" {
 		t.Fatalf("expected router.GetDatasetAliasManagementHandler production profile to be admin")
 	}
@@ -297,13 +297,13 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	assertRouteMethods(t, fkCacheRefresh, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 
 	datasetHeaderGet := mustFindManifestRoute(t, manifest, "system_table_tools.GetDatasetHeaderConfigHandler")
-	assertRouteMethods(t, datasetHeaderGet, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, datasetHeaderGet, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 
 	datasetHeaderSave := mustFindManifestRoute(t, manifest, "system_table_tools.SaveDatasetHeaderConfigHandler")
 	assertRouteMethods(t, datasetHeaderSave, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 
 	fieldSetList := mustFindManifestRoute(t, manifest, "system_table_tools.GetViewFieldSetsHandler")
-	assertRouteMethods(t, fieldSetList, []string{"GET"}, router.RouteMethodSourceExplicitStableContract)
+	assertRouteMethods(t, fieldSetList, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 
 	fieldSetReset := mustFindManifestRoute(t, manifest, "system_table_tools.ResetPersonalViewFieldSetHandler")
 	assertRouteMethods(t, fieldSetReset, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
@@ -316,13 +316,13 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	if rootHandler.MatchType != router.RouteMatchPrefix {
 		t.Fatalf("expected router.rootHandler to use prefix matching, got %s", rootHandler.MatchType)
 	}
-	assertRouteMethods(t, rootHandler, nil, "")
+	assertRouteMethods(t, rootHandler, []string{"GET", "HEAD"}, router.RouteMethodSourceRegistration)
 
 	paymentStatus := mustFindManifestRoute(t, manifest, "payment_gateway.GetPaymentStatusHandler")
 	if paymentStatus.MatchType != router.RouteMatchPrefix {
 		t.Fatalf("expected payment status route to use prefix matching, got %s", paymentStatus.MatchType)
 	}
-	assertRouteMethods(t, paymentStatus, nil, "")
+	assertRouteMethods(t, paymentStatus, []string{"GET", "HEAD"}, router.RouteMethodSourceRegistration)
 }
 
 func TestBuildDefaultRouteManifestMarksSensitiveRoutesAdmin(t *testing.T) {

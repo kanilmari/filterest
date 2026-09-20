@@ -101,28 +101,31 @@ func TestIssueRequiresAnAuthenticatedAdministratorAndJob(t *testing.T) {
 	}
 }
 
-func TestWriteApprovalMatchesMethodPathAndBodyOnce(t *testing.T) {
+func TestWriteApprovalMatchesMethodPathQueryAndBodyOnce(t *testing.T) {
 	store, _ := newTestStore(t)
 	_, delegation := issueTestDelegation(t, store)
 	body := []byte(`{"id":123,"updates":[{"column":"header","value":"New"}]}`)
 	bodyHash := HashRequestBody(body)
 
 	if err := store.Approve(delegation.ID, []ApprovedCall{
-		{Method: "post", Path: "/api/update-row", BodyHash: strings.ToUpper(bodyHash)},
+		{Method: "post", Path: "/api/update-row", Query: "tag=b&dataset=app_notes&label=some%20value&tag=a", BodyHash: strings.ToUpper(bodyHash)},
 	}); err != nil {
 		t.Fatalf("Approve: %v", err)
 	}
 
-	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", HashRequestBody([]byte("{}"))); !errors.Is(err, ErrWriteNotApproved) {
+	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", "dataset=app_notes&label=some+value&tag=a&tag=b", HashRequestBody([]byte("{}"))); !errors.Is(err, ErrWriteNotApproved) {
 		t.Fatalf("different body must be refused, got %v", err)
 	}
-	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/delete-rows", bodyHash); !errors.Is(err, ErrWriteNotApproved) {
+	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/delete-rows", "dataset=app_notes&label=some+value&tag=a&tag=b", bodyHash); !errors.Is(err, ErrWriteNotApproved) {
 		t.Fatalf("different path must be refused, got %v", err)
 	}
-	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", bodyHash); err != nil {
+	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", "dataset=app_tasks&label=some+value&tag=a&tag=b", bodyHash); !errors.Is(err, ErrWriteNotApproved) {
+		t.Fatalf("different query target must be refused, got %v", err)
+	}
+	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", "tag=b&label=some+value&tag=a&dataset=app_notes", bodyHash); err != nil {
 		t.Fatalf("approved call must run: %v", err)
 	}
-	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", bodyHash); !errors.Is(err, ErrWriteNotApproved) {
+	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", "dataset=app_notes&label=some+value&tag=a&tag=b", bodyHash); !errors.Is(err, ErrWriteNotApproved) {
 		t.Fatalf("an approved call must run only once, got %v", err)
 	}
 }
@@ -148,7 +151,7 @@ func TestPendingApprovalsAndInvalidPlans(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Approve: %v", err)
 	}
-	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", bodyHash); err != nil {
+	if err := store.UseWriteApproval(delegation.ID, http.MethodPost, "/api/update-row", "", bodyHash); err != nil {
 		t.Fatalf("approved call: %v", err)
 	}
 	pending, err := store.PendingApprovals(delegation.ID)
