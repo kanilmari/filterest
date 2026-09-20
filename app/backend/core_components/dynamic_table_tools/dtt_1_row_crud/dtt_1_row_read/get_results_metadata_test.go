@@ -178,6 +178,7 @@ func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
 }
 
 type layoutMetadataDriver struct {
+	dataType          string
 	defaultView       driver.Value
 	defaultViewColumn bool
 	detailColumn      bool
@@ -229,8 +230,12 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 	if !c.state.present {
 		value = nil
 	}
+	dataType := c.state.dataType
+	if dataType == "" {
+		dataType = "text"
+	}
 	return &layoutMetadataRows{values: []driver.Value{
-		"url", "text", nil, nil, "details_link", true, true, false, false, false, false, false, false,
+		"url", dataType, nil, nil, "details_link", true, true, false, false, false, false, false, false,
 		int64(1), int64(1), false, c.state.editable, "", "", true, "label", value,
 	}}, nil
 }
@@ -337,6 +342,40 @@ func TestColumnMetadataCarriesExplicitEditability(t *testing.T) {
 				t.Fatal("missing metadata must remain noneditable")
 			}
 		})
+	}
+}
+
+func TestColumnMetadataCarriesDeclaredNumericScale(t *testing.T) {
+	query := ""
+	const driverName = "column-description-numeric-scale"
+	sql.Register(driverName, &layoutMetadataDriver{
+		dataType: "numeric(18,2)",
+		query:    &query,
+	})
+	db, err := sql.Open(driverName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	metadata, err := getColumnDataTypesWithFK("subscriptions", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	columnInfo, ok := metadata["url"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("column description type = %T, want map[string]interface{}", metadata["url"])
+	}
+	if got := columnInfo["data_type"]; got != "numeric(18,2)" {
+		t.Fatalf("data_type = %#v, want numeric(18,2)", got)
+	}
+	for _, requiredFragment := range []string{
+		"WHEN c.data_type = 'numeric'",
+		"pg_catalog.format_type(type_column.atttypid, type_column.atttypmod)",
+	} {
+		if !strings.Contains(query, requiredFragment) {
+			t.Fatalf("column metadata query missing %q", requiredFragment)
+		}
 	}
 }
 

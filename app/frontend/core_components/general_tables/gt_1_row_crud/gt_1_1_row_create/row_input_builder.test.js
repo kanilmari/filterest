@@ -25,6 +25,7 @@ import {isRequiredForeignKeyColumn} from "./row_input_builder_helpers.js";
 import {createMultiselectDropdown} from "../../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js";
 import { fetchLinkableRows } from "./row_api_fetcher.js";
 import { buildForeignKeyField, buildRegularField } from "./row_input_builder.js";
+import { createDraftBackedFormState } from "./row_draft_saver.js";
 
 describe("buildForeignKeyField", () => {
     beforeEach(() => {
@@ -98,6 +99,50 @@ describe("buildForeignKeyField", () => {
 });
 
 describe("buildRegularField", () => {
+    test("uses the database scale for decimal prices", () => {
+        const form = document.createElement("form");
+
+        buildRegularField(form, "subscriptions", {
+            column_name: "price",
+            data_type: "numeric(18,2)",
+            is_nullable: "NO",
+        }, {});
+
+        const input = form.elements.price;
+        input.value = "22.39";
+        expect(input.type).toBe("number");
+        expect(input.step).toBe("0.01");
+        expect(input.validity.stepMismatch).toBe(false);
+    });
+
+    test("remains usable when draft storage rejects every operation", () => {
+        const columns = [{
+            column_name: "price",
+            data_type: "numeric(18,2)",
+            is_nullable: "NO",
+        }];
+        const unavailableStorage = {
+            getItem() { throw new DOMException("blocked", "SecurityError"); },
+            setItem() { throw new DOMException("full", "QuotaExceededError"); },
+            removeItem() { throw new DOMException("blocked", "SecurityError"); },
+        };
+        const state = createDraftBackedFormState(
+            "subscriptions",
+            columns,
+            Object.create(null),
+            unavailableStorage,
+        );
+        const form = document.createElement("form");
+        buildRegularField(form, "subscriptions", columns[0], state);
+
+        const input = form.elements.price;
+        input.value = "22.39";
+        expect(() => input.dispatchEvent(new Event("input", { bubbles: true })))
+            .not.toThrow();
+        expect(input.value).toBe("22.39");
+        expect(state.price).toBe("22.39");
+    });
+
     test("routes multilingual metadata through separate language inputs", () => {
         const form = document.createElement("form");
 

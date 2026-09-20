@@ -17,6 +17,7 @@ vi.mock("../gt_1_2_row_read/table_refresh_unified.js", () => ({refreshTableUnifi
 vi.mock("../../../../reusable_components/modal/modal_builder.js", () => ({hideModal:vi.fn()}));
 vi.mock("../../../../reusable_components/notifications/toast_notification_printer.js", () => ({showSuccessToast:vi.fn(),showWarningToast:vi.fn()}));
 import {endpoint_router} from "../../../endpoints/endpoint_router.js";
+import {hideModal} from "../../../../reusable_components/modal/modal_builder.js";
 
 describe("required foreign-key submission", () => {
  test("returns to the required chooser instead of sending an empty FK", async () => {
@@ -41,6 +42,7 @@ describe("required foreign-key submission", () => {
 describe("valid foreign-key payload", () => {
     test.each(["new", "in_progress"])("sends selected status %s and skips empty attachments", async (status) => {
         endpoint_router.mockClear();
+        const clearStateCallback = vi.fn();
         const form = document.createElement("form");
         form.innerHTML = '<input name="status" type="hidden"><input name="parent_id" type="hidden">';
         form.elements.status.value = status;
@@ -48,13 +50,14 @@ describe("valid foreign-key payload", () => {
             { column_name: "status", data_type: "text", is_nullable: "NO", foreign_table_name: "statuses", foreign_column_name: "slug" },
             { column_name: "parent_id", data_type: "integer", is_nullable: "YES", foreign_table_name: "tickets", foreign_column_name: "id" },
         ];
-        appendFormActions(form, "uid", columns, { _childRowsArray: [] }, () => {});
+        appendFormActions(form, "uid", columns, { _childRowsArray: [] }, clearStateCallback);
         form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true, submitter: form.querySelector("[type=submit]") }));
         await Promise.resolve();
         expect(endpoint_router).toHaveBeenCalledTimes(1);
         const request = endpoint_router.mock.calls[0][1];
         expect(JSON.parse(request.body_data.get("jsonPayload"))).toEqual({ status, parent_id: "" });
         expect([...request.body_data.keys()]).toEqual(["jsonPayload"]);
+        await vi.waitFor(() => expect(clearStateCallback).toHaveBeenCalledTimes(1));
     });
 });
 
@@ -78,6 +81,18 @@ describe("server-filled actor relations", () => {
 });
 
 describe("appendFormActions" , () => {
+    test("explicit Cancel clears the draft before closing the form", () => {
+        hideModal.mockClear();
+        const form = document.createElement("form");
+        const clearStateCallback = vi.fn();
+        appendFormActions(form, "table-uid", [], {}, clearStateCallback);
+
+        form.querySelector('[data-testid="btn-cancel-add-row"]').click();
+
+        expect(clearStateCallback).toHaveBeenCalledTimes(1);
+        expect(hideModal).toHaveBeenCalledTimes(1);
+    });
+
     test("shows Add only on the final form page while Next advances to it", () => {
         const form = document.createElement("form");
         form.dataset.formSectionNavigator = "";

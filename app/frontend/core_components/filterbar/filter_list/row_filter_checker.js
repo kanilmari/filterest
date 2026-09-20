@@ -3,14 +3,7 @@
 // Between filter bar state, column metadata, and dataset row rendering.
 // Exists to keep type-aware filter comparisons consistent across search paths.
 
-const NUMERIC_TYPES = new Set([
-    "numeric",
-    "integer",
-    "bigint",
-    "smallint",
-    "real",
-    "double precision",
-]);
+import { resolveNumberInputStep } from "../../general_tables/gt_1_row_crud/number_input_step_resolver.js";
 
 const DATE_TYPES = new Set([
     "date",
@@ -91,7 +84,8 @@ export function rowMatchesFilters(
             : columnKey;
 
         const typeHint = getColumnType(baseKey, columnTypes);
-        const preferDate = DATE_TYPES.has(typeHint) || (!NUMERIC_TYPES.has(typeHint) && isDateLike(rawValue));
+        const numericType = resolveNumberInputStep(typeHint) !== null;
+        const preferDate = DATE_TYPES.has(typeHint) || (!numericType && isDateLike(rawValue));
 
         if (isFrom || isTo) {
             const rowVal = preferDate

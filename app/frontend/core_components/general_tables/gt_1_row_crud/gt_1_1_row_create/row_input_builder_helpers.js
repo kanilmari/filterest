@@ -2,6 +2,8 @@
 // Pure helper functions extracted from row_input_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
 
+import { resolveNumberInputStep } from "../number_input_step_resolver.js";
+
 /**
  * Build a standardized test ID for a form field.
  *
@@ -19,12 +21,12 @@ export function buildFieldTestId(column_name) {
  * @returns {string} The corresponding HTML input type
  */
 export function getInputType(data_type) {
-    switch (data_type.toLowerCase()) {
-        case "integer":
-        case "bigint":
-        case "smallint":
-        case "numeric":
-            return "number";
+    const normalizedDataType = String(data_type || "").trim().toLowerCase();
+    if (resolveNumberInputStep(normalizedDataType) !== null) {
+        return "number";
+    }
+
+    switch (normalizedDataType) {
         case "boolean":
             return "checkbox";
         case "date":

@@ -32,6 +32,7 @@ describe('getEditInputType', () => {
 
     test('returns number for numeric type', () => {
         expect(getEditInputType('numeric')).toBe('number');
+        expect(getEditInputType('numeric(18,2)')).toBe('number');
     });
 
     test('returns checkbox for boolean', () => {

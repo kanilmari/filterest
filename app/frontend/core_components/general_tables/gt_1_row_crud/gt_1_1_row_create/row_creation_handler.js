@@ -20,13 +20,10 @@ import { relationHasEnabledFileUpload } from "./row_existing_relation_builder.js
 import { showWarningToast } from "../../../../reusable_components/notifications/toast_notification_printer.js";
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
 import { initializeFormSectionNavigator } from "../../../../reusable_components/form_section_navigator/form_section_navigator.js";
-
-// Säilytetään lomakkeen tilaa globaalisti (tässä moduulissa)
-let modal_form_state = {};
-
-function clearState() {
-    modal_form_state = {};
-}
+import {
+    clearRowCreationDraft,
+    createDraftBackedFormState,
+} from "./row_draft_saver.js";
 
 // Auto-resize logiikka kaikille textareille
 document.addEventListener("input", (event) => {
@@ -106,6 +103,16 @@ export async function open_add_row_modal(table_uid, table_name) {
             hideModal();
             return;
         }
+
+        // The fetched schema owns which fields exist. Stored values are only a
+        // viewer-local overlay and are filtered against these current columns.
+        const modal_form_state = createDraftBackedFormState(datasetName, columns);
+        const clearState = () => {
+            columns.forEach((column) => {
+                delete modal_form_state[column.column_name];
+            });
+            clearRowCreationDraft(datasetName);
+        };
 
         // 3) Rakennetaan lomake
         const form = await buildMainForm(

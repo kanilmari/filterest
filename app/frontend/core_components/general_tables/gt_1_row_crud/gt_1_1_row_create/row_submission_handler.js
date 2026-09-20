@@ -28,7 +28,10 @@ export function appendFormActions(form, table_uid, columns, modal_form_state, cl
     cancel_button.dataset.langKey = "cancel";
     cancel_button.dataset.testid = "btn-cancel-add-row";
     cancel_button.classList.add("cancel-button");
-    cancel_button.addEventListener("click", hideModal);
+    cancel_button.addEventListener("click", () => {
+        if (clearStateCallback) clearStateCallback();
+        hideModal();
+    });
 
     const submit_button = document.createElement("button");
     submit_button.type = "submit";
@@ -49,6 +52,9 @@ export function appendFormActions(form, table_uid, columns, modal_form_state, cl
             return;
         }
         await submit_new_row(table_uid, form, columns, modal_form_state, clearStateCallback);
+    });
+    form.addEventListener("reset", () => {
+        if (clearStateCallback) clearStateCallback();
     });
 }
 
@@ -118,8 +124,8 @@ async function submit_new_row(table_uid, form, columns, modal_form_state, clearS
         });
 
         showSuccessToast(getTranslationForKey('row_added_successfully') || "Rivi lisätty onnistuneesti!");
-        hideModal();
         if (clearStateCallback) clearStateCallback();
+        hideModal();
 
         // Uusi "refresh" unifyed-tavalla:
         await refreshTableUnified(datasetName, {

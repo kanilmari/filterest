@@ -32,6 +32,7 @@ describe('determineColumnCategory', () => {
 
     test('returns "numeric" for numeric data types', () => {
         expect(determineColumnCategory('amount', 'numeric')).toBe('numeric');
+        expect(determineColumnCategory('price', 'numeric(18,2)')).toBe('numeric');
         expect(determineColumnCategory('count', 'integer')).toBe('numeric');
         expect(determineColumnCategory('total', 'bigint')).toBe('numeric');
         expect(determineColumnCategory('rank', 'smallint')).toBe('numeric');
@@ -117,6 +118,7 @@ describe('resolveFilterElementKind', () => {
 
     test('returns numeric/date/boolean/text kinds for non-FK columns', () => {
         expect(resolveFilterElementKind({ data_type: 'integer' })).toBe('numeric_range');
+        expect(resolveFilterElementKind({ data_type: 'numeric(18,2)' })).toBe('numeric_range');
         expect(resolveFilterElementKind({ data_type: 'timestamp with time zone' })).toBe('date_range');
         expect(resolveFilterElementKind({ data_type: 'boolean' })).toBe('boolean_select');
         expect(resolveFilterElementKind({ data_type: 'text' })).toBe('text_input');

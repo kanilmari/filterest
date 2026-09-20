@@ -285,7 +285,13 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 	query := fmt.Sprintf(`
         SELECT
             c.column_name,
-            c.data_type,
+            CASE
+                WHEN c.data_type = 'numeric' THEN COALESCE(
+                    pg_catalog.format_type(type_column.atttypid, type_column.atttypmod),
+                    c.data_type
+                )
+                ELSE c.data_type
+            END AS data_type,
             fk_info.foreign_table_name,
             fk_info.foreign_column_name,
             COALESCE(scd.card_element, '') AS card_element,
@@ -307,6 +313,16 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
             %s,
             %s
         FROM information_schema.columns c
+        LEFT JOIN pg_catalog.pg_namespace type_schema
+          ON type_schema.nspname = c.table_schema
+        LEFT JOIN pg_catalog.pg_class type_table
+          ON type_table.relnamespace = type_schema.oid
+          AND type_table.relname = c.table_name
+        LEFT JOIN pg_catalog.pg_attribute type_column
+          ON type_column.attrelid = type_table.oid
+          AND type_column.attname = c.column_name
+          AND type_column.attnum > 0
+          AND NOT type_column.attisdropped
         LEFT JOIN (
             SELECT
                 kcu.column_name,

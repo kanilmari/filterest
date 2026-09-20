@@ -11,6 +11,7 @@ import { getLanguageWithBrowserFallback } from "../../../state_stores/lang_prefe
 import { resolveDatasetDisplayValue } from "../../../table_views/dataset_value_localizer.js";
 import { buildMultilingualTextareaGroup } from "./row_multilingual_input_builder.js";
 import { getTranslationForKey } from "../../../lang/translation_handler.js";
+import { applyNumberInputStep } from "../number_input_step_resolver.js";
 
 /** @deprecated Use getInputType from row_input_builder_helpers.js */
 export const get_input_type = getInputType;
@@ -49,6 +50,10 @@ export function buildForeignKeyField(form, table_name, column, modal_form_state)
     hidden_input.type = "hidden";
     hidden_input.name = column.column_name;
     hidden_input.dataset.testid = `form-hidden-${column.column_name}`;
+    const restoredValue = modal_form_state[column.column_name];
+    hidden_input.value = restoredValue === undefined || restoredValue === null
+        ? ""
+        : String(restoredValue);
     fieldset.appendChild(hidden_input);
 
     // Luo dropdown ja tallenna instanssi, jotta se voidaan päivityksen jälkeen
@@ -79,6 +84,9 @@ export function buildForeignKeyField(form, table_name, column, modal_form_state)
         useSearch: true,
         allowExclude: false,
         maxSelections: 1,
+        initialState: hidden_input.value
+            ? { includeValues: [hidden_input.value] }
+            : {},
         selectedCountLabel: getTranslationForKey("selected") || "selected",
         noResultsLabel: getTranslationForKey("no_results") || "No results",
         clearLabel: getTranslationForKey("clear_selection") || "Clear selection",
@@ -91,6 +99,7 @@ export function buildForeignKeyField(form, table_name, column, modal_form_state)
             const value = includeValues.at(-1) || "";
             hidden_input.value = value;
             modal_form_state[column.column_name] = value;
+            hidden_input.dispatchEvent(new Event("input", { bubbles: true }));
             dropdown_container.querySelector('[role="combobox"]')?.removeAttribute("aria-invalid");
         },
     });
@@ -182,6 +191,7 @@ export function buildRegularField(form, table_name, column, modal_form_state) {
     } else {
         const input = document.createElement("input");
         input.type = getInputType(column.data_type);
+        applyNumberInputStep(input, column.data_type);
         input.id = `${table_name}-${column.column_name}-input`;
         input.name = column.column_name;
         input.dataset.testid = buildFieldTestId(column.column_name);
@@ -190,12 +200,19 @@ export function buildRegularField(form, table_name, column, modal_form_state) {
         input.style.border = "1px solid var(--border_color)";
         input.style.borderRadius = "4px";
 
-        if (modal_form_state[column.column_name]) {
-            input.value = modal_form_state[column.column_name];
+        if (Object.prototype.hasOwnProperty.call(modal_form_state, column.column_name)) {
+            if (input.type === "checkbox") {
+                input.checked = modal_form_state[column.column_name] === true
+                    || modal_form_state[column.column_name] === "true";
+            } else {
+                input.value = modal_form_state[column.column_name];
+            }
         }
 
         input.addEventListener("input", (e) => {
-            modal_form_state[column.column_name] = e.target.value;
+            modal_form_state[column.column_name] = e.target.type === "checkbox"
+                ? e.target.checked
+                : e.target.value;
         });
 
         form.appendChild(label);

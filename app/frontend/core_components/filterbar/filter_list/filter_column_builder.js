@@ -28,6 +28,7 @@ import {
     shouldRetryForeignFilterOptionsWithSlug,
     shouldHideRedundantGeneratedForeignDisplayColumn,
 } from "./filter_column_builder_helpers.js";
+import { applyNumberInputStep } from "../../general_tables/gt_1_row_crud/number_input_step_resolver.js";
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 const FILTER_DISPLAY_MODES = Object.freeze({
@@ -459,6 +460,9 @@ function createFilterElement(tableName, column, colType) {
 
     const filterElementKind = resolveFilterElementKind(colType);
     if (filterElementKind === "numeric_range" || filterElementKind === "date_range") {
+        const columnDataType = typeof colType === "object" && colType?.data_type
+            ? colType.data_type
+            : colType;
         const baseId = getColumnFilterBaseId(tableName, column);
         const modes = resolveFilterDisplayModes(colType);
         const savedModeFallback = getSaved(baseId)
@@ -489,6 +493,9 @@ function createFilterElement(tableName, column, colType) {
         valueInput.placeholder = "Value";
         valueInput.value = getSaved(baseId);
         valueInput.type = filterElementKind === "numeric_range" ? "number" : "date";
+        if (filterElementKind === "numeric_range") {
+            applyNumberInputStep(valueInput, columnDataType);
+        }
         let valueDebounceTimer = null;
         valueInput.addEventListener("input", () => {
             clearTimeout(valueDebounceTimer);
@@ -504,6 +511,8 @@ function createFilterElement(tableName, column, colType) {
         if (filterElementKind === "numeric_range") {
             fromInput.type = "number";
             toInput.type = "number";
+            applyNumberInputStep(fromInput, columnDataType);
+            applyNumberInputStep(toInput, columnDataType);
             fromInput.placeholder = "Min";
             toInput.placeholder = "Max";
         } else {

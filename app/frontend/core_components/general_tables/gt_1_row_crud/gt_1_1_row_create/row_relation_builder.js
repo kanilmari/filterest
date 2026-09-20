@@ -16,6 +16,7 @@ import {
     getImageSourcePickerText,
     openImageSourcePicker,
 } from "../../../../reusable_components/image_source_picker/image_source_picker.js";
+import { applyNumberInputStep } from "../number_input_step_resolver.js";
 
 const ASSET_PROFILE_LABELS = {
     image: () => getTranslationForKey("image") || "Image",
@@ -282,6 +283,7 @@ function appendChildColumnInput(fieldset, datasetName, ccol, childObjectState) {
     } else {
         childInput = document.createElement("input");
         childInput.type = get_input_type(ccol.data_type);
+        applyNumberInputStep(childInput, ccol.data_type);
     }
     childInput.name = childId;
     childInput.id = childId;

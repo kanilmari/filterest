@@ -3,6 +3,7 @@
 // Zero DOM access — all functions are pure input→output.
 
 import { formatTemporalValueForInput } from '../../../table_views/temporal_value_formatter.js';
+import { resolveNumberInputStep } from '../number_input_step_resolver.js';
 
 /**
  * Map a database data type string to the corresponding HTML input type.
@@ -14,7 +15,7 @@ export function getEditInputType(dataType) {
     if (!dataType) return 'text';
     if (dataType.includes('timestamp')) return 'datetime-local';
     if (dataType.includes('date')) return 'date';
-    if (dataType.includes('int') || dataType === 'numeric') return 'number';
+    if (resolveNumberInputStep(dataType) !== null) return 'number';
     if (dataType === 'boolean') return 'checkbox';
     return 'text';
 }

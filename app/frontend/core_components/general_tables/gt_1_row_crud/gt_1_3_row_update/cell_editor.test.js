@@ -363,6 +363,28 @@ describe('cell_editor', () => {
         expect(data[0].due_date).toBe('2026-01-15');
     });
 
+    test('uses the declared decimal scale in the inline editor', async () => {
+        const { editCell } = await import('./cell_editor.js');
+        const cell = document.createElement('td');
+        cell.dataset.rowIndex = '0';
+        cell.dataset.colIndex = '1';
+        cell.textContent = '22.39';
+        document.body.appendChild(cell);
+
+        await editCell(
+            cell,
+            ['id', 'price'],
+            [{ id: 7, price: '22.39' }],
+            { price: { data_type: 'numeric(18,2)' } },
+            'subscriptions'
+        );
+
+        const input = cell.querySelector('[data-testid="table-editor"]');
+        expect(input.type).toBe('number');
+        expect(input.step).toBe('0.01');
+        expect(input.validity.stepMismatch).toBe(false);
+    });
+
     test('does not POST when a string-backed boolean checkbox is unchanged or cancelled', async () => {
         const { editCell } = await import('./cell_editor.js');
         const cell = document.createElement('td');

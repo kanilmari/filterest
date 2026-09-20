@@ -28,6 +28,7 @@ import {
     normalizeTicketStatusForClient,
     normalizeTicketStatusForDb,
 } from './card_field_formatter_helpers.js';
+import { applyNumberInputStep } from '../../general_tables/gt_1_row_crud/number_input_step_resolver.js';
 
 /**
  * parseRoleString - tukee useita pilkulla erotettuja rooleja 
@@ -549,6 +550,7 @@ export function enableEditing(container, table_name, dataTypes) {
         } else if (inputType === 'number') {
             const numberInput = document.createElement('input');
             numberInput.type = 'number';
+            applyNumberInputStep(numberInput, dataType);
             numberInput.value = originalText || '';
             fieldElem.appendChild(numberInput);
 

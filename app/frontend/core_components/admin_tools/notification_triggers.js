@@ -10,6 +10,10 @@ import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { showSuccessToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
 import { buildTriggerFormData } from './notification_triggers_helpers.js';
+import {
+  applyNumberInputStep,
+  resolveNumberInputStep,
+} from '../general_tables/gt_1_row_crud/number_input_step_resolver.js';
 
 export async function load_trigger_management() {
   return loadManagementView('trigger_management_container', generate_notification_trigger_view);
@@ -228,9 +232,10 @@ function createConditionContainer() {
     const data_type = colObj?.dataType || 'text';
 
     let operators = [];
-    if (['integer', 'numeric', 'double_precision', 'real', 'smallint', 'bigint'].includes(data_type)) {
+    if (resolveNumberInputStep(data_type) !== null || data_type === 'double_precision') {
       operators = ['=', '!=', '>', '<', '>=', '<='];
       valueInput.type = 'number';
+      if (!applyNumberInputStep(valueInput, data_type)) valueInput.step = 'any';
     } else if (['character_varying', 'text', 'varchar'].includes(data_type)) {
       operators = ['=', '!=', 'ILIKE', 'NOT ILIKE'];
       valueInput.type = 'text';

@@ -2,14 +2,7 @@
 // Pure helper functions extracted from filter_column_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
 
-const NUMERIC_FILTER_TYPES = [
-    "numeric",
-    "integer",
-    "bigint",
-    "smallint",
-    "real",
-    "double precision",
-];
+import { resolveNumberInputStep } from "../../general_tables/gt_1_row_crud/number_input_step_resolver.js";
 
 const DATE_FILTER_TYPES = [
     "date",
@@ -40,16 +33,7 @@ export function determineColumnCategory(column, dataType) {
     if (lowerCol.endsWith("_id") || lowerCol.endsWith("_uid"))
         return "additional_id";
 
-    const numericTypes = [
-        "numeric",
-        "integer",
-        "bigint",
-        "smallint",
-        "real",
-        "double precision",
-    ];
-
-    if (numericTypes.includes(dataType)) return "numeric";
+    if (resolveNumberInputStep(dataType) !== null) return "numeric";
     if (dataType === "boolean") return "boolean";
     if (lowerCol.endsWith("(linked)") || lowerCol.endsWith("(ln)"))
         return "linked";
@@ -86,7 +70,7 @@ export function resolveFilterElementKind(colType) {
             : colType || ""
     ).toLowerCase();
 
-    if (NUMERIC_FILTER_TYPES.includes(dtString)) return "numeric_range";
+    if (resolveNumberInputStep(dtString) !== null) return "numeric_range";
     if (DATE_FILTER_TYPES.includes(dtString)) return "date_range";
     if (dtString === "boolean") return "boolean_select";
     return "text_input";

@@ -96,6 +96,22 @@ describe('card_field_formatter schema source', () => {
         expect(container.querySelector('[data-column="unknown_column"] input')).toBeNull();
         container.remove();
     });
+
+    test('uses the declared scale for a decimal article field', () => {
+        const container = document.createElement('div');
+        container.appendChild(createEditableField('price', '22.39'));
+        document.body.appendChild(container);
+
+        enableEditing(container, 'subscriptions', {
+            price: { data_type: 'numeric(18,2)', editable_in_ui: true },
+        });
+
+        const input = container.querySelector('[data-column="price"] input');
+        expect(input.type).toBe('number');
+        expect(input.step).toBe('0.01');
+        expect(input.validity.stepMismatch).toBe(false);
+        container.remove();
+    });
 });
 
 describe('card_field_formatter multilingual editing', () => {

@@ -16,6 +16,7 @@ import {
     formatDateForInput,
     canInlineEditCell,
 } from './cell_editor_helpers.js';
+import { applyNumberInputStep } from '../number_input_step_resolver.js';
 import {
     getInlineEditCacheInvalidationKeys,
     getInlineEditOptions,
@@ -364,6 +365,7 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
     const input = document.createElement(editorLayout.useTextarea ? 'textarea' : 'input');
     if (input instanceof HTMLInputElement) {
         input.type = inputType;
+        applyNumberInputStep(input, dataType);
     } else {
         input.classList.add('table-editor-textarea');
         input.rows = 1;

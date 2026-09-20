@@ -7,6 +7,7 @@ package dtt_1_row_create
 
 import (
 	"database/sql/driver"
+	"strings"
 	"testing"
 
 	backend "easelect/backend/core_components"
@@ -45,5 +46,45 @@ func TestGetAddRowColumnsWithTypesScansMultilingualLanguageRegistry(t *testing.T
 	}
 	if len(columns[0].MultilingualLanguages) != 2 || columns[0].MultilingualLanguages[0].LanguageCode != "fi" || columns[0].MultilingualLanguages[1].LanguageCode != "en" {
 		t.Fatalf("languages = %#v, want fi/en registry order", columns[0].MultilingualLanguages)
+	}
+}
+
+func TestGetAddRowColumnsWithTypesCarriesDeclaredNumericScale(t *testing.T) {
+	resetQueues()
+	t.Cleanup(resetQueues)
+	db := newTestDB(t)
+	t.Cleanup(func() { _ = db.Close() })
+	previousDB := backend.Db
+	backend.Db = db
+	t.Cleanup(func() { backend.Db = previousDB })
+
+	pushQuery(queuedQuery{
+		cols: []string{
+			"column_name", "data_type", "is_nullable", "column_default", "is_identity",
+			"generation_expression", "foreign_table_schema", "foreign_table_name",
+			"foreign_column_name", "udt_name", "insert_new_target_with_source",
+			"insert_new_source_with_target", "source_insert_specs", "target_insert_specs",
+			"insertable", "is_multilingual", "multilingual_languages",
+		},
+		rows: [][]driver.Value{{
+			"price", "numeric(18,2)", "NO", nil, "NO", nil, nil, nil, nil, "numeric",
+			nil, nil, nil, nil, true, false, []byte(`[]`),
+		}},
+	})
+
+	columns, err := getAddRowColumnsWithTypes("subscriptions-uid", "public")
+	if err != nil {
+		t.Fatalf("getAddRowColumnsWithTypes() error = %v", err)
+	}
+	if len(columns) != 1 || columns[0].DataType != "numeric(18,2)" {
+		t.Fatalf("columns = %#v, want numeric(18,2) price", columns)
+	}
+	for _, requiredFragment := range []string{
+		"WHEN c.data_type = 'numeric'",
+		"pg_catalog.format_type(type_column.atttypid, type_column.atttypmod)",
+	} {
+		if !strings.Contains(addRowColumnsWithTypesQuery, requiredFragment) {
+			t.Fatalf("add-row column query missing %q", requiredFragment)
+		}
 	}
 }

@@ -160,6 +160,7 @@ describe('resolveInputType', () => {
         expect(resolveInputType('int', 0)).toEqual({ type: 'number' });
         expect(resolveInputType('integer', 0)).toEqual({ type: 'number' });
         expect(resolveInputType('numeric', 0)).toEqual({ type: 'number' });
+        expect(resolveInputType('numeric(18,2)', 0)).toEqual({ type: 'number' });
     });
 
     test('short text → text input', () => {

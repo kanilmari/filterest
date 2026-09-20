@@ -91,6 +91,7 @@ export function buildGeometryField(form, column, modal_form_state) {
 
                     modal_form_state[column.column_name] = hiddenGeom.value;
                     fillAdditionalGeometryFields(form, sug, modal_form_state);
+                    hiddenGeom.dispatchEvent(new Event("input", { bubbles: true }));
                     suggestionsDiv.replaceChildren();
                 });
                 suggestionsDiv.appendChild(div);

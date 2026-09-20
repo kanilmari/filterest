@@ -30,6 +30,7 @@ describe('getInputType', () => {
         expect(getInputType('bigint')).toBe('number');
         expect(getInputType('smallint')).toBe('number');
         expect(getInputType('numeric')).toBe('number');
+        expect(getInputType('numeric(18,2)')).toBe('number');
     });
 
     test('returns checkbox for boolean', () => {

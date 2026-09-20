@@ -5,6 +5,7 @@
 // Exists so card surfaces can reuse one consistent status and display-value normalization layer.
 
 import { extractLangValue } from '../../../reusable_components/lang_value_reader.js';
+import { resolveNumberInputStep } from '../../general_tables/gt_1_row_crud/number_input_step_resolver.js';
 
 const GENERATED_FK_ALIAS_SUFFIX_RE = /\s+\(ln(?: \d+)?\)$/iu;
 const DEV_AGENT_TASK_STATUS_CLIENT_ALIASES = Object.freeze({
@@ -126,7 +127,7 @@ export function resolveInputType(dataType, textLength) {
         return { type: 'datetime-local' };
     }
 
-    if (dataType === 'int' || dataType === 'integer' || dataType === 'numeric') {
+    if (resolveNumberInputStep(dataType) !== null) {
         return { type: 'number' };
     }
 

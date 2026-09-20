@@ -16,6 +16,41 @@ import (
 	"strings"
 )
 
+const tableColumnsWithTypesAndIDsQuery = `
+        SELECT cd.column_uid, cd.column_name,
+               CASE
+                   WHEN c.data_type = 'numeric' THEN COALESCE(
+                       pg_catalog.format_type(type_column.atttypid, type_column.atttypmod),
+                       c.data_type
+                   )
+                   ELSE c.data_type
+               END AS data_type,
+               cd.co_number,
+               COALESCE(cd.card_element, ''),
+               c.character_maximum_length,
+               COALESCE(cd.is_multilingual, FALSE),
+               COALESCE(dt.new_columns_multilingual, EXISTS (
+                   SELECT 1 FROM system_column_details source
+                   WHERE source.table_uid = dt.table_uid AND source.is_multilingual
+               ))
+        FROM system_column_details cd
+        JOIN system_db_tables dt ON dt.table_uid = cd.table_uid
+        JOIN information_schema.columns c
+          ON c.table_name = $1 AND c.column_name = cd.column_name AND c.table_schema = current_schema()
+        LEFT JOIN pg_catalog.pg_namespace type_schema
+          ON type_schema.nspname = c.table_schema
+        LEFT JOIN pg_catalog.pg_class type_table
+          ON type_table.relnamespace = type_schema.oid
+          AND type_table.relname = c.table_name
+        LEFT JOIN pg_catalog.pg_attribute type_column
+          ON type_column.attrelid = type_table.oid
+          AND type_column.attname = c.column_name
+          AND type_column.attnum > 0
+          AND NOT type_column.attisdropped
+        WHERE cd.table_uid = $2
+        ORDER BY cd.co_number
+    `
+
 func GetTableColumnsHandler(w http.ResponseWriter, r *http.Request) {
 	// Oletetaan, että URL-polku on /api/dataset-columns/{table_name}
 	tableName := strings.TrimPrefix(r.URL.Path, "/api/dataset-columns/")
@@ -57,23 +92,7 @@ func GetTableColumnsWithTypesAndIDs(tableName string) ([]map[string]interface{},
 	}
 
 	// Hae saraketiedot liittymällä system_column_details ja information_schema.columns
-	query := `
-        SELECT cd.column_uid, cd.column_name, c.data_type, cd.co_number,
-               COALESCE(cd.card_element, ''),
-               c.character_maximum_length,
-               COALESCE(cd.is_multilingual, FALSE),
-               COALESCE(dt.new_columns_multilingual, EXISTS (
-                   SELECT 1 FROM system_column_details source
-                   WHERE source.table_uid = dt.table_uid AND source.is_multilingual
-               ))
-        FROM system_column_details cd
-        JOIN system_db_tables dt ON dt.table_uid = cd.table_uid
-        JOIN information_schema.columns c
-          ON c.table_name = $1 AND c.column_name = cd.column_name AND c.table_schema = current_schema()
-        WHERE cd.table_uid = $2
-        ORDER BY cd.co_number
-    `
-	rows, err := backend.Db.Query(query, tableName, tableUID)
+	rows, err := backend.Db.Query(tableColumnsWithTypesAndIDsQuery, tableName, tableUID)
 	if err != nil {
 		return nil, err
 	}

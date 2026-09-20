@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
     getDatasetNameByUID: vi.fn(() => "services"),
     hideModal: vi.fn(),
     initializeFormSectionNavigator: vi.fn(),
+    clearRowCreationDraft: vi.fn(),
+    createDraftBackedFormState: vi.fn(),
     showModal: vi.fn(),
     showWarningToast: vi.fn(),
 }));
@@ -51,6 +53,11 @@ vi.mock("../../../../reusable_components/form_section_navigator/form_section_nav
     initializeFormSectionNavigator: mocks.initializeFormSectionNavigator,
 }));
 
+vi.mock("./row_draft_saver.js", () => ({
+    clearRowCreationDraft: mocks.clearRowCreationDraft,
+    createDraftBackedFormState: mocks.createDraftBackedFormState,
+}));
+
 import { open_add_row_modal } from "./row_creation_handler.js";
 
 function deferred() {
@@ -64,6 +71,9 @@ function deferred() {
 beforeEach(() => {
     document.body.replaceChildren();
     vi.clearAllMocks();
+    mocks.createDraftBackedFormState.mockImplementation((datasetName) => ({
+        restoredFor: datasetName,
+    }));
 });
 
 describe("open_add_row_modal", () => {
@@ -111,5 +121,30 @@ describe("open_add_row_modal", () => {
             "min(850px, calc(100vw - 32px))"
         );
         expect(mocks.showModal).toHaveBeenCalledTimes(2);
+    });
+
+    test("restores the draft for the opened dataset and never shares another dataset's state", async () => {
+        mocks.fetchColumnsInfo.mockResolvedValue([
+            { column_name: "price", data_type: "numeric(18,2)" },
+        ]);
+        mocks.fetchOneToManyRelations.mockResolvedValue([]);
+        mocks.fetchManyToManyInfos.mockResolvedValue([]);
+        mocks.buildMainForm.mockResolvedValue(document.createElement("form"));
+
+        await open_add_row_modal(10, "subscriptions");
+        await open_add_row_modal(11, "projects");
+
+        expect(mocks.createDraftBackedFormState).toHaveBeenNthCalledWith(
+            1,
+            "subscriptions",
+            [{ column_name: "price", data_type: "numeric(18,2)" }]
+        );
+        expect(mocks.createDraftBackedFormState).toHaveBeenNthCalledWith(
+            2,
+            "projects",
+            [{ column_name: "price", data_type: "numeric(18,2)" }]
+        );
+        expect(mocks.buildMainForm.mock.calls[0][4]).toEqual({ restoredFor: "subscriptions" });
+        expect(mocks.buildMainForm.mock.calls[1][4]).toEqual({ restoredFor: "projects" });
     });
 });
