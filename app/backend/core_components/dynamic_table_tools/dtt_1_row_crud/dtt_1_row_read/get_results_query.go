@@ -551,7 +551,8 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	if err != nil {
 		return "", nil, 0, nil, fmt.Errorf("error building where clause: %w", err)
 	}
-	where_clause, query_args, err = appendDatasetTextSearchToWhereClause(
+	var relevance_order_by string
+	where_clause, query_args, relevance_order_by, err = appendDatasetTextSearchToWhereClause(
 		ctx.DB,
 		ctx.QueryParams,
 		ctx.TableName,
@@ -582,6 +583,13 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	)
 	if err != nil {
 		return "", nil, 0, nil, fmt.Errorf("error building order by clause: %w", err)
+	}
+
+	// Relevance is what a search means when the person has not asked for
+	// another order. A sort they did choose stays in force: choosing newest and
+	// then typing a word should still list the newest matches.
+	if order_by_clause == "" && relevance_order_by != "" {
+		order_by_clause = relevance_order_by
 	}
 
 	// 4. Handle row visibility policy columns.

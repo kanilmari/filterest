@@ -28,41 +28,55 @@ const datasetSearchQueryKey = "search"
 // serves the condition. Rows whose vector has not been built yet still match
 // through the same on-the-fly expression the search has always used, and a
 // search that is a plain number also matches that row's identifier.
+//
+// It also returns how those matches should be ordered by relevance. The caller
+// uses that only when the person has not chosen a sort of their own. Building
+// it here is what keeps the ranking honest: it reuses the very expression and
+// the very placeholder the condition matched with, instead of a second copy
+// that has to be kept in step by hand.
 func appendDatasetTextSearchToWhereClause(
 	db dbutils.Querier,
 	queryParams url.Values,
 	tableName string,
 	whereClause string,
 	queryArgs []interface{},
-) (string, []interface{}, error) {
+) (string, []interface{}, string, error) {
 	rawSearch := strings.TrimSpace(queryParams.Get(datasetSearchQueryKey))
 	if rawSearch == "" {
-		return whereClause, queryArgs, nil
+		return whereClause, queryArgs, "", nil
 	}
 
 	tsQuery := buildOrPrefixTsQuery(rawSearch)
 	if tsQuery == "" {
-		return whereClause, queryArgs, nil
+		return whereClause, queryArgs, "", nil
 	}
 
 	searchVectorExpr, err := datasetSearchVectorExpression(db, tableName)
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
 
 	queryPlaceholder := len(queryArgs) + 1
 	predicate := fmt.Sprintf("(%s) @@ to_tsquery('simple', $%d)", searchVectorExpr, queryPlaceholder)
 	queryArgs = append(queryArgs, tsQuery)
 
+	quotedTable := pq.QuoteIdentifier(tableName)
+	quotedID := pq.QuoteIdentifier("id")
+	rankExpr := fmt.Sprintf("ts_rank(%s, to_tsquery('simple', $%d))", searchVectorExpr, queryPlaceholder)
+	idOrderExpr := ""
+
 	if numericID, hasNumericID := parseNumericIDSearch(rawSearch); hasNumericID {
 		idPlaceholder := len(queryArgs) + 1
 		predicate = fmt.Sprintf("(%s OR %s.%s = $%d)",
 			predicate,
-			pq.QuoteIdentifier(tableName),
-			pq.QuoteIdentifier("id"),
+			quotedTable,
+			quotedID,
 			idPlaceholder,
 		)
 		queryArgs = append(queryArgs, numericID)
+		// Searching a number means that row above everything else, which is
+		// how the assisted search has always treated an exact identifier.
+		idOrderExpr = fmt.Sprintf("(%s.%s = $%d) DESC, ", quotedTable, quotedID, idPlaceholder)
 	}
 
 	if strings.TrimSpace(whereClause) == "" {
@@ -70,7 +84,15 @@ func appendDatasetTextSearchToWhereClause(
 	} else {
 		whereClause += " AND " + predicate
 	}
-	return whereClause, queryArgs, nil
+
+	// The identifier last makes the order total. Without it two rows of equal
+	// rank may come back in either order, and endless scrolling reads the
+	// result in windows: the same row can arrive twice while another is never
+	// seen at all.
+	relevanceOrderBy := fmt.Sprintf(" ORDER BY %s%s DESC, %s.%s DESC",
+		idOrderExpr, rankExpr, quotedTable, quotedID)
+
+	return whereClause, queryArgs, relevanceOrderBy, nil
 }
 
 // datasetSearchVectorExpression prefers the dataset's stored search vector and
