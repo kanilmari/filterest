@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests localized text-only auxiliary links and approval-aware navigation.
 // Keeps colliding row IDs scoped to the target dataset and preserves modified clicks.
-import { beforeEach, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     navigate: vi.fn(), selected: vi.fn(), openArticle: vi.fn(), translate: vi.fn((_key, { fallback }) => fallback),
 }));
@@ -17,6 +17,7 @@ import {
     buildSupplementalSearchExcerpt,
     createSupplementalDatasetGroup,
     getSupplementalSearchCopy,
+    renderExcerptWithMatchesMarked,
 } from "./supplemental_dataset_results.js";
 import { refreshLocalizedDatasetValues } from "../../table_views/dataset_value_localizer.js";
 const types = { title: { card_element: "header+lang_key", is_multilingual: true, show_value_on_card: true },
@@ -115,4 +116,40 @@ test.each([
         description: { ...types.description, ...hidden },
     });
     expect(group.element.textContent).not.toContain("HIDDEN");
+});
+
+describe("renderExcerptWithMatchesMarked", () => {
+    test("marks the searched word and leaves the rest as plain text", () => {
+        const element = document.createElement("p");
+        renderExcerptWithMatchesMarked(element, "a domain name is registered", "domain");
+
+        expect(element.textContent).toBe("a domain name is registered");
+        const marks = element.querySelectorAll("mark");
+        expect(marks).toHaveLength(1);
+        expect(marks[0].textContent).toBe("domain");
+    });
+
+    test("marks every occurrence, not only the first", () => {
+        const element = document.createElement("p");
+        renderExcerptWithMatchesMarked(element, "report on the report", "report");
+
+        expect(element.querySelectorAll("mark")).toHaveLength(2);
+        expect(element.textContent).toBe("report on the report");
+    });
+
+    test("never inserts stored text as markup", () => {
+        const element = document.createElement("p");
+        renderExcerptWithMatchesMarked(element, "<img src=x onerror=alert(1)> domain", "domain");
+
+        expect(element.querySelector("img")).toBeNull();
+        expect(element.textContent).toContain("<img src=x onerror=alert(1)>");
+    });
+
+    test("leaves an extract with no match untouched", () => {
+        const element = document.createElement("p");
+        renderExcerptWithMatchesMarked(element, "nothing of note here", "domain");
+
+        expect(element.querySelectorAll("mark")).toHaveLength(0);
+        expect(element.textContent).toBe("nothing of note here");
+    });
 });

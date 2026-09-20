@@ -83,6 +83,33 @@ export function buildSupplementalSearchExcerpt(
     return `${prefix}${text.slice(start, end).trim()}${suffix}`;
 }
 
+/** Write an extract into an element with the searched words marked.
+ *
+ * The extract is built from stored text, so it is never inserted as markup:
+ * each piece goes in as text and only the marks are elements this code made.
+ */
+export function renderExcerptWithMatchesMarked(element, excerpt, query) {
+    element.replaceChildren();
+    if (!excerpt) return;
+
+    let remaining = excerpt;
+    // findSearchMatch reports the best match in what is left, so repeating it
+    // walks the extract without needing a second idea of what a term is.
+    for (let guard = 0; guard < 20; guard += 1) {
+        const match = findSearchMatch(remaining, query);
+        if (!match) break;
+        if (match.index > 0) {
+            element.append(remaining.slice(0, match.index));
+        }
+        const marked = document.createElement("mark");
+        marked.textContent = remaining.slice(match.index, match.index + match.length);
+        element.append(marked);
+        remaining = remaining.slice(match.index + match.length);
+        if (!remaining) return;
+    }
+    if (remaining) element.append(remaining);
+}
+
 function roleColumn(columns, types, role) {
     return columns.find(column => {
         const metadata = types[column];
@@ -176,11 +203,12 @@ export function createSupplementalDatasetGroup(tab, query) {
                         const matchingCandidate = candidates.find(candidate => findSearchMatch(
                             plainText(candidate.value), query
                         ));
-                        description.textContent = buildSupplementalSearchExcerpt(
+                        const excerpt = buildSupplementalSearchExcerpt(
                             (matchingCandidate || candidates[0])?.value || "",
                             query
                         );
-                        description.hidden = !description.textContent;
+                        renderExcerptWithMatchesMarked(description, excerpt, query);
+                        description.hidden = !excerpt;
                     });
                     item.append(description);
                 }

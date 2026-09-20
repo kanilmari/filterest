@@ -7,11 +7,28 @@
 .supplemental-dataset-results {
   position: relative;
   clear: both;
+  /* In the card views this block is a child of the card grid, so its own
+     width was deciding how wide a grid column had to be, and every card grew
+     with it. Spanning every column instead means it takes the row it needs
+     and decides nothing about the cards beside it. */
+  grid-column: 1 / -1;
   width: 100%;
+  /* Long lines of prose are hard to read, so the block keeps a comfortable
+     measure and sits in the middle rather than stretching to the window. */
+  max-width: 800px;
+  margin-inline: auto;
   min-width: 0;
   box-sizing: border-box;
   padding: 1rem;
   color: var(--text_color);
+}
+
+/* The words that were searched for, inside the extract. Weight alone carries
+   this, so it reads the same in both themes and needs no colour of its own. */
+.supplemental-dataset-group p mark {
+  background: none;
+  color: inherit;
+  font-weight: 700;
 }
 
 .supplemental-dataset-results[hidden],
