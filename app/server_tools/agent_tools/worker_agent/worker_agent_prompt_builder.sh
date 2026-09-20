@@ -97,6 +97,23 @@ DB_ACCESS_INSTR
         return 0
     fi
 
+    # The prompt must describe the sandbox the run actually has. Telling a
+    # read-only worker it may write workspace files invites it to try, and it
+    # then reports a failure that is really the sandbox doing its job.
+    if [[ "$RESEARCH_MODE" == true ]]; then
+        cat >> "$prompt_save_file" <<'SANDBOX_INSTR'
+
+ENVIRONMENT — SANDBOX MODE:
+This is a read-only task. You may read every file. Do not write, create, move
+or delete any file except the one summary file you are asked for below. The
+sandbox would not stop you, so this is on you to honour.
+You cannot access the database or network directly.
+You CAN run `go build ./backend/...` to check compilation.
+If you need schema information, check data/db_backups/ for SQL dump files, or data/ for pre-exported CSV/JSON snapshots.
+SANDBOX_INSTR
+        return 0
+    fi
+
     cat >> "$prompt_save_file" <<'SANDBOX_INSTR'
 
 ENVIRONMENT — SANDBOX MODE:

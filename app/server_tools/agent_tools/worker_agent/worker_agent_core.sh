@@ -47,7 +47,7 @@ BACKEND="${WORKER_AGENT_BACKEND:-$DEFAULT_BACKEND}"
 DRY_RUN="${WORKER_AGENT_DRY_RUN:-0}"
 CLAUDE_MODEL="${WORKER_CLAUDE_MODEL:-$DEFAULT_CLAUDE_MODEL}"
 CODEX_MODEL="${WORKER_CODEX_MODEL:-}"
-CODEX_REASONING_EFFORT="${WORKER_CODEX_REASONING_EFFORT:-}"
+CODEX_REASONING_EFFORT="${WORKER_CODEX_REASONING_EFFORT:-${DEFAULT_CODEX_REASONING_EFFORT:-}}"
 CODEX_BIN="${WORKER_CODEX_BIN:-codex}"
 CODEX_REQUIRED_VERSION="${WORKER_CODEX_VERSION:-$DEFAULT_CODEX_VERSION}"
 CODEX_ACTUAL_VERSION=""
@@ -304,7 +304,8 @@ BACKEND SELECTION (family=):
 OPTIONS:
   --task-id <id>            Override auto-generated task ID
   --background              Run in background (default: foreground with progress)
-  --research                Read-only mode for research tasks (no file modifications)
+  --research                Read-only: the worker runs in a sandbox that cannot
+                            write, so the restriction does not rely on the prompt
   --full-access             Full system access for Codex (danger-full-access sandbox). ON by default.
   --no-full-access          Restrict Codex to workspace-write sandbox (no DB, no network).
   --dry-run                 Print prompt and exit without running worker
@@ -363,6 +364,9 @@ RESEARCH_MODE=false
 NO_SUMMARY_INSTR=false
 STDIN_MODE=false
 FULL_ACCESS=true
+# Full access is the default; this records whether a run actually asked for it,
+# so read-only can quietly win over the default but never over an explicit ask.
+FULL_ACCESS_REQUESTED=false
 FINALIZER_WRITE_SENTINEL=true
 WAIT_AFTER=false
 WAIT_TASK_ID_ARG=""
@@ -419,6 +423,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --full-access)
             FULL_ACCESS=true
+            FULL_ACCESS_REQUESTED=true
             ;;
         --no-full-access)
             FULL_ACCESS=false
@@ -486,6 +491,14 @@ if [[ -n "$CODEX_MODEL" && ! "$CODEX_MODEL" =~ ^[[:alnum:]][[:alnum:]_./:-]*$ ]]
     err "Invalid Codex model ID: $CODEX_MODEL"
     exit 1
 fi
+if [[ "$RESEARCH_MODE" == true && "$FULL_ACCESS_REQUESTED" == true ]]; then
+    err "--research and --full-access contradict each other: one forbids writing, the other grants it"
+    exit 1
+fi
+if [[ "$RESEARCH_MODE" == true ]]; then
+    FULL_ACCESS=false
+fi
+
 case "$CODEX_REASONING_EFFORT" in
     ""|none|minimal|low|medium|high|xhigh|max|ultra) ;;
     *) err "Invalid Codex reasoning effort: $CODEX_REASONING_EFFORT"; exit 1 ;;

@@ -54,6 +54,9 @@ write_run_status() {
         printf 'status=%s\n' "$status"
         printf 'backend=%s\n' "$BACKEND"
         printf 'research_mode=%s\n' "$RESEARCH_MODE"
+        # What this run was allowed to change, so a later reader does not have
+        # to reconstruct it from the flags someone typed.
+        printf 'write_access=%s\n' "$(describe_write_access)"
         if [[ -n "${CODEX_ACTUAL_VERSION:-}" ]]; then
             printf 'codex_executable=%s\n' "$CODEX_BIN"
             printf 'codex_version=%s\n' "$CODEX_ACTUAL_VERSION"
@@ -88,6 +91,7 @@ write_progress_snapshot() {
         printf -- '- Status: %s\n' "$status"
         printf -- '- Backend: %s\n' "$BACKEND"
         printf -- '- Research mode: %s\n' "$RESEARCH_MODE"
+        printf -- '- Write access: %s\n' "$(describe_write_access)"
         if [[ -n "$exit_code" ]]; then
             printf -- '- Exit code: %s\n' "$exit_code"
         fi
@@ -168,9 +172,31 @@ prepare_codex_backend() {
     write_run_status "running"
 }
 
+# describe_write_access names what a run may change, in the same words for the
+# status file, the log header and the finished-run report.
+describe_write_access() {
+    if [[ "$RESEARCH_MODE" == true ]]; then
+        printf 'forbidden by instruction; sandbox still permits workspace writes'
+    elif [[ "$FULL_ACCESS" == true ]]; then
+        printf 'full (workspace, database and network)'
+    else
+        printf 'workspace only (no database, no network)'
+    fi
+}
+
 run_codex_exec() {
+    # Research mode forbids writing through the prompt and keeps the worker out
+    # of the database and network through the sandbox. It is not yet a hard
+    # restriction, and the record says so rather than implying otherwise.
+    #
+    # Codex does have a read-only sandbox, and it works: a run under it was
+    # refused with "Read-only file system" on 2026-09-20. It was also refused
+    # when writing its own summary, which is the only way a worker returns
+    # anything, and --add-dir does not open a hole in it. Turning it on
+    # therefore needs the summary to arrive another way first. Recorded as a
+    # maintenance finding rather than decided here.
     local sandbox_mode="workspace-write"
-    if [[ "$FULL_ACCESS" == true ]]; then
+    if [[ "$FULL_ACCESS" == true && "$RESEARCH_MODE" != true ]]; then
         sandbox_mode="danger-full-access"
     fi
     local -a codex_args=(exec --sandbox "$sandbox_mode")
