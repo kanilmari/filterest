@@ -6,6 +6,10 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+const { doIntelligentSearchMock } = vi.hoisted(() => ({
+    doIntelligentSearchMock: vi.fn(),
+}));
+
 const getParamsMock = vi.fn(() => ({}));
 const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
@@ -78,7 +82,7 @@ vi.mock("./dataset_search_location_handler.js", () => ({
 }));
 
 vi.mock("./dataset_search_executor.js", () => ({
-    do_intelligent_search: vi.fn(),
+    do_intelligent_search: doIntelligentSearchMock,
 }));
 
 vi.mock("./dataset_search_clearer.js", () => ({
@@ -323,6 +327,73 @@ describe("createDatasetSearchComponent", () => {
                 state: expect.any(Object),
             },
         );
+
+        component.destroy();
+    });
+
+    test("a first search owns its matching rows and count while an ordinary reload is in flight", async () => {
+        const fullDataset = {
+            data: [
+                { id: 1, title: "Claude.ai Max 5x monthly" },
+                { id: 2, title: "Domain renewal" },
+                { id: 3, title: "Email" },
+                { id: 4, title: "Hosting" },
+                { id: 5, title: "Storage" },
+            ],
+            row_count: 5,
+        };
+        const domainMatches = {
+            data: [{ id: 2, title: "Domain renewal" }],
+            row_count: 1,
+        };
+        let committedParams = {};
+        let listingGeneration = 0;
+        let visibleAnswer = null;
+        let releaseOrdinaryReload;
+        let releaseSearchReload;
+        let searchRequestParams = null;
+
+        getParamsMock.mockImplementation(() => ({ ...committedParams }));
+        setParamsMock.mockImplementation((_tableName, params) => {
+            committedParams = { ...params };
+        });
+        datasetSearchStateMock.get.mockReturnValue("domain");
+
+        const ordinaryReloadGeneration = listingGeneration;
+        const ordinaryReload = new Promise(resolve => {
+            releaseOrdinaryReload = resolve;
+        }).then(answer => {
+            if (listingGeneration === ordinaryReloadGeneration) visibleAnswer = answer;
+        });
+
+        doIntelligentSearchMock.mockImplementation(() => {
+            searchRequestParams = getParamsMock("subscriptions");
+            const searchReloadGeneration = ++listingGeneration;
+            return new Promise(resolve => {
+                releaseSearchReload = resolve;
+            }).then(() => {
+                if (listingGeneration !== searchReloadGeneration) return;
+                visibleAnswer = searchRequestParams.search === "domain"
+                    ? domainMatches
+                    : fullDataset;
+            });
+        });
+
+        const { createDatasetSearchComponent } = await import(
+            "./dataset_search_component_builder.js"
+        );
+        const component = createDatasetSearchComponent("subscriptions");
+        component.element.querySelector('[data-testid="dataset-search-submit"]').click();
+
+        await vi.waitFor(() => expect(releaseSearchReload).toBeTypeOf("function"));
+        releaseSearchReload();
+        await vi.waitFor(() => expect(visibleAnswer).not.toBeNull());
+        releaseOrdinaryReload(fullDataset);
+        await ordinaryReload;
+
+        expect(searchRequestParams).toEqual({ search: "domain" });
+        expect(visibleAnswer).toEqual(domainMatches);
+        expect(visibleAnswer.row_count).toBe(1);
 
         component.destroy();
     });

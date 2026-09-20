@@ -365,10 +365,6 @@ export function createDatasetSearchComponent(tableName, options = {}) {
             ? datasetSearchLocationState.get(tableName)
             : false;
         const gpsCoords = useLocation ? await ensureGpsIfNeeded() : null;
-        do_intelligent_search(tableName, query, {
-            useLocation,
-            gps: gpsCoords,
-        });
         if (history[history.length - 1] !== query) history.push(query);
         localStorage.setItem(
             STORAGE_KEY_HISTORY,
@@ -383,6 +379,13 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         updateURL(tableName, params, undefined, getCommitSearchUrlOptions(options));
         renderActiveFilters(tableName);
         notifyCommittedDatasetSearchChanged(tableName);
+        // The listing reload reads committed query parameters synchronously
+        // before its first await. Store them before starting the executor so
+        // the first request carries the same search as every later request.
+        void do_intelligent_search(tableName, query, {
+            useLocation,
+            gps: gpsCoords,
+        });
     }
 
     function syncCommittedSearchControls() {
