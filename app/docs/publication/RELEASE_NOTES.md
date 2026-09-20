@@ -1,4 +1,4 @@
-Filterest 9.3.14 brings the site assistant to the dataset chat and makes searching a dataset the same thing as browsing it. Database compatibility moves from 9.7.15 to 9.8.0; the migrations are additive and existing installations keep their rows.
+Filterest 9.3.15 brings the site assistant to the dataset chat and makes searching a dataset the same thing as browsing it. Database compatibility moves from 9.7.15 to 9.8.0; the migrations are additive and existing installations keep their rows.
 
 - An administrator can ask the dataset chat's coding agent to work on the site itself. The job reads live data through the site's own interface with the asking person's rights, and any change it prepares waits in the chat: each one shows what it would do and its exact request, and one button approves and runs them. Screenshots can be attached to the question.
 - An approval names exactly one target. The dataset, ticket or comment a change addresses is part of what was approved, so an approval given for one cannot be spent on another that happens to look the same.
