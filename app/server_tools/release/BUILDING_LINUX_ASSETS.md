@@ -12,6 +12,25 @@ GCC, `aarch64-linux-gnu-gcc`, Python 3, GNU binutils/coreutils, tar and gzip. It
 creates no output, downloads nothing and does not start an application. It does
 not certify the source's release readiness or test a compiler's ABI output.
 
+Both modes first run the release source checks, which also run on their own
+as `./filterest release verify` (implemented by `verify_source.py` beside this
+guide). In order, and stopping at the first failure, they check:
+
+- the source boundary (`audit_source_boundary.py`): operator homes are neither
+  tracked nor unignored, tracked symlinks stay inside the checkout, and no
+  tracked source addresses a private owner name passed with `--forbidden-name`;
+- the repository root (`audit_public_root_files.py`): tracked root files match
+  `public_root_files.txt`, so a new root launcher or policy file and its entry
+  there belong in the same commit;
+- the release ledger, the app/database compatibility record and the public
+  bootstrap package;
+- the demo media (`audit_public_demo_assets.py`), including secret-like text and
+  any extra marker passed with `--forbidden-marker`.
+
+Filterest lists no private names itself; a workspace that embeds it supplies
+them. Each check can also run alone, for example
+`python3 app/server_tools/release/audit_source_boundary.py`.
+
 To assemble an actual release, first prepare and commit the reviewed source and
 release metadata according to the [publication checklist](../../docs/publication/PUBLICATION_CHECKLIST.md).
 Then run the same command without `--check-only`, with a new or empty output

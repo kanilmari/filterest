@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# db
+# Runs one read-only inspection query against this installation's database.
+# Bridges the short maintenance command name with `./filterest database`.
+# Exists so every Filterest checkout offers the same inspection command while
+# the standalone boundary, interpreter and credential homes stay in one launcher.
+set -euo pipefail
+INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+export FILTEREST_DATABASE_DISPLAY_COMMAND="./db"
+exec "$INSTALLATION_ROOT/filterest" database "$@"

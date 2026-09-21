@@ -1,0 +1,27 @@
+# public_root_files.txt
+# Defines the deliberately small tracked file surface at the Filterest root.
+# Bridges this repository's root with the root-shape release audit beside it.
+# Exists so new tools and reports cannot silently accumulate in the public root:
+# a new root file and its entry here belong in the same commit.
+
+.dockerignore
+.gitattributes
+.gitignore
+AGENTS.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+NOTICE
+README.md
+SECURITY.md
+THIRD_PARTY_NOTICES.md
+api_crud
+codesize
+compose.yml
+content_maintenance
+ctl
+db
+db_report
+db_task
+filterest
+worker_agent

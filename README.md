@@ -298,6 +298,8 @@ for shared coding conventions, QA and verification.
 ./filterest qa                  # run the broader project QA suite
 ./db_report workline board  # inspect the canonical workline observatory state
 ./db_task list        # inspect database-backed development tasks
+./db --local "SELECT 1"  # read-only database inspection (same as ./filterest database)
+./api_crud list-datasets  # dataset maintenance through the API (same as ./filterest data)
 ./worker_agent --help # inspect the optional local AI-worker command
 ./worker_agent --routine --list  # list reusable multi-step worker routines
 ./filterest asset-linking status  # inspect shared media-linking readiness
@@ -390,9 +392,11 @@ installation needs its own completed dependency setup before build and test
 commands can run. PostgreSQL may be managed by the host or another service;
 its location is an installation setting, not a source-repository dependency.
 
-Validate the local Linux release-packaging inputs from this repository with:
+Run the release source checks, then validate the local Linux release-packaging
+inputs, from this repository with:
 
 ```bash
+./filterest release verify
 ./filterest release build --output-dir /tmp/filterest-release-build --check-only
 ```
 

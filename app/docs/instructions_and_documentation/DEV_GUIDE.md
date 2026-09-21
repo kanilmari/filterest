@@ -71,6 +71,9 @@ See the [runtime contract](runtime_contract.md) for current resources, lifecycle
   and version contracts. Commit product changes in this repository.
 - Root commands are thin launchers. Never regenerate or replace an authoritative
   checkout from a parent repository, release copy or another working folder.
+  The root holds only the files in
+  [public_root_files.txt](../../server_tools/release/public_root_files.txt); add a
+  new root file and its entry in one commit, as `./filterest release verify` checks it.
 - `config/`, `keys/`, `projects/`, `data/` and `backups/` are operator-owned
   mutable siblings of `app/`. Preserve them across source changes.
   A source checkout is not a database or media backup.
@@ -374,6 +377,13 @@ Application data changes use supported permission-checked APIs. Direct SQL
 inspection is read-only: no ad hoc DML, grants or deletes instead of an API
 repair or reviewed migration. Existing workflows are described in
 [API CRUD examples](API_CRUD_Examples.md) and [core workflows](Core_Workflows.md).
+
+Inspect with `./db --local "SELECT ..."` (the same tool as `./filterest database`).
+It accepts one `SELECT`/`WITH` statement, runs it in a read-only transaction
+that is always rolled back, and connects as the installation's read-only
+database role. Maintain datasets, columns and rows with `./api_crud` (the
+same tool as `./filterest data`). Their default targets and credential sources
+are described in the [README](../../../README.md#development).
 
 To see what this installation's API actually offers, browse the `system_functions`
 dataset: its `url_route_endpoint` column holds every registered address, and a

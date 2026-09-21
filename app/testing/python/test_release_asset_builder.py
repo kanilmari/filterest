@@ -9,8 +9,18 @@ from pathlib import Path
 import subprocess
 import pytest
 
+from server_tools.release.audit_public_root_files import read_manifest
+
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 BUILDER = SOURCE_ROOT / "server_tools/release/build_assets.sh"
+ROOT_CHECK_FILES = ("audit_public_root_files.py", "public_root_files.txt")
+PASSING_CHECK_STANDINS = (
+    "release/audit_source_boundary.py",
+    "scripts/validate_release_ledger.py",
+    "scripts/validate_app_db_compatibility.py",
+    "public_slice_export/audit_public_bootstrap.py",
+    "release/audit_public_demo_assets.py",
+)
 
 
 @pytest.fixture
@@ -29,6 +39,15 @@ def release_fixture(tmp_path):
             {"ecosystem": "go-toolchain", "version": "go1.26.5", "binary_targets": ["filterest"]},
         ]}),
     }
+    # A complete fixture has exactly the reviewed root files; the builder audits
+    # them with the real root check. The other release source checks have their
+    # own tests, so here they are stand-ins that pass.
+    for root_file in read_manifest():
+        required.setdefault(root_file, "Fixture root file\n")
+    for check in ROOT_CHECK_FILES:
+        required[f"app/server_tools/release/{check}"] = (SOURCE_ROOT / "server_tools/release" / check).read_text()
+    for check in PASSING_CHECK_STANDINS:
+        required[f"app/server_tools/{check}"] = "print('stand-in check OK')\n"
     for relative, content in required.items():
         file = source / relative
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -94,6 +113,39 @@ def test_check_only_never_creates_output_or_runs_compiler(release_fixture):
     assert not output.exists()
     assert not Path(environment["FIXTURE_EVENTS"]).exists()
     assert "A real build still requires clean Git source" in result.stdout
+
+
+@pytest.mark.parametrize("change", ["unreviewed", "missing"])
+def test_root_files_must_match_the_reviewed_list(release_fixture, change):
+    source, output, environment = release_fixture
+    if change == "unreviewed":
+        (source / "temporary-report.txt").write_text("stray\n")
+        expected = "- temporary-report.txt"
+    else:
+        (source / "codesize").unlink()
+        expected = "- codesize"
+    result = run_builder(release_fixture, "--check-only")
+    assert result.returncode != 0
+    assert expected in result.stdout
+    assert "Release source check failed: repository-root files." in result.stderr
+    assert not output.exists()
+    assert not Path(environment["FIXTURE_EVENTS"]).exists()
+
+
+@pytest.mark.parametrize(("check", "label"), [
+    ("release/audit_source_boundary.py", "source boundary"),
+    ("scripts/validate_release_ledger.py", "release ledger"),
+    ("release/audit_public_demo_assets.py", "demo media"),
+])
+def test_a_failing_source_check_stops_both_build_modes(release_fixture, check, label):
+    source, output, environment = release_fixture
+    (source / "app/server_tools" / check).write_text("raise SystemExit(1)\n")
+    for arguments in (("--check-only",), ()):
+        result = run_builder(release_fixture, *arguments)
+        assert result.returncode != 0
+        assert f"Release source check failed: {label}." in result.stderr
+    assert not output.exists()
+    assert not Path(environment["FIXTURE_EVENTS"]).exists()
 
 
 def test_full_assembly_keeps_fourteen_assets_and_standalone_go_boundary(release_fixture):

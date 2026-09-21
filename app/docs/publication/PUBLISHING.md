@@ -55,10 +55,13 @@ release files; this workflow does not require GitHub Actions.
 
 ## Maintainer automation status
 
-The standalone `./filterest release build` command now assembles Linux server
-binaries, notices and checksums from this repository. Its [build contract and
-commands](../../server_tools/release/BUILDING_LINUX_ASSETS.md) distinguish a
-read-only prerequisite check from an actual clean-source release build.
+The standalone `./filterest release verify` command runs the release source
+checks on this checkout: source boundary, repository-root files, release ledger,
+app/database compatibility, public bootstrap and demo media. The standalone
+`./filterest release build` command runs those checks first, then assembles
+Linux server binaries, notices and checksums from this repository. Its [build
+contract and commands](../../server_tools/release/BUILDING_LINUX_ASSETS.md)
+distinguish a read-only prerequisite check from an actual clean-source release build.
 
 The standalone `./filterest release prepare` command plans and applies candidate
 version, build identity and dependency-notice metadata. Its [preparation contract](../../server_tools/release/PREPARING_RELEASES.md) requires a clean reviewed source

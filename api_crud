@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# api_crud
+# Maintains datasets, columns and rows through this installation's application API.
+# Bridges the short maintenance command name with `./filterest data`.
+# Exists so every Filterest checkout offers the same maintenance command while
+# the standalone boundary, interpreter and credential homes stay in one launcher.
+set -euo pipefail
+INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+exec "$INSTALLATION_ROOT/filterest" data "$@"

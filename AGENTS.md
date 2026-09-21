@@ -33,7 +33,8 @@ Read before changing anything:
 Never run an ad hoc `CREATE`, `ALTER`, `UPDATE`, `INSERT`, `DELETE` or `DROP`
 to change application data or schema. You are changing **an application that
 uses a database**, not the database itself. If an endpoint does not work, fix
-the endpoint. Read-only `SELECT` for inspection is the only ad hoc SQL allowed.
+the endpoint. Read-only `SELECT` for inspection is the only ad hoc SQL allowed;
+run it through `./db`, and change data through `./api_crud` or the application.
 Shared schema and data changes belong in a migration under
 `app/server_tools/migrations/`.
 

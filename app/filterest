@@ -52,6 +52,7 @@ Everyday commands:
 Developer commands:
   build [arguments]             Build frontend assets without app-local caches
   release prepare [arguments]   Plan or prepare candidate release metadata
+  release verify [arguments]    Run the release source checks on this checkout
   release build [arguments]     Assemble verified Linux release assets locally
   release promote [arguments]   Verify a candidate and plan published metadata
   release publish [arguments]   Plan or publish verified assets to GitHub
@@ -302,6 +303,9 @@ case "$command_name" in
             prepare)
                 exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/release/prepare_release.py" "$@"
                 ;;
+            verify)
+                exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/release/verify_source.py" "$@"
+                ;;
             build)
                 exec "$CANONICAL_FILTEREST_ROOT/server_tools/release/build_assets.sh" "$@"
                 ;;
@@ -312,7 +316,7 @@ case "$command_name" in
                 exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/release/publish_release.py" "$@"
                 ;;
             *)
-                printf 'error: release requires prepare, build, promote or publish\n' >&2
+                printf 'error: release requires prepare, verify, build, promote or publish\n' >&2
                 exit 2
                 ;;
         esac

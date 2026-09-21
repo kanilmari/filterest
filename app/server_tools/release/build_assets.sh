@@ -17,7 +17,8 @@ Usage: ./filterest release build --output-dir PATH [--check-only] [--target PATH
 Builds Linux amd64 and arm64 production binaries plus SHA-256 checksum files
 and a complete license/notice bundle entirely on the local maintainer machine.
 The target defaults to this Filterest installation. The output directory must
-be outside its Git checkout and empty before a real build. --check-only checks
+be outside its Git checkout and empty before a real build. Both modes first run
+the release source checks (./filterest release verify). --check-only then checks
 required source files and command availability without creating output. It does
 not certify a clean release source, compiled binary metadata or host ABI.
 EOF
@@ -200,6 +201,10 @@ target="${target:-$(cd "$script_dir/../../.." && pwd -P)}"
     die "complete GPL version 3 text missing from Filterest target"
 [[ -f "$target/THIRD_PARTY_LICENSES/manifest.json" ]] || \
     die "THIRD_PARTY_LICENSES/manifest.json missing from Filterest target"
+# Source boundary, root files, ledger, compatibility, bootstrap and demo media.
+require_command python3 "install Python 3 for release metadata verification"
+python3 "$script_dir/verify_source.py" --target "$target" || \
+    die "release source checks failed; see ./filterest release verify"
 
 target_root_abs="$(resolve_existing_directory "$target")"
 target_abs="$(resolve_existing_directory "$target/app")"

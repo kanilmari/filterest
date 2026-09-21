@@ -63,6 +63,38 @@ class PythonToolEnvironmentTest(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout)["owner"], "host")
             self.assertFalse((root / "data/runtime/python/venv").exists())
 
+    def test_root_maintenance_commands_run_the_consolidated_tools(self):
+        # ./db and ./api_crud are short names for ./filterest database and
+        # ./filterest data: same interpreter, same script, same installation.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fallback = self.fixture(root, installed=True)
+            own_python = root / "data/runtime/python/venv/bin/python3"
+            own_python.write_text(
+                "#!/bin/sh\n"
+                'printf \'{"script":"%s","argument":"%s","display":"%s","project":"%s","instances":"%s"}\\n\' '
+                '"$1" "${2:-}" "${FILTEREST_DATABASE_DISPLAY_COMMAND:-unset}" '
+                '"$FILTEREST_PROJECT_ROOT_OVERRIDE" "${FILTEREST_DATABASE_INSTANCE_CONTAINER_PREFIX:-unset}"\n'
+            )
+            hostile = {
+                "FILTEREST_PROJECT_ROOT_OVERRIDE": str(root / "outer-workspace"),
+                "FILTEREST_DATABASE_DISPLAY_COMMAND": "./outer/db",
+                "FILTEREST_DATABASE_INSTANCE_CONTAINER_PREFIX": "outer-",
+            }
+            for command, script in (("db", "db.py"), ("api_crud", "api_crud.py")):
+                with self.subTest(command=command):
+                    shutil.copy2(INSTALLATION / command, root / command)
+                    env = {"HOME": str(root), "PATH": str(fallback) + ":/usr/bin:/bin", "LANG": "C.UTF-8", **hostile}
+                    result = subprocess.run([str(root / command), "--help"], cwd="/tmp", env=env, text=True, capture_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    payload = json.loads(result.stdout)
+                    self.assertEqual(payload["script"], str(root / "app/server_tools/agent_tools" / script))
+                    self.assertEqual(payload["argument"], "--help")
+                    self.assertEqual(payload["project"], str(root))
+                    self.assertEqual(payload["instances"], "unset")
+                    if command == "db":
+                        self.assertEqual(payload["display"], "./db")
+
     def test_standalone_install_does_not_borrow_another_venv(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
