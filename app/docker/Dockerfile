@@ -16,7 +16,7 @@ RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build
 FROM golang:1.26.5-alpine3.24 AS backend-builder
 
 RUN apk add --no-cache \
-    ca-certificates=20260611-r0 \
+    ca-certificates=20260909-r0 \
     gcc=15.2.0-r5 \
     git=2.54.0-r0 \
     libwebp-dev=1.6.0-r0 \
@@ -76,7 +76,7 @@ LABEL org.opencontainers.image.title="Filterest" \
 
 RUN apk add --no-cache \
     bash=5.3.9-r1 \
-    ca-certificates=20260611-r0 \
+    ca-certificates=20260909-r0 \
     libwebp=1.6.0-r0 \
     tzdata=2026d-r0
 
