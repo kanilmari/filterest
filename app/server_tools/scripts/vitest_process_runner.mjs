@@ -1,7 +1,8 @@
 // vitest_process_runner.mjs
 // Runs the repository's root Vitest command with runtime-specific Node flags.
 // Bridges npm scripts, the installed Node runtime, and Vitest's JavaScript entrypoint.
-// Prevents Node 25+ Web Storage globals from replacing jsdom's isolated storage.
+// Prevents Node 25+ Web Storage globals from replacing jsdom's isolated storage,
+// and a given test target from being silently ignored in favour of the whole suite.
 // Keeps the compatibility workaround out of application code and test cases.
 
 import { spawn } from 'node:child_process';
@@ -49,6 +50,9 @@ export function runVitest(
     buildVitestNodeArguments({
       forwardedArguments,
       vitestEntrypoint: resolvedVitestEntrypoint,
+      targetResolution: {
+        projectRoot: runtimeProcess.env.FILTEREST_PROJECT_ROOT_OVERRIDE ?? '',
+      },
     }),
     {
       env: buildVitestChildEnvironment({

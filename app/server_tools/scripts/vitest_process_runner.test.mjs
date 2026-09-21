@@ -1,22 +1,45 @@
 // vitest_process_runner.test.mjs
 // Verifies the Node-version compatibility decisions used by the root Vitest runner.
 // Bridges simulated supported runtimes, forwarded npm arguments, and child Node arguments.
+// Proves a given test target is honoured with a separator or a repository-root path.
 // Prevents the Node 25 Web Storage workaround from breaking the supported Node 24 path.
 // Keeps test-command compatibility independently regression-tested.
 
 import { EventEmitter } from 'node:events';
+import { basename, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test, vi } from 'vitest';
 
 import {
   buildVitestChildEnvironment,
   buildVitestNodeArguments,
+  normalizeVitestTargetArguments,
   resolveVitestMaxWorkers,
   shouldDisableNodeWebStorage,
 } from './vitest_process_config.mjs';
 import { runVitest } from './vitest_process_runner.mjs';
 
 const SUPPORTED_WEB_STORAGE_FLAG = new Set(['--no-experimental-webstorage']);
+
+// Simulates a filesystem through the injected resolver: each existing path maps to its
+// real path, and anything absent resolves to null, so no test touches the real disk.
+function simulatedFilesystem(realPathsByPath) {
+  const realPaths = new Map(Object.entries(realPathsByPath));
+  return (path) => realPaths.get(path) ?? null;
+}
+
+// A standalone checkout: repository root /repo, application folder /repo/app.
+const SIMULATED_STANDALONE_LAYOUT = {
+  workingDirectory: '/repo/app',
+  projectRoot: '/repo',
+  resolveExistingPath: simulatedFilesystem({
+    '/repo/app': '/repo/app',
+    '/repo/app/frontend/core': '/repo/app/frontend/core',
+    '/repo/app/frontend/core/a.test.js': '/repo/app/frontend/core/a.test.js',
+    '/repo/docs/guide': '/repo/docs/guide',
+  }),
+};
 
 describe('resolveVitestMaxWorkers', () => {
   test('caps fork startup concurrency on every supported platform and Node version', () => {
@@ -156,6 +179,93 @@ describe('buildVitestNodeArguments', () => {
       '--configLoader',
       'bundle',
     ]);
+  });
+
+  // `./filterest test-unit -- <target>` reaches the runner as `run -- <target>`.
+  // Vitest treats everything after a bare `--` as pass-through, so the target and
+  // the config-loader choice were both dropped and the whole suite ran.
+  test('keeps a target and the config loader in force after a bare separator', () => {
+    expect(buildVitestNodeArguments({
+      forwardedArguments: ['run', '--', 'frontend/example'],
+      vitestEntrypoint: '/repo/node_modules/vitest/vitest.mjs',
+      targetResolution: SIMULATED_STANDALONE_LAYOUT,
+    })).toEqual([
+      '/repo/node_modules/vitest/vitest.mjs',
+      'run',
+      'frontend/example',
+      '--configLoader=runner',
+    ]);
+  });
+});
+
+describe('normalizeVitestTargetArguments', () => {
+  test('drops every bare separator and keeps the arguments around it in order', () => {
+    expect(normalizeVitestTargetArguments(
+      ['run', '--', 'frontend/core', '--', '--reporter=verbose'],
+      SIMULATED_STANDALONE_LAYOUT,
+    )).toEqual(['run', 'frontend/core', '--reporter=verbose']);
+  });
+
+  test('rewrites a target written from the repository root to the application-relative form', () => {
+    expect(normalizeVitestTargetArguments(
+      ['run', 'app/frontend/core', 'app/frontend/core/', 'app/frontend/core/a.test.js'],
+      SIMULATED_STANDALONE_LAYOUT,
+    )).toEqual(['run', 'frontend/core', 'frontend/core/', 'frontend/core/a.test.js']);
+  });
+
+  test('leaves application-relative targets, name filters and option values unchanged', () => {
+    const argumentsAsWritten = [
+      'run',
+      'frontend/core',
+      'core_components/partial/name',
+      'symbol_picker',
+      '-t',
+      'saves a row',
+      '--config',
+      'vitest.config.mjs',
+      '--outputFile=app/frontend/core',
+      '/repo/app/frontend/core',
+    ];
+    expect(normalizeVitestTargetArguments(argumentsAsWritten, SIMULATED_STANDALONE_LAYOUT))
+      .toEqual(argumentsAsWritten);
+  });
+
+  // A target that exists nowhere, or only outside the tested folder, must reach Vitest as
+  // written: Vitest then fails with "No test files found" and names the filter, rather
+  // than this runner guessing a different target or widening the run.
+  test('passes a missing or out-of-tree target through for Vitest to reject by name', () => {
+    expect(normalizeVitestTargetArguments(
+      ['run', 'app/frontend/missing', 'docs/guide'],
+      SIMULATED_STANDALONE_LAYOUT,
+    )).toEqual(['run', 'app/frontend/missing', 'docs/guide']);
+  });
+
+  test('falls back to the parent of the application folder when no root is named', () => {
+    expect(normalizeVitestTargetArguments(['run', 'app/frontend/core'], {
+      ...SIMULATED_STANDALONE_LAYOUT,
+      projectRoot: '',
+    })).toEqual(['run', 'frontend/core']);
+  });
+
+  // The maintenance shell names its own root and reaches the application through a link.
+  test('follows a linked application folder from a composing repository root', () => {
+    expect(normalizeVitestTargetArguments(['run', 'filterest/app/frontend/core/'], {
+      workingDirectory: '/repo/app',
+      projectRoot: '/shell',
+      resolveExistingPath: simulatedFilesystem({
+        '/repo/app': '/repo/app',
+        '/shell/filterest/app/frontend/core': '/repo/app/frontend/core',
+      }),
+    })).toEqual(['run', 'frontend/core/']);
+  });
+
+  test('resolves a repository-root target against the real application folder', () => {
+    const applicationFolder = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+    const thisTestFile = 'server_tools/scripts/vitest_process_runner.test.mjs';
+    expect(normalizeVitestTargetArguments(
+      ['run', `${basename(applicationFolder)}/${thisTestFile}`],
+      { workingDirectory: applicationFolder, projectRoot: dirname(applicationFolder) },
+    )).toEqual(['run', thisTestFile]);
   });
 });
 

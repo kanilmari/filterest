@@ -23,6 +23,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 ## [Unreleased]
 
 - **The container image builds as Alpine moves on** — The image pinned Alpine packages to exact builds, and Alpine deletes a build as soon as it replaces it, which made two releases impossible to install. Packages are now constrained only by the base image's Alpine release branch, which still receives security fixes, and a test keeps it that way.
+- **`./filterest test-unit <target>` runs only the target** — With a leading `--`, as the Developer Guide showed, the target was ignored and the whole suite ran. A target is now honoured with or without `--`, written relative to `app/` or to the repository root, and a target that matches no test fails instead of running everything.
 
 ## [9.3.16] - 2026-09-21
 

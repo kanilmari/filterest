@@ -434,7 +434,7 @@ meaningful regressions; record the reason for intentional test omissions.
 | Changed surface | First check | Further evidence when affected |
 |---|---|---|
 | Go behavior | Targeted package tests | API, permissions and data in the intended runtime |
-| Frontend logic | `./filterest test-unit -- <test-path>` | Navigation, state, cancellation and focus |
+| Frontend logic | `./filterest test-unit <test-path>` | Navigation, state, cancellation and focus |
 | Layout/themes | Narrow CSS/import checks | Viewports, explicit themes and screenshots |
 | Imports/source moves | Caller/import review and frontend build | Runtime and lazy-loaded paths |
 | Release/bootstrap/tooling | Relevant public Python tests | Artifact, upgrade and restore evidence |
@@ -442,7 +442,11 @@ meaningful regressions; record the reason for intentional test omissions.
 
 Run frontend tests through `npm test` in app/ or `./filterest test-unit`, not
 bare `npx vitest`. The repository runner preserves Node options and bounded
-worker defaults. The [Python test guide](../../testing/python/README.md)
+worker defaults. A given target always limits the run: write it relative to
+app/ (`frontend/core_components/...`) or to the repository root
+(`app/frontend/...`), with or without a leading `--`. A target that matches no
+test file fails with "No test files found" rather than running the whole
+suite. The [Python test guide](../../testing/python/README.md)
 defines categories and isolation limits; use the declared shared environment.
 
 [Playwright config](../../playwright.config.ts) and the
