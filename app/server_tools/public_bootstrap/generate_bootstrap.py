@@ -39,6 +39,11 @@ developer_workflow_schema_migrations = (
 developer_workflow_seed_migrations = (
     "20260919000009_seed_developer_workflow_metadata.sql",
 )
+# Runs after every table exists, as the importing application role, so a new
+# installation withholds table creation from PUBLIC exactly as an upgrade does.
+schema_privilege_migrations = (
+    "20260921000001_withdraw_public_table_creation.sql",
+)
 
 def reviewed_source(name: str) -> str:
     path = public_bootstrap_sources / name
@@ -55,6 +60,7 @@ def reviewed_public_migration(name: str) -> str:
 schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
+    + "".join(reviewed_public_migration(name) for name in schema_privilege_migrations)
 )
 seed_sql = (
     "".join(reviewed_source(name).replace("__FILTEREST_DB_VERSION__", db_version) for name in seed_sources)

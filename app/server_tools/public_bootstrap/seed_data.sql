@@ -654,7 +654,7 @@ WHERE f.name = 'system_table_tools.AdminDatasetUIVisibilityHandler'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.8.0', 'Filterest generated public bootstrap');
+VALUES ('9.8.1', 'Filterest generated public bootstrap');
 
 -- Administrator coding agents require an explicit production opt-in.
 INSERT INTO public.system_config (key, value_type, boolean_value, text_value, json_value)
@@ -3853,5 +3853,7 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260919000010_record_developer_workflow_schema_release.sql'),
   ('20260920000001_retire_queen_permissions.sql'),
   ('20260920000002_create_dataset_interface_labels.sql'),
-  ('20260920000003_name_site_assistant_runtimes.sql')
+  ('20260920000003_name_site_assistant_runtimes.sql'),
+  ('20260921000001_withdraw_public_table_creation.sql'),
+  ('20260921000002_record_public_table_creation_release.sql')
 ON CONFLICT (filename) DO NOTHING;

@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.3.16",
-  "db_version": "9.8.0",
+  "db_version": "9.8.1",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -114,7 +114,9 @@
     "20260919000010_record_developer_workflow_schema_release.sql",
     "20260920000001_retire_queen_permissions.sql",
     "20260920000002_create_dataset_interface_labels.sql",
-    "20260920000003_name_site_assistant_runtimes.sql"
+    "20260920000003_name_site_assistant_runtimes.sql",
+    "20260921000001_withdraw_public_table_creation.sql",
+    "20260921000002_record_public_table_creation_release.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -234,7 +236,7 @@
     "public.tiketit_assets"
   ],
   "seed_row_counts": {
-    "public.dev_agent_task_statuses": 184,
+    "public.dev_agent_task_statuses": 186,
     "public.dokumentaatio": 3,
     "public.dokumentaatio_tiketit_relation": 1,
     "public.palvelukatalogi": 1,
@@ -271,10 +273,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "d6a21b196cca49537969de2104f37013d0a4c298b709459d2ee63dc6df914081"
+      "sha256": "3b7a7f58b622f7959c19cb1e60e9b31f02a0d5e8b0d8bd46a81bf6640475431d"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "f877a859c8a828ded2a79b174095b3e4dbdb5e07e703ccb39928f636600db081"
+      "sha256": "41b214c140910daa5c975e6fc8af634d12a107a2ecea94d8c0d914345dc6ae6d"
     }
   },
   "source_files": {
@@ -291,7 +293,7 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "826aa71629e2aefe7b40bb87fa538b8121b0bd0d68b4418ccbcadfd62ca362e2"
+      "sha256": "d64f47d198b48075356c8fe651cff085daca3c8b8f3101a74c236754a52c3d50"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "c6cd8b8f48e3be6868c232785c8f4c2bd59c045b214deedbb7cca42605225f2f"
@@ -670,6 +672,12 @@
     },
     "filterest/app/server_tools/migrations/20260920000003_name_site_assistant_runtimes.sql": {
       "sha256": "88e2444b457024b322c18966ec2b383e7dfe5636a61f66ec392c198c3134e3d0"
+    },
+    "filterest/app/server_tools/migrations/20260921000001_withdraw_public_table_creation.sql": {
+      "sha256": "b8633bb6a124bfdc6654d7f3459c13cc92d32a671cfa5a105626f87392ae4eb5"
+    },
+    "filterest/app/server_tools/migrations/20260921000002_record_public_table_creation_release.sql": {
+      "sha256": "994688aa896f35252be1f3df3de8e0ed4f19309b187802b755784f6d5f947a0c"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"
