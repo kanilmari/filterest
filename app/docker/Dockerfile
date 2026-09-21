@@ -15,12 +15,24 @@ RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build
 
 FROM golang:1.26.5-alpine3.24 AS backend-builder
 
+# Alpine packages are constrained by the Alpine release branch in each stage's
+# base image (3.24), never by exact builds. A branch index holds only the newest
+# build of each package and removes the one it replaces, so an exact pin such as
+# `pkg=1.2.3-r0` stops resolving at the next rebuild and the image can no longer
+# be built; that broke the 9.3.11 and 9.3.16 releases. Fuzzy `pkg~=1.2` pins only
+# delay it: ca-certificates and tzdata change their whole version inside a
+# branch. A stable branch takes only security and bug-fix updates, and the exact
+# versions an image received stay in that image's own package database
+# (`apk info -v`), which is where image scanners read them. The backend binary
+# links the C library dynamically, so this stage and the final stage must name
+# the same branch. testing/python/alpine_package_policy.py checks both rules.
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
-    ca-certificates=20260909-r0 \
-    gcc=15.2.0-r5 \
-    git=2.54.0-r0 \
-    libwebp-dev=1.6.0-r0 \
-    musl-dev=1.2.6-r2
+    ca-certificates \
+    gcc \
+    git \
+    libwebp-dev \
+    musl-dev
 
 WORKDIR /app
 
@@ -74,11 +86,13 @@ LABEL org.opencontainers.image.title="Filterest" \
       org.opencontainers.image.revision="${FILTEREST_GIT_COMMIT}" \
       filterest.db_version="${FILTEREST_DB_VERSION}"
 
+# Unpinned within the release branch; the backend-builder stage explains why.
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
-    bash=5.3.9-r1 \
-    ca-certificates=20260909-r0 \
-    libwebp=1.6.0-r0 \
-    tzdata=2026d-r0
+    bash \
+    ca-certificates \
+    libwebp \
+    tzdata
 
 RUN case "${FILTEREST_RUNTIME_UID}:${FILTEREST_RUNTIME_GID}" in \
         *[!0-9:]*|:*|*:) printf 'runtime UID/GID must be numeric\n' >&2; exit 1 ;; \

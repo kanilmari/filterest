@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **The container image builds as Alpine moves on** — The image pinned Alpine packages to exact builds, and Alpine deletes a build as soon as it replaces it, which made two releases impossible to install. Packages are now constrained only by the base image's Alpine release branch, which still receives security fixes, and a test keeps it that way.
+
 ## [9.3.16] - 2026-09-21
 
 [GitHub release](https://github.com/kanilmari/filterest/releases/tag/v9.3.16) · Database compatibility moves from 9.7.15 to 9.8.0. Two earlier numbers carry no usable release: the 9.3.14 candidate was superseded before promotion, and 9.3.15 was published but its container image could not be built, because it pinned a certificate bundle Alpine had already replaced and removed. 9.3.16 carries their changes.

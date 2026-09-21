@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import unittest
 
+from alpine_package_policy import alpine_package_policy_violations
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INSTALLATION_ROOT = PROJECT_ROOT.parent
@@ -246,6 +248,14 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("path: app/docker/docker-compose.yml", root_compose)
+
+    def test_alpine_packages_follow_one_release_branch_not_exact_builds(self) -> None:
+        # Exact pins broke the 9.3.11 and 9.3.16 image builds after Alpine
+        # deleted the pinned builds; alpine_package_policy explains the rule.
+        dockerfile = (PUBLIC_SOURCE_ROOT / "docker/Dockerfile").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(alpine_package_policy_violations(dockerfile), [])
 
     @unittest.skipUnless(shutil.which("docker"), "Docker CLI is not installed")
     def test_standalone_compose_build_context_is_exactly_immutable_app(self) -> None:
