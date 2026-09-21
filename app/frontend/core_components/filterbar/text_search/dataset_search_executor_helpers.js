@@ -16,31 +16,10 @@ export function initSearchCache() {
         aiData: [],
         types: {},
         filters: {},
-        renderedOnce: false,
         // How many rows of the dataset the search matches in total, as the
         // dataset's own listing counted them. Null until that answer arrives.
         datasetMatchCount: null,
     };
-}
-
-export function deduplicateRows(existingData, existingAiData, newRows, columns) {
-    const safeExistingData = Array.isArray(existingData) ? existingData : [];
-    const safeExistingAiData = Array.isArray(existingAiData) ? existingAiData : [];
-    const safeNewRows = Array.isArray(newRows) ? newRows : [];
-    const safeColumns = Array.isArray(columns) ? columns : [];
-    const primaryKey = safeColumns.includes("header") ? "header" : null;
-    const allKeys = new Set(
-        [...safeExistingData, ...safeExistingAiData].map((row) =>
-            primaryKey ? row?.[primaryKey] : JSON.stringify(row)
-        )
-    );
-
-    return safeNewRows.filter((row) => {
-        const key = primaryKey ? row?.[primaryKey] : JSON.stringify(row);
-        if (allKeys.has(key)) return false;
-        allKeys.add(key);
-        return true;
-    });
 }
 
 export function filterRows(rows, filters, tableName, columnTypes) {

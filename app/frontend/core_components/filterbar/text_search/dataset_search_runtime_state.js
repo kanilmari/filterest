@@ -82,17 +82,21 @@ export function getSearchResultsFlowContainer(
     return getSearchStageContainer(tableName, currentView);
 }
 
+/**
+ * Whether a view shows the search's AI group as a group of its own. Other
+ * views show only the dataset's own rows, and the counter says the same.
+ */
+export function showsSearchAiGroup(currentView) {
+    return ["table", "card", "article_view"].includes(currentView);
+}
+
 export function getSearchAiHostId(
     tableName,
     currentView = getCurrentSearchView(tableName)
 ) {
-    if (["card", "article_view"].includes(currentView)) {
-        return `${tableName}_search_ai_cards`;
-    }
-    if (currentView === "table") {
-        return `${tableName}_search_ai_table`;
-    }
-    return `${tableName}_search_ai_host`;
+    return currentView === "table"
+        ? `${tableName}_search_ai_table`
+        : `${tableName}_search_ai_cards`;
 }
 
 export function removeSearchNotice(tableName, langKey) {
@@ -140,12 +144,15 @@ export function getVisibleSearchCounts(
                 tableName,
                 searchCache.types
             ),
-        aiCount: countVisibleRows(
-            searchCache.aiData,
-            searchCache.filters,
-            tableName,
-            searchCache.types
-        ),
+        // Only a view that shows the AI group counts its rows.
+        aiCount: showsSearchAiGroup(getCurrentSearchView(tableName))
+            ? countVisibleRows(
+                searchCache.aiData,
+                searchCache.filters,
+                tableName,
+                searchCache.types
+            )
+            : 0,
     };
 }
 
@@ -168,7 +175,7 @@ export function clearSearchResultsCount(tableName) {
  * Only the AI result group is filtered in the browser; the dataset's own rows
  * arrive from a listing that already applied the selected filters.
  */
-export function syncSearchPresentationFilters(tableName, cache) {
+function syncSearchPresentationFilters(tableName, cache) {
     const context = getSearchFilterContext(tableName);
     const serverScopeMatches = cache.serverFiltersApplied && cache.filterSignature === context.signature;
     cache.filters = serverScopeMatches ? {} : context.clientFilters;

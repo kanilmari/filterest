@@ -82,16 +82,6 @@ export function createGenericViewSelector(
     return container;
 }
 
-function getRowId(row) {
-    return row?.id ?? null;
-}
-
-function getFirstRenderableSearchRowId(searchResult) {
-    const rows = Array.isArray(searchResult?.data) ? searchResult.data : [];
-    const firstRow = rows.find((row) => getRowId(row) != null) || rows[0] || null;
-    return getRowId(firstRow);
-}
-
 function rememberDatasetViewUrlState(tableName, viewKey, { pushUrl = true, replace = false } = {}) {
     const params = {
         ...getParams(tableName),
@@ -108,50 +98,32 @@ function rememberDatasetViewUrlState(tableName, viewKey, { pushUrl = true, repla
     setParams(tableName, params);
 }
 
-function prepareArticleViewTarget(tableName, selectedViewKey, previousViewKey) {
-    if (selectedViewKey !== ARTICLE_VIEW_KEY) {
-        return null;
-    }
-
-    return (async () => {
-        const committedSearchTerm = String(getParams(tableName)?.search || "").trim();
-        let firstSearchRowId = null;
-        if (committedSearchTerm) {
-            try {
-                const { getCachedSearchResultForRender } = await import(
-                    "../filterbar/text_search/dataset_search_executor.js"
-                );
-                const searchResult = getCachedSearchResultForRender(tableName, { query: committedSearchTerm });
-                if (searchResult?.complete === true && searchResult?.isCurrent?.() !== false) {
-                    firstSearchRowId = getFirstRenderableSearchRowId(searchResult);
-                }
-            } catch (error) {
-                console.warn("view selector search target sync failed:", error);
-            }
-        }
-
-        // A later click or query edit owns the UI now; stale preparation is inert.
-        if (localStorage.getItem(`${tableName}_view`) !== ARTICLE_VIEW_KEY
-            || String(getParams(tableName)?.search || "").trim() !== committedSearchTerm) return;
-        const currentState = getUnifiedTableState(tableName);
-        if (previousViewKey) {
-            rememberDatasetViewUrlState(tableName, previousViewKey, {
-                pushUrl: true,
-                replace: true,
-            });
-        }
-        rememberDatasetViewUrlState(tableName, ARTICLE_VIEW_KEY, { pushUrl: false });
-        setUnifiedTableState(tableName, {
-            articleView: {
-                ...(currentState.articleView || {}),
-                returnView: previousViewKey === ARTICLE_VIEW_KEY ? currentState.articleView?.returnView || "card" : previousViewKey,
-                collapsed: true,
-                expandedId: firstSearchRowId,
-                pendingAutoOpenFirstSearchResult: Boolean(committedSearchTerm) && firstSearchRowId == null,
-                pendingAutoOpenFirstRenderedResult: !committedSearchTerm && firstSearchRowId == null,
-            },
+/**
+ * Mark the article view as waiting for its first row before it is drawn.
+ * The view selector never picks that row itself: whatever draws the dataset's
+ * list opens its first row, and while a search is committed that list is the
+ * searched listing, so the first row is the first search match.
+ */
+function prepareArticleViewTarget(tableName, previousViewKey) {
+    const searchCommitted = Boolean(String(getParams(tableName)?.search || "").trim());
+    const currentState = getUnifiedTableState(tableName);
+    if (previousViewKey) {
+        rememberDatasetViewUrlState(tableName, previousViewKey, {
+            pushUrl: true,
+            replace: true,
         });
-    })();
+    }
+    rememberDatasetViewUrlState(tableName, ARTICLE_VIEW_KEY, { pushUrl: false });
+    setUnifiedTableState(tableName, {
+        articleView: {
+            ...(currentState.articleView || {}),
+            returnView: previousViewKey === ARTICLE_VIEW_KEY ? currentState.articleView?.returnView || "card" : previousViewKey,
+            collapsed: true,
+            expandedId: null,
+            pendingAutoOpenFirstSearchResult: searchCommitted,
+            pendingAutoOpenFirstRenderedResult: !searchCommitted,
+        },
+    });
 }
 
 function clearRowArticleState(tableName) {
@@ -256,14 +228,11 @@ export function selectDatasetView(tableName, viewKey, currentView = null) {
     localStorage.setItem(`${datasetName}_view`, nextViewKey);
     syncActiveViewButtons(tableName, nextViewKey);
     applyViewStyling(tableName);
-    const articlePreparation = prepareArticleViewTarget(tableName, nextViewKey, previousViewKey);
-    if (articlePreparation) {
-        void articlePreparation.finally(() => {
-            if (localStorage.getItem(`${tableName}_view`) === ARTICLE_VIEW_KEY) refreshTableUnified(tableName);
-        });
-        return;
+    if (nextViewKey === ARTICLE_VIEW_KEY) {
+        prepareArticleViewTarget(tableName, previousViewKey);
+    } else {
+        rememberDatasetViewUrlState(tableName, nextViewKey);
     }
-    rememberDatasetViewUrlState(tableName, nextViewKey);
     refreshTableUnified(tableName);
 }
 

@@ -9,7 +9,7 @@
 // AI group and the other datasets' groups belong to the search itself, and they
 // are placed after the dataset's own rows in that order.
 
-import { appendDataToView, reloadDatasetRowsFromListing } from "../../infinite_scroll/infinite_scroll_handler.js";
+import { reloadDatasetRowsFromListing } from "../../infinite_scroll/infinite_scroll_handler.js";
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
@@ -20,10 +20,8 @@ import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preferen
 import {
     clearRowGroupFacets,
 } from "../filter_list/row_group_facet_printer.js";
-import {
-    deduplicateRows,
-    initSearchCache,
-} from "./dataset_search_executor_helpers.js";
+import { initSearchCache } from "./dataset_search_executor_helpers.js";
+import { claimFirstListedRow, getArticleStateKey } from "../../table_views/card_view/first_listed_row.js";
 import {
     clearSearchResultsCount,
     getCurrentSearchView,
@@ -37,8 +35,8 @@ import {
     isCurrentSearchCache,
     ongoingSearchResultsStore,
     removeSearchNotice,
+    showsSearchAiGroup,
     setSearchDatasetMatchCount,
-    syncSearchPresentationFilters,
     syncSearchResultsCount,
 } from "./dataset_search_runtime_state.js";
 
@@ -74,14 +72,10 @@ async function renderRowsIntoTarget(
     rows,
     columns,
     dataTypes,
-    expectedCache = null
+    expectedCache
 ) {
-    if (!isCurrentSearchCache(tableName, expectedCache)) {
+    if (!targetHost || !isCurrentSearchCache(tableName, expectedCache)) {
         return false;
-    }
-    if (!targetHost) {
-        appendDataToView(tableName, rows, true);
-        return true;
     }
 
     if (
@@ -89,11 +83,6 @@ async function renderRowsIntoTarget(
         targetHost.classList?.contains("search-ai-results-card-container")
     ) {
         const renderOptions = { viewKey: getCurrentSearchView(tableName), dataTypes };
-        if (!expectedCache) {
-            await appendDataToCardView(targetHost, columns, rows, tableName, renderOptions);
-            return true;
-        }
-
         // Card construction awaits metadata and image work. Build into a
         // detached host so a replaced search cannot append its old rows after
         // the newer search has already cleared and repopulated the live view.
@@ -128,141 +117,44 @@ function findRenderedCardForRow(tableName, row) {
     ).find((card) => String(card.dataset.id) === String(rowId)) || null;
 }
 
-async function openFirstPendingSearchArticle(
-    tableName,
-    rowsToRender,
-    expectedCache = null
-) {
-    const expectedView = getCurrentSearchView(tableName);
-    const isCurrent = () => isCurrentSearchCache(tableName, expectedCache)
-        && getCurrentSearchView(tableName) === expectedView;
-    if (!isCurrent()) {
-        return;
-    }
-    if (!["card", "article_view"].includes(getCurrentSearchView(tableName))) {
-        return;
-    }
-    if (!Array.isArray(rowsToRender) || rowsToRender.length === 0) {
-        return;
-    }
-
-    if (!isCurrent()) {
-        return;
-    }
-    const state = getUnifiedTableState(tableName);
-    const stateKey = getCurrentSearchView(tableName) === "article_view" ? "articleView" : "cardView";
-    const cardState = state?.[stateKey] || {};
-    if (
-        expectedCache?.complete === false ||
-        !cardState.pendingAutoOpenFirstSearchResult ||
-        cardState.collapsed !== true ||
-        cardState.expandedId != null
-    ) {
-        return;
-    }
-
-    const firstRow = rowsToRender.find((row) => row?.id != null) || rowsToRender[0];
-    if (!firstRow) {
-        return;
-    }
+/**
+ * Open the first match when the card or article view is waiting for one.
+ * Which row that is follows the one shared rule: the first row of the list the
+ * search has just drawn, which is the searched listing.
+ */
+async function openFirstListedMatch(tableName, cache) {
+    const viewKey = getCurrentSearchView(tableName);
+    const isCurrent = () => isCurrentSearchCache(tableName, cache)
+        && getCurrentSearchView(tableName) === viewKey;
+    if (!["card", "article_view"].includes(viewKey) || !isCurrent()) return;
 
     const { openRowArticleView } = await import(
         "../../table_views/card_view/row_article_opener.js"
     );
-    if (!isCurrent()) {
-        return;
-    }
-
-    setUnifiedTableState(tableName, {
-        [stateKey]: {
-            ...cardState,
-            collapsed: true,
-            expandedId: firstRow.id ?? null,
-            pendingAutoOpenFirstSearchResult: false,
-        },
-    });
-    const selectedCard = findRenderedCardForRow(tableName, firstRow);
-    await openRowArticleView(firstRow, tableName, selectedCard, { isCurrent });
+    if (!isCurrent()) return;
+    const firstRow = claimFirstListedRow(tableName, viewKey, cache.data);
+    if (!firstRow) return;
+    await openRowArticleView(firstRow, tableName, findRenderedCardForRow(tableName, firstRow), { isCurrent });
 }
 
 /**
- * Put one streamed packet of rows on screen and keep the counter in step.
- * A search uses this for its AI group, which has a host of its own; rows the
- * AI already suggested and rows the dataset's own listing put on screen are
- * not repeated.
+ * Take one AI answer into the search, in the order the server ranked it.
+ * The server leaves out every row the dataset's own listing shows for the same
+ * search, so these rows are never met again further down the list; only a row
+ * the AI group already holds is skipped here.
  */
-export async function update_table_ui(tableName, incoming, targetTable, expectedCache = null) {
-    const inColumns = Array.isArray(incoming?.columns) ? incoming.columns : [];
-    const inData = Array.isArray(incoming?.data) ? incoming.data : [];
-    const incomingTypes = incoming?.types || {};
-    let cache = _ongoingSearchResults[tableName];
-    if (expectedCache && cache !== expectedCache) {
-        return 0;
-    }
-    if (!cache) {
-        cache = initSearchCache();
-        _ongoingSearchResults[tableName] = cache;
-    }
-
-    if (incoming?.filters_applied === true) cache.serverFiltersApplied = true;
-    syncSearchPresentationFilters(tableName, cache);
-    cache.types = { ...(cache.types || {}), ...incomingTypes };
-    if (inColumns.length) cache.columns = inColumns;
-
-    // Determine which data pool to deduplicate against (text vs AI)
-    const isAi = incoming?.stage === "ai" || Boolean(targetTable);
-    const dataPool = isAi ? cache.aiData : cache.data;
-
-    const rawNewRows = deduplicateRows(
-        cache.data,
-        cache.aiData,
-        inData,
-        cache.columns
-    );
-    if (rawNewRows.length) {
-        dataPool.push(...rawNewRows);
-    }
-
-    const rowsToRender = getSearchPresentationRows(tableName, cache, rawNewRows);
-
-    if (targetTable) {
-        // Render directly into the specified secondary results host (AI results).
-        const columns = cache.columns;
-        const dataTypes = cache.types;
-        const committed = await renderRowsIntoTarget(
-            tableName,
-            targetTable,
-            rowsToRender,
-            columns,
-            dataTypes,
-            expectedCache
-        );
-        if (!committed) return 0;
-    } else {
-        // Default: render into the primary table via appendDataToView
-        const isFirstRender = cache.renderedOnce !== true;
-        if (["card", "article_view"].includes(getCurrentSearchView(tableName))) {
-            const committed = await renderRowsIntoTarget(
-                tableName,
-                getPrimaryCardContainer(tableName),
-                rowsToRender,
-                cache.columns,
-                cache.types,
-                expectedCache
-            );
-            if (!committed) return 0;
-        } else {
-            if (!isCurrentSearchCache(tableName, expectedCache)) return 0;
-            appendDataToView(tableName, rowsToRender, !isFirstRender ? true : false);
+function acceptAiRows(cache, packet) {
+    if (packet?.filters_applied === true) cache.serverFiltersApplied = true;
+    if (Array.isArray(packet?.columns) && packet.columns.length) cache.columns = packet.columns;
+    cache.types = { ...(cache.types || {}), ...(packet?.types || {}) };
+    const held = new Set(cache.aiData.filter((row) => row?.id != null).map((row) => String(row.id)));
+    for (const row of Array.isArray(packet?.data) ? packet.data : []) {
+        if (row?.id != null) {
+            if (held.has(String(row.id))) continue;
+            held.add(String(row.id));
         }
-        cache.renderedOnce = true;
+        cache.aiData.push(row);
     }
-
-    if (!isCurrentSearchCache(tableName, expectedCache)) return 0;
-    if (!isAi) await openFirstPendingSearchArticle(tableName, rowsToRender, expectedCache);
-    if (!isCurrentSearchCache(tableName, expectedCache)) return 0;
-    syncSearchResultsCount(tableName, cache);
-    return rowsToRender.length;
 }
 
 /**
@@ -340,15 +232,15 @@ function createSecondSearchTable(tableName) {
     if (!primaryTable) return null;
 
     // Remove previous second table if it exists
-    const oldTable = container.querySelector(`#${tableName}_search_ai_table`);
-    if (oldTable) oldTable.remove();
+    const aiHostId = getSearchAiHostId(tableName, "table");
+    container.querySelector(`#${aiHostId}`)?.remove();
 
     const columns = JSON.parse(primaryTable.dataset.columns || "[]");
     const dataTypes = JSON.parse(primaryTable.dataset.dataTypes || "{}");
 
     const table = document.createElement("table");
     table.classList.add("table_from_db", "search-ai-results-table");
-    table.id = `${tableName}_search_ai_table`;
+    table.id = aiHostId;
     table.dataset.columns = JSON.stringify(columns);
     table.dataset.dataTypes = JSON.stringify(dataTypes);
 
@@ -409,32 +301,55 @@ function createSecondSearchCardContainer(tableName) {
 
 function createSecondSearchResultsHost(tableName) {
     const currentView = getCurrentSearchView(tableName);
-    if (currentView === "table") {
-        return createSecondSearchTable(tableName);
-    }
+    if (!showsSearchAiGroup(currentView)) return null;
+    return currentView === "table"
+        ? createSecondSearchTable(tableName)
+        : createSecondSearchCardContainer(tableName);
+}
 
-    if (["card", "article_view"].includes(currentView)) {
-        return createSecondSearchCardContainer(tableName);
-    }
-
-    return null;
+/** Remove the search's own AI group and stage notices from the view now shown. */
+function removeSearchGroups(tableName, currentView = getCurrentSearchView(tableName)) {
+    const stageContainer = getSearchStageContainer(tableName, currentView);
+    if (!stageContainer) return;
+    stageContainer.querySelector(`#${getSearchAiHostId(tableName, currentView)}`)?.remove();
+    stageContainer.querySelectorAll(".search-stage-notice").forEach((el) => el.remove());
 }
 
 /**
- * Cleans up the second search table and notice divs from a previous search.
+ * Put the search's own groups after the dataset's rows in the view now shown:
+ * the notice for a search without matches, the AI group under its own notice,
+ * and the other datasets last, and bring the counter in step with them. A
+ * search calls this when its listing has answered and again when the AI answer
+ * arrives; a view rebuild calls it once. A view with no place for a separate
+ * group shows only the dataset's own rows.
+ */
+async function placeSearchGroups(tableName, cache) {
+    if (!isCurrentSearchCache(tableName, cache)) return false;
+    removeSearchGroups(tableName);
+    if (cache.complete && cache.data.length === 0) {
+        insertLocalizedNotice(tableName, NO_DATASET_MATCHES_NOTICE);
+    }
+    const aiRows = getSearchPresentationRows(tableName, cache, cache.aiData);
+    const aiHost = aiRows.length ? createSecondSearchResultsHost(tableName) : null;
+    if (aiHost) {
+        const committed = await renderRowsIntoTarget(
+            tableName, aiHost, aiRows, cache.columns, cache.types, cache
+        );
+        if (!committed) return false;
+        insertLocalizedNotice(tableName, AI_GROUP_NOTICE);
+    }
+    if (!isCurrentSearchCache(tableName, cache)) return false;
+    syncSearchResultsCount(tableName, cache);
+    cache.supplemental?.place();
+    return true;
+}
+
+/**
+ * Clears a previous search's groups and the dataset's rows before a new one.
  */
 function cleanupSearchArtifacts(tableName) {
     const currentView = getCurrentSearchView(tableName);
-    const stageContainer = getSearchStageContainer(tableName, currentView);
-    if (stageContainer) {
-        const oldAiHost = stageContainer.querySelector(
-            `#${getSearchAiHostId(tableName, currentView)}`
-        );
-        if (oldAiHost) oldAiHost.remove();
-        stageContainer
-            .querySelectorAll(".search-stage-notice")
-            .forEach((el) => el.remove());
-    }
+    removeSearchGroups(tableName, currentView);
 
     if (currentView === "table") {
         const container = getSearchViewContainer(tableName, currentView);
@@ -482,7 +397,6 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
     // Only the rows the search itself put on screen are remembered here. Later
     // pages belong to the listing, which renders and counts them on its own.
     cache.data = rows;
-    cache.renderedOnce = true;
     setSearchDatasetMatchCount(cache, result?.row_count);
     return true;
 }
@@ -505,14 +419,8 @@ async function streamAiSearchResults(tableName, cache, context, opts, isCurrent)
     for await (const packet of readDatasetSearchResponse(tableName, cache.query, requestOptions, isCurrent)) {
         if (!isCurrent()) return;
         if (packet.stage !== "ai") continue;
-        const hadAiRows = cache.aiData.length > 0;
-        const aiHost = createSecondSearchResultsHost(tableName);
-        await update_table_ui(tableName, packet, aiHost, cache);
-        if (!isCurrent()) return;
-        if (!hadAiRows && cache.aiData.length > 0 && aiHost) {
-            insertLocalizedNotice(tableName, AI_GROUP_NOTICE);
-        }
-        cache.supplemental.place();
+        acceptAiRows(cache, packet);
+        await placeSearchGroups(tableName, cache);
     }
 }
 
@@ -528,31 +436,37 @@ export async function rerenderCachedSearchResults(tableName, expectedCache = nul
     await do_intelligent_search(tableName, cache.query, cache.searchOptions || {});
 }
 
-/**
- * Hand the search's rows to a caller that rebuilds the whole dataset view.
- * The dataset's own matches come first and the AI group after them, in the
- * order they are shown, and the count is the dataset's true number of matches.
- */
-export function getCachedSearchResultForRender(tableName, { query = null } = {}) {
+/** The search that still answers this query under the filters now selected. */
+function getCommittedSearchCache(tableName, query = null) {
     const cache = _ongoingSearchResults[tableName];
     if (!cache || (query !== null && cache.query !== String(query).trim())
         || getSearchFilterContext(tableName).signature !== cache.filterSignature) {
         return null;
     }
+    return cache;
+}
 
-    syncSearchPresentationFilters(tableName, cache);
-    const datasetRows = Array.isArray(cache.data) ? [...cache.data] : [];
-    const visibleAiRows = getSearchPresentationRows(tableName, cache, cache.aiData);
-    const data = [...datasetRows, ...visibleAiRows];
-
+/**
+ * Let a caller that rebuilds the whole dataset view keep the committed search.
+ * Rebuilding a view does not ask the search again: the dataset's rows come from
+ * its listing, which carries the search as a condition and keeps paging it like
+ * any other listing. The search contributes only what it alone owns, placed
+ * again from the answers it already received.
+ *
+ * @returns {{ isCurrent: () => boolean, place: (options?: { rowCount?: number }) => Promise<boolean> } | null}
+ *          null when no search answers this query under the selected filters.
+ *          `isCurrent` turns false once a newer run of the search replaces it.
+ */
+export function getSearchGroupsForViewRebuild(tableName, { query = null } = {}) {
+    const cache = getCommittedSearchCache(tableName, query);
+    if (!cache) return null;
     return {
-        columns: Array.isArray(cache.columns) ? [...cache.columns] : [],
-        data,
-        types: { ...(cache.types || {}) },
-        row_count: Number.isFinite(cache.datasetMatchCount) ? cache.datasetMatchCount : data.length,
-        complete: cache.complete !== false,
-        requestIdentity: cache,
         isCurrent: () => isCurrentSearchCache(tableName, cache),
+        // The rebuilt listing has just counted the matches afresh.
+        place: ({ rowCount } = {}) => {
+            if (Number.isFinite(rowCount)) setSearchDatasetMatchCount(cache, rowCount);
+            return placeSearchGroups(tableName, cache);
+        },
     };
 }
 
@@ -582,7 +496,7 @@ export async function sortCachedSearchResults(
 function awaitFirstSearchResultInArticleView(tableName) {
     const currentView = getCurrentSearchView(tableName);
     if (!["card", "article_view"].includes(currentView)) return;
-    const stateKey = currentView === "article_view" ? "articleView" : "cardView";
+    const stateKey = getArticleStateKey(currentView);
     const articleState = getUnifiedTableState(tableName)?.[stateKey];
     if (!articleState?.collapsed) return;
     setUnifiedTableState(tableName, {
@@ -652,10 +566,10 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
             // the AI group arrives afterwards and adds to it.
             cache.complete = true;
             syncSearchResultsCount(tableName, cache);
-            if (cache.data.length === 0) insertLocalizedNotice(tableName, NO_DATASET_MATCHES_NOTICE);
-            await openFirstPendingSearchArticle(tableName, cache.data, cache);
+            await placeSearchGroups(tableName, cache);
             if (!isCurrent()) return;
-            cache.supplemental.place();
+            await openFirstListedMatch(tableName, cache);
+            if (!isCurrent()) return;
             await streamAiSearchResults(tableName, cache, context, opts, isCurrent);
         } catch (error) {
             if (isCurrent()) console.warn("do_intelligent_search failed:", error);

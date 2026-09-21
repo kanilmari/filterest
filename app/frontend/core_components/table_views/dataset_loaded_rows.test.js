@@ -72,6 +72,19 @@ test.each(["detached", "hidden", "display", "offset", "cleared", "search"])("doe
     expect(captureLoadedDatasetRows("events")).toBeNull();
 });
 
+test("a searched list is handed over like any other, and only under the same search", () => {
+    // Searching is browsing: an article opened from the 30th match must carry
+    // every match already loaded, so its previous/next buttons can reach them.
+    localStorage.setItem("test_params", JSON.stringify({ search: "api" }));
+    prepare();
+    const token = captureLoadedDatasetRows("events");
+    expect(token).not.toBeNull();
+    localStorage.setItem("events_view", "article_view");
+    expect(resolveLoadedDatasetRows("events", token)?.result.data).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    localStorage.setItem("test_params", JSON.stringify({ search: "other" }));
+    expect(resolveLoadedDatasetRows("events", token)).toBeNull();
+});
+
 test.each([true, false])("initial pending access keeps a fresh rendered prefix only after an allowed snapshot (%s)", async allowed => {
     vi.resetModules();
     const access = await import("../navigation/nav_engine/dataset_access_registry.js");

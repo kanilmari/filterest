@@ -1,12 +1,11 @@
 // dataset_search_executor_helpers.test.js
 // Verifies pure search-cache helpers used by the intelligent search UI.
-// Bridges streamed dataset rows, active filters, and deduplication rules in isolation.
+// Bridges streamed dataset rows and active filters in isolation.
 // Exists to lock helper behavior before and after UI-level refactors.
 
 import { describe, expect, test } from "vitest";
 import {
     countVisibleRows,
-    deduplicateRows,
     filterRows,
     initSearchCache,
     sortRows,
@@ -20,34 +19,8 @@ describe("dataset_search_executor_helpers", () => {
             aiData: [],
             types: {},
             filters: {},
-            renderedOnce: false,
             datasetMatchCount: null,
         });
-    });
-
-    test("deduplicateRows removes rows already present in text or ai pools", () => {
-        const uniqueRows = deduplicateRows(
-            [{ header: "alpha" }],
-            [{ header: "beta" }],
-            [{ header: "alpha" }, { header: "beta" }, { header: "gamma" }],
-            ["header", "title"]
-        );
-
-        expect(uniqueRows).toEqual([{ header: "gamma" }]);
-    });
-
-    test("deduplicateRows removes duplicates within the incoming batch", () => {
-        const uniqueRows = deduplicateRows(
-            [],
-            [],
-            [{ id: 1, name: "A" }, { id: 1, name: "A" }, { id: 2, name: "B" }],
-            ["id", "name"]
-        );
-
-        expect(uniqueRows).toEqual([
-            { id: 1, name: "A" },
-            { id: 2, name: "B" },
-        ]);
     });
 
     test("filterRows returns only rows matching active filters", () => {

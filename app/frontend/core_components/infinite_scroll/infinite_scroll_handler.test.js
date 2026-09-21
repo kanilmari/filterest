@@ -396,6 +396,32 @@ describe("initializeInfiniteScroll", () => {
         disconnectInfiniteScroll("reloaded_orders");
     });
 
+    test("a search reload remembers its rows, so the next page leaves out rows already on screen", async () => {
+        // The reloaded rows are the start of the searched list, exactly as a
+        // view build's first page is, so an article can carry them over too.
+        commitSearch("remembered_orders", "api");
+        createWideTableView("remembered_orders", { container: 480, table: 900 });
+        getUnifiedTableStateMock.mockReturnValue({ offset: 2, filters: {}, sort: {} });
+        fetchDatasetDataMock
+            .mockResolvedValueOnce({ data: [{ id: 1 }, { id: 2 }], row_count: 251, types: {} })
+            .mockResolvedValueOnce({ data: [{ id: 2 }, { id: 3 }], row_count: 251, types: {} });
+
+        const { disconnectInfiniteScroll, reloadDatasetRowsFromListing } = await import(
+            "./infinite_scroll_handler.js"
+        );
+        await reloadDatasetRowsFromListing("remembered_orders");
+        appendDataToTableMock.mockClear();
+        intersectionObservers.at(-1).callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(appendDataToTableMock).toHaveBeenCalled());
+
+        expect(fetchDatasetDataMock).toHaveBeenLastCalledWith(expect.objectContaining({
+            offset: 2, filters: { search: "api" },
+        }));
+        expect(appendDataToTableMock.mock.calls[0][1]).toEqual([{ id: 3 }]);
+
+        disconnectInfiniteScroll("remembered_orders");
+    });
+
     test("a reload with no matching rows empties the list instead of keeping the old rows", async () => {
         commitSearch("empty_orders", "nonsense");
         createWideTableView("empty_orders", { container: 480, table: 900 });
@@ -407,9 +433,14 @@ describe("initializeInfiniteScroll", () => {
         const { disconnectInfiniteScroll, reloadDatasetRowsFromListing } = await import(
             "./infinite_scroll_handler.js"
         );
+        const loaded = await import("../table_views/dataset_loaded_rows.js");
+        const container = document.getElementById("empty_orders_table_view_container");
+        loaded.rememberLoadedDatasetRows(container, "empty_orders", { data: [{ id: 9 }] }, "table");
         await reloadDatasetRowsFromListing("empty_orders");
 
         expect(document.querySelector("#empty_orders_table_view_container tbody").innerHTML).toBe("");
+        // The rows that were on screen are gone, so they are no longer remembered.
+        expect(loaded.filterLoadedDatasetDuplicates(container, "empty_orders", [{ id: 9 }])).toEqual([{ id: 9 }]);
         expect(setResultsCountMock).toHaveBeenCalledWith("empty_orders", 0);
 
         disconnectInfiniteScroll("empty_orders");

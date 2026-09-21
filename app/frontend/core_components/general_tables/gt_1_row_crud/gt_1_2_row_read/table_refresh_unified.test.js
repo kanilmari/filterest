@@ -24,8 +24,8 @@ const setUnifiedTableStateMock = vi.fn();
 const primeDatasetPermissionsMock = vi.fn();
 const mergeStateWithOptionsMock = vi.fn();
 const computeNextSortStateMock = vi.fn();
-const getCachedSearchResultForRenderMock = vi.fn();
-const hasCachedSearchResultsMock = vi.fn();
+const getSearchGroupsForViewRebuildMock = vi.fn();
+const getDatasetListingFiltersMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -43,6 +43,9 @@ async function loadModule() {
         resetOffset: resetOffsetMock,
         updateOffset: updateOffsetMock,
         disconnectInfiniteScroll: disconnectInfiniteScrollMock,
+    }));
+    vi.doMock("../../../infinite_scroll/dataset_listing_filters.js", () => ({
+        getDatasetListingFilters: getDatasetListingFiltersMock,
     }));
     vi.doMock("../../../filterbar/filter_list/column_visibility_handler.js", () => ({
         applyColumnVisibility: applyColumnVisibilityMock,
@@ -75,8 +78,7 @@ async function loadModule() {
         computeNextSortState: computeNextSortStateMock,
     }));
     vi.doMock("../../../filterbar/text_search/dataset_search_executor.js", () => ({
-        getCachedSearchResultForRender: getCachedSearchResultForRenderMock,
-        hasCachedSearchResults: hasCachedSearchResultsMock,
+        getSearchGroupsForViewRebuild: getSearchGroupsForViewRebuildMock,
     }));
 
     return import("./table_refresh_unified.js");
@@ -97,8 +99,12 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         mergeStateWithOptionsMock.mockImplementation((state) => state);
         parseTableQueryStringMock.mockReturnValue(baseState);
         getParamsMock.mockReturnValue({});
-        hasCachedSearchResultsMock.mockReturnValue(false);
-        getCachedSearchResultForRenderMock.mockReturnValue(null);
+        getSearchGroupsForViewRebuildMock.mockReturnValue(null);
+        // The listing's own contract: a committed search is one more condition.
+        getDatasetListingFiltersMock.mockImplementation((tableName, filters) => {
+            const search = String(getParamsMock(tableName)?.search || "").trim();
+            return { ...(filters || {}), ...(search ? { search } : {}) };
+        });
         redirectToRootInSpaMock.mockResolvedValue(undefined);
         fetchDatasetDataMock.mockRejectedValue(new Error("Dataset not found"));
     });
@@ -217,21 +223,24 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         }));
     });
 
-    test("renders cached search rows when switching views with an active search", async () => {
-        localStorage.setItem("app_service_catalog_view", "table");
-        getParamsMock.mockReturnValue({ search: "firefox" });
-        hasCachedSearchResultsMock.mockReturnValue(true);
-        getCachedSearchResultForRenderMock.mockReturnValue({
-            columns: ["id", "title", "cached_image"],
-            data: [{ id: 7, title: "Firefox" }],
-            types: { title: "text", cached_image: "text" },
-            row_count: 1,
+    test("a view switch during a search browses the searched listing and keeps endless scrolling", async () => {
+        // The search for "api" matches 251 rows; the view shows its first page
+        // of 20 and must keep paging from there, exactly as when browsing.
+        localStorage.setItem("system_functions_view", "card");
+        getParamsMock.mockReturnValue({ search: "api" });
+        getUnifiedTableStateMock.mockReturnValue({
+            offset: 0,
+            sort: { column: "name", direction: "ASC" },
+            filters: { status: "active" },
         });
+        const searchGroups = { isCurrent: vi.fn(() => true), place: vi.fn(async () => true) };
+        getSearchGroupsForViewRebuildMock.mockReturnValue(searchGroups);
+        const firstPage = Array.from({ length: 20 }, (_value, index) => ({ id: index + 1, name: `api_${index + 1}` }));
         fetchDatasetDataMock.mockResolvedValue({
-            columns: ["id", "title"],
-            data: [{ id: 133, title: "Brave" }],
-            types: { id: "integer", title: "text" },
-            row_count: 42,
+            columns: ["id", "name"],
+            data: firstPage,
+            types: { id: "integer", name: "text" },
+            row_count: 251,
             has_geo: false,
             row_group_facets: [
                 { id: 4, slug: "security", title: { en: "Security" }, row_count: 17 },
@@ -245,14 +254,23 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 
         const mod = await loadModule();
 
-        await mod.refreshTableUnified("app_service_catalog", { skipUrlParams: true });
+        await mod.refreshTableUnified("system_functions", { skipUrlParams: true });
 
+        // The one request is the dataset's listing asked with the search as a
+        // condition beside the selected filters, not an unsearched page.
+        expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1);
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
+            dataset_name: "system_functions",
+            offset: 0,
+            filters: { status: "active", search: "api" },
+        }));
+        // Its rows and its count are what the view shows.
         expect(generateTableMock).toHaveBeenCalledWith(
-            "app_service_catalog",
-            ["id", "title"],
-            [{ id: 7, title: "Firefox" }],
-            { title: "text", cached_image: "text", id: "integer" },
-            1,
+            "system_functions",
+            ["id", "name"],
+            firstPage,
+            { id: "integer", name: "text" },
+            251,
             false,
 			{ card_style_variant: "standard" },
 			{
@@ -260,29 +278,38 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 			},
             null
         );
-        expect(updateOffsetMock).not.toHaveBeenCalled();
-        expect(disconnectInfiniteScrollMock).toHaveBeenCalledTimes(2);
-        expect(applyColumnVisibilityMock).toHaveBeenCalledWith("app_service_catalog");
+        // The next page starts after the first one, and endless scrolling is
+        // left connected: the only disconnect is the one before the request.
+        expect(updateOffsetMock).toHaveBeenCalledWith("system_functions", 20);
+        expect(updateOffsetMock.mock.invocationCallOrder[0]).toBeLessThan(
+            generateTableMock.mock.invocationCallOrder[0]
+        );
+        expect(disconnectInfiniteScrollMock).toHaveBeenCalledTimes(1);
+        expect(disconnectInfiniteScrollMock.mock.invocationCallOrder[0]).toBeLessThan(
+            fetchDatasetDataMock.mock.invocationCallOrder[0]
+        );
+        // The search's own groups are placed after the rebuilt rows, without
+        // asking the search again.
+        expect(getSearchGroupsForViewRebuildMock).toHaveBeenCalledWith("system_functions", { query: "api" });
+        expect(searchGroups.place).toHaveBeenCalledTimes(1);
+        // The counter's text part takes the number the rebuilt listing just counted.
+        expect(searchGroups.place).toHaveBeenCalledWith({ rowCount: 251 });
+        expect(searchGroups.place.mock.invocationCallOrder[0]).toBeGreaterThan(
+            generateTableMock.mock.invocationCallOrder[0]
+        );
+        expect(applyColumnVisibilityMock).toHaveBeenCalledWith("system_functions");
     });
 
-    test("keeps zero-result cached searches empty instead of falling back to normal rows", async () => {
+    test("a search without matches shows the searched listing's empty answer", async () => {
         localStorage.setItem("app_service_catalog_view", "table");
         getParamsMock.mockReturnValue({ search: "no-match" });
-        getCachedSearchResultForRenderMock.mockReturnValue({
-            columns: [],
-            data: [],
-            types: {},
-            row_count: 0,
-        });
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
-            data: [{ id: 133, title: "Brave" }],
+            data: [],
             types: { id: "integer", title: "text" },
-            row_count: 42,
+            row_count: 0,
             has_geo: false,
-            row_group_facets: [
-                { id: 4, slug: "security", title: { en: "Security" }, row_count: 17 },
-            ],
+            row_group_facets: [],
         });
         generateTableMock.mockResolvedValue(document.createElement("div"));
 
@@ -290,6 +317,9 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 
         await mod.refreshTableUnified("app_service_catalog", { skipUrlParams: true });
 
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
+            filters: { search: "no-match" },
+        }));
         expect(generateTableMock).toHaveBeenCalledWith(
             "app_service_catalog",
             ["id", "title"],
@@ -301,7 +331,30 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 			undefined,
             null
         );
+        expect(updateOffsetMock).toHaveBeenCalledWith("app_service_catalog", 0);
+    });
+
+    test("a rebuild yields to a newer run of the same search started while it waited", async () => {
+        localStorage.setItem("system_functions_view", "table");
+        getParamsMock.mockReturnValue({ search: "api" });
+        let searchStillCurrent = true;
+        const searchGroups = { isCurrent: () => searchStillCurrent, place: vi.fn(async () => true) };
+        getSearchGroupsForViewRebuildMock.mockReturnValue(searchGroups);
+        let release;
+        fetchDatasetDataMock.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        const mod = await loadModule();
+
+        const pending = mod.refreshTableUnified("system_functions", { skipUrlParams: true });
+        await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+        // A filter changed meanwhile, so the search ran again and reloads the
+        // listing itself under the new filters.
+        searchStillCurrent = false;
+        release({ columns: ["id"], data: [{ id: 1 }], types: {}, row_count: 251 });
+        await pending;
+
+        expect(generateTableMock).not.toHaveBeenCalled();
         expect(updateOffsetMock).not.toHaveBeenCalled();
+        expect(searchGroups.place).not.toHaveBeenCalled();
     });
 
     test("opens the first rendered row when article view was requested without a cached search", async () => {
@@ -391,21 +444,26 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         expect(generateTableMock).toHaveBeenCalledTimes(2);
         expect(applyColumnVisibilityMock).toHaveBeenCalledTimes(1);
     });
-    test("waits for current article search instead of opening an ordinary list row", async () => {
+    test("an article waiting for the first search match opens the searched listing's first row", async () => {
         localStorage.setItem("tasks_view", "article_view");
         getParamsMock.mockReturnValue({ search: "waiting" });
         getUnifiedTableStateMock.mockReturnValue({
             sort: { column: "id", direction: "ASC" }, filters: {}, offset: 0,
             articleView: { collapsed: true, expandedId: null, pendingAutoOpenFirstSearchResult: true },
         });
-        getCachedSearchResultForRenderMock.mockReturnValue(null);
-        fetchDatasetDataMock.mockResolvedValue({ columns: ["id"], data: [{ id: 404 }], types: {}, row_count: 1 });
+        fetchDatasetDataMock.mockResolvedValue({ columns: ["id"], data: [{ id: 404 }, { id: 405 }], types: {}, row_count: 2 });
         generateTableMock.mockResolvedValue(document.createElement("div"));
         const mod = await loadModule();
         await mod.refreshTableUnified("tasks", { skipUrlParams: true });
-        expect(generateTableMock.mock.calls.at(-1)[2]).toEqual([]);
-        expect(openRowArticleViewMock).not.toHaveBeenCalled();
-        expect(getCachedSearchResultForRenderMock).toHaveBeenCalledWith("tasks", { query: "waiting" });
+        // The only rows rendered are the listing's answer to the search itself,
+        // so its first row is the first match.
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
+            filters: { search: "waiting" },
+        }));
+        expect(generateTableMock.mock.calls.at(-1)[2]).toEqual([{ id: 404 }, { id: 405 }]);
+        expect(setUnifiedTableStateMock).toHaveBeenCalledWith("tasks", {
+            articleView: expect.objectContaining({ expandedId: 404, pendingAutoOpenFirstSearchResult: false }),
+        });
     });
 
     test("ignores a delayed ordinary response after the committed query changes", async () => {

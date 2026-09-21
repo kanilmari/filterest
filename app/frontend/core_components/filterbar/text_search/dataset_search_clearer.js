@@ -13,7 +13,8 @@ import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation
 import { getUnifiedTableState, setUnifiedTableState, refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { datasetSearchState } from "./dataset_search_state_reader.js";
 import { ongoingSearchResults } from "./dataset_search_executor.js";
-import { clearSearchResultsCount } from "./dataset_search_runtime_state.js";
+import { clearSearchResultsCount, getSearchAiHostId, showsSearchAiGroup } from "./dataset_search_runtime_state.js";
+import { getDatasetViewContainerId, RENDERABLE_DATASET_VIEW_DEFINITIONS } from "../../table_views/dataset_view_registry.js";
 
 import { resolveSortSelection } from "../top_row_buttons/sort_sync_state_helpers.js";
 
@@ -31,18 +32,14 @@ function getSearchClearingUrlOptions(tableName) {
 }
 
 function removeDatasetSearchArtifacts(tableName) {
-    for (const viewName of ["table", "card", "article_view"]) {
+    for (const { viewKey } of RENDERABLE_DATASET_VIEW_DEFINITIONS) {
+        if (!showsSearchAiGroup(viewKey)) continue;
         const viewContainer = document.getElementById(
-            `${tableName}_${viewName}_view_container`
+            getDatasetViewContainerId(viewKey, tableName)
         );
         if (!viewContainer) continue;
         viewContainer
-            .querySelectorAll(
-                `#${tableName}_search_ai_table, ` +
-                `#${tableName}_search_ai_cards, ` +
-                `#${tableName}_search_ai_host, ` +
-                ".search-stage-notice"
-            )
+            .querySelectorAll(`#${getSearchAiHostId(tableName, viewKey)}, .search-stage-notice`)
             .forEach((element) => element.remove());
     }
 }

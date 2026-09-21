@@ -9,8 +9,10 @@ import { invalidateCardArticleReturn, getCardArticleReturnToken } from "../../..
 import { fetchDatasetData } from '../../../endpoints/endpoint_data_fetcher.js';
 import { generate_table } from '../../../table_views/dataset_view_printer.js';
 import { resetOffset, updateOffset, disconnectInfiniteScroll } from '../../../infinite_scroll/infinite_scroll_handler.js';
+import { getDatasetListingFilters } from '../../../infinite_scroll/dataset_listing_filters.js';
 import { applyColumnVisibility } from '../../../filterbar/filter_list/column_visibility_handler.js';
 import { openRowArticleView } from '../../../table_views/card_view/row_article_opener.js';
+import { claimFirstListedRow, getArticleStateKey } from '../../../table_views/card_view/first_listed_row.js';
 import { setRedirectNotice, clearDatasetSelectionState } from '../../../state_stores/dataset_selection_saver.js';
 import { redirectToRootInSpa } from '../../../navigation/root_redirect_handler.js';
 import { getParams, parseTableQueryString } from '../../../navigation/nav_engine/query_params.js';
@@ -44,21 +46,14 @@ const DATASET_VIEW_PERMISSION_ROUTES = Object.freeze([
     '/ui/table-view-style-buttons',
 ]);
 
-async function getActiveCachedSearchRenderResult(tableName) {
-    const committedSearchTerm = String(getParams(tableName)?.search || "").trim();
-    if (!committedSearchTerm) {
-        return null;
-    }
-
-    const {
-        getCachedSearchResultForRender,
-    } = await import("../../../filterbar/text_search/dataset_search_executor.js");
-    return getCachedSearchResultForRender(tableName, { query: committedSearchTerm });
-}
-
-function getFirstRenderableRowId(rows = []) {
-    const firstRow = rows.find((row) => row?.id != null) || rows[0] || null;
-    return firstRow?.id ?? null;
+/**
+ * The committed search's own groups for a view that is about to be rebuilt.
+ * The search module is loaded only while a search is committed.
+ */
+async function getSearchGroupsForViewRebuild(tableName, query) {
+    if (!query) return null;
+    const searchExecutor = await import("../../../filterbar/text_search/dataset_search_executor.js");
+    return searchExecutor.getSearchGroupsForViewRebuild(tableName, { query });
 }
 
 /**
@@ -131,14 +126,21 @@ export async function refreshTableUnified(tableName, options = {}) {
         // 6) Haetaan localStoragesta tuore offset uudelleen
         currentState = getUnifiedTableState(tableName);
         const currentView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || "table");
-        const stateKey = currentView === "article_view" ? "articleView" : "cardView";
+        const stateKey = getArticleStateKey(currentView);
 
         // Start the common dataset permission batch before data/render work so
         // the filter bar and card controls do not each trigger their own late check.
         void primeDatasetPermissions(tableName, DATASET_VIEW_PERMISSION_ROUTES);
 
-        let cachedSearchRenderResult = await getActiveCachedSearchRenderResult(tableName);
+        // A committed search is browsed like the rest of the dataset: its rows
+        // come from the listing below, which carries the search as a condition,
+        // and endless scrolling keeps paging them. The search itself owns only
+        // its AI and other-dataset groups, which it places after the rebuild.
+        const searchGroups = await getSearchGroupsForViewRebuild(tableName, query);
         if (!isCurrent()) return;
+        // Changing a filter during a search runs the search again, and that run
+        // reloads the listing itself; a rebuild started before it must yield.
+        const isRenderCurrent = () => isCurrent() && searchGroups?.isCurrent() !== false;
 
         // 7) Haetaan data fetchDatasetData-funktiolla (nyt varmasti offset=0, ellei override)
         const result = loadedRows?.result || await fetchDatasetData({
@@ -146,15 +148,13 @@ export async function refreshTableUnified(tableName, options = {}) {
             offset: currentState.offset,
             sort_column: currentState.sort.column,
             sort_order: currentState.sort.direction,
-            filters: currentState.filters,
+            filters: getDatasetListingFilters(tableName, currentState.filters),
             callerName: 'refreshTableUnified',
             include_card_support: ["card", "article_view", "product_card"].includes(currentView),
             include_map_support: currentView === "map",
             view_key: currentView,
         });
-        if (!isCurrent()) return;
-        if (query) cachedSearchRenderResult = await getActiveCachedSearchRenderResult(tableName);
-        if (!isCurrent()) return;
+        if (!isRenderCurrent()) return;
         if (!result) {
             console.warn(`fetchDatasetData palautti tyhjän vastauksen taululle: ${tableName}`);
             return;
@@ -162,22 +162,6 @@ export async function refreshTableUnified(tableName, options = {}) {
         const data = result.data || [];
         const columns = result.columns || [];
         const data_types = result.types || {};
-        const hasCachedSearchRenderResult = Boolean(query);
-        // Metadata may come from the ordinary list, but its rows are never
-        // substitutes while the current text-search response is still pending.
-        if (query && !cachedSearchRenderResult) cachedSearchRenderResult = { data: [], row_count: 0, complete: false };
-        const renderData = hasCachedSearchRenderResult
-            ? cachedSearchRenderResult.data || []
-            : data;
-        const renderColumns = columns.length
-            ? columns
-            : cachedSearchRenderResult?.columns || [];
-        const renderDataTypes = hasCachedSearchRenderResult
-            ? { ...(cachedSearchRenderResult.types || {}), ...data_types }
-            : data_types;
-        const renderRowCount = hasCachedSearchRenderResult
-            ? cachedSearchRenderResult.row_count
-            : result.row_count;
 
         // 8) Seed the next-page offset before rendering.
         // Card view starts infinite scroll during generate_table(), and the
@@ -186,61 +170,39 @@ export async function refreshTableUnified(tableName, options = {}) {
         // same page and appending duplicate cards.
         if (loadedRows) {
             setUnifiedTableState(tableName, { offset: loadedRows.offset });
-        } else if (!hasCachedSearchRenderResult) {
+        } else {
             updateOffset(tableName, data.length);
         }
 
         // 9) Rakennetaan varsinainen taulu/näkymä
         const _activeContainer = await generate_table(
             tableName,
-            renderColumns,
-            renderData,
-            renderDataTypes,
-            renderRowCount,
+            columns,
+            data,
+            data_types,
+            result.row_count,
             result.has_geo,
 			result.table_meta,
 			result.dataset_presentation,
-            hasCachedSearchRenderResult ? null : result.row_group_facets,
+            // A search keeps the row-group facets withdrawn, as it did when it started.
+            query ? null : result.row_group_facets,
             ...((preserveCardReturn || loadedRows) ? [{ preserveCardReturn, loadedRows }] : [])
         );
-        if (!isCurrent() || cachedSearchRenderResult?.isCurrent?.() === false) return;
-        if (hasCachedSearchRenderResult) {
-            disconnectInfiniteScroll(tableName);
-        }
+        if (!isRenderCurrent()) return;
         const renderedView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || currentView);
         if (renderedView !== currentView) {
             await refreshTableUnified(tableName, { skipUrlParams: true });
             return;
         }
 
-        let stateAfterBuild = getUnifiedTableState(tableName);
-        const cardStateAfterBuild = stateAfterBuild[stateKey] || {};
-        const shouldAutoOpenFirstResult =
-            cardStateAfterBuild.collapsed === true
-            && cardStateAfterBuild.expandedId == null
-            && (
-                cardStateAfterBuild.pendingAutoOpenFirstRenderedResult === true
-                || (cardStateAfterBuild.pendingAutoOpenFirstSearchResult === true
-                    && cachedSearchRenderResult?.complete === true)
-            );
-        if (shouldAutoOpenFirstResult) {
-            const firstRowId = getFirstRenderableRowId(renderData);
-            if (firstRowId != null) {
-                setUnifiedTableState(tableName, {
-                    [stateKey]: {
-                        ...cardStateAfterBuild,
-                        expandedId: firstRowId,
-                        pendingAutoOpenFirstRenderedResult: false,
-                        pendingAutoOpenFirstSearchResult: false,
-                    },
-                });
-                stateAfterBuild = getUnifiedTableState(tableName);
-            }
-        }
+        // An article waiting for its first row opens the first row just drawn;
+        // while a search is committed that is its first match.
+        claimFirstListedRow(tableName, currentView, data);
+        const stateAfterBuild = getUnifiedTableState(tableName);
 
         if (stateAfterBuild[stateKey]?.collapsed && stateAfterBuild[stateKey]?.expandedId != null) {
             const expandedId = stateAfterBuild[stateKey].expandedId;
-            let rowItem = renderData.find(r => String(r.id) === String(expandedId));
+            let rowItem = data.find(r => String(r.id) === String(expandedId));
             let cardElem = document.querySelector(
                 `#${getDatasetViewContainerId(currentView, tableName)} .card[data-id='${expandedId}']`
             );
@@ -265,15 +227,18 @@ export async function refreshTableUnified(tableName, options = {}) {
                 }
             }
 
-            if (rowItem && isCurrent()) {
+            if (rowItem && isRenderCurrent()) {
                 openRowArticleView(rowItem, tableName, cardElem || null, {
-                    isCurrent: () => isCurrent() && cachedSearchRenderResult?.isCurrent?.() !== false && resolveDatasetViewSelectionTarget(localStorage.getItem(tableName + "_view") || currentView) === currentView,
+                    isCurrent: () => isRenderCurrent() && resolveDatasetViewSelectionTarget(localStorage.getItem(tableName + "_view") || currentView) === currentView,
                 });
             }
         }
 
         // 10) Sarakenäkyvyys (uusi)
         applyColumnVisibility(tableName);
+
+        // 11) The search's own groups follow the dataset's rows in the rebuilt view.
+        if (isRenderCurrent()) await searchGroups?.place({ rowCount: result.row_count });
     } catch (err) {
         if (!isCurrent()) return;
         /* virhe-tulostus ohjeittesi mukaisena */

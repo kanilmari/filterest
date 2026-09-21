@@ -148,10 +148,8 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 		return fmt.Errorf("full‑text search failed: %w", err)
 	}
 	var order []int
-	textHitIDs := make(map[int]bool)
 	for _, h := range textHits {
 		order = append(order, h.RowID)
-		textHitIDs[h.RowID] = true
 	}
 	order = prioritizeNumericIDResultFirst(order, numericID, hasNumericID)
 	textRows, textCols, err := fetchRowsInOrder(readQuerier, tableName, order, authorization)
@@ -206,13 +204,20 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 			if sErr != nil {
 				fmt.Printf("\033[31membedding search error: %s\033[0m\n", sErr.Error())
 			} else {
-				// Filter out rows already found by text search
 				const semanticThreshold = 0.70
-				var aiOrder []int
+				var nearOrder []int
 				for _, hit := range semanticHits {
-					if !textHitIDs[hit.RowID] && hit.DistanceScore <= semanticThreshold {
-						aiOrder = append(aiOrder, hit.RowID)
+					if hit.DistanceScore <= semanticThreshold {
+						nearOrder = append(nearOrder, hit.RowID)
 					}
+				}
+				// The AI group holds only what the text search does not return:
+				// every row the dataset's own listing shows for this search is
+				// left out, not only the first text hits sent above.
+				aiOrder, oErr := rowsOutsideDatasetTextSearch(readQuerier, tableName, userQuery, nearOrder)
+				if oErr != nil {
+					fmt.Printf("\033[31mrowsOutsideDatasetTextSearch(ai): %s\033[0m\n", oErr.Error())
+					aiOrder = nil
 				}
 				if len(aiOrder) > 0 {
 					aiRows, aiCols, aErr := fetchRowsInOrder(readQuerier, tableName, aiOrder, authorization)

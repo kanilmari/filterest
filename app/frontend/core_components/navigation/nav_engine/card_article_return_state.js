@@ -163,6 +163,8 @@ export function restoreCardArticleReturn(datasetName) {
     document.getElementById(`${datasetName}_filterBar_panel`)?.__syncActiveView?.();
     record.adapter.syncResultsCount(record.query, record.searchCache, record.pagination.lastRowCount);
     restoreDatasetScrollState(record.root);
-    if (!record.query) record.adapter.resumePagination(record.pagination);
+    // A committed search is browsed like the rest of the dataset: its retained
+    // list keeps paging from the same offset, with the search on every page.
+    record.adapter.resumePagination(record.pagination);
     return true;
 }

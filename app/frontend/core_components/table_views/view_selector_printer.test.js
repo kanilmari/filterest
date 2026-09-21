@@ -16,7 +16,6 @@ const getSelectedDatasetMock = vi.fn(() => "demo_table");
 const getParamsMock = vi.fn(() => ({}));
 const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
-const getCachedSearchResultForRenderMock = vi.fn();
 const closeRowArticleMock = vi.fn();
 
 async function loadModule() {
@@ -46,9 +45,9 @@ async function loadModule() {
         setParams: setParamsMock,
         updateURL: updateURLMock,
     }));
-    vi.doMock("../filterbar/text_search/dataset_search_executor.js", () => ({
-        getCachedSearchResultForRender: getCachedSearchResultForRenderMock,
-    }));
+    vi.doMock("../filterbar/text_search/dataset_search_executor.js", () => {
+        throw new Error("the view selector must not read the search's rows");
+    });
     vi.doMock("./card_view/row_article_ui_handler.js", () => ({
         closeRowArticle: closeRowArticleMock,
     }));
@@ -71,7 +70,6 @@ describe("view_selector_printer", () => {
         getParamsMock.mockReturnValue({});
         setParamsMock.mockReset();
         updateURLMock.mockReset();
-        getCachedSearchResultForRenderMock.mockReturnValue(null);
         closeRowArticleMock.mockReset();
     });
 
@@ -262,15 +260,10 @@ describe("view_selector_printer", () => {
         expect(cardButton.classList.contains("active")).toBe(false);
     });
 
-    test("article button targets the first active search result instead of the stale expanded row", async () => {
+    test("article button during a search waits for the first searched row instead of the stale expanded row", async () => {
+        // The view selector never picks a row: whatever draws the searched
+        // listing opens its first row, so an AI suggestion is never chosen.
         getParamsMock.mockReturnValue({ search: "firefox" });
-        getCachedSearchResultForRenderMock.mockReturnValue({
-            complete: true,
-            data: [
-                { id: 7, title: "Firefox" },
-                { id: 9, title: "Fennec" },
-            ],
-        });
         localStorage.setItem(
             "demo_table_sorting_and_filtering_specs",
             JSON.stringify({
@@ -289,9 +282,8 @@ describe("view_selector_printer", () => {
 
         selector.querySelector('[data-testid="view-btn-article_view"]').click();
 
-        await vi.waitFor(() => {
-            expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
-        });
+        // The rebuild starts at once; there is nothing to wait for.
+        expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
         const storedState = JSON.parse(
             localStorage.getItem("demo_table_sorting_and_filtering_specs")
         );
@@ -306,8 +298,8 @@ describe("view_selector_printer", () => {
         expect(storedState.articleView).toEqual({
             returnView: "table",
             collapsed: true,
-            expandedId: 7,
-            pendingAutoOpenFirstSearchResult: false,
+            expandedId: null,
+            pendingAutoOpenFirstSearchResult: true,
             pendingAutoOpenFirstRenderedResult: false,
         });
     });
@@ -356,17 +348,6 @@ describe("view_selector_printer", () => {
             pendingAutoOpenFirstSearchResult: false,
             pendingAutoOpenFirstRenderedResult: true,
         });
-    });
-    test("waits for a complete search even when partial rows already exist", async () => {
-        getParamsMock.mockReturnValue({ search: "birds" });
-        getCachedSearchResultForRenderMock.mockReturnValue({ complete: false, data: [{ id: 7 }] });
-        const { createGenericViewSelector } = await loadModule();
-        const selector = createGenericViewSelector("demo_table", "table", [{ viewKey: "article_view" }]);
-        selector.querySelector("button").click();
-        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
-        const state = JSON.parse(localStorage.getItem("demo_table_sorting_and_filtering_specs"));
-        expect(state.articleView.expandedId).toBeNull();
-        expect(state.articleView.pendingAutoOpenFirstSearchResult).toBe(true);
     });
 
 });

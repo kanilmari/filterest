@@ -5,9 +5,10 @@
 // A committed text search travels with every page as an ordinary condition of
 // the listing, so searching a dataset stays a way of browsing it.
 
-import { appendLoadedDatasetRows, clearLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection } from "../table_views/dataset_loaded_rows.js";
+import { appendLoadedDatasetRows, clearLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection, rememberLoadedDatasetRows } from "../table_views/dataset_loaded_rows.js";
 import { getDatasetViewContainerId, getDatasetViewScrollDirection } from "../table_views/dataset_view_registry.js";
-import { getParams } from "../navigation/nav_engine/query_params.js";
+import { getDatasetListingFilters } from "./dataset_listing_filters.js";
+import { getArticleStateKey } from "../table_views/card_view/first_listed_row.js";
 
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
 import { appendDataToTable } from "../table_views/table_view/table_row_printer.js";
@@ -202,7 +203,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
         const cardContainer = container.querySelector(".card_container");
         if (cardContainer) {
             sentinelParent = cardContainer;
-            const collapsed = getUnifiedTableState(tableName)?.[currentView === "article_view" ? "articleView" : "cardView"]?.collapsed;
+            const collapsed = getUnifiedTableState(tableName)?.[getArticleStateKey(currentView)]?.collapsed;
             observerRoot = collapsed || cardContainer.closest(".big-card-open") ? cardContainer : container;
         }
     }
@@ -314,15 +315,10 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             && container?.isConnected
             && (!callerIsCurrent || callerIsCurrent());
         const offsetVal = replace ? 0 : tableState.offset || 0;
-        // The committed search is one more condition of this listing, next to
-        // the selected filters, so it is sent with every page.
-        const committedSearch = String(getParams(tableName)?.search || "").trim();
-        const filters = {
-            ...(tableState.filters || {}),
-            ...(committedSearch ? { search: committedSearch } : {}),
-        };
+        const filters = getDatasetListingFilters(tableName, tableState.filters);
         const sort_column = tableState.sort?.column || null;
         const sort_order = tableState.sort?.direction || null;
+        const viewKey = getLoadedDatasetProjection(container, tableName) || currentView;
 
         const result = await fetchDatasetData({
             dataset_name: tableName,
@@ -333,7 +329,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             callerName: `fetchMoreData (${replace ? "reload" : "infinite scroll"})`,
             row_count: replace ? null : scrollSt.lastRowCount,
             include_card_support: ["card", "article_view"].includes(currentView),
-            view_key: getLoadedDatasetProjection(container, tableName) || currentView,
+            view_key: viewKey,
         });
         if (!isCurrent()) return null;
         setResultsCount(tableName, result.row_count);
@@ -342,7 +338,10 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
         if (!result.data || result.data.length === 0) {
             // A reload still has to empty the view: an answer with no rows is
             // the result, not a reason to leave the previous rows on screen.
-            if (replace) await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types });
+            if (replace) {
+                await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types });
+                if (isCurrent()) clearLoadedDatasetRows(container);
+            }
             // Kaikki rivit ladattu — pysäytetään infinite scroll kokonaan.
             // disconnect() + null estää myös fillScreenInterval-silmukan jatkumisen.
             if (!replace && scrollSt.observer) {
@@ -359,11 +358,15 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             : filterLoadedDatasetDuplicates(container, tableName, result.data);
         await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types });
         if (!isCurrent()) return result;
-        // A replaced list no longer continues the remembered row prefix, so the
-        // article navigation must not inherit rows that are no longer on screen.
-        if (replace) clearLoadedDatasetRows(container);
         updateOffset(tableName, result.data.length);
-        appendLoadedDatasetRows(container, tableName, rows, getUnifiedTableState(tableName).offset);
+        if (replace) {
+            // A replaced list starts a new remembered prefix: exactly the rows
+            // now on screen, so an article opened from them carries them over
+            // and the article navigation never inherits rows that are gone.
+            rememberLoadedDatasetRows(container, tableName, result, viewKey);
+        } else {
+            appendLoadedDatasetRows(container, tableName, rows, getUnifiedTableState(tableName).offset);
+        }
         if (!replace && Number.isFinite(result.row_count)
             && getUnifiedTableState(tableName).offset >= result.row_count) {
             disconnectInfiniteScroll(tableName);

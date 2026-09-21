@@ -3,7 +3,7 @@
 // Bridges a visible paginated result list and the article navigation list.
 // Exists to transfer already loaded rows without replaying their page requests.
 import { getUnifiedTableState } from "../state_stores/table_state_store.js";
-import { getParams } from "../navigation/nav_engine/query_params.js";
+import { getDatasetListingFilters } from "../infinite_scroll/dataset_listing_filters.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "../navigation/nav_engine/dataset_access_registry.js";
 import { getDatasetViewContainerId } from "./dataset_view_registry.js";
 
@@ -20,12 +20,14 @@ subscribeDatasetAccessRegistry(() => {
     if (hasDatasetAccessSnapshot()) awaitingInitialAccess = false;
 });
 
+// A remembered list belongs to the exact listing it came from: the same
+// conditions (the committed search among them), order and language.
 function signature(tableName) {
     const state = getUnifiedTableState(tableName);
     return JSON.stringify([
-        Object.entries(state.filters || {}).sort(([a], [b]) => a.localeCompare(b)),
+        Object.entries(getDatasetListingFilters(tableName, state.filters))
+            .sort(([a], [b]) => a.localeCompare(b)),
         state.sort || {},
-        String(getParams(tableName)?.search || "").trim(),
         document.documentElement.lang,
     ]);
 }
@@ -45,8 +47,14 @@ export function clearLoadedDatasetRows(container) {
     lists.delete(container);
 }
 
+/**
+ * Remember the rows a view has just put on screen as the start of its list.
+ * A committed search is one more condition of that list and part of its
+ * signature, so a searched list is remembered like any other and never
+ * crosses to a different search.
+ */
 export function rememberLoadedDatasetRows(container, tableName, result, projectionView) {
-    if (!container || String(getParams(tableName)?.search || "").trim()) return;
+    if (!container) return;
     const data = uniqueRows(result.data || []);
     lists.set(container, {
         tableName, signature: signature(tableName), projectionView,
@@ -74,7 +82,7 @@ export function appendLoadedDatasetRows(container, tableName, rows, nextOffset) 
     entry.offset = nextOffset;
 }
 
-/** Only the currently visible, committed, non-search prefix may cross views. */
+/** Only the currently visible, committed prefix may cross views. */
 export function captureLoadedDatasetRows(tableName, { retainedCardReturn = false } = {}) {
     const activeView = localStorage.getItem(tableName + "_view");
     if (retainedCardReturn && activeView !== "article_view") return null;
@@ -85,7 +93,6 @@ export function captureLoadedDatasetRows(tableName, { retainedCardReturn = false
         || !entry || !container?.isConnected || container.hidden
         || getComputedStyle(container).display === "none"
         || !entry.result.data.length
-        || String(getParams(tableName)?.search || "").trim()
         || (!retainedCardReturn && Number(getUnifiedTableState(tableName).offset) !== entry.offset)) return null;
     const token = Object.freeze({});
     transfers.set(token, { ...entry, result: { ...entry.result, data: [...entry.result.data] } });

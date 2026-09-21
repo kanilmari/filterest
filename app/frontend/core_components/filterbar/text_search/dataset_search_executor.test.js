@@ -1,148 +1,26 @@
 // dataset_search_executor.test.js
 // Verifies that a dataset search browses the dataset: its own matches come from
-// the ordinary listing with endless scrolling connected, the streamed answer
-// contributes only its AI group, and the counter reports the true match count.
-// Operates with mocked listing/stream/render dependencies so the executor can be
-// verified in isolation under jsdom.
+// the ordinary listing with endless scrolling connected, the counter reports the
+// true match count, and a changed filter, sort or newer search asks again.
+// Operates with the shared mocked listing/stream/render setup under jsdom.
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
-
-const {
-    appendDataToCardViewMock,
-    appendDataToTableMock,
+import {
     appendDataToViewMock,
     clearRowGroupFacetsMock,
     disconnectInfiniteScrollMock,
     endpointRouterMock,
     getActiveFiltersSnapshotMock,
-    getUnifiedTableStateMock,
-    openRowArticleViewMock,
+    listingAnswer,
     reloadDatasetRowsFromListingMock,
     setResultsCountMock,
-    setSearchAiResultsCountMock,
-    setUnifiedTableStateMock,
-} = vi.hoisted(() => ({
-    appendDataToCardViewMock: vi.fn(),
-    appendDataToTableMock: vi.fn(),
-    appendDataToViewMock: vi.fn(),
-    clearRowGroupFacetsMock: vi.fn(),
-    disconnectInfiniteScrollMock: vi.fn(),
-    endpointRouterMock: vi.fn(),
-    getActiveFiltersSnapshotMock: vi.fn(() => ({})),
-    getUnifiedTableStateMock: vi.fn(() => ({
-        cardView: { collapsed: false, expandedId: null },
-    })),
-    openRowArticleViewMock: vi.fn(),
-    reloadDatasetRowsFromListingMock: vi.fn(),
-    setResultsCountMock: vi.fn(),
-    setSearchAiResultsCountMock: vi.fn(),
-    setUnifiedTableStateMock: vi.fn(),
-}));
+    resetDatasetSearchTest,
+} from "./dataset_search_executor_test_setup.js";
 
-vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: vi.fn((_key, { fallback }) => fallback) }));
-
-vi.mock("../../infinite_scroll/infinite_scroll_handler.js", () => ({
-    appendDataToView: appendDataToViewMock,
-    disconnectInfiniteScroll: disconnectInfiniteScrollMock,
-    reloadDatasetRowsFromListing: reloadDatasetRowsFromListingMock,
-}));
-
-vi.mock("../../table_views/table_view/table_row_printer.js", () => ({
-    appendDataToTable: appendDataToTableMock,
-}));
-
-vi.mock("../../table_views/card_view/card_view_printer.js", () => ({
-    appendDataToCardView: appendDataToCardViewMock,
-}));
-
-vi.mock("../../endpoints/endpoint_router.js", () => ({
-    endpoint_router: endpointRouterMock,
-}));
-
-vi.mock("../../../reusable_components/results_count/results_count_printer.js", () => ({
-    setResultsCount: setResultsCountMock,
-    setSearchAiResultsCount: setSearchAiResultsCountMock,
-}));
-
-vi.mock("./dataset_search_state_reader.js", () => ({
-    getActiveFiltersSnapshot: getActiveFiltersSnapshotMock,
-    RESERVED_PARAM_KEYS: new Set(["search", "view", "sort_column", "sort_order", "offset", "lang"]),
-}));
-
-vi.mock("../filter_list/row_group_facet_printer.js", () => ({
-    clearRowGroupFacets: clearRowGroupFacetsMock,
-    ROW_GROUP_FILTER_KEY: "row_group",
-}));
-
-vi.mock("../../state_stores/table_state_store.js", () => ({
-    getUnifiedTableState: getUnifiedTableStateMock,
-    setUnifiedTableState: setUnifiedTableStateMock,
-}));
-
-vi.mock("../../table_views/card_view/row_article_opener.js", () => ({
-    openRowArticleView: openRowArticleViewMock,
-}));
-
-function createNdjsonStreamResponse(rows) {
-    const encoder = new TextEncoder();
-
-    return {
-        body: new ReadableStream({
-            start(controller) {
-                rows.forEach((row) => {
-                    controller.enqueue(encoder.encode(`${JSON.stringify(row)}\n`));
-                });
-                controller.close();
-            },
-        }),
-    };
-}
-
-/** One answer of the dataset's ordinary listing, as the search now reads it. */
-function listingAnswer({ data = [], row_count = data.length, columns = [], types = {} } = {}) {
-    return { data, row_count, columns, types };
-}
-
-function createTableViewDom(tableName) {
-    document.body.innerHTML = `
-        <div id="${tableName}_results_count"></div>
-        <div id="${tableName}_table_view_container">
-            <table data-columns='["header","id"]' data-data-types="{}">
-                <tbody></tbody>
-            </table>
-        </div>
-    `;
-    localStorage.setItem(`${tableName}_view`, "table");
-}
-
-function createCardViewDom(tableName, viewKey = "card") {
-    const containerView = viewKey === "article_view" ? "article" : "card";
-    document.body.innerHTML = `
-        <div id="${tableName}_results_count"></div>
-        <div id="${tableName}_${containerView}_view_container">
-            <div class="card_sidebar_panel">
-                <div class="card_container"></div>
-            </div>
-        </div>
-    `;
-    localStorage.setItem(`${tableName}_view`, viewKey);
-}
-
-describe("do_intelligent_search", () => {
+describe("do_intelligent_search browses the dataset", () => {
     beforeEach(() => {
-        vi.resetModules();
-        vi.clearAllMocks();
-        localStorage.clear();
-        document.body.innerHTML = "";
-        document.documentElement.lang = "fi";
-        getActiveFiltersSnapshotMock.mockReturnValue({});
-        getUnifiedTableStateMock.mockReturnValue({
-            cardView: { collapsed: false, expandedId: null },
-        });
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer());
-        endpointRouterMock.mockResolvedValue(createNdjsonStreamResponse([]));
-        createTableViewDom("dev_agent_tasks");
+        resetDatasetSearchTest();
     });
 
     test("routes an explicitly registered surface without listing, stream or cache side effects", async () => {
@@ -249,105 +127,6 @@ describe("do_intelligent_search", () => {
         expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
     });
 
-    test("keeps an article-view dataset match before other datasets in the same scroll flow", async () => {
-        const tableName = "subscriptions";
-        createCardViewDom(tableName, "article_view");
-        getUnifiedTableStateMock.mockReturnValue({
-            articleView: { collapsed: false, expandedId: 1 },
-        });
-        reloadDatasetRowsFromListingMock.mockImplementation(async () => {
-            const card = document.createElement("article");
-            card.className = "card small-card";
-            card.dataset.id = "1";
-            card.textContent = "Claude.ai Max 5x monthly";
-            document.querySelector(`#${tableName}_article_view_container .card_container`)
-                .replaceChildren(card);
-            return listingAnswer({ data: [{ id: 1 }], row_count: 1, columns: ["id"] });
-        });
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search(tableName, "claude");
-
-        const resultsFlow = document.querySelector(
-            `#${tableName}_article_view_container .card_container`
-        );
-        const match = resultsFlow.querySelector('.card[data-id="1"]');
-        const supplemental = resultsFlow.querySelector('.supplemental-dataset-results');
-        expect(match?.textContent).toContain("Claude.ai Max 5x monthly");
-        expect(supplemental?.parentElement).toBe(resultsFlow);
-        expect(match.compareDocumentPosition(supplemental) & Node.DOCUMENT_POSITION_FOLLOWING)
-            .toBeTruthy();
-    });
-
-    test("keeps only the AI stage of the streamed answer, and shows it after the dataset's rows", async () => {
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ header: "Direct cloud match", id: 14 }],
-            row_count: 251,
-            columns: ["header", "id"],
-        }));
-        endpointRouterMock.mockResolvedValue(createNdjsonStreamResponse([
-            {
-                stage: "text",
-                columns: ["header", "id"],
-                data: [{ header: "Streamed top-ten repeat", id: 77 }],
-                types: {},
-            },
-            {
-                stage: "ai",
-                columns: ["header", "id"],
-                data: [{ header: "AI-related cloud row", id: 99 }],
-                types: {},
-            },
-        ]));
-
-        const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("dev_agent_tasks", "cloud");
-
-        const cache = ongoingSearchResults.dev_agent_tasks;
-        expect(cache.data).toEqual([{ header: "Direct cloud match", id: 14 }]);
-        expect(cache.aiData).toEqual([{ header: "AI-related cloud row", id: 99 }]);
-        const aiTable = document.getElementById("dev_agent_tasks_search_ai_table");
-        expect(aiTable).not.toBeNull();
-        expect(appendDataToTableMock).toHaveBeenCalledWith(
-            aiTable,
-            [{ header: "AI-related cloud row", id: 99 }],
-            ["header", "id"],
-            {},
-            "dev_agent_tasks"
-        );
-        const seeAlso = document.querySelector('.search-stage-notice[data-lang-key="see_also"]');
-        expect(seeAlso).not.toBeNull();
-        expect(seeAlso.nextElementSibling).toBe(aiTable);
-        expect(document.querySelector('[data-lang-key="text_search_no_results"]')).toBeNull();
-    });
-
-    test("counts the AI group beside the dataset's matches instead of replacing them", async () => {
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ id: 14 }], row_count: 251, columns: ["id"],
-        }));
-        endpointRouterMock.mockResolvedValue(createNdjsonStreamResponse([
-            { stage: "ai", columns: ["id"], data: [{ id: 99 }, { id: 100 }], types: {} },
-        ]));
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("dev_agent_tasks", "cloud");
-
-        expect(setSearchAiResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 2);
-        expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 251);
-    });
-
-    test("says so in the reader's language when the dataset has no matching rows", async () => {
-        localStorage.setItem("chosen_language", "fi");
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({ row_count: 0 }));
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("dev_agent_tasks", "nonsense");
-
-        const notice = document.querySelector('[data-lang-key="text_search_no_results"]');
-        expect(notice?.textContent).toBe("Tekstihaku ei löytänyt tuloksia");
-        expect(setResultsCountMock).toHaveBeenCalledWith("dev_agent_tasks", 0);
-    });
-
     test("a search with selected filters answers only about rows that match both", async () => {
         getActiveFiltersSnapshotMock.mockReturnValue({ status: "closed" });
         reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({ row_count: 0 }));
@@ -362,23 +141,6 @@ describe("do_intelligent_search", () => {
         expect(new URLSearchParams(endpointRouterMock.mock.calls[0][1].url_params).get("filters"))
             .toBe('{"status":"closed"}');
         expect(document.querySelector('[data-lang-key="text_search_no_results"]')).not.toBeNull();
-    });
-
-    test("requests card support fields for the AI group in card view", async () => {
-        createCardViewDom("app_service_catalog");
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ header: "Wikipedia", id: 394 }], row_count: 1, columns: ["header", "id"],
-        }));
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("app_service_catalog", "wikipedia");
-
-        expect(endpointRouterMock).toHaveBeenCalledWith(
-            "getIntelligentResultsStream",
-            expect.objectContaining({
-                url_params: expect.stringContaining("include_card_support=1"),
-            })
-        );
     });
 
     test("sends row-group metadata to the backend without filtering streamed row objects", async () => {
@@ -451,95 +213,6 @@ describe("do_intelligent_search", () => {
         expect(setResultsCountMock).not.toHaveBeenCalledWith("dev_agent_tasks", 999);
     });
 
-    test('preserves the renderer and stream metadata for the AI group in article and card view', async () => {
-        const tableName = 'app_service_catalog';
-        const types = { type_of_operation: { data_type: 'text', is_multilingual: true, card_element: 'description' } };
-        const showView = (viewKey) => {
-            createCardViewDom(tableName);
-            if (viewKey === 'article_view') {
-                document.getElementById(tableName + '_card_view_container').id = tableName + '_article_view_container';
-            }
-            localStorage.setItem(tableName + '_view', viewKey);
-        };
-        getUnifiedTableStateMock.mockReturnValue({
-            cardView: { collapsed: false }, articleView: { collapsed: false },
-        });
-        appendDataToCardViewMock.mockResolvedValue(undefined);
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ id: 1, type_of_operation: '{"fi":"Ohjelmisto","en":"Software"}' }],
-            row_count: 1, columns: ['id', 'type_of_operation'], types,
-        }));
-        // Each search reads its own stream, so a fresh one is produced per call.
-        endpointRouterMock.mockImplementation(() => Promise.resolve(createNdjsonStreamResponse([
-            { stage: 'ai', columns: ['id', 'type_of_operation'], types, data: [{ id: 2, type_of_operation: '{"fi":"Peli","en":"Game"}' }] },
-        ])));
-        const { do_intelligent_search } = await import('./dataset_search_executor.js');
-
-        for (const viewKey of ['article_view', 'card']) {
-            appendDataToCardViewMock.mockClear();
-            showView(viewKey);
-            await do_intelligent_search(tableName, 'kanto');
-            expect(appendDataToCardViewMock).toHaveBeenCalled();
-            for (const call of appendDataToCardViewMock.mock.calls) {
-                expect(call[4]).toEqual({ viewKey, dataTypes: types });
-            }
-        }
-    });
-
-    test("does not commit AI cards built by a search replaced during asynchronous rendering", async () => {
-        createCardViewDom("app_service_catalog");
-        let releaseOldCardRender;
-        appendDataToCardViewMock.mockImplementationOnce(async (host) => {
-            await new Promise((resolve) => { releaseOldCardRender = resolve; });
-            const staleCard = document.createElement("article");
-            staleCard.className = "card";
-            staleCard.dataset.id = "7";
-            host.appendChild(staleCard);
-        });
-        endpointRouterMock
-            .mockResolvedValueOnce(
-                createNdjsonStreamResponse([
-                    { stage: "ai", columns: ["id", "title"], data: [{ id: 7, title: "Old result" }], types: {} },
-                ])
-            )
-            .mockResolvedValueOnce(createNdjsonStreamResponse([]));
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        const oldSearch = do_intelligent_search("app_service_catalog", "old");
-        await vi.waitFor(() => expect(releaseOldCardRender).toBeTypeOf("function"));
-        await do_intelligent_search("app_service_catalog", "new");
-        releaseOldCardRender();
-        await oldSearch;
-
-        expect(
-            document.querySelector("#app_service_catalog_card_view_container .card")
-        ).toBeNull();
-    });
-
-    test("exposes the search's rows and its true match count as one renderable dataset result", async () => {
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ id: 7, title: "Firefox" }], row_count: 251, columns: ["id", "title"],
-            types: { id: "integer", title: "text" },
-        }));
-        endpointRouterMock.mockResolvedValue(createNdjsonStreamResponse([
-            { stage: "ai", columns: ["id", "title"], data: [{ id: 9, title: "Fennec" }], types: {} },
-        ]));
-
-        const { do_intelligent_search, getCachedSearchResultForRender } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("app_service_catalog", "browser");
-
-        expect(getCachedSearchResultForRender("app_service_catalog")).toMatchObject({
-            columns: ["id", "title"],
-            data: [
-                { id: 7, title: "Firefox" },
-                { id: 9, title: "Fennec" },
-            ],
-            types: { id: "integer", title: "text" },
-            row_count: 251,
-            complete: true,
-        });
-    });
-
     test("asks the listing again when the selected filters change during a search", async () => {
         reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
             data: [{ id: 1, status: "open" }], row_count: 1, columns: ["id", "status"],
@@ -575,76 +248,6 @@ describe("do_intelligent_search", () => {
         expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(2);
         const { ongoingSearchResults } = await import("./dataset_search_executor.js");
         expect(ongoingSearchResults.dev_agent_tasks.data.map((row) => row.id)).toEqual([2, 9]);
-    });
-
-    test("opens the dataset's first matching row when the article view is waiting for it", async () => {
-        createCardViewDom("app_service_catalog");
-        getUnifiedTableStateMock.mockReturnValue({
-            cardView: {
-                collapsed: true,
-                expandedId: null,
-                pendingAutoOpenFirstSearchResult: true,
-            },
-        });
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ id: 7, title: "Firefox" }], row_count: 3, columns: ["id", "title"],
-        }));
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("app_service_catalog", "firefox");
-
-        expect(setUnifiedTableStateMock).toHaveBeenCalledWith("app_service_catalog", {
-            cardView: {
-                collapsed: true,
-                expandedId: 7,
-                pendingAutoOpenFirstSearchResult: false,
-            },
-        });
-        expect(openRowArticleViewMock).toHaveBeenCalledWith(
-            { id: 7, title: "Firefox" },
-            "app_service_catalog",
-            null,
-            expect.objectContaining({ isCurrent: expect.any(Function) }),
-        );
-    });
-
-    test("asking the same question again leaves an open article where the reader left it", async () => {
-        createCardViewDom("app_service_catalog");
-        getUnifiedTableStateMock.mockReturnValue({
-            cardView: { collapsed: true, expandedId: 12 },
-        });
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ id: 7 }], row_count: 5, columns: ["id"],
-        }));
-
-        const { do_intelligent_search, rerenderCachedSearchResults } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("app_service_catalog", "firefox");
-        setUnifiedTableStateMock.mockClear();
-
-        // A changed filter or sort asks the same question again; only a new
-        // question sends the reader back to the first result.
-        await rerenderCachedSearchResults("app_service_catalog");
-
-        expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(2);
-        expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
-        expect(openRowArticleViewMock).not.toHaveBeenCalled();
-    });
-
-    test("does not open an article when the dataset itself has no matching row", async () => {
-        createCardViewDom("app_service_catalog");
-        getUnifiedTableStateMock.mockReturnValue({
-            cardView: { collapsed: true, expandedId: null, pendingAutoOpenFirstSearchResult: true },
-        });
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({ row_count: 0 }));
-        endpointRouterMock.mockResolvedValue(createNdjsonStreamResponse([
-            { stage: "ai", columns: ["id"], data: [{ id: 77 }], types: {} },
-        ]));
-
-        const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("app_service_catalog", "absent");
-
-        expect(openRowArticleViewMock).not.toHaveBeenCalled();
-        expect(document.querySelector('[data-lang-key="text_search_no_results"]')).not.toBeNull();
     });
 
     test("a failing AI stream leaves the dataset's own matches on screen", async () => {

@@ -164,6 +164,24 @@ test("only the completed original search can return; a replaced stream cache can
     expect(retained.restoreCardArticleReturn("catalog")).toBe(false);
 });
 
+test("a completed search returns to its retained cards and keeps paging them", () => {
+    // Searching is browsing: a reader who scrolled a searched card list, opened
+    // an article and came back must be able to keep scrolling the matches.
+    const host = fixture("&search=harbour"), card = host.querySelector(".card");
+    const cache = { query: "harbour", complete: true };
+    mocks.cache.catalog = cache;
+    expect(retained.captureCardArticleReturn("catalog", adapter)).not.toBeNull();
+    const origin = openArticle(host);
+    history.replaceState(origin, "", "/catalog?view=card&search=harbour");
+
+    expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
+    expect(host.querySelector(".card")).toBe(card);
+    expect(getUnifiedTableState("catalog").offset).toBe(80);
+    expect(mocks.resume).toHaveBeenCalledWith("catalog", {
+        lastRowCount: 100, orientation: "vertical", isLoading: false,
+    });
+});
+
 test("pending ordinary pagination retains committed cards and resumes at their offset on the no-view URL", () => {
     const host = fixture(), card = host.querySelector(".card");
     const returnURL = "/catalog?sort_column=__newest&sort_order=DESC";

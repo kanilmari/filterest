@@ -67,7 +67,7 @@ describe("clearCommittedDatasetSearch", () => {
         ongoingSearchResultsMock.tasks = { data: [{ id: 473 }] };
         document.body.innerHTML = `
             <div id="tasks_table_view_container">
-                <div id="tasks_search_ai_host"></div>
+                <div id="tasks_search_ai_table"></div>
                 <div class="search-stage-notice"></div>
             </div>
             <div id="tasks_card_view_container">
@@ -103,7 +103,7 @@ describe("clearCommittedDatasetSearch", () => {
         );
         expect(localStorage.getItem("int_search_draft_tasks")).toBe("");
         expect(ongoingSearchResultsMock.tasks).toBeNull();
-        expect(document.querySelector("#tasks_search_ai_host")).toBeNull();
+        expect(document.querySelector("#tasks_search_ai_table")).toBeNull();
         expect(document.querySelector("#tasks_search_ai_cards")).toBeNull();
         expect(document.querySelector(".search-stage-notice")).toBeNull();
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith("tasks", {
