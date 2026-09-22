@@ -157,6 +157,12 @@ type geminiErrorDetail struct {
 	Message string `json:"message"`
 }
 
+// googleEmbeddingEndpoint is the embedContent address for one model. The API
+// key travels in the x-goog-api-key header, never in the address: a failed
+// request's error repeats its address, and that error reaches the server log
+// and the administrator's browser. Tests point this at a local server.
+var googleEmbeddingEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent"
+
 func generateGoogleEmbedding(ctx context.Context, text string) ([]float32, error) {
 	apiKey := os.Getenv("GOOGLE_API_KEY")
 	if apiKey == "" {
@@ -177,12 +183,13 @@ func generateGoogleEmbedding(ctx context.Context, text string) ([]float32, error
 		return nil, fmt.Errorf("google embedding: marshal error: %w", err)
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s", model, apiKey)
+	url := fmt.Sprintf(googleEmbeddingEndpoint, model)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("google embedding: request error: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-goog-api-key", apiKey)
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	httpResp, err := httpClient.Do(httpReq)
