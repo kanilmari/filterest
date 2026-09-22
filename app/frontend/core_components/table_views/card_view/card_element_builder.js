@@ -21,6 +21,7 @@ import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 import { appendTextWithHttpLinks } from "../../../reusable_components/http_text_linkifier.js";
+import { removeBlankLinesFromCardDescription } from "./card_description_blank_line_remover.js";
 
 /* ----------------------------------------------------------- */
 /** Palauttaa Google Maps -Embed-iframe-src-osoitteen. */
@@ -249,6 +250,16 @@ function addDescriptionSection(
         outerDiv.classList.add("single_description_item", descObj.columnClass); // ★
         setFieldHideAttribute(outerDiv);
 
+        // A card shows only the first couple of lines of this text, so a blank
+        // line would spend one of them on nothing. It is left out of the card's
+        // own short view only: the stored value below still travels with the
+        // element, and the article view and the edit form show the text whole.
+        // A language key names a translation rather than carrying the text, so
+        // it is passed through untouched.
+        const shortDescriptionText = descObj.hasLangKey
+            ? descObj.rawValue
+            : removeBlankLinesFromCardDescription(descObj.rawValue);
+
         // Itse key/value-elementti
         const wrapper = createKeyValueElement(
             descObj.label,
@@ -256,7 +267,7 @@ function addDescriptionSection(
             descObj.column,
             descObj.hasLangKey,
             "description_value",
-            descObj.rawValue,
+            shortDescriptionText,
             descObj.columnMeta || {}
         );
         wrapper.classList.add(descObj.columnClass); // ★

@@ -135,6 +135,78 @@ describe("createVanillaDropdown", () => {
         expect(list.style.width).toBe("224px");
         expect(list.style.left).toBe("8px");
     });
+
+    // A picture before an option's name belongs to the option, unlike a
+    // trailing action, which is a control of its own.
+    test("shows an opt-in picture before each option's name, and a click on it still chooses the option", async () => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const onChange = vi.fn();
+
+        const dropdown = createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "star", label: "star" }, { value: "", label: "No symbol" }],
+            useSearch: false,
+            showClearButton: false,
+            onChange,
+            renderOptionLeadingIcon: (option) => {
+                const icon = document.createElement("span");
+                if (option.value) icon.dataset.pictureOf = option.value;
+                return icon;
+            },
+        });
+        dropdown.open();
+
+        const rows = document.querySelectorAll(".vdw-option");
+        expect(rows[0].classList.contains("vdw-option--with-leading-icon")).toBe(true);
+        expect(rows[0].firstElementChild.dataset.pictureOf).toBe("star");
+        expect(rows[0].firstElementChild.classList.contains("vdw-option-icon")).toBe(true);
+        expect(rows[0].querySelector(".vdw-option-label").textContent).toBe("star");
+
+        rows[0].querySelector(".vdw-option-icon").click();
+        expect(onChange).toHaveBeenCalledWith("star");
+    });
+
+    test("options without an opt-in picture are drawn exactly as before", async () => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+
+        createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "asc", label: "Ascending" }],
+            useSearch: false,
+            showClearButton: false,
+        });
+
+        const option = document.querySelector(".vdw-option");
+        expect(option.classList.contains("vdw-option--with-leading-icon")).toBe(false);
+        expect(option.querySelector(".vdw-option-label")).toBeNull();
+        expect(option.textContent).toBe("Ascending");
+    });
+
+    test("a dropdown that must not be used yet refuses a choice and closes", async () => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+
+        const dropdown = createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "asc", label: "Ascending" }],
+            useSearch: false,
+            showClearButton: false,
+        });
+        dropdown.open();
+        dropdown.setDisabled(true);
+
+        const trigger = container.querySelector(".vdw-dropdown-input");
+        expect(trigger.disabled).toBe(true);
+        expect(document.querySelector(".vdw-dropdown-list").style.display).toBe("none");
+
+        dropdown.setDisabled(false);
+        expect(trigger.disabled).toBe(false);
+    });
 });
 
 describe("createVanillaDropdown list layer", () => {

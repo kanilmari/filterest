@@ -241,6 +241,9 @@ export function buildDatasetForm({ mode, source, host = {} }) {
         form.reset();
         fillColumns();
         controls.links.accept();
+        // The symbol control is not a native form control, so the form's own
+        // reset does not reach it; the next dataset starts without a symbol.
+        controls.symbol.reset();
         await controls.folder.reset(source.readFolderChoices());
     }
 
@@ -316,6 +319,9 @@ export function buildDatasetForm({ mode, source, host = {} }) {
         dispose: () => {
             disposed = true;
             disposeLanguage();
+            // The symbol dropdown keeps its open list and its outside-click
+            // listener on the page, not inside the form, so it is taken off here.
+            controls.symbol.dispose();
         },
     };
 }

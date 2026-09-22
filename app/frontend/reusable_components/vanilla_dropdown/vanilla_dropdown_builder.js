@@ -88,6 +88,10 @@ function resolveDropdownOptionLabel(option, translate) {
  * @param {function} [config.onChange] - Kutsutaan, kun valinta muuttuu (parametrina valittu arvo)
  * @param {function} [config.translate] - Optional translation function (key) => string
  * @param {function} [config.renderOptionTrailingAction] - Optional opt-in action renderer for each option
+ * @param {function} [config.renderOptionLeadingIcon] - Optional opt-in picture renderer
+ *   shown before each option's name. It returns one element per option, or
+ *   nothing. The element is part of the option, not a control of its own: a
+ *   click on it chooses the option like a click on the name does.
  * @param {number|null} [config.menuMaxWidth=null] - Optional viewport-bounded menu width in pixels
  */
 export function createVanillaDropdown({
@@ -100,6 +104,7 @@ export function createVanillaDropdown({
 	onChange,
 	translate = () => undefined,
 	renderOptionTrailingAction = null,
+	renderOptionLeadingIcon = null,
     menuMaxWidth = null,
   }) {
 	if (!containerElement) {
@@ -114,6 +119,7 @@ export function createVanillaDropdown({
 	  getValue,
 	  setValue,
 	  setOptions,
+	  setDisabled,
 	  open,
 	  close,
 	  destroy
@@ -315,21 +321,37 @@ export function createVanillaDropdown({
 		const trailingAction = typeof renderOptionTrailingAction === 'function'
 		  ? renderOptionTrailingAction(opt, { close })
 		  : null;
-		if (trailingAction instanceof HTMLElement) {
+		const leadingIcon = typeof renderOptionLeadingIcon === 'function'
+		  ? renderOptionLeadingIcon(opt)
+		  : null;
+		const hasTrailingAction = trailingAction instanceof HTMLElement;
+		const hasLeadingIcon = leadingIcon instanceof HTMLElement;
+		const optionText = resolveDropdownOptionLabel(opt, translate);
+		if (hasTrailingAction || hasLeadingIcon) {
 		  const optionLabel = document.createElement('span');
 		  optionLabel.classList.add('vdw-option-label');
-		  optionLabel.textContent = opt.label;
+		  optionLabel.textContent = optionText;
 		  if (opt.langKey) optionLabel.dataset.langKey = opt.langKey;
-		  item.classList.add('vdw-option--with-trailing-action');
-		  trailingAction.addEventListener('click', (event) => {
-			event.stopPropagation();
-		  });
-		  item.append(optionLabel, trailingAction);
+		  if (hasLeadingIcon) {
+			leadingIcon.classList.add('vdw-option-icon');
+			item.classList.add('vdw-option--with-leading-icon');
+			// No click handler of its own: the picture belongs to the option,
+			// so clicking it must choose the option like the name does.
+			item.appendChild(leadingIcon);
+		  }
+		  item.appendChild(optionLabel);
+		  if (hasTrailingAction) {
+			item.classList.add('vdw-option--with-trailing-action');
+			trailingAction.addEventListener('click', (event) => {
+			  event.stopPropagation();
+			});
+			item.appendChild(trailingAction);
+		  }
 		} else {
-		  item.textContent = opt.label;
+		  item.textContent = optionText;
 		  if (opt.langKey) item.dataset.langKey = opt.langKey;
 		}
-  
+
 		if (opt.value === selectedValue) {
 		  item.classList.add('vdw-selected');
 		}
@@ -381,7 +403,17 @@ export function createVanillaDropdown({
 	  setValue(null, false);
 	  renderList("");
 	}
-  
+
+	// A dropdown that must not be used yet, because what it would offer or what
+	// a choice would be compared against is not known. It stops accepting a
+	// choice, closes if it was open, and says so to assistive technology.
+	function setDisabled(shouldDisable) {
+	  const isDisabled = Boolean(shouldDisable);
+	  inputEl.disabled = isDisabled;
+	  if (clearBtn) clearBtn.disabled = isDisabled;
+	  if (isDisabled) close();
+	}
+
 	function open() {
 	  // Checked on every open: a dialog's form is usually built before it is
 	  // placed in the dialog.

@@ -106,6 +106,12 @@
   box-sizing: border-box;
 }
 
+/* Dropdown, jota ei voi vielä käyttää */
+.vdw-dropdown-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* Perusoption tyyli */
 .vdw-option {
   cursor: pointer;
@@ -117,6 +123,26 @@
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto);
+}
+
+/* Vaihtoehdon oma kuva nimen edessä. */
+.vdw-option--with-leading-icon {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.vdw-option--with-leading-icon.vdw-option--with-trailing-action {
+  grid-template-columns: auto minmax(0, 1fr) minmax(5.5rem, auto);
+}
+
+/* Only the room the picture takes; how it is drawn belongs to the caller's own
+ * icon rule, so an option without a picture keeps its place without showing a
+ * filled box. */
+.vdw-option-icon {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .vdw-option-label {
@@ -162,6 +188,10 @@
 @media (width <= 360px) {
   .vdw-option--with-trailing-action {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vdw-option--with-leading-icon.vdw-option--with-trailing-action {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 }
 

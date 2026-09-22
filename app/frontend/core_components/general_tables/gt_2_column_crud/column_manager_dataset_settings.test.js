@@ -108,16 +108,16 @@ describe('open_column_management_modal: dataset settings', () => {
         });
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        const select = document.querySelector('[data-testid="dataset-symbol-select"]');
-        await vi.waitFor(() => expect(select.disabled).toBe(false));
-        expect(select.value).toBe('payments');
-        return select;
+        const container = document.querySelector('[data-testid="dataset-symbol-select"]');
+        const symbolPicker = container.__dropdown;
+        await vi.waitFor(() => expect(container.querySelector('.vdw-dropdown-input').disabled).toBe(false));
+        expect(symbolPicker.getValue()).toBe('payments');
+        return symbolPicker;
     }
 
     test('choosing No symbol removes the symbol the dataset had', async () => {
-        const select = await openWithStoredSymbol();
-        select.value = '';
-        select.dispatchEvent(new Event('change'));
+        const symbolPicker = await openWithStoredSymbol();
+        symbolPicker.setValue('', true);
 
         document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
@@ -136,9 +136,8 @@ describe('open_column_management_modal: dataset settings', () => {
     });
 
     test('a refused symbol keeps the dialog open and says so, instead of closing as saved', async () => {
-        const select = await openWithStoredSymbol(() => { throw new Error('refused'); });
-        select.value = 'calendar';
-        select.dispatchEvent(new Event('change'));
+        const symbolPicker = await openWithStoredSymbol(() => { throw new Error('refused'); });
+        symbolPicker.setValue('calendar', true);
 
         document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());

@@ -229,9 +229,26 @@ form.dataset-form .dataset-symbol-picker {
     align-items: center;
     gap: 8px;
 }
+/* The chosen symbol is a mask drawn in the current text colour, so it stays
+ * readable in both themes; the asset files themselves are black drawings. */
 form.dataset-form .dataset-symbol-preview {
     width: 24px;
     height: 24px;
+    color: var(--text_color);
+}
+/* The mask rule gives the preview a display of its own, which would otherwise
+ * outrank the browser's own rule for a hidden element. */
+form.dataset-form .dataset-symbol-preview[hidden] {
+    display: none;
+}
+/* The dropdown's own box fills the control column like the form's own inputs. */
+form.dataset-form .dataset-symbol-dropdown {
+    min-width: 0;
+}
+/* The form's padding replaces the dropdown's, so the room for its arrow is
+ * asked for again here. */
+form.dataset-form .dataset-symbol-dropdown .vdw-dropdown-input {
+    padding-right: 2rem;
 }
 form.dataset-form .dataset-new-folder-toggle,
 form.dataset-form .dataset-folder-confirm {

@@ -73,6 +73,8 @@ const COPY = {
     // --- Symbol ---
     dataset_symbol_label: { fi: "Symboli", en: "Symbol", ch: "图标", yue: "圖示" },
     dataset_symbol_none: { fi: "Ei symbolia", en: "No symbol", ch: "无图标", yue: "冇圖示" },
+    dataset_symbol_choose: { fi: "Valitse symboli", en: "Choose a symbol", ch: "选择图标", yue: "揀一個圖示" },
+    dataset_symbol_search: { fi: "Hae symbolia…", en: "Search symbols…", ch: "搜索图标…", yue: "搵圖示…" },
     dataset_symbol_loading: { fi: "Luetaan symboleja…", en: "Reading the symbols…", ch: "正在读取图标…", yue: "正在讀取圖示…" },
     dataset_symbol_unavailable: {
         fi: "Symboleja ei voitu lukea.",

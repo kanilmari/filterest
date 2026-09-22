@@ -53,16 +53,20 @@ const symbolWrites = () => endpointRouterMock.mock.calls
     .filter(([route, options]) => route === 'adminSymbols' && options?.method === 'POST')
     .map(([, options]) => options);
 
+/** The symbols the open picture list offers, "No symbol" included. */
+const offeredSymbols = () => document
+    .querySelectorAll('[data-testid="dataset-symbol-select-list"] .vdw-option');
+
 async function openFilledForm(symbol) {
     const host = document.createElement('div');
     document.body.appendChild(host);
     await generate_table_creation_view(host);
     const form = host.querySelector('form');
-    const select = form.querySelector('[data-testid="dataset-symbol-select"]');
-    await vi.waitFor(() => expect(select.options.length).toBe(3));
+    const symbolPicker = form.querySelector('[data-testid="dataset-symbol-select"]').__dropdown;
+    await vi.waitFor(() => expect(offeredSymbols().length).toBe(3));
     form.querySelector('[name="dataset_name"]').value = 'new_dataset';
-    select.value = symbol;
-    return { form, select };
+    symbolPicker.setValue(symbol, true);
+    return { form, symbolPicker };
 }
 
 /** Send the form and wait until it has started over for the next dataset. */
@@ -130,13 +134,13 @@ describe('dataset creation saves the symbol through the shared step', () => {
 
     test('the next dataset starts without a symbol, so choosing the same one again still saves it', async () => {
         answer();
-        const { form, select } = await openFilledForm('payments');
+        const { form, symbolPicker } = await openFilledForm('payments');
         await submit(form);
-        expect(select.value).toBe('');
+        expect(symbolPicker.getValue()).toBe('');
 
         showSuccessToastMock.mockReset();
         form.querySelector('[name="dataset_name"]').value = 'new_dataset';
-        select.value = 'payments';
+        symbolPicker.setValue('payments', true);
         await submit(form);
 
         expect(symbolWrites().map(({ body_data }) => body_data.icon_key)).toEqual(['payments', 'payments']);

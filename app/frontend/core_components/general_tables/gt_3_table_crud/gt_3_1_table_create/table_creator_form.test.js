@@ -65,8 +65,12 @@ describe('dataset creation card roles', () => {
         await generate_table_creation_view(host);
         const form = host.querySelector('form');
         expect(form.classList.contains('dataset-form')).toBe(true);
+        // The form sets no colour, size or spacing of its own; dataset_form.css
+        // draws all of it. A shared component's icon primitive carries only the
+        // picture it draws, which is that component's business, not the form's.
         expect([form, ...form.querySelectorAll('*')].filter((element) => element.getAttribute('style'))
-            .filter((element) => element.style.display !== 'none')).toEqual([]);
+            .filter((element) => element.style.display !== 'none')
+            .filter((element) => !element.style.maskImage)).toEqual([]);
     });
 
     test('keeps column, length and role FormData aligned through type changes and removal', async () => {

@@ -187,9 +187,11 @@ describe('creating a dataset: sending once', () => {
             return [];
         });
         const { form, find } = await openForm();
-        await vi.waitFor(() => expect(find('dataset-symbol-select').options).toHaveLength(2));
+        await vi.waitFor(() => expect(
+            document.querySelectorAll('[data-testid="dataset-symbol-select-list"] .vdw-option')
+        ).toHaveLength(2));
         find('dataset-name-input').value = 'blogs';
-        find('dataset-symbol-select').value = 'article';
+        find('dataset-symbol-select').__dropdown.setValue('article', true);
         send(form);
         await vi.waitFor(() => expect(find('dataset-name-input').value).toBe(''));
         expect(showWarningToastMock).toHaveBeenCalledWith(
