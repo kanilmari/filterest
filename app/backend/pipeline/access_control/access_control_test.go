@@ -300,69 +300,40 @@ func setupMockDB(t *testing.T, cfg acMockConfig) {
 
 // ── WithAccessControl tests ────────────────────────────────────────────────
 
-// TestWithAccessControl_DevBypass verifies that in dev mode, schema-modification
-// endpoints skip all access control and call the handler directly.
-// The isDev flag is captured at WithAccessControl creation time, so ENVIRONMENT_TYPE
-// must be set before the middleware is created.
-func TestWithAccessControl_DevBypass(t *testing.T) {
+// devSchemaRoutes were once let through without any check in development mode.
+var devSchemaRoutes = []string{"/api/modify-columns", "/api/create_dataset", "/api/set-comments", "/api/create-indexes"}
+
+// TestWithAccessControl_DevModeRefusesAnonymousSchemaRequests proves development
+// mode no longer lets an anonymous request through to a schema-changing route.
+func TestWithAccessControl_DevModeRefusesAnonymousSchemaRequests(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
-
 	store := setupTestStore(t)
-	// No user_id in session — the bypass must fire before any session/DB checks.
-	req := buildReq(t, store, http.MethodPost, "/api/modify-columns", nil, nil, "")
-	rr := httptest.NewRecorder()
-	called := false
-
-	WithAccessControl("/api/modify-columns", "test", noopHandler(&called))(rr, req)
-
-	if !called {
-		t.Error("handler must be called for dev-bypass route (no auth check)")
+	setupMockDB(t, acMockConfig{loginToBrowse: true})
+	for _, route := range devSchemaRoutes {
+		req := buildReq(t, store, http.MethodPost, route, nil, nil, "")
+		rr := httptest.NewRecorder()
+		called := false
+		WithAccessControl(route, "test", noopHandler(&called))(rr, req)
+		if called || rr.Code == http.StatusOK {
+			t.Errorf("%s: anonymous dev request reached the handler (status %d)", route, rr.Code)
+		}
 	}
 }
 
-// TestWithAccessControl_DevBypassRequiresExplicitDev verifies that an unset
-// environment no longer activates the schema-modification bypass.
-func TestWithAccessControl_DevBypassRequiresExplicitDev(t *testing.T) {
-	t.Setenv("ENVIRONMENT_TYPE", "")
-
-	store := setupTestStore(t)
-	setupMockDB(t, acMockConfig{
-		loginToBrowse: true,
-	})
-	req := buildReq(t, store, http.MethodPost, "/api/modify-columns", nil, nil, "")
-	rr := httptest.NewRecorder()
-	called := false
-
-	WithAccessControl("/api/modify-columns", "test", noopHandler(&called))(rr, req)
-
-	if called {
-		t.Error("handler must not be called when dev bypass is not explicitly enabled")
-	}
-	if rr.Code != http.StatusSeeOther {
-		t.Errorf("expected redirect, got %d", rr.Code)
-	}
-}
-
-// TestWithAccessControl_DevBypass_NonBypassRoute verifies that in dev mode,
-// routes not in the bypass list still go through normal access control.
-func TestWithAccessControl_DevBypass_NonBypassRoute(t *testing.T) {
+// TestWithAccessControl_DevModeAllowsPermittedAdminSchemaRequests proves a
+// logged-in administrator with the function permission still reaches them.
+func TestWithAccessControl_DevModeAllowsPermittedAdminSchemaRequests(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
-
 	store := setupTestStore(t)
-	setupMockDB(t, acMockConfig{
-		loginToBrowse: true, // force redirect for anonymous user
-	})
-	req := buildReq(t, store, http.MethodGet, "/api/get-results", nil, nil, "")
-	rr := httptest.NewRecorder()
-	called := false
-
-	WithAccessControl("/api/get-results", "test", noopHandler(&called))(rr, req)
-
-	if called {
-		t.Error("handler must not be called: non-bypass route still requires auth")
-	}
-	if rr.Code != http.StatusSeeOther {
-		t.Errorf("expected redirect, got %d", rr.Code)
+	setupMockDB(t, acMockConfig{isAdmin: true, permissionGranted: true})
+	for _, route := range devSchemaRoutes {
+		req := buildReq(t, store, http.MethodPost, route, int(42), nil, "")
+		rr := httptest.NewRecorder()
+		called := false
+		WithAccessControl(route, "test", noopHandler(&called))(rr, req)
+		if !called || rr.Code != http.StatusOK {
+			t.Errorf("%s: permitted admin was refused in dev (status %d)", route, rr.Code)
+		}
 	}
 }
 

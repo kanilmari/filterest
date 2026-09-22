@@ -249,8 +249,9 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	if mustFindScenarioProfile(t, createDataset, "production").ProfileName != "admin" {
 		t.Fatalf("expected CreateTableHandler production profile to be admin")
 	}
-	if mustFindScenarioProfile(t, createDataset, "development").ProfileName != "public" {
-		t.Fatalf("expected CreateTableHandler development profile to be public")
+	// Development keeps the administrator profile: the route was once public there.
+	if mustFindScenarioProfile(t, createDataset, "development").ProfileName != "admin" {
+		t.Fatalf("expected CreateTableHandler development profile to be admin")
 	}
 
 	simpleCreateTable := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.SimpleCreateTableHandler")

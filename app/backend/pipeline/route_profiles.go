@@ -361,8 +361,10 @@ type RouteProfileDescriptor struct {
 }
 
 // ApplyDevOverrides modifies RouteProfiles for explicit development mode only.
-// In dev mode, dev-only endpoints get their profiles registered and selected
-// schema modification endpoints bypass access control for local iteration.
+// In dev mode, the dev-only tool endpoints get their profiles registered. It
+// never weakens an existing route: schema changes and translation generation
+// keep their normal login, CSRF and administrator checks in development too,
+// because the development server is reachable from other machines and pages.
 // Call this once at startup when ENVIRONMENT_TYPE=dev.
 func ApplyDevOverrides() {
 	envType := os.Getenv("ENVIRONMENT_TYPE")
@@ -383,17 +385,6 @@ func ApplyDevOverrides() {
 	}
 	for name, profile := range devToolProfiles {
 		RouteProfiles[name] = profile
-	}
-
-	// Schema modification shortcuts for explicit local development convenience.
-	devPublicHandlers := []string{
-		"dtt_crud_workflows.CreateTableHandler",
-		"dtt_crud_workflows.SetCommentsHandler",
-		"dtt_crud_workflows.CreateIndexesHandler",
-		"lang.GenerateTranslationsHandler",
-	}
-	for _, name := range devPublicHandlers {
-		RouteProfiles[name] = PublicProfile
 	}
 }
 

@@ -203,7 +203,8 @@ var explicitDevHandlers = []string{
 	"lang.AiTranslateSingleHandler",
 }
 
-// schemaShortcutHandlers get PublicProfile only when ENVIRONMENT_TYPE=dev.
+// schemaShortcutHandlers were once made public in dev mode; every environment
+// must now keep their normal profile.
 var schemaShortcutHandlers = []string{
 	"dtt_crud_workflows.CreateTableHandler",
 	"dtt_crud_workflows.SetCommentsHandler",
@@ -286,7 +287,8 @@ func TestApplyDevOverridesNoOpWhenEnvUnset(t *testing.T) {
 	}
 }
 
-// Test 11: When ENVIRONMENT_TYPE=dev, dev-only profiles are registered and schema shortcuts get PublicProfile.
+// Test 11: When ENVIRONMENT_TYPE=dev, dev-only profiles are registered and the
+// former schema shortcuts keep login, CSRF and (for schema changes) admin checks.
 func TestApplyDevOverridesInDev(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 
@@ -312,14 +314,14 @@ func TestApplyDevOverridesInDev(t *testing.T) {
 
 	pipeline.ApplyDevOverrides()
 
-	// Schema shortcut handlers should be PublicProfile.
+	// An anonymous request stops at auth and a cross-site one at csrf; schema
+	// changes also require an administrator, exactly as in production.
 	for _, name := range schemaShortcutHandlers {
 		profile := pipeline.GetProfile(name)
-		if !profile.Skips("auth") {
-			t.Errorf("%s: expected PublicProfile (skips auth) after ApplyDevOverrides in dev, got %+v", name, profile)
-		}
-		if !profile.Skips("access_control") {
-			t.Errorf("%s: expected PublicProfile (skips access_control) after ApplyDevOverrides in dev, got %+v", name, profile)
+		stages := pipeline.DescribePipeline(emptyCtx, profile)
+		containsAll(t, stages, []string{"auth", "csrf", "access_control"})
+		if name != "lang.GenerateTranslationsHandler" && !profile.AdminOnly {
+			t.Errorf("%s: expected AdminProfile in dev, got %+v", name, profile)
 		}
 	}
 

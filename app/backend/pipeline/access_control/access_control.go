@@ -315,17 +315,10 @@ func userHasFunctionPermissionOnTable(userID int, urlRoute, tableName, tableUID 
 	return false
 }
 
+// WithAccessControl applies the same session, guest and permission checks in
+// every environment; development mode no longer skips them for schema routes.
 func WithAccessControl(urlRoute, handlerName string, originalHandler http.HandlerFunc) http.HandlerFunc {
-	isDev := os.Getenv("ENVIRONMENT_TYPE") == "dev"
-
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		// DEV ONLY: Skip access control for schema modification endpoints
-		if isDev && (urlRoute == "/api/modify-columns" || urlRoute == "/api/create_dataset" || urlRoute == "/api/set-comments" || urlRoute == "/api/create-indexes") {
-			log.Printf("[WithAccessControl][%s] Skipping access control (dev mode)", handlerName)
-			originalHandler(w, r)
-			return
-		}
 
 		// --- Session ja käyttäjätarkistus ---
 		session, err := e_sessions.GetOrCreateSession(w, r)

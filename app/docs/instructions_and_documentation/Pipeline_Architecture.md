@@ -195,7 +195,7 @@ Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_ha
 
 ### Dev Overrides
 
-`ApplyDevOverrides()` is called at startup when `ENVIRONMENT_TYPE=dev`. It makes certain schema modification endpoints public for development convenience. These overrides only affect the running instance, not the source code.
+`ApplyDevOverrides()` is called at startup when `ENVIRONMENT_TYPE=dev`. It only registers the profiles of the development tool endpoints, which exist only in development. It never weakens an existing route: creating datasets, setting comments, creating indexes and generating translations keep their normal login, CSRF, access-control and administrator checks in development too, because a development server can be reached from other machines and from any page open in the developer's browser. (Until September 2026 development made these four routes public and skipped their access control; scripts now log in through the API client instead.)
 
 ---
 
