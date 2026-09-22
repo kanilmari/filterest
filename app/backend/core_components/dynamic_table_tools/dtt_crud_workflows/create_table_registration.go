@@ -1,7 +1,10 @@
 // create_table_registration.go
-// Registers a new dataset's folder, identity and requested read permissions.
-// Connects creation transactions with application rights and runtime SQL roles.
-// Keeps successful dataset creation usable through the selected reader pools.
+// Registers a new dataset's folder, identity and requested read permissions,
+// and reports where the new dataset went.
+// Connects creation transactions with the folder tree, application rights and
+// runtime SQL roles.
+// Keeps successful dataset creation visible in the site navigation by default
+// and usable through the selected reader pools.
 package dtt_crud_workflows
 
 import (
@@ -18,12 +21,28 @@ import (
 	"github.com/lib/pq"
 )
 
+// errNewFolderNameRequired refuses a new folder that has a parent but no name.
+// Such a request used to be read as "no new folder", and the dataset landed in
+// the default folder without anyone noticing.
+var errNewFolderNameRequired = errors.New("new folder name is required when a parent folder is chosen")
+
+// resolveCreateTableFolderID decides where a new dataset goes: a new folder
+// the request names, the folder it chose, or by default the current
+// project's folder. The site navigation lists only the datasets directly in
+// that folder, so a dataset created without a choice appears there at once.
+// Between: CreateTableHandler -> system_table_folders
+// Why: The dataset form defaults to the same folder (dataset_folder_options.js).
 func resolveCreateTableFolderID(q dbutils.Querier, req CreateTableRequest) (int, error) {
-	if req.CreateFolder != nil && strings.TrimSpace(req.CreateFolder.FolderName) != "" {
-		return dtt_system_table_folders.CreateFolderWithQuerier(q, dtt_system_table_folders.CreateFolderRequest{
-			FolderName: req.CreateFolder.FolderName,
-			ParentID:   req.CreateFolder.ParentID,
-		})
+	if req.CreateFolder != nil {
+		if strings.TrimSpace(req.CreateFolder.FolderName) != "" {
+			return dtt_system_table_folders.CreateFolderWithQuerier(q, dtt_system_table_folders.CreateFolderRequest{
+				FolderName: req.CreateFolder.FolderName,
+				ParentID:   req.CreateFolder.ParentID,
+			})
+		}
+		if req.CreateFolder.ParentID != nil && *req.CreateFolder.ParentID > 0 {
+			return 0, errNewFolderNameRequired
+		}
 	}
 
 	if req.FolderID != nil && *req.FolderID > 0 {
@@ -33,7 +52,100 @@ func resolveCreateTableFolderID(q dbutils.Querier, req CreateTableRequest) (int,
 		return *req.FolderID, nil
 	}
 
+	return defaultCreateTableFolderID(q)
+}
+
+// defaultCreateTableFolderID is the current project's folder, or
+// database / other_tables when no project is current.
+func defaultCreateTableFolderID(q dbutils.Querier) (int, error) {
+	var folderID int
+	err := q.QueryRow(`
+		SELECT id
+		FROM system_table_folders
+		WHERE is_current_project = true
+		ORDER BY id
+		LIMIT 1`).Scan(&folderID)
+	if err == nil {
+		return folderID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("failed to look up the current project folder: %w", err)
+	}
 	return dtt_system_table_folders.EnsureDatabaseOtherTablesFolder(q)
+}
+
+// createdDatasetResponse tells the creator where the new dataset went, so
+// the form can name the folder and warn when the site navigation will not
+// list it.
+type createdDatasetResponse struct {
+	Message          string `json:"message"`
+	DatasetName      string `json:"dataset_name"`
+	TableUID         int    `json:"table_uid"`
+	FolderID         int    `json:"folder_id"`
+	FolderPath       string `json:"folder_path"`
+	InSiteNavigation bool   `json:"in_site_navigation"`
+}
+
+// describeCreatedDataset reads the new dataset's identity and its folder's
+// whole path inside the creation transaction. A failed read is returned, not
+// hidden: it aborts the transaction, so the handler must not report success.
+// Between: CreateTableHandler -> system_db_tables, system_table_folders
+// Why: The navigation lists datasets directly in the current project folder
+// only (GetGroupedTables is_top_level_in_current_project).
+func describeCreatedDataset(q dbutils.Querier, tableName string, folderID int) (createdDatasetResponse, error) {
+	response := createdDatasetResponse{
+		Message:     "Dataset created.",
+		DatasetName: tableName,
+		FolderID:    folderID,
+	}
+	if err := q.QueryRow(
+		"SELECT table_uid FROM system_db_tables WHERE table_name = $1 AND schema_name = 'public'", tableName,
+	).Scan(&response.TableUID); err != nil {
+		return response, fmt.Errorf("failed to read the new dataset's identity: %w", err)
+	}
+
+	type folderRow struct {
+		parentID         sql.NullInt64
+		name             string
+		isCurrentProject bool
+	}
+	rows, err := q.Query(`
+		SELECT id, parent_id, folder_name, COALESCE(is_current_project, false)
+		FROM system_table_folders`)
+	if err != nil {
+		return response, fmt.Errorf("failed to read the folders: %w", err)
+	}
+	defer rows.Close()
+	folders := map[int64]folderRow{}
+	for rows.Next() {
+		var id int64
+		var row folderRow
+		if err := rows.Scan(&id, &row.parentID, &row.name, &row.isCurrentProject); err != nil {
+			return response, fmt.Errorf("failed to read a folder: %w", err)
+		}
+		folders[id] = row
+	}
+	if err := rows.Err(); err != nil {
+		return response, fmt.Errorf("failed to read the folders: %w", err)
+	}
+
+	names := []string{}
+	seen := map[int64]bool{}
+	for id := int64(folderID); !seen[id]; {
+		folder, ok := folders[id]
+		if !ok {
+			break
+		}
+		seen[id] = true
+		names = append([]string{folder.name}, names...)
+		if !folder.parentID.Valid {
+			break
+		}
+		id = folder.parentID.Int64
+	}
+	response.FolderPath = strings.Join(names, " / ")
+	response.InSiteNavigation = folders[int64(folderID)].isCurrentProject
+	return response, nil
 }
 
 func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead, grantGuestsRead bool) error {

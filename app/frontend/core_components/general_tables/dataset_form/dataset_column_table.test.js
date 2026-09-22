@@ -161,7 +161,7 @@ describe('dataset column table', () => {
         const created = creating.addColumn();
         expect(control(created, 'is_multilingual')).toBeNull();
         creating.table.querySelectorAll('[role="columnheader"]').forEach((cell) => {
-            expect(cell.dataset.manageTableKey).not.toBe('manage_table_column_multilingual');
+            expect(cell.dataset.datasetFormKey).not.toBe('manage_table_column_multilingual');
         });
         const type = control(created, 'data_type');
         type.value = 'VARCHAR';

@@ -35,7 +35,7 @@ describe('open_column_management_modal: schema edits', () => {
         const removedRow = rows[1];
         removedRow.querySelector('button').click();
 
-        const form = document.querySelector('#column_management_form_demo_table');
+        const form = document.querySelector('form.dataset-form');
         form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
 
@@ -135,7 +135,7 @@ describe('open_column_management_modal: schema edits', () => {
         ]);
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        const defaultInput = document.querySelector('[data-testid="dataset-multilingual-default"]');
         expect(defaultInput.checked).toBe(expected);
         const existingRows = [...document.querySelectorAll('.dataset-column-table__row')].filter(row =>
             row.querySelector('[name="column_name"]').dataset.originalName);
@@ -151,7 +151,7 @@ describe('open_column_management_modal: schema edits', () => {
         fetchColumnsMock.mockResolvedValue([]);
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        expect(document.querySelector('[data-testid="manage-table-multilingual-default"]').checked).toBe(false);
+        expect(document.querySelector('[data-testid="dataset-multilingual-default"]').checked).toBe(false);
     });
 
     test('table default updates untouched new rows while preserving an explicit row override', async () => {
@@ -163,7 +163,7 @@ describe('open_column_management_modal: schema edits', () => {
         first.click(); // User chooses a per-column exception.
         document.querySelector('[data-testid="dataset-column-add"]').click();
         const second = [...document.querySelectorAll('[name="is_multilingual"]')].at(-1);
-        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        const defaultInput = document.querySelector('[data-testid="dataset-multilingual-default"]');
         defaultInput.click();
         expect([first.checked, second.checked]).toEqual([true, true]);
         defaultInput.click();
@@ -175,7 +175,7 @@ describe('open_column_management_modal: schema edits', () => {
     test('saves only the changed table default and newly added text-column choices', async () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        const defaultInput = document.querySelector('[data-testid="dataset-multilingual-default"]');
         defaultInput.click();
         const add = document.querySelector('[data-testid="dataset-column-add"]');
         const choices = [['title', 'TEXT', true], ['code', 'VARCHAR', false], ['when', 'DATE', true]];
@@ -227,7 +227,7 @@ describe('open_column_management_modal: schema edits', () => {
         ]);
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        document.querySelector('[data-testid="manage-table-multilingual-default"]').click();
+        document.querySelector('[data-testid="dataset-multilingual-default"]').click();
         document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
         expect(endpointRouterMock).toHaveBeenCalledWith('modifyColumns', expect.objectContaining({
@@ -239,7 +239,7 @@ describe('open_column_management_modal: schema edits', () => {
     test('language changes translate new multilingual controls without altering the draft choices', async () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
+        const defaultInput = document.querySelector('[data-testid="dataset-multilingual-default"]');
         const input = document.querySelector('[name="is_multilingual"]');
         const row = input.closest('.dataset-column-table__row');
         const type = row.querySelector('[name="data_type"]');
@@ -412,7 +412,7 @@ describe('open_column_management_modal: schema edits', () => {
     test('the dialog frames the shared dataset form and fits around it', async () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        const form = document.querySelector('#column_management_form_demo_table');
+        const form = document.querySelector('form.dataset-form');
         expect(form.classList.contains('dataset-form')).toBe(true);
         expect(form.getAttribute('style')).toBeNull();
         // The columns are the shared column table, as on the creation page.

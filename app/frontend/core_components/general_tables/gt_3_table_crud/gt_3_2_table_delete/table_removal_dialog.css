@@ -1,35 +1,31 @@
-/* column_manager.css
- * Keeps the Manage table dialog's own controls usable in either application
- * theme and in narrow dialogs: its actions, its visibility notice and the
- * dataset removal dialog. The dataset form inside the dialog is drawn by the
- * rules it shares with the creation form (create_table_admin.css).
+/* table_removal_dialog.css
+ * Keeps the dataset removal dialog usable in either application theme and in
+ * narrow dialogs: its deletion modes, the exact-name confirmation and its actions.
+ * The dialog's grid spaces its parts, so its labels add no margins of their own.
  */
-.dataset-removal-dialog button:focus-visible {
-    outline: 2px solid var(--primary_color);
-    outline-offset: 2px;
-}
-.column_management_forms .form-actions,
-.dataset-removal-dialog .form-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-.column_management_forms .form-actions .submit-button,
-.dataset-removal-dialog .form-actions .submit-button {
-    margin-inline-start: auto;
-}
-.manage-table-visibility,
 .dataset-removal-dialog {
     display: grid;
     gap: 12px;
     min-width: 0;
 }
-.manage-table-visibility[hidden],
-.manage-table-visibility [hidden],
 .dataset-removal-dialog [hidden] {
     display: none;
 }
-.manage-table-dataset-name,
+form.dataset-removal-dialog label {
+    margin: 0;
+}
+.dataset-removal-dialog button:focus-visible {
+    outline: 2px solid var(--primary_color);
+    outline-offset: 2px;
+}
+.dataset-removal-dialog .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.dataset-removal-dialog .form-actions .submit-button {
+    margin-inline-start: auto;
+}
 .dataset-removal-dialog code {
     display: block;
     overflow-wrap: anywhere;

@@ -48,7 +48,7 @@ describe('open_column_management_modal: retry after a partial save', () => {
         newType.value = 'VARCHAR';
         newType.dispatchEvent(new Event('change'));
         newRow.querySelector('[name="length"]').value = '40';
-        document.querySelector('[data-testid="manage-table-multilingual-default"]').click();
+        document.querySelector('[data-testid="dataset-multilingual-default"]').click();
 
         const form = document.querySelector('form');
         const schemaRequests = () => endpointRouterMock.mock.calls

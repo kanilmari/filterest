@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // dataset_group_read_access.test.js
-// Verifies the reading-rights control the dataset forms share.
+// Verifies the dataset form's reading rights in both modes, and their routes.
 // Bridges the permission catalogue, one dataset's current rights and the change request.
 // Exists so a right is granted or withdrawn whole, and never left half-applied.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -24,8 +24,9 @@ const {
     DATASET_READ_FUNCTION_NAMES,
     buildGroupReadPermissionChanges,
     createDatasetGroupReadControl,
-    datasetGroupReadCopy,
+    readGroupReadState,
     resolveGroupReadState,
+    saveGroupReadPermissionChanges,
 } = await import('./dataset_group_read_access.js');
 
 const functions = DATASET_READ_FUNCTION_NAMES.map((name, index) => ({ id: index + 1, name }))
@@ -38,8 +39,16 @@ function rightsFor(groupId, functionIds, tableUID = 3470) {
     }));
 }
 
+function mount(settings) {
+    const control = createDatasetGroupReadControl(settings);
+    document.body.appendChild(control.element);
+    return control;
+}
+const status = (control) => control.element.querySelector('.dataset-group-read-status');
+
 beforeEach(() => {
     document.body.innerHTML = '';
+    document.documentElement.lang = 'en';
     endpointRouterMock.mockReset();
     fetchAllFunctionsMock.mockReset().mockResolvedValue(functions);
     fetchUserGroupsMock.mockReset().mockResolvedValue(groups);
@@ -93,59 +102,59 @@ describe('dataset reading rights', () => {
         expect(withdrawal.remove.every((row) => row.user_group_id === 3)).toBe(true);
     });
 
-    test('the control shows the dataset’s current rights and saves only the change', async () => {
-        const control = createDatasetGroupReadControl({ datasetName: 'subscriptions', tableUID: Promise.resolve(3470) });
-        document.body.appendChild(control.element);
+    test('a new dataset is read by nobody but administrators unless chosen', async () => {
+        const control = mount();
         await control.ready;
+        expect(control.checkboxes.users.disabled).toBe(false);
+        expect(control.value()).toEqual({ users: false, guests: false });
+        control.checkboxes.guests.checked = true;
+        expect(control.value()).toEqual({ users: false, guests: true });
+        expect(status(control).hidden).toBe(true);
+    });
 
+    test('an existing dataset shows its current rights and reports only a change', async () => {
+        const control = mount({ stored: readGroupReadState(Promise.resolve(3470)) });
+        expect(status(control).textContent).toBe('Reading the rights…');
+        await control.ready;
         expect(control.checkboxes.users.checked).toBe(true);
         expect(control.checkboxes.guests.checked).toBe(false);
         expect(control.changed()).toBe(false);
-        expect(await control.save()).toBe('unchanged');
-
         control.checkboxes.guests.checked = true;
         expect(control.changed()).toBe(true);
-        expect(await control.save()).toBe('saved');
-        const [route, options] = endpointRouterMock.mock.calls.at(-1);
-        expect(route).toBe('datasetPermissions');
-        expect(options.method).toBe('PATCH');
-        expect(options.body_data.add).toHaveLength(DATASET_READ_FUNCTION_NAMES.length);
-        expect(options.body_data.remove).toEqual([]);
-        // A second save repeats nothing.
-        expect(await control.save()).toBe('unchanged');
+        control.accept();
+        expect(control.changed()).toBe(false);
     });
 
     test('a dataset without a known identity offers no right to change', async () => {
-        const control = createDatasetGroupReadControl({ datasetName: 'subscriptions', tableUID: Promise.resolve(0) });
-        document.body.appendChild(control.element);
+        const control = mount({ stored: readGroupReadState(Promise.resolve(0)) });
         await control.ready;
-
         expect(control.checkboxes.users.disabled).toBe(true);
-        expect(control.element.querySelector('.dataset-group-read-status').textContent)
-            .toBe(datasetGroupReadCopy().unavailable);
+        expect(control.value()).toEqual({});
+        expect(status(control).textContent).toBe('The rights could not be read.');
     });
 
     test('an unreadable permission catalogue says so instead of showing a wrong right', async () => {
         fetchAllFunctionsMock.mockRejectedValue(new Error('network'));
-        const control = createDatasetGroupReadControl({ datasetName: 'subscriptions', tableUID: 3470 });
-        document.body.appendChild(control.element);
+        const control = mount({ stored: readGroupReadState(3470) });
         await control.ready;
-
-        expect(control.element.querySelector('.dataset-group-read-status').textContent)
-            .toBe(datasetGroupReadCopy().unavailable);
+        expect(status(control).textContent).toBe('The rights could not be read.');
         expect(control.checkboxes.guests.disabled).toBe(true);
     });
 
-    test('a refused save reports beside the control and keeps the earlier state', async () => {
-        const control = createDatasetGroupReadControl({ datasetName: 'subscriptions', tableUID: 3470 });
-        document.body.appendChild(control.element);
+    test('a refused save reports beside the control and keeps the change', async () => {
+        const control = mount({ stored: readGroupReadState(3470) });
         await control.ready;
-
         control.checkboxes.guests.checked = true;
-        endpointRouterMock.mockRejectedValueOnce(new Error('denied'));
-        expect(await control.save()).toBe('failed');
-        expect(control.element.querySelector('.dataset-group-read-status').textContent)
-            .toBe(datasetGroupReadCopy().saveFailed);
+        control.reportFailure();
+        expect(status(control).textContent).toBe('The rights could not be saved.');
         expect(control.changed()).toBe(true);
+    });
+
+    test('changed rights travel through the permission editor’s own route', async () => {
+        await saveGroupReadPermissionChanges({ add: [{ user_group_id: 4 }], remove: [] });
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('datasetPermissions', {
+            method: 'PATCH', body_data: { add: [{ user_group_id: 4 }], remove: [] }, suppressErrorToast: true,
+        });
+        expect((await readGroupReadState(3470)).tableUID).toBe(3470);
     });
 });

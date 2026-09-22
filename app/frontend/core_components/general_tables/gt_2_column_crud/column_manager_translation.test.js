@@ -75,7 +75,7 @@ test('FI→EN→Chinese→Cantonese→FI keeps editor and permanent-confirmation
     ]) {
         await translatePage(lang);
         expect(draft.parentElement.querySelector('span').textContent).toBe(name);
-        expect(document.querySelector('[data-testid="manage-table-save"]').textContent).toBe(save);
+        expect(document.querySelector('[data-testid="dataset-form-submit"]').textContent).toBe(save);
         expect(document.querySelector('[data-testid="dataset-removal-confirm"]').textContent).toBe(removal);
         expect(type.selectedOptions[0].textContent).toBe(typeText);
         expect(type.value).toBe('VARCHAR');

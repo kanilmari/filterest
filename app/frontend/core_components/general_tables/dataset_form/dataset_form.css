@@ -1,10 +1,10 @@
 /*
- * create_table_admin.css
- * Draws the dataset form: the one form that creates a dataset on its own page
- * and edits one in the dataset's Manage table dialog.
- * Both forms carry the dataset-form class and the shared classes below, and no
- * other rule draws them; only what surrounds a form (the page or the dialog)
- * differs. Every colour comes from the theme variables, so both themes, and an
+ * dataset_form.css
+ * Draws the one dataset form (dataset_form.js) in both of its modes: creating a
+ * dataset on its own page, and editing one in the dataset's Manage table dialog.
+ * No other rule draws the form; only what surrounds it (the page or the
+ * dialog) differs, and inside a dialog the dialog's own sheet is the frame.
+ * Every colour comes from the theme variables, so both themes, and an
  * operating-system theme opposite to the application's own, stay correct.
  */
 :root {
@@ -233,13 +233,8 @@ form.dataset-form .dataset-symbol-preview {
     width: 24px;
     height: 24px;
 }
-form.dataset-form .dataset-folder-picker {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 8px;
-}
+form.dataset-form .dataset-new-folder-toggle,
 form.dataset-form .dataset-folder-confirm {
-    grid-column: 1 / -1;
     justify-self: start;
 }
 form.dataset-form .dataset-foreign-keys-list {
@@ -251,4 +246,63 @@ form.dataset-form .dataset-foreign-keys-empty {
     list-style: none;
     margin-inline-start: -20px;
     color: var(--empty_field_text_color, var(--text_color));
+}
+form.dataset-form .dataset-foreign-key-remove {
+    align-self: end;
+}
+
+/* --- The dataset's name, a hidden dataset's notice, a new dataset's result --- */
+form.dataset-form .dataset-form-name-value {
+    display: block;
+    overflow-wrap: anywhere;
+}
+form.dataset-form .dataset-form-visibility,
+form.dataset-form .dataset-form-result {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+}
+form.dataset-form .dataset-form-visibility p,
+form.dataset-form .dataset-form-result p {
+    margin: 0;
+}
+form.dataset-form .dataset-form-result {
+    justify-items: start;
+    padding: 10px;
+    border: 1px solid var(--table_border_color);
+    border-radius: var(--border_radius_small);
+    overflow-wrap: anywhere;
+}
+/* A new dataset the site navigation will not list is the one thing to notice. */
+form.dataset-form .dataset-form-result-warning {
+    padding-inline-start: 8px;
+    border-inline-start: 3px solid var(--primary_color);
+    font-weight: 600;
+}
+
+/* --- Actions: Save last and aligned to the right, in both modes --- */
+form.dataset-form .dataset-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 0;
+}
+form.dataset-form .dataset-form-actions button {
+    margin: 0;
+}
+form.dataset-form .dataset-form-actions .submit-button {
+    margin-inline-start: auto;
+}
+
+/* --- Inside a dialog the dialog's sheet is the frame, so the form draws none --- */
+.modal form.dataset-form {
+    padding: 0;
+    border: 0;
+    background-color: transparent;
+}
+
+/* Hidden parts stay hidden even where a rule above gives them a display. */
+form.dataset-form [hidden] {
+    display: none;
 }

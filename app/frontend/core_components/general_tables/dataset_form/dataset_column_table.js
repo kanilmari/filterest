@@ -5,7 +5,7 @@
 // catalogue, the card roles and one set of language keys.
 // Exists so a column is drawn by one renderer, and its state — new or existing,
 // untouched or changed — is held by the row rather than by two row builders.
-import { setManagementText } from "../gt_2_column_crud/manage_table_i18n.js";
+import { setDatasetFormText } from "./dataset_form_text.js";
 import { getCardRoleOptions, isValidCardRole } from "../../table_views/card_view/card_role_catalog.js";
 import {
     COLUMN_TYPE_PARAMETER,
@@ -17,8 +17,7 @@ import {
     getDatasetColumnTypeOptions,
 } from "./dataset_column_type_catalog.js";
 
-// One key per field; the older manage_table_* keys remain in the fallback copy
-// as aliases for anything that still names them.
+// One key per field, in both modes.
 const HEADER_KEYS = Object.freeze({
     name: "column_name",
     type: "data_type",
@@ -67,7 +66,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
     header.className = "dataset-column-table__header";
     header.setAttribute("role", "row");
     for (const field of fields) {
-        const cell = setManagementText(document.createElement("div"), HEADER_KEYS[field]);
+        const cell = setDatasetFormText(document.createElement("div"), HEADER_KEYS[field]);
         cell.id = headerId(field);
         cell.setAttribute("role", "columnheader");
         cell.className = `dataset-column-table__heading dataset-column-table__cell--${field}`;
@@ -75,7 +74,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
     }
     table.appendChild(header);
 
-    const addButton = setManagementText(document.createElement("button"), "add_column");
+    const addButton = setDatasetFormText(document.createElement("button"), "add_column");
     addButton.type = "button";
     addButton.dataset.testid = "dataset-column-add";
     addButton.classList.add("modal-button", "secondary", "saturate_on_hover");
@@ -96,7 +95,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
         if (!control) return { cell, wrapper: cell };
         const wrapper = document.createElement("label");
         wrapper.className = "dataset-column-table__field";
-        const stackedLabel = setManagementText(document.createElement("span"), HEADER_KEYS[field]);
+        const stackedLabel = setDatasetFormText(document.createElement("span"), HEADER_KEYS[field]);
         stackedLabel.className = "dataset-column-table__cell-label";
         stackedLabel.setAttribute("aria-hidden", "true");
         control.setAttribute("aria-labelledby", headerId(field));
@@ -109,7 +108,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
         const label = document.createElement("label");
         label.className = `dataset-column-table__parameter dataset-column-table__parameter--${name}`;
         const input = Object.assign(document.createElement("input"), { type: "number", name, ...attributes });
-        label.append(setManagementText(document.createElement("span"), key), input);
+        label.append(setDatasetFormText(document.createElement("span"), key), input);
         return { label, input };
     }
 
@@ -134,10 +133,10 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
 
         const typeSelect = document.createElement("select");
         typeSelect.name = "data_type";
-        typeSelect.appendChild(setManagementText(Object.assign(document.createElement("option"), { value: "" }), "select_data_type"));
+        typeSelect.appendChild(setDatasetFormText(Object.assign(document.createElement("option"), { value: "" }), "select_data_type"));
         const knownType = findDatasetColumnType(dataType)?.value || "";
         for (const entry of typeOptions) {
-            typeSelect.appendChild(setManagementText(Object.assign(document.createElement("option"), { value: entry.value }), entry.labelKey));
+            typeSelect.appendChild(setDatasetFormText(Object.assign(document.createElement("option"), { value: entry.value }), entry.labelKey));
         }
         // A stored type outside the catalogue stays selected, so an unrelated
         // Save cannot reinterpret the column's schema.
@@ -157,7 +156,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
         const roleSelect = document.createElement("select");
         roleSelect.name = "card_role";
         for (const { value, labelKey } of roleOptions) {
-            roleSelect.appendChild(setManagementText(Object.assign(document.createElement("option"), { value }), labelKey));
+            roleSelect.appendChild(setDatasetFormText(Object.assign(document.createElement("option"), { value }), labelKey));
         }
         const storedRole = String(role || "details");
         roleSelect.value = isValidCardRole(storedRole) ? storedRole : "details";
@@ -165,7 +164,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
         let savedRole = roleSelect.value;
 
         // Removal names the column it removes, as its value reads now.
-        const removeButton = setManagementText(document.createElement("button"), "delete");
+        const removeButton = setDatasetFormText(document.createElement("button"), "delete");
         removeButton.type = "button";
         removeButton.id = `${nameInput.id}-remove`;
         removeButton.className = "dataset-column-table__remove dataset-form-button";

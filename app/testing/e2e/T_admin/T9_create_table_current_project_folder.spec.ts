@@ -244,14 +244,17 @@ test.describe('T9 — Folder-Required Current Project Coverage', () => {
     try {
       await openAdminTreeButton(page, 'create_table');
 
-      const tableNameInput = page.locator('[data-testid="create-table-name-input"]');
-      const existingFolderSelect = page.locator('[data-testid="create-table-folder-select"]');
-      const newFolderNameInput = page.locator('[data-testid="create-table-new-folder-name"]');
-      const newFolderParentSelect = page.locator('[data-testid="create-table-new-folder-parent"]');
-      const submitButton = page.locator('[data-testid="create-table-submit"]');
+      const tableNameInput = page.locator('[data-testid="dataset-name-input"]');
+      const existingFolderSelect = page.locator('[data-testid="dataset-folder-select"]');
+      const newFolderNameInput = page.locator('[data-testid="dataset-new-folder-name"]');
+      const newFolderParentSelect = page.locator('[data-testid="dataset-new-folder-parent"]');
+      const submitButton = page.locator('[data-testid="dataset-form-submit"]');
 
       await expect(tableNameInput).toBeVisible({ timeout: 10000 });
       await expect(existingFolderSelect).toBeVisible({ timeout: 10000 });
+      // The new folder's name and parent appear only when a new folder is asked for.
+      await expect(newFolderParentSelect).toBeHidden();
+      await page.locator('[data-testid="dataset-new-folder-toggle"]').click();
       await expect(newFolderParentSelect).toBeVisible({ timeout: 10000 });
 
       const parentFolderDbId = await findCurrentProjectParentFolderId(page);

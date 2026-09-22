@@ -3,15 +3,15 @@
 // A stacked modal preserves the underlying management draft when cancelled.
 import { createStackedModal } from '../../../../reusable_components/modal/modal_builder.js';
 import {
-    managementText, managementLabel, setManagementText, observeManagementLanguage,
-} from '../../gt_2_column_crud/manage_table_i18n.js';
+    datasetFormText, datasetFormLabel, setDatasetFormText, observeDatasetFormLanguage,
+} from '../../dataset_form/dataset_form_text.js';
 
 export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }) {
     const form = document.createElement('form');
     form.className = 'dataset-removal-dialog';
     form.dataset.testid = 'dataset-removal-dialog';
 
-    const nameLabel = managementLabel('manage_table_name');
+    const nameLabel = datasetFormLabel('table_name');
     const name = document.createElement('code');
     name.textContent = datasetName;
     name.dataset.testid = 'dataset-removal-real-name';
@@ -19,7 +19,7 @@ export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }
     form.appendChild(nameLabel);
 
     const modes = document.createElement('fieldset');
-    modes.appendChild(setManagementText(document.createElement('legend'), 'manage_table_delete_mode'));
+    modes.appendChild(setDatasetFormText(document.createElement('legend'), 'manage_table_delete_mode'));
     const choices = {};
     for (const [mode, key] of [['hide', 'manage_table_hide'], ['permanent', 'manage_table_permanent']]) {
         const label = document.createElement('label');
@@ -30,17 +30,17 @@ export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }
         input.value = mode;
         input.checked = mode === 'hide';
         input.dataset.testid = 'dataset-removal-mode-' + mode;
-        label.append(input, setManagementText(document.createElement('span'), key));
+        label.append(input, setDatasetFormText(document.createElement('span'), key));
         choices[mode] = input;
         modes.appendChild(label);
     }
     form.appendChild(modes);
 
-    const hideHelp = setManagementText(document.createElement('p'), 'manage_table_hide_help');
-    const warning = setManagementText(document.createElement('p'), 'manage_table_permanent_help');
+    const hideHelp = setDatasetFormText(document.createElement('p'), 'manage_table_hide_help');
+    const warning = setDatasetFormText(document.createElement('p'), 'manage_table_permanent_help');
     warning.className = 'deletion-warning';
     warning.dataset.testid = 'dataset-removal-irreversible-warning';
-    const confirmation = managementLabel('manage_table_confirm_name');
+    const confirmation = datasetFormLabel('manage_table_confirm_name');
     confirmation.className = 'deletion-confirmation';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
@@ -56,7 +56,7 @@ export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }
     form.appendChild(error);
     const actions = document.createElement('div');
     actions.className = 'form-actions';
-    const cancel = setManagementText(document.createElement('button'), 'manage_table_cancel');
+    const cancel = setDatasetFormText(document.createElement('button'), 'manage_table_cancel');
     cancel.type = 'button';
     cancel.className = 'cancel-button';
     cancel.dataset.testid = 'dataset-removal-cancel';
@@ -75,7 +75,7 @@ export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }
         confirmation.hidden = !permanent;
         nameInput.disabled = busy || !permanent;
         confirm.classList.toggle('danger-button', permanent);
-        setManagementText(confirm, permanent ? 'manage_table_permanent' : 'manage_table_hide');
+        setDatasetFormText(confirm, permanent ? 'manage_table_permanent' : 'manage_table_hide');
         confirm.disabled = busy || (permanent && nameInput.value !== datasetName);
         choices.hide.disabled = busy;
         choices.permanent.disabled = busy;
@@ -86,13 +86,13 @@ export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }
 
     let disposeLanguage = () => {};
     const dialog = createStackedModal({
-        titlePlainText: managementText('manage_table_delete_title'),
+        titlePlainText: datasetFormText('manage_table_delete_title'),
         contentElements: [form],
         width: 'min(520px, 94vw)',
         cleanupCallback: () => disposeLanguage(),
     });
-    setManagementText(dialog.modal.querySelector('h2'), 'manage_table_delete_title');
-    disposeLanguage = observeManagementLanguage(dialog.modal);
+    setDatasetFormText(dialog.modal.querySelector('h2'), 'manage_table_delete_title');
+    disposeLanguage = observeDatasetFormLanguage(dialog.modal);
     cancel.addEventListener('click', dialog.hide);
     form.addEventListener('submit', async event => {
         event.preventDefault();
@@ -107,7 +107,7 @@ export function openDatasetRemovalDialog({ datasetName, onConfirm, onConfirmed }
         try {
             await onConfirm({ mode, confirmDatasetName: mode === 'permanent' ? exactName : null });
         } catch (failure) {
-            setManagementText(error, 'manage_table_delete_failed');
+            setDatasetFormText(error, 'manage_table_delete_failed');
             error.hidden = false;
             busy = false;
             updateChoice();

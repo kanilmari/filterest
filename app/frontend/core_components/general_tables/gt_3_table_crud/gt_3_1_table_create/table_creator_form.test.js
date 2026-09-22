@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // table_creator_form.test.js
-// Exercises the actual open creation form, its column table and the shared translator without data writes.
+// Exercises the dataset form in its creation mode, its column table and the page translator without data writes.
 import { beforeEach, afterEach, describe, expect, test, vi } from 'vitest';
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
 import { translatePage } from '../../../lang/translation_handler.js';
@@ -13,6 +13,7 @@ vi.mock('../../../table_views/card_view/card_view_printer.js', () => ({ refreshC
 vi.mock('../../../table_views/dataset_value_localizer.js', () => ({ refreshLocalizedDatasetValues: vi.fn().mockResolvedValue() }));
 vi.mock('../../../lang/dev_lang_key_editor.js', () => ({ initDevLangKeyEditor: vi.fn() }));
 vi.mock('../../../vanilla_tree/van_tr_components/admin_tree_builder.js', () => ({ initializeTreeCallAdmin: vi.fn().mockResolvedValue() }));
+vi.mock('../../../navigation/main_tabs/main_tab_printer.js', () => ({ initTabs: vi.fn().mockResolvedValue(), openNavTab: vi.fn() }));
 vi.mock('../../../../reusable_components/notifications/toast_notification_printer.js', () => ({
     showToast: vi.fn(), showSuccessToast: vi.fn(), showWarningToast: vi.fn(),
 }));
@@ -53,7 +54,7 @@ describe('dataset creation card roles', () => {
             expect(columnName.value).toBe('title');
             expect(form.querySelectorAll('input,select')).toHaveLength(fieldCount);
             expect(form.querySelectorAll('[name="card_role"]')[3]).toBe(role);
-            expect(form.querySelector('#create_table_new_folder_parent_id')).not.toBeNull();
+            expect(form.querySelector('[data-testid="dataset-new-folder-parent"]')).not.toBeNull();
         }
         expect(endpoint_router.mock.calls.filter(([, options]) => options?.method === 'POST')).toEqual([]);
     });
@@ -99,7 +100,7 @@ describe('dataset creation card roles', () => {
         document.body.appendChild(host);
         await generate_table_creation_view(host);
         const form = host.querySelector('form');
-        form.querySelector('[name="table_name"]').value = 'demo';
+        form.querySelector('[name="dataset_name"]').value = 'demo';
         const row = form.querySelectorAll('.dataset-column-table__row')[3];
         row.querySelector('[name="column_name"]').value = 'title';
         row.querySelector('[name="data_type"]').value = 'TEXT';
@@ -125,7 +126,7 @@ describe('dataset creation card roles', () => {
         document.body.appendChild(host);
         await generate_table_creation_view(host);
         const form = host.querySelector('form');
-        form.querySelector('[name="table_name"]').value = 'invoices';
+        form.querySelector('[name="dataset_name"]').value = 'invoices';
 
         const rows = form.querySelectorAll('.dataset-column-table__row');
         const priceRow = rows[3];

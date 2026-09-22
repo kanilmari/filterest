@@ -352,8 +352,19 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Say where the dataset went. The description is read inside the same
+	// transaction, so a failure here is reported instead of a success that
+	// could not be committed.
+	created, err := describeCreatedDataset(tx, tableName, targetFolderID)
+	if err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but its placement could not be read: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("Taulu luotu onnistuneesti"))
+	_ = json.NewEncoder(w).Encode(created)
 }
 
 // Bridge functions delegate to the underlying column CRUD packages.

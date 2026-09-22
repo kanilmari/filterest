@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // dataset_deletion_protection.test.js
-// Verifies the deletion-protection control the dataset forms share.
-// Bridges the dataset-settings read with the switch the editing form shows.
+// Verifies the dataset form's deletion-protection switch in both modes.
+// Bridges the dataset-settings read with the switch the form shows.
 // Exists so the protection is never guessed from an answer about another dataset.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -13,14 +13,17 @@ vi.mock('../../lang/translation_handler.js', () => ({
     getTranslationForKey: (key, { fallback } = {}) => fallback,
 }));
 
-const {
-    createDatasetDeletionProtectionControl,
-    datasetDeletionProtectionCopy,
-    readDeletionProtection,
-} = await import('./dataset_deletion_protection.js');
+const { createDatasetDeletionProtectionControl, readDeletionProtection } = await import('./dataset_deletion_protection.js');
+
+function mount(settings) {
+    const control = createDatasetDeletionProtectionControl(settings);
+    document.body.appendChild(control.element);
+    return control;
+}
 
 beforeEach(() => {
     document.body.innerHTML = '';
+    document.documentElement.lang = 'en';
     endpointRouterMock.mockReset();
     endpointRouterMock.mockResolvedValue({ dataset_name: 'subscriptions', prevent_deletion: true });
 });
@@ -37,37 +40,38 @@ describe('dataset deletion protection', () => {
     test('an answer about another dataset is refused instead of being shown', async () => {
         endpointRouterMock.mockResolvedValue({ dataset_name: 'other_dataset', prevent_deletion: true });
         await expect(readDeletionProtection('subscriptions')).rejects.toThrow();
-
         endpointRouterMock.mockResolvedValue({ dataset_name: 'subscriptions' });
         await expect(readDeletionProtection('subscriptions')).rejects.toThrow();
     });
 
-    test('the switch shows the current protection and reports what the person changed', async () => {
-        const control = createDatasetDeletionProtectionControl({ datasetName: 'subscriptions' });
-        document.body.appendChild(control.element);
+    test('a new dataset starts unprotected and can be protected before it exists', async () => {
+        const control = mount();
         await control.ready;
+        expect(control.input.disabled).toBe(false);
+        expect(control.value()).toBe(false);
+        control.input.checked = true;
+        expect(control.value()).toBe(true);
+    });
 
+    test('the switch shows the current protection and reports what the person changed', async () => {
+        const control = mount({ stored: readDeletionProtection('subscriptions') });
+        await control.ready;
         expect(control.input.checked).toBe(true);
         expect(control.changed()).toBe(false);
-
         control.input.checked = false;
         expect(control.changed()).toBe(true);
         expect(control.value()).toBe(false);
-
         // A saved choice is remembered, so a second Save sends nothing new.
         control.accept();
         expect(control.changed()).toBe(false);
     });
 
     test('an unreadable setting is shown as unknown rather than as unprotected', async () => {
-        endpointRouterMock.mockRejectedValue(new Error('network'));
-        const control = createDatasetDeletionProtectionControl({ datasetName: 'subscriptions' });
-        document.body.appendChild(control.element);
+        const control = mount({ stored: Promise.reject(new Error('network')) });
         await control.ready;
-
         expect(control.input.disabled).toBe(true);
         expect(control.changed()).toBe(false);
         expect(control.element.querySelector('.dataset-deletion-protection-status').textContent)
-            .toBe(datasetDeletionProtectionCopy().unavailable);
+            .toBe('The deletion protection could not be read.');
     });
 });

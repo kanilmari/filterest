@@ -4,7 +4,7 @@
 // Exists to reuse one no-reload root-return path instead of duplicating full browser navigations.
 
 import { consumeRedirectNotice } from "../state_stores/dataset_selection_saver.js";
-import { managementText } from "../general_tables/gt_2_column_crud/manage_table_i18n.js";
+import { datasetFormText } from "../general_tables/dataset_form/dataset_form_text.js";
 import { runPostAuthBootstrap } from "../auth/post_auth_bootstrap.js";
 import { showInfoToast, showToast } from "../../reusable_components/notifications/toast_notification_printer.js";
 
@@ -26,7 +26,7 @@ export function buildDatasetRedirectNoticeMessage(notice) {
     }
 
     const localizedKey = managementNoticeKey(notice);
-    if (localizedKey) return managementText(localizedKey);
+    if (localizedKey) return datasetFormText(localizedKey);
 
     const datasetName = notice?.datasetName || "";
     const reason = notice?.reason || "deleted";

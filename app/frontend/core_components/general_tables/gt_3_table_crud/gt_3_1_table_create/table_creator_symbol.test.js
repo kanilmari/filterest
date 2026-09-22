@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // table_creator_symbol.test.js
-// Verifies that the creation form saves a new dataset's symbol through the same
-// step the editing form uses, and reports a refused symbol the same way.
-// Exists so the two dataset forms cannot drift back into two ways of saving it.
+// Verifies that the dataset form's creation mode saves a new dataset's symbol
+// through the same route and control the editing mode uses, and reports a
+// refused symbol the same way.
+// Exists so the two modes cannot drift back into two ways of saving it.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const endpointRouterMock = vi.fn();
@@ -18,6 +19,10 @@ vi.mock('../../../lang/translation_handler.js', () => ({
 }));
 vi.mock('../../../vanilla_tree/van_tr_components/admin_tree_builder.js', () => ({
     initializeTreeCallAdmin: vi.fn().mockResolvedValue(),
+}));
+vi.mock('../../../navigation/main_tabs/main_tab_printer.js', () => ({
+    initTabs: vi.fn().mockResolvedValue(),
+    openNavTab: vi.fn(),
 }));
 vi.mock('../../../../reusable_components/notifications/toast_notification_printer.js', () => ({
     showToast: vi.fn(),
@@ -55,14 +60,16 @@ async function openFilledForm(symbol) {
     const form = host.querySelector('form');
     const select = form.querySelector('[data-testid="dataset-symbol-select"]');
     await vi.waitFor(() => expect(select.options.length).toBe(3));
-    form.querySelector('#table_name').value = 'new_dataset';
+    form.querySelector('[name="dataset_name"]').value = 'new_dataset';
     select.value = symbol;
     return { form, select };
 }
 
+/** Send the form and wait until it has started over for the next dataset. */
 async function submit(form) {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(showSuccessToastMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(form.querySelector('[name="dataset_name"]').value).toBe(''));
 }
 
 beforeEach(() => {
@@ -107,7 +114,7 @@ describe('dataset creation saves the symbol through the shared step', () => {
         expect(status.hidden).toBe(false);
         expect(status.textContent).toBe('The symbol could not be saved.');
         expect(showWarningToastMock).toHaveBeenCalledWith(
-            'The columns were saved. One dataset setting still needs attention — see the message in the form.'
+            "The dataset was created, but one of its settings was not saved — see the message in the form. You can save it in the dataset's Manage table dialog."
         );
     });
 
@@ -128,7 +135,7 @@ describe('dataset creation saves the symbol through the shared step', () => {
         expect(select.value).toBe('');
 
         showSuccessToastMock.mockReset();
-        form.querySelector('#table_name').value = 'new_dataset';
+        form.querySelector('[name="dataset_name"]').value = 'new_dataset';
         select.value = 'payments';
         await submit(form);
 

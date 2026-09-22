@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // dataset_foreign_keys_panel.test.js
-// Verifies the foreign-key panel the dataset forms share.
+// Verifies the dataset form's links panel in both modes, and its routes.
 // Bridges the dataset's existing links with the request that adds one.
 // Exists so a half-filled link is never sent, and a link is never claimed twice.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -19,8 +19,9 @@ vi.mock('../../lang/translation_handler.js', () => ({
 }));
 
 const {
+    addDatasetForeignKey,
     createDatasetForeignKeyPanel,
-    datasetForeignKeyCopy,
+    readDatasetForeignKeys,
     selectOutgoingForeignKeys,
 } = await import('./dataset_foreign_keys_panel.js');
 
@@ -47,13 +48,43 @@ function routeAnswers(route) {
     return { message: 'ok' };
 }
 
+/** Mount the panel as a mode would: editing lists the stored links. */
+function mount({ editing = true, columnNames = () => ['id', 'owner_id', 'category_id'], stored } = {}) {
+    const panel = createDatasetForeignKeyPanel({
+        stored: editing ? (stored ?? readDatasetForeignKeys('subscriptions')) : null,
+        datasetNames: endpointRouterMock('datasetNames'),
+        readColumns: (name) => fetchColumnsMock(name),
+        columnNames,
+        multipleDrafts: !editing,
+    });
+    document.body.appendChild(panel.element);
+    return panel;
+}
+const status = (panel) => panel.element.querySelector('.dataset-foreign-keys-status');
+/** The draft rows as the page shows them. */
+const drafts = (panel) => [...panel.element.querySelectorAll('.dataset-foreign-key-draft')].map((row) => ({
+    referencing: row.querySelector('[name="fk_referencing_column"]'),
+    referencedTable: row.querySelector('[name="fk_referenced_dataset"]'),
+    referencedColumn: row.querySelector('[name="fk_referenced_column"]'),
+}));
+const addButton = (panel) => panel.element.querySelector('[data-testid="dataset-foreign-key-add"]');
+
+async function fillDraft(panel, draft, { column = 'category_id', target = 'categories' } = {}) {
+    draft.referencing.value = column;
+    draft.referencedTable.value = target;
+    draft.referencedTable.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(draft.referencedColumn.options.length).toBe(3));
+    draft.referencedColumn.value = 'id';
+}
+
 beforeEach(() => {
     document.body.innerHTML = '';
+    document.documentElement.lang = 'en';
     endpointRouterMock.mockReset().mockImplementation(async (route) => routeAnswers(route));
     fetchColumnsMock.mockReset().mockResolvedValue([{ column_name: 'id' }, { column_name: 'email' }]);
 });
 
-describe('dataset foreign keys', () => {
+describe('dataset links panel', () => {
     test('only the links that start in this dataset are its own to show', () => {
         expect(selectOutgoingForeignKeys(links, 'subscriptions')).toEqual([{
             constraintName: 'fk_subscriptions_owner_id',
@@ -63,59 +94,94 @@ describe('dataset foreign keys', () => {
         }]);
     });
 
-    test('the existing links are listed in plain words', async () => {
-        const panel = createDatasetForeignKeyPanel({
-            datasetName: 'subscriptions', columnNames: () => ['id', 'owner_id'],
-        });
-        document.body.appendChild(panel.element);
+    test('editing lists the existing links in plain words and drafts one optional link', async () => {
+        const panel = mount();
         await panel.ready;
-
-        expect([...panel.element.querySelectorAll('li')].map((item) => item.textContent))
-            .toEqual(['owner_id → users.id']);
-        expect(Array.from(panel.selects.referencedTableSelect.options).map((option) => option.value))
-            .toEqual(['', 'users', 'categories']);
+        expect([...panel.element.querySelectorAll('li')].map((item) => item.textContent)).toEqual(['owner_id → users.id']);
+        const [draft] = drafts(panel);
+        expect(drafts(panel)).toHaveLength(1);
+        expect(draft.referencing.required).toBe(false);
+        expect(Array.from(draft.referencedTable.options).map((option) => option.value)).toEqual(['', 'users', 'categories']);
+        expect(addButton(panel)).toBeNull();
     });
 
     test('a dataset without links says so instead of showing an empty list', async () => {
-        endpointRouterMock.mockImplementation(async (route) =>
-            route === 'fetchForeignKeys' ? { data: [] } : routeAnswers(route));
-        const panel = createDatasetForeignKeyPanel({ datasetName: 'subscriptions' });
-        document.body.appendChild(panel.element);
+        const panel = mount({ stored: Promise.resolve([]) });
         await panel.ready;
-
-        expect(panel.element.querySelector('.dataset-foreign-keys-empty').textContent)
-            .toBe(datasetForeignKeyCopy().none);
+        expect(panel.element.querySelector('.dataset-foreign-keys-empty').textContent).toBe('This dataset has no links yet.');
     });
 
     test('a half-filled link is never sent', async () => {
-        const panel = createDatasetForeignKeyPanel({
-            datasetName: 'subscriptions', columnNames: () => ['id', 'owner_id'],
-        });
-        document.body.appendChild(panel.element);
+        const panel = mount();
         await panel.ready;
-
-        panel.selects.referencingSelect.value = 'owner_id';
+        drafts(panel)[0].referencing.value = 'owner_id';
         expect(panel.changed()).toBe(false);
-        expect(await panel.save()).toBe('unchanged');
-        expect(endpointRouterMock.mock.calls.some(([route]) => route === 'addForeignKey')).toBe(false);
+        expect(panel.value()).toEqual([]);
     });
 
-    test('a complete link is added once and the list is read again', async () => {
-        const panel = createDatasetForeignKeyPanel({
-            datasetName: 'subscriptions', columnNames: () => ['id', 'owner_id', 'category_id'],
-        });
-        document.body.appendChild(panel.element);
+    test('a complete link is offered once, and a saved one starts the draft over', async () => {
+        const panel = mount();
         await panel.ready;
+        await fillDraft(panel, drafts(panel)[0]);
+        expect(panel.value()).toEqual([
+            { referencing_column: 'category_id', referenced_dataset: 'categories', referenced_column: 'id' },
+        ]);
+        panel.accept(selectOutgoingForeignKeys(links, 'subscriptions'));
+        expect(panel.changed()).toBe(false);
+        expect(drafts(panel)).toHaveLength(1);
+    });
 
-        panel.selects.referencingSelect.value = 'category_id';
-        panel.selects.referencedTableSelect.value = 'categories';
-        panel.selects.referencedTableSelect.dispatchEvent(new Event('change'));
-        await vi.waitFor(() => expect(panel.selects.referencedColumnSelect.options.length).toBe(3));
-        panel.selects.referencedColumnSelect.value = 'id';
+    test('creating drafts any number of links, each required once added', async () => {
+        const panel = mount({ editing: false });
+        await panel.ready;
+        expect(panel.element.querySelector('.dataset-foreign-keys-list')).toBeNull();
+        expect(drafts(panel)).toHaveLength(0);
+        addButton(panel).click();
+        addButton(panel).click();
+        const [first, second] = drafts(panel);
+        expect(first.referencing.required).toBe(true);
+        await fillDraft(panel, first);
+        await fillDraft(panel, second, { column: 'owner_id', target: 'users' });
+        expect(panel.value()).toHaveLength(2);
+        second.referencing.closest('.dataset-foreign-key-draft').querySelector('.dataset-foreign-key-remove').click();
+        expect(panel.value()).toEqual([
+            { referencing_column: 'category_id', referenced_dataset: 'categories', referenced_column: 'id' },
+        ]);
+        panel.accept();
+        expect(drafts(panel)).toHaveLength(0);
+    });
 
+    test('a column the same save is about to add can carry a link', async () => {
+        let names = ['id'];
+        const panel = mount({ editing: false, columnNames: () => names });
+        await panel.ready;
+        addButton(panel).click();
+        names = ['id', 'category_id'];
+        const [draft] = drafts(panel);
+        draft.referencing.dispatchEvent(new Event('focus'));
+        expect(Array.from(draft.referencing.options).map((option) => option.value)).toEqual(['', 'id', 'category_id']);
+    });
+
+    test('a refused link reports beside the panel and keeps the draft', async () => {
+        const panel = mount();
+        await panel.ready;
+        await fillDraft(panel, drafts(panel)[0]);
+        panel.reportFailure();
+        expect(status(panel).textContent).toBe('The link could not be added.');
         expect(panel.changed()).toBe(true);
-        expect(await panel.save()).toBe('saved');
-        expect(endpointRouterMock).toHaveBeenCalledWith('addForeignKey', {
+    });
+
+    test('an unreadable link list says so instead of claiming there are none', async () => {
+        const panel = mount({ stored: Promise.reject(new Error('network')) });
+        await panel.ready;
+        expect(status(panel).textContent).toBe('The links could not be read.');
+    });
+
+    test('a new link is added from the named dataset through its own route', async () => {
+        await addDatasetForeignKey('subscriptions', {
+            referencing_column: 'category_id', referenced_dataset: 'categories', referenced_column: 'id',
+        });
+        expect(endpointRouterMock).toHaveBeenLastCalledWith('addForeignKey', {
             method: 'POST',
             body_data: {
                 referencing_dataset: 'subscriptions',
@@ -125,39 +191,5 @@ describe('dataset foreign keys', () => {
             },
             suppressErrorToast: true,
         });
-        // The draft is cleared, so a second Save cannot repeat the same link.
-        expect(panel.changed()).toBe(false);
-        expect(await panel.save()).toBe('unchanged');
-    });
-
-    test('a refused link reports beside the panel and keeps the draft', async () => {
-        const panel = createDatasetForeignKeyPanel({
-            datasetName: 'subscriptions', columnNames: () => ['category_id'],
-        });
-        document.body.appendChild(panel.element);
-        await panel.ready;
-
-        panel.selects.referencingSelect.value = 'category_id';
-        panel.selects.referencedTableSelect.value = 'categories';
-        panel.selects.referencedColumnSelect.appendChild(
-            Object.assign(document.createElement('option'), { value: 'id', textContent: 'id' })
-        );
-        panel.selects.referencedColumnSelect.value = 'id';
-
-        endpointRouterMock.mockImplementationOnce(async () => { throw new Error('refused'); });
-        expect(await panel.save()).toBe('failed');
-        expect(panel.element.querySelector('.dataset-foreign-keys-status').textContent)
-            .toBe(datasetForeignKeyCopy().saveFailed);
-        expect(panel.changed()).toBe(true);
-    });
-
-    test('an unreadable link list says so instead of claiming there are none', async () => {
-        endpointRouterMock.mockImplementation(async () => { throw new Error('network'); });
-        const panel = createDatasetForeignKeyPanel({ datasetName: 'subscriptions' });
-        document.body.appendChild(panel.element);
-        await panel.ready;
-
-        expect(panel.element.querySelector('.dataset-foreign-keys-status').textContent)
-            .toBe(datasetForeignKeyCopy().unavailable);
     });
 });

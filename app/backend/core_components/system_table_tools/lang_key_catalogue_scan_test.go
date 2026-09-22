@@ -52,10 +52,26 @@ func TestScanFindsLangKeysDeclaredInACatalogue(t *testing.T) {
 			},
 		},
 		{
-			relativePath: "frontend/core_components/general_tables/dataset_form/dataset_symbol_picker.js",
+			// The dataset form (both modes and every setting control) keeps all
+			// of its copy in this one fallback catalogue; the controls pass
+			// the key to its text helper.
+			relativePath: "frontend/core_components/general_tables/dataset_form/dataset_form_translation_fallbacks.js",
 			wantKeys: []string{
 				"dataset_symbol_label", "dataset_symbol_none", "dataset_symbol_loading",
 				"dataset_symbol_unavailable", "dataset_symbol_save_failed",
+				"table_folder_hint", "dataset_folder_for_new_dataset", "dataset_folder_option_current_project",
+				"dataset_new_folder_open", "dataset_new_folder_parent", "dataset_new_folder_name_required",
+				"dataset_created_in_folder", "dataset_created_outside_navigation",
+				"dataset_created_settings_need_attention", "manage_table_settings_need_attention",
+			},
+		},
+		{
+			relativePath: "frontend/core_components/admin_tools/dataset_header_config_translation_fallbacks.js",
+			wantKeys: []string{
+				"dataset_header_config_intro", "dataset_header_config_text_keys_hint",
+				"dataset_header_config_cover_title", "dataset_header_config_background_hint",
+				"dataset_header_config_no_image", "dataset_header_config_not_loaded",
+				"dataset_select_target", "unsaved_changes",
 			},
 		},
 		{

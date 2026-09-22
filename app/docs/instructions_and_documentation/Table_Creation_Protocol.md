@@ -78,6 +78,14 @@ Use the Filterest UI or the `dtt_3_table_create` Go component.
 *   **Code Reference**: `filterest/app/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create/create_table.go`
     *   `CreateTableInDatabase`: Handles table creation and trigger setup.
     *   `InsertNewTables`: Handles registration in `system_db_tables`.
+*   **Folder**: The dataset form (`general_tables/dataset_form/`, one form for
+    creating and editing) and `/api/create_dataset` put a new dataset in the
+    current project's folder (`system_table_folders.is_current_project`) unless
+    another folder, or a named new folder, is chosen. Without a current project
+    the default is `database / other_tables`. The site navigation lists only the
+    datasets directly in the current project's folder, so the create response
+    reports `folder_path` and `in_site_navigation`, and a new folder with a
+    parent but no name is refused.
 
 ### Method B: SQL Migrations (Manual)
 Use this for core system tables or permanent dev tools.

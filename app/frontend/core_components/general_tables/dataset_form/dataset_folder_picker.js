@@ -1,56 +1,25 @@
 // dataset_folder_picker.js
-// Lets an administrator choose which navigation folder holds a dataset.
-// Bridges the dataset forms with the navigation tree data and the folder-move route.
-// Exists so a dataset's place in the tree can be corrected where the dataset is
-// defined, instead of only while the dataset is being created.
+// The dataset form's folder control, in both modes: where a new dataset goes,
+// or which folder an existing dataset sits in.
+// Bridges the form with the navigation tree (its folder choices) and, through
+// the form's persistence adapters, with the dataset-creation and folder-move routes.
+// Exists so one control decides a dataset's place in the tree. A new dataset
+// goes into the current project's folder unless the person chooses otherwise,
+// and a new folder is made only when the person asks for one and names it.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
-import { getTranslationForKey } from "../../lang/translation_handler.js";
-import { buildFolderOptionsFromNodes } from "../gt_3_table_crud/gt_3_1_table_create/table_creator_folder_helpers.js";
+import { createDatasetFormStatus, datasetFormLabel, datasetFormText, setDatasetFormText } from "./dataset_form_text.js";
+import { resolveFolderSelectionDefaults } from "./dataset_folder_options.js";
 
-// The site's own language keys carry the translations; the English text here is
-// the fallback an installation without these keys still shows.
-const COPY_KEYS = Object.freeze({
-    label: ["select_folder", "Choose a folder"],
-    unavailable: ["dataset_folder_unavailable", "The folders could not be read."],
-    saveFailed: ["dataset_folder_save_failed", "The folder could not be saved."],
-    confirm: ["dataset_folder_move_anyway", "Move anyway"],
-});
-
-/** Read the control's copy from the language keys of the current interface language. */
-export function datasetFolderCopy() {
-    const text = {};
-    for (const [name, [key, fallback]] of Object.entries(COPY_KEYS)) {
-        text[name] = getTranslationForKey(key, { fallback }) || fallback;
-    }
-    return text;
-}
-
-/**
- * Where one dataset currently sits in the navigation tree.
- * A dataset the tree does not describe reports empty identities, so the form
- * can say so instead of moving the wrong row.
- */
-export function findDatasetPlacement(nodes = [], datasetName = "") {
-    const node = (Array.isArray(nodes) ? nodes : []).find(
-        (candidate) => candidate?.table_uid && String(candidate?.name || "") === String(datasetName)
-    );
-    const parentNodeId = String(node?.parent_id || "");
-    return {
-        folderId: parentNodeId.startsWith("f_") ? parentNodeId.slice(2) : "",
-        itemId: Number(node?.db_id) || 0,
-        datasetUID: Number(node?.table_uid) || 0,
-    };
-}
+let pickerSequence = 0;
 
 /** The tree the navigation itself draws, preferring the server's current answer. */
 export async function readNavigationTreeNodes() {
     try {
-        const treeData = await endpoint_router("fetchTreeData");
+        const treeData = await endpoint_router("fetchTreeData", { suppressErrorToast: true });
         const nodes = Array.isArray(treeData?.nodes) ? treeData.nodes : [];
         if (nodes.length > 0) return nodes;
     } catch (error) {
-        // A cached tree still names the dataset's folder, which is better than
-        // offering no placement at all.
+        // A cached tree still names the folders, which is better than offering none.
         void error;
     }
     try {
@@ -63,133 +32,266 @@ export async function readNavigationTreeNodes() {
 }
 
 /**
- * Build the folder control for a form that edits an existing dataset.
- * The returned handle saves the move only when the person changed the choice.
+ * Move one dataset to another folder, bound to both identities the tree gives
+ * it. `confirmed` answers the question the server asks before a move that
+ * changes what the site navigation shows.
  */
-export function createDatasetFolderPicker({ datasetName }) {
-    const text = datasetFolderCopy();
+export function moveDatasetToFolder(placement, folderId, { confirmed = false } = {}) {
+    return endpoint_router("updateTableFolder", {
+        method: "POST",
+        body_data: {
+            item_id: placement.itemId,
+            item_type: "table",
+            dataset_uid: placement.datasetUID,
+            new_folder_id: Number(folderId),
+            confirm_cross_project_move: confirmed,
+            confirm_tab_visibility_change: confirmed,
+        },
+        suppressErrorToast: true,
+    });
+}
 
-    const label = document.createElement("label");
-    label.className = "dataset-folder-picker";
-    label.dataset.testid = "dataset-folder-picker";
+/** The server's own sentence about a move it refused, without the route noise. */
+export function describeFolderConflict(error) {
+    const message = String(error?.message || "");
+    const separator = message.indexOf("): ");
+    return separator === -1 ? message.trim() : message.slice(separator + 3).trim();
+}
 
-    const caption = document.createElement("span");
-    caption.dataset.langKey = COPY_KEYS.label[0];
-    caption.textContent = text.label;
+function fillFolderOptions(select, options, { rootKey = "" } = {}) {
+    select.replaceChildren();
+    if (rootKey) {
+        select.appendChild(setDatasetFormText(Object.assign(document.createElement("option"), { value: "" }), rootKey));
+    }
+    for (const option of options) {
+        const element = document.createElement("option");
+        element.value = option.value;
+        // The current project's folder says so: only its direct datasets are
+        // listed in the site navigation.
+        if (option.isCurrentProject) {
+            setDatasetFormText(element, "dataset_folder_option_current_project", { folder: option.label });
+        } else {
+            element.textContent = option.label;
+        }
+        select.appendChild(element);
+    }
+}
 
+/**
+ * Build the folder control.
+ *
+ * @param {object} options
+ * @param {boolean} [options.allowNewFolder] - creation may make a new folder for
+ *   the new dataset; editing only moves a dataset between existing folders
+ * @param {Promise<{options: object[], selected?: string}>} options.choices - the
+ *   folders and the one to show chosen: the dataset's own folder when editing,
+ *   the default folder when creating. A choice-less answer leaves the control
+ *   closed, with the reason beside it.
+ */
+export function createDatasetFolderPicker({ allowNewFolder = false, choices }) {
+    const idPrefix = `dataset-folder-${++pickerSequence}`;
+
+    const section = document.createElement("section");
+    section.className = "dataset-folder-picker dataset-form-section";
+    section.dataset.testid = "dataset-folder-picker";
+    const title = setDatasetFormText(document.createElement("div"), "folder");
+    title.className = "dataset-form-section-title";
+
+    const choiceLabel = datasetFormLabel(allowNewFolder ? "dataset_folder_for_new_dataset" : "select_folder",
+        "dataset-folder-choice");
     const select = document.createElement("select");
     select.name = "dataset_folder_id";
     select.dataset.testid = "dataset-folder-select";
     select.disabled = true;
+    choiceLabel.appendChild(select);
 
-    const status = document.createElement("span");
-    status.className = "dataset-folder-status dataset-form-status";
-    status.setAttribute("role", "status");
-    status.hidden = true;
+    const status = createDatasetFormStatus("dataset-folder-status");
+    section.append(title, choiceLabel);
+
+    let newFolder = null;
+    if (allowNewFolder) {
+        const hint = setDatasetFormText(document.createElement("p"), "table_folder_hint");
+        hint.className = "dataset-form-hint";
+
+        // The new folder's name and parent stay out of sight until the person
+        // asks for a new folder, so a parent is never mistaken for the choice above.
+        const toggle = setDatasetFormText(document.createElement("button"), "dataset_new_folder_open");
+        toggle.type = "button";
+        toggle.className = "dataset-form-button dataset-new-folder-toggle";
+        toggle.dataset.testid = "dataset-new-folder-toggle";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-controls", `${idPrefix}-new`);
+
+        const fields = document.createElement("div");
+        fields.id = `${idPrefix}-new`;
+        fields.className = "dataset-form-fields dataset-new-folder";
+        fields.hidden = true;
+        const nameLabel = datasetFormLabel("new_folder_name");
+        const name = Object.assign(document.createElement("input"), { type: "text", name: "dataset_new_folder_name" });
+        name.dataset.testid = "dataset-new-folder-name";
+        name.setAttribute("aria-describedby", `${idPrefix}-new-status`);
+        nameLabel.appendChild(name);
+        const parentLabel = datasetFormLabel("dataset_new_folder_parent");
+        const parent = document.createElement("select");
+        parent.name = "dataset_new_folder_parent_id";
+        parent.dataset.testid = "dataset-new-folder-parent";
+        parentLabel.appendChild(parent);
+        const nameStatus = createDatasetFormStatus("dataset-new-folder-status");
+        nameStatus.element.id = `${idPrefix}-new-status`;
+        fields.append(nameLabel, parentLabel);
+
+        newFolder = { toggle, fields, name, parent, nameStatus, open: false };
+        section.append(hint, toggle, fields, nameStatus.element);
+
+        // The browser's own reminder for the empty name speaks the page's
+        // language rather than the browser's, and the reason also stays beside
+        // the field.
+        const syncValidity = () => {
+            const missing = newFolder.open && !name.value.trim();
+            name.setCustomValidity(missing ? datasetFormText("dataset_new_folder_name_required") : "");
+        };
+        newFolder.syncValidity = syncValidity;
+        name.addEventListener("invalid", () => nameStatus.show("dataset_new_folder_name_required"));
+
+        const setOpen = (open) => {
+            newFolder.open = open;
+            fields.hidden = !open;
+            // While a new folder is being named it is where the dataset goes,
+            // so the choice above steps aside rather than being silently ignored.
+            select.disabled = open || select.options.length === 0;
+            name.required = open;
+            toggle.setAttribute("aria-expanded", String(open));
+            setDatasetFormText(toggle, open ? "dataset_new_folder_cancel" : "dataset_new_folder_open");
+            nameStatus.clear();
+            if (open) {
+                parent.value = select.value;
+                name.focus();
+            } else {
+                name.value = "";
+            }
+            syncValidity();
+        };
+        newFolder.setOpen = setOpen;
+        toggle.addEventListener("click", () => setOpen(!newFolder.open));
+        // The name may stay empty while the person picks; it is required only
+        // when the form is sent, and the reminder goes once a name is typed.
+        name.addEventListener("input", () => {
+            if (name.value.trim()) nameStatus.clear();
+            syncValidity();
+        });
+    }
 
     // A move the server refuses without an explicit decision is offered again
     // here, with the server's own explanation beside it.
-    const confirmButton = document.createElement("button");
+    const confirmButton = setDatasetFormText(document.createElement("button"), "dataset_folder_move_anyway");
     confirmButton.type = "button";
     confirmButton.className = "dataset-folder-confirm dataset-form-button";
     confirmButton.dataset.testid = "dataset-folder-confirm";
-    confirmButton.dataset.langKey = COPY_KEYS.confirm[0];
-    confirmButton.textContent = text.confirm;
     confirmButton.hidden = true;
-
-    label.append(caption, select, status, confirmButton);
-
-    let placement = { folderId: "", itemId: 0, datasetUID: 0 };
-
-    const ready = readNavigationTreeNodes()
-        .then((nodes) => {
-            placement = findDatasetPlacement(nodes, datasetName);
-            for (const option of buildFolderOptionsFromNodes(nodes)) {
-                const folderOption = document.createElement("option");
-                folderOption.value = option.value;
-                folderOption.textContent = option.label;
-                select.appendChild(folderOption);
-            }
-            if (!placement.itemId || !placement.datasetUID || select.options.length === 0) {
-                status.hidden = false;
-                status.textContent = text.unavailable;
-                return;
-            }
-            select.disabled = false;
-            select.value = placement.folderId;
-        })
-        .catch((error) => {
-            status.hidden = false;
-            status.textContent = text.unavailable;
-            void error;
-        });
-
-    async function move({ confirmed }) {
-        await endpoint_router("updateTableFolder", {
-            method: "POST",
-            body_data: {
-                item_id: placement.itemId,
-                item_type: "table",
-                dataset_uid: placement.datasetUID,
-                new_folder_id: Number(select.value),
-                confirm_cross_project_move: confirmed,
-                confirm_tab_visibility_change: confirmed,
-            },
-            suppressErrorToast: true,
-        });
-        placement = { ...placement, folderId: select.value };
-        status.hidden = true;
-        confirmButton.hidden = true;
-    }
-
+    let pendingConfirmation = null;
     confirmButton.addEventListener("click", async () => {
+        if (!pendingConfirmation) return;
         confirmButton.disabled = true;
         try {
-            await move({ confirmed: true });
-        } catch (error) {
-            status.textContent = text.saveFailed;
-            void error;
+            await pendingConfirmation();
         } finally {
             confirmButton.disabled = false;
         }
     });
+    section.append(status.element, confirmButton);
+
+    let confirmed = "";
+    let loadedOptions = [];
+
+    function show(loaded) {
+        loadedOptions = Array.isArray(loaded?.options) ? loaded.options : [];
+        fillFolderOptions(select, loadedOptions);
+        if (newFolder) fillFolderOptions(newFolder.parent, loadedOptions, { rootKey: "root_folder" });
+        const selected = String(loaded?.selected ?? "");
+        if (loadedOptions.length === 0 || (!allowNewFolder && !selected)) {
+            select.disabled = true;
+            status.show("dataset_folder_unavailable");
+            return;
+        }
+        status.clear();
+        select.disabled = Boolean(newFolder?.open);
+        select.value = selected;
+        // A new dataset has no folder yet; an existing one is measured from its own.
+        confirmed = allowNewFolder ? "" : select.value;
+    }
+
+    function load(pending) {
+        return Promise.resolve(pending).then(show, (error) => {
+            select.disabled = true;
+            status.show("dataset_folder_unavailable");
+            void error;
+        });
+    }
+
+    const ready = load(choices);
 
     return {
-        element: label,
+        element: section,
         select,
         ready,
-        /** The chosen folder, as the tree identifies it. */
-        value: () => select.value,
-        /** Whether the person moved the dataset this time. */
-        changed: () => !select.disabled && select.value !== placement.folderId,
         /**
-         * Move the dataset. Returns "saved", "unchanged", "failed", or
-         * "needs_confirmation" when the server asked for an explicit decision.
+         * The chosen folder, or the new folder to make when one was asked for,
+         * with the path it is shown by and whether the site navigation lists
+         * the datasets directly in it.
          */
-        save: async () => {
-            if (select.disabled || !select.value || select.value === placement.folderId) return "unchanged";
-            try {
-                await move({ confirmed: false });
-                return "saved";
-            } catch (error) {
-                status.hidden = false;
-                // A conflict is the server asking a question, not a failure.
-                if (error?.status === 409) {
-                    status.textContent = describeConflict(error) || text.saveFailed;
-                    confirmButton.hidden = false;
-                    return "needs_confirmation";
-                }
-                status.textContent = text.saveFailed;
-                confirmButton.hidden = true;
-                return "failed";
+        value: () => {
+            const optionFor = (value) => loadedOptions.find((option) => option.value === value);
+            if (newFolder?.open) {
+                const name = newFolder.name.value.trim();
+                const parentLabel = optionFor(newFolder.parent.value)?.label;
+                return {
+                    folderId: "",
+                    newFolder: { name, parentId: newFolder.parent.value },
+                    label: parentLabel ? `${parentLabel} / ${name}` : name,
+                    isCurrentProject: false,
+                };
             }
+            const folderId = select.disabled ? "" : select.value;
+            const option = optionFor(folderId);
+            return { folderId, newFolder: null, label: option?.label || "", isCurrentProject: option?.isCurrentProject === true };
+        },
+        /** Whether the person moved the dataset away from the folder it is in. */
+        changed: () => !select.disabled && select.value !== confirmed,
+        /** The server now holds this folder for the dataset. */
+        accept: () => {
+            confirmed = select.value;
+            pendingConfirmation = null;
+            status.clear();
+            confirmButton.hidden = true;
+        },
+        /**
+         * The reason the form cannot be sent as it is, or null: a new folder
+         * was asked for but has no name. The reason is shown beside the name.
+         */
+        validate: () => {
+            if (!newFolder?.open || newFolder.name.value.trim()) return null;
+            newFolder.nameStatus.show("dataset_new_folder_name_required");
+            newFolder.name.focus();
+            return "dataset_new_folder_name_required";
+        },
+        /** Refresh the browser's reminder for a new folder without a name, in the current language. */
+        syncValidity: () => newFolder?.syncValidity(),
+        /** Show that saving the folder failed, beside the control. */
+        reportFailure: () => {
+            confirmButton.hidden = true;
+            status.show("dataset_folder_save_failed");
+        },
+        /** Show the server's question and offer the move again as a decision. */
+        offerConfirmation: (message, onConfirm) => {
+            pendingConfirmation = onConfirm;
+            if (message) status.showMessage(message);
+            else status.show("dataset_folder_save_failed");
+            confirmButton.hidden = false;
+        },
+        /** Start over for the next new dataset, with the folders as they are now. */
+        reset: (nextChoices) => {
+            newFolder?.setOpen(false);
+            return load(nextChoices ?? { options: loadedOptions, selected: resolveFolderSelectionDefaults(loadedOptions).existingFolderValue });
         },
     };
-}
-
-/** The server's own sentence about a move it refused, without the route noise. */
-function describeConflict(error) {
-    const message = String(error?.message || "");
-    const separator = message.indexOf("): ");
-    return separator === -1 ? message.trim() : message.slice(separator + 3).trim();
 }

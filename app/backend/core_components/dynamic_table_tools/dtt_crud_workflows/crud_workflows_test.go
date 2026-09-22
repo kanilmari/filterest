@@ -98,9 +98,11 @@ func TestEnsureRegisteredTableUID_ReturnsExistingUID(t *testing.T) {
 	}
 }
 
-func TestResolveCreateTableFolderID_UsesDatabaseOtherTablesFolderByDefault(t *testing.T) {
+func TestResolveCreateTableFolderID_UsesDatabaseOtherTablesFolderWithoutCurrentProject(t *testing.T) {
 	db := newWorkflowQueueTestDB(t)
 	defer db.Close()
+	// No folder is the current project, so database / other_tables is the default.
+	pushWorkflowQuery(queuedWorkflowQuery{cols: []string{"id"}, rows: [][]driver.Value{}})
 	pushWorkflowQuery(queuedWorkflowQuery{cols: []string{"id"}, rows: [][]driver.Value{{int64(15)}}})
 	pushWorkflowQuery(queuedWorkflowQuery{cols: []string{"id"}, rows: [][]driver.Value{{int64(150)}}})
 

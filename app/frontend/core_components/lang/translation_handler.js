@@ -23,9 +23,7 @@ import {
 let defaultTranslations = {};
 
 import { getCardRoleTranslationFallbacks } from '../table_views/card_view/card_role_catalog.js';
-import { TABLE_CREATION_TRANSLATION_FALLBACKS } from '../general_tables/gt_3_table_crud/gt_3_1_table_create/table_creation_translation_fallbacks.js';
-
-import { MANAGE_TABLE_TRANSLATION_FALLBACKS } from '../general_tables/gt_2_column_crud/manage_table_translation_fallbacks.js';
+import { DATASET_FORM_TRANSLATION_FALLBACKS } from '../general_tables/dataset_form/dataset_form_translation_fallbacks.js';
 import { getDatasetColumnTypeTranslationFallbacks } from '../general_tables/dataset_form/dataset_column_type_catalog.js';
 import { FAILURE_NOTICE_TRANSLATION_FALLBACKS } from '../error_and_status_handling/error_monitor_handler_helpers.js';
 import { CONFIRM_PROMPT_TRANSLATION_FALLBACKS } from '../../reusable_components/modal/confirm_prompt_translation_fallbacks.js';
@@ -50,10 +48,9 @@ const LOCAL_TRANSLATION_FALLBACKS = {
         ch: "要删除这些项目吗？",
         yue: "要刪除呢啲項目嗎？",
     },
-    ...MANAGE_TABLE_TRANSLATION_FALLBACKS,
     ...getCardRoleTranslationFallbacks(),
     ...getDatasetColumnTypeTranslationFallbacks(),
-    ...TABLE_CREATION_TRANSLATION_FALLBACKS,
+    ...DATASET_FORM_TRANSLATION_FALLBACKS,
     ...FAILURE_NOTICE_TRANSLATION_FALLBACKS,
     ...CONFIRM_PROMPT_TRANSLATION_FALLBACKS,
     ...FOREIGN_KEYS_TRANSLATION_FALLBACKS,

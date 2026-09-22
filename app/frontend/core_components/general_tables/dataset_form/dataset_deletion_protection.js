@@ -1,27 +1,11 @@
 // dataset_deletion_protection.js
-// Shows whether a dataset refuses deletion, and lets that be changed.
-// Bridges the dataset forms with the dataset-settings read and write on the
-// route that already edits a dataset's definition.
+// The dataset form's deletion-protection switch, in both modes.
+// Bridges the form with the dataset-settings read, and with the create and
+// schema requests that carry the switch.
 // Exists so the protection chosen while a dataset is created can be seen and
 // corrected later, instead of being discovered only when a deletion fails.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
-import { getTranslationForKey } from "../../lang/translation_handler.js";
-
-// The site's own language keys carry the translations; the English text here is
-// the fallback an installation without these keys still shows.
-const COPY_KEYS = Object.freeze({
-    label: ["prevent_table_deletion_hosting_request", "Protect this dataset from deletion"],
-    unavailable: ["dataset_deletion_protection_unavailable", "The deletion protection could not be read."],
-});
-
-/** Read the control's copy from the language keys of the current interface language. */
-export function datasetDeletionProtectionCopy() {
-    const text = {};
-    for (const [name, [key, fallback]] of Object.entries(COPY_KEYS)) {
-        text[name] = getTranslationForKey(key, { fallback }) || fallback;
-    }
-    return text;
-}
+import { createDatasetFormStatus, setDatasetFormText } from "./dataset_form_text.js";
 
 /** Whether one dataset currently refuses deletion. */
 export async function readDeletionProtection(datasetName) {
@@ -36,45 +20,36 @@ export async function readDeletionProtection(datasetName) {
 }
 
 /**
- * Build the deletion-protection control for a form that edits an existing
- * dataset. The choice travels with the rest of the dataset's save, so a refused
- * schema change never leaves the protection half-applied.
+ * Build the deletion-protection switch. The choice travels inside the create
+ * or schema request, so a refused change never leaves the protection half-applied.
+ *
+ * @param {object} [options]
+ * @param {Promise<boolean>} [options.stored] - when editing, whether the dataset
+ *   refuses deletion now; the switch stays closed until that is known. Without
+ *   it the switch describes a new dataset, which is unprotected unless chosen.
  */
-export function createDatasetDeletionProtectionControl({ datasetName }) {
-    const text = datasetDeletionProtectionCopy();
-
+export function createDatasetDeletionProtectionControl({ stored = null } = {}) {
     const label = document.createElement("label");
     label.className = "dataset-deletion-protection dataset-form-option";
     label.dataset.testid = "dataset-deletion-protection";
 
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.name = "dataset_prevent_deletion";
+    const input = Object.assign(document.createElement("input"), { type: "checkbox", name: "dataset_prevent_deletion" });
     input.dataset.testid = "dataset-deletion-protection-input";
-    input.disabled = true;
-
-    const caption = document.createElement("span");
-    caption.dataset.langKey = COPY_KEYS.label[0];
-    caption.textContent = text.label;
-
-    const status = document.createElement("span");
-    status.className = "dataset-deletion-protection-status dataset-form-status";
-    status.setAttribute("role", "status");
-    status.hidden = true;
-
-    label.append(input, caption, status);
+    const status = createDatasetFormStatus("dataset-deletion-protection-status");
+    label.append(input, setDatasetFormText(document.createElement("span"), "prevent_table_deletion_hosting_request"),
+        status.element);
 
     let prevented = false;
+    if (stored) input.disabled = true;
 
-    const ready = readDeletionProtection(datasetName)
+    const ready = !stored ? Promise.resolve() : Promise.resolve(stored)
         .then((current) => {
-            prevented = current;
-            input.checked = current;
+            prevented = current === true;
+            input.checked = prevented;
             input.disabled = false;
         })
         .catch((error) => {
-            status.hidden = false;
-            status.textContent = text.unavailable;
+            status.show("dataset_deletion_protection_unavailable");
             void error;
         });
 

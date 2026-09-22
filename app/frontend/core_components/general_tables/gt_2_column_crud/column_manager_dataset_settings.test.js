@@ -63,7 +63,7 @@ describe('open_column_management_modal: dataset settings', () => {
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
 
         const order = endpointRouterMock.mock.calls
-            .filter(([route, options]) => options?.method === 'POST')
+            .filter(([, options]) => options?.method === 'POST')
             .map(([route]) => route);
         expect(order).toEqual(['modifyColumns', 'updateTableFolder', 'enableImageAssetLinking', 'addForeignKey']);
         expect(hideModalMock).toHaveBeenCalledTimes(1);
@@ -150,7 +150,7 @@ describe('open_column_management_modal: dataset settings', () => {
         );
         const status = document.querySelector('.dataset-symbol-status');
         expect(status.hidden).toBe(false);
-        // The message comes from the symbol control's own language key.
-        expect(status.textContent).toBe('dataset_symbol_save_failed');
+        // The message is the form's own copy for that language key.
+        expect(status.textContent).toBe('The symbol could not be saved.');
     });
 });

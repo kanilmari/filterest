@@ -42,7 +42,7 @@ test.describe('Table Creation Permissions', () => {
     await waitForAppReady(page);
   });
 
-  test('creator gets permissions, images and label-free card fields by default', async ({ page }) => {
+  test('creator gets permissions, images and role-default card labels', async ({ page }) => {
     // Accept any dialogs that may appear during table creation
     page.on('dialog', async dialog => {
       await dialog.accept();
@@ -53,12 +53,12 @@ test.describe('Table Creation Permissions', () => {
     await page.waitForTimeout(500);
 
     // 2. Fill table name
-    const tableNameInput = page.locator('[data-testid="create-table-name-input"]');
-    const existingFolderSelect = page.locator('[data-testid="create-table-folder-select"]');
-    const newFolderNameInput = page.locator('[data-testid="create-table-new-folder-name"]');
-    const newFolderParentSelect = page.locator('[data-testid="create-table-new-folder-parent"]');
-    const enableImagesCheckbox = page.locator('[data-testid="create-table-enable-images"]');
-    const grantUsersReadCheckbox = page.locator('#grant_users_read');
+    const tableNameInput = page.locator('[data-testid="dataset-name-input"]');
+    const existingFolderSelect = page.locator('[data-testid="dataset-folder-select"]');
+    const newFolderNameInput = page.locator('[data-testid="dataset-new-folder-name"]');
+    const newFolderParentSelect = page.locator('[data-testid="dataset-new-folder-parent"]');
+    const enableImagesCheckbox = page.locator('[data-testid="dataset-image-attachments-input"]');
+    const grantUsersReadCheckbox = page.locator('[data-testid="dataset-group-read-users"]');
     await expect(tableNameInput).toBeVisible({ timeout: 10000 });
     await expect(existingFolderSelect).toBeVisible({ timeout: 10000 });
     await expect(enableImagesCheckbox).toBeChecked();
@@ -77,8 +77,10 @@ test.describe('Table Creation Permissions', () => {
 
     expect(selectedFolderId, 'Create-table form must offer at least one valid folder option.').not.toBe('');
     await tableNameInput.fill(testTableName);
-    await newFolderNameInput.fill('');
-    await newFolderParentSelect.selectOption(selectedFolderId).catch(() => {});
+    // The new-folder fields stay hidden until "New folder…" is chosen, so the
+    // dataset goes to the folder selected above.
+    await expect(newFolderNameInput).toBeHidden();
+    await expect(newFolderParentSelect).toBeHidden();
 
     // 3. Submit and wait for the create-dataset API response.
     registerTestArtifact('dataset', testTableName);
@@ -90,7 +92,7 @@ test.describe('Table Creation Permissions', () => {
         resp.url().includes('/api/asset-linking/images/enable')
           && resp.request().method() === 'POST'
       ),
-      page.locator('[data-testid="create-table-submit"]').click(),
+      page.locator('[data-testid="dataset-form-submit"]').click(),
     ]);
 
     // Confirm API returned success
@@ -127,9 +129,17 @@ test.describe('Table Creation Permissions', () => {
       ),
     );
     expect(fieldMetadata.length, 'A new table must expose its field presentation metadata.').toBeGreaterThan(0);
+    // Since DB 9.7.15 a new field has no label override of its own and inherits
+    // its card role's default (resolve_card_label_visibility): a details field
+    // shows its label, a header, description or keywords field does not.
+    const roleShowsLabel = (role: unknown): boolean => {
+      const tokens = String(role ?? '').split(',').map((token) => token.trim());
+      if (tokens.some((token) => /^(header|description\d*|keywords)(\s*\+\s*lang[-_]key)?$/.test(token))) return false;
+      return tokens.some((token) => /^details(_link)?\d*(\s*\+\s*lang[-_]key)?$/.test(token));
+    };
     expect(
-      fieldMetadata.every((metadata) => metadata.show_key_on_card === false),
-      'New table fields must hide their labels on cards by default.',
+      fieldMetadata.every((metadata) => metadata.show_key_on_card === roleShowsLabel(metadata.card_element)),
+      'New table fields must follow their card role\'s label default.',
     ).toBe(true);
     await page.waitForTimeout(1000);
 

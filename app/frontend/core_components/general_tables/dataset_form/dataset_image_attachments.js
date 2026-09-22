@@ -1,28 +1,12 @@
 // dataset_image_attachments.js
-// Turns picture attachments on or off for one dataset.
-// Bridges the dataset forms with the asset-linking routes the creation form
-// already calls, so both forms mean the same capability by "images".
-// Exists so a dataset that was created without pictures can be given them, and
-// a dataset that no longer needs them can put the upload surface away.
+// The dataset form's picture switch, in both modes: whether people may attach
+// pictures to the dataset's rows.
+// Bridges the form with the asset-linking routes through the form's persistence
+// adapters, so both modes mean the same capability by "images".
+// Exists so a dataset can be created with pictures, be given them later, or put
+// the upload surface away when it no longer needs one.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
-import { getTranslationForKey } from "../../lang/translation_handler.js";
-
-// The site's own language keys carry the translations; the English text here is
-// the fallback an installation without these keys still shows.
-const COPY_KEYS = Object.freeze({
-    label: ["create_table_enable_images", "Allow pictures in this dataset"],
-    unavailable: ["dataset_images_unavailable", "The picture setting could not be read."],
-    saveFailed: ["dataset_images_save_failed", "The picture setting could not be saved."],
-});
-
-/** Read the control's copy from the language keys of the current interface language. */
-export function datasetImageAttachmentCopy() {
-    const text = {};
-    for (const [name, [key, fallback]] of Object.entries(COPY_KEYS)) {
-        text[name] = getTranslationForKey(key, { fallback }) || fallback;
-    }
-    return text;
-}
+import { createDatasetFormStatus, setDatasetFormText } from "./dataset_form_text.js";
 
 /** Whether one dataset currently offers picture uploads. */
 export async function readImageAttachmentState(datasetName) {
@@ -35,45 +19,51 @@ export async function readImageAttachmentState(datasetName) {
     return match?.enabled === true;
 }
 
-/**
- * Build the picture-attachment control for a form that edits an existing
- * dataset. The returned handle saves only when the person changed the choice.
- */
-export function createDatasetImageAttachmentControl({ datasetName }) {
-    const text = datasetImageAttachmentCopy();
+/** Turn picture uploads on or off for one dataset. */
+export function setImageAttachments(datasetName, enabled) {
+    return endpoint_router(enabled ? "enableImageAssetLinking" : "disableImageAssetLinking", {
+        method: "POST",
+        body_data: { parent_table: String(datasetName) },
+        suppressErrorToast: true,
+    });
+}
 
+/**
+ * Build the picture switch.
+ *
+ * @param {object} [options]
+ * @param {Promise<boolean>} [options.stored] - when editing, whether the dataset
+ *   offers pictures now; the switch stays closed until that is known. Without
+ *   it the switch describes a new dataset, which offers pictures unless the
+ *   person turns them off.
+ */
+export function createDatasetImageAttachmentControl({ stored = null } = {}) {
     const label = document.createElement("label");
     label.className = "dataset-image-attachments dataset-form-option";
     label.dataset.testid = "dataset-image-attachments";
 
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.name = "dataset_enable_images";
+    const input = Object.assign(document.createElement("input"), { type: "checkbox", name: "dataset_enable_images" });
     input.dataset.testid = "dataset-image-attachments-input";
-    input.disabled = true;
+    const status = createDatasetFormStatus("dataset-image-attachments-status");
+    label.append(input, setDatasetFormText(document.createElement("span"), "create_table_enable_images"), status.element);
 
-    const caption = document.createElement("span");
-    caption.dataset.langKey = COPY_KEYS.label[0];
-    caption.textContent = text.label;
-
-    const status = document.createElement("span");
-    status.className = "dataset-image-attachments-status dataset-form-status";
-    status.setAttribute("role", "status");
-    status.hidden = true;
-
-    label.append(input, caption, status);
-
+    // What the dataset offers now. A new dataset offers nothing until it exists.
     let enabled = false;
+    if (stored) {
+        input.disabled = true;
+    } else {
+        input.checked = true;
+        input.defaultChecked = true;
+    }
 
-    const ready = readImageAttachmentState(datasetName)
+    const ready = !stored ? Promise.resolve() : Promise.resolve(stored)
         .then((current) => {
-            enabled = current;
-            input.checked = current;
+            enabled = current === true;
+            input.checked = enabled;
             input.disabled = false;
         })
         .catch((error) => {
-            status.hidden = false;
-            status.textContent = text.unavailable;
+            status.show("dataset_images_unavailable");
             void error;
         });
 
@@ -81,31 +71,16 @@ export function createDatasetImageAttachmentControl({ datasetName }) {
         element: label,
         input,
         ready,
-        /** Whether the dataset would offer pictures after this form is saved. */
+        /** Whether the dataset should offer pictures after this form is saved. */
         value: () => input.checked,
-        /** Whether the person changed the choice this time. */
+        /** Whether that differs from what the dataset offers now. */
         changed: () => !input.disabled && input.checked !== enabled,
-        /** Save the choice. Returns "saved", "unchanged" or "failed". */
-        save: async () => {
-            if (input.disabled || input.checked === enabled) return "unchanged";
-            try {
-                await endpoint_router(
-                    input.checked ? "enableImageAssetLinking" : "disableImageAssetLinking",
-                    {
-                        method: "POST",
-                        body_data: { parent_table: String(datasetName) },
-                        suppressErrorToast: true,
-                    }
-                );
-                enabled = input.checked;
-                status.hidden = true;
-                return "saved";
-            } catch (error) {
-                status.hidden = false;
-                status.textContent = text.saveFailed;
-                void error;
-                return "failed";
-            }
+        /** The server now holds the chosen setting. */
+        accept: () => {
+            if (stored) enabled = input.checked;
+            status.clear();
         },
+        /** Show that saving the setting failed, beside the switch. */
+        reportFailure: () => status.show("dataset_images_save_failed"),
     };
 }

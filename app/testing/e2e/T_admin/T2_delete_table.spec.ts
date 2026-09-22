@@ -16,7 +16,7 @@ import {
   unregisterTestArtifact,
 } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
-import { openActiveFilterbarIfCollapsed } from '../helpers/filterbar';
+import { openActiveFilterbarSection } from '../helpers/filterbar';
 
 test.describe('Dataset Deletion Handling', () => {
   // Force a desktop-sized viewport so the admin delete flow stays consistent across projects.
@@ -57,10 +57,10 @@ test.describe('Dataset Deletion Handling', () => {
     await page.waitForTimeout(500);
 
     // 2. Fill table name
-    const tableNameInput = page.locator('[data-testid="create-table-name-input"]');
-    const existingFolderSelect = page.locator('[data-testid="create-table-folder-select"]');
-    const newFolderNameInput = page.locator('[data-testid="create-table-new-folder-name"]');
-    const newFolderParentSelect = page.locator('[data-testid="create-table-new-folder-parent"]');
+    const tableNameInput = page.locator('[data-testid="dataset-name-input"]');
+    const existingFolderSelect = page.locator('[data-testid="dataset-folder-select"]');
+    const newFolderNameInput = page.locator('[data-testid="dataset-new-folder-name"]');
+    const newFolderParentSelect = page.locator('[data-testid="dataset-new-folder-parent"]');
     await expect(tableNameInput).toBeVisible({ timeout: 10000 });
     await expect(existingFolderSelect).toBeVisible({ timeout: 10000 });
 
@@ -77,8 +77,10 @@ test.describe('Dataset Deletion Handling', () => {
 
     expect(selectedFolderId, 'Create-table form must offer at least one valid folder option.').not.toBe('');
     await tableNameInput.fill(testTableName);
-    await newFolderNameInput.fill('');
-    await newFolderParentSelect.selectOption(selectedFolderId).catch(() => {});
+    // The new-folder fields stay hidden until "New folder…" is chosen, so the
+    // dataset goes to the folder selected above.
+    await expect(newFolderNameInput).toBeHidden();
+    await expect(newFolderParentSelect).toBeHidden();
 
     // 3. Submit and wait for API response.
     registerTestArtifact('dataset', testTableName);
@@ -86,7 +88,7 @@ test.describe('Dataset Deletion Handling', () => {
       page.waitForResponse(resp =>
         resp.url().includes('/api/create_dataset')
       ),
-      page.locator('[data-testid="create-table-submit"]').click(),
+      page.locator('[data-testid="dataset-form-submit"]').click(),
     ]);
     expect(createResponse.ok()).toBe(true);
     const tableUID = await readDatasetTableUIDFromPage(page, testTableName);
@@ -109,11 +111,12 @@ test.describe('Dataset Deletion Handling', () => {
       throw new Error('SAFETY ABORT: Attempting to delete app_service_catalog!');
     }
 
-    // 5. Delete the table through the stable toolbar/modal anchors.
-    await openActiveFilterbarIfCollapsed(page);
-    const activeTableParts = page.locator('.tab_parts_container:visible').first();
-    const manageBtn = activeTableParts.locator('[data-testid="btn-edit-table"]:visible').first();
-    await expect(manageBtn).toBeVisible({ timeout: 5000 });
+    // 5. Delete the table through the stable toolbar/modal anchors. The panel
+    // and its Add & manage content group both keep their own collapsed state,
+    // so open that exact group first, as T1 does.
+    const toolsSection = await openActiveFilterbarSection(page, 'tools');
+    const manageBtn = toolsSection.locator('[data-testid="btn-edit-table"]:visible').first();
+    await expect(manageBtn).toBeVisible({ timeout: 10000 });
     await expect(manageBtn).toBeEnabled();
     await manageBtn.click();
     await expect(page.locator('[data-testid="modal-container"]')).toBeVisible({ timeout: 10000 });
@@ -155,9 +158,9 @@ test.describe('Dataset Deletion Handling', () => {
     );
     expect(markerSurvived).toBe(true);
 
-    // 7. Verify redirect to home or a toast notification
-    const toast = page.locator('[data-testid="toast"]');
-    const toastVisible = await toast.first().isVisible({ timeout: 5000 }).catch(() => false);
-    expect(toastVisible).toBe(true);
+    // 7. Verify the notice. It appears once the rebuilt shell has finished
+    // loading, which can be after the tabs are drawn, so wait for it rather
+    // than read it once (isVisible does not wait, whatever its timeout says).
+    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 5000 });
   });
 });

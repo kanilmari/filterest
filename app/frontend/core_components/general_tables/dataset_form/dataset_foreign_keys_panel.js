@@ -1,33 +1,13 @@
 // dataset_foreign_keys_panel.js
-// Shows the links one dataset already has to other datasets, and adds a new one.
-// Bridges the dataset forms with the foreign-key routes the creation form uses.
-// Exists so a link between two datasets can be seen and added where the dataset
-// is described, instead of only while the dataset is being created.
+// The dataset form's links to other datasets, in both modes: the links an
+// existing dataset has, and the new ones the person drafts.
+// Bridges the form with the foreign-key routes through the form's persistence
+// adapters: a new dataset's links travel in its create request, an existing
+// dataset's new link is added after its columns are saved.
+// Exists so a link between two datasets is drafted and read the same way
+// wherever the dataset is described.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
-import { fetch_columns_for_table } from "../../endpoints/endpoint_column_fetcher.js";
-import { getTranslationForKey } from "../../lang/translation_handler.js";
-
-// The site's own language keys carry the translations; the English text here is
-// the fallback an installation without these keys still shows.
-const COPY_KEYS = Object.freeze({
-    title: ["dataset_foreign_keys_title", "Links to other datasets"],
-    none: ["dataset_foreign_keys_none", "This dataset has no links yet."],
-    unavailable: ["dataset_foreign_keys_unavailable", "The links could not be read."],
-    saveFailed: ["dataset_foreign_key_save_failed", "The link could not be added."],
-    referencingColumn: ["referencing_column", "Column in this dataset"],
-    referencedTable: ["referenced_table", "Target dataset"],
-    referencedColumn: ["referenced_column", "Column in the target dataset"],
-    selectColumn: ["select_column", "Choose a column"],
-});
-
-/** Read the panel's copy from the language keys of the current interface language. */
-export function datasetForeignKeyCopy() {
-    const text = {};
-    for (const [name, [key, fallback]] of Object.entries(COPY_KEYS)) {
-        text[name] = getTranslationForKey(key, { fallback }) || fallback;
-    }
-    return text;
-}
+import { createDatasetFormStatus, datasetFormLabel, setDatasetFormText } from "./dataset_form_text.js";
 
 /**
  * The links that start in this dataset.
@@ -54,86 +34,137 @@ export async function readDatasetForeignKeys(datasetName) {
     return selectOutgoingForeignKeys(response?.data, datasetName);
 }
 
-/**
- * Build the foreign-key panel for a form that edits an existing dataset.
- * The returned handle adds the one link the person filled in, when the rest of
- * the dataset's save has already succeeded.
- */
-export function createDatasetForeignKeyPanel({ datasetName, columnNames = () => [] }) {
-    const text = datasetForeignKeyCopy();
+/** Add one link from an existing dataset to another. */
+export function addDatasetForeignKey(datasetName, link) {
+    return endpoint_router("addForeignKey", {
+        method: "POST",
+        body_data: { referencing_dataset: String(datasetName), ...link },
+        suppressErrorToast: true,
+    });
+}
 
+/**
+ * Build the links panel.
+ *
+ * @param {object} options
+ * @param {Promise<object[]>} [options.stored] - when editing, the links the
+ *   dataset has now, listed above the draft; a new dataset has none
+ * @param {Promise<string[]>} options.datasetNames - the datasets a link may point to
+ * @param {(datasetName: string) => Promise<object[]>} options.readColumns - the
+ *   columns of a dataset a link points to
+ * @param {() => string[]} options.columnNames - the columns the open form shows,
+ *   including ones the same save is about to add
+ * @param {boolean} [options.multipleDrafts] - creation drafts any number of
+ *   links, each required once added; editing drafts one optional link
+ */
+export function createDatasetForeignKeyPanel({
+    stored = null, datasetNames, readColumns, columnNames = () => [], multipleDrafts = false,
+}) {
     const section = document.createElement("section");
     section.className = "dataset-foreign-keys dataset-form-section";
     section.dataset.testid = "dataset-foreign-keys";
-
-    const title = document.createElement("div");
+    const title = setDatasetFormText(document.createElement("div"), "dataset_foreign_keys_title");
     title.className = "dataset-foreign-keys-title dataset-form-section-title";
-    title.dataset.langKey = COPY_KEYS.title[0];
-    title.textContent = text.title;
+    section.appendChild(title);
 
     const list = document.createElement("ul");
     list.className = "dataset-foreign-keys-list";
     list.dataset.testid = "dataset-foreign-keys-list";
+    if (stored) section.appendChild(list);
 
-    const status = document.createElement("span");
-    status.className = "dataset-foreign-keys-status dataset-form-status";
-    status.setAttribute("role", "status");
-    status.hidden = true;
+    const drafts = document.createElement("div");
+    drafts.className = "dataset-form-rows dataset-foreign-key-drafts";
+    const status = createDatasetFormStatus("dataset-foreign-keys-status");
+    section.append(drafts, status.element);
 
-    const draft = document.createElement("div");
-    draft.className = "dataset-foreign-key-draft dataset-form-fields";
+    let targets = [];
+    const draftRows = [];
 
-    const referencingSelect = labelledSelect(draft, COPY_KEYS.referencingColumn, text.referencingColumn, "fk_referencing_column");
-    const referencedTableSelect = labelledSelect(draft, COPY_KEYS.referencedTable, text.referencedTable, "fk_referenced_dataset");
-    const referencedColumnSelect = labelledSelect(draft, COPY_KEYS.referencedColumn, text.referencedColumn, "fk_referenced_column");
-
-    section.append(title, list, draft, status);
-
-    const placeholder = (select) => {
-        const option = document.createElement("option");
-        option.value = "";
-        option.dataset.langKey = COPY_KEYS.selectColumn[0];
-        option.textContent = text.selectColumn;
-        select.replaceChildren(option);
+    const placeholder = (select, key) => {
+        select.replaceChildren(setDatasetFormText(Object.assign(document.createElement("option"), { value: "" }), key));
     };
-    const fill = (select, values) => {
-        placeholder(select);
+    const fill = (select, key, values) => {
+        const chosen = select.value;
+        placeholder(select, key);
         for (const value of values) {
-            const option = document.createElement("option");
-            option.value = value;
-            option.textContent = value;
-            select.appendChild(option);
+            select.appendChild(Object.assign(document.createElement("option"), { value, textContent: value }));
         }
+        select.value = values.includes(chosen) ? chosen : "";
+    };
+    const labelledSelect = (row, key, name) => {
+        const label = datasetFormLabel(key);
+        const select = document.createElement("select");
+        select.name = name;
+        select.dataset.testid = name.replace(/_/g, "-");
+        select.required = multipleDrafts;
+        label.appendChild(select);
+        row.appendChild(label);
+        return select;
     };
 
-    // The column choices follow the form the person is editing, so a column
-    // added in the same save can carry the new link.
-    referencingSelect.addEventListener("focus", () => {
-        const chosen = referencingSelect.value;
-        fill(referencingSelect, columnNames());
-        referencingSelect.value = chosen;
-    });
+    function addDraft() {
+        const row = document.createElement("div");
+        row.className = "dataset-foreign-key-draft dataset-form-fields";
+        const referencing = labelledSelect(row, "referencing_column", "fk_referencing_column");
+        const referencedTable = labelledSelect(row, "referenced_table", "fk_referenced_dataset");
+        const referencedColumn = labelledSelect(row, "referenced_column", "fk_referenced_column");
+        fill(referencing, "select_column", columnNames());
+        fill(referencedTable, "dataset_select_target", targets);
+        placeholder(referencedColumn, "select_column");
 
-    referencedTableSelect.addEventListener("change", async () => {
-        placeholder(referencedColumnSelect);
-        if (!referencedTableSelect.value) return;
-        try {
-            const columns = await fetch_columns_for_table(referencedTableSelect.value);
-            fill(referencedColumnSelect, (columns || []).map((column) => String(column?.column_name || "")).filter(Boolean));
-        } catch (error) {
-            status.hidden = false;
-            status.textContent = text.unavailable;
-            void error;
+        // The column choices follow the form the person is editing, so a column
+        // added in the same save can carry the new link.
+        referencing.addEventListener("focus", () => fill(referencing, "select_column", columnNames()));
+        referencedTable.addEventListener("change", async () => {
+            placeholder(referencedColumn, "select_column");
+            if (!referencedTable.value) return;
+            try {
+                const columns = await readColumns(referencedTable.value);
+                fill(referencedColumn, "select_column",
+                    (columns || []).map((column) => String(column?.column_name || "")).filter(Boolean));
+            } catch (error) {
+                status.show("dataset_foreign_keys_unavailable");
+                void error;
+            }
+        });
+
+        const draft = { row, referencing, referencedTable, referencedColumn };
+        if (multipleDrafts) {
+            const remove = setDatasetFormText(document.createElement("button"), "delete");
+            remove.type = "button";
+            remove.className = "dataset-form-button dataset-foreign-key-remove";
+            remove.addEventListener("click", () => {
+                row.remove();
+                draftRows.splice(draftRows.indexOf(draft), 1);
+            });
+            row.appendChild(remove);
         }
-    });
+        draftRows.push(draft);
+        drafts.appendChild(row);
+        return draft;
+    }
+
+    function clearDrafts() {
+        draftRows.splice(0).forEach(({ row }) => row.remove());
+        if (!multipleDrafts) addDraft();
+    }
+
+    if (multipleDrafts) {
+        const add = setDatasetFormText(document.createElement("button"), "add_foreign_key");
+        add.type = "button";
+        add.className = "modal-button secondary saturate_on_hover";
+        add.dataset.testid = "dataset-foreign-key-add";
+        add.addEventListener("click", () => addDraft().referencing.focus());
+        section.appendChild(add);
+    } else {
+        addDraft();
+    }
 
     function renderExisting(links) {
         list.replaceChildren();
         if (links.length === 0) {
-            const empty = document.createElement("li");
+            const empty = setDatasetFormText(document.createElement("li"), "dataset_foreign_keys_none");
             empty.className = "dataset-foreign-keys-empty";
-            empty.dataset.langKey = COPY_KEYS.none[0];
-            empty.textContent = text.none;
             list.appendChild(empty);
             return;
         }
@@ -144,70 +175,44 @@ export function createDatasetForeignKeyPanel({ datasetName, columnNames = () => 
         }
     }
 
-    const ready = Promise.all([
-        readDatasetForeignKeys(datasetName),
-        endpoint_router("datasetNames", { suppressErrorToast: true }),
-    ])
-        .then(([links, datasetNames]) => {
-            renderExisting(links);
-            fill(referencingSelect, columnNames());
-            fill(referencedTableSelect, (Array.isArray(datasetNames) ? datasetNames : []).map(String));
-            placeholder(referencedColumnSelect);
+    const ready = Promise.all([Promise.resolve(datasetNames), stored ? Promise.resolve(stored) : null])
+        .then(([names, links]) => {
+            targets = (Array.isArray(names) ? names : []).map(String);
+            for (const draft of draftRows) {
+                fill(draft.referencing, "select_column", columnNames());
+                fill(draft.referencedTable, "dataset_select_target", targets);
+            }
+            if (stored) renderExisting(Array.isArray(links) ? links : []);
         })
         .catch((error) => {
-            status.hidden = false;
-            status.textContent = text.unavailable;
+            status.show("dataset_foreign_keys_unavailable");
             void error;
         });
 
-    const draftLink = () => ({
-        referencing_dataset: String(datasetName),
-        referencing_column: referencingSelect.value,
-        referenced_dataset: referencedTableSelect.value,
-        referenced_column: referencedColumnSelect.value,
-    });
-    const complete = () => Boolean(referencingSelect.value && referencedTableSelect.value && referencedColumnSelect.value);
+    const complete = () => draftRows.filter(({ referencing, referencedTable, referencedColumn }) =>
+        referencing.value && referencedTable.value && referencedColumn.value);
 
     return {
         element: section,
-        selects: { referencingSelect, referencedTableSelect, referencedColumnSelect },
         ready,
-        /** Whether the person filled in a complete new link. */
-        changed: complete,
-        /** Add the new link. Returns "saved", "unchanged" or "failed". */
-        save: async () => {
-            if (!complete()) return "unchanged";
-            try {
-                await endpoint_router("addForeignKey", {
-                    method: "POST",
-                    body_data: draftLink(),
-                    suppressErrorToast: true,
-                });
-                placeholder(referencedColumnSelect);
-                referencingSelect.value = "";
-                referencedTableSelect.value = "";
-                renderExisting(await readDatasetForeignKeys(datasetName));
-                status.hidden = true;
-                return "saved";
-            } catch (error) {
-                status.hidden = false;
-                status.textContent = text.saveFailed;
-                void error;
-                return "failed";
-            }
+        /** The complete links the person drafted; a half-filled one is never sent. */
+        value: () => complete().map(({ referencing, referencedTable, referencedColumn }) => ({
+            referencing_column: referencing.value,
+            referenced_dataset: referencedTable.value,
+            referenced_column: referencedColumn.value,
+        })),
+        /** Whether the person drafted a complete link. */
+        changed: () => complete().length > 0,
+        /**
+         * The drafted links are saved: the drafts start over, so a second Save
+         * cannot repeat them, and an existing dataset's list is shown anew.
+         */
+        accept: (links = null) => {
+            clearDrafts();
+            status.clear();
+            if (stored && Array.isArray(links)) renderExisting(links);
         },
+        /** Show that saving the link failed, beside the panel; the draft stays. */
+        reportFailure: () => status.show("dataset_foreign_key_save_failed"),
     };
-}
-
-function labelledSelect(parent, [langKey], captionText, name) {
-    const label = document.createElement("label");
-    const caption = document.createElement("span");
-    caption.dataset.langKey = langKey;
-    caption.textContent = captionText;
-    const select = document.createElement("select");
-    select.name = name;
-    select.dataset.testid = name.replace(/_/g, "-");
-    label.append(caption, select);
-    parent.appendChild(label);
-    return select;
 }

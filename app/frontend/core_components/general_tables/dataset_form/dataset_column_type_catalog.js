@@ -104,21 +104,21 @@ export function parseColumnTypeDefinition(definition) {
  */
 export function getDatasetColumnTypeTranslationFallbacks() {
     return {
-        dataset_column_type_serial: { fi: "Automaattinen tunniste (SERIAL)", en: "Automatic identifier (SERIAL)" },
+        dataset_column_type_serial: { fi: "Automaattinen tunniste (SERIAL)", en: "Automatic identifier (SERIAL)", ch: "自动编号 (SERIAL)", yue: "自動編號 (SERIAL)" },
         dataset_column_type_integer: { fi: "Kokonaisluku (INTEGER)", en: "Integer (INTEGER)", ch: "整数 (INTEGER)", yue: "整數 (INTEGER)" },
-        dataset_column_type_bigint: { fi: "Suuri kokonaisluku (BIGINT)", en: "Large integer (BIGINT)" },
-        dataset_column_type_smallint: { fi: "Pieni kokonaisluku (SMALLINT)", en: "Small integer (SMALLINT)" },
-        dataset_column_type_numeric: { fi: "Desimaaliluku (NUMERIC)", en: "Decimal number (NUMERIC)" },
+        dataset_column_type_bigint: { fi: "Suuri kokonaisluku (BIGINT)", en: "Large integer (BIGINT)", ch: "大整数 (BIGINT)", yue: "大整數 (BIGINT)" },
+        dataset_column_type_smallint: { fi: "Pieni kokonaisluku (SMALLINT)", en: "Small integer (SMALLINT)", ch: "小整数 (SMALLINT)", yue: "細整數 (SMALLINT)" },
+        dataset_column_type_numeric: { fi: "Desimaaliluku (NUMERIC)", en: "Decimal number (NUMERIC)", ch: "小数 (NUMERIC)", yue: "小數 (NUMERIC)" },
         dataset_column_type_varchar: { fi: "Rajattu teksti (VARCHAR)", en: "Limited text (VARCHAR)", ch: "有限长度文本 (VARCHAR)", yue: "限長文字 (VARCHAR)" },
         dataset_column_type_text: { fi: "Teksti (TEXT)", en: "Text (TEXT)", ch: "文本 (TEXT)", yue: "文字 (TEXT)" },
         dataset_column_type_boolean: { fi: "Kyllä/ei (BOOLEAN)", en: "Yes/no (BOOLEAN)", ch: "是/否 (BOOLEAN)", yue: "是／否 (BOOLEAN)" },
         dataset_column_type_date: { fi: "Päivämäärä (DATE)", en: "Date (DATE)", ch: "日期 (DATE)", yue: "日期 (DATE)" },
-        dataset_column_type_timestamptz: { fi: "Aikaleima (TIMESTAMPTZ)", en: "Timestamp (TIMESTAMPTZ)" },
+        dataset_column_type_timestamptz: { fi: "Aikaleima (TIMESTAMPTZ)", en: "Timestamp (TIMESTAMPTZ)", ch: "时间戳 (TIMESTAMPTZ)", yue: "時間戳 (TIMESTAMPTZ)" },
         dataset_column_type_auto_timestamp: { fi: "Automaattinen aikaleima (TIMESTAMPTZ)", en: "Automatic timestamp (TIMESTAMPTZ)", ch: "自动时间戳 (TIMESTAMPTZ)", yue: "自動時間戳 (TIMESTAMPTZ)" },
-        dataset_column_type_jsonb: { fi: "Rakenteinen tieto (JSONB)", en: "Structured data (JSONB)" },
-        dataset_column_type_json: { fi: "Rakenteinen tieto tekstinä (JSON)", en: "Structured data as text (JSON)" },
-        dataset_column_type_precision: { fi: "Numeroita yhteensä", en: "Total digits" },
-        dataset_column_type_scale: { fi: "Desimaaleja", en: "Decimal places" },
+        dataset_column_type_jsonb: { fi: "Rakenteinen tieto (JSONB)", en: "Structured data (JSONB)", ch: "结构化数据 (JSONB)", yue: "結構化資料 (JSONB)" },
+        dataset_column_type_json: { fi: "Rakenteinen tieto tekstinä (JSON)", en: "Structured data as text (JSON)", ch: "文本形式的结构化数据 (JSON)", yue: "文字形式嘅結構化資料 (JSON)" },
+        dataset_column_type_precision: { fi: "Numeroita yhteensä", en: "Total digits", ch: "总位数", yue: "總位數" },
+        dataset_column_type_scale: { fi: "Desimaaleja", en: "Decimal places", ch: "小数位数", yue: "小數位數" },
     };
 }
 
