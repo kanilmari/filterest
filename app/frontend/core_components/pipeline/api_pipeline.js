@@ -20,6 +20,7 @@ import {
     shouldThrottleRateLimitToast,
 } from './api_pipeline_helpers.js';
 import { getBackendRoutePathByHandler } from '../endpoints/backend_route_manifest_reader.js';
+import { markCallerOwnsFailureNotice } from '../error_and_status_handling/error_monitor_handler_helpers.js';
 
 // ==========================================
 // Endpoint Map
@@ -304,6 +305,9 @@ async function resolveUrlStage(ctx) {
 /**
  * buildFetchOptionsStage — constructs the fetch options object from context.
  * Sets method, default Content-Type, credentials, and body.
+ * A caller that shows its own errors (suppressErrorToast) is marked on the
+ * options, so the global fetch monitor does not add a second notice for a
+ * server or network failure (error_monitor_handler.js).
  */
 async function buildFetchOptionsStage(ctx) {
     ctx.fetchOptions = buildFetchOptions({
@@ -312,6 +316,7 @@ async function buildFetchOptionsStage(ctx) {
         bodyData: ctx.bodyData,
     });
     if (ctx.signal !== undefined) ctx.fetchOptions.signal = ctx.signal;
+    if (ctx.suppressErrorToast) markCallerOwnsFailureNotice(ctx.fetchOptions);
 }
 
 /**

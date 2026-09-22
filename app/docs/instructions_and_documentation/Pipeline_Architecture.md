@@ -551,7 +551,7 @@ Handles all HTTP API requests from the frontend. Every `O()` call (the endpoint 
 | # | Stage Name         | AlwaysEnforced | Purpose |
 |---|--------------------|:-:|---|
 | 1 | `resolveUrl`       | No  | Resolves endpoint name to URL pattern via `endpoint_map` |
-| 2 | `buildFetchOptions` | No  | Constructs fetch init (method, headers, body) from context |
+| 2 | `buildFetchOptions` | No  | Constructs fetch init (method, headers, body) from context; marks it when the caller shows its own errors |
 | 3 | `csrf`             | No  | Attaches cached CSRF token to state-changing requests |
 | 4 | `fingerprint`      | No  | Computes and attaches browser fingerprint hash |
 | 5 | `execute`          | No  | Performs the actual `fetch()` call |
@@ -561,6 +561,8 @@ Handles all HTTP API requests from the frontend. Every `O()` call (the endpoint 
 | 9 | `responseParse`    | No  | Parses JSON response body |
 
 The API pipeline has no `alwaysEnforced` stages — all stages are skippable via `context.skip`. Callers can pass options like `{ returnResponse: true }` to customize behavior (e.g., skip response parsing and get the raw `Response` object).
+
+A caller that shows its own error passes `{ suppressErrorToast: true }`. The pipeline's own notices stay silent, and `buildFetchOptions` marks the fetch options (`markCallerOwnsFailureNotice`, a non-enumerable mark that never reaches the network). The global fetch monitor (`error_monitor_handler.js`) then adds no server-error (5xx) or network-failure notice either, so the user sees only the caller's notice. Unmarked requests get the monitor's notice: translated copy from the `server_error_notice` and `network_error_notice` language keys, with the status code and without the address, which goes to the console.
 
 ### 10.4. Frontend vs Backend Pipeline Comparison
 

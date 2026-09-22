@@ -1,32 +1,67 @@
 import { describe, test, expect } from 'vitest';
 import {
-    getNiceStatusMessage,
+    FAILURE_NOTICE_TRANSLATION_FALLBACKS,
+    buildNetworkErrorNotice,
+    buildServerErrorNotice,
+    callerOwnsFailureNotice,
     isAbortLikeNetworkError,
+    markCallerOwnsFailureNotice,
     shortenUrl,
 } from './error_monitor_handler_helpers.js';
 
 // ---------------------------------------------------------------------------
-// getNiceStatusMessage
+// Failure notices
 // ---------------------------------------------------------------------------
-describe('getNiceStatusMessage', () => {
-    test('returns correct message for known status codes', () => {
-        expect(getNiceStatusMessage(400)).toBe("Virheellinen pyynto (400)");
-        expect(getNiceStatusMessage(401)).toBe("Luvaton (401)");
-        expect(getNiceStatusMessage(403)).toBe("Kielletty (403)");
-        expect(getNiceStatusMessage(404)).toBe("Resurssia ei loydy (404)");
-        expect(getNiceStatusMessage(429)).toBe("Liian monta pyyntoa (429)");
-        expect(getNiceStatusMessage(500)).toBe("Palvelinvirhe (500)");
+describe('failure notices', () => {
+    const translate = (langKey) => `copy of ${langKey}`;
+
+    test('server notice is the translated sentence and the status code', () => {
+        expect(buildServerErrorNotice(500, translate)).toBe('copy of server_error_notice (500)');
+        expect(buildServerErrorNotice(502, translate)).toBe('copy of server_error_notice (502)');
     });
 
-    test('returns generic message for unknown status codes', () => {
-        expect(getNiceStatusMessage(502)).toBe("Tuntematon HTTP-virhe (502)");
-        expect(getNiceStatusMessage(503)).toBe("Tuntematon HTTP-virhe (503)");
-        expect(getNiceStatusMessage(418)).toBe("Tuntematon HTTP-virhe (418)");
+    test('server notice omits a status code it was not given', () => {
+        expect(buildServerErrorNotice(undefined, translate)).toBe('copy of server_error_notice');
     });
 
-    test('includes status code in parentheses for all messages', () => {
-        expect(getNiceStatusMessage(500)).toContain('(500)');
-        expect(getNiceStatusMessage(999)).toContain('(999)');
+    test('network notice is only the translated sentence', () => {
+        expect(buildNetworkErrorNotice(translate)).toBe('copy of network_error_notice');
+    });
+
+    test('every notice key has bootstrap copy in each installed language', () => {
+        expect(Object.keys(FAILURE_NOTICE_TRANSLATION_FALLBACKS).sort())
+            .toEqual(['network_error_notice', 'server_error_notice']);
+        for (const copy of Object.values(FAILURE_NOTICE_TRANSLATION_FALLBACKS)) {
+            expect(Object.keys(copy).sort()).toEqual(['ch', 'en', 'fi', 'yue']);
+            for (const text of Object.values(copy)) {
+                expect(text.trim()).not.toBe('');
+                expect(text).not.toMatch(/https?:|\/api\//);
+            }
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Caller-owned failure notices
+// ---------------------------------------------------------------------------
+describe('caller-owned failure notices', () => {
+    test('marked options are recognised, unmarked and missing options are not', () => {
+        const options = markCallerOwnsFailureNotice({ method: 'GET' });
+        expect(callerOwnsFailureNotice(options)).toBe(true);
+        expect(callerOwnsFailureNotice({ method: 'GET' })).toBe(false);
+        expect(callerOwnsFailureNotice(undefined)).toBe(false);
+        expect(callerOwnsFailureNotice(null)).toBe(false);
+    });
+
+    test('the mark leaves what fetch sends unchanged', () => {
+        const options = markCallerOwnsFailureNotice({ method: 'POST', headers: { 'X-CSRF-Token': 't' } });
+        expect(Object.keys(options)).toEqual(['method', 'headers']);
+        expect(JSON.stringify(options)).toBe('{"method":"POST","headers":{"X-CSRF-Token":"t"}}');
+        expect(options).toEqual({ method: 'POST', headers: { 'X-CSRF-Token': 't' } });
+    });
+
+    test('marking tolerates a missing options object', () => {
+        expect(markCallerOwnsFailureNotice(undefined)).toBeUndefined();
     });
 });
 

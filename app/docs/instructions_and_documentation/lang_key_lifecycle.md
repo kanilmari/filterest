@@ -294,6 +294,11 @@ collection selector's ownership and inheritance keys are maintained in
 Their upgrade migration fills missing values while preserving nonempty
 site-authored translations. Finnish and English are recorded as reviewed;
 legacy Chinese/Cantonese fallbacks do not constitute approval of new locales.
+A seed migration can instead be run by the bootstrap itself: list it in
+`language_seed_migrations` in `generate_bootstrap.py`, so the copy is written
+once. `20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql`
+does this, and also shows how to retire wording generated from a key's name:
+only that exact text is replaced, never a translation a site has changed.
 
 Explicit user actions, such as saving an edited translation or restoring a
 personal field selection, keep their normal success/error notifications.

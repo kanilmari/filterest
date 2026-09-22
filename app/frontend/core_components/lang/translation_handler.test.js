@@ -221,6 +221,33 @@ describe('translatePage', () => {
         expect(reset.textContent).toBe('使用網站預設設定');
     });
 
+    test('serves the fetch monitor failure notices in every language before runtime keys exist', async () => {
+        window.translationPromises.ch = Promise.resolve({});
+        const { translatePage, getTranslationForKey } = await import('./translation_handler.js');
+
+        for (const [language, expected] of [
+            ['fi', 'Palvelussa tapahtui virhe. Yritä hetken kuluttua uudelleen.'],
+            ['en', 'The service ran into an error. Please try again in a moment.'],
+            ['ch', '服务出现错误。请稍后再试。'],
+            ['yue', '服務出咗錯。請稍後再試。'],
+        ]) {
+            await translatePage(language);
+            expect(getTranslationForKey('server_error_notice')).toBe(expected);
+        }
+        await translatePage('en');
+        expect(getTranslationForKey('network_error_notice'))
+            .toBe('The service could not be reached. Check your connection and try again.');
+    });
+
+    test('prefers reviewed runtime failure-notice copy over the local fallback', async () => {
+        window.translationPromises.fi = Promise.resolve({ server_error_notice: 'Sivuston oma virheteksti.' });
+        const { translatePage, getTranslationForKey } = await import('./translation_handler.js');
+
+        await translatePage('fi');
+
+        expect(getTranslationForKey('server_error_notice')).toBe('Sivuston oma virheteksti.');
+    });
+
     test('renders the local fallback after the translation service fails', async () => {
         const source = document.createElement('p');
         source.dataset.langKey = 'field_set_source_group';

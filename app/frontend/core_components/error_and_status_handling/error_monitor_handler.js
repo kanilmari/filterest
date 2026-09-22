@@ -8,14 +8,24 @@
 // Fingerprint injection and auth redirects have been moved to the API pipeline
 // (api_pipeline.js stages: fingerprintStage, authRedirectStage).
 // The fetch monkey-patch now only handles 5xx toasts and network error reporting.
+// Its notices come from language keys and name no address; the address and the
+// browser's own error text go to the console. A caller that shows its own
+// notice (endpoint_router's suppressErrorToast) is not given a second one.
 //
 // Session reset is available via window.__resetSession() in the browser console
 // for recovery from corrupted session state.
 import { endpoint_router } from "../endpoints/endpoint_router.js";
 import { showErrorToast } from "../../reusable_components/notifications/toast_notification_printer.js";
-import { getNiceStatusMessage, isAbortLikeNetworkError, shortenUrl } from "./error_monitor_handler_helpers.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
+import {
+    buildNetworkErrorNotice,
+    buildServerErrorNotice,
+    callerOwnsFailureNotice,
+    isAbortLikeNetworkError,
+    shortenUrl,
+} from "./error_monitor_handler_helpers.js";
 // Imported as a side-effect module in main.js:
-//   import "./core_components/error_and_status_handling/error_and_status_monitor.js";
+//   import "./core_components/error_and_status_handling/error_monitor_handler.js";
 
 (function() {
     let pageUnloadInProgress = false;
@@ -75,31 +85,34 @@ import { getNiceStatusMessage, isAbortLikeNetworkError, shortenUrl } from "./err
 
     const originalFetch = window.fetch;
     window.fetch = async function(resource, options = {}) {
+        let response;
         try {
-            const response = await originalFetch(resource, options);
-
-            // System-level error (5xx): error toast + console.error
-            if (!response.ok && response.status >= 500) {
-                const niceStatusMsg = getNiceStatusMessage(response.status);
-                const shortUrl = shortenUrl(response.url, 160);
-                const msg = `${niceStatusMsg} | ${shortUrl}`;
-                console.error('[HTTP]', msg, response);
-                showErrorToast(msg);
-            }
-
-            // 4xx passes through silently — endpoint_router or calling component handles it
-            return response;
+            response = await originalFetch(resource, options);
         } catch (err) {
             const ignoreAbortNoise = options?.headers?.['X-Ignore-Network-Abort'] === '1'
                 || options?.headers?.['x-ignore-network-abort'] === '1';
             if ((pageUnloadInProgress || ignoreAbortNoise) && isAbortLikeNetworkError(err)) {
                 throw err;
             }
-            // Network failure or fetch parse error
-            const msg = `[Network] ${err.message || err}`;
-            console.error(msg, err);
-            showErrorToast(msg);
+            // Network failure: the request never reached the service.
+            console.error(`[Network] ${err.message || err}`, err);
+            if (!callerOwnsFailureNotice(options)) {
+                showErrorToast(buildNetworkErrorNotice(getTranslationForKey));
+            }
             throw err;
         }
+
+        // System-level error (5xx): console.error with the address, and a
+        // notice unless the caller shows its own. Handled after the try, so a
+        // response that did arrive is never also reported as a network failure.
+        if (!response.ok && response.status >= 500) {
+            console.error('[HTTP]', `${response.status} | ${shortenUrl(response.url, 160)}`, response);
+            if (!callerOwnsFailureNotice(options)) {
+                showErrorToast(buildServerErrorNotice(response.status, getTranslationForKey));
+            }
+        }
+
+        // 4xx passes through silently — endpoint_router or calling component handles it
+        return response;
     };
 })();

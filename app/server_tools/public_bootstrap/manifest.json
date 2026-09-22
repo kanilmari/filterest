@@ -116,7 +116,8 @@
     "20260920000002_create_dataset_interface_labels.sql",
     "20260920000003_name_site_assistant_runtimes.sql",
     "20260921000001_withdraw_public_table_creation.sql",
-    "20260921000002_record_public_table_creation_release.sql"
+    "20260921000002_record_public_table_creation_release.sql",
+    "20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -236,7 +237,7 @@
     "public.tiketit_assets"
   ],
   "seed_row_counts": {
-    "public.dev_agent_task_statuses": 186,
+    "public.dev_agent_task_statuses": 195,
     "public.dokumentaatio": 3,
     "public.dokumentaatio_tiketit_relation": 1,
     "public.palvelukatalogi": 1,
@@ -276,7 +277,7 @@
       "sha256": "3b7a7f58b622f7959c19cb1e60e9b31f02a0d5e8b0d8bd46a81bf6640475431d"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "41b214c140910daa5c975e6fc8af634d12a107a2ecea94d8c0d914345dc6ae6d"
+      "sha256": "63b9f698cec34f87de11698fd734436a820b925a5ef1e86682d1579452948c65"
     }
   },
   "source_files": {
@@ -293,7 +294,7 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "d64f47d198b48075356c8fe651cff085daca3c8b8f3101a74c236754a52c3d50"
+      "sha256": "2c22b05eaac3ffc084d17e6f3959956c03a9722946238f899d95120a74bc356a"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "c6cd8b8f48e3be6868c232785c8f4c2bd59c045b214deedbb7cca42605225f2f"
@@ -678,6 +679,9 @@
     },
     "filterest/app/server_tools/migrations/20260921000002_record_public_table_creation_release.sql": {
       "sha256": "994688aa896f35252be1f3df3de8e0ed4f19309b187802b755784f6d5f947a0c"
+    },
+    "filterest/app/server_tools/migrations/20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql": {
+      "sha256": "06d16f17ae5baeab577815cc835acd3e115fae82904a359e12ed02a0a9c3cdbe"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

@@ -39,6 +39,11 @@ developer_workflow_schema_migrations = (
 developer_workflow_seed_migrations = (
     "20260919000009_seed_developer_workflow_metadata.sql",
 )
+# Interface copy an upgrade seeds is seeded for a new installation by the same
+# file, after every language row the reviewed sources above provide.
+language_seed_migrations = (
+    "20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql",
+)
 # Runs after every table exists, as the importing application role, so a new
 # installation withholds table creation from PUBLIC exactly as an upgrade does.
 schema_privilege_migrations = (
@@ -65,6 +70,7 @@ schema_sql = (
 seed_sql = (
     "".join(reviewed_source(name).replace("__FILTEREST_DB_VERSION__", db_version) for name in seed_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)
+    + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
 )
 
 # Enforce the same explicit content boundary used by the public release audit.
