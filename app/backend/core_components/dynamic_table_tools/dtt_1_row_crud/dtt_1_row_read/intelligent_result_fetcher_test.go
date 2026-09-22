@@ -20,6 +20,7 @@ type intelligentFetcherTestState struct {
 	vectorExists              bool
 	queryableColumns          []string
 	finalRows                 [][]driver.Value
+	finalColumns              []string
 	finalQuery                string
 	finalArgs                 []driver.NamedValue
 	requireNullVectorFallback bool
@@ -233,7 +234,8 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 	db, state := openIntelligentFetcherTestDB(t, intelligentFetcherTestState{
 		headerExists: true,
-		finalRows:    [][]driver.Value{{int64(161), "Firefox", float64(0.12)}},
+		finalRows:    [][]driver.Value{{int64(161), "Firefox", float64(0.12), ""}},
+		finalColumns: []string{"id", "row_name", "distance", "language_code"},
 	})
 	defer db.Close()
 
@@ -247,7 +249,7 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 		tableUID:     104,
 		rowGroupSlug: "security",
 	}
-	if _, err := fetchSimilarRows(db, "travel_info", "", pgvector.NewVector([]float32{0.1}), authorization); err != nil {
+	if _, err := fetchSimilarRows(db, "travel_info", "", pgvector.NewVector([]float32{0.1}), authorization, semanticSources{General: true}, semanticResultLimit); err != nil {
 		t.Fatalf("fetchSimilarRows returned error: %v", err)
 	}
 
@@ -301,6 +303,7 @@ func openIntelligentFetcherTestDB(t *testing.T, state intelligentFetcherTestStat
 		vectorExists:              state.vectorExists,
 		queryableColumns:          append([]string(nil), state.queryableColumns...),
 		finalRows:                 cloneIntelligentFetcherRows(state.finalRows),
+		finalColumns:              append([]string(nil), state.finalColumns...),
 		requireNullVectorFallback: state.requireNullVectorFallback,
 	}
 
@@ -362,7 +365,11 @@ func (c *intelligentFetcherTestConn) QueryContext(_ context.Context, query strin
 			(!strings.Contains(query, "COALESCE(") || !strings.Contains(query, "to_tsvector('simple'")) {
 			return newIntelligentFetcherRows([]string{"id", "row_name", "rank"}, nil), nil
 		}
-		return newIntelligentFetcherRows([]string{"id", "row_name", "rank"}, c.state.finalRows), nil
+		columns := []string{"id", "row_name", "rank"}
+		if len(c.state.finalColumns) > 0 {
+			columns = c.state.finalColumns
+		}
+		return newIntelligentFetcherRows(columns, c.state.finalRows), nil
 	}
 }
 

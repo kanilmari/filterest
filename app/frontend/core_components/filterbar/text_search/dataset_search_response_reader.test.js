@@ -57,3 +57,16 @@ test("cancels a pending stream read immediately and ignores later chunks", async
     await expect(pending).resolves.toMatchObject({ done: true });
     expect(cancel).toHaveBeenCalledOnce();
 });
+
+test("sends the interface language as the reader's language", async () => {
+    localStorage.setItem("chosen_language", "fi");
+    try {
+        endpoint.mockResolvedValueOnce({ body: new ReadableStream({ start(controller) { controller.close(); } }) });
+        for await (const packet of readDatasetSearchResponse("app_service_catalog", "auto", {}, () => true)) void packet;
+        const { url_params } = endpoint.mock.calls.at(-1)[1];
+        expect(new URLSearchParams(url_params).get("lang")).toBe("fi");
+        expect(new URLSearchParams(url_params).get("query")).toBe("auto");
+    } finally {
+        localStorage.removeItem("chosen_language");
+    }
+});

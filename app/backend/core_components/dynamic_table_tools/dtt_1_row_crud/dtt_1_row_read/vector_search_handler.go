@@ -1,7 +1,7 @@
 // vector_search_handler.go
 // HTTP handler for semantic vector search over database rows.
 // Bridges the embedding API, the vector column, and the search result response.
-// Exists to generate query embeddings and rank rows by pgvector L2 distance.
+// Exists to generate query embeddings and rank rows by cosine distance across the stored embeddings.
 
 package dtt_1_row_read
 
@@ -27,7 +27,7 @@ import (
 )
 
 // GetResultsVector on rinnakkainen endpoint GetResults-funktiolle, mutta tukee
-// vector_query-parametria, jolla toteutetaan semanttinen haku (ORDER BY embedding_vector <-> $N).
+// vector_query-parametria, jolla toteutetaan semanttinen haku (järjestys kosinietäisyyden mukaan, semanticMatchLateral).
 func GetResultsVector(response_writer http.ResponseWriter, request *http.Request) {
 	table_name := request.URL.Query().Get("dataset")
 	if table_name == "" {
@@ -201,14 +201,20 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 
 	//------------------------------------------------
 	// 7. Tarkistetaan semanttisen haun parametri (vector_query=...)
+	// The rows are ordered by their best distance across every embedding the
+	// dataset stores. lang is the reader's language: a match in it ranks
+	// slightly ahead, and no language is left out.
 	vector_query := request.URL.Query().Get("vector_query")
 	langCode := request.URL.Query().Get("lang")
 	if vector_query != "" {
-		useLang := false
-		if langCode != "" {
-			if ok, err := tableHasLangEmbeddings(readQuerier, table_name); err == nil && ok {
-				useLang = true
+		sources, sourcesErr := resolveSemanticSources(readQuerier, table_name)
+		if sourcesErr != nil || !sources.any() {
+			if sourcesErr != nil {
+				log.Printf("\033[31merror resolving embedding sources: %s\033[0m\n", sourcesErr.Error())
 			}
+			response_data := map[string]interface{}{"columns": []string{}, "data": []map[string]interface{}{}, "types": map[string]interface{}{}, "resultsPerLoad": 0}
+			json.NewEncoder(response_writer).Encode(response_data)
+			return
 		}
 
 		vectorVal, embErr := generateVectorParam(vector_query)
@@ -220,27 +226,18 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 
 		query_args = append(query_args, vectorVal)
 		vecIndex := len(query_args)
-		if useLang {
-			query_args = append(query_args, langCode)
-			langIndex := len(query_args)
-			quotedTable := pq.QuoteIdentifier(table_name)
-			quotedEmbeddingsTable := quoteDerivedTableName(table_name, "_lang_embeddings")
-			join_clauses += fmt.Sprintf(
-				" JOIN (SELECT DISTINCT ON (host_row_id) host_row_id, embedding FROM %s WHERE language_code = $%d ORDER BY host_row_id, updated DESC) le ON le.host_row_id = %s.id",
-				quotedEmbeddingsTable, langIndex, quotedTable)
-			order_by_clause = fmt.Sprintf(" ORDER BY le.embedding <-> $%d", vecIndex)
-		} else {
-			// Tarkista embedding_vector-sarake
-			var columnExists bool
-			err = readQuerier.QueryRow(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = 'embedding_vector' AND table_schema = 'public')`, table_name).Scan(&columnExists)
-			if err != nil || !columnExists {
-				response_data := map[string]interface{}{"columns": []string{}, "data": []map[string]interface{}{}, "types": map[string]interface{}{}, "resultsPerLoad": 0}
-				json.NewEncoder(response_writer).Encode(response_data)
-				return
-			}
-			order_by_clause = fmt.Sprintf(" ORDER BY %s.embedding_vector <-> $%d",
-				pq.QuoteIdentifier(table_name), vecIndex)
+		langIndex := 0
+		if sources.Language {
+			query_args = append(query_args, readerContentLanguage(langCode))
+			langIndex = len(query_args)
 		}
+		join_clauses += fmt.Sprintf(" CROSS JOIN LATERAL (%s\n) AS semantic",
+			semanticMatchLateral(table_name, sources, vecIndex, langIndex))
+		// Rows without an embedding keep their place after every matched row,
+		// and the row id keeps equal distances in one order across pages.
+		order_by_clause = fmt.Sprintf(
+			" ORDER BY semantic.rank_score ASC NULLS LAST, semantic.distance ASC NULLS LAST, %s.id ASC",
+			pq.QuoteIdentifier(table_name))
 	}
 
 	// ------------------------------------------------

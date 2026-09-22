@@ -10,7 +10,7 @@ This section outlines the workflow for displaying search results and summarizes 
 
 ### Overview
 1.  **Search**: The user submits a search query. `do_intelligent_search()` sends a request to `/api/get-intelligent-results` and streams results.
-2.  **Backend**: `GetIntelligentResultsHandlerWrapper` returns matching records in two stages (text and AI).
+2.  **Backend**: `GetIntelligentResultsHandlerWrapper` returns matching records in two stages (text and AI). The request carries the interface language as `lang`, the reader's language: the AI stage searches every stored embedding, general and per language, and only ranks a match in the reader's language slightly ahead.
 3.  **Notices**: When the text-search stage finishes, a `text_search_ended` notice is inserted. If the AI stage returns suggestions, a `see_also` notice appears.
 4.  **Rendering**: `filterest/app/frontend/core_components/table_views/dataset_view_printer.js` renders the data using the selected view module.
 5.  **Filters**: The global search term appears as an `.active-filter-item` above the results.

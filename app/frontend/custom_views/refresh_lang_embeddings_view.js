@@ -1,11 +1,20 @@
 // refresh_lang_embeddings_view.js
-// Admin view to refresh multilingual embeddings on demand.
-// Bridges the embedding-refresh backend endpoints and the admin UI.
-// Exists to let admins regenerate language embeddings per dataset and language without a deploy.
+// Admin view that shows every dataset's embedding status and refreshes multilingual embeddings on demand.
+// Bridges the embedding status and refresh backend endpoints and the admin UI.
+// Exists to let admins see what is embedded and regenerate language embeddings per dataset and language without a deploy.
 
 import { endpoint_router } from '../core_components/endpoints/endpoint_router.js';
 import { applyPermission } from '../core_components/route_permission_checker.js';
-import { showSuccessToast } from '../reusable_components/notifications/toast_notification_printer.js';
+import { showToast } from '../reusable_components/notifications/toast_notification_printer.js';
+import { keyedElement, renderEmbeddingStatusPanel } from './embedding_status_panel.js';
+import { englishEmbeddingAdminCopy } from './embedding_status_translation_fallbacks.js';
+
+// Shows the pending-row count through its language key, so the number never
+// replaces the translated sentence around it.
+export function showPendingRowCount(counter, total) {
+    counter.dataset.langKey = `embedding_refresh_rows_to_process+${total}`;
+    counter.textContent = englishEmbeddingAdminCopy('embedding_refresh_rows_to_process', total);
+}
 
 // normalizeEmbeddingDatasetList accepts the capability-aware admin response
 // while preserving compatibility with the legacy string-only response.
@@ -73,19 +82,22 @@ export function selectedEmbeddingLanguages(container) {
 
 export async function generate_refresh_lang_embeddings_view(container) {
     container.replaceChildren();
+    // Read-only status first: what is embedded, how fully, by which model.
+    const statusPanel = document.createElement('section');
+    statusPanel.id = 'embedding_status_panel';
+    container.appendChild(statusPanel);
+    void renderEmbeddingStatusPanel(statusPanel);
+
     const warning = document.createElement('p');
     warning.classList.add('fw-card', 'fw-text-sm');
     warning.dataset.langKey = 'embedding_external_warning';
-    warning.textContent = 'Enable a table to send its selected, technically eligible text fields to the configured external embedding provider. Restricted-schema fields are never available here.';
+    warning.textContent = 'When a table is enabled, its technically eligible text fields are initially selected. Clear any fields you do not want sent to the configured external embedding provider. Restricted-schema fields cannot be selected here.';
     container.appendChild(warning);
 
     const tbl = document.createElement('table');
     const thead = document.createElement('thead');
     const hRow = document.createElement('tr');
-    const thDataset = document.createElement('th');
-    thDataset.textContent = 'Dataset';
-    thDataset.dataset.langKey = 'dataset';
-    hRow.appendChild(thDataset);
+    hRow.appendChild(keyedElement('th', 'embedding_status_column_dataset'));
     const thFields = document.createElement('th');
     thFields.textContent = 'Fields sent to the external embedding provider';
     thFields.dataset.langKey = 'embedding_external_fields';
@@ -113,8 +125,7 @@ export async function generate_refresh_lang_embeddings_view(container) {
 
     const counter = document.createElement('div');
     counter.id = 'refresh_embeddings_pending_counter';
-    counter.textContent = 'Rows to process: 0';
-    counter.dataset.langKey = 'rows_to_process';
+    showPendingRowCount(counter, 0);
     container.appendChild(counter);
 
     async function updateCounter() {
@@ -136,7 +147,7 @@ export async function generate_refresh_lang_embeddings_view(container) {
                 console.warn('count failed', err);
             }
         }
-        counter.textContent = `Rows to process: ${total}`;
+        showPendingRowCount(counter, total);
     }
 
     let datasets = [];
@@ -159,7 +170,7 @@ export async function generate_refresh_lang_embeddings_view(container) {
         tdName.textContent = name;
         tr.appendChild(tdName);
         const tdFields = document.createElement('td');
-        tdFields.textContent = 'Loading…';
+        tdFields.appendChild(keyedElement('span', 'embedding_refresh_loading'));
         tr.appendChild(tdFields);
         void renderEmbeddingFieldPolicy(tdFields, name);
         languages.forEach(lang => {
@@ -181,11 +192,9 @@ export async function generate_refresh_lang_embeddings_view(container) {
 
     updateCounter();
 
-    const btn = document.createElement('button');
+    const btn = keyedElement('button', 'embedding_refresh_start');
     btn.id = 'refresh_embeddings_start_button';
     btn.type = 'button';
-    btn.textContent = 'Start embedding';
-    btn.dataset.langKey = 'start_embedding';
     applyPermission(btn, '/api/refresh-lang-embeddings');
     btn.addEventListener('click', async (e) => {
         e.preventDefault();
@@ -204,8 +213,9 @@ export async function generate_refresh_lang_embeddings_view(container) {
                 console.warn('refresh failed', err);
             }
         }
-        showSuccessToast('Embeddings refreshed');
+        showToast({ langKey: 'embedding_refresh_done', level: 'success' });
         updateCounter();
+        void renderEmbeddingStatusPanel(statusPanel);
     });
     container.appendChild(btn);
 }
@@ -219,7 +229,7 @@ async function renderEmbeddingFieldPolicy(container, dataset) {
         }), dataset);
     } catch (error) {
         console.warn('embedding field policy fetch failed', error);
-        container.textContent = 'Field policy unavailable';
+        container.replaceChildren(keyedElement('span', 'embedding_refresh_field_policy_unavailable'));
         return;
     }
 
@@ -253,9 +263,8 @@ async function renderEmbeddingFieldPolicy(container, dataset) {
         fieldList.appendChild(label);
     });
     if (policy.columns.length === 0) {
-        const empty = document.createElement('span');
+        const empty = keyedElement('span', 'embedding_refresh_no_eligible_fields');
         empty.classList.add('fw-text-muted', 'fw-text-sm');
-        empty.textContent = 'No eligible text fields';
         fieldList.appendChild(empty);
     }
     container.appendChild(fieldList);
@@ -278,7 +287,7 @@ async function renderEmbeddingFieldPolicy(container, dataset) {
                     allowed_column_uids: selectedEmbeddingColumnUIDs(fieldList),
                 },
             });
-            showSuccessToast('Embedding field selection saved and refresh queued');
+            showToast({ langKey: 'embedding_field_policy_saved', level: 'success' });
         } catch (error) {
             console.warn('embedding field policy save failed', error);
         } finally {

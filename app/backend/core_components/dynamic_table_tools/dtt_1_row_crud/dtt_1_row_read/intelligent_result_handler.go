@@ -19,6 +19,7 @@ import (
 	"easelect/backend/core_components/httpresponse"
 
 	auth "easelect/backend/core_components/auth"
+	dtt_openai "easelect/backend/core_components/dynamic_table_tools/ai_features"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
@@ -26,6 +27,9 @@ type rowSemanticScore struct {
 	RowID         int
 	RowName       string
 	DistanceScore float64
+	// MatchLanguage is the language of the embedding the row ranked by; empty
+	// for the general row embedding.
+	MatchLanguage string
 }
 
 type rowTextRank struct {
@@ -188,36 +192,39 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	//------------------------------------------------
 	// 3. Embedding-haku — vain tulokset joita EI ole teksti-osumissa
 	//------------------------------------------------
-	embeddingsPresent := false
-	if ok, err := tableHasLangEmbeddings(readQuerier, tableName); err == nil && ok {
-		embeddingsPresent = true
-	} else {
-		embeddingsPresent, _ = hasEmbeddingVectorColumn(readQuerier, tableName)
+	// Every stored embedding is searched, in every language. The reader's
+	// language (lang) only ranks a match in that language slightly ahead.
+	sources, sourcesErr := resolveSemanticSources(readQuerier, tableName)
+	if sourcesErr != nil {
+		fmt.Printf("\033[31membedding sources error: %s\033[0m\n", sourcesErr.Error())
+		sources = semanticSources{}
 	}
 
-	if embeddingsPresent {
+	if sources.any() {
 		vec, vErr := generateVectorParam(userQuery)
 		if vErr != nil {
 			fmt.Printf("\033[31membedding vector error: %s\033[0m\n", vErr.Error())
 		} else {
-			semanticHits, sErr := fetchSimilarRows(readQuerier, tableName, lang, vec, authorization)
+			semanticHits, sErr := fetchSimilarRows(readQuerier, tableName, lang, vec, authorization, sources, semanticCandidateLimit)
 			if sErr != nil {
 				fmt.Printf("\033[31membedding search error: %s\033[0m\n", sErr.Error())
 			} else {
-				const semanticThreshold = 0.70
 				var nearOrder []int
-				for _, hit := range semanticHits {
-					if hit.DistanceScore <= semanticThreshold {
-						nearOrder = append(nearOrder, hit.RowID)
-					}
+				for _, hit := range relatedSemanticHits(semanticHits, dtt_openai.SemanticDistanceCutoff()) {
+					nearOrder = append(nearOrder, hit.RowID)
 				}
 				// The AI group holds only what the text search does not return:
 				// every row the dataset's own listing shows for this search is
-				// left out, not only the first text hits sent above.
+				// left out, not only the first text hits sent above. The
+				// candidates were read beyond the final limit so that leaving
+				// those rows out still leaves the AI group something to show.
 				aiOrder, oErr := rowsOutsideDatasetTextSearch(readQuerier, tableName, userQuery, nearOrder)
 				if oErr != nil {
 					fmt.Printf("\033[31mrowsOutsideDatasetTextSearch(ai): %s\033[0m\n", oErr.Error())
 					aiOrder = nil
+				}
+				if len(aiOrder) > semanticResultLimit {
+					aiOrder = aiOrder[:semanticResultLimit]
 				}
 				if len(aiOrder) > 0 {
 					aiRows, aiCols, aErr := fetchRowsInOrder(readQuerier, tableName, aiOrder, authorization)
@@ -295,8 +302,6 @@ func executeInternalIntelligentQuery(r *http.Request, tableName, userQuery strin
  *  • Kirjaa lokiin, mistä rivit tulivat ja millaisin arvoin
  * =========================================================*/
 func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
-	const semanticThreshold = 0.70
-
 	//------------------------------------------------
 	// 1. Input ja sessiorooli
 	//------------------------------------------------
@@ -335,19 +340,14 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	//------------------------------------------------
-	// 2. Tarkista löytyykö embeddings-sarake
+	// 2. Which embeddings the dataset stores
 	//------------------------------------------------
-	embeddingsPresent := false
-	if ok, err := tableHasLangEmbeddings(readQuerier, tableName); err == nil && ok {
-		embeddingsPresent = true
-	} else {
-		var embErr error
-		embeddingsPresent, embErr = hasEmbeddingVectorColumn(readQuerier, tableName)
-		if embErr != nil {
-			fmt.Printf("\033[31merror: %s\033[0m\n", embErr.Error())
-			embeddingsPresent = false
-		}
+	sources, sourcesErr := resolveSemanticSources(readQuerier, tableName)
+	if sourcesErr != nil {
+		fmt.Printf("\033[31merror: %s\033[0m\n", sourcesErr.Error())
+		sources = semanticSources{}
 	}
+	embeddingsPresent := sources.any()
 
 	//------------------------------------------------
 	// 3. Kerää kandidaatit + kerää lokia varten raakadata
@@ -385,11 +385,13 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		if vErr != nil {
 			fmt.Printf("\033[31merror: %s\033[0m\n", vErr.Error())
 		} else {
-			semanticHits, err = fetchSimilarRows(readQuerier, tableName, lang, vec, authorization)
+			semanticHits, err = fetchSimilarRows(readQuerier, tableName, lang, vec, authorization, sources, semanticResultLimit)
 			if err != nil {
 				fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			} else {
-				for _, near := range semanticHits {
+				// Only rows related in meaning become candidates; the rest are
+				// logged below but never returned.
+				for _, near := range relatedSemanticHits(semanticHits, dtt_openai.SemanticDistanceCutoff()) {
 					c := candidates[near.RowID]
 					if c == nil {
 						c = &candidate{RowID: near.RowID, RowName: near.RowName}
@@ -414,7 +416,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	//------------------------------------------------
 	var near, far []rowSemanticScore
 	for _, c := range candidates {
-		if c.HasSem && c.SemDist <= semanticThreshold {
+		if c.HasSem {
 			near = append(near, rowSemanticScore{RowID: c.RowID, RowName: c.RowName, DistanceScore: c.SemDist})
 		} else {
 			far = append(far, rowSemanticScore{RowID: c.RowID, RowName: c.RowName, DistanceScore: c.SemDist})
@@ -504,7 +506,7 @@ func logSearchDiagnostics(userQuery string, textHits []rowTextRank, semHits []ro
 	} else {
 		fmt.Printf("🧩 Embedding search — %d matches:\n", len(semHits))
 		for _, s := range semHits {
-			fmt.Printf("    • id=%d name=%s (distance=%.4f)\n", s.RowID, s.RowName, s.DistanceScore)
+			fmt.Printf("    • id=%d name=%s (distance=%.4f, language=%q)\n", s.RowID, s.RowName, s.DistanceScore, s.MatchLanguage)
 		}
 	}
 	fmt.Println("--------------------------------------------------------")

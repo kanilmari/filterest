@@ -4,11 +4,18 @@
 // Cancels obsolete readers so delayed responses cannot escape into a newer search.
 
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
+import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { ROW_GROUP_FILTER_KEY } from "../filter_list/row_group_facet_printer.js";
 
-/** Read one search through the usual permission, CSRF and session pipeline. */
+/**
+ * Read one search through the usual permission, CSRF and session pipeline.
+ * The interface language travels as the reader's language: the server searches
+ * every content language regardless and only ranks matches in this one first.
+ */
 export async function* readDatasetSearchResponse(tableName, query, options, isCurrent) {
     let url_params = "&dataset=" + encodeURIComponent(tableName) + "&query=" + encodeURIComponent(query);
+    const readerLanguage = getLanguageWithBrowserFallback();
+    if (readerLanguage) url_params += "&lang=" + encodeURIComponent(readerLanguage);
     if (options.filters && Object.keys(options.filters).length) {
         url_params += "&filters=" + encodeURIComponent(JSON.stringify(options.filters));
     }

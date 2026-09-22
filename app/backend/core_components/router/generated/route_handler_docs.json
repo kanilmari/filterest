@@ -58,7 +58,7 @@
   "dtt_1_row_read.GetFilterOptionsHandler": "GetFilterOptionsHandler returns distinct {value, label} pairs from a foreign table. GET /api/get-filter-options?dataset=\u003cforeign_table\u003e",
   "dtt_1_row_read.GetIntelligentResultsHandlerWrapper": "",
   "dtt_1_row_read.GetResultsHandlerWrapper": "GetResultsHandlerWrapper ...",
-  "dtt_1_row_read.GetResultsVector": "GetResultsVector on rinnakkainen endpoint GetResults-funktiolle, mutta tukee vector_query-parametria, jolla toteutetaan semanttinen haku (ORDER BY embedding_vector \u003c-\u003e $N).",
+  "dtt_1_row_read.GetResultsVector": "GetResultsVector on rinnakkainen endpoint GetResults-funktiolle, mutta tukee vector_query-parametria, jolla toteutetaan semanttinen haku (järjestys kosinietäisyyden mukaan, semanticMatchLateral).",
   "dtt_1_row_read.GetRowCountHandlerWrapper": "----------------------------------------------------------------- * /api/get-row-count?dataset=taulun_nimi * ----------------------------------------------------------------",
   "dtt_1_row_read.SiteAssistantApprovalHandler": "SiteAssistantApprovalHandler approves the named waiting changes of one assistant job and runs them. Only the administrator who started the job may approve it, the approved calls must match what that job actually prepared, and each approved call runs once.",
   "dtt_1_row_update.UpdateRowHandlerWrapper": "UpdateRowHandlerWrapper vain lukee ?dataset= -parametrin ja kutsuu varsinaista käsittelijää",

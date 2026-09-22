@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 
@@ -157,14 +156,10 @@ func loadExternalEmbeddingSourcePolicy(q embeddingPolicyQueryer, dataset string)
 	if !datasetPolicy.Configured {
 		columns = defaultExternalEmbeddingSourceColumns(columns)
 	}
-	provider := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_PROVIDER")))
-	if provider == "" {
-		provider = "openai"
-	}
 	return ExternalEmbeddingSourcePolicy{
 		Dataset:    dataset,
 		TableUID:   tableUID,
-		Provider:   provider,
+		Provider:   configuredEmbeddingProvider(),
 		Enabled:    datasetPolicy.Enabled,
 		Configured: datasetPolicy.Configured,
 		Columns:    columns,

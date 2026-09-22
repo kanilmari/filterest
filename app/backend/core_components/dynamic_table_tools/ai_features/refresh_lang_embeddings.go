@@ -104,6 +104,18 @@ func GetEmbeddingDatasetsHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
 		return
 	}
+	// The status view reads every dataset's embedding state in one answer.
+	if r.URL.Query().Get("include_status") == "true" {
+		report, err := BuildEmbeddingStatusReport(tx)
+		if err != nil {
+			log.Printf("\033[31merror: embedding status report: %v\033[0m", err)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "embedding status unavailable")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(report)
+		return
+	}
 	includePolicyCandidates := r.URL.Query().Get("include_policy_candidates") == "true"
 	rows, err := tx.Query(embeddingDatasetCatalogQuery, includePolicyCandidates)
 	if err != nil {

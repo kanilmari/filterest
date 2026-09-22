@@ -1,0 +1,111 @@
+/*
+ * embedding_status_panel.css
+ * Styles the read-only embedding status table on the embedding refresh admin page.
+ * Sits between the status panel's markup and the shared theme tokens.
+ * Exists so the status reads clearly in the light and the dark theme and scrolls sideways on narrow screens.
+ */
+
+.embedding-status-panel {
+    --embedding-status-warning-color: color-mix(in srgb, var(--color-error) 72%, var(--fw-color-text) 28%);
+    --embedding-status-warning-bg: color-mix(in srgb, var(--color-error) 14%, var(--fw-color-surface) 86%);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--fw-space-3, 12px);
+
+    /* The page opens at the top-left corner, under the fixed menu button. */
+    margin: 3rem 0 var(--fw-space-4, 16px);
+    color: var(--fw-color-text);
+}
+
+.embedding-status-panel h3 {
+    margin: 0;
+}
+
+.embedding-status-panel p {
+    margin: 0;
+}
+
+.embedding-status-muted,
+.embedding-status-note {
+    color: var(--fw-color-muted);
+    font-size: 0.85rem;
+}
+
+.embedding-status-label {
+    font-weight: 600;
+}
+
+.embedding-status-warning {
+    color: var(--embedding-status-warning-color);
+    font-weight: 600;
+}
+
+.embedding-status-scroller {
+    overflow-x: auto;
+    border: 1px solid var(--fw-color-border);
+    border-radius: var(--fw-radius-md, 8px);
+}
+
+.embedding-status-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+/* The base style lets any text break anywhere, which in an auto-width table
+   squeezes a column to one letter. Break between words; the table scrolls. */
+.embedding-status-table,
+.embedding-status-table * {
+    overflow-wrap: normal;
+}
+
+.embedding-status-table th,
+.embedding-status-table td {
+    padding: var(--fw-space-2, 8px) var(--fw-space-3, 12px);
+    border-bottom: 1px solid var(--fw-color-border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.embedding-status-table thead th {
+    background: var(--fw-color-surface-muted);
+    font-weight: 600;
+}
+
+.embedding-status-table td {
+    min-width: 8rem;
+}
+
+.embedding-status-table tbody th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.embedding-status-table tbody tr:last-child th,
+.embedding-status-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.embedding-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--fw-space-2, 8px);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background: var(--fw-color-surface-muted);
+    color: var(--fw-color-muted);
+}
+
+.embedding-status-badge--embedded {
+    background: var(--fw-color-primary-soft);
+    color: var(--fw-color-primary);
+}
+
+.embedding-status-badge--partial,
+.embedding-status-badge--unavailable {
+    background: var(--embedding-status-warning-bg);
+    color: var(--embedding-status-warning-color);
+}

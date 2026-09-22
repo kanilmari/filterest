@@ -26,6 +26,7 @@ import { getCardRoleTranslationFallbacks } from '../table_views/card_view/card_r
 import { DATASET_FORM_TRANSLATION_FALLBACKS } from '../general_tables/dataset_form/dataset_form_translation_fallbacks.js';
 import { getDatasetColumnTypeTranslationFallbacks } from '../general_tables/dataset_form/dataset_column_type_catalog.js';
 import { FAILURE_NOTICE_TRANSLATION_FALLBACKS } from '../error_and_status_handling/error_monitor_handler_helpers.js';
+import { EMBEDDING_STATUS_TRANSLATION_FALLBACKS } from '../../custom_views/embedding_status_translation_fallbacks.js';
 import { CONFIRM_PROMPT_TRANSLATION_FALLBACKS } from '../../reusable_components/modal/confirm_prompt_translation_fallbacks.js';
 import { FOREIGN_KEYS_TRANSLATION_FALLBACKS } from '../admin_tools/foreign_keys_translation_fallbacks.js';
 
@@ -52,6 +53,7 @@ const LOCAL_TRANSLATION_FALLBACKS = {
     ...getDatasetColumnTypeTranslationFallbacks(),
     ...DATASET_FORM_TRANSLATION_FALLBACKS,
     ...FAILURE_NOTICE_TRANSLATION_FALLBACKS,
+    ...EMBEDDING_STATUS_TRANSLATION_FALLBACKS,
     ...CONFIRM_PROMPT_TRANSLATION_FALLBACKS,
     ...FOREIGN_KEYS_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),

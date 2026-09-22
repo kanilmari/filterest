@@ -417,9 +417,27 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string, autho
 	return results, rows.Err()
 }
 
-// fetchSimilarRows hakee 10 merkitykseltään lähintä palvelua.
-func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pgvector.Vector, authorization intelligentSearchAuthorization) ([]rowSemanticScore, error) {
-	const limitResults = 10
+// fetchSimilarRows returns up to limit rows closest in meaning to the query,
+// across every embedding the dataset stores: the general row embedding and
+// each language embedding, one result per row at its best distance.
+//
+// readerLang is the reader's interface language. It never narrows which rows
+// or languages are searched; a match in that language only ranks slightly
+// ahead (semanticReaderLanguageRankFactor). DistanceScore stays the row's best
+// distance in any language, so the same row passes the relatedness threshold
+// whichever language the reader uses.
+func fetchSimilarRows(
+	db dbutils.Querier,
+	mainTable string,
+	readerLang string,
+	queryVector pgvector.Vector,
+	authorization intelligentSearchAuthorization,
+	sources semanticSources,
+	limit int,
+) ([]rowSemanticScore, error) {
+	if !sources.any() || limit <= 0 {
+		return nil, nil
+	}
 
 	rowName := "header"
 	if ok, err := tableHasColumn(db, mainTable, "header"); err != nil {
@@ -428,83 +446,47 @@ func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pg
 		rowName = "id"
 	}
 
-	useLang := false
-	if lang != "" {
-		if ok, err := tableHasLangEmbeddings(db, mainTable); err == nil && ok {
-			useLang = true
-		}
+	queryArgs := []interface{}{queryVector}
+	languagePlaceholder := 0
+	if sources.Language {
+		queryArgs = append(queryArgs, readerContentLanguage(readerLang))
+		languagePlaceholder = len(queryArgs)
+	}
+	// Authorization sits in the candidate WHERE, before ORDER BY and LIMIT, so
+	// rows the reader may not see never take a place among the nearest.
+	authorizationCond, scopedArgs, err := appendIntelligentSearchAuthorizationCondition(
+		mainTable,
+		mainTable,
+		authorization,
+		queryArgs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	whereClause := "semantic.distance IS NOT NULL"
+	if authorizationCond != "" {
+		whereClause += " AND " + authorizationCond
 	}
 
-	var rows *sql.Rows
-	var err error
-	if useLang {
-		quotedTable := pq.QuoteIdentifier(mainTable)
-		quotedEmbeddingsTable := quoteDerivedTableName(mainTable, "_lang_embeddings")
-		queryArgs := []interface{}{queryVector, lang}
-		authorizationCond, scopedArgs, scopeErr := appendIntelligentSearchAuthorizationCondition(
-			mainTable,
-			mainTable,
-			authorization,
-			queryArgs,
-		)
-		if scopeErr != nil {
-			return nil, scopeErr
-		}
-		whereClause := ""
-		if authorizationCond != "" {
-			whereClause = " WHERE " + authorizationCond
-		}
-		query := fmt.Sprintf(`
-                        SELECT %[1]s.id,
-                               %[1]s.%[2]s,
-                               le.embedding <-> $1 AS distance_score
-                        FROM %[1]s
-                        JOIN (
-                                SELECT DISTINCT ON (host_row_id) host_row_id, embedding
-                                FROM %[4]s
-                                WHERE language_code = $2
-                                ORDER BY host_row_id, updated DESC
-                        ) AS le ON le.host_row_id = %[1]s.id
-			%[5]s
-                        ORDER BY distance_score ASC
-                        LIMIT %[3]d`,
-			quotedTable,
-			pq.QuoteIdentifier(rowName),
-			limitResults,
-			quotedEmbeddingsTable,
-			whereClause,
-		)
-		rows, err = db.Query(query, scopedArgs...)
-	} else {
-		queryArgs := []interface{}{queryVector}
-		authorizationCond, scopedArgs, scopeErr := appendIntelligentSearchAuthorizationCondition(
-			mainTable,
-			mainTable,
-			authorization,
-			queryArgs,
-		)
-		if scopeErr != nil {
-			return nil, scopeErr
-		}
-		whereClause := fmt.Sprintf("%s.embedding_vector IS NOT NULL", pq.QuoteIdentifier(mainTable))
-		if authorizationCond != "" {
-			whereClause += " AND " + authorizationCond
-		}
-		query := fmt.Sprintf(`
-                        SELECT %[1]s.id,
-                               %[1]s.%[2]s,
-                               %[1]s.embedding_vector <-> $1 AS distance_score
-                        FROM %[1]s
-			WHERE %[4]s
-                        ORDER BY distance_score ASC
-                        LIMIT %[3]d`,
-			pq.QuoteIdentifier(mainTable),
-			pq.QuoteIdentifier(rowName),
-			limitResults,
-			whereClause,
-		)
-		rows, err = db.Query(query, scopedArgs...)
-	}
+	quotedTable := pq.QuoteIdentifier(mainTable)
+	query := fmt.Sprintf(`
+		SELECT %[1]s.id,
+		       %[1]s.%[2]s,
+		       semantic.distance,
+		       semantic.language_code
+		FROM %[1]s
+		CROSS JOIN LATERAL (%[3]s
+		) AS semantic
+		WHERE %[4]s
+		ORDER BY semantic.rank_score ASC, semantic.distance ASC, %[1]s.id ASC
+		LIMIT %[5]d`,
+		quotedTable,
+		pq.QuoteIdentifier(rowName),
+		semanticMatchLateral(mainTable, sources, 1, languagePlaceholder),
+		whereClause,
+		limit,
+	)
+	rows, err := db.Query(query, scopedArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -515,11 +497,17 @@ func fetchSimilarRows(db dbutils.Querier, mainTable, lang string, queryVector pg
 		var id int
 		var name sql.NullString
 		var distance sql.NullFloat64
-		if err := rows.Scan(&id, &name, &distance); err != nil {
+		var language sql.NullString
+		if err := rows.Scan(&id, &name, &distance, &language); err != nil {
 			return nil, err
 		}
 		if distance.Valid {
-			results = append(results, rowSemanticScore{RowID: id, RowName: name.String, DistanceScore: distance.Float64})
+			results = append(results, rowSemanticScore{
+				RowID:         id,
+				RowName:       name.String,
+				DistanceScore: distance.Float64,
+				MatchLanguage: language.String,
+			})
 		}
 	}
 	return results, rows.Err()

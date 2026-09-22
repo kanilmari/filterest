@@ -19,11 +19,85 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+const (
+	embeddingProviderGoogle = "google"
+	embeddingProviderOpenAI = "openai"
+
+	defaultGoogleEmbeddingModel = "gemini-embedding-001"
+	defaultOpenAIEmbeddingModel = "text-embedding-ada-002"
+
+	// googleEmbeddingDimensions is the vector length requested from Google.
+	// At this length Google does not scale its vectors to unit length.
+	googleEmbeddingDimensions = 1536
+)
+
+// configuredEmbeddingProvider is the site's embedding provider, read from the
+// EMBEDDING_PROVIDER environment variable: "google" selects Google, anything
+// else OpenAI. Every embedding path and the admin status read this one answer.
+func configuredEmbeddingProvider() string {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("EMBEDDING_PROVIDER")), embeddingProviderGoogle) {
+		return embeddingProviderGoogle
+	}
+	return embeddingProviderOpenAI
+}
+
+// configuredEmbeddingModel is the model the configured provider is asked for.
+func configuredEmbeddingModel(provider string) string {
+	if provider == embeddingProviderGoogle {
+		if model := strings.TrimSpace(os.Getenv("GOOGLE_EMBEDDING_MODEL")); model != "" {
+			return model
+		}
+		return defaultGoogleEmbeddingModel
+	}
+	if model := strings.TrimSpace(os.Getenv("OPENAI_EMBEDDING_MODEL")); model != "" {
+		return model
+	}
+	return defaultOpenAIEmbeddingModel
+}
+
+// Search compares meaning by cosine distance (1 − cosine similarity). It
+// ignores vector length, so a cut-off means the same whether a provider scales
+// its vectors to length one (OpenAI) or not (Google at 1536 dimensions). Each
+// model still spreads its distances differently, so the cut-off is per model.
+// Calibrate a new model before adding it: unknown models use their provider's
+// default, which fails towards showing fewer AI results rather than unrelated ones.
+var semanticDistanceCutoffs = map[string]float64{
+	defaultOpenAIEmbeddingModel: openAISemanticDistanceCutoff,
+	defaultGoogleEmbeddingModel: googleSemanticDistanceCutoff,
+}
+
+// openAISemanticDistanceCutoff keeps the former rule, a Euclidean distance of
+// at most 0.70, which on OpenAI's unit vectors is this cosine distance (0.70² / 2).
+const openAISemanticDistanceCutoff = 0.245
+
+// googleSemanticDistanceCutoff was measured on the local service catalog with
+// 15 Finnish and English queries (2026-09-22). Unrelated rows lay at 0.44 or
+// farther (one loosely related row at 0.41); genuine matches of Finnish
+// queries at 0.34-0.42.
+// English queries against mostly Finnish rows reached their match only at
+// 0.42-0.49, so some of them are left to the text search rather than let
+// unrelated rows through.
+const googleSemanticDistanceCutoff = 0.43
+
+var defaultSemanticDistanceCutoffs = map[string]float64{
+	embeddingProviderOpenAI: openAISemanticDistanceCutoff,
+	embeddingProviderGoogle: googleSemanticDistanceCutoff,
+}
+
+// SemanticDistanceCutoff is the largest cosine distance at which the
+// configured model's search result still counts as related in meaning.
+func SemanticDistanceCutoff() float64 {
+	provider := configuredEmbeddingProvider()
+	if cutoff, ok := semanticDistanceCutoffs[configuredEmbeddingModel(provider)]; ok {
+		return cutoff
+	}
+	return defaultSemanticDistanceCutoffs[provider]
+}
+
 // GenerateEmbedding returns a float32 embedding vector for the given text.
 // It dispatches to Google or OpenAI based on the EMBEDDING_PROVIDER env var.
 func GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
-	provider := strings.ToLower(os.Getenv("EMBEDDING_PROVIDER"))
-	if provider == "google" {
+	if configuredEmbeddingProvider() == embeddingProviderGoogle {
 		return generateGoogleEmbedding(ctx, text)
 	}
 	return generateOpenAIEmbedding(ctx, text)
@@ -36,10 +110,7 @@ func generateOpenAIEmbedding(ctx context.Context, text string) ([]float32, error
 	if apiKey == "" {
 		return nil, fmt.Errorf("missing OPENAI_API_KEY")
 	}
-	model := os.Getenv("OPENAI_EMBEDDING_MODEL")
-	if model == "" {
-		model = "text-embedding-ada-002"
-	}
+	model := configuredEmbeddingModel(embeddingProviderOpenAI)
 
 	client := openai.NewClient(apiKey)
 	resp, err := client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
@@ -91,17 +162,14 @@ func generateGoogleEmbedding(ctx context.Context, text string) ([]float32, error
 	if apiKey == "" {
 		return nil, fmt.Errorf("missing GOOGLE_API_KEY")
 	}
-	model := os.Getenv("GOOGLE_EMBEDDING_MODEL")
-	if model == "" {
-		model = "gemini-embedding-001"
-	}
+	model := configuredEmbeddingModel(embeddingProviderGoogle)
 
 	reqBody := geminiEmbedRequest{
 		Model: "models/" + model,
 		Content: geminiContent{
 			Parts: []geminiPart{{Text: text}},
 		},
-		OutputDimensionality: 1536,
+		OutputDimensionality: googleEmbeddingDimensions,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
