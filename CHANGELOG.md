@@ -33,6 +33,7 @@ Database compatibility moves from 9.8.0 to 9.8.1.
 - **The read-only inspection tool is read-only** — It accepted two statements in one query, such as a read followed by an update, and committed any statement that returned no rows. It now accepts exactly one statement, finds forbidden words through comments and strings, runs in a read-only transaction and always rolls back.
 - **`./filterest release verify`** — A checkout verifies itself before a release: source boundaries, root files, release ledger, app/database compatibility, bootstrap and demo media. The release build runs the same checks, so a root file and its entry in the root-file list travel in one commit.
 - **A long link in a card is no longer cut through its letters** — The two-line limit on card values counted the value's own padding, so a URL that wrapped showed its second line only halfway. Two lines now fit completely, and links no longer carry a clipping box of their own.
+- **Dialog content no longer disappears under an empty band** — Every dialog kept a fixed empty band between its title line and its content, and around its sides, and the content scrolled under it and was cut off. The margins now scroll with the content like the margins of a page, the title row reaches the dialog's edges, and the frame is a 2 px border in the theme's border colour with a shadow that is slightly stronger in the dark theme.
 
 ## [9.3.16] - 2026-09-21
 

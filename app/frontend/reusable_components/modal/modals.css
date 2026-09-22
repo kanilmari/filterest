@@ -82,59 +82,139 @@
         var(--image-first-reveal-duration, 300ms) linear both;
 }
 
-/* Modaalin sisältö */
+/* Modaalin sisältö
+ *
+ * The dialog is a frame with three rows: a fixed title row, one scrolling
+ * sheet (.modal_body) and an optional fixed action row. The frame itself has
+ * no padding. Every empty margin lives inside the row it belongs to, so the
+ * sheet's margins scroll with its content like the margins of a page, and
+ * content only ever disappears under a visible divider line, never under an
+ * empty band. */
 .modal {
+    /* Page margins of the scrolling sheet, and the close button that the
+       title row keeps clear of. */
+    --modal-sheet-padding-inline: 24px;
+    --modal-sheet-padding-block: 20px;
+    --modal-close-inset: 16px;
+    --modal-close-size: 36px;
+    --modal-shadow-light: 0 16px 40px rgb(0 0 0 / 0.2), 0 2px 8px rgb(0 0 0 / 0.12);
+    /* Dark surfaces need a slightly heavier shadow to separate from the page. */
+    --modal-shadow-dark: 0 16px 40px rgb(0 0 0 / 0.34), 0 2px 8px rgb(0 0 0 / 0.2);
+    --modal-shadow: var(--modal-shadow-light);
+
     /* Use auth-card variables for a fancier look, falling back to standard variables */
     background: var(--auth-card-bg, var(--bg_color_extreme));
-    padding: 32px;
-    border: 1px solid var(--auth-card-border, var(--border_color));
+    padding: 0;
+    border: 2px solid var(--border_color);
     border-radius: 16px;
     width: 100%;
     max-width: 700px;
     box-sizing: border-box;
-    box-shadow: 0 4px 24px var(--auth-card-shadow, rgb(0 0 0 / 0.12)),
-                0 1px 4px var(--auth-card-shadow-sm, rgb(0 0 0 / 0.08));
+    box-shadow: var(--modal-shadow);
     backdrop-filter: blur(10px);
-    
+
     max-height: 95vh;
     position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    
+
     /* Ensure text color is correct */
     color: var(--text_color);
 }
 
-.modal_body {
-    flex: 1;
-    overflow-y: auto;
+/* The shadow follows the application's own theme first and the operating
+   system's only when the application has no explicit theme. */
+@media (prefers-color-scheme: dark) {
+    .modal {
+        --modal-shadow: var(--modal-shadow-dark);
+    }
 }
 
+body.light-mode .modal {
+    --modal-shadow: var(--modal-shadow-light);
+}
+
+body.dark-mode .modal {
+    --modal-shadow: var(--modal-shadow-dark);
+}
+
+@media (width <= 600px) {
+    .modal {
+        --modal-sheet-padding-inline: 16px;
+        --modal-sheet-padding-block: 16px;
+        --modal-close-inset: 12px;
+    }
+}
+
+/* The dialog's only scroll container. Its side margins are padding, which
+   scrolls with the content. Its top and bottom margins are spacer blocks
+   rather than padding: a scroller's own top padding would push a
+   `position: sticky; top: 0` descendant below the edge, leaving content
+   visible above it. With spacers a sticky row sits flush under the title
+   divider. */
+.modal_body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-inline: var(--modal-sheet-padding-inline);
+}
+
+.modal_body::before,
+.modal_body::after {
+    content: "";
+    display: block;
+    height: var(--modal-sheet-padding-block);
+}
+
+/* Without a title row the close button floats over the sheet, so the sheet's
+   first line starts below it. */
+.modal.no_title .modal_body::before {
+    height: calc(var(--modal-close-inset) + var(--modal-close-size));
+}
+
+/* The action row stays fixed below the sheet; its divider is the edge the
+   scrolling content disappears under. */
 .modal_footer {
     flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding: 16px var(--modal-sheet-padding-inline);
+    border-top: 1px solid var(--border_color);
     overflow: visible;
+}
+
+.modal .modal_footer .form-actions {
+    margin-top: 0;
 }
 
 .image_modal .modal_header {
     all: unset !important;
 }
 
-/* Otsikko ja sulkemisnapin layout */
+/* Otsikko ja sulkemisnapin layout. The title row reaches both edges of the
+   frame; its own padding aligns the title with the sheet and keeps it clear
+   of the close button, which is centred on a one-line title. */
 .modal_header {
     display: flex;
+    flex-shrink: 0;
     justify-content: space-between;
     align-items: center;
-    margin-top: 0;
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.5rem;
+    min-height: calc(var(--modal-close-size) + 2 * var(--modal-close-inset));
+    margin: 0;
+    padding-block: var(--modal-close-inset);
+    padding-inline: var(--modal-sheet-padding-inline)
+        calc(var(--modal-close-size) + 2 * var(--modal-close-inset));
     border-bottom: 1px solid var(--border_color);
-    padding-right: 40px;
 }
 
 .modal.no_title .modal_header {
+    min-height: 0;
+    padding: 0;
     border-bottom: none;
-    padding-bottom: 0;
 }
 
 .modal_header h1,
@@ -215,10 +295,10 @@
 /* Sulkemispainike */
 .modal_close_button {
     position: absolute;
-    top: 16px;
-    right: 16px;
-    width: 36px;
-    height: 36px;
+    top: var(--modal-close-inset, 16px);
+    right: var(--modal-close-inset, 16px);
+    width: var(--modal-close-size, 36px);
+    height: var(--modal-close-size, 36px);
     padding: 0;
     display: flex;
     align-items: center;
@@ -286,6 +366,13 @@
 .image_modal .modal_body {
     overflow: hidden;
     line-height: 0;
+    padding: 0;
+}
+
+/* The image stage is full-bleed: no sheet margins above or below it. */
+.image_modal .modal_body::before,
+.image_modal .modal_body::after {
+    content: none;
 }
 
 /* Image-first extends the image viewer with article content below the 100dvh

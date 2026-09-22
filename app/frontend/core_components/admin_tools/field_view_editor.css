@@ -26,9 +26,18 @@
     align-items: center;
 }
 
+/* The modal's sheet is the only scroller, so the column headings stay in view
+   by sticking flush under the dialog's title divider. The surface is the
+   modal's own translucent colour with the same blur, so the heading row reads
+   as part of the sheet and rows passing beneath it do not show through. */
 .field-view-editor__header {
-    padding: 0 0.75rem 0.35rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.35rem 0.75rem;
     color: var(--muted_text_color, var(--text_color));
+    background: var(--auth-card-bg, var(--bg_color_extreme));
+    backdrop-filter: blur(10px);
     font-size: 0.85rem;
     font-weight: 600;
 }
@@ -44,10 +53,8 @@
 .field-view-editor__list {
     display: grid;
     gap: 0.4rem;
-    max-height: min(60vh, 38rem);
     margin: 0;
     padding: 0;
-    overflow: auto;
     list-style: none;
 }
 

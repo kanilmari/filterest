@@ -345,23 +345,14 @@ body.login-page {
     line-height: 1.6;
 }
 
+/* The shared modal supplies the frame, title row and page margins; the
+   screenshot viewer only widens the dialog and lets a wide image scroll. */
 .auth-tour-image-modal {
-    padding: 24px 24px 18px;
     max-width: 96vw;
-}
-
-.auth-tour-image-modal .modal_header {
-    margin-bottom: 0.85rem;
 }
 
 .auth-tour-image-modal .modal_body {
     overflow: auto;
-    padding: 8px 12px 20px;
-}
-
-.auth-tour-image-modal .modal_close_button {
-    top: 18px;
-    right: 18px;
 }
 
 /* Animated background decoration */
@@ -422,11 +413,13 @@ h1.site_name {
     animation: auth-form-slide-up 0.6s ease-out 0.2s both;
 }
 
-/* When inside a modal, remove the card styling as the modal provides it */
+/* When inside a modal, remove the card styling as the modal provides it.
+   The modal's scrolling sheet has its own side margins, so focus rings are
+   no longer clipped and the form needs no padding of its own. */
 .modal .auth-form {
     box-shadow: none;
     border: none;
-    padding: 4px; /* Padding to prevent focus ring clipping */
+    padding: 0;
     background: transparent;
     width: 100%;
     animation: none;
@@ -601,11 +594,13 @@ h1.site_name {
     background: var(--bg_color_blended, rgb(128 128 128 / 0.12));
 }
 
+/* A larger round close button; the shared modal sizes, places and clears
+   it from this one value. */
+.modal:has(.auth-modal-shell) {
+    --modal-close-size: 42px;
+}
+
 .modal:has(.auth-modal-shell) .modal_close_button {
-    top: 16px;
-    right: 16px;
-    width: 42px;
-    height: 42px;
     border: 1px solid var(--auth-card-border, var(--border_color));
     border-radius: 999px;
     background: color-mix(in srgb, var(--auth-card-bg, var(--bg_color_extreme)) 88%, transparent);
