@@ -57,6 +57,15 @@ function attachStableOptionTestIds(options, baseTestId) {
 	});
 }
 
+// The open list is a fixed-position layer, so it lives outside the dropdown's
+// own box. On a page it hangs from the body. Inside a dialog it hangs from that
+// dialog's overlay instead: the body layer sits below every dialog, which hid
+// the options behind the dialog. Not inside the dialog frame itself, whose
+// backdrop-filter would re-anchor a fixed-position child to the frame.
+function resolveDropdownListHost(containerElement) {
+	return containerElement.closest('.modal_overlay') || document.body;
+}
+
 function resolveDropdownOptionLabel(option, translate) {
 	if (!option) return "";
 	const translated = option.langKey ? translate(option.langKey) : "";
@@ -374,6 +383,12 @@ export function createVanillaDropdown({
 	}
   
 	function open() {
+	  // Checked on every open: a dialog's form is usually built before it is
+	  // placed in the dialog.
+	  const listHost = resolveDropdownListHost(containerElement);
+	  if (listWrapper.parentElement !== listHost) {
+		listHost.appendChild(listWrapper);
+	  }
 	  listWrapper.style.display = 'block';
 	  listWrapper.style.visibility = 'hidden';
 	  startPositionTracking();

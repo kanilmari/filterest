@@ -6,6 +6,10 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+vi.mock("../../icons/icon_loader.js", () => ({
+    setElementSvgContent: vi.fn(async () => undefined),
+}));
+
 describe("createVanillaDropdown", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -130,5 +134,66 @@ describe("createVanillaDropdown", () => {
         const list = document.querySelector(".vdw-dropdown-list");
         expect(list.style.width).toBe("224px");
         expect(list.style.left).toBe("8px");
+    });
+});
+
+describe("createVanillaDropdown list layer", () => {
+    beforeEach(() => {
+        document.body.innerHTML = "";
+    });
+
+    const buildDropdown = async (onChange = vi.fn()) => {
+        const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
+        const container = document.createElement("div");
+        const dropdown = createVanillaDropdown({
+            containerElement: container,
+            options: [{ value: "orders", label: "orders" }],
+            useSearch: false,
+            showClearButton: false,
+            onChange,
+        });
+        const list = () => document.querySelector(`.vdw-dropdown-list[style*="block"]`);
+        return { container, dropdown, list };
+    };
+
+    test("a dropdown on a page opens its list on the page body as before", async () => {
+        const { container, dropdown, list } = await buildDropdown();
+        document.body.appendChild(container);
+
+        dropdown.open();
+
+        expect(list().parentElement).toBe(document.body);
+    });
+
+    test("a dropdown in a dialog opens its list on that dialog's overlay, where options can be picked", async () => {
+        const { createModal, showModal } = await import("../modal/modal_builder.js");
+        const onChange = vi.fn();
+        // Built before it is placed in the dialog, as dialog forms are.
+        const { container, dropdown, list } = await buildDropdown(onChange);
+        const { modal_overlay: overlay } = createModal({ titlePlainText: "Add", contentElements: [container] });
+        showModal();
+
+        dropdown.open();
+
+        expect(list().parentElement).toBe(overlay);
+        expect(overlay.querySelector(".modal").contains(list())).toBe(false);
+        list().querySelector(".vdw-option").click();
+        expect(onChange).toHaveBeenCalledWith("orders");
+    });
+
+    test("a dropdown in a stacked dialog opens its list on the stacked overlay", async () => {
+        const { createModal, createStackedModal, showModal } = await import("../modal/modal_builder.js");
+        const below = await buildDropdown();
+        const { modal_overlay: singletonOverlay } = createModal({ titlePlainText: "Manage", contentElements: [below.container] });
+        showModal();
+        const above = await buildDropdown();
+        const stacked = createStackedModal({ titlePlainText: "Pick", contentElements: [above.container] });
+        stacked.show();
+
+        above.dropdown.open();
+
+        expect(above.list().parentElement).toBe(stacked.modal_overlay);
+        expect(stacked.modal_overlay).not.toBe(singletonOverlay);
+        stacked.hide();
     });
 });
