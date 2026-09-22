@@ -22,8 +22,9 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
-Database compatibility moves from 9.8.0 to 9.8.1.
+## [9.3.17] - 2026-09-22
 
+[GitHub release](https://github.com/kanilmari/filterest/releases/tag/v9.3.17) · Database compatibility moves from 9.8.0 to 9.8.1.
 - **The container image builds as Alpine moves on** — The image pinned Alpine packages to exact builds, and Alpine deletes a build as soon as it replaces it, which made two releases impossible to install. Packages are now constrained only by the base image's Alpine release branch, which still receives security fixes, and a test keeps it that way.
 - **`./filterest test-unit <target>` runs only the target** — With a leading `--`, as the Developer Guide showed, the target was ignored and the whole suite ran. A target is now honoured with or without `--`, written relative to `app/` or to the repository root, and a target that matches no test fails instead of running everything.
 - **Only the application creates tables** — A database that began on PostgreSQL 14 or older, or was restored from one, let every database role create tables in the public schema, including the read-only, guest and ordinary-user roles. The migration withdraws that right from everyone except the application's own role; a new installation already starts that way. Who may create a dataset is still decided by Filterest's own table-creation permissions; this closes the way around them at the database level.
