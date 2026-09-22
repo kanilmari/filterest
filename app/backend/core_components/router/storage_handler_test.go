@@ -52,12 +52,12 @@ func TestParseProtectedStoragePathRejectsNonCanonicalShapes(t *testing.T) {
 }
 
 func TestPublicStorageAllowlistStaysExact(t *testing.T) {
-	for _, path := range []string{"project_logo.png", "project_logo.svg", "service_catalog_logos/firefox.svg"} {
+	for _, path := range []string{"service_catalog_logos/firefox.svg", "service_catalog_logos/nested/logo.png"} {
 		if !isPublicStoragePath(path) {
 			t.Errorf("isPublicStoragePath(%q) = false, want true", path)
 		}
 	}
-	for _, path := range []string{"project_logo.png.bak", "nested/project_logo.png", "service_catalog_logos_evil/firefox.svg", "104/7/original/file.png"} {
+	for _, path := range []string{"project_logo.png", "project_logo.svg", "nested/project_logo.png", "service_catalog_logos_evil/firefox.svg", "104/7/original/file.png"} {
 		if isPublicStoragePath(path) {
 			t.Errorf("isPublicStoragePath(%q) = true, want false", path)
 		}
@@ -72,7 +72,7 @@ func TestProtectedSVGDownloadsWhilePublicBrandingRemainsInline(t *testing.T) {
 	}
 
 	publicResponse := httptest.NewRecorder()
-	setStorageDownloadHeaders(publicResponse, "project_logo.svg")
+	setStorageDownloadHeaders(publicResponse, "service_catalog_logos/firefox.svg")
 	if got := publicResponse.Header().Get("Content-Disposition"); got != "" {
 		t.Fatalf("public branding SVG Content-Disposition = %q, want inline delivery", got)
 	}
@@ -556,7 +556,7 @@ func TestServeStorageUsesGuestActorOnlyWhenBrowsingIsOpen(t *testing.T) {
 
 func TestServeStoragePublicLogoSkipsDatabaseAuthorizationAndPrivateCacheHeaders(t *testing.T) {
 	setupStorageHandlerTest(t)
-	writeStorageHandlerFixture(t, "project_logo.png", "logo")
+	writeStorageHandlerFixture(t, "service_catalog_logos/firefox.png", "logo")
 	authorizationCalls := 0
 	storageAuthorizeRead = func(
 		context.Context,
@@ -570,7 +570,7 @@ func TestServeStoragePublicLogoSkipsDatabaseAuthorizationAndPrivateCacheHeaders(
 	}
 
 	rr := httptest.NewRecorder()
-	ServeStorage(rr, httptest.NewRequest(http.MethodGet, "/storage/project_logo.png", nil))
+	ServeStorage(rr, httptest.NewRequest(http.MethodGet, "/storage/service_catalog_logos/firefox.png", nil))
 	if rr.Code != http.StatusOK || rr.Body.String() != "logo" || authorizationCalls != 0 {
 		t.Fatalf("public logo response = status %d body %q calls %d, want 200 logo and no authorization", rr.Code, rr.Body.String(), authorizationCalls)
 	}
@@ -586,13 +586,14 @@ func TestServeStorageRejectsEscapingFileSymlink(t *testing.T) {
 	if err := os.WriteFile(externalFile, []byte("outside-secret"), 0o644); err != nil {
 		t.Fatalf("WriteFile external fixture: %v", err)
 	}
-	symlinkPath := filepath.Join(localStorageDir, "project_logo.png")
+	writeStorageHandlerFixture(t, "service_catalog_logos/placeholder.png", "")
+	symlinkPath := filepath.Join(localStorageDir, "service_catalog_logos", "escape.png")
 	if err := os.Symlink(externalFile, symlinkPath); err != nil {
 		t.Skipf("symlink creation unavailable: %v", err)
 	}
 
 	rr := httptest.NewRecorder()
-	ServeStorage(rr, httptest.NewRequest(http.MethodGet, "/storage/project_logo.png", nil))
+	ServeStorage(rr, httptest.NewRequest(http.MethodGet, "/storage/service_catalog_logos/escape.png", nil))
 
 	if rr.Code == http.StatusOK || strings.Contains(rr.Body.String(), "outside-secret") {
 		t.Fatalf("escaping file symlink response = status %d body %q", rr.Code, rr.Body.String())

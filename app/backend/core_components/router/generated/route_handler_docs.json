@@ -184,7 +184,7 @@
   "system_table_tools.ResetSharedViewFieldSetHandler": "ResetSharedViewFieldSetHandler removes only the administrator-selected site or group assignments. It leaves reusable field collections and every other target intact so an override can be removed without deleting shared content.",
   "system_table_tools.SaveArticleSectionDefaultsHandler": "SaveArticleSectionDefaultsHandler patches or resets the administrator's site default. POST /api/admin/view-field-settings/article-section-defaults",
   "system_table_tools.SaveChildTabConfigHandler": "SaveChildTabConfigHandler bulk-upserts the legacy-named child-tab config rows for a parent table. POST /api/child-tab-config/save",
-  "system_table_tools.SaveDatasetHeaderConfigHandler": "SaveDatasetHeaderConfigHandler stores header copy, shared branding, and dataset-specific presentation media. POST /api/dataset-header-config/save",
+  "system_table_tools.SaveDatasetHeaderConfigHandler": "SaveDatasetHeaderConfigHandler stores header copy and dataset-specific presentation media. POST /api/dataset-header-config/save",
   "system_table_tools.SaveDatasetSortDefaultHandler": "SaveDatasetSortDefaultHandler saves an administrator's own default or the site-wide default. The route uses the administrator pipeline profile.",
   "system_table_tools.SaveFilterbarSectionLayoutHandler": "SaveFilterbarSectionLayoutHandler stores the global admin-managed compact filterbar section layout. POST /api/filterbar-section-layout/save",
   "system_table_tools.SavePersonalDatasetSortDefaultHandler": "SavePersonalDatasetSortDefaultHandler saves only the authenticated user's own default. Its request intentionally has no scope field, so the login-only route cannot be used to select or overwrite the site-wide row.",

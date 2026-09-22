@@ -1,5 +1,5 @@
 // dataset_header_config.go
-// Admin API handlers for dataset header copy, project branding, and dataset presentation media.
+// Admin API handlers for dataset header copy and dataset presentation media.
 // Bridges system metadata, validated storage uploads, and the admin editor workflow.
 // Exists to keep dataset header configuration in one backend surface instead of generic CRUD routes.
 package system_table_tools
@@ -26,8 +26,6 @@ import (
 	"time"
 )
 
-var projectLogoExtensions = []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
-
 type datasetHeaderTextConfig struct {
 	LangKey          string `json:"lang_key"`
 	Fi               string `json:"fi"`
@@ -41,7 +39,6 @@ type datasetHeaderConfigResponse struct {
 	Title               datasetHeaderTextConfig `json:"title"`
 	Slogan              datasetHeaderTextConfig `json:"slogan"`
 	SearchPlaceholder   datasetHeaderTextConfig `json:"search_placeholder"`
-	ProjectLogoPath     string                  `json:"project_logo_path"`
 	CoverImagePath      string                  `json:"cover_image_path"`
 	BackgroundImagePath string                  `json:"background_image_path"`
 }
@@ -74,7 +71,7 @@ func GetDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, config)
 }
 
-// SaveDatasetHeaderConfigHandler stores header copy, shared branding, and dataset-specific presentation media.
+// SaveDatasetHeaderConfigHandler stores header copy and dataset-specific presentation media.
 // POST /api/dataset-header-config/save
 func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -89,8 +86,6 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "dataset_name is required")
 		return
 	}
-
-	removeProjectBanner := strings.EqualFold(strings.TrimSpace(r.FormValue("remove_project_banner")), "true")
 
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
@@ -117,26 +112,6 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	storageDir := resolveStorageDir()
-
-	if removeProjectBanner {
-		if err := removeExistingProjectLogoFiles(storageDir); err != nil {
-			log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] project logo removal failed: %v\033[0m", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error removing project banner")
-			return
-		}
-	}
-
-	if fileHeader, err := readOptionalMultipartFile(r, "project_banner_image"); err != nil {
-		log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] upload read failed: %v\033[0m", err)
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	} else if fileHeader != nil {
-		if err := saveProjectLogoFile(storageDir, fileHeader); err != nil {
-			log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] project logo save failed: %v\033[0m", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving project banner")
-			return
-		}
-	}
 
 	for _, request := range []struct {
 		role        string
@@ -227,7 +202,6 @@ func readDatasetHeaderConfigWithQueryer(q datasetHeaderQueryer, datasetName stri
 	if err != nil {
 		return datasetHeaderConfigResponse{}, err
 	}
-	config.ProjectLogoPath = findProjectLogoPublicPath(resolveStorageDir())
 	if err := q.QueryRow(`
 		SELECT
 			COALESCE(MAX(CASE WHEN media.media_role = 'cover' THEN '/storage/' || media.storage_key END), ''),
@@ -366,7 +340,7 @@ func saveDatasetMediaFile(storageDir string, tableUID int, role string, fileHead
 	}
 
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-	if !isAllowedProjectLogoExtension(ext) {
+	if !isAllowedDatasetMediaExtension(ext) {
 		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media file type: %s", ext)
 	}
 
@@ -417,6 +391,13 @@ func datasetMediaMIMEType(ext string) string {
 		".svg":  "image/svg+xml",
 		".gif":  "image/gif",
 	}[ext]
+}
+
+// isAllowedDatasetMediaExtension accepts exactly the image types that have a
+// known MIME type above, so the upload allowlist and the stored MIME type
+// cannot drift apart.
+func isAllowedDatasetMediaExtension(ext string) bool {
+	return datasetMediaMIMEType(ext) != ""
 }
 
 func createDatasetMediaDisplayVariants(storageDir string, tableUID int, role, fileName, ext string) {
@@ -500,16 +481,6 @@ func resolveStorageDir() string {
 	return runtimepaths.Current().StorageRoot
 }
 
-func findProjectLogoPublicPath(storageDir string) string {
-	for _, ext := range projectLogoExtensions {
-		fileName := fmt.Sprintf("project_logo%s", ext)
-		if _, err := os.Stat(filepath.Join(storageDir, fileName)); err == nil {
-			return "/storage/" + fileName
-		}
-	}
-	return ""
-}
-
 func readOptionalMultipartFile(r *http.Request, fieldName string) (*multipart.FileHeader, error) {
 	if r.MultipartForm == nil || r.MultipartForm.File == nil {
 		return nil, nil
@@ -519,63 +490,4 @@ func readOptionalMultipartFile(r *http.Request, fieldName string) (*multipart.Fi
 		return nil, nil
 	}
 	return fileHeaders[0], nil
-}
-
-func saveProjectLogoFile(storageDir string, fileHeader *multipart.FileHeader) error {
-	if fileHeader == nil {
-		return nil
-	}
-
-	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-	if !isAllowedProjectLogoExtension(ext) {
-		return fmt.Errorf("unsupported project banner file type: %s", ext)
-	}
-
-	if err := os.MkdirAll(storageDir, 0o755); err != nil {
-		return err
-	}
-	if err := removeExistingProjectLogoFiles(storageDir); err != nil {
-		return err
-	}
-
-	src, err := fileHeader.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	if err := filevalidation.ValidateExtensionSignature(src, ext); err != nil {
-		return fmt.Errorf("unsupported project banner file type: %w", err)
-	}
-
-	dstPath := filepath.Join(storageDir, fmt.Sprintf("project_logo%s", ext))
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		return err
-	}
-
-	return dst.Chmod(0o644)
-}
-
-func removeExistingProjectLogoFiles(storageDir string) error {
-	for _, ext := range projectLogoExtensions {
-		candidate := filepath.Join(storageDir, fmt.Sprintf("project_logo%s", ext))
-		if err := os.Remove(candidate); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-	}
-	return nil
-}
-
-func isAllowedProjectLogoExtension(ext string) bool {
-	for _, allowed := range projectLogoExtensions {
-		if ext == allowed {
-			return true
-		}
-	}
-	return false
 }

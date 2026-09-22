@@ -1,5 +1,5 @@
 // dataset_header_config_view.js
-// Renders the admin view for dataset hero copy, project branding, and dataset presentation media.
+// Renders the admin view for dataset hero copy and dataset presentation media.
 // Bridges dataset config endpoints, table-spec refreshes, and framework.css-based form layout.
 // Exists to give admins a dedicated editor for dataset header content without code changes.
 
@@ -7,7 +7,7 @@ import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { fetchDatasetHeaderConfig, saveDatasetHeaderConfig } from '../endpoints/stable_endpoint_router.js';
 import { createVanillaDropdown } from '../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js';
 import { showErrorToast, showInfoToast, showSuccessToast, showWarningToast } from '../../reusable_components/notifications/toast_notification_printer.js';
-import { translatePage } from '../lang/translation_handler.js';
+import { getTranslationForKey, translatePage } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js';
 import { refreshMainTabPresentation } from '../navigation/main_tabs/main_tab_active_state.js';
@@ -22,6 +22,23 @@ import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from '../table_view
  * @property {DatasetHeaderConfigResponse} [config]
  */
 
+/**
+ * One text of this screen in the reader's language. The site's reviewed
+ * translation comes first; the screen's own copy
+ * (dataset_header_config_translation_fallbacks.js) stands in for a key the
+ * installation does not have yet, so the screen never shows a raw key.
+ */
+function headerText(key) {
+    return getTranslationForKey(key, { countUsage: false });
+}
+
+/** Gives an element one text of this screen; the page translator keeps it current. */
+function setHeaderText(element, key) {
+    element.dataset.langKey = key;
+    element.textContent = headerText(key);
+    return element;
+}
+
 export async function generate_dataset_header_config_view(
     container,
     {
@@ -34,8 +51,11 @@ export async function generate_dataset_header_config_view(
     container.replaceChildren();
 
     let selectedDataset = '';
-    let currentBannerPath = '';
-    let pendingPreviewUrl = '';
+    // The dataset whose settings the form now shows. Saving is allowed only
+    // for it, so a failed load can never write one dataset's texts into another.
+    let loadedDataset = '';
+    let loadFailed = false;
+    let saving = false;
 
     const root = document.createElement('div');
     root.classList.add('dataset-header-config-view', 'fw-container', 'fw-flex', 'fw-flex-col', 'fw-gap-4');
@@ -46,8 +66,7 @@ export async function generate_dataset_header_config_view(
     const introHeadingRow = document.createElement('div');
     introHeadingRow.classList.add('fw-flex', 'fw-items-center', 'fw-justify-between', 'fw-gap-2');
 
-    const introTitle = document.createElement('h2');
-    introTitle.textContent = 'Dataset Header Configuration';
+    const introTitle = setHeaderText(document.createElement('h2'), 'dataset_header_config');
     introHeadingRow.appendChild(introTitle);
 
     if (typeof onDismiss === 'function') {
@@ -55,16 +74,17 @@ export async function generate_dataset_header_config_view(
         dismissButton.type = 'button';
         dismissButton.classList.add('dataset-header-config-dismiss', 'fw-btn', 'fw-btn--ghost');
         dismissButton.textContent = '×';
-        dismissButton.title = 'Close';
-        dismissButton.setAttribute('aria-label', 'Close');
+        dismissButton.dataset.titleLangKey = 'close';
+        dismissButton.dataset.ariaLabelLangKey = 'close';
+        dismissButton.title = headerText('close');
+        dismissButton.setAttribute('aria-label', headerText('close'));
         dismissButton.addEventListener('click', onDismiss);
         introHeadingRow.appendChild(dismissButton);
     }
     introCard.appendChild(introHeadingRow);
 
-    const introText = document.createElement('p');
+    const introText = setHeaderText(document.createElement('p'), 'dataset_header_config_intro');
     introText.classList.add('fw-text-muted');
-    introText.textContent = 'Edit the predefined dataset-specific language keys for title, slogan, and search placeholder here. The banner image is shared across the current project.';
     introCard.appendChild(introText);
     root.appendChild(introCard);
 
@@ -74,9 +94,8 @@ export async function generate_dataset_header_config_view(
     const datasetCard = document.createElement('section');
     datasetCard.classList.add('fw-card', 'fw-flex', 'fw-flex-col', 'fw-gap-4');
 
-    const datasetSelectorLabel = document.createElement('label');
+    const datasetSelectorLabel = setHeaderText(document.createElement('label'), 'dataset');
     datasetSelectorLabel.classList.add('fw-label');
-    datasetSelectorLabel.textContent = 'Dataset';
     datasetCard.appendChild(datasetSelectorLabel);
 
     const datasetDropdownContainer = document.createElement('div');
@@ -89,80 +108,33 @@ export async function generate_dataset_header_config_view(
     const copyCard = document.createElement('section');
     copyCard.classList.add('fw-card', 'fw-flex', 'fw-flex-col', 'fw-gap-4');
 
-    const copyTitle = document.createElement('h3');
-    copyTitle.textContent = 'Dataset Text Keys';
-    copyCard.appendChild(copyTitle);
+    copyCard.appendChild(setHeaderText(document.createElement('h3'), 'dataset_header_config_text_keys'));
 
-    const copyHint = document.createElement('p');
+    const copyHint = setHeaderText(document.createElement('p'), 'dataset_header_config_text_keys_hint');
     copyHint.classList.add('fw-text-muted', 'fw-text-sm');
-    copyHint.textContent = 'The ready-made lang keys are shown directly below. Save translations and AI context here; the dataset view will keep using those keys.';
     copyCard.appendChild(copyHint);
 
-    const titleEditor = createLangKeyEditor('Header title');
-    const sloganEditor = createLangKeyEditor('Slogan');
-    const placeholderEditor = createLangKeyEditor('Search placeholder');
+    const titleEditor = createLangKeyEditor('title');
+    const sloganEditor = createLangKeyEditor('dataset_header_config_slogan');
+    const placeholderEditor = createLangKeyEditor('search_placeholder');
     copyCard.appendChild(titleEditor.wrapper);
     copyCard.appendChild(sloganEditor.wrapper);
     copyCard.appendChild(placeholderEditor.wrapper);
 
-
-
-    const bannerCard = document.createElement('section');
-    bannerCard.classList.add('fw-card', 'fw-flex', 'fw-flex-col', 'fw-gap-4');
-
-    const bannerTitle = document.createElement('h3');
-    bannerTitle.textContent = 'Project Banner';
-    bannerCard.appendChild(bannerTitle);
-
-    const bannerHint = document.createElement('p');
-    bannerHint.classList.add('fw-text-muted', 'fw-text-sm');
-    bannerHint.textContent = 'This image is shared by every dataset in the current project.';
-    bannerCard.appendChild(bannerHint);
-
-    const bannerPreview = document.createElement('div');
-    bannerPreview.classList.add('dataset-header-config-banner-preview', 'fw-panel');
-    bannerCard.appendChild(bannerPreview);
-
-    const fileFieldWrapper = document.createElement('div');
-    fileFieldWrapper.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
-    const fileLabel = document.createElement('label');
-    fileLabel.classList.add('fw-label');
-    fileLabel.textContent = 'Replace banner image';
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.name = 'project_banner_image';
-    fileInput.accept = '.png,.jpg,.jpeg,.webp,.svg,.gif';
-    fileInput.classList.add('fw-form-control');
-    fileFieldWrapper.appendChild(fileLabel);
-    fileFieldWrapper.appendChild(fileInput);
-    bannerCard.appendChild(fileFieldWrapper);
-
-    const removeBannerWrapper = document.createElement('label');
-    removeBannerWrapper.classList.add('dataset-header-config-checkbox', 'fw-flex', 'fw-gap-2', 'fw-items-center');
-    const removeBannerCheckbox = document.createElement('input');
-    removeBannerCheckbox.type = 'checkbox';
-    removeBannerCheckbox.name = 'remove_project_banner';
-    const removeBannerText = document.createElement('span');
-    removeBannerText.textContent = 'Remove current project banner on save';
-    removeBannerWrapper.appendChild(removeBannerCheckbox);
-    removeBannerWrapper.appendChild(removeBannerText);
-    bannerCard.appendChild(removeBannerWrapper);
-
     const coverEditor = createDatasetMediaEditor({
-        title: 'Dataset cover image',
-        hint: 'Shown behind the dataset hero. The image belongs only to the selected dataset.',
+        titleKey: 'dataset_header_config_cover_title',
+        hintKey: 'dataset_header_config_cover_hint',
         fileFieldName: 'cover_image',
         removeFieldName: 'remove_cover_image',
     });
     const backgroundEditor = createDatasetMediaEditor({
-        title: 'Dataset content background',
-        hint: 'Shown subtly behind the result count and dataset content, independently of the hero cover.',
+        titleKey: 'dataset_header_config_background_title',
+        hintKey: 'dataset_header_config_background_hint',
         fileFieldName: 'background_image',
         removeFieldName: 'remove_background_image',
     });
 
     formGrid.appendChild(copyCard);
-    formGrid.appendChild(bannerCard);
     formGrid.appendChild(coverEditor.wrapper);
     formGrid.appendChild(backgroundEditor.wrapper);
     datasetCard.appendChild(formGrid);
@@ -170,11 +142,16 @@ export async function generate_dataset_header_config_view(
 
     const actionRow = document.createElement('div');
     actionRow.classList.add('dataset-header-config-actions', 'fw-flex', 'fw-gap-2', 'fw-wrap');
-    const saveButton = document.createElement('button');
+    const saveButton = setHeaderText(document.createElement('button'), 'save');
     saveButton.type = 'submit';
     saveButton.classList.add('fw-btn', 'fw-btn--primary');
-    saveButton.textContent = 'Save dataset header config';
     actionRow.appendChild(saveButton);
+    // Says why saving is off when the selected dataset's settings did not load.
+    const saveStatus = setHeaderText(document.createElement('p'), 'dataset_header_config_not_loaded');
+    saveStatus.classList.add('dataset-header-config-save-status', 'fw-text-muted', 'fw-text-sm');
+    saveStatus.setAttribute('role', 'status');
+    saveStatus.hidden = true;
+    actionRow.appendChild(saveStatus);
     form.appendChild(actionRow);
 
     root.appendChild(form);
@@ -183,95 +160,72 @@ export async function generate_dataset_header_config_view(
     const datasetOptions = await loadDatasetOptions();
     const datasetDropdown = createVanillaDropdown({
         containerElement: datasetDropdownContainer,
-        options: datasetOptions,
-        placeholder: 'Select dataset...',
-        searchPlaceholder: 'Search datasets...',
+        options: datasetOptions || [],
+        placeholder: headerText('dataset_select_target'),
+        searchPlaceholder: headerText('search'),
         onChange: async (datasetName) => {
             selectedDataset = datasetName || '';
-            clearPendingPreview();
-            coverEditor.clearPendingPreview();
-            backgroundEditor.clearPendingPreview();
-            fileInput.value = '';
-            removeBannerCheckbox.checked = false;
+            // Drop picked files and removal ticks before loading the next
+            // dataset: if that load fails, they must not be saved to it.
+            coverEditor.resetSelection();
+            backgroundEditor.resetSelection();
             await loadDatasetConfig();
         },
-    });
-
-    fileInput.addEventListener('change', () => {
-        clearPendingPreview();
-        removeBannerCheckbox.checked = false;
-        const [file] = fileInput.files || [];
-        if (!file) {
-            renderBannerPreview(currentBannerPath, false);
-            return;
-        }
-
-        pendingPreviewUrl = URL.createObjectURL(file);
-        renderBannerPreview(pendingPreviewUrl, true);
-    });
-
-    removeBannerCheckbox.addEventListener('change', () => {
-        if (removeBannerCheckbox.checked) {
-            clearPendingPreview();
-            fileInput.value = '';
-            renderBannerPreview('', false);
-            return;
-        }
-        renderBannerPreview(currentBannerPath, false);
     });
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!selectedDataset) {
-            showInfoToast('Select a dataset before saving.');
+            showInfoToast(headerText('dataset_select_target'));
+            return;
+        }
+        if (loadedDataset !== selectedDataset) {
+            showInfoToast(headerText('dataset_header_config_not_loaded'));
             return;
         }
 
         const payload = new FormData();
         payload.append('dataset_name', selectedDataset);
-        payload.append('remove_project_banner', removeBannerCheckbox.checked ? 'true' : 'false');
         appendLangKeyPayload(payload, 'title', titleEditor);
         appendLangKeyPayload(payload, 'slogan', sloganEditor);
         appendLangKeyPayload(payload, 'placeholder', placeholderEditor);
-
-        const [bannerFile] = fileInput.files || [];
-        if (bannerFile) {
-            payload.append('project_banner_image', bannerFile);
-        }
         coverEditor.appendPayload(payload);
         backgroundEditor.appendPayload(payload);
 
-        saveButton.disabled = true;
+        saving = true;
+        refreshSaveAvailability();
 
         try {
             const response = /** @type {DatasetHeaderConfigSaveResponse} */ (await saveDatasetHeaderConfig(payload));
 
             const savedConfig = response?.config;
             if (!savedConfig) {
-                throw new Error('Missing saved config in response');
+                showErrorToast(headerText('save_failed'));
+                return;
             }
 
             applyConfigToForm(savedConfig);
-            syncProjectLogoMeta(savedConfig.project_logo_path || '');
             syncDatasetPresentationMedia(
                 selectedDataset,
                 savedConfig.cover_image_path || '',
                 savedConfig.background_image_path || ''
             );
             await translatePage(getLanguageWithBrowserFallback());
-            showSuccessToast(response?.message || 'Dataset header config saved');
+            showSuccessToast(headerText('saved'));
             if (typeof onSaved === 'function') {
                 await onSaved(savedConfig);
             }
         } catch (error) {
+            // The request pipeline has already told the reader, in their own
+            // language, why the request failed; the raw error is for the console.
             console.warn('dataset_header_config_view: save failed', error);
-            showErrorToast(error?.message || 'Saving dataset header config failed');
         } finally {
-            saveButton.disabled = false;
+            saving = false;
+            refreshSaveAvailability();
         }
     });
 
-    if (datasetOptions.length > 0) {
+    if (datasetOptions?.length > 0) {
         const requestedDataset = String(initialDatasetName || '').trim();
         const initialOption = datasetOptions.find(
             (option) => option.value === requestedDataset
@@ -279,30 +233,48 @@ export async function generate_dataset_header_config_view(
         selectedDataset = initialOption?.value || datasetOptions[0].value;
         datasetDropdown.setValue(selectedDataset);
         await loadDatasetConfig();
-    } else {
-        showWarningToast('No datasets available for header configuration.');
-        renderBannerPreview('', false);
+    } else if (datasetOptions) {
+        // A list that failed to load is not an empty one; the pipeline said so.
+        showWarningToast(headerText('dataset_header_config_no_datasets'));
     }
 
     async function loadDatasetConfig() {
-        if (!selectedDataset) {
+        const requestedDataset = selectedDataset;
+        loadedDataset = '';
+        loadFailed = false;
+        refreshSaveAvailability();
+        if (!requestedDataset) {
             applyLangKeyConfig(titleEditor, null);
             applyLangKeyConfig(sloganEditor, null);
             applyLangKeyConfig(placeholderEditor, null);
-            currentBannerPath = '';
-            renderBannerPreview('', false);
             coverEditor.applyPath('');
             backgroundEditor.applyPath('');
             return;
         }
 
         try {
-            const config = await fetchDatasetHeaderConfig(selectedDataset);
+            const config = await fetchDatasetHeaderConfig(requestedDataset);
+            // A later dataset switch owns the form now; its own load decides.
+            if (requestedDataset !== selectedDataset) return;
             applyConfigToForm(config);
+            loadedDataset = requestedDataset;
         } catch (error) {
+            if (requestedDataset !== selectedDataset) return;
+            // The request pipeline has reported the failure; the status line
+            // beside the save button says what it means for this form.
+            loadFailed = true;
             console.warn('dataset_header_config_view: load failed', error);
-            showErrorToast(error?.message || 'Loading dataset header config failed');
+        } finally {
+            refreshSaveAvailability();
         }
+    }
+
+    // Saving stays off while a dataset is loading or after its load failed;
+    // only the failure needs words, a load in progress ends by itself.
+    function refreshSaveAvailability() {
+        const notLoaded = Boolean(selectedDataset) && loadedDataset !== selectedDataset;
+        saveButton.disabled = saving || notLoaded;
+        saveStatus.hidden = !(notLoaded && loadFailed);
     }
 
     /**
@@ -312,53 +284,8 @@ export async function generate_dataset_header_config_view(
         applyLangKeyConfig(titleEditor, config?.title);
         applyLangKeyConfig(sloganEditor, config?.slogan);
         applyLangKeyConfig(placeholderEditor, config?.search_placeholder);
-        currentBannerPath = config?.project_logo_path || '';
-        removeBannerCheckbox.checked = false;
-        fileInput.value = '';
-        clearPendingPreview();
-        renderBannerPreview(currentBannerPath, false);
         coverEditor.applyPath(config?.cover_image_path || '');
         backgroundEditor.applyPath(config?.background_image_path || '');
-    }
-
-    function renderBannerPreview(src, isPending) {
-        bannerPreview.replaceChildren();
-        if (!src) {
-            const emptyState = document.createElement('p');
-            emptyState.classList.add('fw-text-muted', 'fw-text-sm');
-            emptyState.textContent = 'No project banner uploaded yet.';
-            bannerPreview.appendChild(emptyState);
-            return;
-        }
-
-        const image = document.createElement('img');
-        image.src = src;
-        image.alt = '';
-        image.classList.add('dataset-header-config-banner-image');
-        bannerPreview.appendChild(image);
-
-        if (isPending) {
-            const badge = document.createElement('span');
-            badge.classList.add('fw-badge');
-            badge.textContent = 'Unsaved preview';
-            bannerPreview.appendChild(badge);
-        }
-    }
-
-    function syncProjectLogoMeta(projectLogoPath) {
-        let meta = document.querySelector('meta[name="project-logo-path"]');
-        if (!meta) {
-            meta = document.createElement('meta');
-            meta.setAttribute('name', 'project-logo-path');
-            document.head.appendChild(meta);
-        }
-        meta.content = projectLogoPath || '';
-    }
-
-    function clearPendingPreview() {
-        if (!pendingPreviewUrl) return;
-        URL.revokeObjectURL(pendingPreviewUrl);
-        pendingPreviewUrl = '';
     }
 }
 
@@ -431,8 +358,8 @@ function applyPresentationImage(element, enabledClass, propertyName, path) {
 }
 
 function createDatasetMediaEditor({
-    title,
-    hint,
+    titleKey,
+    hintKey,
     fileFieldName,
     removeFieldName,
 }) {
@@ -442,24 +369,20 @@ function createDatasetMediaEditor({
     const wrapper = document.createElement('section');
     wrapper.classList.add('fw-card', 'fw-flex', 'fw-flex-col', 'fw-gap-4', 'dataset-header-config-media-card');
 
-    const heading = document.createElement('h3');
-    heading.textContent = title;
-    wrapper.appendChild(heading);
+    wrapper.appendChild(setHeaderText(document.createElement('h3'), titleKey));
 
-    const description = document.createElement('p');
+    const description = setHeaderText(document.createElement('p'), hintKey);
     description.classList.add('fw-text-muted', 'fw-text-sm');
-    description.textContent = hint;
     wrapper.appendChild(description);
 
     const preview = document.createElement('div');
-    preview.classList.add('dataset-header-config-banner-preview', 'fw-panel');
+    preview.classList.add('dataset-header-config-media-preview', 'fw-panel');
     wrapper.appendChild(preview);
 
     const fileLabel = document.createElement('label');
     fileLabel.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
-    const fileLabelText = document.createElement('span');
+    const fileLabelText = setHeaderText(document.createElement('span'), 'dataset_header_config_replace_image');
     fileLabelText.classList.add('fw-label');
-    fileLabelText.textContent = 'Replace image';
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.name = fileFieldName;
@@ -473,8 +396,7 @@ function createDatasetMediaEditor({
     const removeCheckbox = document.createElement('input');
     removeCheckbox.type = 'checkbox';
     removeCheckbox.name = removeFieldName;
-    const removeText = document.createElement('span');
-    removeText.textContent = 'Remove current image on save';
+    const removeText = setHeaderText(document.createElement('span'), 'dataset_header_config_remove_image');
     removeLabel.append(removeCheckbox, removeText);
     wrapper.appendChild(removeLabel);
 
@@ -487,31 +409,34 @@ function createDatasetMediaEditor({
     function renderPreview(src, isPending = false) {
         preview.replaceChildren();
         if (!src) {
-            const emptyState = document.createElement('p');
+            const emptyState = setHeaderText(document.createElement('p'), 'dataset_header_config_no_image');
             emptyState.classList.add('fw-text-muted', 'fw-text-sm');
-            emptyState.textContent = 'No image uploaded yet.';
             preview.appendChild(emptyState);
             return;
         }
         const image = document.createElement('img');
         image.src = src;
         image.alt = '';
-        image.classList.add('dataset-header-config-banner-image');
+        image.classList.add('dataset-header-config-media-image');
         preview.appendChild(image);
         if (isPending) {
-            const badge = document.createElement('span');
+            const badge = setHeaderText(document.createElement('span'), 'unsaved_changes');
             badge.classList.add('fw-badge');
-            badge.textContent = 'Unsaved preview';
             preview.appendChild(badge);
         }
     }
 
-    function applyPath(path) {
-        currentPath = path || '';
+    // Forgets a picked file and the removal tick, and shows the saved image again.
+    function resetSelection() {
         removeCheckbox.checked = false;
         fileInput.value = '';
         clearPendingPreview();
         renderPreview(currentPath);
+    }
+
+    function applyPath(path) {
+        currentPath = path || '';
+        resetSelection();
     }
 
     fileInput.addEventListener('change', () => {
@@ -539,7 +464,7 @@ function createDatasetMediaEditor({
     return {
         wrapper,
         applyPath,
-        clearPendingPreview,
+        resetSelection,
         appendPayload(payload) {
             payload.append(removeFieldName, removeCheckbox.checked ? 'true' : 'false');
             const [file] = fileInput.files || [];
@@ -563,98 +488,69 @@ async function loadDatasetOptions() {
                 label: datasetName,
             }));
     } catch (error) {
+        // Reported to the reader by the request pipeline; null tells the caller
+        // the list failed, rather than that there are no datasets.
         console.warn('dataset_header_config_view: dataset list failed', error);
-        showErrorToast(error?.message || 'Loading dataset list failed');
-        return [];
+        return null;
     }
 }
 
-function createLangKeyEditor(labelText) {
+function createLangKeyEditor(titleKey) {
     const wrapper = document.createElement('section');
     wrapper.classList.add('dataset-header-config-text-card', 'fw-panel', 'fw-flex', 'fw-flex-col', 'fw-gap-3');
+    wrapper.appendChild(setHeaderText(document.createElement('h4'), titleKey));
 
-    const title = document.createElement('h4');
-    title.textContent = labelText;
-    wrapper.appendChild(title);
-
-    const keyField = createReadonlyField('Lang key');
-    wrapper.appendChild(keyField.wrapper);
+    const keyInput = createTextInput();
+    keyInput.readOnly = true;
+    keyInput.classList.add('dataset-header-config-readonly-key');
+    wrapper.appendChild(createLabeledField(setHeaderText(document.createElement('span'), 'lang_key'), keyInput));
 
     const translationsGrid = document.createElement('div');
     translationsGrid.classList.add('dataset-header-config-translation-grid');
-
-    const fiField = createTextField('Suomeksi (FI)');
-    const enField = createTextField('English (EN)');
-    const chField = createTextField('Chinese (CH)');
-    translationsGrid.appendChild(fiField.wrapper);
-    translationsGrid.appendChild(enField.wrapper);
-    translationsGrid.appendChild(chField.wrapper);
+    const fiInput = createTextInput();
+    const enInput = createTextInput();
+    const chInput = createTextInput();
+    translationsGrid.append(
+        createLabeledField(createLanguageCaption('fi'), fiInput),
+        createLabeledField(createLanguageCaption('en'), enInput),
+        createLabeledField(createLanguageCaption('ch'), chInput),
+    );
     wrapper.appendChild(translationsGrid);
 
-    const usageExplanationField = createTextareaField('AI context / usage explanation');
-    usageExplanationField.input.placeholder = 'Explain the meaning and intended use of this key for AI-assisted translation.';
-    wrapper.appendChild(usageExplanationField.wrapper);
+    const usageExplanationInput = document.createElement('textarea');
+    usageExplanationInput.classList.add('fw-form-control');
+    usageExplanationInput.rows = 3;
+    usageExplanationInput.placeholder = headerText('dataset_header_config_usage_placeholder');
+    wrapper.appendChild(createLabeledField(
+        setHeaderText(document.createElement('span'), 'usage_explanation'),
+        usageExplanationInput
+    ));
 
-    return {
-        wrapper,
-        keyInput: keyField.input,
-        fiInput: fiField.input,
-        enInput: enField.input,
-        chInput: chField.input,
-        usageExplanationInput: usageExplanationField.input,
-    };
+    return { wrapper, keyInput, fiInput, enInput, chInput, usageExplanationInput };
 }
 
-function createReadonlyField(labelText) {
-    const wrapper = document.createElement('label');
-    wrapper.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
-
-    const label = document.createElement('span');
-    label.classList.add('fw-label');
-    label.textContent = labelText;
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.readOnly = true;
-    input.classList.add('fw-form-control', 'dataset-header-config-readonly-key');
-
-    wrapper.appendChild(label);
-    wrapper.appendChild(input);
-    return { wrapper, input };
-}
-
-function createTextField(labelText) {
-    const wrapper = document.createElement('label');
-    wrapper.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
-
-    const label = document.createElement('span');
-    label.classList.add('fw-label');
-    label.textContent = labelText;
-
+function createTextInput() {
     const input = document.createElement('input');
     input.type = 'text';
     input.classList.add('fw-form-control');
-
-    wrapper.appendChild(label);
-    wrapper.appendChild(input);
-    return { wrapper, input };
+    return input;
 }
 
-function createTextareaField(labelText) {
+/** A caption above its control, inside one label so the caption focuses the control. */
+function createLabeledField(caption, control) {
     const wrapper = document.createElement('label');
     wrapper.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
+    caption.classList.add('fw-label');
+    wrapper.append(caption, control);
+    return wrapper;
+}
 
-    const label = document.createElement('span');
-    label.classList.add('fw-label');
-    label.textContent = labelText;
-
-    const input = document.createElement('textarea');
-    input.classList.add('fw-form-control');
-    input.rows = 3;
-
-    wrapper.appendChild(label);
-    wrapper.appendChild(input);
-    return { wrapper, input };
+/** A language's name with its code, such as "Finnish (FI)"; only the name is translated. */
+function createLanguageCaption(code) {
+    const caption = document.createElement('span');
+    caption.classList.add('dataset-header-config-language-caption');
+    caption.append(setHeaderText(document.createElement('span'), code), ` (${code.toUpperCase()})`);
+    return caption;
 }
 
 /**

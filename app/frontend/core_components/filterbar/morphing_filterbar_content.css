@@ -264,35 +264,6 @@
   display: none;
 }
 
-/* Compact logo: smaller, left-aligned, less padding */
-.filterbar-panel--compact .project-logo-wrapper {
-  justify-content: flex-start;
-  margin-top: 0;
-  padding-bottom: 8px;
-}
-
-.filterbar-panel--compact .logo-letter-backgrounds-container {
-  --logo-letter-bg-size: 28px;
-  --logo-letter-bg-font-size: 10px;
-  --logo-letter-bg-radius: 1px;
-  --logo-letter-bg-gap-x: 0px;
-  justify-content: flex-start;
-  margin: var(--filterbar-panel-top-space, 16px) var(--filterbar-panel-inline-space, 24px) 0;
-  max-height: 64px;
-  overflow: hidden;
-  transition:
-    max-height 180ms ease,
-    margin 180ms ease,
-    opacity 140ms ease,
-    transform 180ms ease;
-}
-
-.filterbar-panel--compact .logo-letter-background--endcap-label {
-  font-size: 8px;
-  letter-spacing: 1px;
-  text-indent: 1px;
-}
-
 .filterbar-panel--compact .filterbar_results_count {
   text-align: left;
   font-size: 0.9rem;
@@ -309,7 +280,6 @@
     transform 180ms ease;
 }
 
-.filterbar-panel--compact.filterbar-panel--body-scrolled .logo-letter-backgrounds-container,
 .filterbar-panel--compact.filterbar-panel--body-scrolled .morphing-header,
 .filterbar-panel--compact.filterbar-panel--body-scrolled .filterbar_results_count {
   max-height: 0;
@@ -501,132 +471,6 @@
 .results-count-breakdown-separator {
   opacity: 0.55;
 }
-
-/* ============================================
-   PROJECT LOGO
-   ============================================ */
-
-.project-logo-wrapper {
-  display: flex;
-  justify-content: center;
-  margin: var(--filterbar-panel-top-space, 16px) var(--filterbar-panel-inline-space, 24px) 0;
-  width: auto;
-  pointer-events: none;
-  z-index: 0;
-  padding-bottom: 20px;
-  transition: padding 0.5s ease, margin 0.5s ease, opacity 0.3s ease;
-}
-
-.project-logo-wrapper--hidden {
-  display: none;
-  margin-top: 0;
-  padding-bottom: 0;
-}
-
-.project-logo-image {
-  max-width: var(--filterbar-hero-content-max-width, 550px);
-  max-height: 150px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  user-select: none;
-}
-
-.logo-letter-backgrounds-container {
-  display: grid;
-  grid-template-columns: repeat(8, min-content);
-  justify-content: center;
-  gap: var(--logo-letter-bg-gap-x);
-  width: auto;
-  max-width: 800px;
-  margin: var(--filterbar-panel-top-space, 16px) auto 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 1;
-}
-
-.logo-letter-backgrounds-container--serlog-glow {
-  --serlog-logo-glow-width: calc(var(--logo-letter-bg-size) * 8);
-  --serlog-logo-glow-height: calc(var(--logo-letter-bg-size) * 2);
-}
-
-.logo-letter-background {
-  width: var(--logo-letter-bg-size);
-  height: var(--logo-letter-bg-size);
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border-radius: var(--logo-letter-bg-radius);
-  transition: all 0.5s ease;
-  box-shadow: 0 2px 5px rgb(0 0 0 / 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: Inter, sans-serif;
-  font-weight: 800;
-  font-size: var(--logo-letter-bg-font-size);
-  user-select: none;
-}
-
-.logo-letter-backgrounds-container--serlog-glow .logo-letter-background::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      ellipse at 50% 50%,
-      color-mix(in srgb, var(--primary_color, hsl(var(--brand-hue) 80% 50%)) 32%, transparent) 0%,
-      transparent 58%
-    ),
-    linear-gradient(
-      115deg,
-      transparent 0%,
-      rgb(255 255 255 / 14%) 42%,
-      rgb(255 255 255 / 8%) 56%,
-      transparent 78%
-    );
-  background-size: var(--serlog-logo-glow-width) var(--serlog-logo-glow-height);
-  background-position:
-    calc(var(--logo-cell-column, 0) * -1 * var(--logo-letter-bg-size))
-    calc(var(--logo-cell-row, 0) * -1 * var(--logo-letter-bg-size));
-  mix-blend-mode: screen;
-  opacity: 0.8;
-}
-
-.logo-letter-background--endcap-label {
-  font-size: max(6px, calc(var(--logo-letter-bg-font-size) * 0.58));
-  line-height: 1;
-  letter-spacing: 3px;
-  text-align: center;
-  text-indent: 3px;
-}
-
-.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-dark
-  .logo-letter-background--has-letter,
-.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-light
-  .logo-letter-background--blue-letter {
-  text-shadow:
-    0 1px 2px rgb(0 0 0 / 0.55),
-    0 0 6px rgb(0 0 0 / 0.22);
-}
-
-body.light-mode .logo-letter-backgrounds-container--serlog-glow
-  .logo-letter-background--endcap-label,
-body.light-mode .logo-letter-backgrounds-container--serlog-glow
-  .logo-letter-background--monochrome-letter,
-.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-light
-  .logo-letter-background--endcap-label,
-.logo-letter-backgrounds-container--serlog-glow.logo-letter-backgrounds-container--theme-light
-  .logo-letter-background--monochrome-letter {
-  text-shadow: none;
-}
-
-/* Corner rounding — only the outer corner of each corner cell */
-.logo-corner-tl { border-top-left-radius: var(--logo-corner-radius, 18%); }
-.logo-corner-tr { border-top-right-radius: var(--logo-corner-radius, 18%); }
-.logo-corner-bl { border-bottom-left-radius: var(--logo-corner-radius, 18%); }
-.logo-corner-br { border-bottom-right-radius: var(--logo-corner-radius, 18%); }
 
 /* ============================================
    FILTER TOP GRID (buttons, sort, etc.)

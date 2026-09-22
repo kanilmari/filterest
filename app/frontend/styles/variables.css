@@ -66,23 +66,7 @@
     --border-subtle: hsl(var(--brand-hue) 10% 85%);
     --border-strong: hsl(var(--brand-hue) 10% 70%);
 
-    /* Decorative Elements (Logo Letter Backgrounds) */
-    --logo-letter-bg-sat: 80%;
-    --logo-letter-bg-light: 36%;
-    --logo-letter-bg-size: 56px;
-    --logo-letter-bg-radius: 0;
-    --logo-letter-bg-gap-x: 0px;
-    --logo-letter-bg-gap-y: 0px;
-    --logo-letter-bg-font-size: 20px;
     --container-scale: 100%;
-    
-    /* Logo Letter Background Colors & Text */
-    --logo-letter-bg-text-color: #ffffff;
-    --logo-letter-bg-neutral-bg: hsl(var(--brand-hue) 20% 20%); /* Dimmed canonical brand hue for dark mode feel */
-    --logo-letter-bg-neutral-text-color: #ffffff; 
-    --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 12% 22%);
-    --logo-letter-bg-monochrome-color: hsl(var(--brand-hue) 10% 28%);
-    --logo-letter-bg-monochrome-text-color: #ffffff;
 
     /* =========================================
        4. Legacy Mapping & Functional Variables
@@ -220,13 +204,6 @@
         --bg_color_blended: hsl(var(--brand-hue) 10% 90% / 10%);
         
         --add_row_form_box_shadow: 0 2px 60px 30px rgb(0 0 0 / 50%);
-
-        /* Dark Mode Logo Letter Background Overrides */
-        --logo-letter-bg-sat: 49%;
-        --logo-letter-bg-light: 28%;
-        --logo-letter-bg-neutral-bg: hsl(var(--brand-hue) 8% 30%);
-        --logo-letter-bg-neutral-text-color: #ffffff;
-        --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 10% 24%);
     }
 }
 
@@ -295,15 +272,6 @@ body.light-mode {
     
     /* Framework overrides for Light Mode */
     --fw-color-surface: var(--bg_color_extreme);
-
-    /* Light Mode Logo Letter Background Overrides */
-    --logo-letter-bg-sat: 80%;
-    --logo-letter-bg-light: 36%;
-    --logo-letter-bg-neutral-bg: hsl(var(--brand-hue) 8% 90%);
-    --logo-letter-bg-neutral-text-color: #1a1a1a;
-    --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 9% 84%);
-    --logo-letter-bg-monochrome-color: hsl(var(--brand-hue) 10% 84%);
-    --logo-letter-bg-monochrome-text-color: #1a1a1a;
     --fw-color-surface-muted: color-mix(in srgb, var(--bg_color_extreme) 70%, var(--bg_color) 30%);
     --fw-color-surface-alt: var(--bg_color_2);
     --fw-color-border: var(--card_border_color);
@@ -326,9 +294,6 @@ body.dark-mode {
     
     --border-subtle: hsl(var(--brand-hue) 20% 20%);
     --border-strong: hsl(var(--brand-hue) 20% 30%);
-    
-    --logo-letter-bg-sat: 49%;
-    --logo-letter-bg-light: 28%;
 
     --color-brand: hsl(var(--brand-hue) var(--brand-sat) 60%);
     --color-brand-hover: hsl(var(--brand-hue) var(--brand-sat) 50%);
@@ -390,10 +355,6 @@ body.dark-mode {
     --fw-color-muted: var(--empty_field_text_color);
     --fw-color-primary: var(--primary_color);
     --fw-color-primary-soft: color-mix(in srgb, var(--primary_color) 20%, var(--bg_color_extreme) 80%);
-
-    --logo-letter-bg-gray-gradient: hsl(var(--brand-hue) 10% 24%);
-    --logo-letter-bg-monochrome-color: hsl(var(--brand-hue) 10% 24%);
-    --logo-letter-bg-monochrome-text-color: #ffffff;
 }
 
 /* Explicit theme classes must recompute tokens that depend on theme-local

@@ -138,7 +138,7 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(destroy).toHaveBeenCalled();
     });
 
-    test('replaces the project logo grid with the dataset symbol asset in inline hero', async () => {
+    test('shows the dataset symbol asset in the inline hero', async () => {
         const { mountDatasetCoverTestPalette } = await import(
             '../admin_tools/dataset_cover_test_palette.js'
         );
@@ -148,7 +148,6 @@ describe('create_filter_bar inline hero mounting', () => {
         const inlineHero = document.querySelector('.filterbar-inline-hero');
         const heroIcon = inlineHero?.querySelector('.filterbar-hero-dataset-icon');
 
-        expect(inlineHero?.querySelector('.logo-letter-backgrounds-container')).toBeNull();
         expect(heroIcon?.dataset.symbolKey).toBe('task');
         expect(heroIcon?.style.getPropertyValue('--metadata-symbol-url'))
             .toContain('/symbol-assets/task.svg');

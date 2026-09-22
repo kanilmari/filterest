@@ -186,10 +186,9 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		data := indexTemplateData{
 			CSPNonce: nonce, UseMinifiedAssets: useMinified,
 			InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
-			ProductName:     getSiteName(),
-			ProjectLogoPath: getProjectLogoPath(),
-			FaviconPath:     frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
-			PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
+			ProductName: getSiteName(),
+			FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
+			PageTitle:   meta.PageTitle, MetaDescription: meta.MetaDescription,
 			CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 			OGDescription: meta.OGDescription, OGType: meta.OGType,
 			OGURL: meta.OGURL, OGImage: meta.OGImage,

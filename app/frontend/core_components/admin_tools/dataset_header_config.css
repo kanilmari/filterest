@@ -35,12 +35,17 @@
     gap: var(--fw-space-3);
 }
 
+/* The translated language name keeps the caption's own colour. */
+.dataset-header-config-language-caption span {
+    color: inherit;
+}
+
 .dataset-header-config-readonly-key {
     font-family: var(--fw-font-mono, monospace);
     background: color-mix(in srgb, var(--fw-color-surface) 78%, transparent);
 }
 
-.dataset-header-config-banner-preview {
+.dataset-header-config-media-preview {
     min-height: 180px;
     display: flex;
     flex-direction: column;
@@ -49,7 +54,7 @@
     gap: var(--fw-space-2);
 }
 
-.dataset-header-config-banner-image {
+.dataset-header-config-media-image {
     width: 100%;
     max-height: 220px;
     object-fit: contain;
@@ -64,6 +69,20 @@
 
 .dataset-header-config-actions {
     justify-content: flex-start;
+}
+
+/* framework.css gives a disabled button no look of its own; here saving can
+   be off for a reason the status line explains, so it has to look off. */
+.dataset-header-config-actions .fw-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+/* Why saving is off after the selected dataset's settings failed to load. */
+.dataset-header-config-save-status {
+    align-self: center;
+    max-width: 60ch;
+    margin: 0;
 }
 
 .dataset-header-config-dismiss {
@@ -81,7 +100,7 @@
         grid-template-columns: 1fr;
     }
 
-    .dataset-header-config-banner-preview {
+    .dataset-header-config-media-preview {
         min-height: 140px;
     }
 }

@@ -66,7 +66,6 @@ export interface DatasetHeaderConfigResponse {
     title: DatasetHeaderTextConfig;
     slogan: DatasetHeaderTextConfig;
     search_placeholder: DatasetHeaderTextConfig;
-    project_logo_path: string;
     cover_image_path: string;
     background_image_path: string;
 }

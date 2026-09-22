@@ -31,15 +31,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var publicStorageRootFiles = map[string]struct{}{
-	"project_logo.png":  {},
-	"project_logo.jpg":  {},
-	"project_logo.jpeg": {},
-	"project_logo.webp": {},
-	"project_logo.svg":  {},
-	"project_logo.gif":  {},
-}
-
 var protectedStorageVariants = map[string]struct{}{
 	"300":      {},
 	"1000":     {},
@@ -61,12 +52,13 @@ const (
 	storageAuthorizationInternalError
 )
 
+// isPublicStoragePath names the only storage files served without login: the
+// legacy service catalog logos. The retired project banner files
+// (project_logo.*) may still sit at the storage root on older installations;
+// they are deliberately not listed here, so they stay on disk but are no
+// longer served.
 func isPublicStoragePath(cleanRel string) bool {
-	normalized := filepath.ToSlash(cleanRel)
-	if _, ok := publicStorageRootFiles[normalized]; ok {
-		return true
-	}
-	return strings.HasPrefix(normalized, "service_catalog_logos/")
+	return strings.HasPrefix(filepath.ToSlash(cleanRel), "service_catalog_logos/")
 }
 
 func parseProtectedStoragePath(cleanRel string) (dtt_1_row_read.StorageReadRequest, bool) {

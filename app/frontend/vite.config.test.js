@@ -126,7 +126,6 @@ describe('vite project layout resolution', () => {
       nestedStandalone: false,
       backendPort: 8082,
       defaultSiteName: 'Easelect',
-      storageDir: resolve(easelectRoot, 'storage'),
       viteCacheDir: resolve(easelectRoot, 'node_modules', '.vite'),
       buildOutDir: resolve(applicationRoot, 'frontend', 'dist'),
     });
@@ -143,7 +142,6 @@ describe('vite project layout resolution', () => {
       nestedStandalone: true,
       backendPort: 8100,
       defaultSiteName: 'Filterest',
-      storageDir: resolve(installationRoot, 'data', 'storage'),
       viteCacheDir: resolve(
         installationRoot,
         'data',
@@ -172,7 +170,6 @@ describe('vite project layout resolution', () => {
       nestedStandalone: false,
       backendPort: 8100,
       defaultSiteName: 'Filterest',
-      storageDir: resolve(publicRoot, 'storage'),
       viteCacheDir: resolve(publicRoot, 'node_modules', '.vite'),
       buildOutDir: resolve(publicRoot, 'frontend', 'dist'),
     });
@@ -192,7 +189,6 @@ describe('vite project layout resolution', () => {
 
     expect(layout.projectRoot).toBe(installationRoot);
     expect(layout.backendPort).toBe(8100);
-    expect(layout.storageDir).toBe(resolve(installationRoot, 'data', 'storage'));
     expect(layout.viteCacheDir).toBe(
       resolve(installationRoot, 'data/runtime/node/vite-cache'),
     );
@@ -231,7 +227,6 @@ describe('vite project layout resolution', () => {
       embedded ? possibleEaselectRoot : installationRoot,
     );
     expect(layout.backendPort).toBe(embedded ? 8082 : 8100);
-    expect(layout.storageDir.startsWith(`${applicationRoot}/`)).toBe(false);
     expect(layout.viteCacheDir.startsWith(`${applicationRoot}/`)).toBe(false);
     expect(layout.buildOutDir).toBe(
       embedded

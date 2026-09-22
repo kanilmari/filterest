@@ -1,9 +1,8 @@
 package router
 
 import (
+	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -48,55 +47,19 @@ func TestStorageRateLimitReconciliationUpgradesOnlyLegacyDefault(t *testing.T) {
 	}
 }
 
-func TestGetProjectLogoPathReturnsStoragePathWhenLogoExists(t *testing.T) {
-	tempDir := t.TempDir()
-	logoFile := filepath.Join(tempDir, "project_logo.png")
-	if err := os.WriteFile(logoFile, []byte("png"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
+// The project banner feature was removed, but older installations may still
+// have its image at the storage root. The file stays on disk untouched and is
+// no longer served to anyone.
+func TestRetiredProjectLogoFileIsNotServed(t *testing.T) {
+	setupStorageHandlerTest(t)
+	writeStorageHandlerFixture(t, "project_logo.png", "logo")
+
+	rr := httptest.NewRecorder()
+	ServeStorage(rr, httptest.NewRequest(http.MethodGet, "/storage/project_logo.png", nil))
+	if rr.Code != http.StatusNotFound || strings.Contains(rr.Body.String(), "logo") {
+		t.Fatalf("retired project logo response = status %d body %q, want 404", rr.Code, rr.Body.String())
 	}
-
-	previousStorageDir := localStorageDir
-	localStorageDir = tempDir
-	t.Cleanup(func() {
-		localStorageDir = previousStorageDir
-	})
-
-	got := getProjectLogoPath()
-	if got != "/storage/project_logo.png" {
-		t.Fatalf("getProjectLogoPath() = %q, want %q", got, "/storage/project_logo.png")
-	}
-}
-
-func TestGetProjectLogoPathReturnsEmptyWhenLogoMissing(t *testing.T) {
-	previousStorageDir := localStorageDir
-	localStorageDir = t.TempDir()
-	t.Cleanup(func() {
-		localStorageDir = previousStorageDir
-	})
-
-	got := getProjectLogoPath()
-	if got != "" {
-		t.Fatalf("getProjectLogoPath() = %q, want empty string", got)
-	}
-}
-
-func TestGetProjectLogoPathSupportsNonPngExtensions(t *testing.T) {
-	tempDir := t.TempDir()
-	logoFile := filepath.Join(tempDir, "project_logo.jpg")
-	if err := os.WriteFile(logoFile, []byte("jpg"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	previousStorageDir := localStorageDir
-	localStorageDir = tempDir
-	t.Cleanup(func() {
-		localStorageDir = previousStorageDir
-	})
-
-	got := getProjectLogoPath()
-	if got != "/storage/project_logo.jpg" {
-		t.Fatalf("getProjectLogoPath() = %q, want %q", got, "/storage/project_logo.jpg")
-	}
+	assertProtectedStorageHeaders(t, rr)
 }
 
 func TestResolveInstallationEnvironmentUsesExplicitFirstRunChoice(t *testing.T) {
@@ -140,8 +103,8 @@ func TestParseProtectedStoragePath(t *testing.T) {
 }
 
 func TestPublicStoragePathAllowlist(t *testing.T) {
-	if !isPublicStoragePath("project_logo.png") {
-		t.Fatal("project logo should stay public")
+	if isPublicStoragePath("project_logo.png") {
+		t.Fatal("the retired project logo must not be public")
 	}
 	if !isPublicStoragePath("service_catalog_logos/firefox.svg") {
 		t.Fatal("legacy service catalog logos should stay public")

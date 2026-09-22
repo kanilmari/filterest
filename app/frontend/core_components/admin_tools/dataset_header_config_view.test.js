@@ -4,6 +4,7 @@
 // Exists to keep the first stable-candidate migration wired to explicit wrappers instead of endpoint_router.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { DATASET_HEADER_CONFIG_TRANSLATION_FALLBACKS as COPY } from './dataset_header_config_translation_fallbacks.js';
 
 const endpointRouterMock = vi.fn();
 const fetchDatasetHeaderConfigMock = vi.fn();
@@ -41,7 +42,6 @@ function buildConfig(overrides = {}) {
             ch: '',
             usage_explanation: 'Dataset hero search prompt',
         },
-        project_logo_path: '/media/project-logo.png',
 		cover_image_path: '/storage/104/dataset_media/cover/original/cover.webp',
 		background_image_path: '/storage/104/dataset_media/background/original/background.webp',
         ...overrides,
@@ -52,6 +52,25 @@ function getTitleFiInput(container) {
     return /** @type {HTMLInputElement | null} */ (
         container.querySelector('.dataset-header-config-text-card input[type="text"]:not([readonly])')
     );
+}
+
+// Stands in for a person picking a file: browsers let code clear a file input
+// by setting its value to '' but never set it, so the test models both sides.
+function pickFile(input, file) {
+    let files = [file];
+    Object.defineProperty(input, 'files', { configurable: true, get: () => files });
+    Object.defineProperty(input, 'value', {
+        configurable: true,
+        get: () => (files.length ? `C:\\fakepath\\${files[0].name}` : ''),
+        set: (value) => {
+            if (value === '') files = [];
+        },
+    });
+    input.dispatchEvent(new Event('change'));
+}
+
+function submitForm(container) {
+    container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 }
 
 async function flushAsyncWork() {
@@ -77,8 +96,10 @@ async function loadModule() {
         showSuccessToast: showSuccessToastMock,
         showWarningToast: showWarningToastMock,
     }));
+    // The screen's own English copy stands in for the site's translations.
     vi.doMock('../lang/translation_handler.js', () => ({
         translatePage: translatePageMock,
+        getTranslationForKey: (key) => COPY[key]?.en ?? key,
     }));
     vi.doMock('../state_stores/lang_preference_reader.js', () => ({
         getLanguageWithBrowserFallback: getLanguageWithBrowserFallbackMock,
@@ -120,7 +141,9 @@ describe('dataset_header_config_view', () => {
         expect(endpointRouterMock).toHaveBeenCalledTimes(1);
         expect(endpointRouterMock).toHaveBeenCalledWith('datasetNames');
         expect(fetchDatasetHeaderConfigMock).toHaveBeenCalledWith('orders');
-        expect(container.textContent).toContain('Dataset Header Configuration');
+        expect(container.textContent).toContain('Dataset header configuration');
+        expect(container.textContent).not.toContain('Project Banner');
+        expect(container.querySelector('input[name="project_banner_image"]')).toBeNull();
         expect(getTitleFiInput(container)?.value).toBe('Tilaukset');
 		expect(container.querySelectorAll('.dataset-header-config-media-card')).toHaveLength(2);
 		const previewSources = Array.from(container.querySelectorAll('.dataset-header-config-media-card img'))
@@ -203,11 +226,11 @@ describe('dataset_header_config_view', () => {
         const payload = saveDatasetHeaderConfigMock.mock.calls[0][0];
         expect(payload).toBeInstanceOf(FormData);
         expect(payload.get('dataset_name')).toBe('orders');
-        expect(payload.get('remove_project_banner')).toBe('false');
+        expect(payload.has('remove_project_banner')).toBe(false);
 		expect(payload.get('remove_cover_image')).toBe('false');
 		expect(payload.get('remove_background_image')).toBe('false');
         expect(payload.get('title_fi')).toBe('Tilaukset nyt');
-        expect(showSuccessToastMock).toHaveBeenCalledWith('Saved from wrapper');
+        expect(showSuccessToastMock).toHaveBeenCalledWith('Saved');
         expect(translatePageMock).toHaveBeenCalledWith('fi');
 
         const tableSpecs = JSON.parse(localStorage.getItem('table_specs'));
@@ -223,5 +246,160 @@ describe('dataset_header_config_view', () => {
         expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
         expect(contentArea.style.getPropertyValue('--dataset-background-image')).toContain('/background/2160/new-background.webp');
         expect(tabButton.dataset.hasPresentationMedia).toBe('true');
+        expect(document.querySelector('meta[name="project-logo-path"]')).toBeNull();
+    });
+
+    test('forgets picked images and removal ticks when the next dataset fails to load', async () => {
+        const originalCreateObjectURL = URL.createObjectURL;
+        const originalRevokeObjectURL = URL.revokeObjectURL;
+        URL.createObjectURL = vi.fn(() => 'blob:picked-cover');
+        URL.revokeObjectURL = vi.fn();
+        try {
+            endpointRouterMock.mockResolvedValue(['invoices', 'orders']);
+            fetchDatasetHeaderConfigMock
+                .mockResolvedValueOnce(buildConfig())
+                .mockRejectedValueOnce(new Error('Loading invoices failed'))
+                .mockResolvedValueOnce(buildConfig({ dataset_name: 'invoices' }));
+            saveDatasetHeaderConfigMock.mockResolvedValue({
+                status: 'ok',
+                config: buildConfig({ dataset_name: 'invoices' }),
+            });
+            const { generate_dataset_header_config_view } = await loadModule();
+            const container = document.createElement('div');
+            await generate_dataset_header_config_view(container, { initialDatasetName: 'orders' });
+
+            pickFile(
+                container.querySelector('input[name="cover_image"]'),
+                new File(['png'], 'cover.png', { type: 'image/png' })
+            );
+            const removeBackground = /** @type {HTMLInputElement} */ (
+                container.querySelector('input[name="remove_background_image"]')
+            );
+            removeBackground.checked = true;
+            removeBackground.dispatchEvent(new Event('change'));
+            expect(container.textContent).toContain('Unsaved changes');
+
+            const { onChange } = createVanillaDropdownMock.mock.calls[0][0];
+            await onChange('invoices');
+            // The request pipeline reports the failure itself; the view adds no second toast.
+            expect(showErrorToastMock).not.toHaveBeenCalled();
+            expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:picked-cover');
+            expect(container.textContent).not.toContain('Unsaved changes');
+            expect(removeBackground.checked).toBe(false);
+
+            // Choosing the dataset again loads it, and only then can it be saved.
+            await onChange('invoices');
+            submitForm(container);
+            await flushAsyncWork();
+
+            const payload = saveDatasetHeaderConfigMock.mock.calls[0][0];
+            expect(payload.get('dataset_name')).toBe('invoices');
+            expect(payload.get('cover_image')).toBeNull();
+            expect(payload.get('remove_cover_image')).toBe('false');
+            expect(payload.get('remove_background_image')).toBe('false');
+        } finally {
+            URL.createObjectURL = originalCreateObjectURL;
+            URL.revokeObjectURL = originalRevokeObjectURL;
+        }
+    });
+
+    test('refuses to save a dataset whose settings did not load, and says why', async () => {
+        endpointRouterMock.mockResolvedValue(['invoices', 'orders']);
+        fetchDatasetHeaderConfigMock
+            .mockResolvedValueOnce(buildConfig())
+            .mockRejectedValueOnce(new Error('Loading invoices failed'));
+        const { generate_dataset_header_config_view } = await loadModule();
+        const container = document.createElement('div');
+        await generate_dataset_header_config_view(container, { initialDatasetName: 'orders' });
+        const saveButton = /** @type {HTMLButtonElement} */ (container.querySelector('button[type="submit"]'));
+        const status = /** @type {HTMLElement} */ (container.querySelector('.dataset-header-config-save-status'));
+        expect(saveButton.disabled).toBe(false);
+        expect(status.hidden).toBe(true);
+
+        const { onChange } = createVanillaDropdownMock.mock.calls[0][0];
+        await onChange('invoices');
+
+        // The form still shows the orders texts; saving them to invoices is refused.
+        expect(getTitleFiInput(container)?.value).toBe('Tilaukset');
+        expect(saveButton.disabled).toBe(true);
+        expect(status.hidden).toBe(false);
+        expect(status.textContent).toBe(COPY.dataset_header_config_not_loaded.en);
+        expect(status.getAttribute('role')).toBe('status');
+        submitForm(container);
+        await flushAsyncWork();
+        expect(saveDatasetHeaderConfigMock).not.toHaveBeenCalled();
+        expect(showInfoToastMock).toHaveBeenCalledWith(COPY.dataset_header_config_not_loaded.en);
+    });
+
+    test('ignores a slower load for a dataset the admin already left', async () => {
+        endpointRouterMock.mockResolvedValue(['invoices', 'orders']);
+        let finishOrdersReload;
+        fetchDatasetHeaderConfigMock
+            .mockResolvedValueOnce(buildConfig({ dataset_name: 'invoices', title: { lang_key: 'invoices_front_page', fi: 'Laskut' } }))
+            .mockImplementationOnce(() => new Promise((resolve) => { finishOrdersReload = resolve; }))
+            .mockResolvedValueOnce(buildConfig({ dataset_name: 'invoices', title: { lang_key: 'invoices_front_page', fi: 'Laskut' } }));
+        const { generate_dataset_header_config_view } = await loadModule();
+        const container = document.createElement('div');
+        await generate_dataset_header_config_view(container, { initialDatasetName: 'invoices' });
+        const { onChange } = createVanillaDropdownMock.mock.calls[0][0];
+
+        const ordersLoad = onChange('orders');
+        await onChange('invoices');
+        finishOrdersReload(buildConfig());
+        await ordersLoad;
+
+        expect(getTitleFiInput(container)?.value).toBe('Laskut');
+        expect(container.querySelector('button[type="submit"]').disabled).toBe(false);
+    });
+
+    test('leaves failed requests to the pipeline\'s own notice and words only its own failures', async () => {
+        endpointRouterMock.mockRejectedValueOnce(new Error('Virhe pyynnössä (datasetNames): boom'));
+        const { generate_dataset_header_config_view } = await loadModule();
+        await generate_dataset_header_config_view(document.createElement('div'));
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showWarningToastMock).not.toHaveBeenCalled();
+
+        endpointRouterMock.mockResolvedValue(['orders']);
+        fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig());
+        saveDatasetHeaderConfigMock
+            .mockRejectedValueOnce(Object.assign(new Error('Virhe pyynnössä (saveDatasetHeaderConfig): {}'), { status: 500 }))
+            .mockResolvedValueOnce({ status: 'ok' });
+        const container = document.createElement('div');
+        await generate_dataset_header_config_view(container);
+        submitForm(container);
+        await flushAsyncWork();
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(container.querySelector('button[type="submit"]').disabled).toBe(false);
+
+        submitForm(container);
+        await flushAsyncWork();
+        expect(showErrorToastMock).toHaveBeenCalledWith(COPY.save_failed.en);
+        expect(showSuccessToastMock).not.toHaveBeenCalled();
+    });
+
+    test('every text on the screen has Finnish, English, Chinese and Cantonese copy', async () => {
+        endpointRouterMock.mockResolvedValue(['orders']);
+        fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig({ cover_image_path: '' }));
+        const { generate_dataset_header_config_view } = await loadModule();
+        const container = document.createElement('div');
+        await generate_dataset_header_config_view(container, { onDismiss: () => {} });
+
+        const keys = new Set(
+            Array.from(container.querySelectorAll('[data-lang-key], [data-title-lang-key], [data-aria-label-lang-key]'))
+                .flatMap((element) => [element.dataset.langKey, element.dataset.titleLangKey, element.dataset.ariaLabelLangKey])
+                .filter(Boolean)
+        );
+        for (const key of ['dataset_select_target', 'search', 'dataset_header_config_usage_placeholder',
+            'dataset_header_config_not_loaded', 'dataset_header_config_no_datasets', 'saved', 'save_failed',
+            'unsaved_changes']) {
+            keys.add(key);
+        }
+        expect(keys.size).toBeGreaterThan(20);
+        for (const key of keys) {
+            for (const language of ['fi', 'en', 'ch', 'yue']) {
+                expect(COPY[key]?.[language], `${key} ${language}`).toMatch(/\S/);
+            }
+        }
+        expect(Object.keys(COPY).filter((key) => !keys.has(key))).toEqual([]);
     });
 });

@@ -46,12 +46,6 @@
   ],
   "hero_only_order": [
     {
-      "id": "logo_background",
-      "label": "Logo letter grid",
-      "description": "Decorative 8-column letter grid — appended to heroContentWrapper, not contentInner",
-      "folder": "logo_background"
-    },
-    {
       "id": "scroll_indicator",
       "label": "Scroll indicator footer",
       "description": "Footer with pulse-animated scroll button — built inline in create_filter_bar.js",

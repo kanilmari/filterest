@@ -38,7 +38,6 @@ type indexTemplateData struct {
 	InstallationEnvironment string
 	SiteName                string
 	ProductName             string
-	ProjectLogoPath         string
 	FaviconPath             string
 	// SEO / Open Graph fields (populated by resolvePageMeta)
 	PageTitle       string
@@ -71,22 +70,6 @@ func getSiteName() string {
 	}
 
 	return "Easelect"
-}
-
-func getProjectLogoPath() string {
-	if localStorageDir == "" {
-		return ""
-	}
-
-	for _, ext := range []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"} {
-		fileName := fmt.Sprintf("project_logo%s", ext)
-		logoPath := filepath.Join(localStorageDir, fileName)
-		if _, err := os.Stat(logoPath); err == nil {
-			return "/storage/" + fileName
-		}
-	}
-
-	return ""
 }
 
 // getInstallationEnvironment returns the user-facing purpose selected during First Run.
@@ -151,10 +134,9 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool) {
 	data := indexTemplateData{
 		CSPNonce: nonce, UseMinifiedAssets: useMinified, IsDev: isDev,
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: siteName,
-		ProductName:     getSiteName(),
-		ProjectLogoPath: getProjectLogoPath(),
-		FaviconPath:     frontendassets.SiteFaviconPath(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
-		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
+		ProductName: getSiteName(),
+		FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
+		PageTitle:   meta.PageTitle, MetaDescription: meta.MetaDescription,
 		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 		OGDescription: meta.OGDescription, OGType: meta.OGType,
 		OGURL: meta.OGURL, OGImage: meta.OGImage,
@@ -193,10 +175,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	data := indexTemplateData{
 		CSPNonce: nonce, UseMinifiedAssets: useMinified,
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
-		ProductName:     getSiteName(),
-		ProjectLogoPath: getProjectLogoPath(),
-		FaviconPath:     frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
-		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
+		ProductName: getSiteName(),
+		FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
+		PageTitle:   meta.PageTitle, MetaDescription: meta.MetaDescription,
 		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 		OGDescription: meta.OGDescription, OGType: meta.OGType,
 		OGURL: meta.OGURL, OGImage: meta.OGImage,

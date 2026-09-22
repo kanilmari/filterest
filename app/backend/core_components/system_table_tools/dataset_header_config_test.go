@@ -2,7 +2,6 @@ package system_table_tools
 
 import (
 	"bytes"
-	"errors"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -47,47 +46,17 @@ func TestResolveStorageDirUsesConfiguredRuntimeRoot(t *testing.T) {
 	}
 }
 
-func TestFindProjectLogoPublicPathSupportsJpg(t *testing.T) {
-	storageDir := t.TempDir()
-	logoFile := filepath.Join(storageDir, "project_logo.jpg")
-	if err := os.WriteFile(logoFile, []byte("jpg"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	got := findProjectLogoPublicPath(storageDir)
-	if got != "/storage/project_logo.jpg" {
-		t.Fatalf("findProjectLogoPublicPath() = %q, want %q", got, "/storage/project_logo.jpg")
-	}
-}
-
-func TestRemoveExistingProjectLogoFilesRemovesAllSupportedVariants(t *testing.T) {
-	storageDir := t.TempDir()
-	for _, ext := range projectLogoExtensions {
-		logoFile := filepath.Join(storageDir, "project_logo"+ext)
-		if err := os.WriteFile(logoFile, []byte(ext), 0o644); err != nil {
-			t.Fatalf("WriteFile(%q) error = %v", ext, err)
+func TestIsAllowedDatasetMediaExtensionRejectsUnsupportedTypes(t *testing.T) {
+	for _, ext := range []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"} {
+		if !isAllowedDatasetMediaExtension(ext) {
+			t.Fatalf("expected %s to be allowed", ext)
 		}
 	}
 
-	if err := removeExistingProjectLogoFiles(storageDir); err != nil {
-		t.Fatalf("removeExistingProjectLogoFiles() error = %v", err)
-	}
-
-	for _, ext := range projectLogoExtensions {
-		logoFile := filepath.Join(storageDir, "project_logo"+ext)
-		if _, err := os.Stat(logoFile); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("expected %q to be removed, stat error = %v", logoFile, err)
+	for _, ext := range []string{".bmp", ".PNG", ""} {
+		if isAllowedDatasetMediaExtension(ext) {
+			t.Fatalf("expected %q to be rejected", ext)
 		}
-	}
-}
-
-func TestIsAllowedProjectLogoExtensionRejectsUnsupportedTypes(t *testing.T) {
-	if !isAllowedProjectLogoExtension(".webp") {
-		t.Fatal("expected .webp to be allowed")
-	}
-
-	if isAllowedProjectLogoExtension(".bmp") {
-		t.Fatal("expected .bmp to be rejected")
 	}
 }
 

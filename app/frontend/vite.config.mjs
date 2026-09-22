@@ -35,9 +35,6 @@ export function resolveViteProjectLayout(
     nestedStandalone,
     backendPort: privateEaselect ? 8082 : 8100,
     defaultSiteName: privateEaselect ? 'Easelect' : 'Filterest',
-    storageDir: nestedStandalone
-      ? join(projectRoot, 'data', 'storage')
-      : join(projectRoot, 'storage'),
     viteCacheDir: nestedStandalone
       ? join(projectRoot, 'data', 'runtime', 'node', 'vite-cache')
       : join(projectRoot, 'node_modules', '.vite'),
@@ -116,25 +113,7 @@ function resolveDevBackendURL() {
   return `https://localhost:${backendPort}`;
 }
 
-function resolveDevProjectLogoPath() {
-  const { storageDir } = projectLayout;
-
-  for (const ext of ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif']) {
-    const fileName = `project_logo${ext}`;
-    try {
-      if (statSync(join(storageDir, fileName)).isFile()) {
-        return `/storage/${fileName}`;
-      }
-    } catch {
-      // Continue probing supported extensions.
-    }
-  }
-
-  return '';
-}
-
 const DEV_SITE_NAME = readProjectEnvValue('SITE_NAME') || readProjectDefaultSiteName();
-const DEV_PROJECT_LOGO_PATH = resolveDevProjectLogoPath();
 const VITE_DEV_PORT = readProjectEnvPort('VITE_DEV_PORT', 5173);
 const VITE_HMR_PORT = readProjectEnvPort('VITE_HMR_PORT', VITE_DEV_PORT);
 const DEV_BACKEND_URL = resolveDevBackendURL();
@@ -309,7 +288,6 @@ const KNOWN_DEFAULTS = {
   OGURL: DEV_CANONICAL_URL,
   OGImage: '',
   OGLocale: 'fi_FI',
-  ProjectLogoPath: DEV_PROJECT_LOGO_PATH,
   FaviconPath: DEV_FAVICON_PATH,
   FormAction: '/api/register',
   ImportsCSSPath: '/frontend/styles/imports.css',
