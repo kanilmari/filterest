@@ -180,20 +180,6 @@ func mergeFilterbarAIUsageSummaries(summaries ...*filterbarAIUsageSummary) *filt
 	return buildFilterbarAIUsageSummary(calls)
 }
 
-func buildFilterbarAIUnavailableUsageSummary(provider string, model string, note string) *filterbarAIUsageSummary {
-	provider = strings.TrimSpace(provider)
-	model = strings.TrimSpace(model)
-	note = strings.TrimSpace(note)
-	if provider == "" && model == "" && note == "" {
-		return nil
-	}
-	return &filterbarAIUsageSummary{
-		Provider:    provider,
-		Model:       model,
-		PricingNote: note,
-	}
-}
-
 func resolveFilterbarAIModelPricing(provider string, modelName string) (filterbarAIModelPricing, bool) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	modelName = strings.ToLower(strings.TrimSpace(modelName))

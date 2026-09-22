@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Serve one site's administrator coding jobs over a protected Unix socket.
-Connects the web adapter, isolated persistent Git worktrees and a local Codex CLI.
-Run as a dedicated non-root user; configuration and credentials are operator-owned.
+"""Serve one site's administrator coding-agent jobs over a protected Unix socket.
+Connects the web adapter with the job modes this installation offers and the pinned Codex engine.
+A production runner uses a dedicated non-root user; a developer's runner is that developer.
 """
 from __future__ import annotations
 import argparse
@@ -15,64 +15,109 @@ import socketserver
 import signal
 import stat
 import struct
-import subprocess
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlsplit
 
-from coding_agent_jobs import CodingJobs, JobError
+from codex_engine import (CODE_WORKSPACE, JOB_MODES, PINNED_CODEX_VERSION, SITE_ASSISTANT,
+                          code_workspace_sandbox, engine_environment, executable_status)
+from coding_agent_jobs import CodingJobs, JobError, atomic_json, offered_modes, requested_mode
+
+DEDICATED = "dedicated"
+SAME_USER_WORKSTATION = "same_user_workstation"
+REMOVED_SETTINGS = ("repository", "source_revision", "maintenance_actions")
+
+
+def absolute(value, field):
+    if not isinstance(value, str) or not Path(value).is_absolute():
+        raise ValueError(field + " must be an absolute path")
+    return Path(value)
 
 
 def load_config(path):
-    config = json.loads(Path(path).read_text())
-    for field in ("socket", "repository", "jobs_root"):
-        if not isinstance(config.get(field), str) or not Path(config[field]).is_absolute():
-            raise ValueError(field + " must be an absolute path")
+    return validate_config(json.loads(Path(path).read_text()))
+
+
+def validate_config(config):
+    """Reject an unsafe or outdated configuration before anything starts."""
+    for field in ("socket", "jobs_root"):
+        absolute(config.get(field), field)
     if not isinstance(config.get("site_id"), str) or not config["site_id"]:
         raise ValueError("site_id is required")
     command = config.get("codex_command")
     if not isinstance(command, list) or not command or not all(isinstance(x, str) for x in command) or not Path(command[0]).is_absolute():
         raise ValueError("codex_command requires an installed absolute executable")
-    if not isinstance(config.get("allowed_web_uids"), list) or not config["allowed_web_uids"] or not all(isinstance(x, int) and x > 0 for x in config["allowed_web_uids"]):
+    leftover = [field for field in REMOVED_SETTINGS if field in config]
+    if leftover:
+        raise ValueError("the isolated source-copy variant was removed; delete " + ", ".join(leftover)
+                         + " and list the offered job modes under modes")
+    identity = config.get("identity", DEDICATED)
+    if identity not in (DEDICATED, SAME_USER_WORKSTATION):
+        raise ValueError("identity must be dedicated or same_user_workstation")
+    uids = config.get("allowed_web_uids")
+    if not isinstance(uids, list) or not uids or not all(isinstance(x, int) and x > 0 for x in uids):
         raise ValueError("explicit non-root web peer UIDs are required")
-    if os.getuid() in config["allowed_web_uids"]:
+    if identity == DEDICATED and os.getuid() in uids:
         raise ValueError("runner and web peer must use different Unix users")
-    revision = config.get("source_revision", "")
-    import re
-    if not re.fullmatch("[a-f0-9]{40}", revision):
-        raise ValueError("source_revision must be a full immutable commit")
-    repo, jobs = Path(config["repository"]).resolve(), Path(config["jobs_root"]).resolve()
-    if jobs == repo or repo in jobs.parents:
-        raise ValueError("job storage must be outside the source repository")
+    if identity == SAME_USER_WORKSTATION and uids != [os.getuid()]:
+        # On a developer's own machine the web server and the runner are that developer.
+        raise ValueError("a same-user workstation runner accepts only its own user as web peer")
+    modes = config.get("modes")
+    if not isinstance(modes, dict) or not modes or not set(modes) <= set(JOB_MODES) \
+            or not all(isinstance(value, dict) for value in modes.values()):
+        raise ValueError("modes must offer at least one of: " + ", ".join(JOB_MODES))
+    jobs = Path(config["jobs_root"]).resolve()
+    if CODE_WORKSPACE in modes:
+        # Editing code is a development-machine capability by a fixed rule: a
+        # dedicated production runner can never offer it, whatever else it lists.
+        if identity != SAME_USER_WORKSTATION:
+            raise ValueError("code_workspace is offered only by a same-user workstation runner")
+        settings = modes[CODE_WORKSPACE]
+        workspace = absolute(settings.get("workspace"), "modes.code_workspace.workspace")
+        repositories = [absolute(value, "modes.code_workspace.repositories")
+                        for value in settings.get("repositories") or [str(workspace)]]
+        code_workspace_sandbox(config)
+        for repository in {workspace, *repositories}:
+            repository = repository.resolve()
+            if jobs == repository or repository in jobs.parents:
+                raise ValueError("job storage must be outside the source checkout")
+    if config.get("site_tls_ca_file"):
+        absolute(config["site_tls_ca_file"], "site_tls_ca_file")
     return config
 
 
+def private_modes(config):
+    """Socket permissions: the web peer's group on a server, the owner alone on a workstation."""
+    if config.get("identity") == SAME_USER_WORKSTATION:
+        return 0o700, 0o600
+    return 0o750, 0o660
+
+
 def readiness(config):
-    result = {"runner_ready": False, "authentication_verified": False, "reason_code": "runner_tools_missing"}
-    if not os.access(config["codex_command"][0], os.X_OK):
+    """Local tools, account and per-mode checks only; never a model request."""
+    result = {"runner_ready": False, "authentication_verified": False, "reason_code": "runner_tools_missing",
+              "modes": [], "offered_modes": offered_modes(config), "codex_version": "",
+              "pinned_codex_version": PINNED_CODEX_VERSION}
+    status = executable_status(config["codex_command"], engine_environment(config, SITE_ASSISTANT))
+    result["codex_version"] = status["version"]
+    result["authentication_verified"] = status["authenticated"]
+    if not status["installed"]:
         return result
-    try:
-        subprocess.run(["git", "-C", config["repository"], "cat-file", "-e", config["source_revision"] + "^{commit}"],
-                       check=True, capture_output=True, timeout=10)
-        subprocess.run([*config["codex_command"], "--version"], check=True, capture_output=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
+    if not status["pinned"]:
+        result["reason_code"] = "runner_version_mismatch"
         return result
-    # Local account status only; no model request and no credential output.
-    environment = {**os.environ, **config.get("environment", {})}
-    if config.get("codex_home"):
-        environment["CODEX_HOME"] = config["codex_home"]
-    try:
-        login = subprocess.run([*config["codex_command"], "login", "status"],
-                               env=environment, capture_output=True, timeout=10)
-        result["authentication_verified"] = login.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        pass
-    if not result["authentication_verified"]:
+    if not status["authenticated"]:
         result["reason_code"] = "runner_authentication_required"
         return result
-    actions = config.get("maintenance_actions", {})
-    if not all(isinstance(actions.get(k), list) and actions[k] and Path(actions[k][0]).is_absolute()
-               and os.access(actions[k][0], os.X_OK) for k in ("plan", "apply")):
-        result["reason_code"] = "maintenance_not_configured"
+    ready = []
+    for mode in result["offered_modes"]:
+        if mode == CODE_WORKSPACE:
+            workspace = Path(config["modes"][CODE_WORKSPACE]["workspace"])
+            if not (workspace / ".git").exists():
+                continue
+        ready.append(mode)
+    result["modes"] = ready
+    if not ready:
+        result["reason_code"] = "runner_mode_unavailable"
         return result
     result.update(runner_ready=True, reason_code="")
     return result
@@ -80,13 +125,13 @@ def readiness(config):
 
 class RunnerSocket:
     """Own one protected socket pathname across normal and crash restarts."""
-    def __init__(self, path):
+    def __init__(self, path, directory_mode=0o750):
         self.path = Path(path)
         self.directory = None
         self.lock = None
         self.bound = None
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+            self.path.parent.mkdir(parents=True, exist_ok=True, mode=directory_mode)
             self.directory = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             info = os.fstat(self.directory)
             if info.st_uid != os.getuid() or info.st_mode & 0o022:
@@ -168,13 +213,14 @@ class RunnerServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 
     def __init__(self, config):
         self.config = config
-        self.socket_owner = RunnerSocket(config["socket"])
+        directory_mode, socket_mode = private_modes(config)
+        self.socket_owner = RunnerSocket(config["socket"], directory_mode)
         self.jobs = None
         try:
             self.jobs = CodingJobs(config)
             super().__init__(config["socket"], RunnerRequest)
             self.socket_owner.mark_bound()
-            os.chmod(config["socket"], 0o660)
+            os.chmod(config["socket"], socket_mode)
         except BaseException:
             try:
                 if hasattr(self, "socket"):
@@ -198,15 +244,16 @@ class RunnerRequest(BaseHTTPRequestHandler):
 
     def reply(self, status, value):
         body = json.dumps(value, ensure_ascii=False).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
         try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
-            pass  # accepted jobs persist independently of the browser connection
+            # A reloaded page drops its poll; accepted jobs persist independently.
+            self.close_connection = True
 
     def dispatch(self):
         try:
@@ -226,9 +273,11 @@ class RunnerRequest(BaseHTTPRequestHandler):
             if self.command == "GET" and parts.path == "/v1/capabilities":
                 return self.reply(200, readiness(config))
             if self.command == "POST" and parts.path == "/v1/jobs":
-                if not readiness(config)["runner_ready"]:
-                    raise JobError(503, "runner is not ready")
-                return self.reply(202, self.server.jobs.submit(actor, self.body()))
+                body = self.body()
+                mode = requested_mode(config, body)
+                if mode not in readiness(config)["modes"]:
+                    raise JobError(503, "runner is not ready for this mode")
+                return self.reply(202, self.server.jobs.submit(actor, body))
             if self.command == "POST" and parts.path.startswith("/v1/jobs/") and parts.path.endswith("/apply"):
                 job_id = parts.path.removeprefix("/v1/jobs/").removesuffix("/apply")
                 body = self.body()
@@ -260,16 +309,74 @@ class RunnerRequest(BaseHTTPRequestHandler):
     do_POST = dispatch
 
 
+def socket_is_live(path):
+    """Whether a runner currently accepts connections on this socket; no request is sent."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+        probe.settimeout(1)
+        try:
+            probe.connect(str(path))
+        except OSError:
+            return False
+    return True
+
+
+def workstation_config(arguments):
+    """The developer machine's runner: the developer's own user, private paths, both modes."""
+    workspace = str(Path(arguments.workspace).resolve())
+    repositories = [str(Path(value).resolve()) for value in arguments.repository] or [workspace]
+    config = {
+        "site_id": arguments.site_id,
+        "identity": SAME_USER_WORKSTATION,
+        "socket": arguments.socket,
+        "allowed_web_uids": [os.getuid()],
+        "jobs_root": arguments.jobs_root,
+        "codex_command": [arguments.codex],
+        "modes": {
+            CODE_WORKSPACE: {"workspace": workspace, "repositories": list(dict.fromkeys(repositories))},
+            SITE_ASSISTANT: {},
+        },
+    }
+    if arguments.site_tls_ca_file:
+        config["site_tls_ca_file"] = arguments.site_tls_ca_file
+    return validate_config(config)
+
+
+def write_private_config(path, config):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    atomic_json(path, config)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
     parser.add_argument("--check", action="store_true", help="Check local tools/account without starting a model")
+    parser.add_argument("--status", action="store_true", help="Report whether this runner is listening")
+    parser.add_argument("--init-workstation", action="store_true",
+                        help="Write this developer machine's runner configuration, then exit")
+    parser.add_argument("--site-id")
+    parser.add_argument("--socket")
+    parser.add_argument("--jobs-root")
+    parser.add_argument("--codex")
+    parser.add_argument("--workspace")
+    parser.add_argument("--repository", action="append", default=[])
+    parser.add_argument("--site-tls-ca-file")
     args = parser.parse_args()
     if os.getuid() == 0:
-        parser.error("runner must use a dedicated non-root user")
+        parser.error("runner must not run as root")
+    if args.init_workstation:
+        missing = [name for name in ("site_id", "socket", "jobs_root", "codex", "workspace") if not getattr(args, name)]
+        if missing:
+            parser.error("--init-workstation needs --" + ", --".join(name.replace("_", "-") for name in missing))
+        write_private_config(args.config, workstation_config(args))
+        return
     config = load_config(args.config)
     if args.check:
         print(json.dumps(readiness(config)))
+        return
+    if args.status:
+        print(json.dumps({"running": socket_is_live(config["socket"]), "socket": config["socket"]}))
         return
     server = None
     def terminate(_signum, _frame):
@@ -286,6 +393,7 @@ def main():
         try:
             if server is not None:
                 try:
+                    server.jobs.terminate_active()
                     server.server_close()
                 finally:
                     server.jobs.close()

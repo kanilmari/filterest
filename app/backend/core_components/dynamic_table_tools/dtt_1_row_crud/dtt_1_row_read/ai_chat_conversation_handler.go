@@ -24,6 +24,9 @@ type aiChatConversationMessage struct {
 	Content   string                   `json:"content"`
 	CreatedAt string                   `json:"created_at,omitempty"`
 	Usage     *filterbarAIUsageSummary `json:"usage,omitempty"`
+	// Mode names the coding-agent mode that wrote an answer, so a restored
+	// conversation still shows which mode answered.
+	Mode string `json:"mode,omitempty"`
 }
 
 type aiChatConversationPayload struct {
@@ -125,6 +128,9 @@ func normalizeAIChatConversationPayload(payload aiChatConversationPayload) (aiCh
 		}
 		payload.Messages[index].Role = role
 		payload.Messages[index].CreatedAt = strings.TrimSpace(message.CreatedAt)
+		if mode := strings.TrimSpace(message.Mode); mode != codingAgentModeCodeWorkspace && mode != codingAgentModeSiteAssistant {
+			payload.Messages[index].Mode = ""
+		}
 	}
 
 	payload.Preview = buildAIChatConversationPreview(payload.Preview, payload.Messages)

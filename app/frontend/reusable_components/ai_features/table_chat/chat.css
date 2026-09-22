@@ -219,6 +219,19 @@ body.dark-mode {
   opacity: 0.78;
 }
 
+/* The coding-agent mode that wrote an answer, and the mode a waiting job runs in. */
+.chat-mode-footer {
+  margin-top: 0.45rem;
+  font-size: 0.74rem;
+  line-height: 1.28;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.chat-pending-mode {
+  font-weight: 600;
+}
+
 .chat-bubble-pending {
   opacity: 0.92;
 }

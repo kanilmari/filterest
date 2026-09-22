@@ -6,8 +6,11 @@
 # Options: claude | codex
 DEFAULT_BACKEND="codex"
 
-# Exact installed CLI version required for Codex runs. Upgrade deliberately.
-DEFAULT_CODEX_VERSION="0.155.1"
+# Exact installed CLI version required for Codex runs. Every Codex path (this
+# worker, the chat's coding-agent runner, managed site runners) uses the one
+# version pinned in the shared engine module; upgrade it there, deliberately.
+CODEX_ENGINE_MODULE="$(dirname "${BASH_SOURCE[0]}")/coding_agent/codex_engine.py"
+DEFAULT_CODEX_VERSION="$(python3 "$CODEX_ENGINE_MODULE" version)"
 
 # Options: sonnet | opus | haiku (or full model ID like claude-sonnet-4-6)
 DEFAULT_CLAUDE_MODEL="opus"

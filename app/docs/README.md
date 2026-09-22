@@ -35,6 +35,9 @@ Architecture and behaviour guides in
   how backend types reach the browser without drifting.
 - [SPA_Immediate_UI_Update_Inventory.md](instructions_and_documentation/SPA_Immediate_UI_Update_Inventory.md) —
   which actions update the open view without a reload.
+- [Coding_Agent.md](instructions_and_documentation/Coding_Agent.md) —
+  the dataset chat's coding agent: its code workspace and site assistant modes,
+  `./ctl agent` and the production site-assistant runner.
 
 Technical guides, design proposals, reference implementations, and tests live
 under `app/`. A proposal describes intended behavior until its implementation

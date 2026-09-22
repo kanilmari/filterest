@@ -3,8 +3,8 @@
 // Bridges chat interactions, backend AI read routes, and dataset table rendering.
 // Exists to keep the filterbar chat pinned to the API-first ai-chat facade.
 
-import { createCodingAgentControl } from './table_chat_coding_agent_control.js';
-import { getCodingAgentRunnerCopy } from './table_chat_coding_agent_copy.js';
+import { createCodingAgentControl, renderCodingAgentAnswerFooter } from './table_chat_coding_agent_control.js';
+import { getCodingAgentModeCopy, isCodingAgentMode } from './table_chat_coding_agent_copy.js';
 import { renderPendingChanges } from './table_chat_pending_changes.js';
 import { createChatAttachments } from './table_chat_attachments.js';
 import { refreshTableUnified } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
@@ -16,8 +16,9 @@ import {
 } from './table_chat_mode_resolver.js';
 import {
     runApiToolsChatQuery,
-    runCodexDevChatQuery,
+    runCodingAgentChatQuery,
     hasPendingCodingAgentJob,
+    pendingCodingAgentJobMode,
     cancelCodingAgentPolling,
 } from './table_chat_query_runner.js';
 import {
@@ -65,15 +66,12 @@ async function start_api_tools_query(table_name, user_message, pending_message =
     });
 }
 
-async function start_codex_dev_query(table_name, user_message, pending_message = null, imageTokens = []) {
-    const chatResponse = await runCodexDevChatQuery(
+async function start_coding_agent_query(table_name, user_message, mode, pending_message = null, imageTokens = []) {
+    const chatResponse = await runCodingAgentChatQuery(
         table_name,
         user_message,
         conversation_map.get(table_name) || [],
-        {
-            externalRunner: codingAgentControls.get(table_name)?.capability?.runner_kind === 'external',
-            imageTokens,
-        }
+        { mode, imageTokens }
     );
     const assistantReply = String(chatResponse?.answer || 'Codex completed without a visible answer.').trim();
     const visibleAssistantReply = append_no_result_fetch_notice(
@@ -86,6 +84,7 @@ async function start_codex_dev_query(table_name, user_message, pending_message =
         content: visibleAssistantReply,
         created_at: assistantCreatedAt,
         usage: chatResponse?.usage || null,
+        mode: chatResponse?.mode,
     });
     if (chatResponse?.memory) {
         replace_result_context_in_conversation(table_name, chatResponse.memory);
@@ -93,6 +92,7 @@ async function start_codex_dev_query(table_name, user_message, pending_message =
     const message_div = finish_pending_chat_message(table_name, pending_message, 'assistant', visibleAssistantReply, {
         created_at: assistantCreatedAt,
         usage: chatResponse?.usage || null,
+        mode: chatResponse?.mode,
     });
     show_pending_changes(table_name, message_div, chatResponse);
 }
@@ -219,6 +219,9 @@ function normalizeConversationMessage(message) {
     const usage = normalizeChatUsage(message.usage);
     if (usage) {
         normalizedMessage.usage = usage;
+    }
+    if (isCodingAgentMode(message.mode)) {
+        normalizedMessage.mode = message.mode;
     }
     return normalizedMessage;
 }
@@ -360,11 +363,15 @@ function renderConversation(table_name) {
         return;
     }
 
+    // A job still being waited for (for example one resumed after a reload)
+    // keeps its waiting bubble when the stored history is drawn again.
+    const pending_bubbles = [...chat_container.querySelectorAll('.chat-bubble-pending')];
     chat_container.replaceChildren();
     const messages = conversation_map.get(table_name) || [];
 
     if (messages.length === 0) {
         renderWelcomeMessage(table_name);
+        chat_container.append(...pending_bubbles);
         return;
     }
 
@@ -375,8 +382,10 @@ function renderConversation(table_name) {
         append_chat_message(table_name, message.role, message.content, '', {
             created_at: message.created_at,
             usage: message.usage,
+            mode: message.mode,
         });
     });
+    chat_container.append(...pending_bubbles);
 }
 
 function nextConversationUpdatedAt(table_name) {
@@ -550,8 +559,8 @@ export function create_chat_ui(table_name, parent_element) {
     const chat_mode_select = createCodingAgentControl(table_name);
     if (chat_mode_select) codingAgentControls.set(table_name, chat_mode_select);
 
-    // Images are for the site assistant, so the control appears only where that
-    // assistant is offered at all.
+    // Images are for the coding agent's modes, so the control appears only where
+    // the coding agent is offered at all.
     const chat_attachments = chat_mode_select ? createChatAttachments(table_name) : null;
 
     const chat_send_btn = document.createElement('button');
@@ -597,11 +606,11 @@ export function create_chat_ui(table_name, parent_element) {
     chat_ui_wrapper.appendChild(chat_container_full);
     parent_element.appendChild(chat_ui_wrapper);
     if (hasPendingCodingAgentJob(table_name)) {
-        // Only external jobs survive a page reload; the local repository agent
-        // has no durable browser-side job identity to resume.
-        const pending = append_pending_chat_message(table_name, 'codex_dev', 'external');
+        // Every coding-agent job is durable; a reload resumes it under its own mode.
+        const pendingMode = pendingCodingAgentJobMode(table_name);
+        const pending = append_pending_chat_message(table_name, pendingMode, chat_container);
         setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
-        void start_codex_dev_query(table_name, '', pending).catch(error => {
+        void start_coding_agent_query(table_name, '', pendingMode, pending).catch(error => {
             finish_pending_chat_message(table_name, pending, 'error', String(error.message));
         }).finally(() => setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, false));
     }
@@ -629,23 +638,19 @@ export function create_chat_ui(table_name, parent_element) {
             configuredMode: configuredChatMode,
             codingAgentCapability: chat_mode_select?.capability,
         });
-        const pending_message = append_pending_chat_message(
-            table_name,
-            chatMode || configuredChatMode,
-            chat_mode_select?.capability?.runner_kind
-        );
+        const pending_message = append_pending_chat_message(table_name, chatMode || configuredChatMode);
         setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
 
         if (chatMode !== 'api_tools') {
-            if (chatMode === 'codex_dev') {
+            if (isCodingAgentMode(chatMode)) {
                 const attached_tokens = chat_attachments ? chat_attachments.tokens() : [];
                 try {
                     // The tokens leave the composer with their question, so the
                     // next question does not silently reuse the same images.
                     chat_attachments?.clear();
-                    await start_codex_dev_query(table_name, user_message, pending_message, attached_tokens);
+                    await start_coding_agent_query(table_name, user_message, chatMode, pending_message, attached_tokens);
                 } catch (error) {
-                    console.warn('Codex chat query error:', error);
+                    console.warn('Coding agent chat query error:', error);
                     finish_pending_chat_message(
                         table_name,
                         pending_message,
@@ -848,6 +853,7 @@ function build_chat_message_element(sender, friendly_explanation, metadata = {})
     text_elem.textContent = friendly_explanation;
     message_div.appendChild(text_elem);
     renderChatUsageSummary(message_div, metadata.usage);
+    renderCodingAgentAnswerFooter(message_div, metadata.mode);
     return message_div;
 }
 
@@ -970,10 +976,10 @@ function scroll_chat_to_bottom(chat_container) {
     }, 0);
 }
 
-function getPendingStatusMessages(mode, runnerKind) {
+function getPendingStatusMessages(mode) {
     const isEnglish = String(document.documentElement.lang || '').toLowerCase().startsWith('en');
-    if (mode === 'codex_dev') {
-        return getCodingAgentRunnerCopy(runnerKind).pendingStatusMessages;
+    if (isCodingAgentMode(mode)) {
+        return getCodingAgentModeCopy(mode).pendingStatusMessages;
     }
     return isEnglish
         ? [
@@ -1007,8 +1013,10 @@ function render_pending_chat_message(pending_message) {
     pending_message.elapsed_text.textContent = formatPendingElapsed(pending_message.started_at_ms);
 }
 
-function append_pending_chat_message(table_name, mode, runnerKind = '') {
-    const chat_container = document.getElementById(`${table_name}_chat_container`);
+function append_pending_chat_message(table_name, mode, container = null) {
+    // The chat is built before it is attached to the page, so a resumed job
+    // passes its own container instead of relying on a document lookup.
+    const chat_container = container || document.getElementById(`${table_name}_chat_container`);
     if (!chat_container) return null;
 
     const message_div = build_chat_message_element('assistant', '');
@@ -1035,6 +1043,14 @@ function append_pending_chat_message(table_name, mode, runnerKind = '') {
     elapsed_text.classList.add('chat-pending-elapsed');
 
     text_elem.append(status_text, dots, elapsed_text);
+    if (isCodingAgentMode(mode)) {
+        // The waiting bubble names the mode that is working on the question.
+        const mode_label = document.createElement('span');
+        mode_label.classList.add('chat-pending-mode');
+        mode_label.textContent = getCodingAgentModeCopy(mode).label;
+        text_elem.prepend(mode_label);
+        message_div.dataset.mode = mode;
+    }
     chat_container.appendChild(message_div);
 
     const pending_message = {
@@ -1042,7 +1058,7 @@ function append_pending_chat_message(table_name, mode, runnerKind = '') {
         text_elem,
         status_text,
         elapsed_text,
-        status_messages: getPendingStatusMessages(mode, runnerKind),
+        status_messages: getPendingStatusMessages(mode),
         status_index: 0,
         started_at_ms: Date.now(),
         interval_id: 0,
@@ -1077,6 +1093,7 @@ function finish_pending_chat_message(table_name, pending_message, sender, messag
     updateChatMessageTimestamp(pending_message.element, metadata.created_at || buildChatCreatedAt());
     pending_message.text_elem.textContent = message_text;
     renderChatUsageSummary(pending_message.element, metadata.usage);
+    renderCodingAgentAnswerFooter(pending_message.element, metadata.mode);
 
     const chat_container = document.getElementById(`${table_name}_chat_container`);
     if (chat_container) {

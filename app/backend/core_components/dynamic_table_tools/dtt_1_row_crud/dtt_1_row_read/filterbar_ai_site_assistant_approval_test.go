@@ -39,6 +39,11 @@ func approvalBody(hash string) string {
 
 func withFakeRunner(t *testing.T, applied *siteAssistantApplyRequest, waiting []codingAgentPlanEntry) {
 	t.Helper()
+	withFakeRunnerMode(t, applied, waiting, codingAgentModeSiteAssistant)
+}
+
+func withFakeRunnerMode(t *testing.T, applied *siteAssistantApplyRequest, waiting []codingAgentPlanEntry, mode string) {
+	t.Helper()
 	original := codingAgentSocketCall
 	t.Cleanup(func() { codingAgentSocketCall = original })
 	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
@@ -48,6 +53,7 @@ func withFakeRunner(t *testing.T, applied *siteAssistantApplyRequest, waiting []
 		job := result.(*codingAgentJobResult)
 		job.JobID = approvalJobID
 		job.Dataset = "app_notes"
+		job.Mode = mode
 		if method == http.MethodGet {
 			job.Status = "awaiting_approval"
 			job.PendingChanges = waiting
@@ -83,6 +89,22 @@ func TestApprovalRunsTheWaitingChangeWithFreshSiteAccess(t *testing.T) {
 	}
 	if _, err := site_assistant.DefaultStore.ByJob(approvalJobID); err == nil {
 		t.Fatal("the approval's site access must end with the request")
+	}
+}
+
+func TestApprovalRefusesACodeWorkspaceJob(t *testing.T) {
+	var applied siteAssistantApplyRequest
+	withFakeRunnerMode(t, &applied, []codingAgentPlanEntry{waitingChange()}, codingAgentModeCodeWorkspace)
+
+	recorder := httptest.NewRecorder()
+	SiteAssistantApprovalHandler(recorder, codingAgentSessionRequest(t, http.MethodPost,
+		"/api/app/ai-chat/site-assistant-approval", approvalBody(strings.Repeat("d", 64)), "admin", "test_admin_12"))
+
+	if recorder.Code != http.StatusConflict || applied.SiteAssistant != nil {
+		t.Fatalf("a code workspace job must never be approved into site access: %d %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := site_assistant.DefaultStore.ByJob(approvalJobID); err == nil {
+		t.Fatal("no site access may be issued for a code workspace job")
 	}
 }
 

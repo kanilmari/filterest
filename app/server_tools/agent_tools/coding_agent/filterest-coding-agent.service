@@ -1,7 +1,8 @@
-# Optional dedicated coding runner. Configure paths, web UID/group and auth first.
+# Optional dedicated site-assistant runner. Configure paths, web UID/group and auth first.
 # Kept separate from the web process so an application restart keeps accepted jobs.
+# A production runner offers only the site assistant; code work is development-only.
 [Unit]
-Description=Filterest administrator coding agent
+Description=Filterest administrator site assistant runner
 After=network-online.target
 Wants=network-online.target
 
@@ -24,7 +25,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/srv/filterest-coding-agent/source /var/lib/filterest-coding-agent /run/filterest-coding-agent
+ReadWritePaths=/var/lib/filterest-coding-agent /run/filterest-coding-agent
 
 [Install]
 WantedBy=multi-user.target

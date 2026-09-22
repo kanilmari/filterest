@@ -242,44 +242,25 @@ def test_apply_failure_keeps_remainder_and_retry_skips_completed(tmp_path):
     assert [call["path"] for call in retry_session.calls] == ["/api/delete-rows", "/api/add-row"]
 
 
-def test_engine_command_and_environment_come_from_configuration(tmp_path):
-    config = {
-        "codex_command": ["/usr/bin/codex"],
-        "codex_home": "/var/lib/codex",
-        "environment": {"PATH": "/usr/bin"},
-    }
-    command = jobs_module.build_engine_command(config, tmp_path, tmp_path / "answer.txt",
-                                               images=[tmp_path / "attachment-1.png"])
-    assert command[0] == "/usr/bin/codex"
-    assert "--cd" in command and str(tmp_path) in command
-    assert command[-3:] == ["--image", str(tmp_path / "attachment-1.png"), "-"]
-    assert "sandbox_workspace_write.network_access=false" in command
-
-    environment = jobs_module.engine_environment(config, tmp_path / "inbox")
-    assert environment["CODEX_HOME"] == "/var/lib/codex"
-    assert environment["FILTEREST_SITE_ASSISTANT_INBOX"] == str(tmp_path / "inbox")
-    assert "DB_PASSWORD" not in environment
-
-    with pytest.raises(ValueError):
-        jobs_module.build_engine_command({"codex_command": ["codex"]}, tmp_path, tmp_path / "a.txt")
-    with pytest.raises(ValueError):
-        jobs_module.build_engine_command(
-            {"assistant_engine": {"name": "claude", "command": ["/usr/bin/claude"]}},
-            tmp_path, tmp_path / "a.txt")
-
-
-def test_another_engine_runs_from_its_configured_template(tmp_path):
-    config = {"assistant_engine": {
-        "name": "claude",
-        "command": ["/usr/bin/claude"],
-        "argv_template": ["-p", "--add-dir", "{workspace}", "--output-file", "{answer_file}"],
-        "home_variable": "CLAUDE_CONFIG_DIR",
-        "home": "/var/lib/claude",
-    }}
-    command = jobs_module.build_engine_command(config, tmp_path, tmp_path / "answer.txt")
-    assert command == ["/usr/bin/claude", "-p", "--add-dir", str(tmp_path),
-                       "--output-file", str(tmp_path / "answer.txt")]
-    assert jobs_module.engine_environment(config, tmp_path)["CLAUDE_CONFIG_DIR"] == "/var/lib/claude"
+def test_local_https_site_trusts_only_the_configured_certificate(tmp_path):
+    """A development site's own certificate is trusted explicitly, never by disabling checks."""
+    import shutil
+    import ssl
+    import urllib.request
+    assert jobs_module.site_session_factory({}) is jobs_module.SiteAPISession
+    certificate = tmp_path / "localhost.crt"
+    with pytest.raises(OSError):
+        jobs_module.site_session_factory({"site_tls_ca_file": str(certificate)})("https://localhost:8082")
+    if not shutil.which("openssl"):
+        pytest.skip("openssl is needed to create the fixture certificate")
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                    "-subj", "/CN=localhost", "-keyout", str(tmp_path / "localhost.key"),
+                    "-out", str(certificate)], check=True, capture_output=True)
+    session = jobs_module.site_session_factory({"site_tls_ca_file": str(certificate)})("https://localhost:8082")
+    [handler] = [item for item in session._opener.handlers if isinstance(item, urllib.request.HTTPSHandler)]
+    context = handler._context
+    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+    assert [dict(entry[0] for entry in item["subject"]) for item in context.get_ca_certs()] == [{"commonName": "localhost"}]
 
 
 def test_attached_images_are_copied_into_the_workspace(tmp_path):

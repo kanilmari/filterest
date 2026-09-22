@@ -1,8 +1,7 @@
-"""Verify real isolated job execution, restart receipts and socket boundaries.
-Uses a disposable Git repository and fake CLI; no model, account or site calls.
+"""Verify runner configuration, modes, restart receipts and socket boundaries.
+Uses a disposable Git checkout and a fake CLI; no model, account or site calls.
 """
 import http.client
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,39 +14,50 @@ import uuid
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from coding_agent_jobs import CodingJobs, JobError, atomic_json
-from coding_agent_runner import RunnerServer, load_config, readiness
+from codex_engine import PINNED_CODEX_VERSION
+from coding_agent_jobs import CodingJobs, JobError, atomic_json, requested_mode
+from coding_agent_runner import RunnerServer, load_config, readiness, validate_config
+
+FAKE_CLI = """#!/usr/bin/env python3
+import json,os,sys,time
+from pathlib import Path
+if '--version' in sys.argv: print(os.environ.get('FAKE_VERSION','codex-cli PINNED'));sys.exit(0)
+if sys.argv[1:3] == ['login','status']: sys.exit(int(os.environ.get('FAKE_AUTH_EXIT','0')))
+Path(os.environ.get('FAKE_CAPTURE', os.devnull)).write_text(json.dumps({'args': sys.argv[1:], 'environment': dict(os.environ)}))
+time.sleep(float(os.environ.get('FAKE_SLEEP','0')))
+Path('example.py').write_text('value = 2\\n')
+Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text('Edited example.py and verified value = 2.')
+if os.environ.get('DATABASE_PASSWORD') or os.environ.get('SESSION_SECRET_KEY'): sys.exit(7)
+""".replace("PINNED", PINNED_CODEX_VERSION)
+
+
+def fake_cli(directory):
+    executable = directory / "fake-codex"
+    executable.write_text(FAKE_CLI)
+    executable.chmod(0o755)
+    return executable
 
 
 @pytest.fixture
-def config(tmp_path):
+def repository(tmp_path):
     repo = tmp_path / "repository"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     (repo / "example.py").write_text("value = 1\n")
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
-    subprocess.run(["git", "-C", str(repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"], check=True)
-    revision = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-    executable = tmp_path / "fake-codex"
-    executable.write_text("""#!/usr/bin/env python3
-import os,sys,time
-from pathlib import Path
-if '--version' in sys.argv: print('fixture-cli');sys.exit(0)
-if sys.argv[1:3] == ['login','status']: sys.exit(int(os.environ.get('FAKE_AUTH_EXIT','0')))
-time.sleep(float(os.environ.get('FAKE_SLEEP','0')))
-Path('example.py').write_text('value = 2\\n')
-Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text('Edited example.py and verified value = 2.')
-if os.environ.get('DATABASE_PASSWORD'): sys.exit(7)
-""")
-    executable.chmod(0o755)
-    maintenance = tmp_path / "fixed-maintenance"
-    maintenance.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
-    maintenance.chmod(0o755)
-    return dict(socket=str(tmp_path / "runner.sock"), site_id="fixture-site", allowed_web_uids=[os.getuid()],
-                repository=str(repo), source_revision=revision, jobs_root=str(tmp_path / "jobs"),
-                codex_command=[str(executable)], maintenance_actions={
-                    "plan": [str(maintenance), "--plan", "{version}"],
-                    "apply": [str(maintenance), "--apply", "{version}"]}, timeout_seconds=10)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                    "commit", "-qm", "fixture"], check=True)
+    return repo
+
+
+@pytest.fixture
+def config(tmp_path, repository):
+    """A developer machine's runner: the same user as the web server, both modes."""
+    return dict(socket=str(tmp_path / "runner.sock"), site_id="fixture-site",
+                identity="same_user_workstation", allowed_web_uids=[os.getuid()],
+                jobs_root=str(tmp_path / "jobs"), codex_command=[str(fake_cli(tmp_path))],
+                modes={"code_workspace": {"workspace": str(repository)}, "site_assistant": {}},
+                timeout_seconds=10)
 
 
 def wait_finished(jobs, job_id):
@@ -60,53 +70,74 @@ def wait_finished(jobs, job_id):
     raise AssertionError("fixture job did not finish")
 
 
-def payload():
-    return dict(request_id=str(uuid.uuid4()), dataset="fixture", query="Change example value to 2", messages=[])
+def payload(mode="code_workspace"):
+    return dict(request_id=str(uuid.uuid4()), dataset="fixture", query="Change example value to 2",
+                messages=[], mode=mode)
 
 
 def test_config_and_readiness_never_start_model(config, tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config))
-    with pytest.raises(ValueError, match="different Unix users"):
-        load_config(path)
-    distinct = dict(config, allowed_web_uids=[os.getuid() + 10000])
-    path.write_text(json.dumps(distinct))
-    assert load_config(path) == distinct
-    assert readiness(config)["runner_ready"] is True
+    assert load_config(path) == config
+    state = readiness(config)
+    assert state["runner_ready"] is True and state["modes"] == ["code_workspace", "site_assistant"]
+    assert state["codex_version"] == PINNED_CODEX_VERSION
     assert not Path(config["jobs_root"]).exists()
-    missing = dict(config, maintenance_actions={})
-    assert readiness(missing)["reason_code"] == "maintenance_not_configured"
+    config["environment"] = {"FAKE_VERSION": "codex-cli 0.1.0"}
+    assert readiness(config)["reason_code"] == "runner_version_mismatch"
     config["environment"] = {"FAKE_AUTH_EXIT": "1"}
     assert readiness(config)["reason_code"] == "runner_authentication_required"
     config["codex_command"] = ["/missing-cli"]
     assert readiness(config)["reason_code"] == "runner_tools_missing"
 
 
-def test_real_job_edits_only_its_worktree_and_survives_web_disconnect(config, monkeypatch):
-    monkeypatch.setenv("DATABASE_PASSWORD", "not-forwarded-fixture")
+def test_production_runner_can_never_offer_code_work(config):
+    dedicated = dict(config, identity="dedicated", allowed_web_uids=[os.getuid() + 10000])
+    with pytest.raises(ValueError, match="same-user workstation"):
+        validate_config(dedicated)
+    site_only = dict(dedicated, modes={"site_assistant": {}})
+    assert validate_config(site_only)["modes"] == {"site_assistant": {}}
+    with pytest.raises(ValueError, match="different Unix users"):
+        validate_config(dict(site_only, allowed_web_uids=[os.getuid()]))
+    with pytest.raises(ValueError, match="own user"):
+        validate_config(dict(config, allowed_web_uids=[os.getuid() + 10000]))
+
+
+@pytest.mark.parametrize("change,message", [
+    ({"modes": {}}, "modes must offer"),
+    ({"modes": {"isolated_copy": {}}}, "modes must offer"),
+    ({"source_revision": "a" * 40}, "source-copy variant was removed"),
+    ({"maintenance_actions": {}}, "source-copy variant was removed"),
+    ({"identity": "root"}, "identity must be"),
+])
+def test_invalid_or_outdated_configuration_is_rejected(config, change, message):
+    with pytest.raises(ValueError, match=message):
+        validate_config({**config, **change})
+
+
+def test_job_storage_inside_the_checkout_is_rejected(config, repository):
+    with pytest.raises(ValueError, match="outside the source checkout"):
+        validate_config(dict(config, jobs_root=str(repository / "jobs")))
+
+
+@pytest.mark.parametrize("change,code", [
+    ({"mode": "isolated_copy"}, 400),
+    ({"mode": ""}, 400),
+    ({"mode": "site_assistant"}, 400),
+    ({"site_assistant": {"delegation_code": "x", "site_base_url": "http://127.0.0.1:1"}}, 400),
+])
+def test_every_job_names_a_valid_mode(config, change, code):
     jobs = CodingJobs(config)
-    request = payload()
     try:
-        accepted = jobs.submit(42, request)
-        assert accepted["status"] == "queued"
-        # The submitting HTTP connection is not part of this worker lifecycle.
-        result = wait_finished(jobs, request["request_id"])
-        assert result["status"] == "completed"
-        assert "example.py" in result["changed_files"]
-        assert (Path(config["repository"]) / "example.py").read_text() == "value = 1\n"
-        assert (jobs.path(request["request_id"]) / "workspace/example.py").read_text() == "value = 2\n"
-        assert jobs.submit(42, request)["job_id"] == request["request_id"]
-        with pytest.raises(JobError):
-            jobs.read(request["request_id"], 43, "fixture")
-        with pytest.raises(JobError):
-            jobs.read(request["request_id"], 42, "other")
+        with pytest.raises(JobError) as refused:
+            jobs.submit(42, {**payload(), **change})
+        assert refused.value.code == code
+        with pytest.raises(JobError) as unoffered:
+            requested_mode(dict(config, modes={"site_assistant": {}}), payload())
+        assert unoffered.value.code == 403
+        assert not any(Path(config["jobs_root"]).glob("*/status.json"))
     finally:
         jobs.close()
-    reopened = CodingJobs(config)
-    try:
-        assert reopened.read(request["request_id"], 42, "fixture")["status"] == "completed"
-    finally:
-        reopened.close()
 
 
 def test_one_writer_and_request_identity(config):
@@ -169,12 +200,15 @@ def test_socket_site_actor_and_job_status_contract(config):
         assert request("GET", "/v1/capabilities", site="other")[0] == 403
         assert request("GET", "/v1/capabilities", actor="1")[0] == 403
         assert request("GET", "/v1/capabilities")[1]["runner_ready"]
+        # The removed source-copy variant's maintenance route stays gone.
         assert request("POST", "/v1/jobs/" + str(uuid.uuid4()) + "/maintenance", {"action": "apply", "version": "9.3.8"})[0] == 404
+        assert request("POST", "/v1/jobs", {**payload(), "mode": "isolated_copy"})[0] == 400
         body = payload()
         status, result = request("POST", "/v1/jobs", body)
         assert status == 202
         wait_finished(server.jobs, result["job_id"])
-        assert request("GET", "/v1/jobs/" + result["job_id"] + "?dataset=fixture")[1]["status"] == "completed"
+        finished = request("GET", "/v1/jobs/" + result["job_id"] + "?dataset=fixture")[1]
+        assert finished["status"] == "completed" and finished["mode"] == "code_workspace"
         assert request("GET", "/v1/jobs/" + result["job_id"] + "?dataset=fixture", actor="43")[0] == 404
         config["allowed_web_uids"] = [os.getuid() + 10000]
         assert request("GET", "/v1/capabilities")[0] == 403
@@ -309,9 +343,8 @@ def test_socket_lock_symlink_is_rejected(config, tmp_path):
 
 
 def launch_runner(config, tmp_path):
-    actual = dict(config, allowed_web_uids=[os.getuid() + 10000])
     configuration = tmp_path / "service-config.json"
-    configuration.write_text(json.dumps(actual))
+    configuration.write_text(json.dumps(config))
     process = subprocess.Popen([sys.executable, str(Path(__file__).with_name("coding_agent_runner.py")),
                                 "--config", str(configuration)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     deadline = time.monotonic() + 5
@@ -374,3 +407,18 @@ def test_bound_socket_before_listen_is_not_mistaken_for_stale(config):
         with pytest.raises(ValueError, match="live process has bound"):
             RunnerServer(config)
         assert path.stat().st_ino == identity
+
+
+def test_a_dropped_poll_connection_is_not_an_error():
+    """A reloaded page abandons its poll; the reply must end quietly, not raise twice."""
+    from coding_agent_runner import RunnerRequest
+
+    class Gone:
+        def write(self, _data):
+            raise BrokenPipeError(32, "Broken pipe")
+
+    handler = RunnerRequest.__new__(RunnerRequest)
+    handler.request_version, handler.requestline, handler.command = "HTTP/1.1", "GET /v1/jobs HTTP/1.1", "GET"
+    handler.client_address, handler.wfile, handler.close_connection = ("runner", 0), Gone(), False
+    handler.reply(200, {"status": "running"})
+    assert handler.close_connection is True

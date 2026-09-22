@@ -3,7 +3,7 @@
 // Bridges ai-chat facade responses, cached dataset metadata, and table rendering.
 // Exists to keep the non-legacy chat transport out of the legacy SSE UI printer.
 
-import { codingAgentCopy } from "./table_chat_coding_agent_control.js";
+import { getCodingAgentCopy } from "./table_chat_coding_agent_copy.js";
 import { generate_table } from "../../table_views/dataset_view_printer.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import {
@@ -251,15 +251,21 @@ export async function runApiToolsChatQuery(table_name, user_message, conversatio
     };
 }
 
-export async function runCodexDevChatQuery(
+/**
+ * Runs one coding-agent turn as a durable runner job in the chosen mode. The
+ * job's identity and mode are saved before dispatch, so a reload or a lost
+ * acceptance response resumes the same job instead of starting another.
+ */
+export async function runCodingAgentChatQuery(
     table_name,
     user_message,
     conversationMessages = [],
-    { externalRunner = false, imageTokens = [] } = {}
+    { mode = "", imageTokens = [] } = {}
 ) {
     const payload = {
         dataset: table_name,
         query: user_message,
+        mode,
     };
     // The attachments belong to this question only; the server resolves each
     // token to a stored image of the asking administrator.
@@ -280,22 +286,17 @@ export async function runCodexDevChatQuery(
         response = await pollCodingAgentJob(table_name, existing.job_id);
     } else {
         payload.request_id = crypto.randomUUID();
-        // Persist external request identity before dispatch: a dropped acceptance
-        // response can still be recovered from the durable runner after reload.
-        if (externalRunner) localStorage.setItem(codingAgentJobKey(table_name), JSON.stringify({ job_id: payload.request_id }));
+        localStorage.setItem(codingAgentJobKey(table_name), JSON.stringify({ job_id: payload.request_id, mode }));
         try {
             response = await endpoint_router("aiChatCodexQuery", {
                 method: "POST",
                 body_data: payload,
             });
         } catch (error) {
-            if ([400, 403, 404, 409, 429].includes(error?.status)) localStorage.removeItem(codingAgentJobKey(table_name));
+            if ([400, 403, 404, 409, 413, 429].includes(error?.status)) localStorage.removeItem(codingAgentJobKey(table_name));
             throw error;
         }
-        if (response?.job_id) {
-            localStorage.setItem(codingAgentJobKey(table_name), JSON.stringify({ job_id: response.job_id }));
-            response = await pollCodingAgentJob(table_name, response.job_id);
-        }
+        response = await pollCodingAgentJob(table_name, response?.job_id || payload.request_id);
     }
 
     let resultActionTaken = false;
@@ -322,6 +323,7 @@ export async function runCodexDevChatQuery(
         resultActionTaken,
         pendingChanges: Array.isArray(response?.pending_changes) ? response.pending_changes : [],
         jobId: typeof response?.job_id === "string" ? response.job_id : "",
+        mode: typeof response?.mode === "string" && response.mode ? response.mode : (existing?.mode || mode),
     };
 }
 
@@ -332,6 +334,11 @@ function readPendingCodingAgentJob(dataset) {
 }
 export function hasPendingCodingAgentJob(dataset) {
     return Boolean(readPendingCodingAgentJob(dataset));
+}
+/** The mode of the job this chat is still waiting for, so a reload names it truthfully. */
+export function pendingCodingAgentJobMode(dataset) {
+    const mode = readPendingCodingAgentJob(dataset)?.mode;
+    return typeof mode === "string" ? mode : "";
 }
 
 const codingAgentPolls = new Map();
@@ -344,7 +351,7 @@ async function pollCodingAgentJob(dataset, jobID) {
     cancelCodingAgentPolling(dataset);
     const controller = new AbortController();
     codingAgentPolls.set(dataset, controller);
-    const aborted = () => new DOMException(codingAgentCopy().pending, "AbortError");
+    const aborted = () => new DOMException(getCodingAgentCopy().pending, "AbortError");
     try {
         for (;;) {
             if (controller.signal.aborted) throw aborted();
@@ -359,9 +366,9 @@ async function pollCodingAgentJob(dataset, jobID) {
             }
             if (["failed", "interrupted"].includes(response?.status)) {
                 localStorage.removeItem(codingAgentJobKey(dataset));
-                throw new Error(codingAgentCopy().failed);
+                throw new Error(getCodingAgentCopy().failed);
             }
-            if (!["queued", "running"].includes(response?.status)) throw new Error(codingAgentCopy().unavailable);
+            if (!["queued", "running"].includes(response?.status)) throw new Error(getCodingAgentCopy().unavailable);
             await new Promise((resolve, reject) => {
                 const onAbort = () => { clearTimeout(timer); reject(aborted()); };
                 const timer = setTimeout(() => {

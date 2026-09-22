@@ -1,20 +1,17 @@
 {
   "site_id": "example.invalid",
+  "identity": "dedicated",
   "socket": "/run/filterest-coding-agent/runner.sock",
   "allowed_web_uids": [12345],
-  "repository": "/srv/filterest-coding-agent/source",
-  "source_revision": "0000000000000000000000000000000000000000",
   "jobs_root": "/var/lib/filterest-coding-agent/jobs",
   "codex_command": ["/opt/filterest-coding-agent/tools/node_modules/.bin/codex"],
   "codex_home": "/var/lib/filterest-coding-agent/codex",
-  "timeout_seconds": 2400,
-  "maintenance_timeout_seconds": 1800,
+  "assistant_timeout_seconds": 1200,
   "environment": {
     "PATH": "/opt/filterest-coding-agent/tools/node_modules/.bin:/usr/local/bin:/usr/bin:/bin",
     "HOME": "/var/lib/filterest-coding-agent"
   },
-  "maintenance_actions": {
-    "plan": ["/usr/local/libexec/filterest-agent-site-plan", "{version}"],
-    "apply": ["/usr/local/libexec/filterest-agent-site-apply", "{version}"]
+  "modes": {
+    "site_assistant": {}
   }
 }

@@ -51,7 +51,7 @@
   "dtt_1_row_read.CommentDeleteHandler": "CommentDeleteHandler handles DELETE /api/comments?id=N",
   "dtt_1_row_read.CommentListHandler": "CommentListHandler handles GET /api/comments",
   "dtt_1_row_read.FilterbarAICapabilitiesHandler": "FilterbarAICapabilitiesHandler returns the first narrow AI-facing capability contract for one dataset.",
-  "dtt_1_row_read.FilterbarAICodexQueryHandler": "FilterbarAICodexQueryHandler lets explicit DEV-mode browser chats ask local Codex for code-aware help.",
+  "dtt_1_row_read.FilterbarAICodexQueryHandler": "FilterbarAICodexQueryHandler serves an administrator's dataset chat with the coding-agent runner: GET reports the permitted modes and runner readiness, POST starts a durable job in one explicit mode, and GET with job_id reads its status.",
   "dtt_1_row_read.FilterbarAIConversationHandler": "FilterbarAIConversationHandler loads or replaces one authenticated user's conversation for one dataset.",
   "dtt_1_row_read.FilterbarAIQueryHandler": "FilterbarAIQueryHandler delegates narrow AI read intents to canonical dataset read handlers.",
   "dtt_1_row_read.GetDynamicChildItemsHandler": "GetDynamicChildItemsHandler is a legacy alias kept for existing route/profile names.",

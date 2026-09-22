@@ -56,19 +56,9 @@ describe("resolveAvailableFilterbarAIChatMode", () => {
         expect(mod.normalizeFilterbarAIChatMode()).toBe("api_tools");
     });
 
-    test("allows codex_dev only in dev mode with the dev route permission", async () => {
+    test("a stale route list or the dev flag never enables a coding-agent mode", async () => {
         document.head.innerHTML = '<meta name="app-env" content="dev">';
-        configuredChatMode = "codex_dev";
-        hasRoutePermissionMock.mockImplementation(
-            (route) => route === "/api/app/ai-chat/codex-query"
-        );
-        const mod = await loadModule();
-
-        expect(mod.resolveAvailableFilterbarAIChatMode()).toBe("codex_dev");
-    });
-
-    test("falls back from codex_dev to api_tools outside dev mode", async () => {
-        configuredChatMode = "codex_dev";
+        configuredChatMode = "code_workspace";
         hasRoutePermissionMock.mockImplementation((route) =>
             [
                 "/api/app/ai-chat/query",
@@ -77,20 +67,28 @@ describe("resolveAvailableFilterbarAIChatMode", () => {
         );
         const mod = await loadModule();
 
+        expect(mod.normalizeFilterbarAIChatMode()).toBe("code_workspace");
         expect(mod.resolveAvailableFilterbarAIChatMode()).toBe("api_tools");
+    });
+
+    test("normalizes the removed codex_dev value back to api_tools", async () => {
+        configuredChatMode = "codex_dev";
+        const mod = await loadModule();
+
+        expect(mod.normalizeFilterbarAIChatMode()).toBe("api_tools");
     });
 });
 
 test.each([
-    [true, true, true, "codex_dev"],
-    [true, false, true, "api_tools"],
-    [false, true, true, "api_tools"],
-    [true, true, false, "codex_dev"],
-])("production coding selection uses current server permission %s/readiness %s despite cached route %s", async (enabled, ready, routeAllowed, expected) => {
+    ["code_workspace", [{ mode: "code_workspace", ready: true }], true, "code_workspace"],
+    ["code_workspace", [{ mode: "code_workspace", ready: false }], true, "api_tools"],
+    ["site_assistant", [{ mode: "code_workspace", ready: true }], true, "api_tools"],
+    ["site_assistant", [{ mode: "site_assistant", ready: true }], false, "api_tools"],
+    ["site_assistant", [{ mode: "site_assistant", ready: true }], true, "site_assistant"],
+])("mode %s with availability %j and permission %s answers with %s", async (mode, modes, enabled, expected) => {
     const mod = await loadModule();
     expect(mod.resolveAvailableFilterbarAIChatMode({
-        configuredMode: "codex_dev", isDevEnvironment: false,
-        hasApiToolsPermission: true, hasCodexDevPermission: routeAllowed,
-        codingAgentCapability: { feature_enabled: enabled, runner_ready: ready },
+        configuredMode: mode, hasApiToolsPermission: true,
+        codingAgentCapability: { feature_enabled: enabled, modes },
     })).toBe(expected);
 });

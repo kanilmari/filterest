@@ -201,21 +201,27 @@ run_codex_exec() {
     if [[ "$FULL_ACCESS" == true && "$RESEARCH_MODE" != true ]]; then
         sandbox_mode="danger-full-access"
     fi
-    local -a codex_args=(exec --sandbox "$sandbox_mode")
-    if [[ -n "$CODEX_MODEL" ]]; then
-        codex_args+=(--model "$CODEX_MODEL")
+    # The shared engine module owns the Codex argument list, as it does for the
+    # chat's coding-agent runner; this launcher keeps only its own run features.
+    local -a codex_args=()
+    local engine_output
+    # Model IDs and efforts are validated to single tokens, so one per line is exact.
+    if ! engine_output="$(python3 "$CODEX_ENGINE_MODULE" worker-arguments --sandbox "$sandbox_mode" \
+        --model "$CODEX_MODEL" --reasoning-effort "$CODEX_REASONING_EFFORT" | tr '\0' '\n'
+        exit "${PIPESTATUS[0]}")"; then
+        printf 'Worker Codex arguments were refused by the engine module.\n' >> "$LOG_FILE"
+        return 2
     fi
-    if [[ -n "$CODEX_REASONING_EFFORT" ]]; then
-        codex_args+=(-c "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"")
-    fi
+    mapfile -t codex_args <<< "$engine_output"
     {
         printf 'Worker Codex executable: %s\n' "$CODEX_BIN"
         printf 'Worker Codex version: %s\n' "$CODEX_ACTUAL_VERSION"
         printf 'Worker Codex model requested: %s\n' "${CODEX_MODEL:-Codex config default}"
         printf 'Worker Codex reasoning effort requested: %s\n' "${CODEX_REASONING_EFFORT:-Codex config default}"
     } >> "$LOG_FILE"
-    # stdin preserves multiline/large prompts and cannot turn prompt text into flags.
-    "$CODEX_BIN" "${codex_args[@]}" - < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
+    # stdin preserves multiline/large prompts and cannot turn prompt text into flags;
+    # the engine's argument list already ends with "-".
+    "$CODEX_BIN" "${codex_args[@]}" < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
     return $?
 }
 
@@ -338,7 +344,7 @@ run_background() {
     export WORKSPACE_ROOT SCRIPT_DIR TASK_ID OUTPUT_DIR SUMMARY_FILE LOG_FILE DONE_FILE RUN_STATUS_FILE
     export PROGRESS_FILE PID_FILE PROMPT_SAVE_FILE FULL_ACCESS RESEARCH_MODE BACKEND
     export CLAUDE_MODEL FINALIZER_WRITE_SENTINEL
-    export CODEX_BIN CODEX_ACTUAL_VERSION CODEX_MODEL CODEX_REASONING_EFFORT
+    export CODEX_BIN CODEX_ACTUAL_VERSION CODEX_MODEL CODEX_REASONING_EFFORT CODEX_ENGINE_MODULE
     export RUN_FN="$run_fn"
     export -f \
         describe_write_access \

@@ -72,6 +72,12 @@ func SiteAssistantApprovalHandler(w http.ResponseWriter, r *http.Request) {
 		respondCodingAgentRunnerError(w, status)
 		return
 	}
+	if job.Mode != codingAgentModeSiteAssistant {
+		// Only the site assistant prepares changes for approval; a code
+		// workspace job never receives site access, now or on approval.
+		httpresponse.RespondWithError(w, http.StatusConflict, "only a site assistant job has changes to approve")
+		return
+	}
 	approved, err := matchWaitingChanges(job.PendingChanges, request.Approvals)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusConflict, err.Error())
@@ -96,7 +102,9 @@ func SiteAssistantApprovalHandler(w http.ResponseWriter, r *http.Request) {
 		respondCodingAgentRunnerError(w, status)
 		return
 	}
-	result.Mode = "codex"
+	if result.Mode == "" {
+		result.Mode = job.Mode
+	}
 	httpresponse.RespondWithJSON(w, http.StatusOK, result)
 }
 

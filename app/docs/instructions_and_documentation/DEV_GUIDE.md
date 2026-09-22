@@ -105,6 +105,7 @@ Do not create component-local environments without an actual isolation need.
 ./filterest start                         # Build and run locally
 ./ctl                                    # Public lifecycle entrypoint
 ./ctl --stop                             # Stop this installation's local runtime
+./ctl agent status|start|stop|check       # The chat's coding-agent runner (Coding_Agent.md)
 ./filterest build                         # Frontend compilation only
 (cd app && go build ./...)                # Go compilation only
 ./filterest test-unit                     # Frontend unit tests

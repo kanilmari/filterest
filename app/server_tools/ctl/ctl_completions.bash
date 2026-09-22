@@ -41,7 +41,8 @@ _ctl_completions() {
     }
 
     local top_flags="--docker --restore-db --instance --traefik --stop --help --refresh-all-dev-targets --setup-completion -p --port"
-    local top_words="list logs journal i"
+    local top_words="list logs journal i agent"
+    local agent_words="start stop restart status check"
     local instance_mass="list create upgrade-all status-all backup-all sync-all"
     local instance_flags="--init --sync --backup --logs --delete --restore --stop --ngrok --domain"
     local traefik_words="start stop logs"
@@ -56,6 +57,11 @@ _ctl_completions() {
     fi
 
     if [[ "$prev" == "--domain" ]]; then
+        return
+    fi
+
+    if [[ "$prev" == "agent" ]]; then
+        COMPREPLY=( $(compgen -W "$agent_words" -- "$cur") )
         return
     fi
 

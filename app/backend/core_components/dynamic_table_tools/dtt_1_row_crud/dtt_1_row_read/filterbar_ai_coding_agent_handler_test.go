@@ -1,12 +1,13 @@
 // filterbar_ai_coding_agent_handler_test.go
-// Checks policy, trusted actors and durable-job dispatch through the Codex route.
-// Bridges existing AdminProfile semantics with production and development modes.
+// Checks per-mode policy, trusted actors and durable-job dispatch through the coding-agent route.
+// Bridges existing AdminProfile semantics with development and production environments.
 // Uses fake runner calls only, without credentials or paid model requests.
 package dtt_1_row_read
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,6 +50,67 @@ func codingAgentSessionRequest(t *testing.T, method, path, body, role, username 
 	}
 	return request
 }
+
+// fakeCodingAgentRunner answers the socket calls the route makes and records them.
+func fakeCodingAgentRunner(t *testing.T, capabilities codingAgentRunnerCapabilities, onJob func(codingAgentRunnerPayload)) *int {
+	t.Helper()
+	oldReader, oldCall := codingAgentPolicyReader, codingAgentSocketCall
+	t.Cleanup(func() { codingAgentPolicyReader = oldReader; codingAgentSocketCall = oldCall })
+	codingAgentPolicyReader = func(context.Context) (bool, error) { return false, nil }
+	calls := 0
+	codingAgentSocketCall = func(_ context.Context, method, path string, actor int, payload interface{}, result interface{}) (int, error) {
+		calls++
+		if actor != 42 {
+			t.Fatal("browser identity used")
+		}
+		if path == "/v1/capabilities" {
+			*(result.(*codingAgentRunnerCapabilities)) = capabilities
+			return 200, nil
+		}
+		job := result.(*codingAgentJobResult)
+		job.JobID, job.Dataset = "00000000-0000-0000-0000-000000000001", "fixture"
+		if method == http.MethodPost {
+			runnerPayload := payload.(codingAgentRunnerPayload)
+			job.Status, job.Mode = "queued", runnerPayload.Mode
+			if onJob != nil {
+				onJob(runnerPayload)
+			}
+			return 202, nil
+		}
+		job.Status, job.Mode, job.Answer = "completed", codingAgentModeSiteAssistant, "Verified fixture answer"
+		return 200, nil
+	}
+	return &calls
+}
+
+func readAvailability(t *testing.T, role string) (int, codingAgentAvailability) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	FilterbarAICodexQueryHandler(rec, codingAgentRequest("GET", "/api/app/ai-chat/codex-query?dataset=fixture", "", role))
+	var result codingAgentAvailability
+	_ = json.Unmarshal(rec.Body.Bytes(), &result)
+	return rec.Code, result
+}
+
+func TestCodingAgentPermittedModesFollowEnvironmentAndPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		environment string
+		devOnly     bool
+		want        string
+	}{
+		{"dev", true, "code_workspace,site_assistant"},
+		{"dev", false, "code_workspace,site_assistant"},
+		// Code work never appears outside development, whatever the policy says.
+		{"prod", false, "site_assistant"},
+		{"prod", true, ""},
+	} {
+		t.Setenv("ENVIRONMENT_TYPE", tc.environment)
+		if got := strings.Join(codingAgentPermittedModes(tc.devOnly), ","); got != tc.want {
+			t.Fatalf("%s devOnly=%v: modes %q, want %q", tc.environment, tc.devOnly, got, tc.want)
+		}
+	}
+}
+
 func TestCodingAgentAvailabilityEnvironmentPolicyAndActor(t *testing.T) {
 	old := codingAgentPolicyReader
 	defer func() { codingAgentPolicyReader = old }()
@@ -59,71 +121,86 @@ func TestCodingAgentAvailabilityEnvironmentPolicyAndActor(t *testing.T) {
 					t.Setenv("ENVIRONMENT_TYPE", environment)
 					t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "")
 					codingAgentPolicyReader = func(context.Context) (bool, error) { return devOnly, nil }
-					rec := httptest.NewRecorder()
-					FilterbarAICodexQueryHandler(rec, codingAgentRequest("GET", "/api/app/ai-chat/codex-query", "", ""+role))
+					code, result := readAvailability(t, role)
 					if role != "admin" {
-						if rec.Code != 403 {
-							t.Fatal(rec.Code)
+						if code != 403 {
+							t.Fatal(code)
 						}
 						return
 					}
-					var result codingAgentAvailability
-					json.Unmarshal(rec.Body.Bytes(), &result)
-					if rec.Code != 200 || result.FeatureEnabled != (environment == "dev" || !devOnly) || result.DevOnly != devOnly {
-						t.Fatalf("%d %s", rec.Code, rec.Body.String())
+					if code != 200 || result.FeatureEnabled != (environment == "dev" || !devOnly) || result.DevOnly != devOnly {
+						t.Fatalf("%d %+v", code, result)
 					}
-					if environment == "prod" && result.RunnerReady {
-						t.Fatal("unconfigured production runner marked ready")
+					if result.RunnerReady {
+						t.Fatal("an unconfigured runner was marked ready")
+					}
+					if result.FeatureEnabled && result.ReasonCode != "runner_not_configured" {
+						t.Fatalf("reason = %q, want runner_not_configured", result.ReasonCode)
+					}
+					for _, mode := range result.Modes {
+						if mode.Mode == codingAgentModeCodeWorkspace && environment != "dev" {
+							t.Fatal("code work offered outside development")
+						}
 					}
 				})
 			}
 		}
 	}
 }
-func TestCodingAgentExternalDispatchAndOwnerStatus(t *testing.T) {
-	oldReader, oldCall := codingAgentPolicyReader, codingAgentSocketCall
-	defer func() { codingAgentPolicyReader = oldReader; codingAgentSocketCall = oldCall }()
+
+func TestCodingAgentAvailabilityIntersectsRunnerModesWithPolicy(t *testing.T) {
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
+	fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{
+		RunnerReady: true, AuthenticationVerified: true,
+		Modes: []string{"code_workspace", "site_assistant"}, OfferedModes: []string{"code_workspace", "site_assistant"},
+	}, nil)
+
+	t.Setenv("ENVIRONMENT_TYPE", "dev")
+	_, dev := readAvailability(t, "admin")
+	if len(dev.Modes) != 2 || !dev.Modes[0].Ready || dev.Modes[0].Mode != "code_workspace" || !dev.RunnerReady {
+		t.Fatalf("development availability = %+v", dev)
+	}
+
+	// Even a runner that offers code work cannot enable it on a live site.
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	_, prod := readAvailability(t, "admin")
+	if len(prod.Modes) != 1 || prod.Modes[0].Mode != "site_assistant" || !prod.Modes[0].Ready {
+		t.Fatalf("production availability = %+v", prod)
+	}
+}
+
+func TestCodingAgentAvailabilityReportsAStoppedRunner(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "dev")
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
+	fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, nil)
+	codingAgentSocketCall = func(context.Context, string, string, int, interface{}, interface{}) (int, error) {
+		return 0, errors.New("coding agent runner is unreachable")
+	}
+	_, result := readAvailability(t, "admin")
+	if result.ReasonCode != "runner_not_running" || result.RunnerReady || len(result.Modes) != 2 || result.Modes[0].Ready {
+		t.Fatalf("stopped runner availability = %+v", result)
+	}
+}
+
+func TestCodingAgentSiteAssistantDispatchAndOwnerStatus(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "prod")
 	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
-	codingAgentPolicyReader = func(context.Context) (bool, error) { return false, nil }
 	t.Setenv("APP_PORT", "8193")
 	t.Setenv("FILTEREST_CODING_AGENT_SITE_ID", "fixture.test")
-	calls := 0
 	var dispatchedCode string
-	codingAgentSocketCall = func(_ context.Context, method, path string, actor int, payload interface{}, result interface{}) (int, error) {
-		calls++
-		if actor != 42 {
-			t.Fatal("browser identity used")
+	calls := fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, func(runnerPayload codingAgentRunnerPayload) {
+		access := runnerPayload.SiteAssistant
+		if runnerPayload.Query != "Fix data" || runnerPayload.BackendContext != nil || access == nil ||
+			!strings.HasPrefix(access.DelegationCode, site_assistant.DelegationCodePrefix) ||
+			access.SiteBaseURL != "http://127.0.0.1:8193" || access.CatalogRoute != "/api/admin/site-assistant/api-catalog" {
+			t.Fatalf("the site assistant needs exactly its own site access: %#v", runnerPayload)
 		}
-		job := result.(*codingAgentJobResult)
-		job.JobID = "00000000-0000-0000-0000-000000000001"
-		job.Dataset = "fixture"
-		job.Status = "running"
-		if method == "POST" {
-			runnerPayload, ok := payload.(codingAgentRunnerPayload)
-			if !ok || path != "/v1/jobs" || runnerPayload.Query != "Fix code" {
-				t.Fatalf("unexpected dispatch: %s %#v", path, payload)
-			}
-			access := runnerPayload.SiteAssistant
-			if access == nil || !strings.HasPrefix(access.DelegationCode, site_assistant.DelegationCodePrefix) ||
-				access.SiteBaseURL != "http://127.0.0.1:8193" ||
-				access.CatalogRoute != "/api/admin/site-assistant/api-catalog" {
-				t.Fatalf("the job needs its own site access: %#v", access)
-			}
-			dispatchedCode = access.DelegationCode
-			return 202, nil
-		}
-		if path != "/v1/jobs/"+job.JobID+"?dataset=fixture" {
-			t.Fatal(path)
-		}
-		job.Status = "completed"
-		job.Answer = "Verified fixture edit"
-		return 200, nil
-	}
-	body := `{"dataset":"fixture","query":"Fix code","request_id":"00000000-0000-0000-0000-000000000001"}`
+		dispatchedCode = access.DelegationCode
+	})
+	body := `{"dataset":"fixture","query":"Fix data","mode":"site_assistant","request_id":"00000000-0000-0000-0000-000000000001"}`
 	rec := httptest.NewRecorder()
 	FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "admin", "test_admin_12"))
-	if rec.Code != 202 {
+	if rec.Code != 202 || !strings.Contains(rec.Body.String(), `"mode":"site_assistant"`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	if strings.Contains(rec.Body.String(), dispatchedCode) || strings.Contains(rec.Body.String(), "delegation") {
@@ -136,41 +213,79 @@ func TestCodingAgentExternalDispatchAndOwnerStatus(t *testing.T) {
 	t.Cleanup(func() { site_assistant.DefaultStore.Revoke(delegation.ID) })
 	rec = httptest.NewRecorder()
 	FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "GET", "/api/app/ai-chat/codex-query?dataset=fixture&job_id=00000000-0000-0000-0000-000000000001", "", "admin", "test_admin_12"))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Verified fixture edit") || calls != 2 {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Verified fixture answer") || *calls != 2 {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	rec = httptest.NewRecorder()
 	FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "basic", "basic_user"))
-	if rec.Code != 403 || calls != 2 {
+	if rec.Code != 403 || *calls != 2 {
 		t.Fatal("non-admin dispatched")
 	}
 }
 
+func TestCodeWorkspaceIsRefusedOutsideDevelopment(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
+	calls := fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, nil)
+	body := `{"dataset":"fixture","query":"Edit the code","mode":"code_workspace","request_id":"00000000-0000-0000-0000-000000000003"}`
+	rec := httptest.NewRecorder()
+	FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "admin", "test_admin_12"))
+	if rec.Code != http.StatusForbidden || *calls != 0 {
+		t.Fatalf("code work on a live site: %d calls=%d %s", rec.Code, *calls, rec.Body.String())
+	}
+}
+
+func TestCodeWorkspaceDispatchCarriesBackendContextButNoSiteAccess(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "dev")
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
+	originalColumnsReader := filterbarAIColumnsReader
+	t.Cleanup(func() { filterbarAIColumnsReader = originalColumnsReader })
+	filterbarAIColumnsReader = func(string) ([]map[string]interface{}, error) {
+		return nil, errors.New("metadata unavailable in this dispatch test")
+	}
+	var seen codingAgentRunnerPayload
+	fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, func(runnerPayload codingAgentRunnerPayload) { seen = runnerPayload })
+	body := `{"dataset":"fixture","query":"Why does the owner filter fail?","mode":"code_workspace","request_id":"00000000-0000-0000-0000-000000000004"}`
+	rec := httptest.NewRecorder()
+	FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "admin", "test_admin_12"))
+	if rec.Code != 202 || !strings.Contains(rec.Body.String(), `"mode":"code_workspace"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if seen.SiteAssistant != nil {
+		t.Fatal("code work must never receive site access")
+	}
+	if seen.BackendContext == nil || !seen.BackendContext.RouteReached || seen.BackendContext.DeterministicFilterProbeErr == "" {
+		t.Fatalf("backend context = %+v", seen.BackendContext)
+	}
+	if _, err := site_assistant.DefaultStore.ByJob("00000000-0000-0000-0000-000000000004"); err == nil {
+		t.Fatal("a code workspace job was issued a delegation")
+	}
+}
+
+func TestCodingAgentJobNeedsAKnownMode(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "dev")
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
+	calls := fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, nil)
+	for _, mode := range []string{"", "codex", "isolated_copy"} {
+		body := `{"dataset":"fixture","query":"Hello","mode":"` + mode + `","request_id":"00000000-0000-0000-0000-000000000005"}`
+		rec := httptest.NewRecorder()
+		FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "admin", "test_admin_12"))
+		if rec.Code != 400 || *calls != 0 {
+			t.Fatalf("mode %q: %d calls=%d", mode, rec.Code, *calls)
+		}
+	}
+}
+
 func TestDispatchWithoutSiteAccessDoesNotStartAJob(t *testing.T) {
-	oldReader, oldCall := codingAgentPolicyReader, codingAgentSocketCall
-	defer func() { codingAgentPolicyReader = oldReader; codingAgentSocketCall = oldCall }()
 	t.Setenv("ENVIRONMENT_TYPE", "prod")
 	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
 	t.Setenv("FILTEREST_SITE_ASSISTANT_BASE_URL", "")
 	t.Setenv("APP_PORT", "")
-	codingAgentPolicyReader = func(context.Context) (bool, error) { return false, nil }
-	dispatched := false
-	codingAgentSocketCall = func(context.Context, string, string, int, interface{}, interface{}) (int, error) {
-		dispatched = true
-		return 202, nil
-	}
-
-	body := `{"dataset":"fixture","query":"Fix code","request_id":"00000000-0000-0000-0000-000000000002"}`
+	calls := fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, nil)
+	body := `{"dataset":"fixture","query":"Fix data","mode":"site_assistant","request_id":"00000000-0000-0000-0000-000000000002"}`
 	rec := httptest.NewRecorder()
 	FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "admin", "test_admin_12"))
-	if rec.Code != 503 || dispatched {
-		t.Fatalf("a job without site access must not start: %d dispatched=%v", rec.Code, dispatched)
-	}
-}
-func TestCodingAgentModelOverrideReachesActualCLIArguments(t *testing.T) {
-	t.Setenv("FILTERBAR_AI_CODEX_MODEL", "fixture-model")
-	args := buildFilterbarAICodexExecArgs(nil, "/fixture", "/answer")
-	if !strings.Contains(strings.Join(args, " "), "--model fixture-model -") {
-		t.Fatal(args)
+	if rec.Code != 503 || *calls != 0 {
+		t.Fatalf("a job without site access must not start: %d calls=%d", rec.Code, *calls)
 	}
 }

@@ -365,6 +365,9 @@ start_local() {
         fi
         exit 1
     fi
+    # The coding-agent runner lives outside the server so a restart keeps its
+    # jobs; point the server at it and start it when it is missing.
+    coding_agent_prepare_server "$PORT"
     echo "🚀 Starting server..."
     _launch_detached "$LOG_FILE" "$LOCAL_BINARY_PATH"
     

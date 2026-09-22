@@ -62,6 +62,7 @@ if [[ -n "${FILTEREST_PRIVATE_BOOTSTRAP_LIB:-}" ]]; then
     source "$FILTEREST_PRIVATE_BOOTSTRAP_LIB"
 fi
 source "$SCRIPT_DIR/lib/local.sh"
+source "$SCRIPT_DIR/lib/coding_agent.sh"
 source "$SCRIPT_DIR/lib/docker.sh"
 source "$SCRIPT_DIR/lib/instance.sh"
 source "$SCRIPT_DIR/lib/dev_targets.sh"
@@ -93,6 +94,12 @@ QUICK START
   ./ctl list                Listaa kaikki instanssit (local + Docker)
 
   ./ctl logs                Näytä lokaalin palvelimen lokit (tail -f)
+
+  ./ctl agent status        Koodausagentin ajurin tila (käynnistyy ./ctl:n mukana,
+                            jää käyntiin kun palvelin pysähtyy)
+  ./ctl agent start|stop    Käynnistä tai pysäytä ajuri
+  ./ctl agent check         Tarkista Codex-versio, kirjautuminen ja tilat
+                            (ei mallikutsua)
 
   ./ctl journal serlog 100  Näytä journalctl-lokit (systemd-palvelu)
                             → 1. arg: instanssin nimi (osittainen riittää)
@@ -199,6 +206,7 @@ LOCAL_PORT=""
 LOCAL_ACTION="start"
 JOURNAL_LINES=""
 JOURNAL_INSTANCE=""
+AGENT_ACTION=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -215,6 +223,12 @@ while [[ $# -gt 0 ]]; do
                 JOURNAL_INSTANCE="${2:-}"
                 JOURNAL_LINES="${3:-50}"
             fi
+            shift $#
+            ;;
+        agent)
+            # ./ctl agent start|stop|restart|status|check
+            MODE="agent"
+            AGENT_ACTION="${2:-status}"
             shift $#
             ;;
         list)
@@ -350,6 +364,9 @@ case $MODE in
         ;;
     journal)
         show_journal "$JOURNAL_INSTANCE" "$JOURNAL_LINES"
+        ;;
+    agent)
+        manage_coding_agent "$AGENT_ACTION"
         ;;
     docker)
         start_docker

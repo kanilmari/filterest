@@ -14,33 +14,20 @@ administrator approves before anything is written.
 
 from __future__ import annotations
 
+import functools
 import json
-import os
 from pathlib import Path
 import subprocess
 import threading
 import time
 
+from codex_engine import SITE_ASSISTANT, build_job_command, engine_environment
 from site_assistant_api_bridge import SiteAPISession
 from site_assistant_inbox import serve_inbox
 
 INBOX_DIRECTORY_NAME = ".filterest-site-api"
 DEFAULT_TIMEOUT_SECONDS = 1200
 ANSWER_LIMIT = 200_000
-ENGINE_ENVIRONMENT_KEYS = ("PATH", "LANG", "LC_ALL", "HOME")
-
-# Codex is the engine in use; another engine is added as a template, not as code.
-ENGINE_TEMPLATES = {
-    "codex": [
-        "exec", "--sandbox", "workspace-write",
-        "-c", 'approval_policy="never"',
-        "-c", "sandbox_workspace_write.network_access=false",
-        "--ephemeral", "--color", "never",
-        "--cd", "{workspace}",
-        "--output-last-message", "{answer_file}",
-        "-",
-    ],
-}
 
 PROMPT_RULES = """You are the site assistant for this Filterest installation.
 You act for the administrator who asked, with exactly that person's rights.
@@ -63,39 +50,12 @@ API, say so and suggest a development issue instead.
 """
 
 
-def build_engine_command(config, workspace, answer_file, images=()):
-    """Build the engine argument list from configuration, not from the model."""
-    engine = config.get("assistant_engine") or {}
-    name = str(engine.get("name") or "codex")
-    command = list(engine.get("command") or config.get("codex_command") or [])
-    if not command or not os.path.isabs(command[0]):
-        raise ValueError("assistant engine needs an installed absolute executable")
-    template = list(engine.get("argv_template") or ENGINE_TEMPLATES.get(name) or [])
-    if not template:
-        raise ValueError("assistant engine %r has no argument template" % name)
-
-    arguments = []
-    for part in template:
-        arguments.append(part.replace("{workspace}", str(workspace)).replace("{answer_file}", str(answer_file)))
-    model = engine.get("model") or config.get("model")
-    if model:
-        arguments = arguments[:-1] + ["--model", str(model), arguments[-1]]
-    for image in images:
-        arguments = arguments[:-1] + ["--image", str(image), arguments[-1]]
-    return command + arguments
-
-
-def engine_environment(config, inbox):
-    """Deliberate allowlist; the engine never inherits site or database secrets."""
-    environment = {key: os.environ[key] for key in ENGINE_ENVIRONMENT_KEYS if key in os.environ}
-    environment.update(config.get("environment", {}))
-    engine = config.get("assistant_engine") or {}
-    home_variable = engine.get("home_variable") or "CODEX_HOME"
-    home_value = engine.get("home") or config.get("codex_home")
-    if home_value:
-        environment[home_variable] = str(home_value)
-    environment["FILTEREST_SITE_ASSISTANT_INBOX"] = str(inbox)
-    return environment
+def site_session_factory(config):
+    """The configured site session; a private development certificate is trusted explicitly."""
+    certificate = config.get("site_tls_ca_file")
+    if not certificate:
+        return SiteAPISession
+    return lambda base_url: SiteAPISession(base_url, tls_ca_file=certificate)
 
 
 def build_prompt(payload, catalog, tool_path, images=()):
@@ -143,8 +103,9 @@ def call_summary(calls):
     } for call in calls]
 
 
-def run_site_assistant_job(jobs, job_id, *, session_factory=SiteAPISession, run_engine=None):
+def run_site_assistant_job(jobs, job_id, *, session_factory=None, run_engine=None):
     """Run one assistant job and store its answer, plan and call receipt."""
+    session_factory = session_factory or site_session_factory(jobs.config)
     directory = Path(jobs.path(job_id))
     payload = json.loads((directory / "request.json").read_text())
     access = payload.get("site_assistant") or {}
@@ -163,14 +124,14 @@ def run_site_assistant_job(jobs, job_id, *, session_factory=SiteAPISession, run_
     (directory / "prompt.txt").write_text(prompt)
     answer_file = directory / "answer.txt"
 
-    command = build_engine_command(jobs.config, workspace, answer_file, images)
-    environment = engine_environment(jobs.config, inbox)
+    command = build_job_command(jobs.config, SITE_ASSISTANT, workspace, answer_file, images)
+    environment = engine_environment(jobs.config, SITE_ASSISTANT, {"FILTEREST_SITE_ASSISTANT_INBOX": str(inbox)})
     stop = threading.Event()
     calls = []
     server = threading.Thread(target=serve_inbox, args=(session, inbox, stop, calls.append), daemon=True)
     server.start()
     try:
-        runner = run_engine or default_engine_runner
+        runner = run_engine or functools.partial(default_engine_runner, on_start=jobs.track_process(job_id))
         completed = runner(command, prompt, workspace, environment, directory,
                            jobs.config.get("assistant_timeout_seconds", DEFAULT_TIMEOUT_SECONDS))
     except subprocess.TimeoutExpired:
@@ -196,8 +157,9 @@ def run_site_assistant_job(jobs, job_id, *, session_factory=SiteAPISession, run_
                 finished_at=time.time())
 
 
-def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=SiteAPISession):
+def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=None):
     """Run the approved plan with fresh site access and no new model request."""
+    session_factory = session_factory or site_session_factory(jobs.config)
     state = jobs.read(job_id)
     pending = state.get("pending_changes") or []
     if not pending:
@@ -230,7 +192,7 @@ def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=SiteAPISe
 
 
 def store_attached_images(payload, workspace):
-    """Copy the chat's attached images into the job workspace for the engine."""
+    """Copy the chat's attached images into a job-owned folder for the engine."""
     images = []
     for index, attachment in enumerate(payload.get("images") or []):
         source = Path(str(attachment.get("path", "")))
@@ -242,11 +204,12 @@ def store_attached_images(payload, workspace):
     return images
 
 
-def default_engine_runner(command, prompt, workspace, environment, directory, timeout_seconds):
+def default_engine_runner(command, prompt, workspace, environment, directory, timeout_seconds, on_start=None):
     """Run the configured engine, keeping its output in the job's own log."""
     from coding_agent_jobs import run_timed
 
     with (Path(directory) / "execution.log").open("wb") as log:
         completed = run_timed(command, input=prompt.encode(), cwd=str(workspace), env=environment,
-                              stdout=log, stderr=subprocess.STDOUT, timeout=timeout_seconds)
+                              stdout=log, stderr=subprocess.STDOUT, timeout=timeout_seconds,
+                              on_start=on_start)
     return completed.returncode

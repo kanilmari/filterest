@@ -29,26 +29,29 @@ import (
 var codingAgentJobIDPattern = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 
 type codingAgentJobRequest struct {
-	filterbarAICodexQueryRequest
+	codingAgentChatRequest
 	RequestID string `json:"request_id"`
 	// ImageTokens name the administrator's own waiting attachments. They are
 	// resolved to paths here and never forwarded to the runner as tokens.
 	ImageTokens []string `json:"image_tokens,omitempty"`
 }
 type codingAgentJobResult struct {
-	JobID        string                   `json:"job_id"`
-	Status       string                   `json:"status"`
-	Dataset      string                   `json:"dataset"`
-	Answer       string                   `json:"answer,omitempty"`
-	ErrorCode    string                   `json:"error_code,omitempty"`
-	ChangedFiles []string                 `json:"changed_files,omitempty"`
-	Maintenance  []map[string]interface{} `json:"maintenance,omitempty"`
+	JobID        string   `json:"job_id"`
+	Status       string   `json:"status"`
+	Dataset      string   `json:"dataset"`
+	Answer       string   `json:"answer,omitempty"`
+	ErrorCode    string   `json:"error_code,omitempty"`
+	ChangedFiles []string `json:"changed_files,omitempty"`
+	// Plan is the application's own filter plan for a code workspace turn; the
+	// chat applies it to the open dataset view.
+	Plan *filterbarAIQueryPlan `json:"plan,omitempty"`
 	// PendingChanges lists write calls the assistant wants the administrator to
 	// approve. The chat's own filter plan keeps the name "plan", so this field
 	// deliberately differs from it.
 	PendingChanges []codingAgentPlanEntry `json:"pending_changes,omitempty"`
-	Mode           string                 `json:"mode"`
-	DevOnly        bool                   `json:"dev_only"`
+	// Mode is the mode the runner recorded for this job, never a label chosen here.
+	Mode    string `json:"mode"`
+	DevOnly bool   `json:"dev_only"`
 }
 
 // codingAgentPlanEntry describes one waiting write in the words of the API call
@@ -72,6 +75,10 @@ type codingAgentRunnerPayload struct {
 	// Images are the administrator's own attachments, named by a path on this
 	// machine. The browser never sees or supplies a path.
 	Images []codingAgentImage `json:"images,omitempty"`
+	// BackendContext and Plan carry the application's own read for a code
+	// workspace turn. Only this server fills them.
+	BackendContext *codingAgentBackendContext `json:"backend_context,omitempty"`
+	Plan           *filterbarAIQueryPlan      `json:"plan,omitempty"`
 }
 
 type codingAgentImage struct {
@@ -128,7 +135,7 @@ func callCodingAgentRunner(ctx context.Context, method, path string, actor int, 
 	return response.StatusCode, nil
 }
 
-func dispatchCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, devOnly bool) {
+func dispatchCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, devOnly bool, permitted []string) {
 	var payload codingAgentJobRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128*1024))
 	decoder.DisallowUnknownFields()
@@ -142,11 +149,24 @@ func dispatchCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, d
 	}
 	payload.Dataset = strings.TrimSpace(payload.Dataset)
 	payload.Query = strings.TrimSpace(payload.Query)
+	payload.Mode = strings.TrimSpace(payload.Mode)
 	if payload.Dataset == "" || payload.Query == "" || len(payload.Query) > 24000 || !codingAgentJobIDPattern.MatchString(payload.RequestID) {
 		httpresponse.RespondWithError(w, 400, "dataset, query and valid request_id are required")
 		return
 	}
-	payload.Messages = trimFilterbarAICodexMessages(payload.Messages)
+	switch {
+	case payload.Mode != codingAgentModeCodeWorkspace && payload.Mode != codingAgentModeSiteAssistant:
+		httpresponse.RespondWithError(w, 400, "a coding agent mode is required")
+		return
+	case payload.Mode == codingAgentModeCodeWorkspace && !codingAgentIsDev():
+		// A fixed rule: code is never edited from a live site's chat.
+		httpresponse.RespondWithError(w, http.StatusForbidden, "Code workspace mode is available only in development")
+		return
+	case !codingAgentModeIn(payload.Mode, permitted):
+		httpresponse.RespondWithError(w, http.StatusForbidden, "This coding agent mode is not permitted here")
+		return
+	}
+	payload.Messages = trimCodingAgentMessages(payload.Messages)
 
 	// The attachments belong to the asking administrator, so an unknown or
 	// someone else's token stops the job instead of silently dropping an image
@@ -159,22 +179,44 @@ func dispatchCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, d
 	payload.ImageTokens = nil
 
 	runnerPayload := codingAgentRunnerPayload{codingAgentJobRequest: payload, Images: images}
-	access, delegationID, accessErr := issueCodingAgentSiteAccess(r, actor, payload.RequestID)
-	if accessErr != nil {
-		httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "Site access for this job could not be prepared")
+	delegationID := ""
+	if payload.Mode == codingAgentModeSiteAssistant {
+		// Only the site assistant acts on the site, so only it receives site access.
+		access, issuedID, accessErr := issueCodingAgentSiteAccess(r, actor, payload.RequestID)
+		if accessErr != nil {
+			httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "Site access for this job could not be prepared")
+			return
+		}
+		runnerPayload.SiteAssistant, delegationID = access, issuedID
+	} else {
+		backendContext := buildCodingAgentBackendContext(r, payload.codingAgentChatRequest)
+		runnerPayload.BackendContext = &backendContext
+		if probe := backendContext.DeterministicFilterProbe; probe != nil {
+			plan := probe.Plan
+			runnerPayload.Plan = &plan
+		}
+	}
+	if err := fitCodingAgentRunnerPayload(&runnerPayload); err != nil {
+		if delegationID != "" {
+			site_assistant.DefaultStore.Revoke(delegationID)
+		}
+		httpresponse.RespondWithError(w, http.StatusRequestEntityTooLarge, "the question is too large for one coding agent job")
 		return
 	}
-	runnerPayload.SiteAssistant = access
 
 	var result codingAgentJobResult
 	status, err := codingAgentSocketCall(r.Context(), http.MethodPost, "/v1/jobs", actor, runnerPayload, &result)
 	if err != nil {
 		// A job that never started keeps no site access.
-		site_assistant.DefaultStore.Revoke(delegationID)
+		if delegationID != "" {
+			site_assistant.DefaultStore.Revoke(delegationID)
+		}
 		respondCodingAgentRunnerError(w, status)
 		return
 	}
-	result.Mode = "codex"
+	if result.Mode == "" {
+		result.Mode = payload.Mode
+	}
 	result.DevOnly = devOnly
 	httpresponse.RespondWithJSON(w, http.StatusAccepted, result)
 }
@@ -190,7 +232,6 @@ func readCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, jobID
 		respondCodingAgentRunnerError(w, status)
 		return
 	}
-	result.Mode = "codex"
 	result.DevOnly = devOnly
 	httpresponse.RespondWithJSON(w, http.StatusOK, result)
 }

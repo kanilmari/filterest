@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -36,13 +37,19 @@ class BridgeError(RuntimeError):
 class SiteAPISession:
     """One delegated session against one site."""
 
-    def __init__(self, base_url, opener_factory=None):
+    def __init__(self, base_url, opener_factory=None, tls_ca_file=None):
         self.base_url = str(base_url).rstrip("/")
         if not self.base_url.startswith(("http://127.0.0.1", "http://localhost", "https://")):
             raise BridgeError("site base URL must be the site's loopback port or an HTTPS address")
         self.cookies = http.cookiejar.CookieJar()
         factory = opener_factory or urllib.request.build_opener
-        self._opener = factory(urllib.request.HTTPCookieProcessor(self.cookies))
+        handlers = [urllib.request.HTTPCookieProcessor(self.cookies)]
+        if tls_ca_file:
+            # A development site serves HTTPS with its own local certificate.
+            # Trust exactly that certificate; verification is never switched off.
+            handlers.append(urllib.request.HTTPSHandler(
+                context=ssl.create_default_context(cafile=str(tls_ca_file))))
+        self._opener = factory(*handlers)
         self._csrf_token = None
         self.delegation = None
         self.attempted_writes = []

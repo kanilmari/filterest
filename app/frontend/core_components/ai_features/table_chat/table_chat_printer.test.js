@@ -1066,80 +1066,59 @@ describe("create_chat_ui", () => {
         );
     });
 
-    test("routes DEV chat mode through Codex and renders canonical table results", async () => {
-        document.head.innerHTML = '<meta name="app-env" content="dev">';
-        const resultMemory = {
-            role: "system",
-            content: '[easelect_result_context]\n{"filters":{"cached_username":"serlog"},"rows":[{"title":"Serlog.com -palvelukatalogi"}]}',
-        };
-        hasRoutePermissionMock.mockImplementation((route) =>
-            [
-                "/api/app/ai-chat/query",
-                "/api/app/ai-chat/codex-query",
-            ].includes(route)
-        );
+    // Answers the chat's own routes and one coding-agent job, the way the server does.
+    function mockCodingAgentRoutes({ modes, post = null, job }) {
+        hasRoutePermissionMock.mockImplementation((route) => route === "/api/app/ai-chat/query");
         endpointRouterMock.mockImplementation((routeName, options = {}) => {
             if (routeName === "aiChatConversation" && !options.method) {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    messages: [],
-                    preview: "",
-                    updated_at: null,
-                });
+                return Promise.resolve({ dataset: "app_service_catalog", messages: [], preview: "", updated_at: null });
             }
             if (routeName === "aiChatConversation" && options.method === "PUT") {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    messages: options.body_data.messages,
-                    preview: options.body_data.preview,
-                    updated_at: options.body_data.updated_at,
-                });
+                return Promise.resolve({ dataset: "app_service_catalog", ...options.body_data });
             }
-            if (routeName === "aiChatCodexQuery") {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    mode: "codex",
-                    dev_only: true,
-                    answer: "Codex: tarkista user_id-haku backendin capability-polusta.",
-                    plan: {
-                        mode: "rows_page",
-                        canonical_path: "/api/get-results",
-                        uses_sql: false,
-                        filters: { cached_username: "serlog" },
-                    },
-                    result: {
-                        columns: ["id", "header", "cached_username"],
-                        data: [
-                            {
-                                id: 166,
-                                header: "Serlog.com -palvelukatalogi",
-                                cached_username: "serlog",
-                            },
-                        ],
-                        types: { header: "text", cached_username: "text" },
-                        row_count: 1,
-                        has_geo: false,
-                    },
-                    memory: resultMemory,
-                });
+            if (routeName === "aiChatCodexQuery" && options.method === "GET") {
+                return String(options.url_params).includes("job_id=")
+                    ? Promise.resolve({ job_id: "00000000-0000-0000-0000-000000000077", ...job })
+                    : Promise.resolve({ feature_enabled: true, runner_ready: true, modes });
+            }
+            if (routeName === "aiChatCodexQuery" && options.method === "POST") {
+                return post || Promise.resolve({ job_id: "00000000-0000-0000-0000-000000000077", status: "queued" });
             }
             return Promise.resolve({});
         });
+    }
 
+    async function chooseModeAndSend(mode, question) {
         const { create_chat_ui } = await loadModule();
-        const host = document.getElementById("chat-host");
-
-        create_chat_ui("app_service_catalog", host);
-
+        create_chat_ui("app_service_catalog", document.getElementById("chat-host"));
         const modeSelect = document.getElementById("app_service_catalog_chat_mode");
-        expect(modeSelect).not.toBeNull();
-        modeSelect.value = "codex_dev";
+        await vi.waitFor(() => {
+            expect(modeSelect.querySelector(`[value="${mode}"]`)?.disabled).toBe(false);
+        });
+        modeSelect.value = mode;
         modeSelect.dispatchEvent(new Event("change"));
-
+        refreshTableUnifiedMock.mockClear();
         const input = document.getElementById("app_service_catalog_chat_input");
         const sendButton = document.getElementById("app_service_catalog_chat_sendBtn");
-        input.value = "Miksi user_id-haku ei löydä serlog-palvelua?";
+        input.value = question;
         sendButton.click();
+        return sendButton;
+    }
+
+    const chatText = () => document.getElementById("app_service_catalog_chat_container")?.textContent || "";
+
+    test("routes a code workspace question to the runner and applies the application's filter plan", async () => {
+        document.head.innerHTML = '<meta name="app-env" content="dev">';
+        mockCodingAgentRoutes({
+            modes: [{ mode: "code_workspace", ready: true }, { mode: "site_assistant", ready: true }],
+            job: {
+                status: "completed", mode: "code_workspace",
+                answer: "Codex: tarkista user_id-haku backendin capability-polusta.",
+                plan: { mode: "rows_page", canonical_path: "/api/get-results", uses_sql: false, filters: { cached_username: "serlog" } },
+            },
+        });
+
+        await chooseModeAndSend("code_workspace", "Miksi user_id-haku ei löydä serlog-palvelua?");
 
         await vi.waitFor(() => {
             expect(endpointRouterMock).toHaveBeenCalledWith("aiChatCodexQuery", {
@@ -1148,232 +1127,109 @@ describe("create_chat_ui", () => {
                     request_id: expect.any(String),
                     dataset: "app_service_catalog",
                     query: "Miksi user_id-haku ei löydä serlog-palvelua?",
+                    mode: "code_workspace",
                     lang: "en",
-                    messages: [
-                        expect.objectContaining({
-                            role: "user",
-                            content: "Miksi user_id-haku ei löydä serlog-palvelua?",
-                            created_at: expect.any(String),
-                        }),
-                    ],
+                    messages: [expect.objectContaining({ role: "user", content: "Miksi user_id-haku ei löydä serlog-palvelua?" })],
                 },
             });
         });
+        await vi.waitFor(() => expect(chatText()).toContain("Codex: tarkista user_id-haku"));
+        expect(chatText()).toContain("Answered by: Code workspace (Codex)");
+        expect(setParamsMock).toHaveBeenCalledWith("app_service_catalog", { cached_username: "serlog" });
+        expect(refreshTableUnifiedMock).toHaveBeenCalled();
         await vi.waitFor(() => {
-            expect(
-                document.getElementById("app_service_catalog_chat_container")?.textContent
-            ).toContain("Codex: tarkista user_id-haku");
+            expect(endpointRouterMock).toHaveBeenCalledWith("aiChatConversation", expect.objectContaining({
+                method: "PUT",
+                body_data: expect.objectContaining({
+                    messages: expect.arrayContaining([expect.objectContaining({ role: "assistant", mode: "code_workspace" })]),
+                }),
+            }));
         });
-        expect(setParamsMock).toHaveBeenCalledWith("app_service_catalog", {
-            cached_username: "serlog",
-        });
-        expect(generateTableMock).toHaveBeenCalledWith(
-            "app_service_catalog",
-            ["id", "header", "cached_username"],
-            [
-                {
-                    id: 166,
-                    header: "Serlog.com -palvelukatalogi",
-                    cached_username: "serlog",
-                },
-            ],
-            {
-                id: { card_element: "details", data_type: "text", show_value_on_card: true },
-                header: { card_element: "details", data_type: "text", show_value_on_card: true },
-                cached_username: { card_element: "details", data_type: "text", show_value_on_card: true },
-            },
-            1,
-            false,
-            undefined
-        );
-        await vi.waitFor(() => {
-            expect(endpointRouterMock).toHaveBeenCalledWith(
-                "aiChatConversation",
-                expect.objectContaining({
-                    method: "PUT",
-                    body_data: expect.objectContaining({
-                        dataset: "app_service_catalog",
-                        messages: expect.arrayContaining([resultMemory]),
-                    }),
-                })
-            );
-        });
-        expect(endpointRouterMock).not.toHaveBeenCalledWith(
-            "aiChatQuery",
-            expect.anything()
-        );
+        expect(endpointRouterMock).not.toHaveBeenCalledWith("aiChatQuery", expect.anything());
     });
 
     test.each([
-        {
-            theme: "light",
-            environment: "dev",
-            runnerKind: "legacy_dev",
-            startedText: "Repository agent started working.",
-            otherAgentText: "Site assistant started working.",
-        },
-        {
-            theme: "dark",
-            environment: "prod",
-            runnerKind: "external",
-            startedText: "Site assistant started working.",
-            otherAgentText: "Repository agent started working.",
-        },
-    ])("shows the $runnerKind waiting text in the $theme theme", async ({
-        theme,
-        environment,
-        runnerKind,
-        startedText,
-        otherAgentText,
+        { theme: "light", environment: "dev", mode: "code_workspace", label: "Code workspace (Codex)",
+          startedText: "Code workspace started working.", otherAgentText: "Site assistant started working." },
+        { theme: "dark", environment: "prod", mode: "site_assistant", label: "Site assistant (Codex)",
+          startedText: "Site assistant started working.", otherAgentText: "Code workspace started working." },
+    ])("shows the $mode waiting text and answer footer in the $theme theme", async ({
+        theme, environment, mode, label, startedText, otherAgentText,
     }) => {
         document.head.innerHTML = `<meta name="app-env" content="${environment}">`;
-        document.documentElement.lang = "en";
         document.documentElement.dataset.theme = theme;
-        hasRoutePermissionMock.mockImplementation((route) =>
-            [
-                "/api/app/ai-chat/query",
-                "/api/app/ai-chat/codex-query",
-            ].includes(route)
-        );
-
-        let resolveCodexQuery;
-        endpointRouterMock.mockImplementation((routeName, options = {}) => {
-            if (routeName === "aiChatConversation" && !options.method) {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    messages: [],
-                    preview: "",
-                    updated_at: null,
-                });
-            }
-            if (routeName === "aiChatConversation" && options.method === "PUT") {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    messages: options.body_data.messages,
-                    preview: options.body_data.preview,
-                    updated_at: options.body_data.updated_at,
-                });
-            }
-            if (routeName === "aiChatCodexQuery" && options.method === "GET") {
-                return Promise.resolve({
-                    feature_enabled: true,
-                    runner_ready: true,
-                    runner_kind: runnerKind,
-                });
-            }
-            if (routeName === "aiChatCodexQuery" && options.method === "POST") {
-                return new Promise((resolve) => {
-                    resolveCodexQuery = resolve;
-                });
-            }
-            return Promise.resolve({});
+        let acceptJob;
+        mockCodingAgentRoutes({
+            modes: [{ mode, ready: true }],
+            post: new Promise((resolve) => { acceptJob = resolve; }),
+            job: { status: "completed", mode, answer: "Valmis vastaus Codexilta." },
         });
 
-        const { create_chat_ui } = await loadModule();
-        const host = document.getElementById("chat-host");
-
-        create_chat_ui("app_service_catalog", host);
-
-        const modeSelect = document.getElementById("app_service_catalog_chat_mode");
-        await vi.waitFor(() => {
-            expect(modeSelect.querySelector('[value="codex_dev"]').disabled).toBe(false);
-        });
-        modeSelect.value = "codex_dev";
-        modeSelect.dispatchEvent(new Event("change"));
-        refreshTableUnifiedMock.mockClear();
-
-        const input = document.getElementById("app_service_catalog_chat_input");
-        const sendButton = document.getElementById("app_service_catalog_chat_sendBtn");
-        input.value = "Tutki miksi localhost ei aukea Codexista";
-        sendButton.click();
+        const sendButton = await chooseModeAndSend(mode, "Tutki miksi localhost ei aukea Codexista");
 
         await vi.waitFor(() => {
-            const containerText =
-                document.getElementById("app_service_catalog_chat_container")?.textContent || "";
-            expect(containerText).toContain(startedText);
-            expect(containerText).not.toContain(otherAgentText);
-            expect(containerText).toContain("00:00");
+            expect(chatText()).toContain(startedText);
+            expect(chatText()).not.toContain(otherAgentText);
+            expect(chatText()).toContain("00:00");
         });
+        expect(document.querySelector(".chat-bubble-pending .chat-pending-mode")?.textContent).toBe(label);
         expect(sendButton.disabled).toBe(true);
         expect(document.querySelector(".chat-bubble-pending .chat-typing-dots")).not.toBeNull();
+        expect(JSON.parse(localStorage.getItem("codingAgentJob_app_service_catalog")).mode).toBe(mode);
 
-        resolveCodexQuery({
-            dataset: "app_service_catalog",
-            mode: "codex",
-            dev_only: true,
-            answer: "Valmis vastaus Codexilta.",
-        });
+        acceptJob({ job_id: "00000000-0000-0000-0000-000000000077", status: "queued", mode });
 
         await vi.waitFor(() => {
-            const containerText =
-                document.getElementById("app_service_catalog_chat_container")?.textContent || "";
-            expect(containerText).toContain("Valmis vastaus Codexilta.");
-            expect(containerText).not.toContain(startedText);
+            expect(chatText()).toContain("Valmis vastaus Codexilta.");
+            expect(chatText()).not.toContain(startedText);
         });
+        expect(document.querySelector(".chat-mode-footer")?.textContent).toBe(`Answered by: ${label}`);
         expect(sendButton.disabled).toBe(false);
         expect(document.querySelector(".chat-bubble-pending")).toBeNull();
     });
 
-    test("does not rerender dataset content for Codex answer-only replies with an empty result shell", async () => {
-        document.head.innerHTML = '<meta name="app-env" content="dev">';
-        hasRoutePermissionMock.mockImplementation((route) =>
-            [
-                "/api/app/ai-chat/query",
-                "/api/app/ai-chat/codex-query",
-            ].includes(route)
-        );
+    test("a job resumed after a reload keeps its named waiting bubble while the history loads", async () => {
+        document.documentElement.lang = "en";
+        localStorage.setItem("codingAgentJob_app_service_catalog", JSON.stringify({
+            job_id: "00000000-0000-0000-0000-000000000077", mode: "site_assistant" }));
+        let finishJob;
+        mockCodingAgentRoutes({ modes: [{ mode: "site_assistant", ready: true }], job: { status: "running" } });
+        const route = endpointRouterMock.getMockImplementation();
         endpointRouterMock.mockImplementation((routeName, options = {}) => {
             if (routeName === "aiChatConversation" && !options.method) {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    messages: [],
-                    preview: "",
-                    updated_at: null,
-                });
+                return Promise.resolve({ dataset: "app_service_catalog", preview: "", updated_at: "2026-09-22T10:00:00Z",
+                    messages: [{ role: "user", content: "Earlier question", created_at: "2026-09-22T10:00:00Z" }] });
             }
-            if (routeName === "aiChatConversation" && options.method === "PUT") {
-                return Promise.resolve({
-                    dataset: "app_service_catalog",
-                    messages: options.body_data.messages,
-                    preview: options.body_data.preview,
-                    updated_at: options.body_data.updated_at,
-                });
+            if (routeName === "aiChatCodexQuery" && String(options.url_params).includes("job_id=")) {
+                return new Promise((resolve) => { finishJob = resolve; });
             }
-            if (routeName === "aiChatCodexQuery") {
-                return Promise.resolve({
-                    answer: "Voin tarkistaa tätä ilman uutta tuloshakua.",
-                    plan: {
-                        mode: "answer_only",
-                        uses_sql: false,
-                    },
-                    result: {},
-                });
-            }
-            return Promise.resolve({});
+            return route(routeName, options);
+        });
+        const { create_chat_ui } = await loadModule();
+        // The filterbar builds the chat before attaching it to the page.
+        const detached = document.createElement("div");
+        create_chat_ui("app_service_catalog", detached);
+        document.getElementById("chat-host").append(detached);
+
+        await vi.waitFor(() => expect(chatText()).toContain("Earlier question"));
+        expect(document.querySelector(".chat-bubble-pending .chat-pending-mode")?.textContent).toBe("Site assistant (Codex)");
+        finishJob({ job_id: "00000000-0000-0000-0000-000000000077", status: "completed", mode: "site_assistant", answer: "Two rows." });
+        await vi.waitFor(() => expect(document.querySelector(".chat-mode-footer")?.textContent).toBe("Answered by: Site assistant (Codex)"));
+        expect(endpointRouterMock).not.toHaveBeenCalledWith("aiChatCodexQuery", expect.objectContaining({ method: "POST" }));
+    });
+
+    test("does not rerender dataset content for coding-agent answer-only replies", async () => {
+        document.head.innerHTML = '<meta name="app-env" content="dev">';
+        mockCodingAgentRoutes({
+            modes: [{ mode: "code_workspace", ready: true }],
+            job: { status: "completed", mode: "code_workspace", answer: "Voin tarkistaa tätä ilman uutta tuloshakua." },
         });
 
-        const { create_chat_ui } = await loadModule();
-        const host = document.getElementById("chat-host");
-
-        create_chat_ui("app_service_catalog", host);
-
-        const modeSelect = document.getElementById("app_service_catalog_chat_mode");
-        modeSelect.value = "codex_dev";
-        modeSelect.dispatchEvent(new Event("change"));
-        refreshTableUnifiedMock.mockClear();
-
-        const input = document.getElementById("app_service_catalog_chat_input");
-        const sendButton = document.getElementById("app_service_catalog_chat_sendBtn");
-        input.value = "Mitä tämä tarkoittaa?";
-        sendButton.click();
+        await chooseModeAndSend("code_workspace", "Mitä tämä tarkoittaa?");
 
         await vi.waitFor(() => {
-            const containerText =
-                document.getElementById("app_service_catalog_chat_container")?.textContent || "";
-            expect(containerText).toContain("Voin tarkistaa tätä ilman uutta tuloshakua.");
-            expect(containerText).toContain(
-                "No results were fetched this turn; the current result view was left unchanged."
-            );
+            expect(chatText()).toContain("Voin tarkistaa tätä ilman uutta tuloshakua.");
+            expect(chatText()).toContain("No results were fetched this turn; the current result view was left unchanged.");
         });
         expect(generateTableMock).not.toHaveBeenCalled();
         expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
