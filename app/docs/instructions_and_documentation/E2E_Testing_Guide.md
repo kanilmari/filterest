@@ -58,6 +58,22 @@ Why this is the safest broad baseline:
 
 Local timing varies by machine and app state, but a full 6-project matrix run is on the order of tens of minutes, not hours. Plan overnight loops around multiple reruns rather than a single all-night pass.
 
+### Leftover browsers and other sessions
+
+`./filterest test` (`app/server_tools/scripts/safe_test.sh`) finds Playwright in
+the installation's own dependency folder (`FILTEREST_NODE_MODULES_ROOT`) before
+`PATH`, and names the setup command when it is missing. After Playwright exits,
+it ends only the leftover browser processes **this run** started: every process
+of the run inherits a per-run marker in its environment, and the cleanup signals
+only processes that carry that marker. Playwright launches browsers detached
+into their own sessions, so neither the process tree nor the process group
+identifies them; the marker survives both. Another session's browsers are never
+touched, even when they start during this run. Where process environments
+cannot be inspected (no `/proc`), the cleanup is skipped rather than guessed.
+
+A maintenance shell may keep a thin command of its own that sets the dependency
+folder, the test target and the credential file, then calls this harness.
+
 ## Test Matrix
 
 Every spec runs in 6 combinations automatically (see `app/playwright.config.ts`):
@@ -114,7 +130,8 @@ The same global setup/teardown path owns an exclusive artifact-run registry and 
 - setup never deletes a dataset or folder merely because its name looks synthetic
 - a creating test registers a `planned` name before the request and confirms it only after reading the exact server id (`table_uid` or folder id)
 - teardown deletes only exact current-run `confirmed` identities after re-reading server inventories; missing baselines, mismatched targets/users, corrupt registries, and ambiguous `planned` entries fail closed before cleanup
-- the full language-key set must return exactly to the setup baseline, and drift reports the exact added or removed keys
+- the full language-key set must return exactly to the setup baseline, and drift reports the exact added or removed keys. The key set is shared with every session using the same database, so an added key that a migration file seeds as an exact SQL literal (`app/server_tools/migrations/`, plus folders listed in `FILTEREST_E2E_EXTRA_MIGRATION_DIRS`) is reported as added by that migration instead of failing the run; any other added key, and every removed key, still fails it
+- once the run's own artifacts are verified gone, teardown releases the run record and baseline **before** the language-key comparison, so a language-key finding never leaves a stale run that blocks the next one
 - separate Playwright commands must not run concurrently against the shared `.auth` registry; an active, stale, or corrupt foreign run is rejected for inspection rather than guessed away
 - teardown mutates the registry, artifacts, and shared auth state only when the recorded PID and per-process nonce match its own process identity; this prevents PID reuse from claiming ownership, and a runner whose setup was rejected as foreign performs no teardown cleanup
 

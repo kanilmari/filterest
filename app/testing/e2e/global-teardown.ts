@@ -20,10 +20,16 @@ import {
   unregisterTestArtifact,
   type CurrentArtifactRun,
 } from './helpers/test-artifact-run-registry';
+import {
+  attributeLangKeyDrift,
+  describeMigrationSeededKeys,
+  resolveMigrationDirectories,
+} from './helpers/lang-key-drift-attribution';
 import { removeStorageStateFile } from './helpers/storage-state-file';
 import { resolveFilterestTestRuntimePaths } from './helpers/test-runtime-paths';
 import { resolveLocalFilterestBaseUrl } from '../../server_tools/scripts/local_filterest_target.cjs';
 
+const APPLICATION_ROOT = path.resolve(__dirname, '../..');
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
 const AUTH_FILE = testRuntimePaths.authStorageState;
 const ARTIFACT_BASELINE_FILE = path.join(
@@ -44,7 +50,7 @@ function resolveBaseURL(config: FullConfig): string {
   const configuredBaseURL = config.projects[0]?.use?.baseURL;
   return typeof configuredBaseURL === 'string' && configuredBaseURL.trim() !== ''
     ? configuredBaseURL
-    : resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__dirname, '../..') });
+    : resolveLocalFilterestBaseUrl({ applicationRoot: APPLICATION_ROOT });
 }
 
 /** Prevents a rejected parallel runner from tearing down another process's active E2E run. */
@@ -153,6 +159,15 @@ async function globalTeardown(config: FullConfig) {
       );
     }
 
+    // Every artifact this run owned is now verified gone, so release the run
+    // before the shared language-key comparison. A language-key finding must
+    // not leave a stale run record that blocks the next run.
+    for (const artifact of registeredArtifacts) {
+      unregisterTestArtifact(artifact.kind, artifact.name, artifactRun.runId);
+    }
+    finishArtifactRunRegistry(artifactRun.runId);
+    fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
+
     const langKeyInventory = await readLangKeyInventoryWithStorageState(baseURL, AUTH_FILE);
     const delta = diffSortedKeys(langKeyInventory.allLangKeys, baseline.langKeys);
     if (
@@ -160,19 +175,29 @@ async function globalTeardown(config: FullConfig) {
       delta.added.length > 0 ||
       delta.removed.length > 0
     ) {
-      throw new Error(
-        '[global-teardown] lang-key baseline drifted during E2E run: ' +
-        `expected_count=${baseline.totalLangKeyCount}, got_count=${langKeyInventory.totalLangKeyCount}; ` +
-        `added=${delta.added.join(', ') || 'none'}; ` +
-        `removed=${delta.removed.join(', ') || 'none'}`,
+      // The key set is shared with every other session on the same database.
+      // Keys a migration file seeds were added by that migration, not by a test.
+      const attribution = attributeLangKeyDrift(
+        delta.added,
+        delta.removed,
+        resolveMigrationDirectories(APPLICATION_ROOT),
       );
+      const migrationSeeded = describeMigrationSeededKeys(attribution.migrationSeeded);
+      if (attribution.unexplainedAdded.length === 0 && attribution.removed.length === 0) {
+        console.warn(
+          '[global-teardown] language keys were added during the run by database migration(s), '
+          + `not by the tests: ${migrationSeeded}`,
+        );
+      } else {
+        throw new Error(
+          '[global-teardown] lang-key baseline drifted during E2E run: ' +
+          `expected_count=${baseline.totalLangKeyCount}, got_count=${langKeyInventory.totalLangKeyCount}; ` +
+          `added=${attribution.unexplainedAdded.join(', ') || 'none'}; ` +
+          `removed=${attribution.removed.join(', ') || 'none'}; ` +
+          `added_by_migrations=${migrationSeeded}`,
+        );
+      }
     }
-
-    for (const artifact of registeredArtifacts) {
-      unregisterTestArtifact(artifact.kind, artifact.name, artifactRun.runId);
-    }
-    finishArtifactRunRegistry(artifactRun.runId);
-    fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
   } finally {
     removeStorageStateFile(AUTH_FILE);
   }
