@@ -1,6 +1,6 @@
-// big_card_content_builder.test.js
+// row_article_content_builder.test.js
 // Verifies article content, detail disclosures and narrowly scoped card-media integration.
-// Bridges buildBigCardContent and its mocked card-media dependencies with jsdom DOM assertions.
+// Bridges buildRowArticleContent and its mocked card-media dependencies with jsdom DOM assertions.
 // Exists to preserve article content contracts while shared renderers and wrappers evolve.
 // @vitest-environment jsdom
 
@@ -87,11 +87,8 @@ vi.mock('./row_article_presentation_settings.js', () => ({
 }));
 
 vi.mock('./row_article_ui_handler.js', () => ({
-    createTwoLineKeyValueElement: vi.fn(() => document.createElement('div')),
     createRowArticleKeyValueElement: createRowArticleKeyValueElementMock,
-    createNavigableTwoLineElement: vi.fn(() => document.createElement('div')),
     createRowArticleNavigableElement: createRowArticleNavigableElementMock,
-    resolveLocalizedValue: vi.fn((value) => String(value ?? '')),
     resolveRowArticleLocalizedValue: vi.fn((value) => String(value ?? '')),
 }));
 
@@ -107,13 +104,12 @@ vi.mock('./relation_detail_helpers.js', () => ({
     resolveRowArticleRelationDetailEntries: resolveRowArticleRelationDetailEntriesMock,
 }));
 
-import { buildBigCardContent } from './big_card_content_builder.js';
 import { buildRowArticleContent } from './row_article_content_builder.js';
 import { CARD_IMAGE_RENDER_SLOTS } from './card_image_render_options.js';
 import { resolveCardFieldDisplayValue } from './card_field_formatter_helpers.js';
 import { splitKeywords } from './row_article_content_builder_helpers.js';
 
-describe('big_card_content_builder', () => {
+describe('row_article_content_builder', () => {
     beforeEach(() => {
         document.body.innerHTML = '';
         localStorage.clear();
@@ -159,10 +155,6 @@ describe('big_card_content_builder', () => {
         expect(section?.querySelector('button')?.getAttribute('aria-expanded')).toBe(String(startOpen));
         expect(createRowArticleKeyValueElementMock).toHaveBeenCalled();
         expect(section?.querySelector('.big_card_details_container')).not.toBeNull();
-    });
-
-    test('keeps the legacy big-card export mapped to the row article builder', () => {
-        expect(buildBigCardContent).toBe(buildRowArticleContent);
     });
 
     test('marks multilingual keyword tags read-only for the article editor', async () => {
@@ -224,21 +216,6 @@ describe('big_card_content_builder', () => {
 
         expect(createRowArticleKeyValueElementMock.mock.calls.map((call) => call[1]))
             .toEqual(['binance', 'binance.com', 'cryptocurrencies']);
-    });
-
-    test('returns row_article aliases alongside the legacy content-builder keys', async () => {
-        const built = await buildRowArticleContent(
-            { cached_image: '/storage/3500/35001/original/3500_35001_1.svg' },
-            'app_org_service_catalog',
-            { cached_image: { card_element: 'image' } },
-            ['cached_image'],
-            'seed-1',
-            'M',
-            true
-        );
-
-        expect(built.rowArticleContentElement).toBe(built.card_modal_content_div);
-        expect(built.rowArticleHeaderText).toBe(built.modal_header_text);
     });
 
     test('passes the DB-backed timestamp presentation mode to article detail fields', async () => {

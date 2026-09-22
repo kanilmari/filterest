@@ -79,7 +79,7 @@ function buildInlineMedia(container, article, initialContext) {
                 if (!canInteract() || records.getAttribute("aria-busy") === "true") return;
                 records.setAttribute("aria-busy", "true");
                 try {
-                    const { openRowArticleView } = await import("./article_view_opener.js");
+                    const { openRowArticleView } = await import("./row_article_opener.js");
                     if (canInteract()) await openRowArticleView(row, context.tableName, card);
                 } catch (error) {
                     console.warn("Article record navigation failed:", error?.message || error);

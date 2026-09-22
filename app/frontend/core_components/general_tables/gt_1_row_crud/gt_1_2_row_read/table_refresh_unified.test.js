@@ -52,7 +52,6 @@ async function loadModule() {
     }));
     vi.doMock("../../../table_views/card_view/row_article_opener.js", () => ({
         openRowArticleView: openRowArticleViewMock,
-        open_big_card_view: openRowArticleViewMock,
     }));
     vi.doMock("../../../state_stores/dataset_selection_saver.js", () => ({
         setRedirectNotice: setRedirectNoticeMock,

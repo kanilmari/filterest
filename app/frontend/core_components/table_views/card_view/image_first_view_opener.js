@@ -17,7 +17,7 @@ import {
     openImageModalContent,
     transitionImageFirstModalContent,
 } from "./card_image_modal.js";
-import { buildRowArticleContent } from "./big_card_content_builder.js";
+import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { resolveRowArticleDataTypes } from "./row_article_data_types_resolver.js";
 import {
     buildCreationSeed,

@@ -1,12 +1,12 @@
 /* @vitest-environment jsdom */
-// big_card_image_upload.test.js
+// row_article_image_upload.test.js
 // Verifies click and drag-and-drop activation for the article image upload surface.
 // Bridges browser input events with the shared upload callback so media files do not navigate away.
 // Exists to keep Easelect and generated Filterest article uploads on one regression-tested path.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { createImageUploadPlaceholder } from "./big_card_image_upload.js";
+import { createImageUploadPlaceholder } from "./row_article_image_upload.js";
 
 beforeEach(() => {
     document.body.replaceChildren();

@@ -51,7 +51,7 @@ This section outlines the workflow for displaying search results and summarizes 
 Shared asset-linking is now visible in multiple frontend surfaces, not only the admin capability view.
 
 ### Current End-User Surfaces
--   **Article View**: Existing rows can use `big_card_image_gallery.js` and `big_card_attachment_list.js` for image upload/delete/set-primary plus attachment upload/open/download/delete. PDF attachments should preview inline inside the existing article view rather than spawning a second modal on top. The implementation still uses internal `big_card` identifiers.
+-   **Article View**: Existing rows can use `row_article_image_gallery.js` and `row_article_attachment_list.js` for image upload/delete/set-primary plus attachment upload/open/download/delete. PDF attachments should preview inline inside the existing article view rather than spawning a second modal on top. The article view's modules use the `row_article_` file prefix; its CSS classes still carry internal `big_card` identifiers.
 -   **Add-Row Modal**: `gt_1_1_row_create/row_relation_builder.js` now understands shared `file_upload.profiles` metadata and renders separate profile-aware file inputs for shared `<parent>_assets` relations.
 
 ### Current Rules

@@ -31,7 +31,7 @@ vi.mock("./card_image_modal.js", () => ({
     transitionImageFirstModalContent: transitionImageFirstModalContentMock,
 }));
 
-vi.mock("./big_card_content_builder.js", () => ({
+vi.mock("./row_article_content_builder.js", () => ({
     buildRowArticleContent: buildContentMock,
 }));
 

@@ -7,14 +7,14 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const {
-    closeBigCardMock,
+    closeRowArticleMock,
     handleAllNavigationMock,
     parseTableQueryStringMock,
     setParamsMock,
     setUnifiedTableStateMock,
     tableStates,
 } = vi.hoisted(() => ({
-    closeBigCardMock: vi.fn(),
+    closeRowArticleMock: vi.fn(),
     handleAllNavigationMock: vi.fn(),
     parseTableQueryStringMock: vi.fn(() => ({
         filters: {},
@@ -55,7 +55,7 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 }));
 
 vi.mock("../../table_views/card_view/row_article_ui_handler.js", () => ({
-    closeBigCard: closeBigCardMock,
+    closeRowArticle: closeRowArticleMock,
 }));
 
 vi.mock("../../table_views/dataset_view_registry.js", () => ({
@@ -93,7 +93,7 @@ await import("./history_navigation_handler.js");
 describe("history_navigation_handler", () => {
     beforeEach(() => {
         ifavHistory.handle.mockResolvedValue(false);
-        closeBigCardMock.mockClear();
+        closeRowArticleMock.mockClear();
         vi.mocked(canRestoreCardArticleReturn).mockReturnValue(false);
         handleAllNavigationMock.mockClear();
         parseTableQueryStringMock.mockClear();
@@ -135,7 +135,7 @@ describe("history_navigation_handler", () => {
         const wrapper = document.querySelector(".card_view_wrapper");
         const cardContainer = document.querySelector(".card_container");
         const activeArticle = document.querySelector(".active_row_article");
-        expect(closeBigCardMock).toHaveBeenCalledWith(
+        expect(closeRowArticleMock).toHaveBeenCalledWith(
             wrapper,
             cardContainer,
             activeArticle,
@@ -199,11 +199,11 @@ describe("history_navigation_handler", () => {
         document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper big-card-open"><div class="card_container"></div><article class="active_row_article"></article></div></div>';
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
-        expect(closeBigCardMock).not.toHaveBeenCalled();
+        expect(closeRowArticleMock).not.toHaveBeenCalled();
         const options = handleAllNavigationMock.mock.calls[0][2];
         expect(options.restoreMountedView.isCurrent()).toBe(true);
         options.restoreMountedView.commit();
-        expect(closeBigCardMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), null, "events", true, { restoreScroll: false });
+        expect(closeRowArticleMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), null, "events", true, { restoreScroll: false });
         expect(restoreCardArticleReturn).toHaveBeenCalledWith("events");
     });
 

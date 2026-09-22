@@ -108,9 +108,12 @@ filter bar, `.dataset-shared-topbar` and the content hero.
 ### Article view
 The full-detail row presentation. The ordinary article view and Image First
 Article View are distinct presentation paths; neither is the result-card view.
-Existing `big_card` names are internal compatibility identifiers. Prefer
-**article view** in product prose, and use an exact identifier only when needed
-to locate implementation. A terminology change alone does not rename code.
+The ordinary article view's code modules share the `row_article_` file prefix.
+The stored view key stays `article_view`, and the remaining `big_card` names
+(CSS classes, browser-history state, card-visibility columns) are compatibility
+identifiers. Prefer **article view** in product prose, and use an exact
+identifier only when needed to locate implementation. A terminology change
+alone does not rename code.
 
 ### Image First Article View
 **IFAV** means Image First Article View. **IFA view** is a shorter name for the

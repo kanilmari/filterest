@@ -40,7 +40,7 @@ vi.mock('../../../reusable_components/notifications/toast_notification_printer.j
 }));
 
 import {
-    buildAttachmentList,
+    buildRowArticleAttachmentList,
     buildAcceptAttribute,
     buildPdfPreviewSrc,
     buildPdfThumbnailSrc,
@@ -54,8 +54,7 @@ import {
     resolveAttachmentDescription,
     resolveAttachmentKind,
     resolveAttachmentOriginalName,
-} from './big_card_attachment_list.js';
-import { buildRowArticleAttachmentList } from './row_article_attachment_list.js';
+} from './row_article_attachment_list.js';
 
 beforeEach(() => {
     endpointRouterMock.mockReset();
@@ -77,12 +76,6 @@ beforeEach(() => {
     showSuccessToastMock.mockReset();
     showWarningToastMock.mockReset();
     document.body.innerHTML = '';
-});
-
-describe('row article attachment aliases', () => {
-    test('keeps the row_article attachment export mapped to the legacy implementation', () => {
-        expect(buildRowArticleAttachmentList).toBe(buildAttachmentList);
-    });
 });
 
 describe('classifyAttachmentKind', () => {
@@ -242,11 +235,11 @@ describe('filterUploadableAttachmentFiles', () => {
     });
 });
 
-describe('buildAttachmentList', () => {
+describe('buildRowArticleAttachmentList', () => {
     test('uses caller-provided attachment linking status without refetching the status route', async () => {
         endpointRouterMock.mockClear();
 
-        await buildAttachmentList(
+        await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -274,7 +267,7 @@ describe('buildAttachmentList', () => {
         endpointRouterMock.mockClear();
         hasDatasetPermissionMock.mockResolvedValue(false);
 
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'tiketit',
             9,
             {
@@ -301,7 +294,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('renders preview action only for pdf attachments', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -321,7 +314,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('opens preview modal when pdf preview action is clicked', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -345,7 +338,7 @@ describe('buildAttachmentList', () => {
         endpointRouterMock.mockClear();
         const onAttachmentChanged = vi.fn().mockResolvedValue(undefined);
 
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -412,7 +405,7 @@ describe('buildAttachmentList', () => {
 
     test('uses backend foreign_key_column metadata for attachment uploads when child stub is incomplete', async () => {
         endpointRouterMock.mockClear();
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -458,7 +451,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('renders pdf thumbnail card for previewable attachments', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -475,7 +468,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('opens preview panel when pdf thumbnail is clicked', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -496,7 +489,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('toggles preview panel closed when the same preview button is clicked again', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -517,7 +510,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('renders count badge, visible dropzone, and multiple upload input for shared asset attachments', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {
@@ -538,7 +531,7 @@ describe('buildAttachmentList', () => {
     });
 
     test('shows upload-oriented empty state when attachments are enabled but none exist yet', async () => {
-        const list = await buildAttachmentList(
+        const list = await buildRowArticleAttachmentList(
             'contracts',
             7,
             {

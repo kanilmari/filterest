@@ -1,5 +1,5 @@
-// big_card_child_tabs_helpers.js
-// Pure helpers for big-card related-tab link behavior.
+// row_article_child_tabs_helpers.js
+// Pure helpers for article-view related-tab link behavior.
 // Bridges DOM click-event semantics and related-dataset param construction.
 // Exists to keep SPA-link rules testable without pulling the whole related-tab UI into unit tests.
 
@@ -98,5 +98,3 @@ export function findMatchingRelatedTableEntry(childTables = [], datasetName = ""
         )
     ) || null;
 }
-
-export const buildChildDatasetParams = buildRelatedDatasetParams;

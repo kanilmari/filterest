@@ -6,7 +6,7 @@ import {
     resolveImagePath,
     coerceToString,
     classifyRole,
-} from './big_card_content_builder_helpers.js';
+} from './row_article_content_builder_helpers.js';
 
 // ---------------------------------------------------------------------------
 // extractSuffixNumber

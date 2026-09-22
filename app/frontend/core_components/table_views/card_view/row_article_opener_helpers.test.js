@@ -5,7 +5,7 @@ import {
     extractRowId,
     sortColumnsByRole,
     buildCardUrl,
-} from './big_card_opener_helpers.js';
+} from './row_article_opener_helpers.js';
 
 // ---------------------------------------------------------------------------
 // buildSlug

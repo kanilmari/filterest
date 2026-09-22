@@ -25,7 +25,6 @@ vi.mock('./card_avatar_builder.js', () => ({
 
 vi.mock('./row_article_opener.js', () => ({
     openRowArticleView: vi.fn(),
-    open_big_card_view: vi.fn(),
 }));
 
 vi.mock('./image_first_view_activation.js', () => ({

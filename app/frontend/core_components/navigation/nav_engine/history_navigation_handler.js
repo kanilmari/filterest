@@ -14,7 +14,7 @@ import {
     invalidateTableRefresh,
     setUnifiedTableState,
 } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
-import { closeBigCard } from '../../table_views/card_view/row_article_ui_handler.js';
+import { closeRowArticle } from '../../table_views/card_view/row_article_ui_handler.js';
 import {
     ARTICLE_VIEW_KEY,
     resolveDatasetViewSelectionTarget,
@@ -161,7 +161,7 @@ window.addEventListener('popstate', async () => {
                         ?.querySelector(".card_view_wrapper.big-card-open");
                     const article = wrapper?.querySelector(".active_row_article, .active_big_card");
                     const cards = wrapper?.querySelector(".card_container");
-                    if (article && cards) closeBigCard(wrapper, cards, article, null, datasetName, true, { restoreScroll: false });
+                    if (article && cards) closeRowArticle(wrapper, cards, article, null, datasetName, true, { restoreScroll: false });
                     window.__bigCardClosing = false;
                     applyParsedUrlState(datasetName, parseTableQueryString(window.location.search));
                     return restoreCardArticleReturn(datasetName);
@@ -182,7 +182,7 @@ window.addEventListener('popstate', async () => {
 
         if (activeBigCard && cardContainer) {
             // skipHistoryBack avoids an extra history.back() because popstate already moved history
-            closeBigCard(openCardWrapper, cardContainer, activeBigCard, null, baseDataset, true);
+            closeRowArticle(openCardWrapper, cardContainer, activeBigCard, null, baseDataset, true);
         } else {
             // Fallback: ensure wrapper isn't stuck in open state
             openCardWrapper.classList.remove('big-card-open');
@@ -198,7 +198,7 @@ window.addEventListener('popstate', async () => {
             return;
         }
     }
-    // If closeBigCard triggered history.back(), skip re-navigation
+    // If closeRowArticle triggered history.back(), skip re-navigation
     // because the card DOM is already cleaned up.
     if (window.__bigCardClosing) {
         window.__bigCardClosing = false;

@@ -10,7 +10,7 @@ import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_
 import { getTranslationForKey } from '../lang/translation_handler.js';
 import { render_tree } from '../../reusable_components/vanilla_tree/vanilla_tree_builder.js';
 import { format_column_name } from '../table_views/card_view/card_field_formatter.js';
-import { filterNonMediaChildTables } from '../table_views/card_view/row_article_asset_resolver.js';
+import { filterRowArticleNonMediaChildTables } from '../table_views/card_view/row_article_asset_resolver.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { extractFirstSelectedTableName } from './tree_selection_helpers.js';
 
@@ -191,7 +191,7 @@ export async function generate_child_tab_config_form(container) {
                 },
             });
 
-            const referringDatasets = filterNonMediaChildTables(dynResponse?.child_tables || []).map(c => c.dataset);
+            const referringDatasets = filterRowArticleNonMediaChildTables(dynResponse?.child_tables || []).map(c => c.dataset);
             // Deduplicate because the same dataset can refer to the parent through multiple FKs.
             const uniqueKeys = [...new Set(referringDatasets)];
             // Always include __comments

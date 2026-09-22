@@ -383,8 +383,8 @@
       ],
       "embedded_sources": [
         {
-          "path": "app/frontend/core_components/table_views/card_view/article_view_ui_handler.js",
-          "sha256": "e9e5a66055f1c3d731a80943a38f8e7146fd1e5d3622855c92105b70873e98b1"
+          "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
+          "sha256": "a5561a1070e7959092463cbe4e2cc451355332f93268a80f36acfbeffb3bebfe"
         },
         {
           "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
@@ -402,7 +402,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "09792e474da620390aa5c2f899c8949809336949299596d2fe1c5debb173ef0a"
+    "sha256": "9f60c1252d50780b7f92be1292b993bbc1989b315414e0ed7edc9af63bb2fd7f"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -410,7 +410,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.8.0",
+  "database_version": "9.8.1",
   "dependencies": [
     {
       "binary_targets": [

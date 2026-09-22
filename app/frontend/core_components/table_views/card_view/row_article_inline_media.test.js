@@ -8,7 +8,7 @@ const { bind, open, language } = vi.hoisted(() => ({
     bind: vi.fn(), open: vi.fn(), language: vi.fn(() => "fi"),
 }));
 vi.mock("./image_first_view_activation.js", () => ({ bindImageFirstViewActivation: bind }));
-vi.mock("./article_view_opener.js", () => ({ openRowArticleView: open }));
+vi.mock("./row_article_opener.js", () => ({ openRowArticleView: open }));
 vi.mock("../../../ui_config.js", () => ({ enable_experimental_row_article_row_navigation: true }));
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => key }));
 vi.mock("../../state_stores/lang_preference_reader.js", () => ({ getLanguageWithBrowserFallback: language }));

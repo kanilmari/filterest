@@ -1,4 +1,4 @@
-// big_card_image_upload.js
+// row_article_image_upload.js
 // Reusable drag-and-drop / click-to-upload placeholder for image uploads.
 // Bridges file selection UI with the caller's onFileSelected callback.
 // Exists to provide a consistent upload affordance for both hero and thumbnail slots.

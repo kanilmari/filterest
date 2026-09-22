@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// big_card_child_tabs.test.js
+// row_article_child_tabs.test.js
 // Verifies related-record article navigation does not pollute browser history.
 // Bridges related-tab row clicks with the shared navigation handler contract.
 // Exists so Back returns to the previous article instead of an intermediate card list.
@@ -81,9 +81,9 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helper
     })),
 }));
 
-import { buildRelatedTabs } from "./big_card_child_tabs.js";
+import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
 
-describe("buildRelatedTabs related-record navigation", () => {
+describe("buildRowArticleRelatedTabs related-record navigation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         document.body.innerHTML = `
@@ -97,7 +97,7 @@ describe("buildRelatedTabs related-record navigation", () => {
     });
 
     test("opens a related row without pushing an intermediate dataset base URL", async () => {
-        const tabs = await buildRelatedTabs(
+        const tabs = await buildRowArticleRelatedTabs(
             [{
                 dataset: "dev_agent_tasks",
                 column: "parent_id",
@@ -135,7 +135,7 @@ describe("buildRelatedTabs related-record navigation", () => {
     });
 
     test("renders related rows with compact columns and hides generated bridge relation tabs", async () => {
-        const tabs = await buildRelatedTabs(
+        const tabs = await buildRowArticleRelatedTabs(
             [
                 {
                     dataset: "dokumentaatio",
@@ -183,7 +183,7 @@ describe("buildRelatedTabs related-record navigation", () => {
     });
 
     test("renders ticket todos as a checkbox list with verbatim text", async () => {
-        const tabs = await buildRelatedTabs(
+        const tabs = await buildRowArticleRelatedTabs(
             [{
                 dataset: "dev_agent_task_todos",
                 column: "task_id",
@@ -220,7 +220,7 @@ describe("buildRelatedTabs related-record navigation", () => {
             return Promise.resolve([]);
         });
 
-        const tabs = await buildRelatedTabs(
+        const tabs = await buildRowArticleRelatedTabs(
             [{
                 dataset: "dev_agent_task_todos",
                 column: "task_id",
@@ -256,7 +256,7 @@ describe("buildRelatedTabs related-record navigation", () => {
 
     test("restores the Agent task todos child tab instead of the default first tab", async () => {
         mocks.getUnifiedTableState.mockReturnValue({ articleView: { expandedId: 889 } });
-        const tabs = await buildRelatedTabs(
+        const tabs = await buildRowArticleRelatedTabs(
             [
                 {
                     dataset: "dev_agent_tasks",
@@ -288,7 +288,7 @@ describe("buildRelatedTabs related-record navigation", () => {
 
     test("persists the opened related child tab for the same article row", async () => {
         mocks.getUnifiedTableState.mockReturnValue({ articleView: { expandedId: 889 } });
-        const tabs = await buildRelatedTabs(
+        const tabs = await buildRowArticleRelatedTabs(
             [
                 {
                     dataset: "dev_agent_tasks",

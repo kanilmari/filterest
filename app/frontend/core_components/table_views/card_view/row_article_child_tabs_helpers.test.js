@@ -12,7 +12,7 @@ import {
     shouldHandleSpaNavigationClick,
     shouldLazyLoadRelatedTableRows,
     shouldOpenRelatedTab,
-} from './big_card_child_tabs_helpers.js';
+} from './row_article_child_tabs_helpers.js';
 
 describe('shouldHandleSpaNavigationClick', () => {
     test('handles a plain left click inside the SPA', () => {

@@ -34,15 +34,10 @@ vi.mock('../../../reusable_components/notifications/toast_notification_printer.j
 }));
 
 import {
-    buildImageGallery,
-    canUploadImageToChildDataset,
-    resolveImageRows,
-} from './big_card_image_gallery.js';
-import {
     buildRowArticleImageGallery,
-    canUploadImageToRowArticleChildDataset,
-    resolveRowArticleImageRows,
+    canUploadImageToChildDataset,
 } from './row_article_image_gallery.js';
+import { resolveRowArticleImageRows } from './row_article_image_rows.js';
 
 beforeEach(() => {
     endpointRouterMock.mockReset();
@@ -54,22 +49,14 @@ beforeEach(() => {
     showSuccessToastMock.mockReset();
 });
 
-describe('row article image gallery aliases', () => {
-    test('keeps row_article exports mapped to the legacy gallery implementation', () => {
-        expect(buildRowArticleImageGallery).toBe(buildImageGallery);
-        expect(resolveRowArticleImageRows).toBe(resolveImageRows);
-        expect(canUploadImageToRowArticleChildDataset).toBe(canUploadImageToChildDataset);
-    });
-});
-
-describe('resolveImageRows', () => {
+describe('resolveRowArticleImageRows', () => {
     test('keeps explicit image asset rows from shared asset tables', () => {
         const rows = [
             { id: 1, asset_kind: 'image', filename: 'hero.png' },
             { id: 2, asset_kind: 'pdf', filename: 'offer.pdf' },
         ];
 
-        expect(resolveImageRows(rows).map(row => row.id)).toEqual([1]);
+        expect(resolveRowArticleImageRows(rows).map(row => row.id)).toEqual([1]);
     });
 
     test('keeps legacy filename rows without asset_kind for backward compatibility', () => {
@@ -78,7 +65,7 @@ describe('resolveImageRows', () => {
             { id: 2, asset_kind: 'archive', filename: 'backup.zip' },
         ];
 
-        expect(resolveImageRows(rows).map(row => row.id)).toEqual([1]);
+        expect(resolveRowArticleImageRows(rows).map(row => row.id)).toEqual([1]);
     });
 
     test('sorts primary image rows before non-primary rows', () => {
@@ -87,14 +74,14 @@ describe('resolveImageRows', () => {
             { id: 12, asset_kind: 'image', filename: 'hero.png', is_primary: true, sort_order: 99 },
         ];
 
-        expect(resolveImageRows(rows).map(row => row.id)).toEqual([12, 11]);
+        expect(resolveRowArticleImageRows(rows).map(row => row.id)).toEqual([12, 11]);
     });
 
     test('deduplicates a parent-row image already represented by a canonical child row', () => {
         const canonical = { id: 12, asset_kind: 'image', filename: 'hero.png', is_primary: false };
         const parentFallback = { asset_kind: 'image', filename: 'hero.png', is_primary: true };
 
-        expect(resolveImageRows([canonical], [parentFallback])).toEqual([canonical]);
+        expect(resolveRowArticleImageRows([canonical], [parentFallback])).toEqual([canonical]);
     });
 });
 
@@ -106,16 +93,16 @@ describe('canUploadImageToChildDataset', () => {
     });
 });
 
-describe('buildImageGallery', () => {
+describe('buildRowArticleImageGallery', () => {
     test('does not keep a fallback upload input when no child relation is resolved', () => {
-        const gallery = buildImageGallery('services', 1, null, () => {});
+        const gallery = buildRowArticleImageGallery('services', 1, null, () => {});
 
         expect(gallery.querySelectorAll('input[type="file"]').length).toBe(0);
         expect(gallery.querySelector('[data-testid="big-card-image-upload-disabled"]')).not.toBeNull();
     });
 
     test('hides upload input when caller explicitly disables upload permission', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             { dataset: 'services_assets', column: 'services_id', rows: [] },
@@ -128,7 +115,7 @@ describe('buildImageGallery', () => {
     });
 
     test('enables multiple file selection for shared asset image uploads', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             { dataset: 'services_assets', column: 'services_id', relation_kind: 'shared_asset', rows: [] },
@@ -142,7 +129,7 @@ describe('buildImageGallery', () => {
     });
 
     test('renders a single existing image as a thumbnail without a persistent hero preview', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -160,7 +147,7 @@ describe('buildImageGallery', () => {
     });
 
     test('uses the shared SVG presentation and parent-row label in image-section thumbnails', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'app_service_catalog',
             1,
             {
@@ -194,7 +181,7 @@ describe('buildImageGallery', () => {
     test.each([true, false])(
         'renders a lone parent-row image thumbnail whether primary is %s',
         (isPrimary) => {
-            const gallery = buildImageGallery(
+            const gallery = buildRowArticleImageGallery(
                 'tickets',
                 2,
                 null,
@@ -218,7 +205,7 @@ describe('buildImageGallery', () => {
     test('opens the standalone image-first view when a thumbnail is clicked', () => {
         const rowItem = { id: 1, title: 'Service' };
         const selectedCard = document.createElement('article');
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -246,7 +233,7 @@ describe('buildImageGallery', () => {
     });
 
     test('keeps the ordinary gallery unchanged and hands all images to image-first', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -275,7 +262,7 @@ describe('buildImageGallery', () => {
     });
 
     test('shows five image thumbnails at a time and pages carousel arrows to the end', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -319,7 +306,7 @@ describe('buildImageGallery', () => {
     });
 
     test('renders delete actions for image rows when caller grants delete permission', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -335,7 +322,7 @@ describe('buildImageGallery', () => {
     });
 
     test('renders make-default action for non-primary rows when caller grants update permission', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -356,7 +343,7 @@ describe('buildImageGallery', () => {
     });
 
     test('context menu exposes primary + delete actions when both permissions are available', () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -382,7 +369,7 @@ describe('buildImageGallery', () => {
 
     test('shared asset galleries expose the metadata editor and save batched updates', async () => {
         const onRefresh = vi.fn().mockResolvedValue(undefined);
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -431,7 +418,7 @@ describe('buildImageGallery', () => {
 
     test('setting a new primary image updates target row and clears previous primary row', async () => {
         const onRefresh = vi.fn().mockResolvedValue(undefined);
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {
@@ -465,7 +452,7 @@ describe('buildImageGallery', () => {
     });
 
     test('shared asset upload uses relation_kind metadata even when dataset name has no _assets suffix', async () => {
-        const gallery = buildImageGallery(
+        const gallery = buildRowArticleImageGallery(
             'services',
             1,
             {

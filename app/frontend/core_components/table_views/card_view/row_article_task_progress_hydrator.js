@@ -1,7 +1,7 @@
 // row_article_task_progress_hydrator.js
 // Inserts the task todo progress visual into an open row article.
 // Bridges the task progress renderer and stable article tool-section ordering.
-// Exists to keep big_card_opener from owning task-specific progress UI details.
+// Exists to keep row_article_opener from owning task-specific progress UI details.
 
 import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
 

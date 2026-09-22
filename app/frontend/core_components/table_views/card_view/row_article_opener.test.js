@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// big_card_opener.test.js
+// row_article_opener.test.js
 // Verifies row article opening outside the card layout shell.
-// Bridges calendar/map/list callers and the shared big-card article opener host.
+// Bridges calendar/map/list callers and the shared article opener host.
 // Exists to keep every row-oriented view able to open the default row article experience.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -163,7 +163,7 @@ vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
 }));
 
 import { createArticleLanguageEditor } from "../article_view/article_language_editor.js";
-import { openRowArticleView } from "./big_card_opener.js";
+import { openRowArticleView } from "./row_article_opener.js";
 import {
     collectCardUpdates,
     disableEditing,

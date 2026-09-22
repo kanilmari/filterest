@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// big_card_ui_handler.test.js
+// row_article_ui_handler.test.js
 // Verifies article-view label helpers render metadata-driven icons safely.
 // Bridges row-article field labels and the shared card-detail icon registry.
 // Exists so field label icons stay visible when article/detail layouts evolve.
@@ -24,10 +24,10 @@ import {
     createRowArticleLinkTwoLine,
     createRowArticleNavigableElement,
     dispatchCardArticleToggle,
-    closeBigCard,
-} from "./big_card_ui_handler.js";
+    closeRowArticle,
+} from "./row_article_ui_handler.js";
 
-describe("big_card_ui_handler label icons", () => {
+describe("row_article_ui_handler label icons", () => {
     test("createRowArticleKeyValueElement renders a configured field icon before label text", () => {
         const element = createRowArticleKeyValueElement(
             "Website",
@@ -268,7 +268,7 @@ describe("article shared field layout", () => {
         wrapper.innerHTML = '<div class="card_container"><div class="card small-card"></div></div><article class="active_row_article"></article>';
         document.body.appendChild(wrapper);
         const cards = wrapper.querySelector(".card_container");
-        closeBigCard(wrapper, cards, wrapper.querySelector("article"), null, "events", true, { restoreScroll: false });
+        closeRowArticle(wrapper, cards, wrapper.querySelector("article"), null, "events", true, { restoreScroll: false });
         expect(wrapper.classList.contains("big-card-open")).toBe(false);
         expect(wrapper.querySelector("article")).toBeNull();
         expect(cards.firstChild.classList.contains("small-card")).toBe(false);
