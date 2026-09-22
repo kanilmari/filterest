@@ -289,3 +289,36 @@ func TestDispatchWithoutSiteAccessDoesNotStartAJob(t *testing.T) {
 		t.Fatalf("a job without site access must not start: %d calls=%d", rec.Code, *calls)
 	}
 }
+
+// The browser sends a job only who said what. The request is decoded strictly,
+// so display details the stored history also carries (time, usage, mode) refuse
+// the whole job; this pins the shape both sides agree on.
+func TestCodingAgentJobHistoryIsRoleAndContentOnly(t *testing.T) {
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/socket")
+	t.Setenv("APP_PORT", "8193")
+	t.Setenv("FILTEREST_CODING_AGENT_SITE_ID", "fixture.test")
+	var history []aiChatConversationMessage
+	calls := fakeCodingAgentRunner(t, codingAgentRunnerCapabilities{}, func(runnerPayload codingAgentRunnerPayload) {
+		history = runnerPayload.Messages
+	})
+	const requestID = "00000000-0000-0000-0000-000000000006"
+	t.Cleanup(func() {
+		if delegation, err := site_assistant.DefaultStore.ByJob(requestID); err == nil {
+			site_assistant.DefaultStore.Revoke(delegation.ID)
+		}
+	})
+	post := func(messages string) *httptest.ResponseRecorder {
+		body := `{"dataset":"fixture","query":"Again","mode":"site_assistant","request_id":"` + requestID + `","messages":` + messages + `}`
+		rec := httptest.NewRecorder()
+		FilterbarAICodexQueryHandler(rec, codingAgentSessionRequest(t, "POST", "/api/app/ai-chat/codex-query", body, "admin", "test_admin_12"))
+		return rec
+	}
+	if rec := post(`[{"role":"assistant","content":"Hello","usage":{"label":"","provider":"openai"}}]`); rec.Code != 400 || *calls != 0 {
+		t.Fatalf("display details in the history: %d calls=%d", rec.Code, *calls)
+	}
+	rec := post(`[{"role":"user","content":"Hi"},{"role":"assistant","content":"Hello"}]`)
+	if rec.Code != 202 || len(history) != 2 || history[1].Role != "assistant" || history[1].Content != "Hello" {
+		t.Fatalf("%d %s %#v", rec.Code, rec.Body.String(), history)
+	}
+}

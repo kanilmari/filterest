@@ -277,6 +277,14 @@ describe('api_pipeline', () => {
         expect(showWarningToastMock).not.toHaveBeenCalled();
     });
 
+    test('the thrown error carries its notice, so a caller can show the same sentence', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'invalid coding agent request' }, { ok: false, status: 400 })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'aiChatCodexQuery', suppressErrorToast: true }))
+            .rejects.toMatchObject({ status: 400, failureNotice: { langKey: 'request_failed_notice', status: 400 } });
+        expect(shownNotices()).toEqual([]);
+    });
+
     test('a notice starts in the page language before runtime translations replace it', async () => {
         document.documentElement.lang = 'fi';
         vi.stubGlobal('fetch', vi.fn(async () => buildResponse('internal server error', {

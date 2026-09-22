@@ -488,6 +488,18 @@ async function hydrateConversationFromBackend(table_name, localSnapshot) {
     }
 }
 
+// A failed request is shown in the bubble as the same translated sentence the
+// request pipeline chose for it, never as the technical message with the route
+// and the server's raw reply. Other failures already carry readable copy.
+function describeChatFailure(error, fallbackText) {
+    const notice = error?.failureNotice;
+    if (!notice?.langKey) {
+        return String(error?.message || fallbackText);
+    }
+    const sentence = getTranslationForKey(notice.langKey);
+    return Number.isInteger(notice.status) ? `${sentence} (${notice.status})` : sentence;
+}
+
 // create_chat_ui builds the filterbar AI chat composer and message stream.
 // It connects a dataset filterbar surface to the API-first chat query facade.
 // The function exists so every dataset gets one reusable chat UI instance.
@@ -611,7 +623,7 @@ export function create_chat_ui(table_name, parent_element) {
         const pending = append_pending_chat_message(table_name, pendingMode, chat_container);
         setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, true);
         void start_coding_agent_query(table_name, '', pendingMode, pending).catch(error => {
-            finish_pending_chat_message(table_name, pending, 'error', String(error.message));
+            finish_pending_chat_message(table_name, pending, 'error', describeChatFailure(error, 'Unable to complete the Codex query right now.'));
         }).finally(() => setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, false));
     }
 
@@ -655,7 +667,7 @@ export function create_chat_ui(table_name, parent_element) {
                         table_name,
                         pending_message,
                         'error',
-                        String(error?.message || 'Unable to complete the Codex query right now.')
+                        describeChatFailure(error, 'Unable to complete the Codex query right now.')
                     );
                 } finally {
                     setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, false);
@@ -689,7 +701,7 @@ export function create_chat_ui(table_name, parent_element) {
                                 table_name,
                                 retryPendingMessage,
                                 'error',
-                                String(retryError?.message || 'Unable to complete the AI query right now.')
+                                describeChatFailure(retryError, 'Unable to complete the AI query right now.')
                             );
                         } finally {
                             setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, false);
@@ -703,7 +715,7 @@ export function create_chat_ui(table_name, parent_element) {
                 table_name,
                 pending_message,
                 'error',
-                String(error?.message || 'Unable to complete the AI query right now.')
+                describeChatFailure(error, 'Unable to complete the AI query right now.')
             );
         } finally {
             setChatComposerBusy(chat_input, chat_send_btn, clear_history_btn, false);

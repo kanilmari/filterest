@@ -55,3 +55,9 @@ test("a refused mode forgets the saved job so the next question starts fresh",as
  await expect(runCodingAgentChatQuery("fixture","edit",[],{mode:"code_workspace"})).rejects.toThrow("only in development");
  expect(hasPendingCodingAgentJob("fixture")).toBe(false);
 });
+test("the job's history carries only who said what, never display details the strict request refuses",async()=>{
+ request.mockResolvedValueOnce({job_id:id,status:"queued",mode:"site_assistant"}).mockResolvedValueOnce({job_id:id,status:"completed",answer:"ok",mode:"site_assistant"});
+ const history=[{role:"user",content:"hi",created_at:"2026-09-22T16:14:00.000Z"},{role:"assistant",content:"hello",usage:{label:"",provider:"openai",total_tokens:5},mode:"site_assistant"}];
+ await runCodingAgentChatQuery("fixture","again",history,{mode:"site_assistant"});
+ expect(request.mock.calls[0][1].body_data.messages).toEqual([{role:"user",content:"hi"},{role:"assistant",content:"hello"}]);
+});

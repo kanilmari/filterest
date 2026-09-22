@@ -519,16 +519,19 @@ async function errorHandlerStage(ctx) {
     const errorText = stripAnsiCodes(await ctx.response.text());
     const log = status >= 500 ? console.error : ctx.suppressErrorToast ? console.debug : console.warn;
     log.call(console, `[api_pipeline] ${ctx.routeName} failed (${status}):`, errorText);
+    const notice = resolveFailureNotice(status, errorText);
     if (!ctx.suppressErrorToast) {
         if (status === 403) {
             showAccessDeniedToast(ctx.routeName);
         } else {
-            const notice = resolveFailureNotice(status, errorText);
             showRequestFailureNotice(notice.langKey, { status: notice.status });
         }
     }
     const error = new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);
     error.status = status;
+    // The same translated sentence for a caller that reports the failure in its
+    // own surface, such as a chat bubble, instead of the technical message.
+    error.failureNotice = notice;
     throw error;
 }
 

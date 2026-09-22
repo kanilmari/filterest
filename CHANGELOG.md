@@ -53,6 +53,7 @@ Database compatibility moves from 9.8.0 to 9.8.1.
 - **Every installation records deletions** — The deletion log that the delete path writes to came from a private maintenance-shell migration, so no public installation had it, fintravel.fi included. A migration creates it where it is missing, with the same shape, and lets the application's administrator and ordinary-user roles write to it.
 - **Readers of a dataset can use its filters** — Groups that could read fintravel.fi's travel datasets lacked the one right that loads the filter bar's options. A migration grants it to every group that already holds all of a dataset's other reader rights, without naming any dataset or group; narrower rights stay narrow, and new datasets already received it.
 - **The 9.8.1 interface texts are in the database** — The texts added this release (dialogs, the dataset form, the foreign-keys page, the coding agent, AI search and the embeddings page, dataset header settings, request notices) are seeded in four languages from the same copy the screens fall back to. A text an administrator has already reviewed is never overwritten; only an untouched earlier wording is replaced.
+- **The dataset chat reports a failed request in the reader's language** — A failed chat request put the technical message in the chat, with the request's internal name and the server's raw reply, and in Finnish on every page. The chat now shows the same translated sentence as the request notice, with the status code.
 
 ## [9.3.16] - 2026-09-21
 

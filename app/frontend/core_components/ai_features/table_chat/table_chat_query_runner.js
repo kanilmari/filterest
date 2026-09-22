@@ -276,8 +276,10 @@ export async function runCodingAgentChatQuery(
     if (currentLang) {
         payload.lang = currentLang;
     }
+    // The job reads only who said what. The stored history also carries display
+    // details (time, usage, mode) that the strict job request refuses as a whole.
     if (Array.isArray(conversationMessages) && conversationMessages.length > 0) {
-        payload.messages = conversationMessages;
+        payload.messages = conversationMessages.map(({ role, content }) => ({ role, content }));
     }
 
     let response;
