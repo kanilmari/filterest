@@ -78,6 +78,10 @@ FILTEREST_API_OTP_CODE_ENV = "FILTEREST_API_OTP_CODE"
 _DEV_USERNAME_EXPLICIT_KEY = "_DB_TASK_DEV_USERNAME_EXPLICIT"
 _DEV_PASSWORD_EXPLICIT_KEY = "_DB_TASK_DEV_PASSWORD_EXPLICIT"
 _OTP_EXPLICIT_KEY = "_DB_TASK_OTP_EXPLICIT"
+# Sign-in requires a browser-identity value in every environment, including
+# development. A command-line client has no browser, so it binds its session to
+# this stable tool identifier the same way the shared API client does.
+DB_TASK_CLIENT_FINGERPRINT = "filterest-db-task-cli"
 
 
 def _resolve_db_task_base_url(environment=None):
@@ -1063,8 +1067,13 @@ def _get_session():
             sys.exit(1)
         csrf = info.get("csrf_token", "")
 
-        # Step 2: Login phase 1 (credentials)
-        resp = _curl_raw(jar, "POST", "/api/login", {"username": username, "password": password, "csrf_token": csrf})
+        # Step 2: Login phase 1 (credentials). Every environment requires a
+        # browser-identity value, so this command-line client supplies its own
+        # stable identifier instead of a browser fingerprint.
+        resp = _curl_raw(jar, "POST", "/api/login", {
+            "username": username, "password": password,
+            "fingerprint": DB_TASK_CLIENT_FINGERPRINT, "csrf_token": csrf,
+        })
         if not resp or not isinstance(resp, dict):
             print("Error: Login phase 1 failed", file=sys.stderr)
             sys.exit(1)
@@ -1084,6 +1093,7 @@ def _get_session():
         # Step 4: Login phase 2 (OTP)
         resp = _curl_raw(jar, "POST", "/api/login", {
             "username": username, "password": password,
+            "fingerprint": DB_TASK_CLIENT_FINGERPRINT,
             "csrf_token": csrf, "otp_code": otp_code,
         })
         if isinstance(resp, dict) and resp.get("authenticated"):

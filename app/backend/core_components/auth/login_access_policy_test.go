@@ -119,7 +119,11 @@ func TestPolicyReadFailureClosesPendingLogin(t *testing.T) {
 	}
 }
 
-func TestLegacyDevFormCannotBypassAdminOnlyLogin(t *testing.T) {
+// TestLegacyDevFormLoginIsRefusedInDevelopment proves the removed bypass stays
+// removed: development mode used to fall through to a second, weaker sign-in
+// path for non-JSON POSTs. Both public entry points must now refuse it with the
+// credentials still attached, exactly as production always did.
+func TestLegacyDevFormLoginIsRefusedInDevelopment(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	hash, err := bcrypt.GenerateFromPassword([]byte("synthetic-password"), bcrypt.MinCost)
 	if err != nil {
@@ -127,14 +131,31 @@ func TestLegacyDevFormCannotBypassAdminOnlyLogin(t *testing.T) {
 	}
 	setupAdmissionFixture(t, credentialMockConfig{userID: 42, userLookupOK: true, hashedPassword: string(hash), adminOnly: true, adminAllowed: true})
 	store := setupAuthModesTestStore(t)
-	req := buildAuthModesReq(t, store, "https://example.test/login", map[interface{}]interface{}{"csrf_token": "synthetic-csrf"})
-	req.Method = http.MethodPost
-	form := url.Values{"username": {"synthetic-user"}, "password": {"synthetic-password"}, "csrf_token": {"synthetic-csrf"}}
-	req.Body = io.NopCloser(strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	handleLoginPost(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("legacy form bypassed admission: %d", rr.Code)
+
+	entryPoints := map[string]func(http.ResponseWriter, *http.Request){
+		"api_login": LoginAPIHandler,
+		"login":     LoginHandler,
+	}
+	for name, handler := range entryPoints {
+		t.Run(name, func(t *testing.T) {
+			req := buildAuthModesReq(t, store, "https://example.test/login", map[interface{}]interface{}{"csrf_token": "synthetic-csrf"})
+			req.Method = http.MethodPost
+			form := url.Values{"username": {"synthetic-user"}, "password": {"synthetic-password"}, "csrf_token": {"synthetic-csrf"}}
+			req.Body = io.NopCloser(strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr := httptest.NewRecorder()
+			handler(rr, req)
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("legacy form login accepted in dev: %d", rr.Code)
+			}
+			if !strings.Contains(rr.Body.String(), "legacy_form_login_disabled") {
+				t.Fatalf("legacy form refusal body = %q", rr.Body.String())
+			}
+			if _, ok := rr.Result().Header["Set-Cookie"]; ok {
+				if session, _ := store.Get(req, "session"); session != nil && session.Values["authenticated"] == true {
+					t.Fatal("legacy form login authenticated a session")
+				}
+			}
+		})
 	}
 }

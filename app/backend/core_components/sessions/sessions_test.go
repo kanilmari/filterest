@@ -83,12 +83,32 @@ func TestAllowInsecureDevProxy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ENVIRONMENT_TYPE", "dev")
 			t.Setenv("ALLOW_INSECURE_DEV_PROXY", tt.value)
 			if got := AllowInsecureDevProxy(); got != tt.want {
 				t.Fatalf("AllowInsecureDevProxy() = %v, want %v", got, tt.want)
 			}
 			if got := ShouldUseSecureCookies(); got == tt.want {
 				t.Fatalf("ShouldUseSecureCookies() = %v, expected inverse of %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAllowInsecureDevProxyRequiresExplicitDevelopmentMode guards the narrowed
+// switch. The environment variable alone used to drop the Secure flag from
+// session and authentication cookies in any runtime, so one stray value in a
+// production environment file let them travel over plain HTTP.
+func TestAllowInsecureDevProxyRequiresExplicitDevelopmentMode(t *testing.T) {
+	for _, environmentType := range []string{"prod", "production", "staging", "", "Dev"} {
+		t.Run("environment_"+environmentType, func(t *testing.T) {
+			t.Setenv("ENVIRONMENT_TYPE", environmentType)
+			t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
+			if AllowInsecureDevProxy() {
+				t.Fatalf("AllowInsecureDevProxy() honoured the switch with ENVIRONMENT_TYPE=%q", environmentType)
+			}
+			if !ShouldUseSecureCookies() {
+				t.Fatalf("Secure cookie flag dropped with ENVIRONMENT_TYPE=%q", environmentType)
 			}
 		})
 	}
@@ -429,6 +449,8 @@ func TestResetSessionHandlerClearsAuthCookiesOnValidPost(t *testing.T) {
 
 func TestResetSessionHandlerAllowsHTTPOriginForInsecureDevProxy(t *testing.T) {
 	initSessionTestStore(t)
+	// The insecure-proxy switch is honoured only in explicit development mode.
+	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	t.Setenv("ALLOW_INSECURE_DEV_PROXY", "true")
 
 	req := httptest.NewRequest(http.MethodPost, "https://example.com/api/reset-session", nil)

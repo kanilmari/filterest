@@ -11,13 +11,13 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
+	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/otp"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -31,14 +31,23 @@ const localLoginFactorMaxAttempts = 5
 
 func LoginAPIHandler(w http.ResponseWriter, r *http.Request) {
 
-	// AJAX JSON flow (new 2-step OTP login)
+	// AJAX JSON flow (two-step OTP login) is the only supported sign-in path.
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "application/json") {
 		handleLoginJSON(w, r)
 		return
 	}
-	// Legacy form-POST flow
-	handleLoginPost(w, r)
+	// The legacy form-POST login is removed. It used to remain reachable in
+	// explicit development mode, where it authenticated through a separate and
+	// weaker code path. Development now behaves exactly like production here.
+	respondLegacyFormLoginDisabled(w)
+}
+
+// respondLegacyFormLoginDisabled answers a non-JSON sign-in attempt with the
+// same refusal production has always returned, in every environment.
+func respondLegacyFormLoginDisabled(w http.ResponseWriter) {
+	log.Println("legacy form login is disabled in every environment 🔒")
+	httpresponse.RespondWithError(w, http.StatusForbidden, "legacy_form_login_disabled")
 }
 
 // loginJSONRequest is the JSON body for the AJAX login flow.
@@ -356,14 +365,13 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 	}
 	session.Values["device_id"] = deviceID
 
-	// Fingerprint
-	isDev := os.Getenv("ENVIRONMENT_TYPE") == "dev"
-	if fingerprint == "" && !isDev {
+	// Fingerprint. Every environment requires a real browser fingerprint.
+	// Development used to substitute a fixed placeholder here, which produced an
+	// authenticated session whose device binding matched every other such
+	// session, so the pipeline fingerprint stage could not tell them apart.
+	if fingerprint == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "fingerprint_required"})
 		return
-	}
-	if fingerprint == "" && isDev {
-		fingerprint = "dev-mode-fingerprint"
 	}
 	hmacFP := HMACFingerprint(fingerprint)
 	session.Values["fingerprint_hash"] = hmacFP

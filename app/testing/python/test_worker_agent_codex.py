@@ -180,3 +180,33 @@ def test_explicit_exact_version_upgrade(worker):
                             'FAKE_CODEX_VERSION': '0.156.0'})
     assert result.returncode == 0, result.stderr
     assert 'codex_version=0.156.0' in next(output.glob('*/run_status.txt')).read_text()
+
+
+@pytest.mark.parametrize('access_options, expected_sandbox', [
+    ((), 'workspace-write'),
+    (('--no-full-access',), 'workspace-write'),
+    (('--full-access',), 'danger-full-access'),
+])
+def test_worker_sandbox_defaults_to_workspace_write(worker, tmp_path, access_options, expected_sandbox):
+    """A worker no longer receives full system access unless the run asks for it.
+
+    Full access used to be the default, so every worker could reach the
+    database, the network and the whole filesystem whether the task needed it or
+    not. The explicit flag still works and must keep working.
+    """
+    _run, env, output, _codex = worker
+    result = subprocess.run(
+        ['bash', str(CORE), 'family=codex', '--no-summary-instr',
+         '--output-dir', str(output), '--task-id', 'sandbox-default',
+         *access_options, '-'],
+        cwd=tmp_path, env=env, input='Only a local test.',
+        text=True, capture_output=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    capture = json.loads(Path(env['CODEX_CAPTURE']).read_text())
+    assert capture['args'][:3] == ['exec', '--sandbox', expected_sandbox]
+    status = next(output.glob('*/run_status.txt')).read_text()
+    if expected_sandbox == 'workspace-write':
+        assert 'workspace only (no database, no network)' in status
+    else:
+        assert 'full (workspace, database and network)' in status

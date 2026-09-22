@@ -44,6 +44,30 @@ describe('translateError', () => {
         expect(translateError(code, language)).toBe(expected);
     });
 
+    test.each([
+        ['fi', 'Kirjautuminen vaatii selaimen tunnistetiedon. Salli JavaScript ja avaa palvelu suojatulla https-yhteydellä.'],
+        ['en', 'Signing in requires the browser identity check. Allow JavaScript and open the service over a secure https connection.'],
+        ['zh-CN', '登录需要浏览器标识校验。请允许 JavaScript 并通过安全的 https 连接打开本服务。'],
+        ['yue', '登入需要瀏覽器識別檢查。請允許 JavaScript，並用安全嘅 https 連線開呢個服務。'],
+    ])('explains the required browser identity check in %s', (language, expected) => {
+        expect(translateError('fingerprint_required', language)).toBe(expected);
+    });
+
+    test.each([
+        ['fi', 'Vanha lomakekirjautuminen ei ole enää käytössä. Lataa sivu uudelleen ja kirjaudu kirjautumislomakkeella.'],
+        ['en', 'The old form sign-in is no longer available. Reload the page and sign in with the login form.'],
+        ['zh-CN', '旧版表单登录已停用。请重新加载页面，并使用登录表单登录。'],
+        ['yue', '舊版表單登入已經停用。請重新載入頁面，用登入表單登入。'],
+    ])('explains the removed legacy form sign-in in %s', (language, expected) => {
+        expect(translateError('legacy_form_login_disabled', language)).toBe(expected);
+    });
+
+    test('falls back to English for a language the new copy does not cover', () => {
+        expect(translateError('fingerprint_required', 'sv')).toBe(
+            'Signing in requires the browser identity check. Allow JavaScript and open the service over a secure https connection.',
+        );
+    });
+
     test('preserves unknown and existing codes while unsupported languages use English policy copy', () => {
         expect(translateError('not_login_not_allowed', 'en')).toBe('not_login_not_allowed');
         expect(translateError('wrong_credentials', 'en')).toBe('Väärä käyttäjätunnus tai salasana.');

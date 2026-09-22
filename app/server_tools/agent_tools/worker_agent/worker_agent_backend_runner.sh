@@ -51,7 +51,7 @@ cleanup_worker_server() {
 describe_write_access() {
     if [[ "${RESEARCH_MODE:-false}" == true ]]; then
         printf 'forbidden by instruction; sandbox still permits workspace writes'
-    elif [[ "${FULL_ACCESS:-true}" == true ]]; then
+    elif [[ "${FULL_ACCESS:-false}" == true ]]; then
         printf 'full (workspace, database and network)'
     else
         printf 'workspace only (no database, no network)'

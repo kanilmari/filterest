@@ -144,19 +144,28 @@ func TestCheckLoginRateLimit(t *testing.T) {
 	})
 }
 
-func TestShouldBlockLoginAttempt(t *testing.T) {
-	t.Run("production blocks exceeded rate limit", func(t *testing.T) {
-		resetRateLimiter()
-		ip := "10.2.0.1"
+// TestShouldBlockFailedLoginAttempt covers the narrowed development exemption.
+// The relaxed limiter exists for test suites and tooling on the developer's own
+// machine, so it now requires both explicit development mode and a request that
+// actually arrives from this machine.
+func TestShouldBlockFailedLoginAttempt(t *testing.T) {
+	recordFailuresToLimit := func(ip string) {
 		for i := 0; i < loginRateLimitMax; i++ {
-			checkLoginRateLimit(ip)
+			recordLoginFailure(ip)
 		}
+	}
+
+	t.Run("production blocks exceeded rate limit", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT_TYPE", "prod")
+		resetLoginFailureLimiter()
+		ip := "10.2.0.1"
+		recordFailuresToLimit(ip)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
 		req.RemoteAddr = ip + ":1234"
 		rr := httptest.NewRecorder()
 
-		if !shouldBlockLoginAttempt(rr, req) {
+		if !shouldBlockFailedLoginAttempt(rr, req) {
 			t.Fatal("expected rate limit to block request outside dev")
 		}
 		if got := rr.Header().Get(loginRateLimitHeader); got != "" {
@@ -164,44 +173,69 @@ func TestShouldBlockLoginAttempt(t *testing.T) {
 		}
 	})
 
-	t.Run("dev warns instead of blocking", func(t *testing.T) {
+	t.Run("dev warns instead of blocking for a request from this machine", func(t *testing.T) {
 		t.Setenv("ENVIRONMENT_TYPE", "dev")
-		resetRateLimiter()
-		ip := "10.2.0.2"
-		for i := 0; i < loginRateLimitMax; i++ {
-			checkLoginRateLimit(ip)
-		}
+		resetLoginFailureLimiter()
+		ip := "127.0.0.1"
+		recordFailuresToLimit(ip)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
 		req.RemoteAddr = ip + ":1234"
 		rr := httptest.NewRecorder()
 
-		if shouldBlockLoginAttempt(rr, req) {
-			t.Fatal("dev should not hard-block exceeded login rate limit")
+		if shouldBlockFailedLoginAttempt(rr, req) {
+			t.Fatal("dev should not hard-block a local exceeded login rate limit")
 		}
 		if got := rr.Header().Get(loginRateLimitHeader); got != "true" {
 			t.Fatalf("warning header = %q, want true", got)
 		}
 	})
 
-	t.Run("dev bypass header still short-circuits limiter", func(t *testing.T) {
+	t.Run("dev bypass header short-circuits the limiter for this machine", func(t *testing.T) {
 		t.Setenv("ENVIRONMENT_TYPE", "dev")
-		resetRateLimiter()
-		ip := "10.2.0.3"
+		resetLoginFailureLimiter()
+		ip := "::1"
 		for i := 0; i < loginRateLimitMax+5; i++ {
-			checkLoginRateLimit(ip)
+			recordLoginFailure(ip)
 		}
 
 		req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
-		req.RemoteAddr = ip + ":1234"
+		req.RemoteAddr = "[" + ip + "]:1234"
 		req.Header.Set("X-Bypass-Ratelimit", "test-mode")
 		rr := httptest.NewRecorder()
 
-		if shouldBlockLoginAttempt(rr, req) {
-			t.Fatal("dev bypass header should skip rate limit blocking")
+		if shouldBlockFailedLoginAttempt(rr, req) {
+			t.Fatal("dev bypass header should skip rate limit blocking for a local request")
 		}
 		if got := rr.Header().Get(loginRateLimitHeader); got != "" {
 			t.Fatalf("warning header = %q, want empty", got)
+		}
+	})
+
+	// Regression for the narrowed bypass: development mode alone no longer
+	// exempts anyone. A request that did not come from this machine is rate
+	// limited in development exactly as it is in production, with or without
+	// the test-suite header.
+	t.Run("dev still blocks a request that did not come from this machine", func(t *testing.T) {
+		for _, bypassHeader := range []string{"", "test-mode"} {
+			t.Setenv("ENVIRONMENT_TYPE", "dev")
+			resetLoginFailureLimiter()
+			ip := "203.0.113.7"
+			recordFailuresToLimit(ip)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+			req.RemoteAddr = ip + ":1234"
+			if bypassHeader != "" {
+				req.Header.Set("X-Bypass-Ratelimit", bypassHeader)
+			}
+			rr := httptest.NewRecorder()
+
+			if !shouldBlockFailedLoginAttempt(rr, req) {
+				t.Fatalf("remote client was exempted in dev (bypass header %q)", bypassHeader)
+			}
+			if got := rr.Header().Get(loginRateLimitHeader); got != "" {
+				t.Fatalf("remote client received the dev warning header: %q", got)
+			}
 		}
 	})
 }
@@ -211,10 +245,11 @@ func TestFirewallIdentitySeparatesLoginLimiterBuckets(t *testing.T) {
 	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", "172.25.0.1")
 
 	loginGate := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if shouldBlockLoginAttempt(w, r) {
+		if shouldBlockFailedLoginAttempt(w, r) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
+		recordLoginFailure(getClientIP(r))
 		w.WriteHeader(http.StatusOK)
 	})
 	invoke := func(handler http.Handler, peer, client string) int {
@@ -226,7 +261,7 @@ func TestFirewallIdentitySeparatesLoginLimiterBuckets(t *testing.T) {
 		return recorder.Code
 	}
 
-	resetRateLimiter()
+	resetLoginFailureLimiter()
 	trustedHandler := firewall.FirewallHandler(loginGate)
 	for attempt := 1; attempt <= loginRateLimitMax; attempt++ {
 		if got := invoke(trustedHandler, "172.25.0.1", "203.0.113.10"); got != http.StatusOK {
@@ -240,7 +275,7 @@ func TestFirewallIdentitySeparatesLoginLimiterBuckets(t *testing.T) {
 		t.Fatalf("client B was merged into client A login bucket: status %d", got)
 	}
 
-	resetRateLimiter()
+	resetLoginFailureLimiter()
 	untrustedHandler := firewall.FirewallHandler(loginGate)
 	for attempt := 1; attempt <= loginRateLimitMax; attempt++ {
 		spoofedClient := fmt.Sprintf("198.51.100.%d", attempt)

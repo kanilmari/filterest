@@ -378,6 +378,9 @@ func ApplyDevOverrides() {
 		"devtools.ExportTableCSVHandler":         AdminProfile,
 		"devtools.ImportTableCSVHandler":         AdminProfile,
 		"pipeline.IntrospectionHandler":          AdminProfile,
+		// The client log stays pre-authentication so login-page failures are
+		// visible, but the handler itself accepts only requests from this
+		// machine and bounds what it writes into the developer's log.
 		"devtools.LogClientError":                PublicProfile,
 		"devtools.CheckJsonInTextColumnsHandler": AdminProfile,
 		"lang.UpdateLangKeyHandler":              AdminProfile,

@@ -185,10 +185,12 @@ func TestLoginAPIHandler_JSONRateLimitBlocked(t *testing.T) {
 	}
 }
 
+// The development rate-limit exemptions apply only to a request that arrives
+// from this machine, so the fixtures use a loopback client address.
 func TestLoginAPIHandler_JSONDevBypassSkipsRateLimit(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	resetRateLimiter()
-	ip := "10.10.10.11"
+	ip := "127.0.0.1"
 	for i := 0; i < loginRateLimitMax+1; i++ {
 		recordLoginFailure(ip)
 	}
@@ -213,7 +215,7 @@ func TestLoginAPIHandler_JSONDevBypassSkipsRateLimit(t *testing.T) {
 func TestLoginAPIHandler_JSONDevRateLimitWarnsWithoutBlocking(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	resetRateLimiter()
-	ip := "10.10.10.12"
+	ip := "127.0.0.2"
 	for i := 0; i < loginRateLimitMax+1; i++ {
 		recordLoginFailure(ip)
 	}
@@ -279,38 +281,6 @@ func TestHandleLoginOTPVerify_NoPendingChallengeDoesNotConsumeFailure(t *testing
 	}
 	if got := loginFailureCount(ip); got != 0 {
 		t.Fatalf("missing challenge failure count = %d, want 0", got)
-	}
-}
-
-func TestLoginAPIHandler_LegacyFormDisabledOutsideExplicitDev(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader("username=alice"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-
-	LoginAPIHandler(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusForbidden)
-	}
-	body := decodeJSONBody(t, rr)
-	if body["error"] != "legacy_form_login_disabled" {
-		t.Fatalf("unexpected body: %#v", body)
-	}
-}
-
-func TestLoginHandler_PostLegacyFormDisabledOutsideExplicitDev(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=alice"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-
-	LoginHandler(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusForbidden)
-	}
-	body := decodeJSONBody(t, rr)
-	if body["error"] != "legacy_form_login_disabled" {
-		t.Fatalf("unexpected body: %#v", body)
 	}
 }
 

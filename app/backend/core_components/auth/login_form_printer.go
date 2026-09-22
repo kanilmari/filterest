@@ -1,6 +1,6 @@
 // login_form_printer.go
 // Renders the login form HTML template and dispatches GET/POST requests.
-// Bridges the HTTP router, login template, and the credential/legacy handlers.
+// Bridges the HTTP router, login template, and the JSON credential handler.
 // Exists to manage session store setup and route login page rendering for the auth package.
 package auth
 
@@ -122,7 +122,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		handleLoginPost(w, r)
+		// The legacy form-POST login is removed in every environment. The page
+		// signs in through the JSON flow at /api/login.
+		respondLegacyFormLoginDisabled(w)
 		return
 	}
 }
@@ -225,33 +227,4 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	}
 
 	log.Println("login template rendered successfully 🖼️")
-}
-
-// logPostFormValues logs all POST form fields and checks honeypot fields.
-// Returns true if any honeypot field was filled (indicates possible bot).
-func logPostFormValues(
-	r *http.Request,
-	honeypotFieldNames ...string,
-) (honeypotFilled bool) {
-
-	honeypotSet := map[string]struct{}{}
-	for _, honeypotFieldName := range honeypotFieldNames {
-		honeypotSet[honeypotFieldName] = struct{}{}
-	}
-
-	for fieldName, fieldValues := range r.PostForm {
-		// vältä lokitusta kaikista mahdollisista salasanakentistä
-		isSensitive := strings.Contains(strings.ToLower(fieldName), "password")
-
-		for _, fieldValue := range fieldValues {
-			if !isSensitive {
-				log.Printf("form field %s = %q", fieldName, fieldValue)
-			}
-
-			if _, exists := honeypotSet[fieldName]; exists && fieldValue != "" {
-				honeypotFilled = true
-			}
-		}
-	}
-	return
 }

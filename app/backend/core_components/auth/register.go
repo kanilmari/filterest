@@ -14,7 +14,6 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -193,11 +192,14 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1) Lisätään rivi system_users-tauluun (pääkäyttäjällä)
-	// Dev-ympäristössä enabled=true, muuten false
-	enabled := false
-	if os.Getenv("ENVIRONMENT_TYPE") != "prod" {
-		enabled = true
-	}
+	// A newly registered account is enabled automatically only for local
+	// development on this machine: explicit development mode AND a request that
+	// arrives from this machine itself. Previously any environment that was not
+	// literally "prod" auto-approved the account, so an unset, misspelled or
+	// staging value silently created usable accounts, and a development server
+	// reached over the network auto-approved strangers. Everywhere else a new
+	// account stays disabled until an administrator enables it.
+	enabled := isLocalDevelopmentLoginRequest(clientIP)
 
 	var newUserID int
 	err = backend.Db.QueryRow(`

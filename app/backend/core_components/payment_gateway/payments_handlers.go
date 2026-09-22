@@ -164,10 +164,14 @@ type PaymentStatusResponse struct {
 
 var revolutClient *RevolutClient
 
+// validateCreatePaymentServiceToken fails closed. Payment creation always
+// requires the configured service token: development mode used to authorize
+// every caller whenever no token was configured, which is exactly the state a
+// half-configured deployment is in.
 func validateCreatePaymentServiceToken(r *http.Request) bool {
 	expectedToken := strings.TrimSpace(os.Getenv("MCP_SERVICE_TOKEN"))
 	if expectedToken == "" {
-		return strings.TrimSpace(os.Getenv("ENVIRONMENT_TYPE")) == "dev"
+		return false
 	}
 
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))

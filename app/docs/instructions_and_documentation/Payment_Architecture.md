@@ -16,7 +16,7 @@ The payment gateway lives in `filterest/app/backend/core_components/payment_gate
 
 | Method | Path | Handler | Auth model |
 |--------|------|---------|-----------|
-| `POST` | `/api/payments/create` | `CreatePaymentHandler` | `PublicProfile` — bearer `MCP_SERVICE_TOKEN` (narrow explicit-dev fallback only when unset) |
+| `POST` | `/api/payments/create` | `CreatePaymentHandler` | `PublicProfile` — bearer `MCP_SERVICE_TOKEN`, required in every environment; an unset token refuses every caller |
 | `POST` | `/api/payments/webhook` | `WebhookHandler` | `PublicProfile` — timestamped Revolut v1 HMAC-SHA256 verification |
 | `GET` | `/api/payments/{token}/status` | `GetPaymentStatusHandler` | `PublicProfile` — opaque UUID token is the credential |
 

@@ -276,3 +276,45 @@ func TestClosedRegistrationIgnoresStaleBasicRoleWhenCurrentRoleIsAdmin(t *testin
 		t.Fatalf("current canonical role not used: status=%d", rr.Code)
 	}
 }
+
+// TestNewAccountAutoEnableIsLocalDevelopmentOnly guards the narrowed
+// auto-approval. A newly registered account used to be enabled automatically in
+// every environment whose name was not literally "prod", so an unset, misspelled
+// or staging value silently created usable accounts, and a development server
+// reached over the network auto-approved strangers.
+func TestNewAccountAutoEnableIsLocalDevelopmentOnly(t *testing.T) {
+	cases := []struct {
+		name            string
+		environmentType string
+		remoteAddr      string
+		wantEnabled     bool
+	}{
+		{name: "local development", environmentType: "dev", remoteAddr: "127.0.0.1:1234", wantEnabled: true},
+		{name: "local development ipv6", environmentType: "dev", remoteAddr: "[::1]:1234", wantEnabled: true},
+		{name: "development server reached from the network", environmentType: "dev", remoteAddr: "203.0.113.5:1234", wantEnabled: false},
+		{name: "environment name unset", environmentType: "", remoteAddr: "127.0.0.1:1234", wantEnabled: false},
+		{name: "environment name misspelled", environmentType: "develop", remoteAddr: "127.0.0.1:1234", wantEnabled: false},
+		{name: "staging", environmentType: "staging", remoteAddr: "127.0.0.1:1234", wantEnabled: false},
+		{name: "production", environmentType: "prod", remoteAddr: "127.0.0.1:1234", wantEnabled: false},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			state := setupRegisterAdmin(t)
+			registrationEnabledFunc = func() bool { return true }
+			t.Setenv("ENVIRONMENT_TYPE", testCase.environmentType)
+			req := registerAdminRequest(t, map[interface{}]interface{}{"csrf_token": "test-csrf"}, "test-csrf")
+			req.RemoteAddr = testCase.remoteAddr
+			rr := httptest.NewRecorder()
+
+			RegisterAPIHandler(rr, req)
+
+			if rr.Code != http.StatusSeeOther || state.inserts != 1 {
+				t.Fatalf("registration did not complete: status=%d inserts=%d", rr.Code, state.inserts)
+			}
+			if state.newEnabled != testCase.wantEnabled {
+				t.Fatalf("new account enabled = %v, want %v", state.newEnabled, testCase.wantEnabled)
+			}
+		})
+	}
+}

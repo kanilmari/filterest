@@ -28,7 +28,15 @@ var SessionName = "session"
 // AllowInsecureDevProxy enables HTTP cookie delivery for same-Wi-Fi Vite/LAN
 // testing. It is dev-only and opt-in because production and normal local usage
 // must keep Secure cookies enforced.
+//
+// The switch is now honoured only in explicit development mode. Previously the
+// environment variable alone disabled the Secure cookie flag in any runtime, so
+// one stray value in a production environment file silently allowed session and
+// authentication cookies to travel over plain HTTP.
 func AllowInsecureDevProxy() bool {
+	if strings.TrimSpace(os.Getenv("ENVIRONMENT_TYPE")) != "dev" {
+		return false
+	}
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("ALLOW_INSECURE_DEV_PROXY"))) {
 	case "1", "true", "yes", "on":
 		return true

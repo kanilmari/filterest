@@ -22,6 +22,11 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Signing in works the same way in every environment** — A development server accepted a sign-in without the browser's identity check, giving every such session the same fixed device binding, and it kept an older, weaker form sign-in alive beside the current one. Both are gone: the identity check is always required, and the old form sign-in is refused everywhere, as production already refused it.
+- **Creating a payment always requires its service token** — With no token configured, a development server authorized every caller, which is exactly the state a half-configured installation is in. It now refuses.
+- **What development relaxes stays on the developer's own machine** — Automatic approval of a newly registered account, the exemption from the failed-sign-in limit, and the browser error log's write address now require both explicit development mode and a request from the machine itself; a development server reached over the network behaves like production. The insecure-proxy switch is ignored outside development, so session cookies keep their Secure flag. The error-log address also bounds what it accepts and strips control characters, so a caller cannot forge log lines.
+- **A worker asks for full access instead of receiving it** — Codex workers run in the workspace sandbox by default, without the database, the network or the rest of the file system; full access is now an explicit choice per run.
+
 ## [9.3.17] - 2026-09-22
 
 [GitHub release](https://github.com/kanilmari/filterest/releases/tag/v9.3.17) · Database compatibility moves from 9.8.0 to 9.8.1.

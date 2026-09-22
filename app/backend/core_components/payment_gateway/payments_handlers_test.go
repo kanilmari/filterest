@@ -347,17 +347,42 @@ func TestCreatePaymentHandler_MissingAuthorizationRejectedWhenTokenConfigured(t 
 	}
 }
 
-func TestCreatePaymentHandler_AllowsExplicitDevBypassWhenTokenUnset(t *testing.T) {
+// TestCreatePaymentHandler_RejectsUnconfiguredTokenInEveryEnvironment guards the
+// removed development bypass. Payment creation used to authorize every caller in
+// development whenever no service token was configured, which is exactly the
+// state a half-configured deployment is in. It now fails closed everywhere.
+func TestCreatePaymentHandler_RejectsUnconfiguredTokenInEveryEnvironment(t *testing.T) {
+	for _, environmentType := range []string{"dev", "prod", ""} {
+		t.Run("environment_"+environmentType, func(t *testing.T) {
+			t.Setenv("MCP_SERVICE_TOKEN", "")
+			t.Setenv("ENVIRONMENT_TYPE", environmentType)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/payments/create", strings.NewReader(`{}`))
+			rr := httptest.NewRecorder()
+
+			CreatePaymentHandler(rr, req)
+
+			if rr.Code != http.StatusUnauthorized {
+				t.Fatalf("CreatePaymentHandler status = %d, want %d", rr.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
+// A bearer token cannot substitute for an unconfigured expected token either:
+// an empty configured secret must never match anything a caller sends.
+func TestCreatePaymentHandler_RejectsAnyBearerWhenTokenUnset(t *testing.T) {
 	t.Setenv("MCP_SERVICE_TOKEN", "")
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/payments/create", strings.NewReader(`not-json`))
+	req := httptest.NewRequest(http.MethodPost, "/api/payments/create", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer ")
 	rr := httptest.NewRecorder()
 
 	CreatePaymentHandler(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("CreatePaymentHandler status = %d, want %d after dev bypass", rr.Code, http.StatusBadRequest)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("CreatePaymentHandler status = %d, want %d", rr.Code, http.StatusUnauthorized)
 	}
 }
 

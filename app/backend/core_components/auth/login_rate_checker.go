@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -152,42 +153,42 @@ func beginFailedLoginAttempt(w http.ResponseWriter, r *http.Request) (release fu
 	return release, false
 }
 
+// isLocalDevelopmentLoginRequest reports whether the login rate-limit
+// exemptions may apply at all. They exist for test suites and tooling that run
+// on the developer's own machine, so they are limited to explicit development
+// mode AND a request that actually arrives from this machine. A development
+// server reached over the network is rate limited exactly like production.
+func isLocalDevelopmentLoginRequest(clientIP string) bool {
+	if os.Getenv("ENVIRONMENT_TYPE") != "dev" {
+		return false
+	}
+	return isLoopbackClientIP(clientIP)
+}
+
+// isLoopbackClientIP reports whether the firewall-verified client address is
+// this machine itself. An unparseable or empty address is never loopback.
+func isLoopbackClientIP(clientIP string) bool {
+	address := net.ParseIP(strings.TrimSpace(clientIP))
+	return address != nil && address.IsLoopback()
+}
+
 // shouldBlockFailedLoginAttempt applies the production/dev policy to the
 // failure-only login counter without incrementing it.
 func shouldBlockFailedLoginAttempt(w http.ResponseWriter, r *http.Request) bool {
-	if os.Getenv("ENVIRONMENT_TYPE") == "dev" && r.Header.Get("X-Bypass-Ratelimit") == "test-mode" {
+	clientIP := getClientIP(r)
+	localDevelopment := isLocalDevelopmentLoginRequest(clientIP)
+
+	if localDevelopment && r.Header.Get("X-Bypass-Ratelimit") == "test-mode" {
 		return false
 	}
 
-	clientIP := getClientIP(r)
 	if !isLoginFailureRateLimited(clientIP) {
 		return false
 	}
 
-	if os.Getenv("ENVIRONMENT_TYPE") == "dev" {
+	if localDevelopment {
 		w.Header().Set(loginRateLimitHeader, "true")
-		log.Printf("\033[33mwarning: failed-login rate limit would have blocked ip=%s outside dev\033[0m", clientIP)
-		return false
-	}
-
-	return true
-}
-
-// shouldBlockLoginAttempt returns true when login rate limiting should hard-block the request.
-// In dev, the limiter is downgraded to a warning so local tooling does not get stuck behind 429s.
-func shouldBlockLoginAttempt(w http.ResponseWriter, r *http.Request) bool {
-	if os.Getenv("ENVIRONMENT_TYPE") == "dev" && r.Header.Get("X-Bypass-Ratelimit") == "test-mode" {
-		return false
-	}
-
-	clientIP := getClientIP(r)
-	if !checkLoginRateLimit(clientIP) {
-		return false
-	}
-
-	if os.Getenv("ENVIRONMENT_TYPE") == "dev" {
-		w.Header().Set(loginRateLimitHeader, "true")
-		log.Printf("\033[33mwarning: login rate limit would have blocked ip=%s outside dev\033[0m", clientIP)
+		log.Printf("\033[33mwarning: failed-login rate limit would have blocked local ip=%s outside dev\033[0m", clientIP)
 		return false
 	}
 
@@ -205,11 +206,4 @@ func getClientIP(r *http.Request) string {
 		return r.RemoteAddr // fallback
 	}
 	return host
-}
-
-// logLoginAttemptIP records only the firewall-verified numeric client identity.
-// Avoiding reverse DNS keeps high-cardinality public traffic off request and
-// background resolver paths and prevents an unbounded hostname cache.
-func logLoginAttemptIP(ip string) {
-	log.Printf("login attempt IP=%s", ip)
 }

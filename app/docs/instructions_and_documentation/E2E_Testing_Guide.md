@@ -163,6 +163,11 @@ Playwright also injects `X-Bypass-Ratelimit: test-mode` in two places:
 - `app/playwright.config.ts` for normal test project requests
 - `app/testing/e2e/global-setup.ts` for the one-time login/bootstrap context
 
+For the login rate limiter the header is honoured only in explicit development
+mode **and** only for a request that arrives from this machine, so it works from
+a local Playwright run against `https://localhost:8082` and is ignored for a
+development server reached over the network.
+
 This header is not only for rate limits. In development, the backend translation route uses it as a hard guardrail: `/api/generateTranslations` returns an empty JSON array immediately in test mode instead of calling an external LLM provider. This keeps normal Playwright runs out of Anthropic/OpenAI billing paths even if the frontend notices missing lang keys during the test.
 
 Important nuance: when `login_to_browse=false`, landing on `/` does not prove the browser is authenticated. `login()` should confirm a non-guest session via `/api/user-profile` instead of trusting URL state alone.

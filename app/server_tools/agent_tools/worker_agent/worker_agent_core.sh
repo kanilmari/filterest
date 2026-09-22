@@ -306,8 +306,11 @@ OPTIONS:
   --background              Run in background (default: foreground with progress)
   --research                Read-only: the worker runs in a sandbox that cannot
                             write, so the restriction does not rely on the prompt
-  --full-access             Full system access for Codex (danger-full-access sandbox). ON by default.
+  --full-access             Full system access for Codex (danger-full-access sandbox).
+                            OFF by default; ask for it only when the task needs
+                            the database, the network or work outside the workspace.
   --no-full-access          Restrict Codex to workspace-write sandbox (no DB, no network).
+                            This is the default.
   --dry-run                 Print prompt and exit without running worker
   --no-summary-instr        Don't append summary instruction (advanced)
   --codex-model <model>     Explicit Codex model ID (overrides Codex configuration).
@@ -363,9 +366,12 @@ BACKGROUND=false
 RESEARCH_MODE=false
 NO_SUMMARY_INSTR=false
 STDIN_MODE=false
-FULL_ACCESS=true
-# Full access is the default; this records whether a run actually asked for it,
-# so read-only can quietly win over the default but never over an explicit ask.
+# A worker runs in the workspace-write sandbox unless the run explicitly asks
+# for more. Full system access used to be the default, so every worker could
+# reach the database, the network and the whole filesystem whether the task
+# needed it or not. FULL_ACCESS_REQUESTED still records an explicit ask, so
+# read-only can quietly win over the default but never over an explicit ask.
+FULL_ACCESS=false
 FULL_ACCESS_REQUESTED=false
 FINALIZER_WRITE_SENTINEL=true
 WAIT_AFTER=false

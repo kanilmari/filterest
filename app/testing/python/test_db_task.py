@@ -639,3 +639,43 @@ def test_cmd_continue_stops_when_worker_does_not_advance_queue(monkeypatch: pyte
 
     with pytest.raises(SystemExit, match="1"):
         db_task.cmd_continue(args)
+
+
+def test_login_sends_a_browser_identity_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sign-in requires a browser-identity value in every environment.
+
+    Development used to substitute a placeholder when the client sent none, so a
+    command-line tool could sign in without binding its session to anything.
+    This client must supply its own stable identifier in both login phases.
+    """
+    sent_bodies: list[dict] = []
+
+    def fake_curl_raw(_jar, method, path, data=None, _headers=None):
+        if path == "/api/csrf-token":
+            return {"csrf_token": "test-csrf"}
+        if path == "/api/login":
+            sent_bodies.append(dict(data or {}))
+            if len(sent_bodies) == 1:
+                return {"otp_required": True}
+            return {"authenticated": True}
+        raise AssertionError(f"unexpected request {method} {path}")
+
+    monkeypatch.setattr(db_task, "_curl_raw", fake_curl_raw)
+    monkeypatch.setattr(db_task, "_cached_session", None, raising=False)
+    monkeypatch.setattr(db_task, "_is_session_valid", lambda _jar: False)
+    monkeypatch.setattr(db_task, "_reset_session_cookie_jar", lambda _jar: None)
+    monkeypatch.setattr(db_task, "_get_session_cookie_jar_path", lambda: "/tmp/db_task_test_jar")
+    monkeypatch.setattr(db_task, "_load_credentials", lambda: {
+        "DEV_USERNAME": "fixture-user",
+        "DEV_PASSWORD": "fixture-password",
+        "DEV_LOGIN_VERIFICATION_CODE": "000000",
+    })
+
+    try:
+        db_task._get_session()
+    finally:
+        db_task._cached_session = None
+
+    assert sent_bodies, "no login request was sent"
+    for body in sent_bodies:
+        assert body.get("fingerprint") == db_task.DB_TASK_CLIENT_FINGERPRINT
