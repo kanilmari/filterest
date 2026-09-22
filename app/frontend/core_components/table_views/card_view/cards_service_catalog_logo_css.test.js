@@ -272,4 +272,30 @@ describe('card text clamp CSS', () => {
             expectTwoLineClamp(rule);
         }
     });
+
+    test('keeps detail links as inline text inside the clamped value', () => {
+        // A link must not become a second clipped box: that box was the only one
+        // link values did not share with the plain values that render correctly.
+        const cardsCss = readSiblingCss('cards.css');
+        for (const selector of [
+            '.card--modern .card_detail_tile_value_link',
+            '.card_details_single_line .card_detail_row_value_link',
+        ]) {
+            const linkRule = extractRule(cardsCss, selector);
+            expect(linkRule).toContain('display: inline');
+            expect(linkRule).not.toMatch(/-webkit-box|line-clamp|overflow|height/);
+        }
+    });
+
+    test('keeps vertical padding out of the two-line key-value detail cap', () => {
+        // Under border-box sizing, padding inside the capped box shortens it below
+        // two lines and cuts the second line of a wrapped value such as a long URL.
+        const cardsCss = readSiblingCss('cards.css');
+        const spacingRule = extractRule(
+            cardsCss,
+            '.card_details_kv:not(.card_details_single_line) .kv-value:not(.kv-conditional-value, .label-value-layout__value)'
+        );
+        expect(spacingRule).toContain('padding-block: 0');
+        expect(spacingRule).toMatch(/margin-block: \S/);
+    });
 });

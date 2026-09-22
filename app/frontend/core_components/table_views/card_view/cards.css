@@ -425,15 +425,10 @@ body.dark-mode .card--modern {
     color: var(--empty_field_text_color);
 }
 
+/* The value box above already clamps to two lines. A link stays ordinary inline text
+   inside it, exactly like a plain value, instead of a second clipped box of its own. */
 .card--modern .card_detail_tile_value_link {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    text-overflow: ellipsis;
-    white-space: normal;
+    display: inline;
 }
 
 /* Keywords already provide this boundary; description-only cards need the same single divider. */
@@ -1067,6 +1062,24 @@ body.dark-mode .card--modern {
     max-height: calc(1.5em * 2);
 }
 
+/* The two-line cap must measure text lines only. With the global border-box sizing,
+   the key-value library's vertical value padding (kv_container.css: 0.75rem, 3px on top
+   when stacked) would count toward it and cut the second line, through the middle of
+   its letters in inline pairs. The same spacing therefore sits outside the clamped box. */
+.card_details_kv:not(.card_details_single_line) .kv-value:not(.kv-conditional-value, .label-value-layout__value) {
+    padding-block: 0;
+    margin-block: 0.75rem;
+}
+
+.card_details_kv.kv-stacked:not(.card_details_single_line) .kv-value:not(.kv-conditional-value, .label-value-layout__value) {
+    margin-block-start: 3px;
+}
+
+/* Inline pairs keep the library's -1px overlap on the value's lower edge. */
+.card_details_kv.kv-inline:not(.card_details_single_line) .kv-value:not(.kv-conditional-value, .label-value-layout__value) {
+    margin-block-end: calc(0.75rem - 1px);
+}
+
 .card_details_kv .kv-conditional-value .kv-link-group {
     margin-left: 0;
 }
@@ -1228,15 +1241,9 @@ body.dark-mode .card--modern {
     padding-left: 0;
 }
 
+/* As in modern tiles: the row value clamps; its link is inline text, not a nested clipped box. */
 .card_details_single_line .card_detail_row_value_link {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    text-overflow: ellipsis;
-    white-space: normal;
+    display: inline;
 }
 
 /* Footer-napit */
