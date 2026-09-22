@@ -43,7 +43,7 @@ export function createDatasetImageAttachmentControl({ datasetName }) {
     const text = datasetImageAttachmentCopy();
 
     const label = document.createElement("label");
-    label.className = "dataset-image-attachments";
+    label.className = "dataset-image-attachments dataset-form-option";
     label.dataset.testid = "dataset-image-attachments";
 
     const input = document.createElement("input");
@@ -57,7 +57,7 @@ export function createDatasetImageAttachmentControl({ datasetName }) {
     caption.textContent = text.label;
 
     const status = document.createElement("span");
-    status.className = "dataset-image-attachments-status";
+    status.className = "dataset-image-attachments-status dataset-form-status";
     status.setAttribute("role", "status");
     status.hidden = true;
 

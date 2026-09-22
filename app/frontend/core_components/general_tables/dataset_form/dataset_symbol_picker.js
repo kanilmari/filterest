@@ -27,11 +27,25 @@ export function datasetSymbolCopy() {
 
 /**
  * Build the symbol control for a dataset form.
- * The returned handle exposes the chosen key and, in a form that edits an
- * existing dataset, a save step that assigns it.
+ * The returned handle saves the chosen symbol to a dataset through the same
+ * step in both forms: the one that edits an existing dataset, and the one
+ * that has just created a new dataset.
+ *
+ * @param {object} [options]
+ * @param {Promise<{iconKey: string, tableUID: number}>} [options.stored] - in a
+ *   form that edits an existing dataset, the symbol it already has and its
+ *   identity. The control stays closed until they are known, because the stored
+ *   symbol is what a Save compares against: only then is "No symbol" a real
+ *   change that removes it, and an untouched symbol is never written again.
+ *   Without it the control describes a dataset that does not exist yet, which
+ *   has no symbol.
  */
-export function createDatasetSymbolPicker({ selectedKey = "" } = {}) {
+export function createDatasetSymbolPicker({ stored = null } = {}) {
     const text = datasetSymbolCopy();
+    // What the described dataset holds. A new dataset holds nothing, and every
+    // dataset the creation form makes is new, so only a stored one advances.
+    let storedKey = "";
+    let storedTableUID = 0;
 
     const label = document.createElement("label");
     label.className = "dataset-symbol-picker";
@@ -51,7 +65,7 @@ export function createDatasetSymbolPicker({ selectedKey = "" } = {}) {
     preview.hidden = true;
 
     const status = document.createElement("span");
-    status.className = "dataset-symbol-status";
+    status.className = "dataset-symbol-status dataset-form-status";
     status.setAttribute("role", "status");
     status.hidden = true;
 
@@ -69,20 +83,55 @@ export function createDatasetSymbolPicker({ selectedKey = "" } = {}) {
 
     label.append(caption, select, preview, status);
 
-    const ready = loadSymbolKeys()
+    const appendSymbolOption = (key) => {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = key.replace(/[-_]/g, " ");
+        select.appendChild(option);
+    };
+
+    const showStatus = (message) => {
+        status.hidden = false;
+        status.textContent = message;
+    };
+
+    // Show the symbol the dataset already has and make it the baseline.
+    const showStoredSymbol = ({ iconKey, tableUID } = {}) => {
+        storedTableUID = Number(tableUID) || 0;
+        if (!storedTableUID) {
+            // Without the dataset's identity nothing can be saved, so the
+            // control stays closed instead of accepting a choice it would drop.
+            showStatus(text.unavailable);
+            return;
+        }
+        storedKey = String(iconKey || "");
+        // A stored symbol the registry does not list — retired, or unreadable
+        // just now — is still shown as itself, so an untouched Save never
+        // removes it.
+        if (storedKey && !Array.from(select.options).some((option) => option.value === storedKey)) {
+            appendSymbolOption(storedKey);
+        }
+        select.value = storedKey;
+        showPreview();
+        select.disabled = false;
+    };
+
+    if (stored) select.disabled = true;
+
+    const registryRead = loadSymbolKeys()
         .then((keys) => {
-            for (const key of keys) {
-                const option = document.createElement("option");
-                option.value = key;
-                option.textContent = key.replace(/[-_]/g, " ");
-                select.appendChild(option);
-            }
-            if (selectedKey && keys.includes(selectedKey)) select.value = selectedKey;
+            for (const key of keys) appendSymbolOption(key);
             showPreview();
         })
         .catch((error) => {
-            status.hidden = false;
-            status.textContent = text.unavailable;
+            showStatus(text.unavailable);
+            void error;
+        });
+
+    const ready = !stored ? registryRead : registryRead
+        .then(() => stored)
+        .then(showStoredSymbol, (error) => {
+            showStatus(text.unavailable);
             void error;
         });
 
@@ -90,26 +139,35 @@ export function createDatasetSymbolPicker({ selectedKey = "" } = {}) {
         element: label,
         select,
         ready,
-        /** The chosen key, or an empty string when the dataset shows no symbol. */
-        value: () => select.value,
-        /** Whether the person changed the choice this time. */
-        changed: () => select.value !== selectedKey,
         /**
-         * Assign the chosen symbol to one dataset. Returns true when something
-         * was saved, false when nothing changed.
+         * Whether the chosen symbol differs from what the dataset holds. The
+         * creation form asks this before looking up the new dataset's identity,
+         * which is needed only when there is something to save.
          */
-        save: async (tableUID) => {
-            if (!tableUID || select.value === selectedKey) return false;
+        changed: () => select.value !== storedKey,
+        /**
+         * Assign the chosen symbol to one dataset; "No symbol" removes the one
+         * it had. Returns "saved", "unchanged" or "failed", like the dataset's
+         * other settings; a failure is shown beside the control.
+         *
+         * @param {number} [tableUID] - the dataset the creation form has just
+         *   made; the editing form leaves it out and saves to the `stored` one
+         */
+        save: async (tableUID = storedTableUID) => {
+            if (select.disabled || select.value === storedKey) return "unchanged";
+            if (!tableUID) {
+                showStatus(text.saveFailed);
+                return "failed";
+            }
             try {
                 await assignDatasetSymbol(tableUID, select.value);
-                selectedKey = select.value;
+                if (stored) storedKey = select.value;
                 status.hidden = true;
-                return true;
+                return "saved";
             } catch (error) {
-                status.hidden = false;
-                status.textContent = text.saveFailed;
+                showStatus(text.saveFailed);
                 void error;
-                return false;
+                return "failed";
             }
         },
     };
@@ -130,10 +188,15 @@ export async function readDatasetSymbol(datasetName) {
     return { iconKey: String(match?.icon_key || ""), tableUID: Number(match?.table_uid || 0) };
 }
 
-/** Assign one symbol to one dataset through the administrator's own route. */
+/**
+ * Assign one symbol to one dataset through the administrator's own route. An
+ * empty key removes the dataset's symbol. A failure is the caller's to show
+ * beside its own control, so the router's general notice stays quiet.
+ */
 export function assignDatasetSymbol(tableUID, iconKey) {
     return endpoint_router("adminSymbols", {
         method: "POST",
         body_data: { target_type: "dataset", target_uid: Number(tableUID), icon_key: String(iconKey || "") },
+        suppressErrorToast: true,
     });
 }

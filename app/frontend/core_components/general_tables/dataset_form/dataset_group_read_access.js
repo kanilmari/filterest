@@ -108,24 +108,24 @@ export function createDatasetGroupReadControl({ datasetName, tableUID = 0 }) {
     const text = datasetGroupReadCopy();
 
     const section = document.createElement("section");
-    section.className = "dataset-group-read";
+    section.className = "dataset-group-read dataset-form-section";
     section.dataset.testid = "dataset-group-read";
 
     const title = document.createElement("div");
-    title.className = "dataset-group-read-title";
+    title.className = "dataset-group-read-title dataset-form-section-title";
     title.dataset.langKey = COPY_KEYS.title[0];
     title.textContent = text.title;
     section.appendChild(title);
 
     const status = document.createElement("span");
-    status.className = "dataset-group-read-status";
+    status.className = "dataset-group-read-status dataset-form-status";
     status.setAttribute("role", "status");
     status.textContent = text.loading;
 
     const checkboxes = {};
     for (const { groupName, copyKey } of GROUPS) {
         const label = document.createElement("label");
-        label.className = "dataset-group-read-option";
+        label.className = "dataset-group-read-option dataset-form-option";
         const input = document.createElement("input");
         input.type = "checkbox";
         input.name = `dataset_group_read_${groupName}`;

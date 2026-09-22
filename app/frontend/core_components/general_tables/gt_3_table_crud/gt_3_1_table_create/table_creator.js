@@ -3,21 +3,29 @@
 // Bridges column configuration, identifier validation, translation, and the admin tree refresh into one creation flow.
 // Exists to encapsulate all new-table setup logic so the toolbar can delegate table creation as a single call.
 
-// Voit pitää default_auto_columns samana kuin aiemmin
+// Every new dataset starts with these automatic columns and one blank row.
 const default_auto_columns = [
-    { column_name: 'id', data_type: 'SERIAL' },
-    { column_name: 'created', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()' },
-    { column_name: 'updated', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()' }
+    { name: 'id', dataType: 'SERIAL' },
+    { name: 'created', dataType: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()' },
+    { name: 'updated', dataType: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()' }
 ];
+
+/** Start the column table over: the automatic columns, then one blank row. */
+function fillDefaultColumns(columnTable) {
+    columnTable.clear();
+    default_auto_columns.forEach(column => columnTable.addColumn(column));
+    columnTable.addColumn();
+}
 
 import { loadManagementView } from '../../../../reusable_components/dom_container_builder.js';
 import { fetch_columns_for_table } from '../../../endpoints/endpoint_column_fetcher.js';
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../../../lang/translation_handler.js';
 import { showSuccessToast, showWarningToast } from '../../../../reusable_components/notifications/toast_notification_printer.js';
-import { addColumnField } from './table_creation_column_builder.js';
+import { createDatasetColumnTable } from '../../dataset_form/dataset_column_table.js';
 import { createCreationLabel, setCreationText } from './table_creation_labels.js';
-import { assignDatasetSymbol, createDatasetSymbolPicker, readDatasetSymbol } from '../../dataset_form/dataset_symbol_picker.js';
+import { createDatasetSymbolPicker, readDatasetSymbol } from '../../dataset_form/dataset_symbol_picker.js';
+import { managementText } from '../../gt_2_column_crud/manage_table_i18n.js';
 import { initializeTreeCallAdmin } from '../../../vanilla_tree/van_tr_components/admin_tree_builder.js';
 import { buildTableCreationRequestData } from './table_creator_helpers.js';
 import {
@@ -33,16 +41,12 @@ export function load_table_creation() {
 export async function generate_table_creation_view(container) {
     container.replaceChildren(); // Tyhjennä mahdollinen aiempi sisältö
 
+    // The dataset form: drawn by the same rules as the dataset's editing
+    // dialog (create_table_admin.css), so one dataset is described in one layout.
     const form = document.createElement('form');
     form.id = 'table_creation_form';
+    form.className = 'dataset-form';
     form.dataset.testid = 'create-table-form';
-    form.style.display = 'grid';
-    form.style.gridTemplateColumns = '1fr'; 
-    form.style.gridGap = '10px'; 
-    form.style.backgroundColor = 'var(--bg_color)';
-    form.style.color = 'var(--text_color)';
-    form.style.border = '1px solid var(--border_color)';
-    form.style.padding = '10px';
 
     // Taulun nimi
     const tableNameLabel = createCreationLabel('table_name');
@@ -55,27 +59,22 @@ export async function generate_table_creation_view(container) {
     tableNameLabel.appendChild(tableNameInput);
     form.appendChild(tableNameLabel);
 
-    // The dataset's symbol is chosen where the dataset is defined; it is assigned
+    // The dataset's symbol is chosen where the dataset is defined; it is saved
     // once the dataset exists, because the assignment names that dataset.
     const symbolPicker = createDatasetSymbolPicker();
 
     const datasetRouteHint = document.createElement('p');
-    datasetRouteHint.className = 'table-name-route-hint';
+    datasetRouteHint.className = 'dataset-form-hint';
     datasetRouteHint.dataset.testid = 'create-table-route-hint';
     setCreationText(datasetRouteHint, 'create_dataset_route_hint');
     form.appendChild(symbolPicker.element);
-    Object.assign(datasetRouteHint.style, {
-        margin: '0',
-        fontSize: '0.9em',
-        color: 'var(--text_color_2, var(--text_color))',
-    });
     form.appendChild(datasetRouteHint);
 
     const folderSection = document.createElement('div');
-    folderSection.className = 'table-folder-section';
+    folderSection.className = 'dataset-form-section';
 
     const folderSectionTitle = document.createElement('div');
-    folderSectionTitle.className = 'table-folder-section-title';
+    folderSectionTitle.className = 'dataset-form-section-title';
     setCreationText(folderSectionTitle, 'folder');
     folderSection.appendChild(folderSectionTitle);
 
@@ -88,12 +87,12 @@ export async function generate_table_creation_view(container) {
     folderSection.appendChild(existingFolderLabel);
 
     const folderHint = document.createElement('p');
-    folderHint.className = 'table-folder-hint';
+    folderHint.className = 'dataset-form-hint';
     setCreationText(folderHint, 'table_folder_hint');
     folderSection.appendChild(folderHint);
 
     const newFolderFields = document.createElement('div');
-    newFolderFields.className = 'table-folder-inline-fields';
+    newFolderFields.className = 'dataset-form-fields';
 
     const newFolderNameLabel = createCreationLabel('new_folder_name');
     const newFolderNameInput = document.createElement('input');
@@ -116,31 +115,18 @@ export async function generate_table_creation_view(container) {
     form.appendChild(folderSection);
 
     const cardRoleHint = setCreationText(document.createElement('p'), 'card_role_hint');
-    cardRoleHint.className = 'table-folder-hint';
+    cardRoleHint.className = 'dataset-form-hint';
     form.appendChild(cardRoleHint);
 
-    // Sarakkeet container
-    const columnsContainer = document.createElement('div');
-    columnsContainer.id = 'columns_container';
-    columnsContainer.style.display = 'grid';
-    columnsContainer.style.gridTemplateColumns = '1fr';
-    columnsContainer.style.gridGap = '5px';
-    form.appendChild(columnsContainer);
-
-    // Lisää sarake -painike
-    const addColumnButton = document.createElement('button');
-    addColumnButton.type = 'button';
-    setCreationText(addColumnButton, 'add_column');
-    addColumnButton.classList.add('modal-button', 'secondary', 'saturate_on_hover');
-    addColumnButton.addEventListener('click', () => addColumnField(columnsContainer));
-    form.appendChild(addColumnButton);
+    // The columns: the table both dataset forms share, with its own
+    // "Add column" button.
+    const columnTable = createDatasetColumnTable({ mode: 'create' });
+    form.appendChild(columnTable.element);
 
     // Vierasavaimet-container
     const foreignKeysContainer = document.createElement('div');
     foreignKeysContainer.id = 'ct_foreign_keys_container';
-    foreignKeysContainer.style.display = 'grid';
-    foreignKeysContainer.style.gridTemplateColumns = '1fr';
-    foreignKeysContainer.style.gridGap = '5px';
+    foreignKeysContainer.className = 'dataset-form-rows';
     form.appendChild(foreignKeysContainer);
 
     // Lisää vierasavain -painike
@@ -149,27 +135,22 @@ export async function generate_table_creation_view(container) {
     setCreationText(addForeignKeyButton, 'add_foreign_key');
     addForeignKeyButton.classList.add('modal-button', 'secondary', 'saturate_on_hover');
     addForeignKeyButton.addEventListener('click', async () => {
-        await addForeignKeyField(foreignKeysContainer);
+        await addForeignKeyField(foreignKeysContainer, columnTable);
     });
     form.appendChild(addForeignKeyButton);
 
     // --- Oikeudet ---
     const permissionsContainer = document.createElement('div');
-    permissionsContainer.style.marginTop = '10px';
-    permissionsContainer.style.display = 'flex';
-    permissionsContainer.style.flexDirection = 'column';
-    permissionsContainer.style.gap = '5px';
+    permissionsContainer.className = 'dataset-form-section';
 
     const permissionsTitle = document.createElement('div');
     setCreationText(permissionsTitle, 'default_permissions');
-    permissionsTitle.style.fontWeight = 'bold';
+    permissionsTitle.className = 'dataset-form-section-title';
     permissionsContainer.appendChild(permissionsTitle);
 
     // Users read access
     const usersReadLabel = document.createElement('label');
-    usersReadLabel.style.display = 'flex';
-    usersReadLabel.style.alignItems = 'center';
-    usersReadLabel.style.gap = '5px';
+    usersReadLabel.className = 'dataset-form-option';
     const usersReadCheckbox = document.createElement('input');
     usersReadCheckbox.type = 'checkbox';
     usersReadCheckbox.id = 'grant_users_read';
@@ -180,9 +161,7 @@ export async function generate_table_creation_view(container) {
 
     // Guests read access
     const guestsReadLabel = document.createElement('label');
-    guestsReadLabel.style.display = 'flex';
-    guestsReadLabel.style.alignItems = 'center';
-    guestsReadLabel.style.gap = '5px';
+    guestsReadLabel.className = 'dataset-form-option';
     const guestsReadCheckbox = document.createElement('input');
     guestsReadCheckbox.type = 'checkbox';
     guestsReadCheckbox.id = 'grant_guests_read';
@@ -193,9 +172,7 @@ export async function generate_table_creation_view(container) {
 
     // Prevent deletion
     const preventDeletionLabel = document.createElement('label');
-    preventDeletionLabel.style.display = 'flex';
-    preventDeletionLabel.style.alignItems = 'center';
-    preventDeletionLabel.style.gap = '5px';
+    preventDeletionLabel.className = 'dataset-form-option';
     const preventDeletionCheckbox = document.createElement('input');
     preventDeletionCheckbox.type = 'checkbox';
     preventDeletionCheckbox.id = 'prevent_deletion';
@@ -211,12 +188,10 @@ export async function generate_table_creation_view(container) {
     // ----------------
 
     const capabilitiesContainer = document.createElement('div');
-    capabilitiesContainer.className = 'table-capabilities-section';
+    capabilitiesContainer.className = 'dataset-form-section';
 
     const enableImagesLabel = document.createElement('label');
-    enableImagesLabel.style.display = 'flex';
-    enableImagesLabel.style.alignItems = 'center';
-    enableImagesLabel.style.gap = '5px';
+    enableImagesLabel.className = 'dataset-form-option';
     const enableImagesCheckbox = document.createElement('input');
     enableImagesCheckbox.type = 'checkbox';
     enableImagesCheckbox.id = 'enable_images';
@@ -234,9 +209,7 @@ export async function generate_table_creation_view(container) {
     // chosen while the dataset is created as well as when it is edited. The
     // editing form's own label names the same choice.
     const multilingualDefaultLabel = document.createElement('label');
-    multilingualDefaultLabel.style.display = 'flex';
-    multilingualDefaultLabel.style.alignItems = 'center';
-    multilingualDefaultLabel.style.gap = '5px';
+    multilingualDefaultLabel.className = 'dataset-form-option';
     const multilingualDefaultCheckbox = document.createElement('input');
     multilingualDefaultCheckbox.type = 'checkbox';
     multilingualDefaultCheckbox.id = 'new_columns_multilingual';
@@ -261,16 +234,10 @@ export async function generate_table_creation_view(container) {
     // Lomakkeen lähetyksen käsittely
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        await submitTableCreationForm(form);
+        await submitTableCreationForm(form, { symbolPicker, columnTable });
     });
 
-    // Lisää oletuksena auto-sarakkeet (id, created, updated) 
-    // ja sitten yksi "tyhjä" sarake, niin käyttäjä näkee logiikan.
-    default_auto_columns.forEach(ac => {
-        addColumnField(columnsContainer, ac.column_name, ac.data_type);
-    });
-    // Yksi täysin tyhjä sarake
-    addColumnField(columnsContainer);
+    fillDefaultColumns(columnTable);
 
     // Haetaan heti taulujen nimet vierasavainvalintoja varten
     window.allTables = await fetchTableNames();
@@ -367,16 +334,13 @@ function populateFolderSelect(selectElement, folderOptions, { placeholderKey, in
 
 }
 
-async function addForeignKeyField(container) {
+async function addForeignKeyField(container, columnTable) {
     if(!window.allTables) {
         window.allTables = await fetchTableNames();
     }
 
     const fkDiv = document.createElement('div');
-    fkDiv.className = 'foreign-key-field';
-    fkDiv.style.alignItems = 'center';
-    fkDiv.style.border = '1px solid var(--table_border_color)';
-    fkDiv.style.padding = '5px';
+    fkDiv.className = 'foreign-key-field dataset-form-section dataset-form-fields';
 
     // Referoiva sarake
     const referencingColumnLabel = createCreationLabel('referencing_column');
@@ -412,16 +376,7 @@ async function addForeignKeyField(container) {
     const removeFkButton = document.createElement('button');
     removeFkButton.type = 'button';
     setCreationText(removeFkButton, 'delete');
-    removeFkButton.style.backgroundColor = 'var(--button_bg_color)';
-    removeFkButton.style.color = 'var(--button_text_color)';
-    removeFkButton.addEventListener('mouseenter', () => {
-        removeFkButton.style.backgroundColor = 'var(--button_hover_bg_color)';
-        removeFkButton.style.color = 'var(--button_hover_text_color)';
-    });
-    removeFkButton.addEventListener('mouseleave', () => {
-        removeFkButton.style.backgroundColor = 'var(--button_bg_color)';
-        removeFkButton.style.color = 'var(--button_text_color)';
-    });
+    removeFkButton.className = 'dataset-form-button';
     removeFkButton.addEventListener('click', () => {
         container.removeChild(fkDiv);
     });
@@ -432,26 +387,22 @@ async function addForeignKeyField(container) {
     });
 
     await updateReferencedColumnsDropdown(referencedTableSelect.value, referencedColumnSelect);
-    updateReferencingColumnsDropdown(referencingColumnSelect);
+    updateReferencingColumnsDropdown(referencingColumnSelect, columnTable.columnNames());
 
     container.appendChild(fkDiv);
 }
 
-function updateReferencingColumnsDropdown(selectElement) {
-    const columnInputs = document.querySelectorAll('#columns_container .column-field input[name="column_name"]');
+function updateReferencingColumnsDropdown(selectElement, columnNames) {
     selectElement.replaceChildren();
     const emptyOption = document.createElement('option');
     emptyOption.value = '';
     setCreationText(emptyOption, 'select_column');
     selectElement.appendChild(emptyOption);
-    columnInputs.forEach(input => {
-        const trimmedVal = input.value.trim();
-        if (trimmedVal) {
-            const opt = document.createElement('option');
-            opt.value = trimmedVal;
-            opt.textContent = trimmedVal;
-            selectElement.appendChild(opt);
-        }
+    columnNames.forEach(columnName => {
+        const opt = document.createElement('option');
+        opt.value = columnName;
+        opt.textContent = columnName;
+        selectElement.appendChild(opt);
     });
 }
 
@@ -481,7 +432,7 @@ async function fetchTableNames() {
     return tables;
 }
 
-async function submitTableCreationForm(form) {
+async function submitTableCreationForm(form, { symbolPicker, columnTable }) {
     const formData = new FormData(form);
     const result = buildTableCreationRequestData({
         tableName: formData.get('table_name'),
@@ -515,16 +466,14 @@ async function submitTableCreationForm(form) {
             body_data: result.requestData,
         });
 
-        const chosenSymbol = form.querySelector('[name="icon_key"]')?.value || '';
-        if (chosenSymbol) {
-            try {
-                const { tableUID } = await readDatasetSymbol(result.tableName);
-                if (tableUID) await assignDatasetSymbol(tableUID, chosenSymbol);
-            } catch (symbolError) {
-                // The dataset exists; only its symbol is missing, and it can be
-                // chosen again from the dataset's own management dialog.
-                console.warn('Dataset symbol assignment failed:', symbolError);
-            }
+        // The symbol is saved by the same step the editing form uses. The new
+        // dataset's identity is looked up only when there is a symbol to save;
+        // an unknown identity is a failed save, not a silently skipped one.
+        let symbolOutcome = 'unchanged';
+        if (symbolPicker.changed()) {
+            const { tableUID } = await readDatasetSymbol(result.tableName)
+                .catch(() => ({ tableUID: 0 }));
+            symbolOutcome = await symbolPicker.save(tableUID);
         }
 
         if (result.enableImages) {
@@ -545,14 +494,14 @@ async function submitTableCreationForm(form) {
         }
 
         showSuccessToast(getTranslationForKey('table_created_successfully') || 'Taulu luotu onnistuneesti!');
+        if (symbolOutcome === 'failed') {
+            // As in the editing form: the reason stays beside the symbol
+            // control, and the dataset's own dialog can save the symbol again.
+            showWarningToast(managementText('manage_table_settings_need_attention'));
+        }
         form.reset();
-        // Palautetaan lomake oletustilaan
-        const columnsContainer = document.getElementById('columns_container');
-        columnsContainer.replaceChildren();
-        default_auto_columns.forEach(ac => {
-            addColumnField(columnsContainer, ac.column_name, ac.data_type);
-        });
-        addColumnField(columnsContainer);
+        // The form starts over for the next dataset.
+        fillDefaultColumns(columnTable);
         const fkContainer = document.getElementById('ct_foreign_keys_container');
         fkContainer.replaceChildren();
         const refreshedFolderOptions = await fetchFolderOptions({ forceRefresh: true });

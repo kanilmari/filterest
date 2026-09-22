@@ -131,8 +131,11 @@ select {
 
 
 .management_forms {
+    /* Named, because a sticky header inside this scroller offsets itself by it
+       to meet the scroller's edge (create_table_admin.css). */
+    --management-forms-padding: 20px;
     height: 100vh;
-    padding: 20px;
+    padding: var(--management-forms-padding);
     overflow: auto;
 }
 

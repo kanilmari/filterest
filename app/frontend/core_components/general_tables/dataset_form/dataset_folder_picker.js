@@ -83,7 +83,7 @@ export function createDatasetFolderPicker({ datasetName }) {
     select.disabled = true;
 
     const status = document.createElement("span");
-    status.className = "dataset-folder-status";
+    status.className = "dataset-folder-status dataset-form-status";
     status.setAttribute("role", "status");
     status.hidden = true;
 
@@ -91,7 +91,7 @@ export function createDatasetFolderPicker({ datasetName }) {
     // here, with the server's own explanation beside it.
     const confirmButton = document.createElement("button");
     confirmButton.type = "button";
-    confirmButton.className = "dataset-folder-confirm";
+    confirmButton.className = "dataset-folder-confirm dataset-form-button";
     confirmButton.dataset.testid = "dataset-folder-confirm";
     confirmButton.dataset.langKey = COPY_KEYS.confirm[0];
     confirmButton.textContent = text.confirm;

@@ -63,11 +63,11 @@ export function createDatasetForeignKeyPanel({ datasetName, columnNames = () => 
     const text = datasetForeignKeyCopy();
 
     const section = document.createElement("section");
-    section.className = "dataset-foreign-keys";
+    section.className = "dataset-foreign-keys dataset-form-section";
     section.dataset.testid = "dataset-foreign-keys";
 
     const title = document.createElement("div");
-    title.className = "dataset-foreign-keys-title";
+    title.className = "dataset-foreign-keys-title dataset-form-section-title";
     title.dataset.langKey = COPY_KEYS.title[0];
     title.textContent = text.title;
 
@@ -76,12 +76,12 @@ export function createDatasetForeignKeyPanel({ datasetName, columnNames = () => 
     list.dataset.testid = "dataset-foreign-keys-list";
 
     const status = document.createElement("span");
-    status.className = "dataset-foreign-keys-status";
+    status.className = "dataset-foreign-keys-status dataset-form-status";
     status.setAttribute("role", "status");
     status.hidden = true;
 
     const draft = document.createElement("div");
-    draft.className = "dataset-foreign-key-draft";
+    draft.className = "dataset-foreign-key-draft dataset-form-fields";
 
     const referencingSelect = labelledSelect(draft, COPY_KEYS.referencingColumn, text.referencingColumn, "fk_referencing_column");
     const referencedTableSelect = labelledSelect(draft, COPY_KEYS.referencedTable, text.referencedTable, "fk_referenced_dataset");

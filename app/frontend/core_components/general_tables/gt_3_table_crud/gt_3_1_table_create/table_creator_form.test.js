@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Exercises the actual open creation form and shared translator without data writes.
+// table_creator_form.test.js
+// Exercises the actual open creation form, its column table and the shared translator without data writes.
 import { beforeEach, afterEach, describe, expect, test, vi } from 'vitest';
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
 import { translatePage } from '../../../lang/translation_handler.js';
@@ -57,13 +58,23 @@ describe('dataset creation card roles', () => {
         expect(endpoint_router.mock.calls.filter(([, options]) => options?.method === 'POST')).toEqual([]);
     });
 
+    test('draws the shared dataset form with no look of its own', async () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        await generate_table_creation_view(host);
+        const form = host.querySelector('form');
+        expect(form.classList.contains('dataset-form')).toBe(true);
+        expect([form, ...form.querySelectorAll('*')].filter((element) => element.getAttribute('style'))
+            .filter((element) => element.style.display !== 'none')).toEqual([]);
+    });
+
     test('keeps column, length and role FormData aligned through type changes and removal', async () => {
         await translatePage('en');
         const host = document.createElement('div');
         document.body.appendChild(host);
         await generate_table_creation_view(host);
         const form = host.querySelector('form');
-        const rows = form.querySelectorAll('.column-field');
+        const rows = form.querySelectorAll('.dataset-column-table__row');
         const row = rows[3];
         row.querySelector('[name="column_name"]').value = 'summary';
         const type = row.querySelector('[name="data_type"]');
@@ -71,7 +82,7 @@ describe('dataset creation card roles', () => {
         type.dispatchEvent(new Event('change'));
         row.querySelector('[name="length"]').value = '255';
         row.querySelector('[name="card_role"]').value = 'description';
-        rows[2].querySelector('button').click();
+        rows[2].querySelector('.dataset-column-table__remove').click();
         const data = new FormData(form);
         expect(data.getAll('column_name')).toEqual(['id','created','summary']);
         expect(data.getAll('length')).toEqual(['','','255']);
@@ -89,7 +100,7 @@ describe('dataset creation card roles', () => {
         await generate_table_creation_view(host);
         const form = host.querySelector('form');
         form.querySelector('[name="table_name"]').value = 'demo';
-        const row = form.querySelectorAll('.column-field')[3];
+        const row = form.querySelectorAll('.dataset-column-table__row')[3];
         row.querySelector('[name="column_name"]').value = 'title';
         row.querySelector('[name="data_type"]').value = 'TEXT';
         row.querySelector('[name="card_role"]').value = 'header';
@@ -116,7 +127,7 @@ describe('dataset creation card roles', () => {
         const form = host.querySelector('form');
         form.querySelector('[name="table_name"]').value = 'invoices';
 
-        const rows = form.querySelectorAll('.column-field');
+        const rows = form.querySelectorAll('.dataset-column-table__row');
         const priceRow = rows[3];
         priceRow.querySelector('[name="column_name"]').value = 'price';
         const type = priceRow.querySelector('[name="data_type"]');
@@ -126,7 +137,7 @@ describe('dataset creation card roles', () => {
         const precision = priceRow.querySelector('[name="precision"]');
         const scale = priceRow.querySelector('[name="scale"]');
         expect(precision.style.display).not.toBe('none');
-        expect(priceRow.querySelector('.column-field__length').style.display).toBe('none');
+        expect(priceRow.querySelector('.dataset-column-table__parameter--length').style.display).toBe('none');
         expect(precision.value).toBe('12');
         expect(scale.value).toBe('2');
         scale.value = '4';

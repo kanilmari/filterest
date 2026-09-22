@@ -44,7 +44,7 @@ export function createDatasetDeletionProtectionControl({ datasetName }) {
     const text = datasetDeletionProtectionCopy();
 
     const label = document.createElement("label");
-    label.className = "dataset-deletion-protection";
+    label.className = "dataset-deletion-protection dataset-form-option";
     label.dataset.testid = "dataset-deletion-protection";
 
     const input = document.createElement("input");
@@ -58,7 +58,7 @@ export function createDatasetDeletionProtectionControl({ datasetName }) {
     caption.textContent = text.label;
 
     const status = document.createElement("span");
-    status.className = "dataset-deletion-protection-status";
+    status.className = "dataset-deletion-protection-status dataset-form-status";
     status.setAttribute("role", "status");
     status.hidden = true;
 

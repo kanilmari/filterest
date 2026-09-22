@@ -1,117 +1,254 @@
 /*
  * create_table_admin.css
- * Gives dataset authoring room for per-column card roles on wide screens.
- * Container queries stack the native controls when the available pane is narrow.
+ * Draws the dataset form: the one form that creates a dataset on its own page
+ * and edits one in the dataset's Manage table dialog.
+ * Both forms carry the dataset-form class and the shared classes below, and no
+ * other rule draws them; only what surrounds a form (the page or the dialog)
+ * differs. Every colour comes from the theme variables, so both themes, and an
+ * operating-system theme opposite to the application's own, stay correct.
  */
-#table_creation_form {
-    max-width: 968px;
-    width: 100%;
+:root {
+    /* One width for the form wherever it appears; the dialog fits around it. */
+    --dataset-form-width: 968px;
+}
+form.dataset-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: var(--dataset-form-width);
+    max-width: 100%;
     box-sizing: border-box;
-    margin-top: 20px;
+    padding: 10px;
+    color: var(--text_color);
+    background-color: var(--bg_color);
+    border: 1px solid var(--border_color);
     container-type: inline-size;
 }
-#table_creation_form label {
-    display: block;
+form.dataset-form label {
+    display: grid;
+    gap: 5px;
     min-width: 0;
-    margin-bottom: 10px;
+    margin: 0;
 }
-#table_creation_form label > span {
-    display: block;
-    margin-bottom: 4px;
-}
-#table_creation_form input:not([type="checkbox"]),
-#table_creation_form select {
-    min-width: 0;
+form.dataset-form input:not([type="checkbox"]),
+form.dataset-form select {
     width: 100%;
+    min-width: 0;
+    min-height: 40px;
     box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px;
+    border: 2px solid var(--auth-input-border, var(--border_color));
+    border-radius: 10px;
     color: var(--text_color);
-    background: var(--input_bg_color);
+    background-color: var(--input_bg_color);
+    font-size: 1rem;
+    font-weight: normal;
 }
-.table-capabilities-section,
-.table-folder-section {
+/* A long choice stays on one line and ends in an ellipsis, rather than losing
+ * its second line to the control's height. */
+form.dataset-form select {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+form.dataset-form input:not([type="checkbox"]):focus,
+form.dataset-form select:focus {
+    border-color: var(--auth-focus-color, hsl(var(--brand-hue) 50% 50%));
+    box-shadow: 0 0 0 3px var(--auth-focus-ring, hsl(var(--brand-hue) 50% 50% / 0.2));
+    transform: none;
+}
+form.dataset-form input[type="checkbox"] {
+    margin: 3px 0 0;
+    padding: 0;
+}
+form.dataset-form button:focus-visible {
+    outline: 2px solid var(--primary_color);
+    outline-offset: 2px;
+}
+
+/* --- Shared building blocks --- */
+form.dataset-form .dataset-form-section {
     display: grid;
     gap: 10px;
+    min-width: 0;
     padding: 10px;
     border: 1px solid var(--table_border_color);
     border-radius: var(--border_radius_small);
 }
-.table-capabilities-section label { margin-bottom: 0 !important; }
-.table-folder-section { margin-bottom: 10px; }
-.table-folder-section-title { font-weight: 600; }
-.table-folder-inline-fields {
+form.dataset-form .dataset-form-section-title { font-weight: 600; }
+form.dataset-form .dataset-form-rows {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
     gap: 10px;
 }
-.table-folder-hint {
+form.dataset-form .dataset-form-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    gap: 10px;
+}
+/* A checkbox with its caption; a status message, if any, runs below both. */
+form.dataset-form .dataset-form-option {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 4px 8px;
+}
+form.dataset-form .dataset-form-hint {
     margin: 0;
     color: var(--text_color_secondary, var(--text_color));
     font-size: 0.92rem;
 }
-#table_creation_form .column-field {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(80px, 0.9fr) minmax(0, 1.15fr) auto;
-    align-items: end;
-    gap: 8px;
-    margin-bottom: 10px;
-    border: 1px solid var(--table_border_color);
-    padding: 10px;
+form.dataset-form .dataset-form-status {
+    grid-column: 1 / -1;
+    color: var(--empty_field_text_color, var(--text_color));
+    font-size: 0.85rem;
 }
-#table_creation_form .column-field label { margin: 0; }
-#table_creation_form .column-field__parameters {
+form.dataset-form .dataset-form-button {
+    min-height: 40px;
+    margin: 0;
+    color: var(--button_text_color);
+    background: var(--button_bg_color);
+}
+form.dataset-form .dataset-form-button:hover {
+    color: var(--button_hover_text_color);
+    background: var(--button_hover_bg_color);
+}
+
+/* --- The column table: one header row, then one row per column ---
+ * Rows share the table's column tracks (subgrid), so every cell lines up under
+ * its header. The header row sticks to the top of whatever scrolls the form:
+ * the Manage table dialog's body, or the creation page. No ancestor up to that
+ * scroller may clip overflow, or the header would stick to that box instead.
+ */
+form.dataset-form .dataset-column-table {
+    display: grid;
+    grid-template-columns:
+        [name] minmax(0, 1fr) [type] minmax(0, 1.15fr) [parameters] minmax(90px, 0.9fr)
+        [role] minmax(0, 1.15fr) [actions] auto;
+    column-gap: 8px;
+    border: 1px solid var(--table_border_color);
+    border-radius: var(--border_radius_small);
+}
+form.dataset-form .dataset-column-table--multilingual {
+    grid-template-columns:
+        [name] minmax(0, 1fr) [type] minmax(0, 1.15fr) [parameters] minmax(90px, 0.9fr)
+        [role] minmax(0, 1.15fr) [multilingual] minmax(0, auto) [actions] auto;
+}
+form.dataset-form .dataset-column-table__header,
+form.dataset-form .dataset-column-table__row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: end;
+    padding: 8px 10px;
+}
+form.dataset-form .dataset-column-table__header {
+    position: sticky;
+    /* A scroller's own padding would leave a band above the stuck header where
+     * rows show through, so the header meets the scroller's edge instead. The
+     * dialog's scroller has none; the creation page's is named in form.css. */
+    top: calc(-1 * var(--management-forms-padding, 0px));
+    z-index: 2;
+    align-items: center;
+    background-color: var(--bg_color);
+    border-bottom: 1px solid var(--table_border_color);
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+form.dataset-form .dataset-column-table__row + .dataset-column-table__row {
+    border-top: 1px solid var(--table_border_color);
+}
+form.dataset-form .dataset-column-table__cell { min-width: 0; }
+form.dataset-form .dataset-column-table__cell-label { display: none; }
+form.dataset-form .dataset-column-table__parameters {
     display: flex;
     align-items: end;
     gap: 8px;
     min-width: 0;
 }
-#table_creation_form .column-field__parameters > label {
+form.dataset-form .dataset-column-table__parameter {
     flex: 1 1 70px;
-    min-width: 0;
+    gap: 2px;
+    font-size: 0.85rem;
 }
-#table_creation_form .column-field input,
-#table_creation_form .column-field select,
-#table_creation_form .column-field button {
-    margin: 0;
-    min-height: 40px;
-    box-sizing: border-box;
-}
-#table_creation_form .column-field button {
-    color: var(--button_text_color);
-    background: var(--button_bg_color);
-}
-#table_creation_form .column-field button:hover {
-    color: var(--button_hover_text_color);
-    background: var(--button_hover_bg_color);
-}
-#table_creation_form .foreign-key-field {
+form.dataset-form .dataset-column-table__cell--multilingual { justify-self: center; }
+form.dataset-form .dataset-column-table__multilingual input { margin: 0 0 12px; }
+form.dataset-form .dataset-column-table-block {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 10px;
 }
-@container (max-width: 740px) {
-    #table_creation_form .column-field { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    #table_creation_form .column-field:not(.column-field--varchar) .column-field__length { display: none; }
-    #table_creation_form .column-field:not(.column-field--numeric) .column-field__precision,
-    #table_creation_form .column-field:not(.column-field--numeric) .column-field__scale { display: none; }
-    #table_creation_form .column-field__remove { justify-self: start; }
+/* On a narrow screen the table stacks: each column becomes a card whose
+ * fields carry their names again, because a header row cannot be seen beside
+ * cells that no longer line up under it. A horizontally scrolling table would
+ * need a clipping wrapper, and would lose the sticky header. */
+@container (max-width: 600px) {
+    form.dataset-form .dataset-column-table,
+    form.dataset-form .dataset-column-table--multilingual {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        border: 0;
+    }
+    form.dataset-form .dataset-column-table__header { display: none; }
+    form.dataset-form .dataset-column-table__row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        border: 1px solid var(--table_border_color);
+        border-radius: var(--border_radius_small);
+    }
+    form.dataset-form .dataset-column-table__row + .dataset-column-table__row {
+        border-top: 1px solid var(--table_border_color);
+    }
+    form.dataset-form .dataset-column-table__cell-label { display: block; }
+    form.dataset-form .dataset-column-table__cell--multilingual:empty { display: none; }
+    form.dataset-form .dataset-column-table__cell--multilingual { justify-self: start; }
+    form.dataset-form .dataset-column-table__multilingual {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+    }
+    form.dataset-form .dataset-column-table__multilingual input {
+        order: -1;
+        margin: 0;
+    }
+    /* The type's parameters come last and take a whole line, so a type with
+     * none leaves no hole in the card. */
+    form.dataset-form .dataset-column-table__cell--parameters {
+        grid-column: 1 / -1;
+        order: 1;
+    }
+    form.dataset-form .dataset-column-table__cell--actions {
+        grid-column: 1 / -1;
+        order: 2;
+    }
 }
-@container (max-width: 440px) {
-    #table_creation_form .column-field,
-    #table_creation_form .foreign-key-field { grid-template-columns: minmax(0, 1fr); }
+@container (max-width: 400px) {
+    form.dataset-form .dataset-column-table__row { grid-template-columns: minmax(0, 1fr); }
 }
 
-.dataset-symbol-picker {
-    display: grid;
+/* --- The shared dataset controls --- */
+form.dataset-form .dataset-symbol-picker {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
 }
-.dataset-symbol-preview {
+form.dataset-form .dataset-symbol-preview {
     width: 24px;
     height: 24px;
 }
-.dataset-symbol-status {
+form.dataset-form .dataset-folder-picker {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+form.dataset-form .dataset-folder-confirm {
     grid-column: 1 / -1;
+    justify-self: start;
+}
+form.dataset-form .dataset-foreign-keys-list {
+    margin: 0;
+    padding-inline-start: 20px;
+    overflow-wrap: anywhere;
+}
+form.dataset-form .dataset-foreign-keys-empty {
+    list-style: none;
+    margin-inline-start: -20px;
     color: var(--empty_field_text_color, var(--text_color));
-    font-size: 0.85rem;
 }

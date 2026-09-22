@@ -1,5 +1,6 @@
 // table_creation_translation_fallbacks.js
-// Bootstrap copy for the existing multilingual dataset creation form.
+// Bootstrap copy for the dataset forms: the creation form, and the column table
+// both forms share (its header keys are the one set both forms use).
 // Runtime translations remain authoritative; stable role IDs are not display text.
 export const TABLE_CREATION_TRANSLATION_FALLBACKS = {
   "table_name": {
@@ -25,6 +26,18 @@ export const TABLE_CREATION_TRANSLATION_FALLBACKS = {
     "en": "Length",
     "ch": "长度",
     "yue": "長度"
+  },
+  "dataset_column_type_parameters": {
+    "fi": "Pituus / tarkkuus",
+    "en": "Length / precision",
+    "ch": "长度 / 精度",
+    "yue": "長度 / 精度"
+  },
+  "actions": {
+    "fi": "Toiminnot",
+    "en": "Actions",
+    "ch": "操作",
+    "yue": "操作"
   },
   "card_role": {
     "fi": "Rooli kortissa",

@@ -1,41 +1,10 @@
 /* column_manager.css
- * Keeps management controls usable in either application theme and narrow dialogs.
+ * Keeps the Manage table dialog's own controls usable in either application
+ * theme and in narrow dialogs: its actions, its visibility notice and the
+ * dataset removal dialog. The dataset form inside the dialog is drawn by the
+ * rules it shares with the creation form (create_table_admin.css).
  */
-.column_management_forms .column-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    position: relative;
-    padding: 10px 42px 10px 10px;
-    border: 1px solid var(--table_border_color);
-}
-.column_management_forms .column-row label {
-    display: grid;
-    gap: 5px;
-    min-width: 0;
-}
-.column_management_forms .column-row input,
-.column_management_forms .column-row select {
-    min-width: 0;
-    width: 100%;
-    box-sizing: border-box;
-}
-.column_management_forms .column-remove-button {
-    position: absolute;
-    inset-block-start: 5px;
-    inset-inline-end: 5px;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    color: var(--color-error);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-size: 22px;
-}
-.column_management_forms .column-remove-button:focus-visible,
-.dataset-removal-dialog button:focus-visible,
-.column_management_forms button:focus-visible {
+.dataset-removal-dialog button:focus-visible {
     outline: 2px solid var(--primary_color);
     outline-offset: 2px;
 }
@@ -92,106 +61,4 @@
 .dataset-removal-dialog .deletion-warning,
 .dataset-removal-dialog [role="alert"] {
     color: var(--color-error);
-}
-@media (width <= 560px) {
-    .column_management_forms .column-row {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-.column_management_forms .dataset-symbol-picker {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-}
-.column_management_forms .dataset-symbol-preview {
-    width: 24px;
-    height: 24px;
-}
-.column_management_forms .dataset-symbol-status {
-    grid-column: 1 / -1;
-    color: var(--empty_field_text_color, var(--text_color));
-    font-size: 0.85rem;
-}
-
-/* The dimensions the editing dialog now shares with the creation form.
- * Every colour comes from the theme variables, so both themes stay correct.
- */
-.column_management_forms .dataset-folder-picker {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 8px;
-}
-.column_management_forms .dataset-folder-status,
-.column_management_forms .dataset-group-read-status,
-.column_management_forms .dataset-image-attachments-status,
-.column_management_forms .dataset-deletion-protection-status,
-.column_management_forms .dataset-foreign-keys-status {
-    grid-column: 1 / -1;
-    color: var(--empty_field_text_color, var(--text_color));
-    font-size: 0.85rem;
-}
-.column_management_forms .dataset-folder-confirm {
-    grid-column: 1 / -1;
-    justify-self: start;
-    color: var(--button_text_color);
-    background: var(--button_bg_color);
-}
-.column_management_forms .dataset-folder-confirm:hover {
-    color: var(--button_hover_text_color);
-    background: var(--button_hover_bg_color);
-}
-.column_management_forms .manage-table-dataset-settings,
-.column_management_forms .dataset-group-read,
-.column_management_forms .dataset-foreign-keys {
-    display: grid;
-    gap: 8px;
-    padding: 10px;
-    border: 1px solid var(--table_border_color);
-    min-width: 0;
-}
-.column_management_forms .dataset-group-read-title,
-.column_management_forms .dataset-foreign-keys-title {
-    font-weight: 600;
-}
-.column_management_forms .dataset-group-read-option,
-.column_management_forms .dataset-image-attachments,
-.column_management_forms .dataset-deletion-protection {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-.column_management_forms .dataset-group-read-option input,
-.column_management_forms .dataset-image-attachments input,
-.column_management_forms .dataset-deletion-protection input {
-    width: auto;
-    margin-block-start: 3px;
-}
-.column_management_forms .dataset-foreign-keys-list {
-    margin: 0;
-    padding-inline-start: 20px;
-    overflow-wrap: anywhere;
-}
-.column_management_forms .dataset-foreign-keys-empty {
-    list-style: none;
-    margin-inline-start: -20px;
-    color: var(--empty_field_text_color, var(--text_color));
-}
-.column_management_forms .dataset-foreign-key-draft {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
-    gap: 8px;
-}
-.column_management_forms .dataset-foreign-key-draft label {
-    display: grid;
-    gap: 5px;
-    min-width: 0;
-}
-.column_management_forms .dataset-foreign-key-draft select {
-    min-width: 0;
-    width: 100%;
-    box-sizing: border-box;
 }

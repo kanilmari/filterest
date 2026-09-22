@@ -15,21 +15,20 @@ import { refreshTableUnified } from '../gt_1_row_crud/gt_1_2_row_read/table_refr
 import { invalidateDatabaseCatalogTreeCache } from '../../table_views/tree_view/tree_view_printer.js';
 import { purgeStaleColumnState } from './column_manager_state_cleanup.js';
 import { createDatasetDimensionPanels } from '../dataset_form/dataset_dimension_panels.js';
-import { getCardRoleOptions, isValidCardRole } from '../../table_views/card_view/card_role_catalog.js';
-import {
-    COLUMN_TYPE_PARAMETER,
-    DEFAULT_NUMERIC_PRECISION,
-    DEFAULT_NUMERIC_SCALE,
-    composeColumnTypeDefinition,
-    findDatasetColumnType,
-    getColumnTypeParameter,
-    getDatasetColumnTypeOptions,
-} from '../dataset_form/dataset_column_type_catalog.js';
+import { findDatasetColumnType } from '../dataset_form/dataset_column_type_catalog.js';
+import { createDatasetColumnTable } from '../dataset_form/dataset_column_table.js';
+
+/** One column as the dialog remembers the server holding it. */
+function toSavedColumn(columnName, dataType, length) {
+    return { column_name: columnName, data_type: String(dataType || '').toUpperCase(), length: length ?? '' };
+}
 
 export async function open_column_management_modal(table_name) {
     const columns = await fetch_columns_for_table(table_name);
     const declaredDefault = columns[0]?.new_columns_multilingual;
-    const initialMultilingualDefault = typeof declaredDefault === 'boolean'
+    // What the server holds, as far as this dialog knows; it advances with
+    // every schema change the server accepts (see acceptSavedColumns).
+    let savedMultilingualDefault = typeof declaredDefault === 'boolean'
         ? declaredDefault : columns.some(column => column.is_multilingual === true);
 
     // Spell every stored type the way the shared catalogue does, so an
@@ -39,23 +38,16 @@ export async function open_column_management_modal(table_name) {
         col.data_type = findDatasetColumnType(col.data_type)?.value || col.data_type;
     });
 
-    const initial_columns = columns.map(col => ({
-        column_name: col.column_name,
-        data_type: col.data_type.toUpperCase(),
-        length: col.character_maximum_length || ''
-    }));
+    // The columns the server holds, which every Save compares against. It
+    // starts as the columns the dialog opened with and advances the moment the
+    // server accepts a schema change (see acceptSavedColumns).
+    const saved_columns = columns.map(col => toSavedColumn(col.column_name, col.data_type, col.character_maximum_length));
 
-    // Käytetään vain yhtä "form"-elementtiä pääkontainerina:
+    // The dataset form: drawn by the same rules as the creation form
+    // (create_table_admin.css), so one dataset is described in one layout.
     const form = document.createElement('form');
     form.id = `column_management_form_${table_name}`;
-    form.classList.add('column_management_forms');
-    form.style.display = 'grid';
-    form.style.gridTemplateColumns = '1fr';
-    form.style.gridGap = '10px';
-    form.style.backgroundColor = 'var(--bg_color)';
-    form.style.color = 'var(--text_color)';
-    form.style.border = '1px solid var(--border_color)';
-    form.style.padding = '10px';
+    form.classList.add('column_management_forms', 'dataset-form');
 
     const datasetLabel = managementLabel('manage_table_name');
     const datasetName = document.createElement('code');
@@ -76,226 +68,43 @@ export async function open_column_management_modal(table_name) {
     visibilityPanel.append(visibilityStatus, restoreButton);
     form.appendChild(visibilityPanel);
 
+    // The columns are the table both dataset forms share. It is placed after
+    // the dataset's own settings, but the links to other datasets read its names.
+    const columnTable = createDatasetColumnTable({
+        mode: 'edit',
+        multilingualDefault: () => multilingualDefaultInput.checked,
+    });
+
     // Every dataset-level dimension is described once, by the controls both
     // dataset forms share, instead of being wired separately here.
     const datasetDimensions = createDatasetDimensionPanels({
         datasetName: table_name,
-        columnNames: () => [...form.querySelectorAll('.column-row input[name="column_name"]')]
-            .map(input => input.value.trim())
-            .filter(Boolean),
+        columnNames: () => columnTable.columnNames(),
     });
     form.append(...datasetDimensions.elements);
 
     const multilingualDefaultLabel = managementLabel('manage_table_multilingual_default');
-    multilingualDefaultLabel.style.display = 'flex';
-    multilingualDefaultLabel.style.alignItems = 'flex-start';
-    multilingualDefaultLabel.style.gap = '8px';
+    multilingualDefaultLabel.classList.add('dataset-form-option');
     const multilingualDefaultInput = document.createElement('input');
     multilingualDefaultInput.type = 'checkbox';
     multilingualDefaultInput.dataset.testid = 'manage-table-multilingual-default';
-    multilingualDefaultInput.checked = initialMultilingualDefault;
+    multilingualDefaultInput.checked = savedMultilingualDefault;
     multilingualDefaultLabel.prepend(multilingualDefaultInput);
     form.append(multilingualDefaultLabel);
     multilingualDefaultInput.addEventListener('change', () => {
-        form.querySelectorAll('input[name="is_multilingual"]').forEach(input => {
-            if (input.dataset.multilingualOverride !== 'true') {
-                input.checked = multilingualDefaultInput.checked;
-            }
-        });
+        columnTable.setMultilingualDefault(multilingualDefaultInput.checked);
     });
 
-    // The same catalogue the creation form offers, minus the types that only
-    // describe how a column is born and cannot be a conversion target.
-    const allowedTypeEntries = getDatasetColumnTypeOptions('edit');
-
-    function createColumnRow(column_name_value, data_type_value, length_value, original = true, card_role_value = 'details') {
-        const row = document.createElement('div');
-        row.classList.add('column-row');
-        const nameLabel = managementLabel('manage_table_column_name');
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.name = 'column_name';
-        nameInput.value = column_name_value || '';
-        if (original) {
-            nameInput.dataset.originalName = column_name_value;
-        }
-        nameLabel.appendChild(nameInput);
-        row.appendChild(nameLabel);
-
-        // Tietotyyppi
-        const typeLabel = managementLabel('manage_table_data_type');
-        const typeSelect = document.createElement('select');
-        typeSelect.name = 'data_type';
-
-        const emptyOpt = document.createElement('option');
-        emptyOpt.value = '';
-        setManagementText(emptyOpt, 'manage_table_select_type');
-        typeSelect.appendChild(emptyOpt);
-
-        const knownExistingType = findDatasetColumnType(data_type_value)?.value || '';
-        allowedTypeEntries.forEach(entry => {
-            const opt = document.createElement('option');
-            opt.value = entry.value;
-            setManagementText(opt, entry.labelKey);
-            if (entry.value === knownExistingType) {
-                opt.selected = true;
-            }
-            typeSelect.appendChild(opt);
-        });
-
-        // Existing PostgreSQL types outside the editor's creation choices must
-        // remain selected, so an unrelated Save cannot reinterpret their schema.
-        const existingType = String(data_type_value || '').toUpperCase();
-        if (existingType && !knownExistingType) {
-            const existingOption = document.createElement('option');
-            existingOption.value = existingType;
-            existingOption.textContent = existingType;
-            existingOption.selected = true;
-            typeSelect.appendChild(existingOption);
-        }
-
-        typeLabel.appendChild(typeSelect);
-        row.appendChild(typeLabel);
-
-        // Pituus (vain VARCHAR)
-        const lengthLabel = managementLabel('manage_table_length');
-        const lengthInput = document.createElement('input');
-        lengthInput.type = 'number';
-        lengthInput.name = 'length';
-        lengthInput.value = length_value || '';
-        lengthLabel.appendChild(lengthInput);
-        row.appendChild(lengthLabel);
-
-        // A decimal column carries its own two numbers, because the database
-        // refuses a decimal type without them.
-        const precisionLabel = managementLabel('dataset_column_type_precision');
-        const precisionInput = document.createElement('input');
-        precisionInput.type = 'number';
-        precisionInput.name = 'precision';
-        precisionInput.min = '1';
-        precisionInput.max = '1000';
-        precisionLabel.appendChild(precisionInput);
-        row.appendChild(precisionLabel);
-
-        const scaleLabel = managementLabel('dataset_column_type_scale');
-        const scaleInput = document.createElement('input');
-        scaleInput.type = 'number';
-        scaleInput.name = 'scale';
-        scaleInput.min = '0';
-        scaleLabel.appendChild(scaleInput);
-        row.appendChild(scaleLabel);
-
-        // An untouched decimal column keeps its stored precision: this form
-        // does not read it, so leaving the fields empty is what tells a Save
-        // that nothing about the type changed.
-        const syncTypeParameters = ({ prefill = false } = {}) => {
-            const parameter = getColumnTypeParameter(typeSelect.value);
-            const usesLength = parameter === COLUMN_TYPE_PARAMETER.LENGTH;
-            const usesPrecision = parameter === COLUMN_TYPE_PARAMETER.PRECISION;
-            lengthLabel.style.display = usesLength ? 'block' : 'none';
-            if (!usesLength) lengthInput.value = '';
-            precisionLabel.style.display = usesPrecision ? 'block' : 'none';
-            scaleLabel.style.display = usesPrecision ? 'block' : 'none';
-            if (!usesPrecision) {
-                precisionInput.value = '';
-                scaleInput.value = '';
-            } else if (prefill && !precisionInput.value) {
-                precisionInput.value = String(DEFAULT_NUMERIC_PRECISION);
-                scaleInput.value = String(DEFAULT_NUMERIC_SCALE);
-            }
-        };
-        typeSelect.addEventListener('change', () => syncTypeParameters({ prefill: true }));
-        syncTypeParameters();
-
-        if (!original) {
-            const multilingualLabel = managementLabel('manage_table_column_multilingual');
-            const multilingualInput = document.createElement('input');
-            multilingualInput.type = 'checkbox';
-            multilingualInput.name = 'is_multilingual';
-            multilingualInput.dataset.testid = 'manage-table-new-column-multilingual';
-            multilingualInput.checked = multilingualDefaultInput.checked;
-            multilingualInput.style.width = 'auto';
-            multilingualInput.style.justifySelf = 'start';
-            multilingualInput.addEventListener('change', () => {
-                multilingualInput.dataset.multilingualOverride = 'true';
-            });
-            multilingualLabel.append(multilingualInput);
-            const syncMultilingualType = () => {
-                const textColumn = ['TEXT', 'VARCHAR'].includes(typeSelect.value);
-                multilingualLabel.style.display = textColumn ? 'grid' : 'none';
-                multilingualInput.disabled = !textColumn;
-            };
-            typeSelect.addEventListener('change', syncMultilingualType);
-            syncMultilingualType();
-            row.append(multilingualLabel);
-        }
-
-        // How the column is presented on a card is part of the dataset's
-        // definition, so it is set here as well as when the dataset is created.
-        const roleLabel = managementLabel('card_role');
-        const roleSelect = document.createElement('select');
-        roleSelect.name = 'card_role';
-        for (const { value, labelKey } of getCardRoleOptions({ includeLegacyVariants: true })) {
-            const option = document.createElement('option');
-            option.value = value;
-            setManagementText(option, labelKey);
-            roleSelect.appendChild(option);
-        }
-        const storedRole = String(card_role_value || 'details');
-        roleSelect.value = isValidCardRole(storedRole) ? storedRole : 'details';
-        if (roleSelect.value !== storedRole) roleSelect.value = 'details';
-        roleSelect.dataset.originalRole = roleSelect.value;
-        roleLabel.appendChild(roleSelect);
-        row.appendChild(roleLabel);
-
-        // Keep the removal control available to touch and keyboard users.
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.textContent = '×';
-        removeButton.className = 'column-remove-button';
-        removeButton.dataset.manageTableAriaKey = 'manage_table_remove_column';
-        removeButton.setAttribute('data-aria-label-lang-key', 'manage_table_remove_column');
-        removeButton.setAttribute('aria-label', managementText('manage_table_remove_column'));
-
-        removeButton.addEventListener('click', () => {
-            row.remove();
-        });
-        row.appendChild(removeButton);
-
-        return row;
-    }
-
-    // Luo rivit olemassa oleville sarakkeille
-    columns.forEach(col => {
-        const r = createColumnRow(
-            col.column_name, col.data_type, col.character_maximum_length, true, col.card_element
-        );
-        form.appendChild(r);
-    });
-
-    // Luo ensimmäinen tyhjä uusi sarake -rivi
-    const initialNewRow = createColumnRow('', '', '', false);
-    form.appendChild(initialNewRow);
-
-    // Lisää uusi sarake -painike
-    const addRowButton = document.createElement('button');
-    addRowButton.type = 'button';
-    setManagementText(addRowButton, 'manage_table_add_column');
-    addRowButton.style.backgroundColor = 'var(--button_bg_color)';
-    addRowButton.style.color = 'var(--button_text_color)';
-    addRowButton.addEventListener('mouseenter', () => {
-        addRowButton.style.backgroundColor = 'var(--button_hover_bg_color)';
-        addRowButton.style.color = 'var(--button_hover_text_color)';
-    });
-    addRowButton.addEventListener('mouseleave', () => {
-        addRowButton.style.backgroundColor = 'var(--button_bg_color)';
-        addRowButton.style.color = 'var(--button_text_color)';
-    });
-    addRowButton.addEventListener('click', () => {
-        const newRow = createColumnRow('', '', '', false);
-        form.insertBefore(newRow, addRowButton);
-    });
-    form.appendChild(addRowButton);
+    // The columns the dataset holds, then one blank row for a column to add.
+    columns.forEach(col => columnTable.addColumn({
+        existing: true,
+        name: col.column_name,
+        dataType: col.data_type,
+        length: col.character_maximum_length,
+        role: col.card_element,
+    }));
+    columnTable.addColumn();
+    form.appendChild(columnTable.element);
 
     // The links to other datasets sit after the columns, because a link names a
     // column of this dataset — including one this same Save is about to add.
@@ -337,9 +146,10 @@ export async function open_column_management_modal(table_name) {
         titleDataLangKey: 'manage_table_title',
         titlePlainText: managementText('manage_table_title'),
         contentElements: [form],
-        // The same width the creation form uses, so one dataset is described in
-        // one layout rather than two.
-        maxWidth: '968px',
+        // The dialog is exactly as wide as the dataset form it frames; the form
+        // itself takes the creation form's width (create_table_admin.css).
+        width: 'fit-content',
+        maxWidth: '96vw',
         cleanupCallback: () => { disposed = true; disposeLanguage(); },
     });
     disposeLanguage = observeManagementLanguage(form);
@@ -369,46 +179,60 @@ export async function open_column_management_modal(table_name) {
         }
     });
 
+    // Once the server has taken a schema change, the dialog describes what it
+    // now holds. A later setting can still be refused and keep the dialog open;
+    // a retry compared against the columns as they were opened would repeat an
+    // addition or rename the server already made, be refused for it, and take
+    // the settings still waiting to be saved down with it. Only what was sent
+    // is recorded, so an edit made while the request was under way stays a
+    // change for the next Save.
+    function acceptSavedColumns({ removed, changes, sentRows, sentRoles, multilingualDefault }) {
+        // Find every changed column before renaming any, so two columns that
+        // swap names in one save are not mistaken for each other.
+        const updates = changes.map(change => ({
+            change,
+            entry: change.original_name
+                ? saved_columns.find(column => column.column_name === change.original_name)
+                : null,
+        }));
+        for (const name of removed) {
+            const index = saved_columns.findIndex(column => column.column_name === name);
+            if (index !== -1) saved_columns.splice(index, 1);
+        }
+        for (const { change, entry } of updates) {
+            const held = toSavedColumn(change.new_name, change.data_type, change.length);
+            if (entry) Object.assign(entry, held);
+            else saved_columns.push(held);
+            sentRows.get(change)?.markSaved(change.new_name);
+        }
+        for (const { row, role } of sentRoles) row.acceptRole(role);
+        if (multilingualDefault !== undefined) savedMultilingualDefault = multilingualDefault;
+    }
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (saveButton.disabled) return;
 
-        const currentRows = form.querySelectorAll('.column-row');
+        const currentRows = columnTable.rows();
         const currentColumns = [];
 
         let invalidInput = false;
-        currentRows.forEach(r => {
-            const nameInput = r.querySelector('input[name="column_name"]');
-            const typeSelect = r.querySelector('select[name="data_type"]');
-            const lengthInput = r.querySelector('input[name="length"]');
-
-            const newName = nameInput.value.trim();
-            if (newName && !isValidIdentifier(newName)) {
+        currentRows.forEach(row => {
+            const column = row.read();
+            if (column.name && !isValidIdentifier(column.name)) {
                 showWarningToast(managementText('manage_table_invalid_name'));
                 invalidInput = true;
                 return;
             }
-
-            // A decimal type travels complete, because the server builds the
-            // length only for limited text. Empty fields mean the stored
-            // precision stays untouched.
-            const precisionInput = r.querySelector('input[name="precision"]');
-            const scaleInput = r.querySelector('input[name="scale"]');
-            const usesPrecision =
-                getColumnTypeParameter(typeSelect.value) === COLUMN_TYPE_PARAMETER.PRECISION &&
-                String(precisionInput?.value || '').trim() !== '';
-
             currentColumns.push({
-                original_name: nameInput.dataset.originalName || null,
-                new_name: newName,
-                data_type: usesPrecision
-                    ? composeColumnTypeDefinition(typeSelect.value, {
-                        precision: precisionInput?.value,
-                        scale: scaleInput?.value,
-                    })
-                    : typeSelect.value,
-                length: lengthInput.value ? parseInt(lengthInput.value, 10) : null,
-                is_multilingual: r.querySelector('input[name="is_multilingual"]')?.checked
+                row,
+                original_name: column.originalName,
+                new_name: column.name,
+                data_type: column.dataType,
+                length: column.length,
+                is_multilingual: column.isMultilingual,
+                role: column.role,
+                roleChanged: column.roleChanged,
             });
         });
         if (invalidInput) {
@@ -418,9 +242,11 @@ export async function open_column_management_modal(table_name) {
         const removed_columns = [];
         const modified_columns = [];
         const added_columns = [];
+        // The row each sent change came from, to be marked saved once accepted.
+        const sentRows = new Map();
 
         // Alkuperäiset sarakkeet
-        for (const initCol of initial_columns) {
+        for (const initCol of saved_columns) {
             const found = currentColumns.find(c => c.original_name === initCol.column_name);
             if (!found) {
                 removed_columns.push(initCol.column_name);
@@ -439,12 +265,14 @@ export async function open_column_management_modal(table_name) {
                 }
 
                 if ((changedName || changedType) && found.data_type !== '') {
-                    modified_columns.push({
+                    const change = {
                         original_name: found.original_name,
                         new_name: found.new_name,
                         data_type: found.data_type,
                         length: found.data_type.toUpperCase() === 'VARCHAR' ? found.length : null
-                    });
+                    };
+                    modified_columns.push(change);
+                    sentRows.set(change, found.row);
                 }
             }
         }
@@ -452,14 +280,16 @@ export async function open_column_management_modal(table_name) {
         // Uudet sarakkeet
         for (const currCol of currentColumns) {
             if (!currCol.original_name && currCol.new_name !== '' && currCol.data_type !== '') {
-                added_columns.push({
+                const change = {
                     original_name: "",
                     new_name: currCol.new_name,
                     data_type: currCol.data_type,
                     length: currCol.data_type.toUpperCase() === 'VARCHAR' ? currCol.length : null,
                     ...(['TEXT', 'VARCHAR'].includes(currCol.data_type)
                         ? { is_multilingual: currCol.is_multilingual === true } : {})
-                });
+                };
+                added_columns.push(change);
+                sentRows.set(change, currCol.row);
             }
         }
 
@@ -469,17 +299,16 @@ export async function open_column_management_modal(table_name) {
         // whole request and lose every other change in it.
         const createdColumnNames = new Set(added_columns.map(column => column.new_name));
         const column_card_roles = {};
-        currentRows.forEach(r => {
-            const nameInput = r.querySelector('input[name="column_name"]');
-            const roleSelect = r.querySelector('select[name="card_role"]');
-            const columnName = nameInput?.value.trim();
-            if (!columnName || !roleSelect) return;
-            const isNewColumn = !nameInput.dataset.originalName;
-            if (isNewColumn && !createdColumnNames.has(columnName)) return;
+        const sentRoles = [];
+        currentColumns.forEach(({ row, original_name, new_name, role, roleChanged }) => {
+            if (!new_name) return;
+            const isNewColumn = !original_name;
+            if (isNewColumn && !createdColumnNames.has(new_name)) return;
             // Otherwise: a new column's choice, or a role the person changed on
             // an existing column. An untouched column keeps whatever it has.
-            if (isNewColumn || roleSelect.value !== roleSelect.dataset.originalRole) {
-                column_card_roles[columnName] = roleSelect.value;
+            if (isNewColumn || roleChanged) {
+                column_card_roles[new_name] = role;
+                sentRoles.push({ row, role });
             }
         });
 
@@ -494,7 +323,7 @@ export async function open_column_management_modal(table_name) {
         }
 
 
-        if (multilingualDefaultInput.checked !== initialMultilingualDefault) {
+        if (multilingualDefaultInput.checked !== savedMultilingualDefault) {
             requestData.new_columns_multilingual = multilingualDefaultInput.checked;
         }
 
@@ -511,6 +340,15 @@ export async function open_column_management_modal(table_name) {
                 suppressErrorToast: true,
             });
             datasetDimensions.acceptPreventDeletion();
+            // Before anything else can fail: the columns are saved now, and a
+            // retry must compare against them rather than repeat them.
+            acceptSavedColumns({
+                removed: removed_columns,
+                changes: [...modified_columns, ...added_columns],
+                sentRows,
+                sentRoles,
+                multilingualDefault: requestData.new_columns_multilingual,
+            });
 
             // Every remaining dimension owns its own route and is saved after
             // the schema change. The navigation trees read the dataset list and

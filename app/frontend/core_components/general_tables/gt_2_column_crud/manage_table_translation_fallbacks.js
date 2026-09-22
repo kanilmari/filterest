@@ -80,12 +80,6 @@ export const MANAGE_TABLE_TRANSLATION_FALLBACKS = {
     "ch": "日期 (DATE)",
     "yue": "日期 (DATE)"
   },
-  "manage_table_remove_column": {
-    "fi": "Poista sarake",
-    "en": "Remove column",
-    "ch": "移除列",
-    "yue": "移除欄位"
-  },
   "manage_table_add_column": {
     "fi": "Lisää sarake",
     "en": "Add column",

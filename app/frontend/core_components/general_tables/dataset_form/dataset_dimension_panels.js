@@ -28,17 +28,10 @@ export function createDatasetDimensionPanels({ datasetName, columnNames = () => 
     });
 
     // The dataset's own symbol belongs where the dataset is defined, so it is
-    // chosen here rather than only in the separate symbol tool.
-    const symbolPicker = createDatasetSymbolPicker();
-    let symbolTableUID = 0;
-    const symbolReady = identity.then(async ({ iconKey, tableUID }) => {
-        symbolTableUID = tableUID;
-        await symbolPicker.ready;
-        if (iconKey) {
-            symbolPicker.select.value = iconKey;
-            symbolPicker.select.dispatchEvent(new Event("change"));
-        }
-    });
+    // chosen here rather than only in the separate symbol tool. The symbol the
+    // dataset already has is what a Save compares against, so choosing
+    // "No symbol" removes it.
+    const symbolPicker = createDatasetSymbolPicker({ stored: identity });
 
     // The dimensions below were previously offered only while a dataset was
     // being created. A dataset is described in one place, so the editing form
@@ -53,7 +46,7 @@ export function createDatasetDimensionPanels({ datasetName, columnNames = () => 
     const foreignKeys = createDatasetForeignKeyPanel({ datasetName, columnNames });
 
     const settingsPanel = document.createElement("section");
-    settingsPanel.className = "manage-table-dataset-settings";
+    settingsPanel.className = "manage-table-dataset-settings dataset-form-section";
     settingsPanel.append(imageAttachments.element, deletionProtection.element);
 
     return {
@@ -63,7 +56,7 @@ export function createDatasetDimensionPanels({ datasetName, columnNames = () => 
         foreignKeysElement: foreignKeys.element,
         /** Resolves once every control shows the dataset's current state. */
         ready: Promise.allSettled([
-            symbolReady, folderPicker.ready, imageAttachments.ready,
+            symbolPicker.ready, folderPicker.ready, imageAttachments.ready,
             deletionProtection.ready, groupReadAccess.ready, foreignKeys.ready,
         ]),
         /**
@@ -82,8 +75,8 @@ export function createDatasetDimensionPanels({ datasetName, columnNames = () => 
          * @returns {Promise<boolean>} true when nothing is left needing attention
          */
         saveAll: async () => {
-            if (symbolTableUID) await symbolPicker.save(symbolTableUID);
             const outcomes = [
+                await symbolPicker.save(),
                 await folderPicker.save(),
                 await imageAttachments.save(),
                 await groupReadAccess.save(),

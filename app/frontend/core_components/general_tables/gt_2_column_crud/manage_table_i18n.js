@@ -3,10 +3,13 @@
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { MANAGE_TABLE_TRANSLATION_FALLBACKS } from './manage_table_translation_fallbacks.js';
 import { getDatasetColumnTypeTranslationFallbacks } from '../dataset_form/dataset_column_type_catalog.js';
+import { TABLE_CREATION_TRANSLATION_FALLBACKS } from '../gt_3_table_crud/gt_3_1_table_create/table_creation_translation_fallbacks.js';
 
-// The column types are named once, in the catalogue both dataset forms share.
+// The column types are named once, in the catalogue both dataset forms share,
+// and the column table's field names once, in the copy both forms read.
 const DIALOG_FALLBACKS = {
     ...MANAGE_TABLE_TRANSLATION_FALLBACKS,
+    ...TABLE_CREATION_TRANSLATION_FALLBACKS,
     ...getDatasetColumnTypeTranslationFallbacks(),
 };
 

@@ -1,113 +1,32 @@
 // column_manager.test.js
-// Verifies column-management saves stay inside the SPA shell and sanitize stale schema state.
+// Verifies the Manage table dialog's schema edits: renames, removals, new columns,
+// types, card roles and the multilingual default, and the form it shares with dataset creation.
 // Bridges mocked modal/API dependencies with localStorage-backed dataset UI state.
 // Exists to keep schema edits from falling back to a full reload or leaving broken filter state behind.
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+    createModalMock,
+    endpointRouterMock,
+    fetchColumnsMock,
+    hideModalMock,
+    loadModule,
+    refreshTableUnifiedMock,
+    reloadSpy,
+    showSuccessToastMock,
+    resetColumnManagerTest,
+} from './column_manager_test_setup.js';
 
-const createModalMock = vi.fn(({ contentElements }) => {
-    document.body.append(...contentElements);
-});
-const showModalMock = vi.fn();
-const hideModalMock = vi.fn();
-const fetchColumnsMock = vi.fn();
-const endpointRouterMock = vi.fn();
-const showSuccessToastMock = vi.fn();
-const showWarningToastMock = vi.fn();
-const refreshTableUnifiedMock = vi.fn();
-const getTranslationForKeyMock = vi.fn(key => key);
-const reloadSpy = vi.fn();
-
-async function loadModule() {
-    vi.resetModules();
-    vi.doMock('../../../reusable_components/modal/modal_builder.js', () => ({
-        createModal: createModalMock,
-        showModal: showModalMock,
-        hideModal: hideModalMock,
-    }));
-    vi.doMock('../../endpoints/endpoint_column_fetcher.js', () => ({
-        fetch_columns_for_table: fetchColumnsMock,
-    }));
-    vi.doMock('../../endpoints/endpoint_router.js', () => ({
-        endpoint_router: endpointRouterMock,
-    }));
-    vi.doMock('../../../reusable_components/dom_container_builder.js', () => ({
-        isValidIdentifier: () => true,
-    }));
-    vi.doMock('../../../reusable_components/notifications/toast_notification_printer.js', () => ({
-        showSuccessToast: showSuccessToastMock,
-        showWarningToast: showWarningToastMock,
-    }));
-    vi.doMock('../gt_3_table_crud/gt_3_2_table_delete/table_remover.js', () => ({
-        drop_table: vi.fn(),
-    }));
-    vi.doMock('../../lang/translation_handler.js', () => ({
-        getTranslationForKey: getTranslationForKeyMock,
-    }));
-    vi.doMock('../gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js', () => ({
-        refreshTableUnified: refreshTableUnifiedMock,
-    }));
-
-    return import('./column_manager.js');
-}
-
-describe('open_column_management_modal', () => {
-    beforeEach(() => {
-        for (const [options] of createModalMock.mock.calls) options.cleanupCallback?.();
-        vi.clearAllMocks();
-        document.documentElement.lang = 'en';
-        localStorage.clear();
-        sessionStorage.clear();
-        document.body.innerHTML = '';
-
-        fetchColumnsMock.mockResolvedValue([
-            { column_name: 'legacy_col', data_type: 'TEXT', character_maximum_length: null },
-            { column_name: 'gone_col', data_type: 'TEXT', character_maximum_length: null },
-        ]);
-        endpointRouterMock.mockImplementation(async (route) => route === 'adminDatasetUiVisibility'
-            ? { dataset_name: 'demo_table', ui_hidden: false } : { message: 'ok' });
-        refreshTableUnifiedMock.mockResolvedValue(undefined);
-
-        localStorage.setItem('demo_table_sorting_and_filtering_specs', JSON.stringify({
-            sort: { column: 'legacy_col', direction: 'ASC' },
-            filters: {
-                legacy_col: 'abc',
-                legacy_col_from: '2026-01-01',
-                legacy_col_to: '2026-12-31',
-                gone_col: 'remove-me',
-                untouched: 'keep-me',
-            },
-            offset: 12,
-            cardView: { collapsed: false, expandedId: null },
-        }));
-        localStorage.setItem('demo_table_hide_columns', JSON.stringify({
-            legacy_col: true,
-            gone_col: true,
-            untouched: true,
-        }));
-        localStorage.setItem('demo_table_open_filters', JSON.stringify([
-            'legacy_col',
-            'gone_col',
-            'modern_col',
-        ]));
-
-        Object.defineProperty(window, 'location', {
-            value: {
-                ...window.location,
-                reload: reloadSpy,
-            },
-            writable: true,
-            configurable: true,
-        });
-    });
+describe('open_column_management_modal: schema edits', () => {
+    beforeEach(resetColumnManagerTest);
 
     test('refreshes in place and rewrites stale localStorage keys after rename/remove', async () => {
         const mod = await loadModule();
 
         await mod.open_column_management_modal('demo_table');
 
-        const rows = document.querySelectorAll('.column-row');
+        const rows = document.querySelectorAll('.dataset-column-table__row');
         expect(rows).toHaveLength(3);
 
         const renamedRow = rows[0];
@@ -218,10 +137,10 @@ describe('open_column_management_modal', () => {
         await mod.open_column_management_modal('demo_table');
         const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
         expect(defaultInput.checked).toBe(expected);
-        const existingRows = [...document.querySelectorAll('.column-row')].filter(row =>
+        const existingRows = [...document.querySelectorAll('.dataset-column-table__row')].filter(row =>
             row.querySelector('[name="column_name"]').dataset.originalName);
         expect(existingRows.every(row => !row.querySelector('[name="is_multilingual"]'))).toBe(true);
-        const newRow = document.querySelector('[name="is_multilingual"]').closest('.column-row');
+        const newRow = document.querySelector('[name="is_multilingual"]').closest('.dataset-column-table__row');
         const type = newRow.querySelector('[name="data_type"]');
         type.value = 'TEXT';
         type.dispatchEvent(new Event('change'));
@@ -239,17 +158,17 @@ describe('open_column_management_modal', () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
         const first = document.querySelector('[name="is_multilingual"]');
-        first.closest('.column-row').querySelector('[name="data_type"]').value = 'TEXT';
-        first.closest('.column-row').querySelector('[name="data_type"]').dispatchEvent(new Event('change'));
+        first.closest('.dataset-column-table__row').querySelector('[name="data_type"]').value = 'TEXT';
+        first.closest('.dataset-column-table__row').querySelector('[name="data_type"]').dispatchEvent(new Event('change'));
         first.click(); // User chooses a per-column exception.
-        document.querySelector('[data-manage-table-key="manage_table_add_column"]').click();
+        document.querySelector('[data-testid="dataset-column-add"]').click();
         const second = [...document.querySelectorAll('[name="is_multilingual"]')].at(-1);
         const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
         defaultInput.click();
         expect([first.checked, second.checked]).toEqual([true, true]);
         defaultInput.click();
         expect([first.checked, second.checked]).toEqual([true, false]);
-        document.querySelector('[data-manage-table-key="manage_table_add_column"]').click();
+        document.querySelector('[data-testid="dataset-column-add"]').click();
         expect([...document.querySelectorAll('[name="is_multilingual"]')].at(-1).checked).toBe(false);
     });
 
@@ -258,12 +177,12 @@ describe('open_column_management_modal', () => {
         await mod.open_column_management_modal('demo_table');
         const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
         defaultInput.click();
-        const add = document.querySelector('[data-manage-table-key="manage_table_add_column"]');
+        const add = document.querySelector('[data-testid="dataset-column-add"]');
         const choices = [['title', 'TEXT', true], ['code', 'VARCHAR', false], ['when', 'DATE', true]];
         for (const [index, [name, type, multilingual]] of choices.entries()) {
             if (index) add.click();
             const input = [...document.querySelectorAll('[name="is_multilingual"]')].at(-1);
-            const row = input.closest('.column-row');
+            const row = input.closest('.dataset-column-table__row');
             row.querySelector('[name="column_name"]').value = name;
             const typeSelect = row.querySelector('[name="data_type"]');
             typeSelect.value = 'TEXT';
@@ -322,7 +241,7 @@ describe('open_column_management_modal', () => {
         await mod.open_column_management_modal('demo_table');
         const defaultInput = document.querySelector('[data-testid="manage-table-multilingual-default"]');
         const input = document.querySelector('[name="is_multilingual"]');
-        const row = input.closest('.column-row');
+        const row = input.closest('.dataset-column-table__row');
         const type = row.querySelector('[name="data_type"]');
         type.value = 'TEXT';
         type.dispatchEvent(new Event('change'));
@@ -390,7 +309,7 @@ describe('open_column_management_modal', () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
 
-        const rows = document.querySelectorAll('.column-row');
+        const rows = document.querySelectorAll('.dataset-column-table__row');
         expect(rows[0].querySelector('[name="card_role"]').value).toBe('header');
         rows[1].querySelector('[name="card_role"]').value = 'image';
 
@@ -410,10 +329,10 @@ describe('open_column_management_modal', () => {
         await mod.open_column_management_modal('demo_table');
 
         // The person names a new column but has not chosen its type yet.
-        const newRow = document.querySelectorAll('.column-row')[1];
+        const newRow = document.querySelectorAll('.dataset-column-table__row')[1];
         newRow.querySelector('[name="column_name"]').value = 'not_finished_yet';
         // Meanwhile they do change an existing column's role, which must survive.
-        document.querySelectorAll('.column-row')[0].querySelector('[name="card_role"]').value = 'image';
+        document.querySelectorAll('.dataset-column-table__row')[0].querySelector('[name="card_role"]').value = 'image';
 
         document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -431,7 +350,7 @@ describe('open_column_management_modal', () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
 
-        const role = document.querySelector('.column-row [name="card_role"]');
+        const role = document.querySelector('.dataset-column-table__row [name="card_role"]');
         expect(role.value).toBe('description1+lang_key');
 
         // An untouched row still sends nothing.
@@ -451,7 +370,7 @@ describe('open_column_management_modal', () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
 
-        const newRow = document.querySelectorAll('.column-row')[1];
+        const newRow = document.querySelectorAll('.dataset-column-table__row')[1];
         newRow.querySelector('[name="column_name"]').value = 're_examine_date';
         const type = newRow.querySelector('[name="data_type"]');
         type.value = 'DATE';
@@ -470,7 +389,7 @@ describe('open_column_management_modal', () => {
         ]);
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-        const row = document.querySelector('.column-row');
+        const row = document.querySelector('.dataset-column-table__row');
         const type = row.querySelector('[name="data_type"]');
         type.value = 'NUMERIC';
         type.dispatchEvent(new Event('change'));
@@ -488,103 +407,19 @@ describe('open_column_management_modal', () => {
         }));
     });
 
-    // The dimensions below used to exist only while a dataset was being created.
-    const datasetNodes = [
-        { id: 'f_4', name: 'database', parent_id: 'null', db_id: 4 },
-        { id: 'f_7', name: 'other_tables', parent_id: 'f_4', db_id: 7 },
-        { id: 't_demo_table', name: 'demo_table', parent_id: 'f_7', db_id: 91, table_uid: '3470' },
-    ];
-
-    function answerEveryDatasetDimension(overrides = {}) {
-        endpointRouterMock.mockImplementation(async (route, options) => {
-            if (overrides[route]) return overrides[route](options);
-            if (route === 'adminDatasetUiVisibility') return { dataset_name: 'demo_table', ui_hidden: false };
-            if (route === 'adminSymbols') {
-                return { symbols: [], datasets: [{ dataset_name: 'demo_table', table_uid: 3470 }], fields: [] };
-            }
-            if (route === 'modifyColumns' && options?.method !== 'POST') {
-                return { dataset_name: 'demo_table', prevent_deletion: false };
-            }
-            if (route === 'fetchTreeData') return { nodes: datasetNodes };
-            if (route === 'imageAssetLinkingStatus') {
-                return { asset_linkings: [{ parent_table: 'demo_table', enabled: false }] };
-            }
-            if (route === 'fetchForeignKeys') return { data: [] };
-            if (route === 'datasetNames') return ['users'];
-            return { message: 'ok' };
-        });
-    }
-
-    test('the deletion switch is shown and travels inside the schema request', async () => {
-        answerEveryDatasetDimension();
+    // One dataset is described by one form: the dialog frames the same form
+    // the creation page shows, drawn by the same rules, at the same width.
+    test('the dialog frames the shared dataset form and fits around it', async () => {
         const mod = await loadModule();
         await mod.open_column_management_modal('demo_table');
-
-        const protection = document.querySelector('[data-testid="dataset-deletion-protection-input"]');
-        await vi.waitFor(() => expect(protection.disabled).toBe(false));
-        expect(protection.checked).toBe(false);
-        protection.checked = true;
-
-        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
-
-        const [, saved] = endpointRouterMock.mock.calls
-            .filter(([route, options]) => route === 'modifyColumns' && options?.method === 'POST').at(-1);
-        expect(saved.body_data.prevent_deletion).toBe(true);
-    });
-
-    test('folder, pictures and a new link are saved through their own routes after the columns', async () => {
-        answerEveryDatasetDimension();
-        const mod = await loadModule();
-        await mod.open_column_management_modal('demo_table');
-
-        const folder = document.querySelector('[data-testid="dataset-folder-select"]');
-        await vi.waitFor(() => expect(folder.disabled).toBe(false));
-        expect(folder.value).toBe('7');
-        folder.value = '4';
-
-        const pictures = document.querySelector('[data-testid="dataset-image-attachments-input"]');
-        await vi.waitFor(() => expect(pictures.disabled).toBe(false));
-        pictures.checked = true;
-
-        const panel = document.querySelector('[data-testid="dataset-foreign-keys"]');
-        panel.querySelector('[name="fk_referencing_column"]').value = 'legacy_col';
-        const target = panel.querySelector('[name="fk_referenced_dataset"]');
-        await vi.waitFor(() => expect(target.options.length).toBe(2));
-        target.value = 'users';
-        const targetColumn = panel.querySelector('[name="fk_referenced_column"]');
-        targetColumn.appendChild(Object.assign(document.createElement('option'), { value: 'id' }));
-        targetColumn.value = 'id';
-
-        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
-
-        const order = endpointRouterMock.mock.calls
-            .filter(([route, options]) => options?.method === 'POST')
-            .map(([route]) => route);
-        expect(order).toEqual(['modifyColumns', 'updateTableFolder', 'enableImageAssetLinking', 'addForeignKey']);
-        expect(hideModalMock).toHaveBeenCalledTimes(1);
-    });
-
-    test('a setting the server refuses keeps the dialog open instead of hiding the problem', async () => {
-        answerEveryDatasetDimension({
-            updateTableFolder: () => { throw new Error('refused'); },
-        });
-        const mod = await loadModule();
-        await mod.open_column_management_modal('demo_table');
-
-        const folder = document.querySelector('[data-testid="dataset-folder-select"]');
-        await vi.waitFor(() => expect(folder.disabled).toBe(false));
-        folder.value = '4';
-
-        document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
-
-        expect(hideModalMock).not.toHaveBeenCalled();
-        expect(showWarningToastMock).toHaveBeenCalledWith(
-            'The columns were saved. One dataset setting still needs attention — see the message in the form.'
-        );
-        expect(document.querySelector('.dataset-folder-status').hidden).toBe(false);
+        const form = document.querySelector('#column_management_form_demo_table');
+        expect(form.classList.contains('dataset-form')).toBe(true);
+        expect(form.getAttribute('style')).toBeNull();
+        // The columns are the shared column table, as on the creation page.
+        const table = form.querySelector('[role="table"].dataset-column-table');
+        expect(table).not.toBeNull();
+        expect(table.querySelectorAll('[role="row"].dataset-column-table__row')).toHaveLength(3);
+        expect(createModalMock.mock.calls.at(-1)[0]).toMatchObject({ width: 'fit-content' });
     });
 
     test('preserves existing SQL types outside creation choices on an unchanged Save', async () => {
@@ -604,5 +439,4 @@ describe('open_column_management_modal', () => {
             body_data: { dataset_name: 'demo_table', modified_columns: [], added_columns: [], removed_columns: [] },
         }));
     });
-
 });
