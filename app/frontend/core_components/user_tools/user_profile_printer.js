@@ -19,8 +19,13 @@ import {
 
 async function requestCurrentPassword() {
     return showInputModal({
-        titlePlainText: translatedText('confirm_password_title', 'Confirm password'),
+        // Keys, not only resolved text, so the dialog follows the page translator
+        // and its local fallback copy when a key is not yet seeded.
+        titleLangKey: 'confirm_password',
+        titlePlainText: translatedText('confirm_password', 'Confirm password'),
+        messageLangKey: 'confirm_current_password_message',
         messagePlainText: translatedText('confirm_current_password_message', 'Enter your current password to confirm this change.'),
+        labelLangKey: 'current_password',
         labelPlainText: translatedText('current_password', 'Current Password'),
         inputType: 'password',
         autocomplete: 'current-password',

@@ -131,8 +131,8 @@ export async function generate_child_tab_config_form(container) {
         if (editMode) {
             if (dirty) {
                 const save = await showConfirmModal({
-                    messagePlainText: 'Tallenna muutokset ennen muokkauksen lopettamista?',
-                    messageLangKey: 'confirm_save_child_tab_config',
+                    messagePlainText: 'Save changes before you stop editing?',
+                    messageLangKey: 'confirm_save_child_tab_config_on_exit',
                 });
                 if (save) {
                     await doSave();

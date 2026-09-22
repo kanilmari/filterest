@@ -496,7 +496,8 @@ async function deleteImageRow({ row, childDataset, triggerButton, onRefresh }) {
     const ok = await showConfirmModal({
         titleLangKey: "delete_confirm_title",
         titlePlainText: "Vahvista poisto",
-        messagePlainText: `Poistetaanko kuva "${itemName}"?`,
+        messageLangKey: "confirm_delete_image",
+        messagePlainText: "Delete this image?",
         confirmLangKey: "delete",
         confirmText: "Poista",
         cancelLangKey: "dont_delete",

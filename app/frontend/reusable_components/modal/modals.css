@@ -27,8 +27,9 @@
 }
 
 .stacked_modal {
+    --modal-max-width: 96vw;
+
     width: min(1100px, 96vw);
-    max-width: 96vw;
     max-height: 97dvh;
 }
 
@@ -89,7 +90,8 @@
  * no padding. Every empty margin lives inside the row it belongs to, so the
  * sheet's margins scroll with its content like the margins of a page, and
  * content only ever disappears under a visible divider line, never under an
- * empty band. */
+ * empty band. These margins are the dialog's only frame: a form inside the
+ * sheet draws no panel of its own (form.css). */
 .modal {
     /* Page margins of the scrolling sheet, and the close button that the
        title row keeps clear of. */
@@ -101,6 +103,10 @@
     /* Dark surfaces need a slightly heavier shadow to separate from the page. */
     --modal-shadow-dark: 0 16px 40px rgb(0 0 0 / 0.34), 0 2px 8px rgb(0 0 0 / 0.2);
     --modal-shadow: var(--modal-shadow-light);
+    /* The dialog keeps at least this much of the screen on each side, whatever
+       width its feature asks for. A feature's own limit arrives as
+       --modal-max-width (createModal's maxWidth); 700px is the default. */
+    --modal-screen-margin: 16px;
 
     /* Use auth-card variables for a fancier look, falling back to standard variables */
     background: var(--auth-card-bg, var(--bg_color_extreme));
@@ -108,7 +114,7 @@
     border: 2px solid var(--border_color);
     border-radius: 16px;
     width: 100%;
-    max-width: 700px;
+    max-width: min(var(--modal-max-width, 700px), calc(100vw - 2 * var(--modal-screen-margin)));
     box-sizing: border-box;
     box-shadow: var(--modal-shadow);
     backdrop-filter: blur(10px);
@@ -253,16 +259,20 @@ body.dark-mode .modal {
     transform: translateY(-1px);
 }
 
+/* An action row spaces its buttons with a gap rather than a margin on each
+   button, so a row whose first button sits on the left starts exactly at
+   the sheet's content edge. */
 .modal .form-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: 10px;
     margin-top: 20px;
 }
 
 .modal .form-actions button {
-    /* Inherits from fw-btn, but overrides padding and margin */
+    /* Inherits from fw-btn, but overrides padding */
     padding: 12px 20px;
-    margin-left: 10px;
 }
 
 .modal .form-actions .cancel-button {
@@ -505,7 +515,7 @@ body.dark-mode .modal {
     line-height: 1.4em;
 }
 
-.modal_body h1, .modal_body h2, .modal_body h3, .modal_body h4, .modal_body h5, .modal_body h6 
+.modal_body h1, .modal_body h2, .modal_body h3, .modal_body h4, .modal_body h5, .modal_body h6,
 .big_description_value h1, .big_description_value h2, .big_description_value h3, .big_description_value h4, .big_description_value h5, .big_description_value h6
 {
     margin-top: 40px;
@@ -516,7 +526,6 @@ body.dark-mode .modal {
     color: var(--color-error);
     box-shadow: 0 3px 8px color-mix(in srgb, var(--color-error) 30%, transparent);
     padding: 12px 20px;
-    margin-left: 10px;
     border: none;
     border-radius: 10px;
     font-size: 1rem;
@@ -539,6 +548,17 @@ body.dark-mode .modal {
     color: var(--color-error);
     box-shadow: 0 2px 6px color-mix(in srgb, var(--color-error) 25%, transparent);
     filter: none;
+}
+
+/* The message of a confirm or input dialog. It starts at the sheet's top
+   margin like the first line of any other dialog; only the space below it
+   separates it from the item list or field that follows. */
+.modal .modal_message {
+    margin: 0 0 16px;
+}
+
+.modal .modal_message:last-child {
+    margin-bottom: 0;
 }
 
 /* Delete confirmation item list */

@@ -170,6 +170,7 @@ function resetModalPresentationState(modalOverlay, modal) {
         modal._imageModalClassNames = [];
         modal.style.removeProperty("width");
         modal.style.removeProperty("max-width");
+        modal.style.removeProperty("--modal-max-width");
         modal.style.removeProperty("max-height");
     }
 
@@ -387,10 +388,12 @@ export function createModal({
     }
     modal.setAttribute('aria-describedby', body.id);
 
-    // Aseta modaalin oletusleveys
+    // Aseta modaalin oletusleveys. A feature's maxWidth goes through
+    // --modal-max-width, so modals.css still keeps every dialog clear of the
+    // screen's edges on a phone.
     modal.style.width = width;
     if (maxWidth) {
-        modal.style.maxWidth = maxWidth;
+        modal.style.setProperty("--modal-max-width", maxWidth);
     }
     if (maxHeight) {
         modal.style.maxHeight = maxHeight;
@@ -499,7 +502,7 @@ export function createStackedModal({
     modal.setAttribute("aria-modal", "true");
     modal.tabIndex = -1;
     modal.style.width = width;
-    modal.style.maxWidth = maxWidth;
+    modal.style.setProperty("--modal-max-width", maxWidth);
     modal.style.maxHeight = maxHeight;
 
     const header = document.createElement("div");

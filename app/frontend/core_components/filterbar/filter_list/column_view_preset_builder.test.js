@@ -114,6 +114,21 @@ test("reset removes only the session user's assignment and reloads inheritance",
     expect(api.assignSiteViewFieldSet).not.toHaveBeenCalled();
 });
 
+test("delete confirmation names the field set it deletes", async () => {
+    const { showConfirmModal } = await import("../../../reusable_components/modal/confirm_modal_builder.js");
+    showConfirmModal.mockClear();
+    const { buildColumnViewPresetSelector } = await import("./column_view_preset_builder.js");
+    const row = buildColumnViewPresetSelector("orders", ["title"], "table");
+    await vi.waitFor(() => expect(row.querySelector("select").value).toBe("7"));
+    row.querySelector('[data-lang-key="delete_field_set"]').click();
+    await vi.waitFor(() => expect(showConfirmModal).toHaveBeenCalledTimes(1));
+    expect(showConfirmModal.mock.calls[0][0]).toMatchObject({
+        messageLangKey: "confirm_delete_field_set",
+        itemNames: ["Mine"],
+    });
+    await vi.waitFor(() => expect(api.deletePersonalViewFieldSet).toHaveBeenCalledWith({ field_set_id: 7 }));
+});
+
 test("administrator mode selects and updates the separate site default", async () => {
     const { buildColumnViewPresetSelector } = await import("./column_view_preset_builder.js");
     const row = buildColumnViewPresetSelector("orders", ["title", "id"], "card");

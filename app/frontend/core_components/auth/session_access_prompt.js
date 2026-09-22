@@ -115,8 +115,7 @@ export function requestSessionAccessPrompt({ reason = 'session-ended' } = {}) {
         titlePlainText: copy.title,
         contentElements: [message],
         footerElements: [actions],
-        width: 'min(520px, calc(100vw - 32px))',
-        maxWidth: 'calc(100vw - 32px)',
+        width: '520px',
     });
     showModal();
 }

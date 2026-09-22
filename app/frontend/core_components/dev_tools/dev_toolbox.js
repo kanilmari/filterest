@@ -213,8 +213,7 @@ export function openDevToolbox(doc = document) {
     createModal({
         titlePlainText: "DEV toolbox",
         contentElements: [toolbox],
-        width: "min(560px, calc(100vw - 32px))",
-        maxWidth: "calc(100vw - 32px)",
+        width: "560px",
     });
     showModal();
     return true;

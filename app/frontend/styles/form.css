@@ -20,6 +20,18 @@ form {
     box-shadow: 0 2px 5px rgb(0 0 0 / 10%);
 }
 
+/* The panel above belongs to forms on a page. Inside a dialog the dialog's
+   own sheet margins are the only frame (modals.css), so a form there draws
+   no padding, surface, rounding or shadow of its own. `:where()` adds no
+   specificity: this outranks only the rule above, and a feature's own form
+   rule still decides that form. */
+:where(.modal) form {
+    padding: 0;
+    background-color: transparent;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 .form_with_border {
     border: 1px solid var(--border_color);
 }

@@ -485,6 +485,36 @@ func TestGetTableNamesHandlerHandlesQueryErrorAndSuccess(t *testing.T) {
 	})
 }
 
+// Permissions attach to a catalogued table_uid, so a physical table missing from
+// system_db_tables (such as the media registry) must not be listed: one such name
+// in a multi-dataset request denied the foreign-keys page to every administrator.
+func TestGetTableNamesHandlerListsOnlyCataloguedDatasets(t *testing.T) {
+	db, state := openForeignKeyMockDB(t, []foreignKeyQueryResponse{
+		{
+			match: "FROM information_schema.tables",
+			cols:  []string{"table_name"},
+			rows:  [][]driver.Value{{"posts"}},
+		},
+	}, nil)
+	withForeignKeyDB(t, db)
+
+	rec := httptest.NewRecorder()
+	GetTableNamesHandler(rec, httptest.NewRequest(http.MethodGet, "/api/dataset-names", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if len(state.queryCalls) != 1 {
+		t.Fatalf("query calls = %d, want 1", len(state.queryCalls))
+	}
+	query := state.queryCalls[0].query
+	for _, want := range []string{"EXISTS", "FROM system_db_tables sdt", "sdt.table_name = t.table_name"} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("table-name query = %q, want catalogue condition %q", query, want)
+		}
+	}
+}
+
 func TestGetForeignKeysHandlesQueryErrorAndDatasetFilterSuccess(t *testing.T) {
 	t.Run("query error", func(t *testing.T) {
 		db, _ := openForeignKeyMockDB(t, []foreignKeyQueryResponse{

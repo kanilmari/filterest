@@ -271,27 +271,26 @@ export function buildMoveConfirmationModalOptions(moveImpact) {
         return null;
     }
 
+    // Messages come from language keys; the moved item's name and the project
+    // route are listed below the message, so no translation carries a name.
     if (moveImpact.crossProjectBoundary) {
         const fromProject = moveImpact.sourceProjectName;
         const toProject = moveImpact.targetProjectName;
-        let message = `Move ${moveImpact.itemType} "${moveImpact.itemName}" across a project boundary?`;
-        if (fromProject && toProject) {
-            message = `Move ${moveImpact.itemType} "${moveImpact.itemName}" from project "${fromProject}" to project "${toProject}"?`;
-        } else if (fromProject) {
-            message = `Move ${moveImpact.itemType} "${moveImpact.itemName}" out of project "${fromProject}"?`;
-        } else if (toProject) {
-            message = `Move ${moveImpact.itemType} "${moveImpact.itemName}" into project "${toProject}"?`;
-        }
-        if (moveImpact.itemType === 'folder') {
-            message += ' All tables inside the folder move with it.';
-        } else {
-            message += ' This changes which project includes the table.';
-        }
+        const isFolder = moveImpact.itemType === 'folder';
+        const projectRoute = fromProject || toProject
+            ? [fromProject, toProject].map((name) => name || '…').join(' → ')
+            : '';
 
         return {
             modalOptions: {
+                titleLangKey: 'tree_move_project_title',
                 titlePlainText: 'Move to another project?',
-                messagePlainText: message,
+                messageLangKey: isFolder ? 'tree_move_folder_to_project' : 'tree_move_table_to_project',
+                messagePlainText: isFolder
+                    ? 'Move this folder to another project? All tables inside it move with it.'
+                    : 'Move this table to another project? This changes which project includes the table.',
+                itemNames: [moveImpact.itemName, projectRoute].filter(Boolean),
+                confirmLangKey: 'tree_move_confirm',
                 confirmText: 'Move',
                 isDanger: true,
             },
@@ -303,14 +302,18 @@ export function buildMoveConfirmationModalOptions(moveImpact) {
     }
 
     if (moveImpact.itemType === 'table' && moveImpact.changesTopTabVisibility) {
-        const message = moveImpact.targetWillBeVisibleInTabs
-            ? `Move table "${moveImpact.itemName}" to the project root? It will appear in the project's main SVG tabs.`
-            : `Move table "${moveImpact.itemName}" into a subfolder? It will stay in the project but disappear from the project's main SVG tabs.`;
+        const toRoot = moveImpact.targetWillBeVisibleInTabs;
 
         return {
             modalOptions: {
+                titleLangKey: 'tree_move_tab_visibility_title',
                 titlePlainText: 'Change tab visibility?',
-                messagePlainText: message,
+                messageLangKey: toRoot ? 'tree_move_table_to_root' : 'tree_move_table_to_subfolder',
+                messagePlainText: toRoot
+                    ? 'Move this table to the project root? It will appear in the project\'s main tabs.'
+                    : 'Move this table into a subfolder? It stays in the project but leaves the project\'s main tabs.',
+                itemNames: [moveImpact.itemName].filter(Boolean),
+                confirmLangKey: 'tree_move_confirm',
                 confirmText: 'Move',
             },
             confirmFlags: {

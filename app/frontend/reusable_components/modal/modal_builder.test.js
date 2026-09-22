@@ -106,6 +106,7 @@ describe("modal_builder accessibility", () => {
             maxWidth: "100vw",
             maxHeight: "100vh",
         });
+        expect(first.modal.style.getPropertyValue("--modal-max-width")).toBe("100vw");
         first.modal.classList.add("image_modal", "image_first_view_modal");
         first.modal._imageModalClassNames = ["image_first_view_modal"];
         first.modal_overlay.classList.add(
@@ -121,14 +122,16 @@ describe("modal_builder accessibility", () => {
             titlePlainText: "Sign-in required",
             contentElements: [message],
             width: "520px",
-            maxWidth: "calc(100vw - 32px)",
         });
 
         expect(second.modal.classList.contains("image_modal")).toBe(false);
         expect(second.modal.classList.contains("image_first_view_modal")).toBe(false);
         expect(second.modal._imageModalClassNames).toEqual([]);
         expect(second.modal.style.width).toBe("520px");
-        expect(second.modal.style.maxWidth).toBe("calc(100vw - 32px)");
+        // The image viewer's width limit must not follow the next dialog;
+        // modals.css then applies the default limit and the phone margin.
+        expect(second.modal.style.getPropertyValue("--modal-max-width")).toBe("");
+        expect(second.modal.style.maxWidth).toBe("");
         expect(second.modal.style.maxHeight).toBe("");
         expect(second.modal_overlay.classList.contains("modal_overlay_blur")).toBe(false);
         expect(second.modal_overlay.classList.contains("image_first_view_overlay")).toBe(false);

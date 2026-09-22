@@ -432,7 +432,8 @@ function buildAttachmentRow({ row, rowIndex, childDataset, canDelete, canEditMet
             const ok = await showConfirmModal({
                 titleLangKey: "delete_confirm_title",
                 titlePlainText: "Vahvista poisto",
-                messagePlainText: `Poistetaanko liite "${itemName}"?`,
+                messageLangKey: "confirm_delete_attachment",
+                messagePlainText: "Delete this attachment?",
                 confirmLangKey: "delete",
                 confirmText: "Poista",
                 cancelLangKey: "dont_delete",

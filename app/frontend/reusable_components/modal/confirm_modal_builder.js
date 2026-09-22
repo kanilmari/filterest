@@ -30,7 +30,8 @@ export function showConfirmModal({
         };
 
         const messageEl = document.createElement('p');
-        messageEl.style.margin = '16px 0';
+        // The dialog's sheet owns the space above the message (modals.css).
+        messageEl.classList.add('modal_message');
         messageEl.dataset.testid = 'confirm-modal-message';
         if (messageLangKey) {
             messageEl.dataset.langKey = messageLangKey;
@@ -165,7 +166,7 @@ export function showInputModal({
 
         if (messageLangKey || messagePlainText) {
             const messageEl = document.createElement('p');
-            messageEl.style.margin = '16px 0';
+            messageEl.classList.add('modal_message');
             messageEl.dataset.testid = 'input-modal-message';
             if (messageLangKey) messageEl.dataset.langKey = messageLangKey;
             messageEl.textContent = messagePlainText || messageLangKey;

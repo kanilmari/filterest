@@ -439,7 +439,9 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
         const confirmed = await showConfirmModal({
             titleLangKey: "confirm_delete",
             messageLangKey: "confirm_delete_field_set",
-            messageText: `${fieldSet.name}?`,
+            messagePlainText: t("confirm_delete_field_set", "Poistetaanko tämä kenttäjoukko?"),
+            // The dialog lists names below its message; the key's text stays name-free.
+            itemNames: [fieldSet.name],
         });
         if (!confirmed) return;
         try {

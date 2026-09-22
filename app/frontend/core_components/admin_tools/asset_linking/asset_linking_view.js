@@ -45,8 +45,9 @@ export async function generate_asset_linking_view(container) {
             defaultMaxFileSizeMB: 10,
             maxFileSizeLabel: getTranslationForKey('max_file_size_mb') || 'Max Size (MB)',
             rowTestIdPrefix: 'asset-linking-image',
+            confirmRemoveLangKey: 'asset_linking_remove_images_confirm',
             confirmRemoveMessage: (assetState) =>
-                `Permanently remove image assets for "${assetState.parentTable}"? This will delete the child table "${assetState.childTable}" and ALL uploaded images.`,
+                `Permanently remove image assets for "${assetState.parentTable}"? The image table below and ALL uploaded images are deleted.`,
             enabledToastText: getTranslationForKey('image_assets_enabled') || 'Image assets enabled successfully',
             disabledToastText: getTranslationForKey('image_assets_disabled') || 'Image assets disabled',
             reenabledToastText: getTranslationForKey('image_assets_enabled') || 'Image assets re-enabled',
@@ -74,8 +75,9 @@ export async function generate_asset_linking_view(container) {
             defaultMaxFileSizeMB: 25,
             maxFileSizeLabel: getTranslationForKey('max_file_size_mb') || 'Max Size (MB)',
             rowTestIdPrefix: 'asset-linking-attachment',
+            confirmRemoveLangKey: 'asset_linking_remove_attachments_confirm',
             confirmRemoveMessage: (assetState) =>
-                `Permanently remove attachment linking for "${assetState.parentTable}"? This will delete the shared asset table "${assetState.childTable}" if no other asset profiles still use it.`,
+                `Permanently remove attachment linking for "${assetState.parentTable}"? The shared asset table below is deleted if no other asset profile still uses it.`,
             enabledToastText: 'Attachment linking enabled successfully',
             disabledToastText: 'Attachment linking disabled',
             reenabledToastText: 'Attachment linking re-enabled',
@@ -140,7 +142,7 @@ async function renderCapabilitySection(container, config) {
     addButton.addEventListener('click', async () => {
         const form = await createCapabilityEnableForm(container, config);
         createModal({
-            title: config.enableButtonText,
+            titlePlainText: config.enableButtonText,
             contentElements: [form],
             width: '500px'
         });
@@ -385,9 +387,12 @@ function createCapabilityActionsCell(container, config, assetState, capabilityEn
         removeButton.style.fontSize = '0.85em';
         removeButton.style.color = 'var(--danger_text, #721c24)';
         removeButton.addEventListener('click', async () => {
+            // The parent table fills the message's $table_name; the table that
+            // is deleted is listed below it.
             const ok = await showConfirmModal({
                 messagePlainText: config.confirmRemoveMessage(assetState),
-                messageLangKey: config.confirmRemoveLangKey,
+                messageLangKey: `${config.confirmRemoveLangKey}+${assetState.parentTable}`,
+                itemNames: [assetState.childTable].filter(Boolean),
                 isDanger: true
             });
             if (!ok) {

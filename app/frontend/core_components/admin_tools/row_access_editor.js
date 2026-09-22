@@ -392,7 +392,7 @@ export async function openRowAccessEditor(datasetName) {
         titleDataLangKey: "edit_row_permissions",
         titleDataLangKeyFallback: "Edit row permissions",
         contentElements: [content],
-        width: "min(calc(100vw - 32px), 760px)",
+        width: "760px",
         maxWidth: "760px",
         maxHeight: "min(calc(100dvh - 32px), 860px)",
         cleanupCallback: () => {

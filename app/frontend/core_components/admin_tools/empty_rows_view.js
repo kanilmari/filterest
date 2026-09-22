@@ -96,8 +96,9 @@ export async function generate_empty_rows_view(container) {
                 }
 
                 const ok = await showConfirmModal({
-                    messagePlainText: `Poistetaanko ${ids.length} riviä?`,
-                    messageLangKey: 'confirm_delete_rows',
+                    messagePlainText: `Delete ${ids.length} rows?`,
+                    // The count fills the translation's $count placeholder.
+                    messageLangKey: `confirm_delete_rows+${ids.length}`,
                     isDanger: true,
                 });
                 if (!ok) return;
@@ -169,7 +170,8 @@ export async function generate_media_tools_view(container) {
 
     archiveRootBtn.addEventListener('click', async () => {
         const ok = await showConfirmModal({
-            messagePlainText: 'Arkistoidaanko kaikki tuntemattomat storage-juurikansiot storage_deleted-hakemistoon?',
+            messagePlainText: 'Archive all unknown storage root folders into the storage_deleted folder?',
+            messageLangKey: 'confirm_archive_unknown_storage_roots',
             isDanger: true,
         });
         if (!ok) {
@@ -206,7 +208,8 @@ export async function generate_media_tools_view(container) {
 
     pruneArchivedBtn.addEventListener('click', async () => {
         const ok = await showConfirmModal({
-            messagePlainText: 'Poistetaanko pysyvästi kaikki arkistoidut storage_deleted-juurikansiot, joilla ei ole enää live-datasettia?',
+            messagePlainText: 'Permanently delete all archived storage_deleted root folders that no longer have a live dataset?',
+            messageLangKey: 'confirm_purge_archived_storage_roots',
             isDanger: true,
         });
         if (!ok) {

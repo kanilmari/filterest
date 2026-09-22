@@ -145,7 +145,9 @@ describe('admin_tree_builder move helpers', () => {
             confirm_cross_project_move: false,
             confirm_tab_visibility_change: true,
         });
-        expect(modal?.modalOptions.messagePlainText).toContain('disappear from the project\'s main SVG tabs');
+        expect(modal?.modalOptions.messagePlainText).toContain('leaves the project\'s main tabs');
+        expect(modal?.modalOptions.messageLangKey).toBe('tree_move_table_to_subfolder');
+        expect(modal?.modalOptions.itemNames).toEqual(['app_service_catalog']);
     });
 
     test('marks table moves between project roots as cross-project moves', async () => {
@@ -171,7 +173,9 @@ describe('admin_tree_builder move helpers', () => {
             confirm_cross_project_move: true,
             confirm_tab_visibility_change: false,
         });
-        expect(modal?.modalOptions.messagePlainText).toContain('from project "serlog" to project "tukisuu"');
+        expect(modal?.modalOptions.messageLangKey).toBe('tree_move_table_to_project');
+        expect(modal?.modalOptions.itemNames).toEqual(['app_service_catalog', 'serlog → tukisuu']);
+        expect(modal?.modalOptions.confirmLangKey).toBe('tree_move_confirm');
     });
 
     test('marks folder moves between project trees as cross-project moves', async () => {

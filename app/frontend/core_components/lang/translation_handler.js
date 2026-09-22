@@ -28,6 +28,8 @@ import { TABLE_CREATION_TRANSLATION_FALLBACKS } from '../general_tables/gt_3_tab
 import { MANAGE_TABLE_TRANSLATION_FALLBACKS } from '../general_tables/gt_2_column_crud/manage_table_translation_fallbacks.js';
 import { getDatasetColumnTypeTranslationFallbacks } from '../general_tables/dataset_form/dataset_column_type_catalog.js';
 import { FAILURE_NOTICE_TRANSLATION_FALLBACKS } from '../error_and_status_handling/error_monitor_handler_helpers.js';
+import { CONFIRM_PROMPT_TRANSLATION_FALLBACKS } from '../../reusable_components/modal/confirm_prompt_translation_fallbacks.js';
+import { FOREIGN_KEYS_TRANSLATION_FALLBACKS } from '../admin_tools/foreign_keys_translation_fallbacks.js';
 
 const LOCAL_TRANSLATION_FALLBACKS = {
     delete_confirm_title: {
@@ -53,6 +55,8 @@ const LOCAL_TRANSLATION_FALLBACKS = {
     ...getDatasetColumnTypeTranslationFallbacks(),
     ...TABLE_CREATION_TRANSLATION_FALLBACKS,
     ...FAILURE_NOTICE_TRANSLATION_FALLBACKS,
+    ...CONFIRM_PROMPT_TRANSLATION_FALLBACKS,
+    ...FOREIGN_KEYS_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),
     // Existing installations or cached responses may predate this bootstrap
     // key. Reviewed runtime translations still take priority over these labels.

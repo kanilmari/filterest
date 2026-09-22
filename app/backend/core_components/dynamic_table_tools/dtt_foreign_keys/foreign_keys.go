@@ -116,11 +116,22 @@ func columnExists(tableName, columnName string) bool {
 
 func GetTableNamesHandler(w http.ResponseWriter, r *http.Request) {
 	withAliases := r.URL.Query().Get("with_aliases") == "1"
+	// Lists the datasets: physical public tables that are also catalogued in
+	// system_db_tables. Permissions attach to a catalogued table_uid, so an
+	// uncatalogued internal table (such as the media registry) can never be
+	// authorised; listing it made every multi-dataset request built from this
+	// list, such as the foreign-keys admin page, fail with 403 for every
+	// administrator.
 	query := `
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-        ORDER BY table_name;
+        SELECT t.table_name
+        FROM information_schema.tables t
+        WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+          AND EXISTS (
+            SELECT 1 FROM system_db_tables sdt
+            WHERE sdt.table_name = t.table_name
+              AND COALESCE(NULLIF(sdt.schema_name, ''), 'public') = 'public'
+          )
+        ORDER BY t.table_name;
     `
 	rows, err := backend.Db.Query(query)
 	if err != nil {

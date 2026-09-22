@@ -22,7 +22,8 @@ export async function generate_foreign_keys_view(container) {
 
         // Luo "Add Foreign Key" -nappi
         const addButton = document.createElement('button');
-        addButton.textContent = 'Add Foreign Key';
+        addButton.dataset.langKey = 'add_foreign_key';
+        addButton.textContent = 'Add foreign key';
         addButton.id = 'open_modal_button';
         addButton.style.marginBottom = '20px';
         container.appendChild(addButton);
@@ -31,7 +32,7 @@ export async function generate_foreign_keys_view(container) {
         addButton.addEventListener('click', async () => {
             const form = await createForeignKeyForm(container);
             createModal({
-                titleDataLangKey: 'add-foreign-key',
+                titleDataLangKey: 'add_foreign_key',
                 contentElements: [form],
                 width: '600px'
             });
@@ -60,22 +61,18 @@ async function createForeignKeyForm(container) {
     const referencedTableDiv = document.createElement('div');
     const referencedColumnDiv = document.createElement('div');
 
-    // Lisää lomakkeeseen
-    form.appendChild(document.createTextNode('Referencing Table:'));
-    form.appendChild(referencingTableDiv);
-    form.appendChild(document.createElement('br'));
-
-    form.appendChild(document.createTextNode('Referencing Column:'));
-    form.appendChild(referencingColumnDiv);
-    form.appendChild(document.createElement('br'));
-
-    form.appendChild(document.createTextNode('Referenced Table:'));
-    form.appendChild(referencedTableDiv);
-    form.appendChild(document.createElement('br'));
-
-    form.appendChild(document.createTextNode('Referenced Column:'));
-    form.appendChild(referencedColumnDiv);
-    form.appendChild(document.createElement('br'));
+    // Lisää lomakkeeseen: each field's caption comes from a language key.
+    for (const [langKey, fallback, dropdownContainer] of [
+        ['referencing_table', 'Referencing table', referencingTableDiv],
+        ['referencing_column', 'Referencing column', referencingColumnDiv],
+        ['referenced_table', 'Referenced table', referencedTableDiv],
+        ['referenced_column', 'Referenced column', referencedColumnDiv],
+    ]) {
+        const caption = document.createElement('span');
+        caption.dataset.langKey = langKey;
+        caption.textContent = fallback;
+        form.append(caption, dropdownContainer, document.createElement('br'));
+    }
 
     // Haetaan dataset-nimet /api/dataset-names -endpointilta
     let tables = [];
@@ -95,7 +92,7 @@ async function createForeignKeyForm(container) {
     const referencingTableDropdown = createVanillaDropdown({
         containerElement: referencingTableDiv,
         options: tableOptions,
-        placeholder: getTranslationForKey('select_table') || 'Valitse taulu...',
+        placeholder: getTranslationForKey('select_table'),
         onChange: async (selectedValue) => {
             // Kun taulu vaihtuu, päivitetään referencingColumnDropdown
             await updateColumnsDropdown(selectedValue, referencingColumnDropdown);
@@ -106,7 +103,7 @@ async function createForeignKeyForm(container) {
     const referencingColumnDropdown = createVanillaDropdown({
         containerElement: referencingColumnDiv,
         options: [],  // Aloitetaan tyhjällä
-        placeholder: '-- Select Column --',
+        placeholder: getTranslationForKey('select_column'),
         onChange: (_selectedColumn) => {
             // Tarvittaessa tee jotain, kun column vaihtuu
         }
@@ -116,7 +113,7 @@ async function createForeignKeyForm(container) {
     const referencedTableDropdown = createVanillaDropdown({
         containerElement: referencedTableDiv,
         options: tableOptions,
-        placeholder: getTranslationForKey('select_table') || 'Valitse taulu...',
+        placeholder: getTranslationForKey('select_table'),
         onChange: async (selectedValue) => {
             await updateColumnsDropdown(selectedValue, referencedColumnDropdown);
         }
@@ -125,7 +122,7 @@ async function createForeignKeyForm(container) {
     const referencedColumnDropdown = createVanillaDropdown({
         containerElement: referencedColumnDiv,
         options: [],
-        placeholder: '-- Select Column --'
+        placeholder: getTranslationForKey('select_column')
     });
 
     // Ladataan aluksi column-listat (jos haluat, että ekat valinnat on esivalittu)
@@ -138,6 +135,7 @@ async function createForeignKeyForm(container) {
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
+    cancelButton.dataset.langKey = 'cancel';
     cancelButton.textContent = 'Cancel';
     cancelButton.classList.add('cancel-button');
     cancelButton.addEventListener('click', () => {
@@ -146,7 +144,8 @@ async function createForeignKeyForm(container) {
 
     const submitButton = document.createElement('button');
     submitButton.type = 'submit';
-    submitButton.textContent = 'Add Foreign Key';
+    submitButton.dataset.langKey = 'add_foreign_key';
+    submitButton.textContent = 'Add foreign key';
     submitButton.classList.add('submit-button');
 
     formActions.appendChild(cancelButton);
@@ -181,7 +180,7 @@ async function createForeignKeyForm(container) {
                 method: 'POST',
                 body_data: formObject
             });
-            showSuccessToast('Foreign key added successfully');
+            showSuccessToast(getTranslationForKey('foreign_key_added_successfully'));
             hideModal();
             generate_foreign_keys_view(container);
         } catch (error) {
@@ -253,6 +252,9 @@ async function displayForeignKeysTable(container) {
 
     columns.forEach(column => {
         const th = document.createElement('th');
+        // The columns are referencing_table, referencing_column, referenced_table
+        // and referenced_column; each name is also its caption's language key.
+        th.dataset.langKey = column;
         th.textContent = column;
         header_row.appendChild(th);
     });

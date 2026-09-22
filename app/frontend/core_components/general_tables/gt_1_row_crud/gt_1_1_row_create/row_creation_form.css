@@ -63,11 +63,9 @@
     margin-top: 2px;
 }
 
+/* The form lives only in a dialog, whose sheet margins frame it; it adds no
+   side padding of its own at any width. */
 @media (width <= 520px) {
-    .row-creation-form {
-        padding-inline: 10px;
-    }
-
     .row-creation-form__relation-fieldset {
         padding: 12px;
     }
