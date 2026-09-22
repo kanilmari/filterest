@@ -3854,6 +3854,1146 @@ CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(languag
 JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
 WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
 ON CONFLICT (lang_key_id, language_code) DO NOTHING;
+-- 20260922000004_seed_request_notice_and_interface_language_keys.sql
+-- Seeds the failed-request notices the API pipeline shows for 4xx, 429 and 503.
+-- Bridges the notices of request_failure_notice.js with the language keys of the
+-- installation, beside server_error_notice and network_error_notice (20260922000001).
+-- Exists because the rate-limit notice was Finnish only, the maintenance notice
+-- chose between hardcoded Finnish and English, and other refusals showed the
+-- route name and the raw server text.
+-- A nonempty translation is never overwritten. Running the file again changes
+-- nothing. The public bootstrap runs this same file, so a new installation
+-- receives the same rows. The other interface copy of this release follows in
+-- 20260922000005.
+-- Finnish and English are served from the columns of system_lang_keys and are
+-- mirrored into the normalized table as reviewed copy. Chinese (ch) and
+-- Cantonese (yue) fill only their own columns, as the earlier seeds do: they
+-- are not a review of the zh-CN, zh-TW or zh-HK locales.
+-- VERSION_DB: 9.8.1
+-- VERSION_DB_OWNER: 20260921000002_record_public_table_creation_release.sql
+
+-- Add the missing keys, fill only empty columns, and mirror the served
+-- Finnish and English into the normalized table where a row is missing.
+WITH authored_keys(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES
+        ('request_failed_notice',
+         'Pyyntöä ei voitu suorittaa.',
+         'The request could not be completed.',
+         '无法完成请求。',
+         '完成唔到呢個請求。',
+         'Failed-request notice: the service refused or could not complete the request (4xx). The status code follows in parentheses.'),
+        ('rate_limit_notice',
+         'Pyyntöjä tuli liian monta. Odota hetki ja yritä uudelleen.',
+         'Too many requests. Wait a moment and try again.',
+         '请求过多。请稍等片刻后重试。',
+         '請求太多。請等一陣再試。',
+         'Failed-request notice: the service refused the request because too many were sent in a short time (429).'),
+        ('service_unavailable_notice',
+         'Palvelu on hetkellisesti huoltotilassa. Yritä pian uudelleen.',
+         'The service is temporarily under maintenance. Please retry shortly.',
+         '服务正在临时维护。请稍后重试。',
+         '服務暫時維護緊。請稍後再試。',
+         'Failed-request notice: the service is temporarily unavailable, for example during maintenance or an update (503).')
+), written_keys AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, ch, yue, creation_spec)
+    SELECT lang_key, fi, en, ch, yue, creation_spec
+    FROM authored_keys
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+        ch = CASE WHEN NULLIF(btrim(existing.ch), '') IS NULL THEN EXCLUDED.ch ELSE existing.ch END,
+        yue = CASE WHEN NULLIF(btrim(existing.yue), '') IS NULL THEN EXCLUDED.yue ELSE existing.yue END,
+        creation_spec = CASE WHEN NULLIF(btrim(existing.creation_spec), '') IS NULL
+                             THEN EXCLUDED.creation_spec ELSE existing.creation_spec END,
+        updated = now()
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL
+       OR NULLIF(btrim(existing.en), '') IS NULL
+       OR NULLIF(btrim(existing.ch), '') IS NULL
+       OR NULLIF(btrim(existing.yue), '') IS NULL
+       OR NULLIF(btrim(existing.creation_spec), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en
+), served_keys AS (
+    -- One statement does not read its own writes, so the keys as they read
+    -- after it are the rows written above plus the rest of the authored keys.
+    SELECT id, fi, en FROM written_keys
+    UNION ALL
+    SELECT keys.id, keys.fi, keys.en
+    FROM public.system_lang_keys AS keys
+    JOIN authored_keys USING (lang_key)
+    WHERE keys.lang_key NOT IN (SELECT lang_key FROM written_keys)
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM served_keys AS served
+CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(language_code, translation)
+JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
+WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO NOTHING;
+-- 20260922000005_seed_interface_language_keys_of_9_8_1.sql
+-- Seeds the interface copy the other 9.8.1 changes added as frontend fallback text.
+-- Bridges the dataset form, the shared confirm and input dialogs and the other
+-- screens changed in this release with the language keys of the installation.
+-- Exists so every label, hint and question reads in the languages of the site
+-- from its own translations, and so copy an earlier seed or a generated
+-- placeholder wrote gives way to its reviewed successor.
+-- A nonempty translation is never overwritten; only the exact superseded wording
+-- listed in step 1 gives way. Running the file again changes nothing. The public
+-- bootstrap runs this same file, so a new installation receives the same rows.
+-- Finnish and English are served from the columns of system_lang_keys and are
+-- mirrored into the normalized table as reviewed copy. Chinese (ch) and
+-- Cantonese (yue) fill only their own columns, as the earlier seeds do: they
+-- are not a review of the zh-CN, zh-TW or zh-HK locales. Placeholders such as
+-- {folder}, {dataset}, $count and $table_name are filled by the page and stay
+-- literal in every language.
+-- VERSION_DB: 9.8.1
+-- VERSION_DB_OWNER: 20260921000002_record_public_table_creation_release.sql
+
+-- 1. Wording that is withdrawn where a site still holds exactly it: copy an
+--    earlier seed wrote before it was rewritten, and wording generated from
+--    the name of a key. It then counts as missing copy and is filled in step 2
+--    like any empty value. Any other text, a reviewed translation included,
+--    stays as it is. NULL matches nothing.
+WITH superseded_copy(lang_key, fi, en, ch, yue) AS (
+    VALUES
+        -- Seeded by 20260922000001, before new datasets defaulted to the folder of the current project.
+        ('table_folder_hint', 'Valitse olemassa oleva kansio tai luo uusi. Oletuskansio on database / other_tables.', 'Choose an existing folder or create one. The default folder is database / other_tables.', '选择现有文件夹或创建新文件夹。默认文件夹为 database / other_tables。', '選擇現有資料夾或建立新資料夾。預設資料夾係 database / other_tables。'),
+        -- Generated from the name of the key and its machine translation, never reviewed.
+        ('confirm_save_permissions', 'Vahvista tallennusoikeudet', 'Confirm save permissions', NULL, NULL)
+), withdrawn_translations AS (
+    DELETE FROM public.system_lang_key_translations AS stored
+    USING public.system_lang_keys AS keys, superseded_copy AS superseded
+    WHERE keys.id = stored.lang_key_id
+      AND keys.lang_key = superseded.lang_key
+      AND ((stored.language_code = 'fi' AND stored.translation = superseded.fi)
+        OR (stored.language_code = 'en' AND stored.translation = superseded.en))
+    RETURNING stored.lang_key_id
+)
+UPDATE public.system_lang_keys AS keys
+SET fi = CASE WHEN keys.fi = superseded.fi THEN NULL ELSE keys.fi END,
+    en = CASE WHEN keys.en = superseded.en THEN NULL ELSE keys.en END,
+    ch = CASE WHEN keys.ch = superseded.ch THEN NULL ELSE keys.ch END,
+    yue = CASE WHEN keys.yue = superseded.yue THEN NULL ELSE keys.yue END,
+    updated = now()
+FROM superseded_copy AS superseded
+WHERE keys.lang_key = superseded.lang_key
+  AND (keys.fi = superseded.fi OR keys.en = superseded.en
+    OR keys.ch = superseded.ch OR keys.yue = superseded.yue);
+
+-- 2. Add the missing keys, fill only empty columns, and mirror the served
+--    Finnish and English into the normalized table where a row is missing.
+WITH authored_keys(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES
+        -- Dataset form: folder of a new dataset (dataset_form_translation_fallbacks.js).
+        ('table_folder_hint',
+         'Uusi aineisto tallennetaan oletuksena nykyisen projektin kansioon, jolloin se näkyy sivuston navigaatiossa. Jos projektia ei ole valittu, oletus on database / other_tables. Muiden kansioiden aineistot eivät näy navigaatiossa.',
+         'By default a new dataset goes into the current project''s folder, where it appears in the site navigation. Without a current project the default is database / other_tables. Datasets in other folders do not appear in the navigation.',
+         '新数据集默认放入当前项目的文件夹，并显示在网站导航中。如果没有当前项目，默认文件夹为 database / other_tables。其他文件夹中的数据集不会显示在导航中。',
+         '新資料集預設會放入目前項目嘅資料夾，並會喺網站導覽顯示。如果冇目前項目，預設資料夾係 database / other_tables。其他資料夾入面嘅資料集唔會喺導覽顯示。',
+         'Dataset form: hint under the folder selector of a new dataset.'),
+        ('dataset_folder_for_new_dataset',
+         'Valitse kansio uudelle taululle',
+         'Choose a folder for the new dataset',
+         '为新数据集选择文件夹',
+         '為新資料集選擇資料夾',
+         'Dataset form: label of the folder choice of a new dataset, where a new folder can also be created.'),
+        ('dataset_folder_option_current_project',
+         '{folder} (nykyinen projekti)',
+         '{folder} (current project)',
+         '{folder}（当前项目）',
+         '{folder}（目前項目）',
+         'Dataset form: folder option that is the folder of the current project. {folder} is the folder name.'),
+        ('dataset_new_folder_open',
+         'Uusi kansio…',
+         'New folder…',
+         '新建文件夹…',
+         '新增資料夾…',
+         'Dataset form: button that opens the fields for creating a new folder.'),
+        ('dataset_new_folder_cancel',
+         'Älä luo uutta kansiota',
+         'Don''t create a new folder',
+         '不新建文件夹',
+         '唔新增資料夾',
+         'Dataset form: button that closes the new-folder fields without creating a folder.'),
+        ('dataset_new_folder_parent',
+         'Uuden kansion yläkansio',
+         'Parent folder of the new folder',
+         '新文件夹的上级文件夹',
+         '新資料夾嘅上層資料夾',
+         'Dataset form: label of the parent-folder selector of a new folder.'),
+        ('dataset_new_folder_name_required',
+         'Anna uudelle kansiolle nimi tai valitse, ettei uutta kansiota luoda.',
+         'Name the new folder, or choose not to create one.',
+         '请为新文件夹命名，或选择不新建文件夹。',
+         '請為新資料夾命名，或者揀唔新增資料夾。',
+         'Dataset form: validation message when the new-folder fields are open but the name is empty.'),
+        ('dataset_select_target',
+         'Valitse aineisto',
+         'Choose a dataset',
+         '选择数据集',
+         '選擇資料集',
+         'Dataset form: placeholder of the selector that chooses the dataset a foreign key refers to.'),
+        ('dataset_created_in_folder',
+         'Aineisto {dataset} luotiin kansioon {folder}.',
+         'Dataset {dataset} was created in the folder {folder}.',
+         '数据集 {dataset} 已创建在文件夹 {folder} 中。',
+         '資料集 {dataset} 已經建立喺資料夾 {folder}。',
+         'Dataset form: success notice after creation. {dataset} and {folder} are the dataset and folder names.'),
+        ('dataset_created_outside_navigation',
+         'Se ei näy sivuston navigaatiossa, koska navigaatio näyttää vain nykyisen projektin kansiossa suoraan olevat aineistot. Voit siirtää sen aineiston hallinnasta.',
+         'It will not appear in the site navigation, which lists only the datasets directly in the current project''s folder. You can move it in the dataset''s Manage table dialog.',
+         '它不会显示在网站导航中，因为导航只列出直接位于当前项目文件夹中的数据集。您可以在数据集的管理窗口中移动它。',
+         '佢唔會喺網站導覽顯示，因為導覽只會列出直接喺目前項目資料夾入面嘅資料集。你可以喺資料集嘅管理視窗移動佢。',
+         'Dataset form: note after creation when the new dataset is outside the folder the site navigation lists.'),
+        ('dataset_open',
+         'Avaa aineisto',
+         'Open dataset',
+         '打开数据集',
+         '開啟資料集',
+         'Dataset form: button in the creation notice that opens the new dataset.'),
+        -- Shared confirm and input dialogs (confirm_prompt_translation_fallbacks.js).
+        ('confirm',
+         'Vahvista',
+         'Confirm',
+         '确认',
+         '確認',
+         'Confirm dialog: default confirming button.'),
+        ('continue',
+         'Jatka',
+         'Continue',
+         '继续',
+         '繼續',
+         'Input dialog: button that continues with the entered value, as in the current-password prompt.'),
+        ('confirm_current_password_message',
+         'Vahvista muutos antamalla nykyinen salasanasi.',
+         'Enter your current password to confirm this change.',
+         '请输入当前密码以确认此更改。',
+         '請輸入而家嘅密碼確認呢個更改。',
+         'User profile: prompt asking for the current password before an account change.'),
+        ('confirm_delete_folder',
+         'Poistetaanko tämä kansio? Vain tyhjän kansion voi poistaa.',
+         'Delete this folder? Only empty folders can be deleted.',
+         '要删除此文件夹吗？只能删除空文件夹。',
+         '要刪除呢個資料夾嗎？只可以刪除空資料夾。',
+         'Navigation tree: question before deleting a folder.'),
+        ('tree_move_project_title',
+         'Siirretäänkö toiseen projektiin?',
+         'Move to another project?',
+         '移动到另一个项目？',
+         '移去另一個項目？',
+         'Navigation tree: title of the question before moving an item to another project.'),
+        ('tree_move_folder_to_project',
+         'Siirretäänkö tämä kansio toiseen projektiin? Kaikki kansion taulut siirtyvät sen mukana.',
+         'Move this folder to another project? All tables inside it move with it.',
+         '要将此文件夹移动到另一个项目吗？其中的所有表都会一起移动。',
+         '要將呢個資料夾移去另一個項目嗎？入面所有表都會一齊移動。',
+         'Navigation tree: question before moving a folder to another project.'),
+        ('tree_move_table_to_project',
+         'Siirretäänkö tämä taulu toiseen projektiin? Taulun projekti vaihtuu.',
+         'Move this table to another project? This changes which project includes the table.',
+         '要将此表移动到另一个项目吗？这会改变包含该表的项目。',
+         '要將呢個表移去另一個項目嗎？咁會改變包含呢個表嘅項目。',
+         'Navigation tree: question before moving a table to another project.'),
+        ('tree_move_tab_visibility_title',
+         'Muutetaanko välilehtien näkyvyyttä?',
+         'Change tab visibility?',
+         '更改标签页可见性？',
+         '更改分頁可見性？',
+         'Navigation tree: title of the question before a move that changes the main tabs of a project.'),
+        ('tree_move_table_to_root',
+         'Siirretäänkö tämä taulu projektin juureen? Se näkyy projektin päävälilehdissä.',
+         'Move this table to the project root? It will appear in the project''s main tabs.',
+         '要将此表移动到项目根目录吗？它将显示在项目的主标签页中。',
+         '要將呢個表移去項目根目錄嗎？佢會喺項目嘅主分頁度顯示。',
+         'Navigation tree: question before moving a table to the root of its project.'),
+        ('tree_move_table_to_subfolder',
+         'Siirretäänkö tämä taulu alikansioon? Se pysyy projektissa, mutta poistuu projektin päävälilehdistä.',
+         'Move this table into a subfolder? It stays in the project but leaves the project''s main tabs.',
+         '要将此表移动到子文件夹吗？它仍在项目中，但会从项目的主标签页中移除。',
+         '要將呢個表移入子資料夾嗎？佢仍然喺項目入面，但會喺項目嘅主分頁度消失。',
+         'Navigation tree: question before moving a table into a subfolder of its project.'),
+        ('tree_move_confirm',
+         'Siirrä',
+         'Move',
+         '移动',
+         '移動',
+         'Navigation tree: confirming button of a move question.'),
+        ('confirm_delete_rows',
+         'Poistetaanko $count riviä?',
+         'Delete $count rows?',
+         '要删除 $count 行吗？',
+         '要刪除 $count 行嗎？',
+         'Admin tools: question before deleting rows. $count is the number of rows.'),
+        ('confirm_archive_unknown_storage_roots',
+         'Arkistoidaanko kaikki tuntemattomat tallennustilan juurikansiot storage_deleted-kansioon?',
+         'Archive all unknown storage root folders into the storage_deleted folder?',
+         '要将所有未知的存储根文件夹归档到 storage_deleted 文件夹吗？',
+         '要將所有未知嘅儲存根資料夾封存去 storage_deleted 資料夾嗎？',
+         'Admin tools: question before archiving unknown storage root folders.'),
+        ('confirm_purge_archived_storage_roots',
+         'Poistetaanko pysyvästi kaikki arkistoidut storage_deleted-juurikansiot, joilla ei enää ole käytössä olevaa aineistoa?',
+         'Permanently delete all archived storage_deleted root folders that no longer have a live dataset?',
+         '要永久删除所有不再对应在用数据集的已归档 storage_deleted 根文件夹吗？',
+         '要永久刪除所有已經冇對應在用資料集嘅已封存 storage_deleted 根資料夾嗎？',
+         'Admin tools: question before permanently deleting archived storage root folders.'),
+        ('confirm_save_child_tab_config',
+         'Tallennetaanko muutokset ennen taulun vaihtoa?',
+         'Save changes before switching tables?',
+         '切换表之前保存更改吗？',
+         '切換表之前要唔要儲存變更？',
+         'Admin tools: question before switching tables with unsaved child-tab settings.'),
+        ('confirm_save_child_tab_config_on_exit',
+         'Tallennetaanko muutokset ennen muokkauksen lopettamista?',
+         'Save changes before you stop editing?',
+         '停止编辑前保存更改吗？',
+         '停止編輯之前要唔要儲存變更？',
+         'Admin tools: question before leaving the child-tab settings with unsaved changes.'),
+        ('confirm_save_card_visibility',
+         'Tallennetaanko muutokset ennen taulun vaihtoa?',
+         'Save changes before switching tables?',
+         '切换表之前保存更改吗？',
+         '切換表之前要唔要儲存變更？',
+         'Admin tools: question before switching tables with unsaved card visibility settings.'),
+        ('confirm_delete_foreign_key',
+         'Poistetaanko valittu viiteavain?',
+         'Delete the selected foreign key?',
+         '要删除所选外键吗？',
+         '要刪除所選外鍵嗎？',
+         'Admin tools: question before deleting a foreign key.'),
+        ('confirm_fix_all_issues',
+         'Korjataanko kaikki korjattavissa olevat ongelmat? Tätä ei voi perua.',
+         'Fix all fixable issues? This cannot be undone.',
+         '要修复所有可修复的问题吗？此操作无法撤销。',
+         '要修復所有可以修復嘅問題嗎？呢個操作無法撤銷。',
+         'Admin tools: question before fixing every fixable database consistency issue.'),
+        ('asset_linking_remove_images_confirm',
+         'Poistetaanko taulun "$table_name" kuvaliitokset pysyvästi? Alla näkyvä kuvataulu ja KAIKKI ladatut kuvat poistetaan.',
+         'Permanently remove image assets for "$table_name"? The image table below and ALL uploaded images are deleted.',
+         '要永久移除“$table_name”的图片资源吗？下方的图片表和所有已上传的图片都会被删除。',
+         '要永久移除「$table_name」嘅圖片資源嗎？下面嘅圖片表同所有已上載嘅圖片都會被刪除。',
+         'Admin tools: question before removing the image assets of a table. $table_name is the table.'),
+        ('asset_linking_remove_attachments_confirm',
+         'Poistetaanko taulun "$table_name" liitekytkentä pysyvästi? Alla näkyvä jaettu liitetaulu poistetaan, jos mikään muu liiteprofiili ei enää käytä sitä.',
+         'Permanently remove attachment linking for "$table_name"? The shared asset table below is deleted if no other asset profile still uses it.',
+         '要永久移除“$table_name”的附件关联吗？如果没有其他资源配置仍在使用，下方的共享资源表将被删除。',
+         '要永久移除「$table_name」嘅附件關聯嗎？如果冇其他資源設定仲用緊，下面嘅共用資源表會被刪除。',
+         'Admin tools: question before removing the attachment linking of a table. $table_name is the table.'),
+        ('confirm_delete_image',
+         'Poistetaanko tämä kuva?',
+         'Delete this image?',
+         '要删除此图片吗？',
+         '要刪除呢張圖片嗎？',
+         'Article view: question before deleting an image.'),
+        ('confirm_delete_attachment',
+         'Poistetaanko tämä liite?',
+         'Delete this attachment?',
+         '要删除此附件吗？',
+         '要刪除呢個附件嗎？',
+         'Article view: question before deleting an attachment.'),
+        -- Dataset chat: the two coding-agent modes and their availability (table_chat_coding_agent_copy.js). Keys an earlier seed wrote in Finnish and English only keep that description and gain Chinese and Cantonese.
+        ('coding_agent_mode_code_workspace',
+         'Koodityötila (Codex)',
+         'Code workspace (Codex)',
+         '代码工作区 (Codex)',
+         '程式碼工作區 (Codex)',
+         'Dataset chat: name of the mode that edits the code of this machine, in the selector, the waiting message and the answer footer.'),
+        ('coding_agent_mode_site_assistant',
+         'Sivustoavustaja (Codex)',
+         'Site assistant (Codex)',
+         '站点助手 (Codex)',
+         '網站助手 (Codex)',
+         'Dataset chat: name of the API-only site assistant mode, in the selector, the waiting message and the answer footer.'),
+        ('coding_agent_code_workspace_started',
+         'Koodityötila aloitti työn.',
+         'Code workspace started working.',
+         '代码工作区已开始工作。',
+         '程式碼工作區開始咗工作。',
+         'Dataset chat: first waiting message of the code workspace.'),
+        ('coding_agent_code_workspace_context',
+         'Codex lukee keskustelua ja tämän koneen koodia.',
+         'Codex is reading the chat and this machine''s code.',
+         'Codex 正在阅读对话和本机代码。',
+         'Codex 睇緊對話同呢部機嘅程式碼。',
+         'Dataset chat: code workspace waiting message about reading the chat and the code.'),
+        ('coding_agent_code_workspace_scope',
+         'Koodityötila voi muokata tämän koneen koodia, ajaa testejä ja käynnistää kehityspalvelimen uudelleen.',
+         'Code workspace may edit this machine''s code, run tests and restart the development server.',
+         '代码工作区可以编辑本机代码、运行测试并重启开发服务器。',
+         '程式碼工作區可以改呢部機嘅程式碼、行測試同重新啟動開發伺服器。',
+         'Dataset chat: code workspace waiting message about what it may change.'),
+        ('coding_agent_code_workspace_working',
+         'Koodityötila työskentelee edelleen.',
+         'Code workspace is still working.',
+         '代码工作区仍在工作。',
+         '程式碼工作區仲做緊。',
+         'Dataset chat: continuing waiting message of the code workspace.'),
+        ('coding_agent_code_workspace_duration',
+         'Pitkä koodityö voi kestää enintään 40 minuuttia. Palvelimen uudelleenkäynnistys ei keskeytä sitä.',
+         'Long code work may take up to 40 minutes. A server restart does not interrupt it.',
+         '较长的代码工作最多可能需要 40 分钟。重启服务器不会中断它。',
+         '長嘅程式碼工作最多可能要 40 分鐘。重新啟動伺服器唔會打斷佢。',
+         'Dataset chat: duration guidance for the code workspace.'),
+        ('coding_agent_not_running',
+         'Koodausagentin ajuri ei ole käynnissä. Käynnistä se kehityskoneella komennolla ./ctl agent start.',
+         'The coding agent runner is not running. On the development machine, start it with ./ctl agent start.',
+         '编码代理运行器未运行。请在开发机器上用 ./ctl agent start 启动它。',
+         '編碼代理執行器冇行緊。喺開發機用 ./ctl agent start 啟動佢。',
+         'Dataset chat: the coding agent runner is not running on the development machine.'),
+        ('coding_agent_sign_in_required',
+         'Codex ei ole kirjautunut tällä koneella. Kirjaudu komennolla codex login ja tarkista ./ctl agent check.',
+         'Codex is not signed in on this machine. Sign in with codex login, then run ./ctl agent check.',
+         'Codex 尚未在本机登录。请用 codex login 登录，然后运行 ./ctl agent check。',
+         'Codex 未喺呢部機登入。用 codex login 登入，再行 ./ctl agent check。',
+         'Dataset chat: Codex is not signed in on the development machine.'),
+        ('coding_agent_answered_by',
+         'Vastasi',
+         'Answered by',
+         '回答者',
+         '回答者',
+         'Dataset chat: prefix of the answer footer naming the mode that answered.'),
+        ('site_assistant_started',
+         'Sivustoavustaja aloitti työn.',
+         'Site assistant started working.',
+         '站点助手已开始工作。',
+         '網站助手開始咗工作。',
+         'Dataset chat: first waiting message for the API-only site assistant.'),
+        ('site_assistant_context',
+         'Sivustoavustaja lukee keskustelua ja sivuston kontekstia.',
+         'Site assistant is reading the chat and site context.',
+         '站点助手正在阅读对话和站点上下文。',
+         '網站助手睇緊對話同網站內容。',
+         'Dataset chat: site assistant waiting message about reading context.'),
+        ('site_assistant_scope',
+         'Sivustoavustaja voi tarkistaa sivustoa ja valmistella API-muutoksia hyväksyttäväksesi.',
+         'Site assistant may inspect the site and prepare API changes for your approval.',
+         '站点助手可以检查站点并准备 API 更改供您批准。',
+         '網站助手可以檢查網站同準備 API 更改俾你批准。',
+         'Dataset chat: site assistant waiting message about its approved API boundary.'),
+        ('site_assistant_working',
+         'Sivustoavustaja työskentelee edelleen.',
+         'Site assistant is still working.',
+         '站点助手仍在工作。',
+         '網站助手仲做緊。',
+         'Dataset chat: continuing waiting message for the site assistant.'),
+        ('site_assistant_duration',
+         'Pitkä sivustoavustajan työ voi kestää enintään 40 minuuttia.',
+         'Long site-assistant jobs may take up to 40 minutes.',
+         '较长的站点助手工作最多可能需要 40 分钟。',
+         '長嘅網站助手工作最多可能要 40 分鐘。',
+         'Dataset chat: duration guidance for the site assistant.'),
+        ('coding_agent_service_label',
+         'Tekoälypalvelu',
+         'AI service',
+         'AI 服务',
+         'AI 服務',
+         'Dataset chat: label of the AI service selector.'),
+        ('coding_agent_service_api',
+         'API-tekoäly',
+         'API AI',
+         'API AI',
+         'API AI',
+         'Dataset chat: AI service option that answers from dataset reads.'),
+        ('coding_agent_checking',
+         'Tarkistetaan saatavuutta…',
+         'Checking availability…',
+         '正在检查可用性…',
+         '檢查緊可唔可以用…',
+         'Dataset chat: status while assistant availability is being read.'),
+        ('coding_agent_not_ready',
+         'Koodausagentti ei ole valmis. Ylläpitäjän on viimeisteltävä sen käyttöönotto.',
+         'Coding agent is not ready. An administrator must finish its setup.',
+         '编码代理尚未就绪。管理员必须完成设置。',
+         '編碼代理未準備好。管理員要完成設定。',
+         'Dataset chat: assistant is permitted but its runner setup is unfinished.'),
+        ('coding_agent_dev_only',
+         'Koodausagentti on rajattu kehitysympäristöön.',
+         'Coding agent is restricted to development.',
+         '编码代理仅限开发环境使用。',
+         '編碼代理只限開發環境用。',
+         'Dataset chat: assistant is allowed only in the development environment.'),
+        ('coding_agent_job_pending',
+         'Työ on yhä käynnissä. Keskustelun avaaminen jatkaa sen tilan seurantaa.',
+         'A job is still running. Reopening this chat resumes its status.',
+         '任务仍在运行。重新打开此对话将继续显示其状态。',
+         '工作仲行緊。再打開呢個對話會繼續顯示佢嘅狀態。',
+         'Dataset chat: an assistant job continues after the chat is closed.'),
+        ('coding_agent_job_failed',
+         'Työ keskeytyi tai epäonnistui. Sen loki säilyy ylläpitäjälle.',
+         'The job stopped or failed. Its log remains available to the administrator.',
+         '任务已停止或失败。其日志仍可供管理员查看。',
+         '工作停咗或者失敗咗。佢嘅記錄仍然俾管理員睇到。',
+         'Dataset chat: an assistant job ended without an answer.'),
+        -- Embedding status view of the administration (embedding_status_translation_fallbacks.js).
+        ('embedding_status_title',
+         'Upotusten tila',
+         'Embedding status',
+         '嵌入状态',
+         '嵌入狀態',
+         'Embedding status view: title.'),
+        ('embedding_status_intro',
+         'Tästä näet, mitkä aineistot on upotettu, kuinka kattavasti ja millä mallilla. Näkymä vain lukee tietoja.',
+         'See which datasets are embedded, how completely and with which model. This view only reads.',
+         '查看哪些数据集已嵌入、覆盖程度以及使用的模型。此视图只读取数据。',
+         '睇吓邊啲資料集已經嵌入、覆蓋幾多，同埋用咗邊個模型。呢個畫面只會讀取資料。',
+         'Embedding status view: introduction under the title.'),
+        ('embedding_status_loading',
+         'Luetaan upotusten tilaa…',
+         'Reading the embedding status…',
+         '正在读取嵌入状态…',
+         '讀緊嵌入狀態…',
+         'Embedding status view: status while the view is read.'),
+        ('embedding_status_unavailable',
+         'Upotusten tilaa ei voitu lukea.',
+         'The embedding status could not be read.',
+         '无法读取嵌入状态。',
+         '讀取唔到嵌入狀態。',
+         'Embedding status view: message when the status could not be read.'),
+        ('embedding_status_empty',
+         'Yhtään aineistoa ei löytynyt.',
+         'No datasets found.',
+         '未找到数据集。',
+         '搵唔到資料集。',
+         'Embedding status view: message when no dataset exists.'),
+        ('embedding_status_provider',
+         'Palvelu',
+         'Provider',
+         '服务商',
+         '服務供應商',
+         'Embedding status view: label of the embedding provider.'),
+        ('embedding_status_model',
+         'Malli',
+         'Model',
+         '模型',
+         '模型',
+         'Embedding status view: label of the embedding model.'),
+        ('embedding_status_dimensions',
+         '$count ulottuvuutta',
+         '$count dimensions',
+         '$count 维',
+         '$count 維',
+         'Embedding status view: vector size of the model. $count is the number of dimensions.'),
+        ('embedding_status_key_configured',
+         'API-avain asetettu',
+         'API key configured',
+         '已配置 API 密钥',
+         '已設定 API 金鑰',
+         'Embedding status view: the API key of the provider is set.'),
+        ('embedding_status_key_missing',
+         'API-avain puuttuu',
+         'API key missing',
+         '缺少 API 密钥',
+         '欠缺 API 金鑰',
+         'Embedding status view: the API key of the provider is missing.'),
+        ('embedding_status_column_dataset',
+         'Aineisto',
+         'Dataset',
+         '数据集',
+         '資料集',
+         'Embedding status view: column heading: dataset.'),
+        ('embedding_status_column_state',
+         'Tila',
+         'State',
+         '状态',
+         '狀態',
+         'Embedding status view: column heading: embedding state.'),
+        ('embedding_status_column_rows',
+         'Upotetut rivit',
+         'Embedded rows',
+         '已嵌入的行',
+         '已嵌入嘅行',
+         'Embedding status view: column heading: embedded rows.'),
+        ('embedding_status_column_changed',
+         'Muuttunut upotuksen jälkeen',
+         'Changed since embedding',
+         '嵌入后已更改',
+         '嵌入之後有改動',
+         'Embedding status view: column heading: rows changed since their embedding.'),
+        ('embedding_status_changed_hint',
+         'Rivit, joita on muokattu kieliupotuksen luomisen jälkeen. Upotus ei ehkä enää vastaa niiden sisältöä.',
+         'Rows edited after their language embedding was made. The embedding may no longer match them.',
+         '在语言嵌入生成后被编辑的行。嵌入可能已不再与其内容相符。',
+         '語言嵌入整好之後再被改過嘅行。嵌入可能已經唔再啱佢哋嘅內容。',
+         'Embedding status view: explanation of the changed-since-embedding column.'),
+        ('embedding_status_column_languages',
+         'Kielet',
+         'Languages',
+         '语言',
+         '語言',
+         'Embedding status view: column heading: embedded languages.'),
+        ('embedding_status_column_refreshed',
+         'Viimeksi päivitetty',
+         'Last refreshed',
+         '上次刷新',
+         '上次更新',
+         'Embedding status view: column heading: time of the last refresh.'),
+        ('embedding_status_column_automatic',
+         'Päivittyy rivin muuttuessa',
+         'Updates when a row changes',
+         '行更改时自动更新',
+         '行有改動時自動更新',
+         'Embedding status view: column heading: whether embeddings refresh when a row changes.'),
+        ('embedding_status_state_embedded',
+         'Upotettu',
+         'Embedded',
+         '已嵌入',
+         '已嵌入',
+         'Embedding status view: state: every row is embedded.'),
+        ('embedding_status_state_partial',
+         'Osittain upotettu',
+         'Partly embedded',
+         '部分嵌入',
+         '部分嵌入',
+         'Embedding status view: state: some rows are embedded.'),
+        ('embedding_status_state_none',
+         'Ei upotettu',
+         'Not embedded',
+         '未嵌入',
+         '未嵌入',
+         'Embedding status view: state: no row is embedded.'),
+        ('embedding_status_state_unavailable',
+         'Tila ei saatavilla',
+         'Status unavailable',
+         '状态不可用',
+         '狀態唔可用',
+         'Embedding status view: state: the status of the dataset could not be read.'),
+        ('embedding_status_rows_without',
+         '$count ilman upotusta',
+         '$count without an embedding',
+         '$count 行没有嵌入',
+         '$count 行未有嵌入',
+         'Embedding status view: rows without an embedding. $count is the number of rows.'),
+        ('embedding_status_not_tracked',
+         'Ei seurata',
+         'Not tracked',
+         '未跟踪',
+         '冇追蹤',
+         'Embedding status view: value when the time of an embedding is not stored.'),
+        ('embedding_status_not_tracked_hint',
+         'Yleiselle upotukselle ei tallenneta aikaa, joten sen ikää tai rivin myöhempiä muutoksia ei tiedetä.',
+         'The general embedding stores no time, so its age and later row changes are unknown.',
+         '通用嵌入不记录时间，因此无法得知其生成时间以及之后的行更改。',
+         '通用嵌入冇記錄時間，所以唔知佢幾時整，亦唔知之後行有冇改動。',
+         'Embedding status view: explanation of why the general embedding has no time.'),
+        ('embedding_status_general_embedding',
+         'Yleinen, kaikki kielet yhdessä',
+         'General, all languages together',
+         '通用，所有语言合并',
+         '通用，所有語言合埋',
+         'Embedding status view: name of the general embedding that covers all languages.'),
+        ('embedding_status_current_model',
+         'Nykyinen malli',
+         'Current model',
+         '当前模型',
+         '而家嘅模型',
+         'Embedding status view: embeddings made with the current model.'),
+        ('embedding_status_other_model',
+         '$count tehty toisella mallilla',
+         '$count made with another model',
+         '$count 个由其他模型生成',
+         '$count 個由其他模型整',
+         'Embedding status view: embeddings made with another model. $count is their number.'),
+        ('embedding_status_other_model_hint',
+         'Nämä upotukset eivät vastaa nykyistä mallia, joten haku ei voi verrata niitä. Luo ne uudelleen.',
+         'These embeddings do not match the current model, so search cannot compare them. Create them again.',
+         '这些嵌入与当前模型不匹配，搜索无法比较它们。请重新生成。',
+         '呢啲嵌入同而家嘅模型唔夾，搜尋冇辦法比較。請重新整過。',
+         'Embedding status view: explanation of why embeddings of another model must be made again.'),
+        ('embedding_status_orphans',
+         '$count poistettujen rivien upotusta',
+         '$count embeddings of deleted rows',
+         '$count 个已删除行的嵌入',
+         '$count 個已刪除行嘅嵌入',
+         'Embedding status view: embeddings left from deleted rows. $count is their number.'),
+        ('embedding_status_automatic_on',
+         'Kyllä',
+         'Yes',
+         '是',
+         '係',
+         'Embedding status view: value when embeddings refresh automatically.'),
+        ('embedding_status_blocker_no_embedding_storage',
+         'Ei – aineistolla ei ole upotuksia',
+         'No – the dataset has no embeddings',
+         '否 – 数据集没有嵌入',
+         '唔會 – 資料集冇嵌入',
+         'Embedding status view: why automatic refresh is off: the dataset has no embeddings.'),
+        ('embedding_status_blocker_provider_sending_disabled',
+         'Ei – ulkoiset upotukset eivät ole käytössä tälle taululle',
+         'No – external embeddings are not enabled for this table',
+         '否 – 此表未启用外部嵌入',
+         '唔會 – 呢個資料表未啟用外部嵌入',
+         'Embedding status view: why automatic refresh is off: external embeddings are not enabled for the table.'),
+        ('embedding_status_blocker_no_approved_fields',
+         'Ei – yhtään kenttää ei ole sallittu lähetettäväksi',
+         'No – no fields are approved for sending',
+         '否 – 没有允许发送的字段',
+         '唔會 – 冇批准傳送嘅欄位',
+         'Embedding status view: why automatic refresh is off: no field is approved for sending.'),
+        ('embedding_status_blocker_queue_unavailable',
+         'Ei – päivitysjono puuttuu',
+         'No – the refresh queue is missing',
+         '否 – 缺少刷新队列',
+         '唔會 – 欠缺更新隊列',
+         'Embedding status view: why automatic refresh is off: the refresh queue is missing.'),
+        ('embedding_status_pending',
+         '$count odottaa',
+         '$count waiting',
+         '$count 个等待中',
+         '$count 個等緊',
+         'Embedding status view: refresh jobs waiting. $count is their number.'),
+        ('embedding_status_failing',
+         '$count epäonnistunut',
+         '$count failing',
+         '$count 个失败',
+         '$count 個失敗',
+         'Embedding status view: refresh jobs failing. $count is their number.'),
+        -- Foreign-keys admin page and its Add dialog (foreign_keys_translation_fallbacks.js). Keys the database already holds in Finnish and English gain Chinese and Cantonese.
+        ('referencing_table',
+         'Viittaava taulu',
+         'Referencing table',
+         '引用表',
+         '引用表',
+         'Foreign-keys admin: label of the table that holds the referencing column.'),
+        ('foreign_key_added_successfully',
+         'Viiteavain lisätty onnistuneesti',
+         'Foreign key added successfully',
+         '外键添加成功',
+         '外鍵已成功加入',
+         'Foreign-keys admin: notice after a foreign key was added.'),
+        ('select_table',
+         'Valitse taulu',
+         'Select table',
+         '选择表',
+         '選擇表',
+         'Foreign-keys admin: placeholder of a table selector.'),
+        ('fill_all_fields',
+         'Täytä kaikki kentät',
+         'Fill all fields',
+         '请填写所有字段',
+         '請填寫所有欄位',
+         'Foreign-keys admin: validation message when a field of the Add dialog is empty.'),
+        ('foreign_key_deleted_successfully',
+         'Viiteavain poistettu onnistuneesti',
+         'Foreign key deleted successfully',
+         '外键删除成功',
+         '外鍵已成功刪除',
+         'Foreign-keys admin: notice after a foreign key was deleted.'),
+        ('select_foreign_key_to_delete',
+         'Valitse poistettava viiteavain',
+         'Select foreign key to delete',
+         '请选择要删除的外键',
+         '請選擇要刪除嘅外鍵',
+         'Foreign-keys admin: validation message when no foreign key is selected for deletion.'),
+        ('delete_selected_foreign_key',
+         'Poista valittu viiteavain',
+         'Delete selected foreign key',
+         '删除所选外键',
+         '刪除所選外鍵',
+         'Foreign-keys admin: button that deletes the selected foreign key.'),
+        -- Permission editor: its save question had only wording generated from the key name.
+        ('confirm_save_permissions',
+         'Tallennetaanko muutetut oikeudet?',
+         'Save the changed permissions?',
+         '保存已更改的权限吗？',
+         '要唔要儲存已更改嘅權限？',
+         'Permission editor: question before saving changed permissions.')
+), written_keys AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, ch, yue, creation_spec)
+    SELECT lang_key, fi, en, ch, yue, creation_spec
+    FROM authored_keys
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+        ch = CASE WHEN NULLIF(btrim(existing.ch), '') IS NULL THEN EXCLUDED.ch ELSE existing.ch END,
+        yue = CASE WHEN NULLIF(btrim(existing.yue), '') IS NULL THEN EXCLUDED.yue ELSE existing.yue END,
+        creation_spec = CASE WHEN NULLIF(btrim(existing.creation_spec), '') IS NULL
+                             THEN EXCLUDED.creation_spec ELSE existing.creation_spec END,
+        updated = now()
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL
+       OR NULLIF(btrim(existing.en), '') IS NULL
+       OR NULLIF(btrim(existing.ch), '') IS NULL
+       OR NULLIF(btrim(existing.yue), '') IS NULL
+       OR NULLIF(btrim(existing.creation_spec), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en
+), served_keys AS (
+    -- One statement does not read its own writes, so the keys as they read
+    -- after it are the rows written above plus the rest of the authored keys.
+    SELECT id, fi, en FROM written_keys
+    UNION ALL
+    SELECT keys.id, keys.fi, keys.en
+    FROM public.system_lang_keys AS keys
+    JOIN authored_keys USING (lang_key)
+    WHERE keys.lang_key NOT IN (SELECT lang_key FROM written_keys)
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM served_keys AS served
+CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(language_code, translation)
+JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
+WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO NOTHING;
+-- 20260922000006_seed_dataset_creation_warning_language_key.sql
+-- Seeds the warning the dataset form shows when a dataset was created but one of
+-- its later settings, such as its symbol, could not be saved.
+-- Bridges the creation mode of the dataset form with the language keys of the
+-- installation.
+-- Exists because that warning reused the wording of the editing dialog, which
+-- speaks of saved columns; the copy came after 20260922000005 was applied to the
+-- development database, so it is seeded here rather than there.
+-- A nonempty translation is never overwritten. Running the file again changes
+-- nothing. The public bootstrap runs this same file, so a new installation
+-- receives the same row.
+-- Finnish and English are served from the columns of system_lang_keys and are
+-- mirrored into the normalized table as reviewed copy. Chinese (ch) and
+-- Cantonese (yue) fill only their own columns, as the earlier seeds do: they
+-- are not a review of the zh-CN, zh-TW or zh-HK locales.
+-- VERSION_DB: 9.8.1
+-- VERSION_DB_OWNER: 20260921000002_record_public_table_creation_release.sql
+
+-- Add the missing keys, fill only empty columns, and mirror the served
+-- Finnish and English into the normalized table where a row is missing.
+WITH authored_keys(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES
+        -- Dataset form, creation mode (dataset_form_translation_fallbacks.js).
+        ('dataset_created_settings_need_attention',
+         'Aineisto luotiin, mutta yksi sen asetuksista jäi tallentamatta – katso lomakkeen viesti. Voit tallentaa asetuksen aineiston hallinnasta.',
+         'The dataset was created, but one of its settings was not saved — see the message in the form. You can save it in the dataset''s Manage table dialog.',
+         '数据集已创建，但其中一项设置未能保存——请查看表单中的提示。您可以在数据集的管理窗口中保存该设置。',
+         '資料集已經建立，但其中一項設定儲存唔到——請睇表單入面嘅訊息。你可以喺資料集嘅管理視窗儲存呢項設定。',
+         'Dataset form, creation mode: warning after a dataset was created but one of its later settings (such as its symbol) could not be saved.')
+), written_keys AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, ch, yue, creation_spec)
+    SELECT lang_key, fi, en, ch, yue, creation_spec
+    FROM authored_keys
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+        ch = CASE WHEN NULLIF(btrim(existing.ch), '') IS NULL THEN EXCLUDED.ch ELSE existing.ch END,
+        yue = CASE WHEN NULLIF(btrim(existing.yue), '') IS NULL THEN EXCLUDED.yue ELSE existing.yue END,
+        creation_spec = CASE WHEN NULLIF(btrim(existing.creation_spec), '') IS NULL
+                             THEN EXCLUDED.creation_spec ELSE existing.creation_spec END,
+        updated = now()
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL
+       OR NULLIF(btrim(existing.en), '') IS NULL
+       OR NULLIF(btrim(existing.ch), '') IS NULL
+       OR NULLIF(btrim(existing.yue), '') IS NULL
+       OR NULLIF(btrim(existing.creation_spec), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en
+), served_keys AS (
+    -- One statement does not read its own writes, so the keys as they read
+    -- after it are the rows written above plus the rest of the authored keys.
+    SELECT id, fi, en FROM written_keys
+    UNION ALL
+    SELECT keys.id, keys.fi, keys.en
+    FROM public.system_lang_keys AS keys
+    JOIN authored_keys USING (lang_key)
+    WHERE keys.lang_key NOT IN (SELECT lang_key FROM written_keys)
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM served_keys AS served
+CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(language_code, translation)
+JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
+WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO NOTHING;
+-- 20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql
+-- Seeds the copy of the embedding refresh controls and of the dataset header settings.
+-- Bridges the embedding administration page and the dataset header settings screen
+-- with the language keys of the installation.
+-- Exists because both screens showed hardcoded English or keys without Chinese
+-- and Cantonese; the copy came after 20260922000005 was applied to the development
+-- database, so it is seeded here. Shared keys these screens reuse gain the copy a
+-- new installation already has, and wording generated from the name of a key or
+-- left untranslated in a column gives way to it.
+-- A nonempty translation is never overwritten; only the exact superseded wording
+-- listed in step 1 gives way. Running the file again changes nothing. The public
+-- bootstrap runs this same file, so a new installation receives the same rows.
+-- Finnish and English are served from the columns of system_lang_keys and are
+-- mirrored into the normalized table as reviewed copy. Chinese (ch) and
+-- Cantonese (yue) fill only their own columns, as the earlier seeds do: they
+-- are not a review of the zh-CN, zh-TW or zh-HK locales. $count is filled by the
+-- page and stays literal.
+-- VERSION_DB: 9.8.1
+-- VERSION_DB_OWNER: 20260921000002_record_public_table_creation_release.sql
+
+-- 1. Wording that is withdrawn where a site still holds exactly it: copy an
+--    earlier seed wrote before it was rewritten, and wording generated from
+--    the name of a key. It then counts as missing copy and is filled in step 2
+--    like any empty value. Any other text, a reviewed translation included,
+--    stays as it is. NULL matches nothing.
+WITH superseded_copy(lang_key, fi, en, ch, yue) AS (
+    VALUES
+        -- Generated from the name of the key and its machine translation, never reviewed.
+        ('dataset_header_config', 'Tietojoukon otsikon konfiguraatio', 'Dataset header config', NULL, NULL),
+        -- Generated from the name of the key into the Finnish column.
+        ('usage_explanation', 'Usage explanation', NULL, NULL, NULL),
+        -- English left in the Chinese column.
+        ('search', NULL, NULL, 'Search', NULL)
+), withdrawn_translations AS (
+    DELETE FROM public.system_lang_key_translations AS stored
+    USING public.system_lang_keys AS keys, superseded_copy AS superseded
+    WHERE keys.id = stored.lang_key_id
+      AND keys.lang_key = superseded.lang_key
+      AND ((stored.language_code = 'fi' AND stored.translation = superseded.fi)
+        OR (stored.language_code = 'en' AND stored.translation = superseded.en))
+    RETURNING stored.lang_key_id
+)
+UPDATE public.system_lang_keys AS keys
+SET fi = CASE WHEN keys.fi = superseded.fi THEN NULL ELSE keys.fi END,
+    en = CASE WHEN keys.en = superseded.en THEN NULL ELSE keys.en END,
+    ch = CASE WHEN keys.ch = superseded.ch THEN NULL ELSE keys.ch END,
+    yue = CASE WHEN keys.yue = superseded.yue THEN NULL ELSE keys.yue END,
+    updated = now()
+FROM superseded_copy AS superseded
+WHERE keys.lang_key = superseded.lang_key
+  AND (keys.fi = superseded.fi OR keys.en = superseded.en
+    OR keys.ch = superseded.ch OR keys.yue = superseded.yue);
+
+-- 2. Add the missing keys, fill only empty columns, and mirror the served
+--    Finnish and English into the normalized table where a row is missing.
+WITH authored_keys(lang_key, fi, en, ch, yue, creation_spec) AS (
+    VALUES
+        -- Embedding administration: refresh controls (embedding_status_translation_fallbacks.js).
+        ('embedding_refresh_rows_to_process',
+         'Käsiteltäviä rivejä: $count',
+         'Rows to process: $count',
+         '待处理行数：$count',
+         '待處理行數：$count',
+         'Embedding administration, refresh controls: number of rows the refresh will process. $count is that number.'),
+        ('embedding_refresh_loading',
+         'Ladataan…',
+         'Loading…',
+         '正在加载…',
+         '載入緊…',
+         'Embedding administration, refresh controls: status while the refresh settings are read.'),
+        ('embedding_refresh_field_policy_unavailable',
+         'Kenttävalintaa ei voitu lukea',
+         'The field selection could not be read',
+         '无法读取字段选择',
+         '讀取唔到欄位選擇',
+         'Embedding administration, refresh controls: message when the field selection of a dataset could not be read.'),
+        ('embedding_refresh_no_eligible_fields',
+         'Ei sopivia tekstikenttiä',
+         'No eligible text fields',
+         '没有符合条件的文本字段',
+         '冇合資格嘅文字欄位',
+         'Embedding administration, refresh controls: message when a dataset has no text field that may be embedded.'),
+        ('embedding_refresh_start',
+         'Aloita upotus',
+         'Start embedding',
+         '开始嵌入',
+         '開始嵌入',
+         'Embedding administration, refresh controls: button that starts embedding.'),
+        ('embedding_refresh_done',
+         'Upotukset päivitetty',
+         'Embeddings refreshed',
+         '嵌入已刷新',
+         '嵌入已更新',
+         'Embedding administration, refresh controls: notice after the embeddings were refreshed.'),
+        -- Dataset header settings screen (dataset_header_config_translation_fallbacks.js). Shared keys keep the fresh-install copy.
+        ('dataset_header_config_intro',
+         'Muokkaa tässä aineiston omia tekstejä: otsikkoa, iskulausetta ja hakukentän vihjetekstiä.',
+         'Edit the dataset''s own texts here: its title, slogan and search placeholder.',
+         '在此编辑数据集自己的文本：标题、标语和搜索占位文本。',
+         '喺度編輯資料集自己嘅文字：標題、標語同搜尋預留位置文字。',
+         'Dataset header settings: introduction of the screen.'),
+        ('dataset_header_config_text_keys',
+         'Aineiston tekstit',
+         'Dataset texts',
+         '数据集文本',
+         '資料集文字',
+         'Dataset header settings: heading of the dataset texts section.'),
+        ('dataset_header_config_text_keys_hint',
+         'Jokaisella tekstillä on valmis kieliavain, joka näkyy alla. Tallenna tänne käännökset ja tekoälylle tarkoitettu käyttöselite; aineistonäkymä käyttää näitä avaimia.',
+         'Each text has a ready-made language key, shown below. Save its translations and the usage explanation for AI translation here; the dataset view keeps using these keys.',
+         '每段文本都有现成的语言键，显示在下方。请在此保存其翻译以及供 AI 翻译使用的使用说明；数据集视图会继续使用这些键。',
+         '每段文字都有現成嘅語言鍵，顯示喺下面。請喺度儲存佢嘅翻譯同埋畀 AI 翻譯用嘅使用說明；資料集檢視會繼續用呢啲鍵。',
+         'Dataset header settings: explanation of the language keys of the dataset texts.'),
+        ('dataset_header_config_slogan',
+         'Iskulause',
+         'Slogan',
+         '标语',
+         '標語',
+         'Dataset header settings: label of the dataset slogan.'),
+        ('dataset_header_config_usage_placeholder',
+         'Kerro, mitä avain tarkoittaa ja missä sitä käytetään, jotta tekoäly osaa kääntää sen.',
+         'Explain what this key means and where it is used, so AI translation gets it right.',
+         '说明此键的含义和用途，以便 AI 正确翻译。',
+         '講解呢個鍵嘅意思同用途，等 AI 翻譯得準確。',
+         'Dataset header settings: placeholder of the usage explanation field for AI translation.'),
+        ('dataset_header_config_cover_title',
+         'Aineiston kansikuva',
+         'Dataset cover image',
+         '数据集封面图片',
+         '資料集封面圖片',
+         'Dataset header settings: heading of the dataset cover image section.'),
+        ('dataset_header_config_cover_hint',
+         'Näkyy aineiston otsikkoalueen taustalla. Kuva kuuluu vain valitulle aineistolle.',
+         'Shown behind the dataset hero. The image belongs only to the selected dataset.',
+         '显示在数据集标题区域的背景中。图片只属于所选数据集。',
+         '顯示喺資料集標題區嘅背景。圖片只屬於所選資料集。',
+         'Dataset header settings: explanation of the dataset cover image.'),
+        ('dataset_header_config_background_title',
+         'Aineiston sisällön tausta',
+         'Dataset content background',
+         '数据集内容背景',
+         '資料集內容背景',
+         'Dataset header settings: heading of the dataset content background section.'),
+        ('dataset_header_config_background_hint',
+         'Näkyy hienovaraisesti tulosmäärän ja aineiston sisällön takana, kansikuvasta riippumatta.',
+         'Shown subtly behind the result count and dataset content, independently of the hero cover.',
+         '淡淡地显示在结果数量和数据集内容后面，与封面图片无关。',
+         '淡淡咁顯示喺結果數目同資料集內容後面，同封面圖片無關。',
+         'Dataset header settings: explanation of the dataset content background.'),
+        ('dataset_header_config_replace_image',
+         'Vaihda kuva',
+         'Replace image',
+         '更换图片',
+         '更換圖片',
+         'Dataset header settings: button that replaces an image.'),
+        ('dataset_header_config_remove_image',
+         'Poista nykyinen kuva tallennettaessa',
+         'Remove current image on save',
+         '保存时删除当前图片',
+         '儲存時刪除目前圖片',
+         'Dataset header settings: option that removes the current image on save.'),
+        ('dataset_header_config_no_image',
+         'Kuvaa ei ole vielä ladattu.',
+         'No image uploaded yet.',
+         '尚未上传图片。',
+         '仲未上載圖片。',
+         'Dataset header settings: text when no image has been uploaded.'),
+        ('dataset_header_config_no_datasets',
+         'Asetettavia aineistoja ei ole.',
+         'No datasets available for header configuration.',
+         '没有可配置标题的数据集。',
+         '冇可以設定標題嘅資料集。',
+         'Dataset header settings: text when no dataset can be configured.'),
+        ('dataset_header_config_not_loaded',
+         'Tämän aineiston asetuksia ei saatu ladattua, joten tallennus on estetty, ettei toisen aineiston tekstejä tallennu sen päälle. Valitse aineisto uudelleen yrittääksesi uudestaan.',
+         'This dataset''s settings did not load, so saving is off to keep another dataset''s texts from overwriting them. Choose the dataset again to retry.',
+         '此数据集的设置未能加载，因此已停用保存，以免其他数据集的文本覆盖它们。请重新选择该数据集以重试。',
+         '呢個資料集嘅設定載入唔到，所以已停用儲存，免得其他資料集嘅文字覆蓋佢哋。請重新揀選呢個資料集再試。',
+         'Dataset header settings: warning that saving is off because the settings of the dataset did not load.'),
+        ('dataset_header_config',
+         'Tietojoukko-otsikoiden asetukset',
+         'Dataset header configuration',
+         '数据集标题配置',
+         '資料集標題設定',
+         'Admin tools: name of the dataset header settings screen.'),
+        ('close',
+         'Sulje',
+         'Close',
+         '关闭',
+         '關閉',
+         'Shared: button that closes a panel or dialog.'),
+        ('saved',
+         'Tallennettu',
+         'Saved',
+         '已保存',
+         '已儲存',
+         'Shared: status after changes were saved.'),
+        ('unsaved_changes',
+         'Tallentamattomat muutokset',
+         'Unsaved changes',
+         '未保存的更改',
+         '未儲存嘅變更',
+         'Shared: status when there are changes not yet saved.'),
+        ('dataset',
+         'Aineisto',
+         'Dataset',
+         '数据集',
+         '資料集',
+         'Shared: the word dataset, as a label.'),
+        ('lang_key',
+         'Avain',
+         'Key',
+         '语言键',
+         '語言鍵',
+         'Shared: label of a language key.'),
+        ('title',
+         'Otsikko',
+         'Title',
+         '标题',
+         '標題',
+         'Shared: label of a title.'),
+        ('search_placeholder',
+         'Hakupaikkamerkki',
+         'Search placeholder',
+         '搜索占位文本',
+         '搜尋預留位置文字',
+         'Shared: label of the placeholder text of a search field.'),
+        ('usage_explanation',
+         'Käyttöselite',
+         'Usage explanation',
+         '使用说明',
+         '使用說明',
+         'Shared: label of the usage explanation of a language key, used as context for AI translation.'),
+        ('search',
+         'Haku',
+         'Search',
+         '搜索',
+         '搜尋',
+         'Shared: label or button for search.'),
+        ('fi',
+         'Suomi',
+         'Finnish',
+         '芬兰语',
+         '芬蘭文',
+         'Language name: Finnish.'),
+        ('en',
+         'Englanti',
+         'English',
+         '英语',
+         '英文',
+         'Language name: English.'),
+        ('ch',
+         'Kiina',
+         'Chinese',
+         '简体中文',
+         '簡體中文',
+         'Language name: Chinese.')
+), written_keys AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, ch, yue, creation_spec)
+    SELECT lang_key, fi, en, ch, yue, creation_spec
+    FROM authored_keys
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+        ch = CASE WHEN NULLIF(btrim(existing.ch), '') IS NULL THEN EXCLUDED.ch ELSE existing.ch END,
+        yue = CASE WHEN NULLIF(btrim(existing.yue), '') IS NULL THEN EXCLUDED.yue ELSE existing.yue END,
+        creation_spec = CASE WHEN NULLIF(btrim(existing.creation_spec), '') IS NULL
+                             THEN EXCLUDED.creation_spec ELSE existing.creation_spec END,
+        updated = now()
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL
+       OR NULLIF(btrim(existing.en), '') IS NULL
+       OR NULLIF(btrim(existing.ch), '') IS NULL
+       OR NULLIF(btrim(existing.yue), '') IS NULL
+       OR NULLIF(btrim(existing.creation_spec), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en
+), served_keys AS (
+    -- One statement does not read its own writes, so the keys as they read
+    -- after it are the rows written above plus the rest of the authored keys.
+    SELECT id, fi, en FROM written_keys
+    UNION ALL
+    SELECT keys.id, keys.fi, keys.en
+    FROM public.system_lang_keys AS keys
+    JOIN authored_keys USING (lang_key)
+    WHERE keys.lang_key NOT IN (SELECT lang_key FROM written_keys)
+)
+INSERT INTO public.system_lang_key_translations (
+    lang_key_id, language_code, translation, source_kind, review_status
+)
+SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM served_keys AS served
+CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(language_code, translation)
+JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
+WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO NOTHING;
 
 -- Generated migration-ledger baseline. These migrations are already embodied by this bootstrap.
 INSERT INTO public.system_schema_migrations (filename) VALUES
@@ -3967,5 +5107,11 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260920000003_name_site_assistant_runtimes.sql'),
   ('20260921000001_withdraw_public_table_creation.sql'),
   ('20260921000002_record_public_table_creation_release.sql'),
-  ('20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql')
+  ('20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql'),
+  ('20260922000002_create_missing_deletion_log.sql'),
+  ('20260922000003_grant_filter_options_to_dataset_readers.sql'),
+  ('20260922000004_seed_request_notice_and_interface_language_keys.sql'),
+  ('20260922000005_seed_interface_language_keys_of_9_8_1.sql'),
+  ('20260922000006_seed_dataset_creation_warning_language_key.sql'),
+  ('20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql')
 ON CONFLICT (filename) DO NOTHING;

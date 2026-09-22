@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 ALLOWED_SCHEMA_TABLES = {
     "public.ai_chat_conversations",
+    "public.deletion_log",
     "public.dev_agent_handover_report_items",
     "public.dev_agent_handover_reports",
     "public.dev_agent_release_goal_contracts",

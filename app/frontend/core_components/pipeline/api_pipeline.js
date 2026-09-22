@@ -5,7 +5,7 @@
 
 import { createPipeline, createStage } from './frontend_pipeline.js';
 import { requestLoginRedirect } from '../auth/login_redirect_handler.js';
-import { showErrorToast, showWarningToast, showAccessDeniedToast } from '../../reusable_components/notifications/toast_notification_printer.js';
+import { showAccessDeniedToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import {
     isMutatingMethod,
     resolveEndpointUrl,
@@ -16,11 +16,15 @@ import {
     createRateLimitError,
     createServiceUnavailableError,
     stripAnsiCodes,
-    truncateErrorText,
     shouldThrottleRateLimitToast,
+    resolveFailureNotice,
 } from './api_pipeline_helpers.js';
 import { getBackendRoutePathByHandler } from '../endpoints/backend_route_manifest_reader.js';
 import { markCallerOwnsFailureNotice } from '../error_and_status_handling/error_monitor_handler_helpers.js';
+import {
+    isExpectedNetworkAbort,
+    showRequestFailureNotice,
+} from '../error_and_status_handling/request_failure_notice.js';
 
 // ==========================================
 // Endpoint Map
@@ -305,9 +309,10 @@ async function resolveUrlStage(ctx) {
 /**
  * buildFetchOptionsStage — constructs the fetch options object from context.
  * Sets method, default Content-Type, credentials, and body.
- * A caller that shows its own errors (suppressErrorToast) is marked on the
- * options, so the global fetch monitor does not add a second notice for a
- * server or network failure (error_monitor_handler.js).
+ * The pipeline owns the failure notice of every request it sends: its own
+ * stages show it, or its caller does (suppressErrorToast). The options are
+ * therefore always marked, so the global fetch monitor never adds a second
+ * notice for a server or network failure (error_monitor_handler.js).
  */
 async function buildFetchOptionsStage(ctx) {
     ctx.fetchOptions = buildFetchOptions({
@@ -316,7 +321,7 @@ async function buildFetchOptionsStage(ctx) {
         bodyData: ctx.bodyData,
     });
     if (ctx.signal !== undefined) ctx.fetchOptions.signal = ctx.signal;
-    if (ctx.suppressErrorToast) markCallerOwnsFailureNotice(ctx.fetchOptions);
+    markCallerOwnsFailureNotice(ctx.fetchOptions);
 }
 
 /**
@@ -349,10 +354,27 @@ async function fingerprintStage(_ctx) {
 /**
  * executeStage — performs the actual fetch call and stores the Response.
  */
-// PIPELINE_EXCEPTION: This is the pipeline's own execute stage — the direct fetch() here IS the pipeline.
-// See docs/instructions_and_documentation/PIPELINE_EXCEPTIONS.md.
 async function executeStage(ctx) {
-    ctx.response = await fetch(ctx.resolvedUrl, ctx.fetchOptions);
+    ctx.response = await fetchReportingNetworkFailure(ctx);
+}
+
+/**
+ * Sends the request once. When it never reaches the service, the reader gets
+ * the translated network notice (unless the caller shows its own, or the
+ * request was cancelled on purpose) and the console gets the browser's error.
+ */
+// PIPELINE_EXCEPTION: This is the pipeline's own execute path — the direct fetch() here IS the pipeline.
+// See docs/instructions_and_documentation/PIPELINE_EXCEPTIONS.md.
+async function fetchReportingNetworkFailure(ctx) {
+    try {
+        return await fetch(ctx.resolvedUrl, ctx.fetchOptions);
+    } catch (error) {
+        if (!isExpectedNetworkAbort(error, ctx.fetchOptions)) {
+            console.error(`[api_pipeline] ${ctx.routeName}: the request did not reach the service`, error);
+            if (!ctx.suppressErrorToast) showRequestFailureNotice('network_error_notice');
+        }
+        throw error;
+    }
 }
 
 /**
@@ -384,8 +406,7 @@ async function csrfRecoveryStage(ctx) {
 
     ctx.fetchOptions.headers['X-CSRF-Token'] = refreshedToken;
     ctx.csrfRetryAttempted = true;
-    // PIPELINE_EXCEPTION: this retry is the pipeline's own execute path after CSRF-token refresh.
-    ctx.response = await fetch(ctx.resolvedUrl, ctx.fetchOptions);
+    ctx.response = await fetchReportingNetworkFailure(ctx);
 }
 
 /**
@@ -437,7 +458,7 @@ async function authRedirectStage(ctx) {
 
 /**
  * rateLimitHandlerStage — throws a typed RateLimitError on 429 responses.
- * Shows a warning toast automatically so callers don't need to handle display.
+ * Shows a translated warning automatically so callers don't need to handle display.
  * Consolidates multiple simultaneous 429s into a single toast to avoid
  * flooding the user with one notification per blocked API call.
  * Callers can catch err.isRateLimited === true to add custom backoff logic.
@@ -451,7 +472,7 @@ async function rateLimitHandlerStage(ctx) {
     const now = Date.now();
     if (!ctx.suppressErrorToast && shouldThrottleRateLimitToast(_rateLimitLastToastTime, _RATE_LIMIT_TOAST_WINDOW_MS, now)) {
         _rateLimitLastToastTime = now;
-        showWarningToast(`Liian monta pyyntöä — odota hetki`, 6000);
+        showRequestFailureNotice('rate_limit_notice', { level: 'warning', duration: 6000 });
     }
     console.debug(`[api_pipeline] 429 rate-limited: ${ctx.routeName}`);
 
@@ -460,7 +481,8 @@ async function rateLimitHandlerStage(ctx) {
 
 /**
  * serviceUnavailableHandlerStage — converts maintenance/drain responses into one
- * typed retryable error and a bounded, non-technical warning for the user.
+ * typed retryable error and a bounded, translated, non-technical warning.
+ * It is the only notice a 503 gets: the server-error notice is for other 5xx.
  */
 let _serviceUnavailableLastToastTime = 0;
 const _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS = 5000;
@@ -475,37 +497,38 @@ async function serviceUnavailableHandlerStage(ctx) {
         now
     )) {
         _serviceUnavailableLastToastTime = now;
-        const isFinnish = document.documentElement.lang?.toLowerCase().startsWith('fi');
-        showWarningToast(isFinnish
-            ? 'Palvelu on hetkellisesti huoltotilassa. Yritä pian uudelleen.'
-            : 'The service is temporarily under maintenance. Please retry shortly.', 7000);
+        showRequestFailureNotice('service_unavailable_notice', { level: 'warning', duration: 7000 });
     }
+    console.warn(`[api_pipeline] ${ctx.routeName}: service unavailable (503)`);
 
     throw createServiceUnavailableError(ctx.routeName);
 }
 
 /**
  * errorHandlerStage — throws for all non-ok responses not handled by prior stages.
- * Shows an error toast automatically so callers don't need to handle display.
- * Strips ANSI color codes from error messages for browser console readability.
- * Callers can still catch the thrown error for custom recovery logic.
+ * Shows one translated notice automatically so callers don't need to handle display:
+ * the permission notice for a 403, and otherwise the sentence resolveFailureNotice
+ * picks, with the status code. The route and the server's own text are technical
+ * detail for the console (ANSI colour codes stripped) and for the thrown error,
+ * so callers can still catch it for custom recovery logic.
  * suppressErrorToast only delegates notifications to the caller; error and security handling stay active.
  */
 async function errorHandlerStage(ctx) {
     if (ctx.response.ok) return;
-    let errorText = await ctx.response.text();
-    errorText = stripAnsiCodes(errorText);
-    const userMessage = truncateErrorText(errorText);
+    const status = ctx.response.status;
+    const errorText = stripAnsiCodes(await ctx.response.text());
+    const log = status >= 500 ? console.error : ctx.suppressErrorToast ? console.debug : console.warn;
+    log.call(console, `[api_pipeline] ${ctx.routeName} failed (${status}):`, errorText);
     if (!ctx.suppressErrorToast) {
-        if (ctx.response.status === 403) {
+        if (status === 403) {
             showAccessDeniedToast(ctx.routeName);
         } else {
-            showErrorToast(`${ctx.routeName}: ${userMessage}`);
+            const notice = resolveFailureNotice(status, errorText);
+            showRequestFailureNotice(notice.langKey, { status: notice.status });
         }
     }
-    console.debug('api_pipeline error response:', errorText);
     const error = new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);
-    error.status = ctx.response.status;
+    error.status = status;
     throw error;
 }
 

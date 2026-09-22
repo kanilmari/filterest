@@ -9,33 +9,20 @@
 // (api_pipeline.js stages: fingerprintStage, authRedirectStage).
 // The fetch monkey-patch now only handles 5xx toasts and network error reporting.
 // Its notices come from language keys and name no address; the address and the
-// browser's own error text go to the console. A caller that shows its own
-// notice (endpoint_router's suppressErrorToast) is not given a second one.
+// browser's own error text go to the console. A request whose caller shows its
+// own notice is not given a second one: the API pipeline marks every request
+// it sends, so the monitor's notices are for fetches outside the pipeline.
 //
 // Session reset is available via window.__resetSession() in the browser console
 // for recovery from corrupted session state.
 import { endpoint_router } from "../endpoints/endpoint_router.js";
 import { showErrorToast } from "../../reusable_components/notifications/toast_notification_printer.js";
-import { getTranslationForKey } from "../lang/translation_handler.js";
-import {
-    buildNetworkErrorNotice,
-    buildServerErrorNotice,
-    callerOwnsFailureNotice,
-    isAbortLikeNetworkError,
-    shortenUrl,
-} from "./error_monitor_handler_helpers.js";
+import { callerOwnsFailureNotice, shortenUrl } from "./error_monitor_handler_helpers.js";
+import { isExpectedNetworkAbort, showRequestFailureNotice } from "./request_failure_notice.js";
 // Imported as a side-effect module in main.js:
 //   import "./core_components/error_and_status_handling/error_monitor_handler.js";
 
 (function() {
-    let pageUnloadInProgress = false;
-    window.addEventListener('pagehide', () => {
-        pageUnloadInProgress = true;
-    });
-    window.addEventListener('pageshow', () => {
-        pageUnloadInProgress = false;
-    });
-
     // ==========================================
     // Session Reset (recovery tool)
     // ==========================================
@@ -89,15 +76,15 @@ import {
         try {
             response = await originalFetch(resource, options);
         } catch (err) {
-            const ignoreAbortNoise = options?.headers?.['X-Ignore-Network-Abort'] === '1'
-                || options?.headers?.['x-ignore-network-abort'] === '1';
-            if ((pageUnloadInProgress || ignoreAbortNoise) && isAbortLikeNetworkError(err)) {
+            // A cancelled request (its caller aborted it, the page is being
+            // left, or it was expendable background work) is not a failure.
+            if (isExpectedNetworkAbort(err, options)) {
                 throw err;
             }
             // Network failure: the request never reached the service.
             console.error(`[Network] ${err.message || err}`, err);
             if (!callerOwnsFailureNotice(options)) {
-                showErrorToast(buildNetworkErrorNotice(getTranslationForKey));
+                showRequestFailureNotice('network_error_notice');
             }
             throw err;
         }
@@ -108,7 +95,7 @@ import {
         if (!response.ok && response.status >= 500) {
             console.error('[HTTP]', `${response.status} | ${shortenUrl(response.url, 160)}`, response);
             if (!callerOwnsFailureNotice(options)) {
-                showErrorToast(buildServerErrorNotice(response.status, getTranslationForKey));
+                showRequestFailureNotice('server_error_notice', { status: response.status });
             }
         }
 

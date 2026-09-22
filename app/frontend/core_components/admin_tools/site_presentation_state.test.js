@@ -8,6 +8,11 @@ import {
 } from './site_presentation_state.js';
 import { mountDatasetCoverTestPalette } from './dataset_cover_test_palette.js';
 
+// Every toast's text: a request a test does not stub fails in Node and adds its
+// own notice, so a test looks for its toast among all of them.
+const toastTexts = () => [...document.querySelectorAll('[data-testid="toast"] .toast-notification-content')]
+    .map((node) => node.textContent).join(' ');
+
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const settings = (brand = '#e61aad') => ({
     dataset_cover_theme: { ...clone(DEFAULT_DATASET_COVER_THEME),
@@ -353,7 +358,7 @@ describe('palette lifecycle', () => {
         a.destroy();
         expect(hue()).toBe('210');
         b.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await vi.waitFor(() => expect(document.querySelector('[data-testid="toast"] .toast-notification-content').textContent).toMatch(/saved/i));
+        await vi.waitFor(() => expect(toastTexts()).toMatch(/saved/i));
         const c = await mountDatasetCoverTestPalette(hero(), 'c', opts);
         expect(hue()).toBe('210');
         expect(c.panel.querySelector('[data-testid="dataset-cover-test-palette-brand-color"]').value).toBe('#6699cc');
@@ -379,7 +384,7 @@ describe('palette lifecycle', () => {
         focusedInput.focus();
         expect(document.activeElement).toBe(focusedInput);
         pending.resolve(settings('#cc3366'));
-        await vi.waitFor(() => expect(document.querySelector('[data-testid="toast"] .toast-notification-content').textContent).toMatch(/saved/i));
+        await vi.waitFor(() => expect(toastTexts()).toMatch(/saved/i));
         expect(hue()).toBe('210');
         expect(document.activeElement).toBe(focusedInput);
         control.resetPreview();

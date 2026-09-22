@@ -3,7 +3,8 @@
 Runs the DB 9.8.1 language seed on disposable PostgreSQL clusters loaded from the
 reviewed public bootstrap, as a new installation and rewound to an older site.
 Protects reviewed translations, replaces only the exact unreviewed placeholder,
-and keeps the seeded copy equal to the frontend fallback copy.
+and keeps the seeded copy equal to the frontend fallback copy. The folder hint
+this file wrote is superseded by 20260922000005, whose test covers its current copy.
 """
 from __future__ import annotations
 
@@ -19,13 +20,12 @@ APP = Path(__file__).resolve().parents[2]
 MIGRATION = APP / "server_tools/migrations/20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql"
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 NOTICE_FALLBACKS = APP / "frontend/core_components/error_and_status_handling/error_monitor_handler_helpers.js"
-FORM_FALLBACKS = (
-    APP / "frontend/core_components/general_tables/gt_3_table_crud/gt_3_1_table_create/"
-    "table_creation_translation_fallbacks.js"
-)
+FORM_FALLBACKS = APP / "frontend/core_components/general_tables/dataset_form/dataset_form_translation_fallbacks.js"
 NOTICE_KEYS = ("server_error_notice", "network_error_notice")
 FORM_KEYS = ("dataset_column_type_parameters", "actions", "table_folder_hint")
 KEYS = NOTICE_KEYS + FORM_KEYS
+# Rewritten by a later seed of the same release; a new installation holds that copy.
+SUPERSEDED_KEYS = ("table_folder_hint",)
 LANGUAGES = ("fi", "en", "ch", "yue")
 PLACEHOLDER = {"fi": "Taulukon kansion vihje", "en": "Table folder hint"}
 KEY_LIST = ", ".join(f"'{key}'" for key in KEYS)
@@ -60,10 +60,18 @@ def _authored_rows() -> dict[str, tuple[str, ...]]:
 
 
 def _frontend_fallback(path: Path, key: str) -> tuple[str, ...]:
+    """The fi, en, ch and yue copy of one key, written either as an object
+    ({ fi: "...", ... }) or as a [Finnish, English, Chinese, Cantonese] array."""
     text = path.read_text()
-    block = re.search(r"(?<![A-Za-z0-9_])[\"']?" + key + r"[\"']?\s*:\s*\{(.*?)\}", text, re.S)[1]
+    string = r"\"(?:[^\"\\]|\\.)*\""
+    head = r"(?<![A-Za-z0-9_])[\"']?" + key + r"[\"']?\s*:\s*"
+    array = re.search(head + r"\[\s*((?:" + string + r"\s*,?\s*){4})\]", text, re.S)
+    if array:
+        return tuple(json.loads(value) for value in re.findall(string, array[1]))
+    member = r"[\"']?[A-Za-z]+[\"']?\s*:\s*" + string + r"\s*,?\s*"
+    block = re.search(head + r"\{\s*((?:" + member + r")+)\}", text, re.S)[1]
     return tuple(
-        json.loads(re.search(r"[\"']?" + language + r"[\"']?\s*:\s*(\"(?:[^\"\\]|\\.)*\")", block)[1])
+        json.loads(re.search(r"(?<![A-Za-z0-9_])[\"']?" + language + r"[\"']?\s*:\s*(" + string + ")", block)[1])
         for language in LANGUAGES
     )
 
@@ -107,7 +115,7 @@ def test_seeded_copy_is_the_frontend_fallback_copy():
     assert set(rows) == set(KEYS)
     for key in NOTICE_KEYS:
         assert rows[key][:4] == _frontend_fallback(NOTICE_FALLBACKS, key), key
-    for key in FORM_KEYS:
+    for key in set(FORM_KEYS) - set(SUPERSEDED_KEYS):
         assert rows[key][:4] == _frontend_fallback(FORM_FALLBACKS, key), key
     assert all(row[4].strip() for row in rows.values())
 
@@ -121,7 +129,7 @@ def test_bootstrap_runs_this_same_file_and_baselines_it():
 
 def test_new_installation_has_every_key_in_every_language(site):
     rows = _authored_rows()
-    for key in KEYS:
+    for key in set(KEYS) - set(SUPERSEDED_KEYS):
         assert _columns(site, key) == rows[key][:4], key
         assert _normalized(site, key) == {
             "en": (rows[key][1], "manual", "approved"),

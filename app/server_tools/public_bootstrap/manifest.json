@@ -117,10 +117,17 @@
     "20260920000003_name_site_assistant_runtimes.sql",
     "20260921000001_withdraw_public_table_creation.sql",
     "20260921000002_record_public_table_creation_release.sql",
-    "20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql"
+    "20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql",
+    "20260922000002_create_missing_deletion_log.sql",
+    "20260922000003_grant_filter_options_to_dataset_readers.sql",
+    "20260922000004_seed_request_notice_and_interface_language_keys.sql",
+    "20260922000005_seed_interface_language_keys_of_9_8_1.sql",
+    "20260922000006_seed_dataset_creation_warning_language_key.sql",
+    "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
+    "public.deletion_log",
     "public.dev_agent_handover_report_items",
     "public.dev_agent_handover_reports",
     "public.dev_agent_release_goal_contracts",
@@ -237,7 +244,7 @@
     "public.tiketit_assets"
   ],
   "seed_row_counts": {
-    "public.dev_agent_task_statuses": 195,
+    "public.dev_agent_task_statuses": 209,
     "public.dokumentaatio": 3,
     "public.dokumentaatio_tiketit_relation": 1,
     "public.palvelukatalogi": 1,
@@ -259,7 +266,7 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 153,
-    "public.system_lang_keys": 552,
+    "public.system_lang_keys": 695,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
@@ -274,10 +281,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "3b7a7f58b622f7959c19cb1e60e9b31f02a0d5e8b0d8bd46a81bf6640475431d"
+      "sha256": "1005ad82b763672d37df376fa8c30e0607c18a7c993c105991984e4a9e12dfc3"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "63b9f698cec34f87de11698fd734436a820b925a5ef1e86682d1579452948c65"
+      "sha256": "08c04ea9aa8deddfea19f0c2e4899293950ba5a2fed7f55f2eb8f3f636233145"
     }
   },
   "source_files": {
@@ -294,10 +301,10 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "2c22b05eaac3ffc084d17e6f3959956c03a9722946238f899d95120a74bc356a"
+      "sha256": "e13a31ff0720a701b803607d7579a2ae4da3b24822eac0782b40d158a7b01d4c"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
-      "sha256": "c6cd8b8f48e3be6868c232785c8f4c2bd59c045b214deedbb7cca42605225f2f"
+      "sha256": "726924de4e4231f5ba07ef79282535c45eda13b34b08e3ced0d5630809a2c9c5"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.schema.sql": {
       "sha256": "d78b9e231e499f7982c15231722450020b7844386fb31d98067f625891a33801"
@@ -682,6 +689,24 @@
     },
     "filterest/app/server_tools/migrations/20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql": {
       "sha256": "06d16f17ae5baeab577815cc835acd3e115fae82904a359e12ed02a0a9c3cdbe"
+    },
+    "filterest/app/server_tools/migrations/20260922000002_create_missing_deletion_log.sql": {
+      "sha256": "79a833a820c9a6136d708829469c4d18436571c09980cf6df510177342210195"
+    },
+    "filterest/app/server_tools/migrations/20260922000003_grant_filter_options_to_dataset_readers.sql": {
+      "sha256": "3d0ef3256a35568280e220281796d427b13d8a0ab9864d703867ce5bec9bf434"
+    },
+    "filterest/app/server_tools/migrations/20260922000004_seed_request_notice_and_interface_language_keys.sql": {
+      "sha256": "cd69f76670a2c59bf6ece33e2019816142c1ef8f58c90cd1efcce014db70b00f"
+    },
+    "filterest/app/server_tools/migrations/20260922000005_seed_interface_language_keys_of_9_8_1.sql": {
+      "sha256": "9a05903ecb478ba772507b4cd62471fd0c13fc948d4a927554aa304458ab150b"
+    },
+    "filterest/app/server_tools/migrations/20260922000006_seed_dataset_creation_warning_language_key.sql": {
+      "sha256": "ac9c53557157e66375d495a174ae0e3ef99c95ddbe81af17a0cc238984b774fd"
+    },
+    "filterest/app/server_tools/migrations/20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql": {
+      "sha256": "f24c41b75f0378af32d0c27449749c74e65b40ccd8ea99bbde42297bfe5a10cd"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

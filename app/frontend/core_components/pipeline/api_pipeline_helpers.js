@@ -209,18 +209,34 @@ export function stripAnsiCodes(text) {
     return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
+// A language key a server may name as the reason for refusing a request.
+const SERVER_REASON_LANG_KEY = /^[a-z][a-z0-9_]{0,127}$/;
+
 /**
- * Truncates text to a maximum length, appending '...' if truncated.
+ * Picks the translated notice for a failed response the earlier stages left:
+ * the server-error sentence for a 5xx, the reason a 4xx names by language key
+ * (JSON error_lang_key, as table creation sends), and otherwise the general
+ * failure sentence. The status code follows each sentence except a named
+ * reason, which is already specific. The server's free text is never shown:
+ * it is technical, rarely in the reader's language, and goes to the console.
  *
- * @param {string} text - Text to truncate
- * @param {number} [maxLength=200] - Maximum character length before truncation
- * @returns {string}
+ * @param {number} status - HTTP status code of the failed response
+ * @param {string} bodyText - Response body text
+ * @returns {{ langKey: string, status?: number }}
  */
-export function truncateErrorText(text, maxLength = 200) {
-    if (!text) return '';
-    return text.length > maxLength
-        ? text.slice(0, maxLength) + '\u2026'
-        : text;
+export function resolveFailureNotice(status, bodyText) {
+    if (status >= 500) {
+        return { langKey: 'server_error_notice', status };
+    }
+    try {
+        const reasonKey = JSON.parse(bodyText || '')?.error_lang_key;
+        if (typeof reasonKey === 'string' && SERVER_REASON_LANG_KEY.test(reasonKey)) {
+            return { langKey: reasonKey };
+        }
+    } catch {
+        // Not JSON: no named reason.
+    }
+    return { langKey: 'request_failed_notice', status };
 }
 
 /**

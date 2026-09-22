@@ -551,18 +551,22 @@ Handles all HTTP API requests from the frontend. Every `O()` call (the endpoint 
 | # | Stage Name         | AlwaysEnforced | Purpose |
 |---|--------------------|:-:|---|
 | 1 | `resolveUrl`       | No  | Resolves endpoint name to URL pattern via `endpoint_map` |
-| 2 | `buildFetchOptions` | No  | Constructs fetch init (method, headers, body) from context; marks it when the caller shows its own errors |
+| 2 | `buildFetchOptions` | No  | Constructs fetch init (method, headers, body) from context; marks it as a request whose notice the pipeline owns |
 | 3 | `csrf`             | No  | Attaches cached CSRF token to state-changing requests |
 | 4 | `fingerprint`      | No  | Computes and attaches browser fingerprint hash |
-| 5 | `execute`          | No  | Performs the actual `fetch()` call |
-| 6 | `authRedirect`     | No  | Redirects to login on 401 responses |
-| 7 | `rateLimitHandler` | No  | Shows toast notification on 429 responses |
-| 8 | `errorHandler`     | No  | Shows error toast on 4xx/5xx responses |
-| 9 | `responseParse`    | No  | Parses JSON response body |
+| 5 | `execute`          | No  | Performs the actual `fetch()` call; shows the network notice when the request never reaches the service |
+| 6 | `csrfRecovery`     | No  | Refreshes the CSRF token and retries once after a CSRF-specific 403 |
+| 7 | `authRedirect`     | No  | Redirects to login on 401 responses and session-failure 403s |
+| 8 | `rateLimitHandler` | No  | Shows the rate-limit notice on 429 responses |
+| 9 | `serviceUnavailable` | No | Shows the maintenance notice on 503 responses |
+| 10 | `errorHandler`    | No  | Shows the one notice for any other 4xx/5xx response |
+| 11 | `responseParse`   | No  | Parses JSON response body |
 
 The API pipeline has no `alwaysEnforced` stages — all stages are skippable via `context.skip`. Callers can pass options like `{ returnResponse: true }` to customize behavior (e.g., skip response parsing and get the raw `Response` object).
 
-A caller that shows its own error passes `{ suppressErrorToast: true }`. The pipeline's own notices stay silent, and `buildFetchOptions` marks the fetch options (`markCallerOwnsFailureNotice`, a non-enumerable mark that never reaches the network). The global fetch monitor (`error_monitor_handler.js`) then adds no server-error (5xx) or network-failure notice either, so the user sees only the caller's notice. Unmarked requests get the monitor's notice: translated copy from the `server_error_notice` and `network_error_notice` language keys, with the status code and without the address, which goes to the console.
+The pipeline owns the failure notice of every request it sends, and each failure gets exactly one, in the reader's language (`request_failure_notice.js`): the sentence is a `data-lang-key` element that the translation handler fills from the site's translations, starting from bootstrap copy in the page's language. A 5xx shows `server_error_notice`, a 503 `service_unavailable_notice` instead, a 429 `rate_limit_notice`, a 403 the permission notice, a request that never reaches the service `network_error_notice`, and any other 4xx `request_failed_notice`, or the reason the server names by language key (`error_lang_key` in a JSON body). The status code follows the 5xx and 4xx sentences. The route, the address and the server's own text are technical detail: they go to the console and the thrown error, never the notice. A request its caller cancelled, or one sent while the page is being left, gets no notice.
+
+A caller that shows its own error passes `{ suppressErrorToast: true }`; the pipeline's notices then stay silent. `buildFetchOptions` marks every request's fetch options (`markCallerOwnsFailureNotice`, a non-enumerable mark that never reaches the network), so the global fetch monitor (`error_monitor_handler.js`) adds no second notice. The monitor's own notices, with the same copy, are for fetches outside the pipeline.
 
 ### 10.4. Frontend vs Backend Pipeline Comparison
 

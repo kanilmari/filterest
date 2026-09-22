@@ -43,6 +43,15 @@ developer_workflow_seed_migrations = (
 # file, after every language row the reviewed sources above provide.
 language_seed_migrations = (
     "20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql",
+    "20260922000004_seed_request_notice_and_interface_language_keys.sql",
+    "20260922000005_seed_interface_language_keys_of_9_8_1.sql",
+    "20260922000006_seed_dataset_creation_warning_language_key.sql",
+    "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
+)
+# Tables an upgrade creates where a site lacks them are created for a new
+# installation by the same file, so both end with the same table.
+repair_schema_migrations = (
+    "20260922000002_create_missing_deletion_log.sql",
 )
 # Runs after every table exists, as the importing application role, so a new
 # installation withholds table creation from PUBLIC exactly as an upgrade does.
@@ -65,6 +74,7 @@ def reviewed_public_migration(name: str) -> str:
 schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
+    + "".join(reviewed_public_migration(name) for name in repair_schema_migrations)
     + "".join(reviewed_public_migration(name) for name in schema_privilege_migrations)
 )
 seed_sql = (

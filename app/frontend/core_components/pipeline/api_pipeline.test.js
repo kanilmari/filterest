@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // api_pipeline.test.js
-// Verifies shared API-pipeline recovery behavior for CSRF token drift on mutating requests.
-// Bridges cached CSRF bootstrap, retry-once recovery, and the manifest-backed route pipeline.
-// Exists to keep admin saves working after session/token churn without requiring a full page refresh.
+// Verifies shared API-pipeline recovery behavior and the one notice each failed request gets.
+// Bridges cached CSRF bootstrap, retry-once recovery, the manifest-backed route pipeline and its notices.
+// Exists to keep admin saves working after session/token churn and failures reported once, translated.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -11,6 +11,7 @@ const requestSessionAccessPromptMock = vi.fn();
 const showErrorToastMock = vi.fn();
 const showAccessDeniedToastMock = vi.fn();
 const showWarningToastMock = vi.fn();
+const showToastMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -24,8 +25,19 @@ async function loadModule() {
         showErrorToast: showErrorToastMock,
         showAccessDeniedToast: showAccessDeniedToastMock,
         showWarningToast: showWarningToastMock,
+        showToast: showToastMock,
     }));
     return import('./api_pipeline.js');
+}
+
+/** The failure notices shown, as { langKey, text, level, duration }. */
+function shownNotices() {
+    return showToastMock.mock.calls.map(([options]) => ({
+        langKey: options.content.querySelector('[data-lang-key]')?.dataset.langKey,
+        text: options.content.textContent,
+        level: options.level,
+        duration: options.duration,
+    }));
 }
 
 function buildResponse(body, { ok = true, status = 200, statusText = 'OK', contentType = 'application/json' } = {}) {
@@ -55,7 +67,11 @@ describe('api_pipeline', () => {
         requestSessionAccessPromptMock.mockReset();
         showErrorToastMock.mockReset();
         showWarningToastMock.mockReset();
+        showToastMock.mockReset();
         vi.restoreAllMocks();
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        document.documentElement.lang = 'en';
     });
 
     test('keeps private endpoint registration available beside manifest-backed routes', async () => {
@@ -224,29 +240,104 @@ describe('api_pipeline', () => {
             isRetryable: true,
         });
 
-        expect(showWarningToastMock).toHaveBeenCalledWith(
-            'The service is temporarily under maintenance. Please retry shortly.',
-            7000
-        );
-        expect(showWarningToastMock.mock.calls.flat().join(' ')).not.toContain('private runtime detail');
+        expect(shownNotices()).toEqual([{
+            langKey: 'service_unavailable_notice',
+            text: 'The service is temporarily under maintenance. Please retry shortly.',
+            level: 'warning',
+            duration: 7000,
+        }]);
         expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showWarningToastMock).not.toHaveBeenCalled();
     });
     test.each([400, 403, 429, 503])('quiet requests still fail for HTTP %s without error or warning toasts', async (status) => {
         localStorage.setItem('button_state', 'logout');
         vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Provider unavailable' }, { ok: false, status })));
         const mod = await loadModule();
         await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders', suppressErrorToast: true })).rejects.toThrow();
+        expect(showToastMock).not.toHaveBeenCalled();
         expect(showErrorToastMock).not.toHaveBeenCalled();
         expect(showWarningToastMock).not.toHaveBeenCalled();
+        expect(showAccessDeniedToastMock).not.toHaveBeenCalled();
         expect(requestLoginRedirectMock).not.toHaveBeenCalled();
     });
 
-    test.each([400, 429, 503])('ordinary requests retain their HTTP %s notifications', async (status) => {
+    test.each([
+        [400, 'request_failed_notice', 'The request could not be completed. (400)', 'error'],
+        [429, 'rate_limit_notice', 'Too many requests. Wait a moment and try again.', 'warning'],
+        [500, 'server_error_notice', 'The service ran into an error. Please try again in a moment. (500)', 'error'],
+        [503, 'service_unavailable_notice', 'The service is temporarily under maintenance. Please retry shortly.', 'warning'],
+    ])('an ordinary HTTP %s gets one translated notice without route or server text', async (status, langKey, text, level) => {
         localStorage.setItem('button_state', 'logout');
         vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Provider unavailable' }, { ok: false, status })));
         const mod = await loadModule();
-        await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders' })).rejects.toThrow();
-        expect(showErrorToastMock.mock.calls.length + showWarningToastMock.mock.calls.length).toBeGreaterThan(0);
+        await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders' })).rejects.toMatchObject({ status });
+        expect(shownNotices()).toMatchObject([{ langKey, text, level }]);
+        expect(text).not.toMatch(/imageSourcePickerProviders|Provider unavailable/);
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showWarningToastMock).not.toHaveBeenCalled();
+    });
+
+    test('a notice starts in the page language before runtime translations replace it', async () => {
+        document.documentElement.lang = 'fi';
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse('internal server error', {
+            ok: false, status: 500, contentType: 'text/plain',
+        })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'getResults' })).rejects.toMatchObject({ status: 500 });
+        expect(shownNotices()).toMatchObject([{
+            langKey: 'server_error_notice',
+            text: 'Palvelussa tapahtui virhe. Yritä hetken kuluttua uudelleen. (500)',
+        }]);
+        // The route and the server's text are technical detail for the console.
+        expect(console.error.mock.calls.flat().join(' ')).toContain('getResults');
+        expect(console.error.mock.calls.flat().join(' ')).toContain('internal server error');
+    });
+
+    test('a refusal that names its reason by language key shows that reason', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({
+            error_lang_key: 'error_table_creation_missing_primary_key',
+            error_message: 'missing primary key',
+        }, { ok: false, status: 400 })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'getResults' })).rejects.toMatchObject({ status: 400 });
+        expect(shownNotices()).toMatchObject([{ langKey: 'error_table_creation_missing_primary_key', level: 'error' }]);
+        expect(shownNotices()[0].text).not.toContain('missing primary key');
+    });
+
+    test('marks every request so the global fetch monitor adds no second notice', async () => {
+        const fetchMock = vi.fn(async () => buildResponse({ ok: true }));
+        vi.stubGlobal('fetch', fetchMock);
+        const mod = await loadModule();
+        const { callerOwnsFailureNotice } = await import('../error_and_status_handling/error_monitor_handler_helpers.js');
+        await mod.runApiPipeline({ routeName: 'getResults' });
+        await mod.runApiPipeline({ routeName: 'getResults', suppressErrorToast: true });
+        expect(fetchMock.mock.calls.map(([, options]) => callerOwnsFailureNotice(options))).toEqual([true, true]);
+    });
+
+    test('a request that never reaches the service gets the translated network notice', async () => {
+        const failure = new TypeError('Failed to fetch https://localhost:8082/api/get-results');
+        vi.stubGlobal('fetch', vi.fn(async () => { throw failure; }));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'getResults' })).rejects.toBe(failure);
+        expect(shownNotices()).toEqual([{
+            langKey: 'network_error_notice',
+            text: 'The service could not be reached. Check your connection and try again.',
+            level: 'error',
+            duration: undefined,
+        }]);
+        expect(console.error.mock.calls.flat()).toContain(failure);
+    });
+
+    test('a cancelled or quiet request that never reaches the service gets no notice', async () => {
+        const controller = new AbortController();
+        controller.abort();
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new DOMException('Cancelled', 'AbortError'); }));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'getResults', signal: controller.signal }))
+            .rejects.toMatchObject({ name: 'AbortError' });
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+        await expect(mod.runApiPipeline({ routeName: 'getResults', suppressErrorToast: true })).rejects.toThrow('Failed to fetch');
+        expect(showToastMock).not.toHaveBeenCalled();
     });
 
     test.each([429, 503])('a quiet HTTP %s does not consume the next ordinary notification throttle', async (status) => {
@@ -255,7 +346,7 @@ describe('api_pipeline', () => {
         const mod = await loadModule();
         await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders', suppressErrorToast: true })).rejects.toThrow();
         await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders' })).rejects.toThrow();
-        expect(showWarningToastMock).toHaveBeenCalledOnce();
+        expect(showToastMock).toHaveBeenCalledOnce();
     });
 
     test.each([

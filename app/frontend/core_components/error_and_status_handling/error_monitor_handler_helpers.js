@@ -1,16 +1,18 @@
 // error_monitor_handler_helpers.js
-// Pure helpers for the global fetch monitor in error_monitor_handler.js.
-// Bridges the monitor, the API pipeline that marks caller-owned failures, and
+// Pure helpers for failed-request notices and the global fetch monitor.
+// Bridges the monitor, the API pipeline that owns its requests' notices, and
 // the translation handler that serves the notices' language keys.
-// Exists so the monitor's notices stay translatable, free of technical detail
-// and testable without the browser's global fetch. Zero DOM access.
+// Exists so the notices stay translatable, free of technical detail and
+// testable without the browser's global fetch. Zero DOM access.
 
 /**
- * Bootstrap copy for the notices the fetch monitor shows. The installation's
- * runtime translations (system_lang_keys) are authoritative; the translation
- * handler serves this copy only while a site lacks the key. Migration
- * 20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql seeds
- * the same wording, and a Python test keeps the two in step.
+ * Bootstrap copy for the failed-request notices (request_failure_notice.js).
+ * The installation's runtime translations (system_lang_keys) are
+ * authoritative; the translation handler serves this copy only while a site
+ * lacks the key. Migrations
+ * 20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql and
+ * 20260922000004_seed_pending_interface_language_keys.sql seed the same
+ * wording, and Python tests keep the two in step.
  */
 export const FAILURE_NOTICE_TRANSLATION_FALLBACKS = Object.freeze({
     server_error_notice: {
@@ -25,6 +27,24 @@ export const FAILURE_NOTICE_TRANSLATION_FALLBACKS = Object.freeze({
         ch: "无法连接到服务。请检查网络连接后重试。",
         yue: "連唔到服務。請檢查網絡連線再試。",
     },
+    request_failed_notice: {
+        fi: "Pyyntöä ei voitu suorittaa.",
+        en: "The request could not be completed.",
+        ch: "无法完成请求。",
+        yue: "完成唔到呢個請求。",
+    },
+    rate_limit_notice: {
+        fi: "Pyyntöjä tuli liian monta. Odota hetki ja yritä uudelleen.",
+        en: "Too many requests. Wait a moment and try again.",
+        ch: "请求过多。请稍等片刻后重试。",
+        yue: "請求太多。請等一陣再試。",
+    },
+    service_unavailable_notice: {
+        fi: "Palvelu on hetkellisesti huoltotilassa. Yritä pian uudelleen.",
+        en: "The service is temporarily under maintenance. Please retry shortly.",
+        ch: "服务正在临时维护。请稍后重试。",
+        yue: "服務暫時維護緊。請稍後再試。",
+    },
 });
 
 // A registered symbol, so a module evaluated twice (tests, hot reload) still
@@ -34,7 +54,8 @@ const CALLER_OWNS_FAILURE_NOTICE = Symbol.for("filterest.fetch.callerOwnsFailure
 
 /**
  * Marks fetch options whose caller shows its own notice when the request
- * fails, so the global monitor does not show a second one. The mark is not
+ * fails, so the global monitor does not show a second one. The API pipeline
+ * marks every request it sends, because it owns their notices. The mark is not
  * enumerable: the options still compare, spread and serialise as before.
  *
  * @param {object} fetchOptions - The options object later passed to fetch()
@@ -58,30 +79,6 @@ export function markCallerOwnsFailureNotice(fetchOptions) {
  */
 export function callerOwnsFailureNotice(fetchOptions) {
     return Boolean(fetchOptions && fetchOptions[CALLER_OWNS_FAILURE_NOTICE] === true);
-}
-
-/**
- * Composes the notice for a server failure: the translated sentence and the
- * status code. The failed address is diagnostic detail for the console only.
- *
- * @param {number} status - HTTP status code
- * @param {(langKey: string) => string} translate - Returns the copy for one language key
- * @returns {string}
- */
-export function buildServerErrorNotice(status, translate) {
-    const sentence = translate("server_error_notice");
-    return Number.isInteger(status) ? `${sentence} (${status})` : sentence;
-}
-
-/**
- * Composes the notice for a request that never reached the service. The
- * browser's own error text is diagnostic detail for the console only.
- *
- * @param {(langKey: string) => string} translate - Returns the copy for one language key
- * @returns {string}
- */
-export function buildNetworkErrorNotice(translate) {
-    return translate("network_error_notice");
 }
 
 /**

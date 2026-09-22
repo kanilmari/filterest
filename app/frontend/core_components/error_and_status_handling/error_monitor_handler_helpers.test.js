@@ -1,8 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
     FAILURE_NOTICE_TRANSLATION_FALLBACKS,
-    buildNetworkErrorNotice,
-    buildServerErrorNotice,
     callerOwnsFailureNotice,
     isAbortLikeNetworkError,
     markCallerOwnsFailureNotice,
@@ -13,24 +11,11 @@ import {
 // Failure notices
 // ---------------------------------------------------------------------------
 describe('failure notices', () => {
-    const translate = (langKey) => `copy of ${langKey}`;
-
-    test('server notice is the translated sentence and the status code', () => {
-        expect(buildServerErrorNotice(500, translate)).toBe('copy of server_error_notice (500)');
-        expect(buildServerErrorNotice(502, translate)).toBe('copy of server_error_notice (502)');
-    });
-
-    test('server notice omits a status code it was not given', () => {
-        expect(buildServerErrorNotice(undefined, translate)).toBe('copy of server_error_notice');
-    });
-
-    test('network notice is only the translated sentence', () => {
-        expect(buildNetworkErrorNotice(translate)).toBe('copy of network_error_notice');
-    });
-
     test('every notice key has bootstrap copy in each installed language', () => {
-        expect(Object.keys(FAILURE_NOTICE_TRANSLATION_FALLBACKS).sort())
-            .toEqual(['network_error_notice', 'server_error_notice']);
+        expect(Object.keys(FAILURE_NOTICE_TRANSLATION_FALLBACKS).sort()).toEqual([
+            'network_error_notice', 'rate_limit_notice', 'request_failed_notice',
+            'server_error_notice', 'service_unavailable_notice',
+        ]);
         for (const copy of Object.values(FAILURE_NOTICE_TRANSLATION_FALLBACKS)) {
             expect(Object.keys(copy).sort()).toEqual(['ch', 'en', 'fi', 'yue']);
             for (const text of Object.values(copy)) {

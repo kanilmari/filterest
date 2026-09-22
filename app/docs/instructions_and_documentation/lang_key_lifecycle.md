@@ -299,6 +299,11 @@ A seed migration can instead be run by the bootstrap itself: list it in
 once. `20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql`
 does this, and also shows how to retire wording generated from a key's name:
 only that exact text is replaced, never a translation a site has changed.
+`20260922000005_seed_interface_language_keys_of_9_8_1.sql` retires
+wording an earlier seed wrote in the same way, in all four columns, when the
+copy is rewritten before a site has reviewed it. Keep apostrophes out of the SQL
+comments of a file the bootstrap embeds: the manifest's row counter reads a
+comment's apostrophe as the start of a string.
 
 Explicit user actions, such as saving an edited translation or restoring a
 personal field selection, keep their normal success/error notifications.

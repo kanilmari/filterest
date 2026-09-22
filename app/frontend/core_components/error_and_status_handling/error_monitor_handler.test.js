@@ -2,15 +2,15 @@
 // error_monitor_handler.test.js
 // Verifies the global fetch monitor's notices for server and network failures.
 // Bridges the monkey-patched window.fetch, the API pipeline's caller-owned
-// mark and the translation handler's language keys.
+// mark and the language-keyed failure notices.
 // Exists so a failed request produces one readable, translated notice without
-// its address, and none when the calling code shows its own.
+// its address, and none when the calling code (the API pipeline) shows its own.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const showErrorToastMock = vi.fn();
-const getTranslationForKeyMock = vi.fn();
-const RUNTIME_COPY = Object.freeze({
+const showToastMock = vi.fn();
+const PAGE_COPY = Object.freeze({
     server_error_notice: 'Palvelussa tapahtui virhe. Yritä hetken kuluttua uudelleen.',
     network_error_notice: 'Palveluun ei saatu yhteyttä. Tarkista verkkoyhteys ja yritä uudelleen.',
 });
@@ -36,9 +36,7 @@ async function loadMonitor(fetchImplementation) {
         showErrorToast: showErrorToastMock,
         showWarningToast: vi.fn(),
         showAccessDeniedToast: vi.fn(),
-    }));
-    vi.doMock('../lang/translation_handler.js', () => ({
-        getTranslationForKey: getTranslationForKeyMock,
+        showToast: showToastMock,
     }));
     vi.doMock('../endpoints/endpoint_router.js', () => ({
         endpoint_router: vi.fn(),
@@ -52,12 +50,20 @@ async function loadHelpers() {
     return import('./error_monitor_handler_helpers.js');
 }
 
+/** The failure notices shown, as { langKey, text }. */
+function shownNotices() {
+    return showToastMock.mock.calls.map(([options]) => ({
+        langKey: options.content.querySelector('[data-lang-key]')?.dataset.langKey,
+        text: options.content.textContent,
+    }));
+}
+
 describe('error_monitor_handler fetch monitor', () => {
     beforeEach(() => {
         browserFetch = window.fetch;
         showErrorToastMock.mockReset();
-        getTranslationForKeyMock.mockReset();
-        getTranslationForKeyMock.mockImplementation((langKey) => RUNTIME_COPY[langKey] || langKey);
+        showToastMock.mockReset();
+        document.documentElement.lang = 'fi';
         vi.spyOn(console, 'error').mockImplementation(() => {});
     });
 
@@ -72,9 +78,10 @@ describe('error_monitor_handler fetch monitor', () => {
         const result = await monitoredFetch('/api/get-results', { method: 'GET' });
 
         expect(result.status).toBe(500);
-        expect(getTranslationForKeyMock).toHaveBeenCalledWith('server_error_notice');
-        expect(showErrorToastMock).toHaveBeenCalledTimes(1);
-        expect(showErrorToastMock).toHaveBeenCalledWith(`${RUNTIME_COPY.server_error_notice} (500)`);
+        expect(shownNotices()).toEqual([
+            { langKey: 'server_error_notice', text: `${PAGE_COPY.server_error_notice} (500)` },
+        ]);
+        expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 
     test('keeps the failed address out of the notice and in the console', async () => {
@@ -82,7 +89,7 @@ describe('error_monitor_handler fetch monitor', () => {
 
         await monitoredFetch('/api/get-results');
 
-        const notice = showErrorToastMock.mock.calls[0][0];
+        const notice = shownNotices()[0].text;
         expect(notice).not.toContain('localhost');
         expect(notice).not.toContain('/api/');
         expect(notice).not.toContain('private_dataset');
@@ -96,7 +103,7 @@ describe('error_monitor_handler fetch monitor', () => {
         const result = await monitoredFetch('/api/get-results', markCallerOwnsFailureNotice({ method: 'GET' }));
 
         expect(result.status).toBe(500);
-        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showToastMock).not.toHaveBeenCalled();
         expect(console.error).toHaveBeenCalledWith('[HTTP]', expect.stringContaining('500'), result);
     });
 
@@ -105,7 +112,7 @@ describe('error_monitor_handler fetch monitor', () => {
 
         await monitoredFetch('/api/get-results');
 
-        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showToastMock).not.toHaveBeenCalled();
     });
 
     test('shows the translated network notice without the browser error text', async () => {
@@ -114,10 +121,21 @@ describe('error_monitor_handler fetch monitor', () => {
 
         await expect(monitoredFetch('/api/get-results')).rejects.toBe(failure);
 
-        expect(getTranslationForKeyMock).toHaveBeenCalledWith('network_error_notice');
-        expect(showErrorToastMock).toHaveBeenCalledTimes(1);
-        expect(showErrorToastMock).toHaveBeenCalledWith(RUNTIME_COPY.network_error_notice);
+        expect(shownNotices()).toEqual([
+            { langKey: 'network_error_notice', text: PAGE_COPY.network_error_notice },
+        ]);
         expect(console.error.mock.calls.flat().join(' ')).toContain('Failed to fetch');
+    });
+
+    test('shows no network notice for a request its caller cancelled', async () => {
+        const controller = new AbortController();
+        controller.abort();
+        const failure = new DOMException('Cancelled', 'AbortError');
+        const monitoredFetch = await loadMonitor(async () => { throw failure; });
+
+        await expect(monitoredFetch('/api/get-results', { signal: controller.signal })).rejects.toBe(failure);
+
+        expect(showToastMock).not.toHaveBeenCalled();
     });
 
     test('shows no network notice when the caller shows its own', async () => {
@@ -128,7 +146,7 @@ describe('error_monitor_handler fetch monitor', () => {
         await expect(monitoredFetch('/api/get-results', markCallerOwnsFailureNotice({})))
             .rejects.toBe(failure);
 
-        expect(showErrorToastMock).not.toHaveBeenCalled();
+        expect(showToastMock).not.toHaveBeenCalled();
         expect(console.error).toHaveBeenCalled();
     });
 
@@ -150,13 +168,17 @@ describe('error_monitor_handler fetch monitor', () => {
             .rejects.toMatchObject({ status: 500 });
         // The pipeline's own error stage respects the same flag; the monitor
         // adds nothing either, so the calling code's notice is the only one.
+        expect(showToastMock).not.toHaveBeenCalled();
         expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 
-    test('an ordinary API pipeline request still gets the monitor notice', async () => {
+    test('an ordinary API pipeline request gets exactly one notice, from the pipeline', async () => {
         const runApiPipeline = await loadPipelineOverMonitor();
 
         await expect(runApiPipeline({ routeName: 'getResults' })).rejects.toMatchObject({ status: 500 });
-        expect(showErrorToastMock).toHaveBeenCalledWith(`${RUNTIME_COPY.server_error_notice} (500)`);
+        expect(shownNotices()).toEqual([
+            { langKey: 'server_error_notice', text: `${PAGE_COPY.server_error_notice} (500)` },
+        ]);
+        expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 });

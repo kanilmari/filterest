@@ -15,8 +15,8 @@ import {
     createServiceUnavailableError,
     isServiceUnavailableError,
     stripAnsiCodes,
-    truncateErrorText,
     shouldThrottleRateLimitToast,
+    resolveFailureNotice,
 } from './api_pipeline_helpers.js';
 
 describe('service-unavailable errors', () => {
@@ -295,37 +295,38 @@ describe('stripAnsiCodes', () => {
 });
 
 // ---------------------------------------------------------------------------
-// truncateErrorText
+// resolveFailureNotice
 // ---------------------------------------------------------------------------
-describe('truncateErrorText', () => {
-    test('returns text unchanged when under maxLength', () => {
-        expect(truncateErrorText('short', 200)).toBe('short');
+describe('resolveFailureNotice', () => {
+    test('a server error gets the server-error sentence and its status code', () => {
+        expect(resolveFailureNotice(500, 'internal server error')).toEqual({ langKey: 'server_error_notice', status: 500 });
+        expect(resolveFailureNotice(502, '<html>Bad gateway</html>')).toEqual({ langKey: 'server_error_notice', status: 502 });
     });
 
-    test('truncates and appends ellipsis when over maxLength', () => {
-        const long = 'x'.repeat(250);
-        const result = truncateErrorText(long, 200);
-        expect(result.length).toBe(201); // 200 chars + ellipsis char
-        expect(result.endsWith('\u2026')).toBe(true);
+    test('a refusal shows the general sentence, never the server text', () => {
+        expect(resolveFailureNotice(400, 'Invalid JSON')).toEqual({ langKey: 'request_failed_notice', status: 400 });
+        expect(resolveFailureNotice(404, JSON.stringify({ error: 'dataset "x" not found', code: 404 })))
+            .toEqual({ langKey: 'request_failed_notice', status: 404 });
     });
 
-    test('uses 200 as default maxLength', () => {
-        const exact200 = 'a'.repeat(200);
-        expect(truncateErrorText(exact200)).toBe(exact200);
-
-        const over200 = 'b'.repeat(201);
-        expect(truncateErrorText(over200).endsWith('\u2026')).toBe(true);
+    test('a refusal that names its reason by language key shows that reason', () => {
+        const body = JSON.stringify({
+            error_lang_key: 'error_table_creation_missing_primary_key',
+            error_message: 'missing primary key',
+        });
+        expect(resolveFailureNotice(400, body)).toEqual({ langKey: 'error_table_creation_missing_primary_key' });
     });
 
-    test('returns empty string for falsy input', () => {
-        expect(truncateErrorText('')).toBe('');
-        expect(truncateErrorText(null)).toBe('');
-        expect(truncateErrorText(undefined)).toBe('');
+    test('a named reason that is not a plain language key is ignored', () => {
+        for (const reasonKey of ['<img src=x>', 'Error Key', '', 42, 'x'.repeat(200)]) {
+            expect(resolveFailureNotice(409, JSON.stringify({ error_lang_key: reasonKey })))
+                .toEqual({ langKey: 'request_failed_notice', status: 409 });
+        }
     });
 
-    test('handles text at exact boundary', () => {
-        const exact = 'c'.repeat(200);
-        expect(truncateErrorText(exact, 200)).toBe(exact);
+    test('a server error keeps its own sentence even when it names a reason', () => {
+        expect(resolveFailureNotice(500, JSON.stringify({ error_lang_key: 'some_reason' })))
+            .toEqual({ langKey: 'server_error_notice', status: 500 });
     });
 });
 
