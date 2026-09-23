@@ -5,11 +5,14 @@
 // Exists so the page reads in Finnish, English, Chinese (ch) and Cantonese (yue).
 // The Finnish and English texts of keys the database already holds match that
 // copy exactly, so a new and an upgraded installation read the same.
-// add_foreign_key, referencing_column, referenced_table, referenced_column and
-// select_column come from the dataset form's fallbacks, which the page shares.
+// referencing_column, referenced_table, referenced_column and select_column come
+// from the dataset form's fallbacks, which the page shares. This page owns
+// add_foreign_key, because the dataset form now names the same act in the
+// person's own words ("Connect two fields") and no longer shares this key.
 
 // Each entry reads [Finnish, English, Chinese, Cantonese].
 const COPY = {
+    add_foreign_key: ["Lisää viiteavain", "Add foreign key", "添加外键", "新增外鍵"],
     referencing_table: ["Viittaava taulu", "Referencing table", "引用表", "引用表"],
     select_table: ["Valitse taulu", "Select table", "选择表", "選擇表"],
     fill_all_fields: ["Täytä kaikki kentät", "Fill all fields", "请填写所有字段", "請填寫所有欄位"],

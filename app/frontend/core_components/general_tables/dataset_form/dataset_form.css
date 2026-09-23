@@ -267,6 +267,64 @@ form.dataset-form .dataset-foreign-keys-empty {
 form.dataset-form .dataset-foreign-key-remove {
     align-self: end;
 }
+/* The offer to connect two fields, and the information symbol beside it. */
+form.dataset-form .dataset-foreign-keys-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+form.dataset-form .dataset-foreign-keys-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+form.dataset-form .dataset-form-explain-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    color: var(--text_color_secondary, var(--text_color));
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+}
+form.dataset-form .dataset-form-explain-button:hover,
+form.dataset-form .dataset-form-explain-button[aria-expanded="true"] {
+    color: var(--text_color);
+    border-color: var(--table_border_color);
+}
+form.dataset-form .dataset-form-explain-symbol {
+    width: 18px;
+    height: 18px;
+}
+/* The symbol says everything a sighted reader needs; the button's name is
+ * written for a screen reader and is taken out of the visible layout only. */
+form.dataset-form .dataset-form-explain-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+form.dataset-form .dataset-form-explanation {
+    margin: 0;
+    color: var(--text_color_secondary, var(--text_color));
+    font-size: 0.92rem;
+    overflow-wrap: anywhere;
+}
+form.dataset-form .dataset-form-explanation[hidden] {
+    display: none;
+}
 
 /* --- The dataset's name, a hidden dataset's notice, a new dataset's result --- */
 form.dataset-form .dataset-form-name-value {

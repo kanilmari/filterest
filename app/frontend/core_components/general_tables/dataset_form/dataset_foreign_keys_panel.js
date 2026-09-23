@@ -7,7 +7,43 @@
 // Exists so a link between two datasets is drafted and read the same way
 // wherever the dataset is described.
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
+import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { createDatasetFormStatus, datasetFormLabel, setDatasetFormText } from "./dataset_form_text.js";
+
+/** Each panel on the page needs its own explanation to point the button at. */
+let explanationCounter = 0;
+
+/**
+ * The information symbol beside the button, and the explanation it opens.
+ *
+ * The symbol is a button with a name of its own rather than a hover text, so a
+ * person reading with the keyboard or a screen reader reaches the explanation
+ * the same way anyone else does. The name is a text the sighted reader does not
+ * need, so it is placed off-screen instead of beside the symbol.
+ */
+function createConnectTwoFieldsExplainer() {
+    explanationCounter += 1;
+    const explanation = setDatasetFormText(document.createElement("p"), "connect_two_fields_explanation");
+    explanation.className = "dataset-form-explanation";
+    explanation.id = `dataset-foreign-keys-explanation-${explanationCounter}`;
+    explanation.hidden = true;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "dataset-form-explain-button";
+    button.dataset.testid = "dataset-foreign-key-explain";
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", explanation.id);
+    const accessibleName = setDatasetFormText(document.createElement("span"), "connect_two_fields_explain");
+    accessibleName.className = "dataset-form-explain-name";
+    button.append(createSymbolMaskElement("info", "dataset-form-explain-symbol"), accessibleName);
+    button.addEventListener("click", () => {
+        explanation.hidden = !explanation.hidden;
+        button.setAttribute("aria-expanded", String(!explanation.hidden));
+    });
+
+    return { button, explanation };
+}
 
 /**
  * The links that start in this dataset.
@@ -66,6 +102,14 @@ export function createDatasetForeignKeyPanel({
     const title = setDatasetFormText(document.createElement("div"), "dataset_foreign_keys_title");
     title.className = "dataset-foreign-keys-title dataset-form-section-title";
     section.appendChild(title);
+    const explainer = createConnectTwoFieldsExplainer();
+    // The explanation belongs beside the button that offers the act. Editing an
+    // existing dataset has no button, so there it stands beside the title, which
+    // is the same offer in that mode.
+    if (!multipleDrafts) {
+        title.appendChild(explainer.button);
+        section.appendChild(explainer.explanation);
+    }
 
     const list = document.createElement("ul");
     list.className = "dataset-foreign-keys-list";
@@ -150,12 +194,15 @@ export function createDatasetForeignKeyPanel({
     }
 
     if (multipleDrafts) {
-        const add = setDatasetFormText(document.createElement("button"), "add_foreign_key");
+        const add = setDatasetFormText(document.createElement("button"), "connect_two_fields");
         add.type = "button";
         add.className = "modal-button secondary saturate_on_hover";
         add.dataset.testid = "dataset-foreign-key-add";
         add.addEventListener("click", () => addDraft().referencing.focus());
-        section.appendChild(add);
+        const actions = document.createElement("div");
+        actions.className = "dataset-foreign-keys-actions";
+        actions.append(add, explainer.button);
+        section.append(actions, explainer.explanation);
     } else {
         addDraft();
     }

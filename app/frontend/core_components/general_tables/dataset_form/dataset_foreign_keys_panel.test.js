@@ -68,6 +68,8 @@ const drafts = (panel) => [...panel.element.querySelectorAll('.dataset-foreign-k
     referencedColumn: row.querySelector('[name="fk_referenced_column"]'),
 }));
 const addButton = (panel) => panel.element.querySelector('[data-testid="dataset-foreign-key-add"]');
+const explainButton = (panel) => panel.element.querySelector('[data-testid="dataset-foreign-key-explain"]');
+const explanation = (panel) => panel.element.querySelector('.dataset-form-explanation');
 
 async function fillDraft(panel, draft, { column = 'category_id', target = 'categories' } = {}) {
     draft.referencing.value = column;
@@ -191,5 +193,66 @@ describe('dataset links panel', () => {
             },
             suppressErrorToast: true,
         });
+    });
+});
+
+describe('the offer to connect two fields', () => {
+    const BUTTON_TEXTS = {
+        fi: 'Yhdistä kaksi kenttää',
+        en: 'Connect two fields',
+        'zh-CN': '连接两个字段',
+        yue: '連接兩個欄位',
+    };
+    const EXPLANATION_TEXTS = {
+        fi: 'Tämän aineiston rivi osoittaa toisen aineiston riviin, jolloin toisen rivin tiedot voidaan näyttää tässä ja arvo pysyy kelvollisena (viiteavain).',
+        en: "A row of this dataset points at a row of another dataset, so the other row's information can be shown here and the value stays valid (foreign key).",
+        'zh-CN': '本数据集中的一行指向另一个数据集中的一行，这样就能在这里显示另一行的信息，并且该值始终有效（外键）。',
+        yue: '呢個資料集嘅一行會指向另一個資料集嘅一行，噉就可以喺呢度顯示嗰行嘅資料，個值亦會一直有效（外鍵）。',
+    };
+
+    test.each(Object.keys(BUTTON_TEXTS))('names the act and explains it in %s', async (language) => {
+        document.documentElement.lang = language;
+        const panel = mount({ editing: false });
+        await panel.ready;
+
+        expect(addButton(panel).textContent).toBe(BUTTON_TEXTS[language]);
+        expect(explanation(panel).textContent).toBe(EXPLANATION_TEXTS[language]);
+    });
+
+    test('the explanation names the technical term the developer knows', async () => {
+        const panel = mount({ editing: false });
+        await panel.ready;
+        expect(explanation(panel).textContent).toContain('(foreign key)');
+    });
+
+    test('an information symbol with a name of its own opens the explanation', async () => {
+        const panel = mount({ editing: false });
+        await panel.ready;
+        const symbol = explainButton(panel);
+
+        expect(symbol.type).toBe('button');
+        expect(symbol.querySelector('.dataset-form-explain-name').textContent)
+            .toBe('What does connecting two fields mean?');
+        expect(symbol.querySelector('.dataset-form-explain-symbol').dataset.symbolKey).toBe('info');
+        expect(symbol.hasAttribute('title')).toBe(false);
+        expect(symbol.getAttribute('aria-controls')).toBe(explanation(panel).id);
+        expect(explanation(panel).hidden).toBe(true);
+        expect(symbol.getAttribute('aria-expanded')).toBe('false');
+
+        symbol.click();
+        expect(explanation(panel).hidden).toBe(false);
+        expect(symbol.getAttribute('aria-expanded')).toBe('true');
+
+        symbol.click();
+        expect(explanation(panel).hidden).toBe(true);
+        expect(symbol.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    test('editing an existing dataset offers the same explanation beside the title', async () => {
+        const panel = mount();
+        await panel.ready;
+        expect(addButton(panel)).toBeNull();
+        expect(explainButton(panel).closest('.dataset-foreign-keys-title')).not.toBeNull();
+        expect(explanation(panel).textContent).toBe(EXPLANATION_TEXTS.en);
     });
 });

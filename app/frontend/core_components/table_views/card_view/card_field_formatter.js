@@ -29,6 +29,7 @@ import {
     normalizeTicketStatusForDb,
 } from './card_field_formatter_helpers.js';
 import { applyNumberInputStep } from '../../general_tables/gt_1_row_crud/number_input_step_resolver.js';
+import { resolveCardFieldLabelPlacement } from './card_field_label_placement.js';
 
 /**
  * parseRoleString - tukee useita pilkulla erotettuja rooleja 
@@ -81,10 +82,19 @@ export function createKeyValueElement(
     wrapper.classList.add("key_value_wrapper");
 
     /* ---------- LABEL ---------- */
-    if (column_label) {
+    // Nimen paikka luetaan sarakkeesta, ei yhden rivin arvosta.
+    const labelPlacement = resolveCardFieldLabelPlacement({
+        labelRequested: Boolean(column_label),
+        baseRoles: parseRoleString(columnMeta?.card_element || "").baseRoles,
+        dataType: columnMeta?.data_type,
+        labelValueLayout: columnMeta?.label_value_layout,
+    });
+    if (labelPlacement !== "hidden") {
+        wrapper.dataset.cardLabelPlacement = labelPlacement;
         const labelDiv = document.createElement("div");
         labelDiv.classList.add("kv_label");
-        // Kieliavain attribuuttiin, ei varatekstiä
+        // Kieliavain attribuuttiin, ei varatekstiä. Kaksoispiste tulee tyylistä,
+        // koska kääntäjä korvaa tämän elementin tekstin joka kielenvaihdossa.
         labelDiv.dataset.langKey = column;
         wrapper.appendChild(labelDiv);
     }
