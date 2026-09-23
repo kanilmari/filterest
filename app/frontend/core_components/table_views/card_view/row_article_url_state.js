@@ -4,6 +4,7 @@
 // Exists so article deep links preserve the active search while marking the view as article.
 
 import { getParams, setParams } from "../../navigation/nav_engine/query_params.js";
+import { serializeDatasetQuery } from "../../navigation/nav_engine/dataset_address_writer.js";
 
 export function buildRowArticleQueryString(tableName) {
     const params = {
@@ -11,13 +12,6 @@ export function buildRowArticleQueryString(tableName) {
         view: "article_view",
     };
     setParams(tableName, params);
-
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-            searchParams.set(key, value);
-        }
-    });
-    const query = searchParams.toString();
-    return query ? `?${query}` : "";
+    // The dataset address owner spells every dataset query; this link is one of them.
+    return serializeDatasetQuery(params);
 }

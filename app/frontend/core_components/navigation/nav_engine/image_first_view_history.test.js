@@ -111,7 +111,7 @@ describe("image-first history", () => {
     test("Forward uses the existing permission/dirty pipeline and rejects denied or stale intents", async () => {
         mocks.pipeline.mockResolvedValue({ abort: true, reason: "permission_denied" });
         expect(await authorizeImageFirstView("events", () => true)).toBe(false);
-        expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({ name: "events", skip: ["urlUpdate"] }));
+        expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({ name: "events", skip: ["urlUpdate", "datasetAddress"] }));
         mocks.pipeline.mockClear();
         expect(await authorizeImageFirstView("events", () => false)).toBe(false);
         expect(mocks.pipeline).not.toHaveBeenCalled();

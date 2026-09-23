@@ -14,6 +14,7 @@ import {
     hasDatasetAccessSnapshot,
 } from '../navigation/nav_engine/dataset_access_registry.js';
 import { updateBrowserTabTitle } from '../navigation/nav_engine/browser_tab_title_writer.js';
+import { updateDatasetAddress } from '../navigation/nav_engine/dataset_address_writer.js';
 
 // ==========================================
 // Stage Implementations
@@ -135,6 +136,25 @@ async function viewRenderStage(ctx) {
 }
 
 /**
+ * datasetAddressStage — describes the settled navigation in the browser address.
+ *
+ * It runs after viewRender, so the effective view is the one the renderer kept
+ * after its permission and capability checks, and any article it opened is the
+ * one on screen. The urlUpdate stage above writes the address the caller asked
+ * for; this stage corrects it to the address that state produced, and writes the
+ * cached query parameters with it so the two cannot disagree later.
+ *
+ * A custom view is not a dataset and has no dataset address to own. The
+ * image-first article owns its own address and skips this stage by name.
+ *
+ * @param {Object} ctx - Navigation context with name and isCustomView
+ */
+async function datasetAddressStage(ctx) {
+    if (ctx.isCustomView) return;
+    await updateDatasetAddress({ dataset: ctx.name, isCurrent: ctx.isCurrentNavigation });
+}
+
+/**
  * browserTabTitleStage — retitles the browser tab for the navigation that just
  * settled. It runs after viewRender so the dataset, view and any open article
  * are already the ones the person is looking at, and it is skipped for an
@@ -158,6 +178,7 @@ const navigationStages = [
     createStage('permissionCheck',  permissionCheckStage, false),
     createStage('urlUpdate',        urlUpdateStage,       false),
     createStage('viewRender',       viewRenderStage,      true),
+    createStage('datasetAddress',   datasetAddressStage,  false),
     createStage('browserTabTitle',  browserTabTitleStage, true),
 ];
 

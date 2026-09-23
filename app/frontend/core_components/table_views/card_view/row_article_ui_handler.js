@@ -13,6 +13,7 @@ import {
 import { appendConfiguredCardDetailIcon } from "./card_detail_single_line_helpers.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
+import { updateDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
 import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
 import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation_handler_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
@@ -306,6 +307,11 @@ export function closeRowArticle(
                     void import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js")
                         .then(({ refreshTableUnified }) => refreshTableUnified(table_name, { skipUrlParams: true }));
                 }
+                // The bare path above drops the person's search and filters and
+                // leaves the cached parameters still saying article_view. Ask the
+                // address owner to write both from the state this close settles,
+                // so the next search or sort cannot copy that view back in.
+                void updateDatasetAddress({ dataset: table_name });
             }
         }
     }

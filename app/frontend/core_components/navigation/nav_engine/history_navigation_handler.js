@@ -4,7 +4,7 @@
 // Exists to decouple history restoration logic from the main navigation entry point.
 
 import { handleImageFirstViewHistory } from "./image_first_view_history.js";
-import { HISTORY_ENTRY_ID, getHistoryDatasetView, writeHistoryEntry } from "./history_entry_state.js";
+import { HISTORY_ENTRY_ID, getHistoryDatasetView } from "./history_entry_state.js";
 import { canRestoreCardArticleReturn, restoreCardArticleReturn, getCardArticleReturnToken, refreshCardArticleReturnViewport } from "./card_article_return_state.js";
 import { custom_views } from '../admin_and_user_tools/custom_view_reader.js';
 import { setParams, DATASET_PREFIX, parseTableQueryString } from './query_params.js';
@@ -26,6 +26,7 @@ import {
     isDatasetBasePath,
 } from './history_navigation_handler_helpers.js';
 import { updateBrowserTabTitle } from './browser_tab_title_writer.js';
+import { updateDatasetAddress } from './dataset_address_writer.js';
 
 function getTargetView(datasetName, parsed) {
     const view = parsed.view || getHistoryDatasetView(datasetName);
@@ -81,17 +82,12 @@ async function restoreDatasetBasePathState(datasetName, isCurrentNavigation) {
         localStorage.setItem(`${datasetName}_view`, nextView);
         setParams(datasetName, { ...buildParamsFromParsed(parsed), view: nextView });
         clearClosedArticleState(datasetName);
-        const result = await handle_all_navigation(datasetName, custom_views, {
+        // Permission and capability checks may still select a fallback below.
+        // The address owner describes whichever view actually rendered, and
+        // writes the cached parameters with it, once this restoration settles.
+        await handle_all_navigation(datasetName, custom_views, {
             skipUrlUpdate: true, isCurrentNavigation, forceReload: true,
         });
-        if (returnView && !result?.abort && isCurrentNavigation()) {
-            // Permission and capability checks may have selected a fallback.
-            const effectiveView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${datasetName}_view`) || returnView);
-            setParams(datasetName, { ...buildParamsFromParsed(parsed), view: effectiveView });
-            const url = new URL(window.location.href);
-            url.searchParams.set("view", effectiveView);
-            writeHistoryEntry(url.pathname + url.search + url.hash, {}, { replace: true });
-        }
         return true;
     }
     clearClosedArticleState(datasetName);
@@ -248,12 +244,19 @@ async function restoreHistoryEntryState() {
 }
 
 window.addEventListener('popstate', async () => {
+    // An entry the person has already left again is not ours to rewrite, so the
+    // address owner below only speaks for the entry this restoration started on.
+    const landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
+    const isLandedEntry = () => (history.state?.[HISTORY_ENTRY_ID] ?? null) === landedEntryId;
     try {
         await restoreHistoryEntryState();
     } finally {
         // Several restoration paths return before any navigation runs, including
-        // the cached article return and the already-cleaned close. The browser
-        // tab still has to describe the entry the person landed on.
+        // the cached article return and the already-cleaned close. The address
+        // and the browser tab still have to describe the entry the person landed
+        // on, and the restored view may be a permitted fallback of the one the
+        // entry asked for.
+        await updateDatasetAddress({ isCurrent: isLandedEntry });
         await updateBrowserTabTitle();
     }
 });

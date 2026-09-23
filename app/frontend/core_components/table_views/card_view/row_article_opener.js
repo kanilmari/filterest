@@ -10,6 +10,7 @@ import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js
 import { ARTICLE_VIEW_KEY, resolveDatasetViewSelectionTarget } from "../dataset_view_registry.js";
 import { captureCardArticleReturn, getCardArticleOriginEntry } from "../../navigation/nav_engine/card_article_return_state.js";
 import { writeHistoryEntry } from "../../navigation/nav_engine/history_entry_state.js";
+import { updateDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
 import { createArticleLanguageEditor } from "../article_view/article_language_editor.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { rebaseSavedCardDraftFields } from "./card_edit_reconciler.js";
@@ -570,6 +571,9 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
 
         rowArticleElement.prepend(closeBtn);
         placeholder.replaceChildren(rowArticleElement);
+        // The article and its own history entry now exist, so the address owner
+        // can confirm the settled row address and store the matching parameters.
+        void updateDatasetAddress({ dataset: table_name, isCurrent: canCommit });
         window.requestAnimationFrame(() => {
             void (async () => {
                 if (!canCommit() || !rowArticleElement.isConnected) return;

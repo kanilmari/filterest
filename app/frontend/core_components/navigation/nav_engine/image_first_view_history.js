@@ -63,7 +63,9 @@ export async function authorizeImageFirstView(tableName, isCurrent) {
     ]);
     if (!isCurrent() || !hasRoutePermission("/ui/view/article_view")) return false;
     const result = await runNavigationPipeline({
-        name: tableName, skip: ["urlUpdate"], isCurrentNavigation: isCurrent,
+        // This view owns its own address, including its row and image; only the
+        // permission and dirty stages are borrowed here.
+        name: tableName, skip: ["urlUpdate", "datasetAddress"], isCurrentNavigation: isCurrent,
         canRestoreMountedView: () => true, _performNavigationCore: () => {},
     });
     return !result?.abort && isCurrent();

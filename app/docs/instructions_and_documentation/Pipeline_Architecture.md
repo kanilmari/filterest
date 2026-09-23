@@ -523,17 +523,29 @@ Handles client-side view transitions — every tab/route change flows through th
 |---|------------------|:-:|---|
 | 1 | `dirtyCheck`     | No  | Aborts if user has unsaved changes (calls `window.check_manage_permissions_dirty()`) |
 | 2 | `permissionCheck`| No  | Aborts if user lacks access to target route (API routes, custom views, dataset tables) |
-| 3 | `urlUpdate`      | No  | Pushes new URL to browser history via `updateURL()` |
+| 3 | `urlUpdate`      | No  | Writes the URL the caller asked for, via `updateURL()` |
 | 4 | `viewRender`     | Yes | Switches containers, lazy-loads content, shows/hides loading spinner |
+| 5 | `datasetAddress` | No  | Corrects the address to the state that actually rendered, via `updateDatasetAddress()` |
+| 6 | `browserTabTitle`| Yes | Retitles the browser tab for the settled state, via `updateBrowserTabTitle()` |
 
-**Profiling approach:** Rather than explicit profile objects (like the backend's `RouteProfiles`), the navigation pipeline uses `context.skip` arrays. This was a deliberate design decision: with only 4 stages (3 skippable), named profiles would add abstraction without proportional value.
+Stages 3 and 5 are not the same decision twice. `urlUpdate` writes the address a
+caller requested, before anything renders. `datasetAddress` runs after rendering
+and replaces that entry with the address the settled state produced: the dataset
+through its alias, the view that survived permission and capability checks, and
+the open row when one is open. It writes the cached query parameters with the
+address, so the two cannot drift apart. Its owner is
+`navigation/nav_engine/dataset_address_writer.js`, which also owns the
+serialisation behind `updateURL()`.
+
+**Profiling approach:** Rather than explicit profile objects (like the backend's `RouteProfiles`), the navigation pipeline uses `context.skip` arrays. This was a deliberate design decision: with few skippable stages, named profiles would add abstraction without proportional value.
 
 **Current skip patterns in the codebase:**
 
 | Caller | Skip | Why |
 |--------|------|-----|
-| Back/forward navigation (`history_navigation.js`) | `['urlUpdate']` | Browser already updated the URL bar |
-| Landing on frontpage (`load_tables.js`) | `['urlUpdate']` | Initial load — URL is already correct |
+| Back/forward navigation (`history_navigation_handler.js`) | `['urlUpdate']` | Browser already moved the address; the settled state still corrects it |
+| Landing on frontpage (`table_loader_handler.js`) | `['urlUpdate']` | Initial load — URL is already correct |
+| Image-first article (`image_first_view_history.js`) | `['urlUpdate', 'datasetAddress']` | That view owns its own address, row and image |
 | Normal navigation | `[]` (no skip) | Full pipeline |
 
 **Introspection:** Call `describeNavigationPipeline()` (exported from `navigation_pipeline.js`) to get the pipeline structure at runtime:
@@ -572,14 +584,14 @@ A caller that shows its own error passes `{ suppressErrorToast: true }`; the pip
 
 | Aspect | Backend | Frontend Navigation | Frontend API |
 |--------|---------|--------------------:|-------------:|
-| Stages | 12 | 4 | 9 |
+| Stages | 12 | 6 | 9 |
 | Runner | `BuildHandler()` (Go) | `runPipeline()` (JS) | `runPipeline()` (JS) |
 | Profiling | Explicit `RouteProfile` objects | Implicit `context.skip` arrays | Implicit `context.skip` + options |
-| AlwaysEnforced | 5 stages | 1 stage (`viewRender`) | 0 stages |
+| AlwaysEnforced | 5 stages | 2 stages (`viewRender`, `browserTabTitle`) | 0 stages |
 | Introspection | `/api/pipeline-info` endpoint | `describeNavigationPipeline()` | — |
-| Conformance | `TestRouteProfilesConformance` | N/A (4 stages, low risk) | N/A |
+| Conformance | `TestRouteProfilesConformance` | N/A (6 stages, low risk) | N/A |
 
-**Why no explicit profiles on the frontend?** The backend has 103+ routes × 11 stages — without explicit profiles, security decisions would be invisible. The frontend navigation pipeline has 1 entry point × 4 stages with only 1 active skip pattern. An explicit `NavigationProfiles` object would add indirection without improving clarity or safety.
+**Why no explicit profiles on the frontend?** The backend has 103+ routes × 11 stages — without explicit profiles, security decisions would be invisible. The frontend navigation pipeline has 1 entry point and a handful of stages with only a few active skip patterns. An explicit `NavigationProfiles` object would add indirection without improving clarity or safety.
 
 ---
 

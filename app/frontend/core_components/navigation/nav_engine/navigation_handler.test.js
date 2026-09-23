@@ -17,6 +17,7 @@ const updateRecentlyViewedStatusMock = vi.fn();
 const updateActiveHeadingMock = vi.fn();
 const runNavigationPipelineMock = vi.fn();
 const updateURLMock = vi.fn();
+const updateDatasetAddressMock = vi.fn(async () => true);
 const destroyChatMock = vi.fn();
 const clearSSEActiveDatasetMock = vi.fn();
 const setSSEActiveDatasetMock = vi.fn();
@@ -40,6 +41,9 @@ async function loadModule({ realPipeline = false } = {}) {
         useStorageParams: vi.fn(),
         useUrlParams: vi.fn(),
         updateURL: updateURLMock,
+    }));
+    vi.doMock('./dataset_address_writer.js', () => ({
+        updateDatasetAddress: updateDatasetAddressMock,
     }));
     vi.doMock('./recent_tab_saver.js', () => ({
         update_recently_viewed_list: updateRecentlyViewedListMock,

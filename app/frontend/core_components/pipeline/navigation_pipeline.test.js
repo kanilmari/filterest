@@ -13,6 +13,7 @@ const showAccessDeniedToastMock = vi.fn();
 const canReadDatasetFromRegistryMock = vi.fn();
 const hasDatasetAccessSnapshotMock = vi.fn();
 const updateBrowserTabTitleMock = vi.fn(async () => true);
+const updateDatasetAddressMock = vi.fn(async () => true);
 
 async function loadModule(customViews = []) {
   vi.resetModules();
@@ -39,6 +40,9 @@ async function loadModule(customViews = []) {
   vi.doMock('../navigation/nav_engine/browser_tab_title_writer.js', () => ({
     updateBrowserTabTitle: updateBrowserTabTitleMock,
   }));
+  vi.doMock('../navigation/nav_engine/dataset_address_writer.js', () => ({
+    updateDatasetAddress: updateDatasetAddressMock,
+  }));
   return import('./navigation_pipeline.js');
 }
 
@@ -52,6 +56,7 @@ describe('navigation_pipeline', () => {
     canReadDatasetFromRegistryMock.mockReset();
     hasDatasetAccessSnapshotMock.mockReset();
     updateBrowserTabTitleMock.mockClear();
+    updateDatasetAddressMock.mockClear();
     canReadDatasetFromRegistryMock.mockReturnValue(null);
     hasDatasetAccessSnapshotMock.mockReturnValue(false);
     delete window.check_manage_permissions_dirty;
@@ -65,6 +70,7 @@ describe('navigation_pipeline', () => {
       { name: 'permissionCheck', alwaysEnforced: false },
       { name: 'urlUpdate', alwaysEnforced: false },
       { name: 'viewRender', alwaysEnforced: true },
+      { name: 'datasetAddress', alwaysEnforced: false },
       { name: 'browserTabTitle', alwaysEnforced: true },
     ]);
   });
@@ -245,6 +251,41 @@ describe('navigation_pipeline', () => {
     });
 
     expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: null });
+    expect(updateDatasetAddressMock).not.toHaveBeenCalled();
+  });
+
+  test('asks the address owner to describe the dataset once rendering settled', async () => {
+    hasDatasetPermissionMock.mockResolvedValue(true);
+    const mod = await loadModule();
+    const isCurrentNavigation = () => true;
+
+    await mod.runNavigationPipeline({
+      name: 'travel_deals',
+      containerId: 'travel_deals_container',
+      params: {},
+      isCurrentNavigation,
+      _performNavigationCore: vi.fn(),
+    });
+
+    expect(updateDatasetAddressMock).toHaveBeenCalledWith({
+      dataset: 'travel_deals',
+      isCurrent: isCurrentNavigation,
+    });
+  });
+
+  test('a view that owns its own address can skip the address stage by name', async () => {
+    hasDatasetPermissionMock.mockResolvedValue(true);
+    const mod = await loadModule();
+
+    await mod.runNavigationPipeline({
+      name: 'travel_deals',
+      containerId: 'travel_deals_container',
+      skip: ['urlUpdate', 'datasetAddress'],
+      _performNavigationCore: vi.fn(),
+    });
+
+    expect(updateURLMock).not.toHaveBeenCalled();
+    expect(updateDatasetAddressMock).not.toHaveBeenCalled();
   });
   test("a valid mounted return still checks permission and renders without a loading insertion", async () => {
     hasDatasetPermissionMock.mockResolvedValue(true);

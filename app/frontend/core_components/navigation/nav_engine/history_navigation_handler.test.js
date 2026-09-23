@@ -26,13 +26,20 @@ const {
     tableStates: new Map(),
 }));
 
+// The real dataset address owner runs in this file, so the query cache behaves
+// like a cache: what the handler stores is what the owner reads back.
+const datasetParamsStore = vi.hoisted(() => new Map());
+
 const browserTabTitle = vi.hoisted(() => ({ update: vi.fn(async () => true) }));
 vi.mock("./browser_tab_title_writer.js", () => ({
     updateBrowserTabTitle: browserTabTitle.update,
 }));
 
 const ifavHistory = vi.hoisted(() => ({ handle: vi.fn(async () => false) }));
-vi.mock("./image_first_view_history.js", () => ({ handleImageFirstViewHistory: ifavHistory.handle }));
+vi.mock("./image_first_view_history.js", () => ({
+    handleImageFirstViewHistory: ifavHistory.handle,
+    isImageFirstViewURL: () => new URL(location.href).searchParams.get("view") === "image_first_view",
+}));
 
 vi.mock("../admin_and_user_tools/custom_view_reader.js", () => ({
     custom_views: [],
@@ -41,7 +48,26 @@ vi.mock("../admin_and_user_tools/custom_view_reader.js", () => ({
 vi.mock("./query_params.js", () => ({
     DATASET_PREFIX: "/",
     parseTableQueryString: parseTableQueryStringMock,
-    setParams: setParamsMock,
+    normalizePath: (pathname) => (
+        pathname !== "/" && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname
+    ),
+    getParams: (dataset) => ({ ...(datasetParamsStore.get(dataset) || {}) }),
+    setParams: (dataset, params) => {
+        datasetParamsStore.set(dataset, { ...params });
+        return setParamsMock(dataset, params);
+    },
+}));
+
+vi.mock("./dataset_aliases.js", () => ({
+    buildDatasetPath: (datasetName, prefix = "/") => `${prefix}${datasetName}`,
+    getInternalDatasetName: (datasetName) => datasetName,
+}));
+
+vi.mock("../../state_stores/table_state_store.js", () => ({
+    getUnifiedTableState: (tableName) => tableStates.get(tableName) || {
+        articleView: { collapsed: false, expandedId: null },
+    },
+    setUnifiedTableState: setUnifiedTableStateMock,
 }));
 
 vi.mock("./navigation_handler.js", () => ({
@@ -67,6 +93,9 @@ vi.mock("../../table_views/dataset_view_registry.js", () => ({
     ARTICLE_VIEW_KEY: "article_view",
     resolveDatasetViewSelectionTarget: (viewKey) => (
         viewKey === "article" ? "article_view" : viewKey
+    ),
+    isArticleDatasetView: (viewKey) => (
+        (viewKey === "article" ? "article_view" : viewKey) === "article_view"
     ),
 }));
 
@@ -106,6 +135,7 @@ describe("history_navigation_handler", () => {
         setParamsMock.mockClear();
         setUnifiedTableStateMock.mockClear();
         tableStates.clear();
+        datasetParamsStore.clear();
         localStorage.clear();
         document.body.innerHTML = "";
         window.__bigCardClosing = false;
@@ -119,11 +149,9 @@ describe("history_navigation_handler", () => {
         ifavHistory.handle.mockResolvedValue(true);
 
         window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
-        await Promise.resolve();
-        await Promise.resolve();
+        await vi.waitFor(() => expect(browserTabTitle.update).toHaveBeenCalledTimes(1));
 
         expect(handleAllNavigationMock).not.toHaveBeenCalled();
-        expect(browserTabTitle.update).toHaveBeenCalledTimes(1);
     });
 
     test("restores calendar view when browser Back closes a calendar-opened article", async () => {
@@ -257,6 +285,21 @@ describe("history_navigation_handler", () => {
         expect(setParamsMock).toHaveBeenLastCalledWith("events", { view: "card", search: "harbour" });
     });
 
+    test("a row address whose article view is not permitted settles on the permitted view", async () => {
+        // The person opened a bookmarked row, but the renderer may only give
+        // them the table. The address has to describe the table, without the row.
+        parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0, view: "article_view", search: "harbour" });
+        history.replaceState({ __filterestEntryId: "deep-row" }, "", "/events/7-title?view=article_view&search=harbour");
+        handleAllNavigationMock.mockImplementationOnce(async () => {
+            localStorage.setItem("events_view", "table");
+            return {};
+        });
+        window.dispatchEvent(new PopStateEvent("popstate"));
+        await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(location.pathname + location.search).toBe("/events?search=harbour&view=table"));
+        expect(setParamsMock).toHaveBeenLastCalledWith("events", { view: "table", search: "harbour" });
+    });
+
     test("a collection article without a recorded return stays an article, not an invented card default", async () => {
         tableStates.set("events", { articleView: { collapsed: true, expandedId: 7 } });
         parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0, view: "article_view" });
@@ -298,7 +341,7 @@ describe("history_navigation_handler", () => {
         expect(isCurrentNavigation()).toBe(false);
     });
 
-    test.each(["card", "table"])("Back to a no-view %s entry restores its own renderer, not the latest preference", async view => {
+    test.each(["card", "table"])("Back to a no-view %s entry restores its own renderer and says so in the address", async view => {
         parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0 });
         document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="calendar"></div></div>';
         localStorage.setItem("events_view", "calendar");
@@ -307,7 +350,10 @@ describe("history_navigation_handler", () => {
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
         expect(localStorage.getItem("events_view")).toBe(view);
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
-        expect(location.pathname + location.search).toBe("/events");
+        // The entry remembered its renderer in history state alone, so a reload
+        // of the same address lost it. The address owner now writes the restored
+        // view into the address itself, which survives a reload and a copied link.
+        await vi.waitFor(() => expect(location.pathname + location.search).toBe(`/events?view=${view}`));
     });
 
     test("explicit URL view takes precedence and Forward reloads a different rendered view", async () => {

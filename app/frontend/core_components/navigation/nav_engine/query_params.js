@@ -3,11 +3,8 @@
 // Bridges the URL bar and filter/sort state across navigation and popstate events.
 // Exists to centralise param read/write logic so every navigation path shares a consistent state model.
 
-import { writeHistoryEntry, rememberHistoryDatasetView } from "./history_entry_state.js";
-import {
-    buildDatasetPath,
-    getInternalDatasetName,
-} from './dataset_aliases.js';
+import { writeDatasetAddress } from "./dataset_address_writer.js";
+import { getInternalDatasetName } from './dataset_aliases.js';
 
 const STORAGE_KEY = 'dataset_query_params';
 export const DATASET_PREFIX = '/';
@@ -117,44 +114,21 @@ export function setParams(dataset, params = {}) {
     saveToStorage();
 }
 
-function rememberVisibleDatasetHistoryView() {
-    const path = normalizePath(location.pathname);
-    const prefix = path.startsWith('/admin/') ? '/admin/' : DATASET_PREFIX;
-    const dataset = getInternalDatasetName(path.slice(prefix.length));
-    // A row URL or another route must not inherit a hidden dataset's view.
-    if (!dataset || dataset.includes('/') || buildDatasetPath(dataset, prefix) !== path) return;
-    const root = document.getElementById(`${dataset}_container`);
-    const view = root?.querySelector('.tab_parts_container')?.dataset.view;
-    if (!root?.isConnected || root.classList.contains('hidden')
-        || getComputedStyle(root).display === 'none' || !view) return;
-    const hasVisibleResults = [...root.querySelectorAll('.scrollable_content')]
-        .some(host => host.childElementCount > 0 && !host.hidden && getComputedStyle(host).display !== 'none');
-    if (hasVisibleResults) rememberHistoryDatasetView(dataset, view);
-}
-
+/**
+ * Writes one dataset address with the parameters the caller supplies.
+ *
+ * The serialisation itself belongs to the dataset address owner
+ * ([dataset_address_writer.js](./dataset_address_writer.js)), which also
+ * reconciles the address with the state a finished render left on screen. This
+ * keeps the long-standing public name and call shape for every existing caller.
+ */
 export function updateURL(
     dataset,
     params = getParams(dataset),
     prefix = DATASET_PREFIX,
     options = {}
 ) {
-    setParams(dataset, params);
-    const sp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '') {
-            sp.set(k, v);
-        }
-    });
-    const query = sp.toString();
-    const targetPath = typeof options.pathOverride === 'string' && options.pathOverride
-        ? normalizePath(options.pathOverride)
-        : buildDatasetPath(dataset, prefix);
-    const newUrl = `${targetPath}${query ? `?${query}` : ''}`;
-    const currentUrl = window.location.pathname + window.location.search;
-    const state = options.state === undefined ? {} : options.state;
-    const replace = Boolean(options.replace || currentUrl === newUrl);
-    if (!replace) rememberVisibleDatasetHistoryView();
-    writeHistoryEntry(newUrl, state, { replace });
+    writeDatasetAddress(dataset, params, prefix, options);
 }
 
 /**

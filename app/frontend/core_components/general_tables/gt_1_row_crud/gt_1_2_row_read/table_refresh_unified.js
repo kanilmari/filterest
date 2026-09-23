@@ -16,6 +16,7 @@ import { claimFirstListedRow, getArticleStateKey } from '../../../table_views/ca
 import { setRedirectNotice, clearDatasetSelectionState } from '../../../state_stores/dataset_selection_saver.js';
 import { redirectToRootInSpa } from '../../../navigation/root_redirect_handler.js';
 import { getParams, parseTableQueryString } from '../../../navigation/nav_engine/query_params.js';
+import { updateDatasetAddress } from '../../../navigation/nav_engine/dataset_address_writer.js';
 import { getUnifiedTableState, setUnifiedTableState } from '../../../state_stores/table_state_store.js';
 import { primeDatasetPermissions } from '../../../route_permission_checker.js';
 import { getDefaultDatasetSortSync } from '../../../config_fetcher.js';
@@ -199,6 +200,11 @@ export async function refreshTableUnified(tableName, options = {}) {
         // while a search is committed that is its first match.
         claimFirstListedRow(tableName, currentView, data);
         const stateAfterBuild = getUnifiedTableState(tableName);
+        // An article opening below is a step forward that writes its own row
+        // address; asking for the settled address here would replace the list
+        // entry that open is meant to push past. The opener asks once its own
+        // entry exists.
+        let articleOpenStarted = false;
 
         if (stateAfterBuild[stateKey]?.collapsed && stateAfterBuild[stateKey]?.expandedId != null) {
             const expandedId = stateAfterBuild[stateKey].expandedId;
@@ -228,6 +234,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             }
 
             if (rowItem && isRenderCurrent()) {
+                articleOpenStarted = true;
                 openRowArticleView(rowItem, tableName, cardElem || null, {
                     isCurrent: () => isRenderCurrent() && resolveDatasetViewSelectionTarget(localStorage.getItem(tableName + "_view") || currentView) === currentView,
                 });
@@ -239,6 +246,12 @@ export async function refreshTableUnified(tableName, options = {}) {
 
         // 11) The search's own groups follow the dataset's rows in the rebuilt view.
         if (isRenderCurrent()) await searchGroups?.place({ rowCount: result.row_count });
+
+        // 12) The rendered view is now the settled one, fallbacks included, so the
+        // address owner can describe it and store the matching query parameters.
+        if (!articleOpenStarted && isRenderCurrent()) {
+            await updateDatasetAddress({ dataset: tableName, isCurrent: isRenderCurrent });
+        }
     } catch (err) {
         if (!isCurrent()) return;
         /* virhe-tulostus ohjeittesi mukaisena */
