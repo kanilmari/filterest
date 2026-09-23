@@ -57,11 +57,6 @@ export function isBridgeRelationTable(relatedTable = {}) {
     return datasetName.endsWith("_relation");
 }
 
-export function parseRelatedTabKey(tabKey = "") {
-    const [dataset = "", column = "", referenceDirection = ""] = String(tabKey || "").split("__");
-    return { dataset, column, referenceDirection };
-}
-
 export function buildRelatedTabKey(relatedTable = {}) {
     return [
         String(relatedTable?.dataset || ""),

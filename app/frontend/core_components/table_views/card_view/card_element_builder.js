@@ -19,8 +19,6 @@ import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preferen
 import { buildGoogleMapsEmbedUrl, resolveImagePaths } from "./card_element_builder_helpers.js";
 import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
-import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
-import { appendTextWithHttpLinks } from "../../../reusable_components/http_text_linkifier.js";
 import { removeBlankLinesFromCardDescription } from "./card_description_blank_line_remover.js";
 
 /* ----------------------------------------------------------- */
@@ -311,118 +309,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
-/**
- * Rakentaa avainsana-(keyword)-osion kortille.
- * Kaikkiin luotuihin elementteihin asetetaan data-hide-field-on-card:
- *  • "false" → saraketta EI saa piilottaa
- *  • "true"  → sarake voidaan piilottaa normaalisti
- */
-function addDetailsSection(details_entries, row_item, table_name, container) {
-    if (details_entries.length === 0) return;
-
-    details_entries.sort((a, b) => a.suffix_number - b.suffix_number);
-
-    const mid_point = Math.ceil(details_entries.length / 2);
-    const left_details = details_entries.slice(0, mid_point);
-    const right_details = details_entries.slice(mid_point);
-
-    const details_container = document.createElement("div");
-    details_container.classList.add("card_details_container");
-
-    details_container.appendChild(
-        createDetailsTable(left_details, row_item, table_name)
-    );
-    details_container.appendChild(
-        createDetailsTable(right_details, row_item, table_name)
-    );
-
-    container.appendChild(details_container);
-}
-
-/**
- * Luo <table>-elementin riveineen.
- * data-hide-field-on-card saa arvon "true" tai "false" sen mukaan,
- * löytyykö localStoragesta avain hide_fields_on_cards ja onko se "true".
- */
-function createDetailsTable(detailsList, row_item, table_name) {
-    count_this_function("createDetailsTable");
-
-    /** Luetaan käyttäjän asetus ja muutetaan se merkkijonoksi "true"/"false". */
-    const hideFieldsOnCardsString =
-        localStorage.getItem("hide_fields_on_cards") === "true"
-            ? "true"
-            : "false";
-
-    /** Asettaa data-attribuutin elementille aina ("true" tai "false"). */
-    function setFieldHideAttribute(targetElement) {
-        targetElement.dataset.hideFieldOnCard = hideFieldsOnCardsString;
-    }
-
-    const table = document.createElement("table");
-    table.classList.add("card_table");
-
-    detailsList.forEach((detailObj) => {
-        /* TR ------------------------------------------------------ */
-        const row = document.createElement("tr");
-        row.classList.add(detailObj.columnClass); // ★
-        setFieldHideAttribute(row);
-
-        /* KEY-solu ------------------------------------------------ */
-        const key_cell = document.createElement("th");
-        key_cell.dataset.langKey = detailObj.column;
-        key_cell.classList.add(detailObj.columnClass); // ★
-        setFieldHideAttribute(key_cell);
-
-        /* VALUE-solu --------------------------------------------- */
-        const value_cell = document.createElement("td");
-        value_cell.classList.add(detailObj.columnClass); // ★
-        setFieldHideAttribute(value_cell);
-
-        /* ——— Arvon käsittely ——— */
-        if (detailObj.isLink) {
-            const linkValue = detailObj.rawValue.trim();
-            const safeHref = resolveSafeExternalHttpUrl(linkValue);
-            if (safeHref) {
-                const link = document.createElement("a");
-                link.href = safeHref;
-                link.target = "_blank";
-                link.rel = "noopener noreferrer";
-                link.textContent = linkValue;
-                value_cell.appendChild(link);
-            } else {
-                value_cell.textContent = linkValue;
-            }
-        } else if (!detailObj.hasLangKey && detailObj.rawValue.length > 80) {
-            const displayText = detailObj.rawValue.slice(0, 80) + "... ";
-            const fullValueHref = resolveSafeExternalHttpUrl(detailObj.rawValue);
-            if (fullValueHref) {
-                const link = document.createElement("a");
-                link.href = fullValueHref;
-                link.target = "_blank";
-                link.rel = "noopener noreferrer";
-                link.textContent = displayText;
-                value_cell.appendChild(link);
-            } else {
-                appendTextWithHttpLinks(value_cell, displayText);
-            }
-            if (show_more_button_on_cards) {
-                value_cell.appendChild(createShowMoreLink(row_item, table_name));
-            }
-        } else {
-            appendTextWithHttpLinks(value_cell, detailObj.rawValue);
-            if (detailObj.titleValue) {
-                value_cell.title = detailObj.titleValue;
-            }
-        }
-
-        row.appendChild(key_cell);
-        row.appendChild(value_cell);
-        table.appendChild(row);
-    });
-
-    return table;
-}
-
 function createShowMoreLink(row_item, table_name) {
     const link = document.createElement("a");
     link.href = "#";
@@ -442,7 +328,6 @@ export {
     addUsernameElement,
     addImageOrAvatar,
     addDescriptionSection,
-    addDetailsSection,
     createShowMoreLink,
     updateCardImageSources,
 };

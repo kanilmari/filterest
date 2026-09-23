@@ -17,23 +17,14 @@ export function extractSuffixNumber(role) {
 /**
  * Test whether a role string matches a given base role with optional numeric suffix.
  * E.g. matchesRole("details3", "details") → true, matchesRole("header", "details") → false.
+ * Only classifyRole below uses it, so the routing category is the tested contract.
  *
  * @param {string} role - The role string to test
  * @param {string} baseName - The base role name (without suffix)
  * @returns {boolean}
  */
-export function matchesRole(role, baseName) {
+function matchesRole(role, baseName) {
     return new RegExp(`^${baseName}(\\d+)?$`).test(role);
-}
-
-/**
- * Split a comma-separated keyword string into trimmed, non-empty tokens.
- *
- * @param {string} raw - Comma-separated keyword string, e.g. "foo, bar, , baz"
- * @returns {string[]}
- */
-export function splitKeywords(raw) {
-    return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 /**
@@ -57,18 +48,6 @@ export function resolveImagePath(src) {
     return m
         ? `/storage/${m[1]}/${m[2]}/original/${trimmed}`
         : "/storage/" + trimmed;
-}
-
-/**
- * Coerce a raw cell value to a display string.
- * null/undefined → "", strings pass through, others are stringified.
- *
- * @param {*} raw - Raw cell value from row data
- * @returns {string}
- */
-export function coerceToString(raw) {
-    if (raw === null || raw === undefined) return "";
-    return typeof raw === "string" ? raw : String(raw);
 }
 
 /**

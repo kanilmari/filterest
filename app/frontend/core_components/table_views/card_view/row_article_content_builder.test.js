@@ -94,7 +94,6 @@ vi.mock('./row_article_ui_handler.js', () => ({
 
 vi.mock('./row_article_content_builder_helpers.js', () => ({
     extractSuffixNumber: vi.fn(() => 0),
-    splitKeywords: vi.fn(() => []),
     resolveImagePath: vi.fn((value) => value),
     classifyRole: vi.fn((role) => role),
 }));
@@ -107,7 +106,6 @@ vi.mock('./relation_detail_helpers.js', () => ({
 import { buildRowArticleContent } from './row_article_content_builder.js';
 import { CARD_IMAGE_RENDER_SLOTS } from './card_image_render_options.js';
 import { resolveCardFieldDisplayValue } from './card_field_formatter_helpers.js';
-import { splitKeywords } from './row_article_content_builder_helpers.js';
 
 describe('row_article_content_builder', () => {
     beforeEach(() => {
@@ -169,7 +167,6 @@ describe('row_article_content_builder', () => {
                 displayValue: 'risteilyt, matkat',
                 isMultilingual: true,
             }));
-        vi.mocked(splitKeywords).mockReturnValueOnce(['risteilyt', 'matkat']);
 
         const built = await buildRowArticleContent(
             { keywords: JSON.stringify({ fi: 'risteilyt, matkat', en: 'cruises, travel' }) },

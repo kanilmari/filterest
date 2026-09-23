@@ -21,7 +21,6 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 
 import {
     createRowArticleKeyValueElement,
-    createRowArticleLinkTwoLine,
     createRowArticleNavigableElement,
     dispatchCardArticleToggle,
     closeRowArticle,
@@ -170,27 +169,17 @@ describe("row_article_ui_handler label icons", () => {
         expect(openInNewTab?.querySelector(".open-in-new-tab-icon")).not.toBeNull();
     });
 
-    test("semantic article links accept HTTP(S) without guessing plain or unsafe values", () => {
-        const safe = createRowArticleLinkTwoLine(
-            "Website",
-            "https://example.test",
-            "website",
-            false,
-        );
-        const unsafe = createRowArticleLinkTwoLine(
-            "Script",
-            "javascript:alert(1)",
-            "script",
-            false,
-        );
-
-        expect(safe.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
-        expect(safe.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
-        expect(unsafe.querySelector("a")).toBeNull();
-        expect(unsafe.textContent).toContain("javascript:alert(1)");
-    });
-
     test("raw article link metadata rejects unsafe schemes while explicit internal routes remain valid", () => {
+        // An external details link: the article builder passes externalHttpOnly
+        // and openPrimaryInNewTab together, so a new tab must not reach back into
+        // this document through window.opener.
+        const safe = createRowArticleNavigableElement({
+            label: "Website",
+            value: "https://example.test",
+            href: "https://example.test",
+            externalHttpOnly: true,
+            openPrimaryInNewTab: true,
+        });
         const unsafe = createRowArticleNavigableElement({
             label: "Website",
             value: "javascript:alert(1)",
@@ -203,6 +192,8 @@ describe("row_article_ui_handler label icons", () => {
             href: "/documentation/1-read-documentation",
         });
 
+        expect(safe.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
+        expect(safe.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
         expect(unsafe.querySelector("a")).toBeNull();
         expect(unsafe.textContent).toContain("javascript:alert(1)");
         expect(internal.querySelector("a")?.getAttribute("href")).toBe(
@@ -237,22 +228,17 @@ describe("article shared field layout", () => {
             const metadata = { label_value_layout: layout };
             const text = createRowArticleKeyValueElement("Note", "Original text", "note", false,
                 "big_card_detail_value", true, null, "raw text", metadata);
-            const link = createRowArticleLinkTwoLine("Website", "https://example.test", "website",
-                false, true, null, "raw link", metadata);
             const navigation = createRowArticleNavigableElement({
                 label: "Related", value: "Related row", column: "related", href: "/example/7",
                 storedRawValue: "7", labelMeta: metadata,
             });
             const hidden = createRowArticleKeyValueElement("Hidden label", "Visible value", "hidden", false,
                 "big_card_detail_value", false, null, "raw hidden", metadata);
-            for (const element of [text, link, navigation, hidden]) {
+            for (const element of [text, navigation, hidden]) {
                 expect(element.dataset.labelValueLayout).toBe(layout || undefined);
             }
             expect(text.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("raw text");
             expect(text.textContent).toContain("Original text");
-            expect(link.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("raw link");
-            expect(link.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
-            expect(link.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
             expect(navigation.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("7");
             expect(navigation.querySelector("a")?.getAttribute("href")).toBe("/example/7");
             expect(hidden.querySelector(".two_line_label")).toBeNull();

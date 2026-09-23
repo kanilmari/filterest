@@ -394,7 +394,7 @@ export async function openRowAccessEditor(datasetName) {
         contentElements: [content],
         width: "760px",
         maxWidth: "760px",
-        maxHeight: "min(calc(100dvh - 32px), 860px)",
+        maxHeight: "860px",
         cleanupCallback: () => {
             principalDropdown?.destroy?.();
             principalDropdown = null;

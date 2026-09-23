@@ -79,8 +79,11 @@ export function findCanonicalOtherTablesFolderValue(folderOptions = []) {
     return fallbackValue;
 }
 
-/** The current project's folder, whose direct datasets the site navigation lists. */
-export function findCurrentProjectFolderValue(folderOptions = []) {
+/**
+ * The current project's folder, whose direct datasets the site navigation lists.
+ * Only resolveFolderSelectionDefaults below reads it, and that is the tested contract.
+ */
+function findCurrentProjectFolderValue(folderOptions = []) {
     return trimToEmpty(folderOptions.find((option) => option?.isCurrentProject === true)?.value);
 }
 

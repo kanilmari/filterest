@@ -411,9 +411,10 @@ export async function appendDataToCardView(
 }
 
 /**
- * Luo yhden kortin annetun rivin datasta *ja* lisää column_visibility-yhteensopivat
- * luokat.  Korttiin tulostetaan details-data sekä vanhalla menetelmällä
- * (`addDetailsSection`) että uutena vertailuna `renderKeyValuePairs`-kirjastolla.
+ * Builds one card from a row and adds the column_visibility-compatible classes.
+ * The card's detail fields go through the single `renderCardDetailsSection` path
+ * above, which picks the modern, single-line or key-value presentation from the
+ * card's style variant and details layout.
  */
 async function createSingleCard(
     row_item,

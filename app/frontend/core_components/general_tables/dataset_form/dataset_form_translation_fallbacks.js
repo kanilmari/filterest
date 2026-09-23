@@ -258,7 +258,6 @@ const COPY = {
 
     // --- Creating ---
     create_table: { fi: "Luo aineisto", en: "Create dataset", ch: "创建数据集", yue: "建立資料集" },
-    table_created_successfully: { fi: "Aineisto luotiin.", en: "Dataset created.", ch: "数据集已创建。", yue: "已建立資料集。" },
     dataset_created_in_folder: {
         fi: "Aineisto {dataset} luotiin kansioon {folder}.",
         en: "Dataset {dataset} was created in the folder {folder}.",

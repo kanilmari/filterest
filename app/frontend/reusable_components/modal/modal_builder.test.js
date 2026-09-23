@@ -107,6 +107,7 @@ describe("modal_builder accessibility", () => {
             maxHeight: "100vh",
         });
         expect(first.modal.style.getPropertyValue("--modal-max-width")).toBe("100vw");
+        expect(first.modal.style.getPropertyValue("--modal-max-height")).toBe("100vh");
         first.modal.classList.add("image_modal", "image_first_view_modal");
         first.modal._imageModalClassNames = ["image_first_view_modal"];
         first.modal_overlay.classList.add(
@@ -128,9 +129,10 @@ describe("modal_builder accessibility", () => {
         expect(second.modal.classList.contains("image_first_view_modal")).toBe(false);
         expect(second.modal._imageModalClassNames).toEqual([]);
         expect(second.modal.style.width).toBe("520px");
-        // The image viewer's width limit must not follow the next dialog;
-        // modals.css then applies the default limit and the phone margin.
+        // The image viewer's own size limits must not follow the next dialog;
+        // modals.css then applies the default limits and the phone margin.
         expect(second.modal.style.getPropertyValue("--modal-max-width")).toBe("");
+        expect(second.modal.style.getPropertyValue("--modal-max-height")).toBe("");
         expect(second.modal.style.maxWidth).toBe("");
         expect(second.modal.style.maxHeight).toBe("");
         expect(second.modal_overlay.classList.contains("modal_overlay_blur")).toBe(false);

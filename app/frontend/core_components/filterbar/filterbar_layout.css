@@ -28,7 +28,6 @@
 
 .filterbar-panel {
   --filterbar-panel-inline-space: 24px;
-  --filterbar-panel-top-space: 16px;
   position: fixed;
   top: 0;
   right: 0;

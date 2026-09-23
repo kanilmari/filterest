@@ -8,7 +8,6 @@ import {
     getRelatedTableRowCount,
     isBridgeRelationTable,
     isOutgoingRelatedTable,
-    parseRelatedTabKey,
     shouldHandleSpaNavigationClick,
     shouldLazyLoadRelatedTableRows,
     shouldOpenRelatedTab,
@@ -84,24 +83,6 @@ describe('isBridgeRelationTable', () => {
 
     test('recognizes explicit bridge relation metadata when backend adds it', () => {
         expect(isBridgeRelationTable({ dataset: 'service_links', relation_kind: 'many_to_many_bridge' })).toBe(true);
-    });
-});
-
-describe('parseRelatedTabKey', () => {
-    test('splits the composite tab key into dataset and column', () => {
-        expect(parseRelatedTabKey('tasks__parent_id')).toEqual({
-            dataset: 'tasks',
-            column: 'parent_id',
-            referenceDirection: '',
-        });
-    });
-
-    test('keeps reference direction when present', () => {
-        expect(parseRelatedTabKey('services__id__outgoing')).toEqual({
-            dataset: 'services',
-            column: 'id',
-            referenceDirection: 'outgoing',
-        });
     });
 });
 

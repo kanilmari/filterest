@@ -18,10 +18,7 @@ import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
-import {
-    appendTextWithHttpLinks,
-    linkifyHttpTextNodes,
-} from "../../../reusable_components/http_text_linkifier.js";
+import { linkifyHttpTextNodes } from "../../../reusable_components/http_text_linkifier.js";
 
 let highlightedCard = null;
 const OPEN_IN_NEW_TAB_LANG_KEY = "open_in_new_tab";
@@ -134,53 +131,6 @@ export function createRowArticleKeyValueElement(
             valueDiv.style.whiteSpace = "pre-wrap";
         }
         linkifyHttpTextNodes(valueDiv);
-    }
-
-    container.appendChild(valueDiv);
-    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv, labelMeta?.label_value_layout);
-    return container;
-}
-
-/**
- * Luo label–linkki-yhdistelmän kahdelle riville (details_link-rooli).
- * Label saa data-lang-key = "<sarakkeen_nimi>", arvo vain jos hasLangKey = true.
- */
-export function createRowArticleLinkTwoLine(
-    label,
-    linkValue,
-    column,
-    hasLangKey,
-    showKey = true,
-    isMultilingual = null,
-    storedRawValue = linkValue,
-    labelMeta = {}
-) {
-    count_this_function("createLinkTwoLine"); // 🔢 stored counter key, kept stable
-
-    const container = document.createElement("div");
-    container.classList.add("two_line_field");
-
-    /* ---------- LABEL ---------- */
-    if (showKey) {
-        container.appendChild(createTwoLineLabelElement({
-            label,
-            labelKey: column,
-            column,
-            labelMeta,
-        }));
-    }
-
-    /* ---------- VALUE ---------- */
-    const valueDiv = document.createElement("div");
-    valueDiv.classList.add("big_card_detail_value", "two_line_value");
-    valueDiv.setAttribute("data-column", column);
-    valueDiv.setAttribute("data-raw-value", storedRawValue);
-
-    if (hasLangKey) {
-        valueDiv.dataset.langKey = linkValue;
-    } else {
-        const resolved = resolveRowArticleLocalizedValue(linkValue, isMultilingual);
-        appendTextWithHttpLinks(valueDiv, resolved.trim());
     }
 
     container.appendChild(valueDiv);

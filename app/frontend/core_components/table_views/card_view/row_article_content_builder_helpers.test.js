@@ -1,10 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
     extractSuffixNumber,
-    matchesRole,
-    splitKeywords,
     resolveImagePath,
-    coerceToString,
     classifyRole,
 } from './row_article_content_builder_helpers.js';
 
@@ -30,65 +27,6 @@ describe('extractSuffixNumber', () => {
 
     test('handles zero suffix', () => {
         expect(extractSuffixNumber('details0')).toBe(0);
-    });
-});
-
-// ---------------------------------------------------------------------------
-// matchesRole
-// ---------------------------------------------------------------------------
-describe('matchesRole', () => {
-    test('matches exact base name without suffix', () => {
-        expect(matchesRole('details', 'details')).toBe(true);
-        expect(matchesRole('hidden', 'hidden')).toBe(true);
-    });
-
-    test('matches base name with numeric suffix', () => {
-        expect(matchesRole('details3', 'details')).toBe(true);
-        expect(matchesRole('description12', 'description')).toBe(true);
-        expect(matchesRole('details_link42', 'details_link')).toBe(true);
-    });
-
-    test('rejects non-matching roles', () => {
-        expect(matchesRole('header', 'details')).toBe(false);
-        expect(matchesRole('details', 'description')).toBe(false);
-        expect(matchesRole('details_link3', 'details')).toBe(false);
-    });
-
-    test('rejects role with non-numeric suffix', () => {
-        expect(matchesRole('detailsABC', 'details')).toBe(false);
-    });
-
-    test('rejects empty string', () => {
-        expect(matchesRole('', 'details')).toBe(false);
-    });
-});
-
-// ---------------------------------------------------------------------------
-// splitKeywords
-// ---------------------------------------------------------------------------
-describe('splitKeywords', () => {
-    test('splits comma-separated string', () => {
-        expect(splitKeywords('foo, bar, baz')).toEqual(['foo', 'bar', 'baz']);
-    });
-
-    test('trims whitespace from each token', () => {
-        expect(splitKeywords('  foo ,  bar  , baz  ')).toEqual(['foo', 'bar', 'baz']);
-    });
-
-    test('filters out empty tokens', () => {
-        expect(splitKeywords('foo, , bar,, baz')).toEqual(['foo', 'bar', 'baz']);
-    });
-
-    test('returns empty array for empty string', () => {
-        expect(splitKeywords('')).toEqual([]);
-    });
-
-    test('handles single keyword', () => {
-        expect(splitKeywords('only')).toEqual(['only']);
-    });
-
-    test('handles all-whitespace tokens', () => {
-        expect(splitKeywords(', , ,')).toEqual([]);
     });
 });
 
@@ -131,34 +69,6 @@ describe('resolveImagePath', () => {
 });
 
 // ---------------------------------------------------------------------------
-// coerceToString
-// ---------------------------------------------------------------------------
-describe('coerceToString', () => {
-    test('returns empty string for null', () => {
-        expect(coerceToString(null)).toBe('');
-    });
-
-    test('returns empty string for undefined', () => {
-        expect(coerceToString(undefined)).toBe('');
-    });
-
-    test('returns string values unchanged', () => {
-        expect(coerceToString('hello')).toBe('hello');
-        expect(coerceToString('')).toBe('');
-    });
-
-    test('converts numbers to string', () => {
-        expect(coerceToString(42)).toBe('42');
-        expect(coerceToString(0)).toBe('0');
-    });
-
-    test('converts boolean to string', () => {
-        expect(coerceToString(true)).toBe('true');
-        expect(coerceToString(false)).toBe('false');
-    });
-});
-
-// ---------------------------------------------------------------------------
 // classifyRole
 // ---------------------------------------------------------------------------
 describe('classifyRole', () => {
@@ -193,6 +103,16 @@ describe('classifyRole', () => {
     test('returns fallback for unknown roles', () => {
         expect(classifyRole('unknown')).toBe('fallback');
         expect(classifyRole('foobar')).toBe('fallback');
+    });
+
+    // Only a numeric suffix repeats a role; these two cases used to be asserted
+    // against the internal matchesRole helper, which is no longer exported.
+    test('a non-numeric suffix does not repeat a role', () => {
+        expect(classifyRole('detailsABC')).toBe('fallback');
+    });
+
+    test('an empty role falls back instead of matching a base name', () => {
+        expect(classifyRole('')).toBe('fallback');
     });
 
     test('details_link is classified before details', () => {

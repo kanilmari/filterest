@@ -77,9 +77,9 @@ export async function openDatasetHeaderConfigModal(datasetName) {
         titleDataLangKey: 'dataset_header_config',
         titleDataLangKeyFallback: 'Dataset header configuration',
         contentElements: [content],
-        width: 'min(calc(100vw - 48px), 1080px)',
+        width: '1080px',
         maxWidth: '1080px',
-        maxHeight: 'min(calc(100dvh - 48px), 860px)',
+        maxHeight: '860px',
     });
     modal.dataset.testid = 'dataset-header-config-modal';
     showModal();

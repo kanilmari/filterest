@@ -281,7 +281,6 @@ export function openImageSourcePicker({
         contentElements: [root],
         width: "min(1180px, 96vw)",
         maxWidth: "96vw",
-        maxHeight: "97dvh",
         cleanupCallback: cleanup,
     });
 

@@ -26,7 +26,12 @@
     z-index: calc(var(--z-modal) + 1);
 }
 
-.stacked_modal {
+/* This stylesheet owns the stacked layer's size. The rule is written against
+   .modal.stacked_modal so it outranks the generic .modal rule further down;
+   createStackedModal only sets a size its caller actually asked for. The second
+   layer deliberately sits closer to the screen edge than the shared margin
+   below, so it states its own maximum height. */
+.modal.stacked_modal {
     --modal-max-width: 96vw;
 
     width: min(1100px, 96vw);
@@ -103,9 +108,11 @@
     /* Dark surfaces need a slightly heavier shadow to separate from the page. */
     --modal-shadow-dark: 0 16px 40px rgb(0 0 0 / 0.34), 0 2px 8px rgb(0 0 0 / 0.2);
     --modal-shadow: var(--modal-shadow-light);
-    /* The dialog keeps at least this much of the screen on each side, whatever
-       width its feature asks for. A feature's own limit arrives as
-       --modal-max-width (createModal's maxWidth); 700px is the default. */
+    /* The dialog keeps at least this much of the screen on every side, whatever
+       size its feature asks for. A feature's own limits arrive as
+       --modal-max-width (createModal's maxWidth) and --modal-max-height
+       (createModal's maxHeight); 700px and 95vh are the defaults. A feature
+       therefore states only its own maximum, never a margin of its own. */
     --modal-screen-margin: 16px;
 
     /* Use auth-card variables for a fancier look, falling back to standard variables */
@@ -115,11 +122,11 @@
     border-radius: 16px;
     width: 100%;
     max-width: min(var(--modal-max-width, 700px), calc(100vw - 2 * var(--modal-screen-margin)));
+    max-height: min(var(--modal-max-height, 95vh), calc(100dvh - 2 * var(--modal-screen-margin)));
     box-sizing: border-box;
     box-shadow: var(--modal-shadow);
     backdrop-filter: blur(10px);
 
-    max-height: 95vh;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -360,7 +367,10 @@ body.dark-mode .modal {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    /* The image viewer is full-bleed: it keeps no screen margin on either axis,
+       so it states both of its own limits instead of following the shared rule. */
     max-width: none;
+    max-height: 100vh;
     overflow: hidden;
     min-width: 200px;
     min-height: 200px;

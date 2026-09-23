@@ -352,7 +352,6 @@ export function openImageModalContent({
         contentElements: [contentElement],
         width: "auto",
         maxWidth: "100vw",
-        maxHeight: "100vh",
         cleanupCallback: () => imageModalCleanup(),
         closeTransition: usesImageFirstCloseTransition
             ? {

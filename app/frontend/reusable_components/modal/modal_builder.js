@@ -172,6 +172,7 @@ function resetModalPresentationState(modalOverlay, modal) {
         modal.style.removeProperty("max-width");
         modal.style.removeProperty("--modal-max-width");
         modal.style.removeProperty("max-height");
+        modal.style.removeProperty("--modal-max-height");
     }
 
     modalOverlay?.classList.remove(
@@ -388,15 +389,15 @@ export function createModal({
     }
     modal.setAttribute('aria-describedby', body.id);
 
-    // Aseta modaalin oletusleveys. A feature's maxWidth goes through
-    // --modal-max-width, so modals.css still keeps every dialog clear of the
-    // screen's edges on a phone.
+    // Aseta modaalin oletusleveys. A feature's maxWidth and maxHeight go through
+    // --modal-max-width and --modal-max-height, so modals.css still keeps every
+    // dialog clear of the screen's edges on a phone.
     modal.style.width = width;
     if (maxWidth) {
         modal.style.setProperty("--modal-max-width", maxWidth);
     }
     if (maxHeight) {
-        modal.style.maxHeight = maxHeight;
+        modal.style.setProperty("--modal-max-height", maxHeight);
     }
 
     modal_current_cleanup_callback = typeof cleanupCallback === "function"
@@ -483,9 +484,9 @@ export function createStackedModal({
     titlePlainText = "Dialog",
     contentElements = [],
     footerElements = null,
-    width = "min(1100px, 96vw)",
-    maxWidth = "96vw",
-    maxHeight = "97dvh",
+    width = null,
+    maxWidth = null,
+    maxHeight = null,
     cleanupCallback = null,
 } = {}) {
     stackedModalSerial += 1;
@@ -501,9 +502,20 @@ export function createStackedModal({
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
     modal.tabIndex = -1;
-    modal.style.width = width;
-    modal.style.setProperty("--modal-max-width", maxWidth);
-    modal.style.maxHeight = maxHeight;
+    // modals.css owns this layer's size through .modal.stacked_modal. Only a
+    // size the caller actually asked for is written here, as createModal does.
+    // maxHeight stays an inline max-height rather than --modal-max-height,
+    // because this layer's stylesheet rule declares max-height directly and a
+    // caller's own limit has to outrank it.
+    if (width) {
+        modal.style.width = width;
+    }
+    if (maxWidth) {
+        modal.style.setProperty("--modal-max-width", maxWidth);
+    }
+    if (maxHeight) {
+        modal.style.maxHeight = maxHeight;
+    }
 
     const header = document.createElement("div");
     header.classList.add("modal_header");
