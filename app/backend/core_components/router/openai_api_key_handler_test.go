@@ -60,7 +60,7 @@ func TestSaveOpenAIAPIKeyHandlerMapsInvalidSecretToBadRequest(t *testing.T) {
 	originalSaver := openAIAPIKeySaver
 	defer func() { openAIAPIKeySaver = originalSaver }()
 
-	openAIAPIKeySaver = func(string) error { return backend.ErrInvalidOpenAIAPIKey }
+	openAIAPIKeySaver = func(string) error { return backend.ErrInvalidProviderAPIKey }
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/openai-api-key", strings.NewReader(`{"api_key":""}`))
 	recorder := httptest.NewRecorder()
 

@@ -175,6 +175,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.siteAssistantAPICatalogHandler":    AdminProfile,
 	"router.adminUpdateNoticeStreamHandler":    AdminNoTxProfile,
 	"router.saveOpenAIAPIKeyHandler":           AdminProfile,
+	"router.saveProviderAPIKeyHandler":         AdminProfile,
 
 	// DEV-only local AI tooling
 	"dtt_1_row_read.FilterbarAICodexQueryHandler": AdminProfile,

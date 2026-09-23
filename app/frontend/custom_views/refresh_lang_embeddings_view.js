@@ -6,8 +6,8 @@
 import { endpoint_router } from '../core_components/endpoints/endpoint_router.js';
 import { applyPermission } from '../core_components/route_permission_checker.js';
 import { showToast } from '../reusable_components/notifications/toast_notification_printer.js';
-import { keyedElement, renderEmbeddingStatusPanel } from './embedding_status_panel.js';
-import { englishEmbeddingAdminCopy } from './embedding_status_translation_fallbacks.js';
+import { renderEmbeddingStatusPanel } from './embedding_status_panel.js';
+import { englishEmbeddingAdminCopy, keyedElement } from './embedding_status_translation_fallbacks.js';
 
 // Shows the pending-row count through its language key, so the number never
 // replaces the translated sentence around it.

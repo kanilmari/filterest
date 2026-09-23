@@ -227,6 +227,86 @@ export const EMBEDDING_STATUS_TRANSLATION_FALLBACKS = Object.freeze({
         yue: "$count 個失敗",
     },
 
+    // The administrator's own key form, shown only when no key is configured.
+    embedding_key_setup_title: {
+        fi: "Lisää palvelun API-avain",
+        en: "Add the provider's API key",
+        ch: "添加服务商的 API 密钥",
+        yue: "加入服務供應商嘅 API 金鑰",
+    },
+    embedding_key_setup_explanation: {
+        fi: "Upotus tarvitsee yllä näkyvän palvelun avaimen. Liitä avain tähän, niin tämä asennus ottaa sen heti käyttöön.",
+        en: "Embedding needs a key from the provider named above. Paste one here and this installation starts using it at once.",
+        ch: "嵌入需要上面所示服务商的密钥。把密钥粘贴到这里，本安装会立即开始使用。",
+        yue: "嵌入需要上面嗰個服務供應商嘅金鑰。將金鑰貼喺呢度，呢個安裝就會即刻開始用。",
+    },
+    embedding_key_setup_privacy: {
+        fi: "Palvelulle lähetetään vain alla hyväksytyt aineiston kentät tekstinä, jotta niistä saadaan hakuvektorit. Avain tallennetaan tämän asennuksen suojattuihin asetuksiin eikä sitä koskaan lähetetä selaimeen.",
+        en: "Only the dataset fields approved below are sent to the provider, as text, to be turned into search vectors. The key itself is stored in this installation's protected settings and is never sent to a browser.",
+        ch: "只有下方已批准的数据集字段会以文本形式发送给服务商，用于生成搜索向量。密钥保存在本安装的受保护设置中，绝不会发送到浏览器。",
+        yue: "只有下面已批准嘅資料集欄位會以文字形式傳畀服務供應商，用嚟整搜尋向量。金鑰會存喺呢個安裝嘅受保護設定，永遠唔會傳去瀏覽器。",
+    },
+    embedding_key_setup_field_label: {
+        fi: "API-avain",
+        en: "API key",
+        ch: "API 密钥",
+        yue: "API 金鑰",
+    },
+    embedding_key_setup_where: {
+        fi: "Mistä avain haetaan",
+        en: "Where to get a key",
+        ch: "在哪里获取密钥",
+        yue: "去邊度攞金鑰",
+    },
+    embedding_key_setup_save: {
+        fi: "Tallenna avain",
+        en: "Save key",
+        ch: "保存密钥",
+        yue: "儲存金鑰",
+    },
+    embedding_key_setup_saving: {
+        fi: "Tallennetaan…",
+        en: "Saving…",
+        ch: "正在保存…",
+        yue: "儲存緊…",
+    },
+    embedding_key_setup_saved: {
+        fi: "Avain tallennettu. Sivusto käyttää sitä nyt.",
+        en: "Key saved. This site now uses it.",
+        ch: "密钥已保存，本站点现已使用。",
+        yue: "金鑰已儲存，網站而家開始用緊。",
+    },
+    embedding_key_setup_required: {
+        fi: "Liitä API-avain ensin.",
+        en: "Paste the API key first.",
+        ch: "请先粘贴 API 密钥。",
+        yue: "請先貼上 API 金鑰。",
+    },
+    embedding_key_setup_rejected: {
+        fi: "Arvo hylättiin eikä mitään muutettu. Tarkista, että liitit koko avaimen yhdelle riville.",
+        en: "The value was refused and nothing was changed. Check that you pasted the whole key on one line.",
+        ch: "该值被拒绝，未作任何更改。请检查是否把整个密钥粘贴在同一行。",
+        yue: "個值俾拒絕咗，冇改過任何嘢。請檢查係咪成條金鑰貼晒喺同一行。",
+    },
+    embedding_key_setup_not_writable: {
+        fi: "Tämä asennus säilyttää asetuksensa sovelluksen ulkopuolella, joten avainta ei voitu tallentaa täältä. Mitään ei muutettu. Lisää avain sinne, missä sivuston asetuksia säilytetään, ja käynnistä sovellus uudelleen.",
+        en: "This installation keeps its settings outside the application, so the key could not be saved from here. Nothing was changed. Add the key where the site's settings are kept, then restart the application.",
+        ch: "本安装的设置保存在应用之外，因此无法从这里保存密钥。未作任何更改。请在站点设置所在之处添加密钥，然后重启应用。",
+        yue: "呢個安裝嘅設定擺喺應用程式外面，所以喺呢度儲存唔到金鑰。冇改過任何嘢。請喺網站設定嗰度加入金鑰，然後重新啟動應用程式。",
+    },
+    embedding_key_setup_failed: {
+        fi: "Avainta ei voitu tallentaa. Mitään ei muutettu.",
+        en: "The key could not be saved. Nothing was changed.",
+        ch: "无法保存密钥。未作任何更改。",
+        yue: "儲存唔到金鑰。冇改過任何嘢。",
+    },
+    embedding_key_setup_never_shown: {
+        fi: "Tallennettua avainta ei koskaan näytetä tässä. Sivu kertoo vain, onko avain olemassa.",
+        en: "A saved key is never shown here. This page only says whether one exists.",
+        ch: "已保存的密钥绝不会在此显示。本页面只说明是否存在密钥。",
+        yue: "已儲存嘅金鑰永遠唔會喺呢度顯示。呢版只會話你知有冇金鑰。",
+    },
+
     // The refresh controls below the status view.
     embedding_refresh_rows_to_process: {
         fi: "Käsiteltäviä rivejä: $count",
@@ -278,4 +358,21 @@ export const EMBEDDING_STATUS_TRANSLATION_FALLBACKS = Object.freeze({
 export function englishEmbeddingAdminCopy(langKey, variable = null) {
     const copy = EMBEDDING_STATUS_TRANSLATION_FALLBACKS[langKey]?.en ?? langKey;
     return variable === null ? copy : copy.split("$count").join(String(variable));
+}
+
+/**
+ * Creates an element whose text comes from a language key, `$count` filled from
+ * variable. Every surface of the embedding admin page builds its words this
+ * way, so the shared fallback table above is the only English on the page.
+ *
+ * @param {string} tagName
+ * @param {string} langKey
+ * @param {string|number|null} [variable=null]
+ * @returns {HTMLElement}
+ */
+export function keyedElement(tagName, langKey, variable = null) {
+    const element = document.createElement(tagName);
+    element.dataset.langKey = variable === null ? langKey : `${langKey}+${variable}`;
+    element.textContent = englishEmbeddingAdminCopy(langKey, variable);
+    return element;
 }

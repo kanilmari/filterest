@@ -222,6 +222,16 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 		t.Fatalf("expected router.saveOpenAIAPIKeyHandler production profile to be admin")
 	}
 
+	providerKeySave := mustFindManifestRoute(t, manifest, "router.saveProviderAPIKeyHandler")
+	assertScenarioNames(t, providerKeySave, []string{"production", "development", "api_language"})
+	assertRouteMethods(t, providerKeySave, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
+	if providerKeySave.PathPattern != "/api/admin/provider-api-key" {
+		t.Fatalf("expected router.saveProviderAPIKeyHandler path to be /api/admin/provider-api-key, got %q", providerKeySave.PathPattern)
+	}
+	if mustFindScenarioProfile(t, providerKeySave, "production").ProfileName != "admin" {
+		t.Fatalf("expected router.saveProviderAPIKeyHandler production profile to be admin")
+	}
+
 	userPermissions := mustFindManifestRoute(t, manifest, "auth.UserPermissionsHandler")
 	assertRouteMethods(t, userPermissions, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 

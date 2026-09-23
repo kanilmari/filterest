@@ -109,3 +109,55 @@
     background: var(--embedding-status-warning-bg);
     color: var(--embedding-status-warning-color);
 }
+
+/* The administrator's key form, shown inside the panel only while the site's
+   embedding provider has no key. It stays a single column at phone width. */
+.embedding-key-setup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fw-space-2, 8px);
+    padding: var(--fw-space-3, 12px);
+    border: 1px solid var(--fw-color-border);
+    border-radius: var(--fw-radius-md, 8px);
+    background: var(--fw-color-surface-muted);
+}
+
+.embedding-key-setup__title {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.embedding-key-setup p {
+    margin: 0;
+}
+
+.embedding-key-setup__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fw-space-1, 4px);
+    font-weight: 600;
+}
+
+.embedding-key-setup__input {
+    width: 100%;
+    max-width: 32rem;
+    box-sizing: border-box;
+    padding: var(--fw-space-2, 8px);
+    border: 1px solid var(--fw-color-border);
+    border-radius: var(--fw-radius-sm, 6px);
+    background: var(--fw-color-surface);
+    color: var(--fw-color-text);
+    font: inherit;
+    font-weight: 400;
+}
+
+.embedding-key-setup__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--fw-space-3, 12px);
+}
+
+.embedding-key-setup__status:empty {
+    display: none;
+}

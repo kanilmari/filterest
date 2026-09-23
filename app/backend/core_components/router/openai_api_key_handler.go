@@ -17,6 +17,8 @@ type saveOpenAIAPIKeyRequest struct {
 	APIKey string `json:"api_key"`
 }
 
+// openAIAPIKeySaver keeps this route's existing request shape and answers
+// while the generalised provider saver owns the behaviour.
 var openAIAPIKeySaver = backend.SaveOpenAIAPIKey
 
 func saveOpenAIAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +31,7 @@ func saveOpenAIAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := openAIAPIKeySaver(payload.APIKey); err != nil {
-		if errors.Is(err, backend.ErrInvalidOpenAIAPIKey) {
+		if errors.Is(err, backend.ErrInvalidProviderAPIKey) {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid OpenAI API key")
 			return
 		}

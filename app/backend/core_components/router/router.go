@@ -149,6 +149,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/site-assistant/delegation/exchange", auth.SiteAssistantDelegationExchangeHandler, "auth.SiteAssistantDelegationExchangeHandler", http.MethodPost)
 	functionRegisterHandler("/api/admin/update-notice/stream", adminUpdateNoticeStreamHandler, "router.adminUpdateNoticeStreamHandler", http.MethodGet)
 	functionRegisterHandler("/api/admin/openai-api-key", saveOpenAIAPIKeyHandler, "router.saveOpenAIAPIKeyHandler", http.MethodPost)
+	functionRegisterHandler("/api/admin/provider-api-key", saveProviderAPIKeyHandler, "router.saveProviderAPIKeyHandler", http.MethodPost)
 	functionRegisterHandler("/sitemap.xml", sitemapHandler, "router.sitemapHandler", http.MethodGet)
 	functionRegisterHandler("/datasets/", datasetsRedirectHandler, "router.datasetsRedirectHandler", http.MethodGet)
 	functionRegisterHandler("/admin/", adminHandler, "router.adminHandler", http.MethodGet)

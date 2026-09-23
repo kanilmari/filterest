@@ -27,6 +27,7 @@ func TestSensitiveMaintenanceRoutesRequireAdmin(t *testing.T) {
 		"system_table_tools.UpdateColumnInsertableHandler",
 		"system_table_tools.SaveArticleSectionDefaultsHandler",
 		"router.saveOpenAIAPIKeyHandler",
+		"router.saveProviderAPIKeyHandler",
 	}
 
 	for _, handlerName := range handlerNames {

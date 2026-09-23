@@ -435,6 +435,35 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/provider-api-key",
+      "match_type": "exact",
+      "handler_name": "router.saveProviderAPIKeyHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/row-access-rules",
       "match_type": "exact",
       "handler_name": "system_table_tools.AdminRowAccessRulesHandler",

@@ -131,6 +131,7 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     aiChatSiteAssistantApproval: 'dtt_1_row_read.SiteAssistantApprovalHandler',
     aiChatAttachment: 'dtt_1_row_read.ChatAttachmentHandler',
     saveOpenAIAPIKey: 'router.saveOpenAIAPIKeyHandler',
+    saveProviderAPIKey: 'router.saveProviderAPIKeyHandler',
     openaiEmbedStream: 'ai_features.EmbeddingStreamHandler',
     refreshLangEmbeddings: 'ai_features.RefreshLangEmbeddingsHandler',
     countLangEmbeddings: 'ai_features.CountLangEmbeddingsHandler',

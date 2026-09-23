@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	backend "easelect/backend/core_components"
+
 	"github.com/lib/pq"
 )
 
@@ -191,18 +193,26 @@ func BuildEmbeddingStatusReport(tx *sql.Tx) (EmbeddingStatusReport, error) {
 	return report, nil
 }
 
+// embeddingProviderKeyConfigured says whether this installation currently holds
+// the configured provider's key. Which setting holds it is decided once, in the
+// saver the administrator's key form writes through, so the page that reports a
+// missing key and the form that installs one can never disagree.
+func embeddingProviderKeyConfigured(provider string) bool {
+	environmentName, known := backend.ProviderAPIKeyEnvironmentName(provider)
+	return known && strings.TrimSpace(os.Getenv(environmentName)) != ""
+}
+
 func currentEmbeddingProviderStatus(q embeddingPolicyQueryer) EmbeddingProviderStatus {
 	provider := configuredEmbeddingProvider()
 	model := configuredEmbeddingModel(provider)
 	status := EmbeddingProviderStatus{Provider: provider, Model: model}
 	if provider == embeddingProviderGoogle {
 		status.Dimensions = googleEmbeddingDimensions
-		status.KeyConfigured = strings.TrimSpace(os.Getenv("GOOGLE_API_KEY")) != ""
 	} else {
 		status.Dimensions = knownOpenAIEmbeddingDimensions[model]
 		status.UnitLength = true
-		status.KeyConfigured = strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != ""
 	}
+	status.KeyConfigured = embeddingProviderKeyConfigured(provider)
 	_ = q.QueryRow(`SELECT to_regclass('public.system_embedding_refresh_jobs') IS NOT NULL`).
 		Scan(&status.RefreshQueueAvailable)
 	return status

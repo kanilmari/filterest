@@ -132,6 +132,7 @@
   "router.robotsHandler": "",
   "router.rootHandler": "",
   "router.saveOpenAIAPIKeyHandler": "",
+  "router.saveProviderAPIKeyHandler": "saveProviderAPIKeyHandler distinguishes three outcomes the administrator must be able to tell apart: a refused value, an installation whose settings the application cannot write, and an unexpected failure. Conflating them would let the page claim a success it did not achieve.",
   "router.siteAssistantAPICatalogHandler": "siteAssistantAPICatalogHandler returns the administrator-only description of this installation's HTTP API routes, access levels, methods and core request shapes as JSON, or as Markdown with ?format=markdown for site assistant context.",
   "router.sitemapHandler": "sitemapHandler generates a dynamic sitemap.xml from public datasets.",
   "router.systemAutomationAccountHandler": "systemAutomationAccountHandler returns non-secret readiness on GET and atomically creates or rotates the fixed account on POST. Both methods require the same exact trusted peer and bearer token as the system drain endpoint.",

@@ -6,7 +6,8 @@
 import { endpoint_router } from '../core_components/endpoints/endpoint_router.js';
 import { getLanguageWithBrowserFallback } from '../core_components/state_stores/lang_preference_reader.js';
 import { formatTimestampDisplayText } from '../core_components/table_views/timestamp_display_formatter.js';
-import { englishEmbeddingAdminCopy } from './embedding_status_translation_fallbacks.js';
+import { renderEmbeddingProviderKeyForm } from './embedding_provider_key_form.js';
+import { englishEmbeddingAdminCopy, keyedElement } from './embedding_status_translation_fallbacks.js';
 
 const STATUS_QUERY = '?include_status=true';
 const PROVIDER_LABELS = Object.freeze({ google: 'Google', openai: 'OpenAI' });
@@ -88,22 +89,6 @@ export function describeEmbeddingState(status) {
     if (status.total_rows === null || status.embedded_rows === 0) return EMBEDDING_STATE_NONE;
     if (status.embedded_rows >= status.total_rows) return EMBEDDING_STATE_EMBEDDED;
     return EMBEDDING_STATE_PARTIAL;
-}
-
-/**
- * Creates an element whose text comes from a language key, `$count` filled
- * from variable. Shared with the refresh controls on the same page.
- *
- * @param {string} tagName
- * @param {string} langKey
- * @param {string|number|null} [variable=null]
- * @returns {HTMLElement}
- */
-export function keyedElement(tagName, langKey, variable = null) {
-    const element = document.createElement(tagName);
-    element.dataset.langKey = variable === null ? langKey : `${langKey}+${variable}`;
-    element.textContent = englishEmbeddingAdminCopy(langKey, variable);
-    return element;
 }
 
 function withHint(element, hintKey) {
@@ -297,6 +282,15 @@ export async function renderEmbeddingStatusPanel(container) {
     }
 
     body.replaceChildren(renderProviderSummary(report.provider));
+    // The summary above only ever says whether a key exists. When it does not,
+    // the administrator gets the field to install one right where they noticed
+    // it was missing, instead of an instruction to edit a file on the server.
+    if (!report.provider.key_configured) {
+        body.appendChild(renderEmbeddingProviderKeyForm({
+            provider: report.provider.provider,
+            onSaved: () => renderEmbeddingStatusPanel(container),
+        }));
+    }
     if (report.datasets.length === 0) {
         body.appendChild(keyedElement('p', 'embedding_status_empty'));
         return;

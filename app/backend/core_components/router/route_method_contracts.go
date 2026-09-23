@@ -124,6 +124,7 @@ var legacyMethodNotAllowedResponses = map[string]methodNotAllowedResponse{
 	"router.adminVersionInfoHandler":                           {Message: "Method not allowed"},
 	"router.healthHandler":                                     {Message: "Method not allowed"},
 	"router.saveOpenAIAPIKeyHandler":                           {Message: "only POST accepted"},
+	"router.saveProviderAPIKeyHandler":                         {Message: "only POST accepted"},
 	"router.siteAssistantAPICatalogHandler":                    {Message: "Method not allowed"},
 	"router.systemAutomationAccountHandler":                    {Message: "method_not_allowed", NoStore: true},
 	"router.systemDrainHandler":                                {Message: "Method not allowed"},
