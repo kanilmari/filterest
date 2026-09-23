@@ -13,6 +13,7 @@ const isDatasetRowPathMock = vi.fn();
 const refreshTableUnifiedMock = vi.fn();
 const datasetSearchStateSetMock = vi.fn();
 const ongoingSearchResultsMock = {};
+const updateBrowserTabTitleMock = vi.fn(async () => true);
 
 vi.mock("../../navigation/nav_engine/query_params.js", () => ({
     DATASET_PREFIX: "/",
@@ -39,6 +40,10 @@ vi.mock("./dataset_search_executor.js", () => ({
     ongoingSearchResults: ongoingSearchResultsMock,
 }));
 
+vi.mock("../../navigation/nav_engine/browser_tab_title_writer.js", () => ({
+    updateBrowserTabTitle: updateBrowserTabTitleMock,
+}));
+
 describe("clearCommittedDatasetSearch", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -53,6 +58,15 @@ describe("clearCommittedDatasetSearch", () => {
             "",
             "/tasks/473-description?search=urgent&sort_column=name&status=open&view=article"
         );
+    });
+
+    test("retitles the browser tab when the committed search changes", async () => {
+        getParamsMock.mockReturnValue({ search: "urgent" });
+        const { notifyCommittedDatasetSearchChanged } = await import("./dataset_search_clearer.js");
+
+        notifyCommittedDatasetSearchChanged("tasks");
+
+        expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: "tasks" });
     });
 
     test("clears only committed text search and preserves the row-article route", async () => {

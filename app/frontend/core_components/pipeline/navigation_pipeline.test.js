@@ -12,6 +12,7 @@ const hasDatasetPermissionMock = vi.fn();
 const showAccessDeniedToastMock = vi.fn();
 const canReadDatasetFromRegistryMock = vi.fn();
 const hasDatasetAccessSnapshotMock = vi.fn();
+const updateBrowserTabTitleMock = vi.fn(async () => true);
 
 async function loadModule(customViews = []) {
   vi.resetModules();
@@ -35,6 +36,9 @@ async function loadModule(customViews = []) {
   vi.doMock('../navigation/admin_and_user_tools/custom_view_reader.js', () => ({
     custom_views: customViews,
   }));
+  vi.doMock('../navigation/nav_engine/browser_tab_title_writer.js', () => ({
+    updateBrowserTabTitle: updateBrowserTabTitleMock,
+  }));
   return import('./navigation_pipeline.js');
 }
 
@@ -47,6 +51,7 @@ describe('navigation_pipeline', () => {
     showAccessDeniedToastMock.mockReset();
     canReadDatasetFromRegistryMock.mockReset();
     hasDatasetAccessSnapshotMock.mockReset();
+    updateBrowserTabTitleMock.mockClear();
     canReadDatasetFromRegistryMock.mockReturnValue(null);
     hasDatasetAccessSnapshotMock.mockReturnValue(false);
     delete window.check_manage_permissions_dirty;
@@ -60,6 +65,7 @@ describe('navigation_pipeline', () => {
       { name: 'permissionCheck', alwaysEnforced: false },
       { name: 'urlUpdate', alwaysEnforced: false },
       { name: 'viewRender', alwaysEnforced: true },
+      { name: 'browserTabTitle', alwaysEnforced: true },
     ]);
   });
 
@@ -209,6 +215,36 @@ describe('navigation_pipeline', () => {
 
     expect(updateURLMock).not.toHaveBeenCalled();
     expect(performNavigationCore).toHaveBeenCalledTimes(1);
+    expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: 'system_users' });
+  });
+
+  test('never retitles the browser tab for a navigation that aborted', async () => {
+    window.check_manage_permissions_dirty = vi.fn().mockResolvedValue(false);
+    const mod = await loadModule();
+
+    await mod.runNavigationPipeline({
+      name: 'system_users',
+      containerId: 'dataset_container',
+      _performNavigationCore: vi.fn(),
+    });
+
+    expect(updateBrowserTabTitleMock).not.toHaveBeenCalled();
+  });
+
+  test('passes no dataset identity for a custom view so the site name wins', async () => {
+    hasRoutePermissionMock.mockReturnValue(true);
+    const mod = await loadModule([
+      { name: 'permissions', requiredPermission: '/ui/permissions' },
+    ]);
+
+    await mod.runNavigationPipeline({
+      name: 'permissions',
+      containerId: 'permissions_container',
+      isCustomView: true,
+      _performNavigationCore: vi.fn(),
+    });
+
+    expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: null });
   });
   test("a valid mounted return still checks permission and renders without a loading insertion", async () => {
     hasDatasetPermissionMock.mockResolvedValue(true);

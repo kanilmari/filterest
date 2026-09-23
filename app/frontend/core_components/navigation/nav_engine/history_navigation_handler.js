@@ -25,6 +25,7 @@ import {
     buildParamsFromParsed,
     isDatasetBasePath,
 } from './history_navigation_handler_helpers.js';
+import { updateBrowserTabTitle } from './browser_tab_title_writer.js';
 
 function getTargetView(datasetName, parsed) {
     const view = parsed.view || getHistoryDatasetView(datasetName);
@@ -136,7 +137,7 @@ async function restoreArticleReturnView(datasetName, isCurrentNavigation) {
     return true;
 }
 
-window.addEventListener('popstate', async () => {
+async function restoreHistoryEntryState() {
     const targetEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
     const targetURL = window.location.href;
     const isCurrentNavigation = () => window.location.href === targetURL
@@ -244,4 +245,15 @@ window.addEventListener('popstate', async () => {
         forceReload: Boolean(deepLinkedRowId) || targetViewNeedsRender(name, parsed),
         ...(preserveCardReturn ? { preserveCardReturn } : {}),
     });
+}
+
+window.addEventListener('popstate', async () => {
+    try {
+        await restoreHistoryEntryState();
+    } finally {
+        // Several restoration paths return before any navigation runs, including
+        // the cached article return and the already-cleaned close. The browser
+        // tab still has to describe the entry the person landed on.
+        await updateBrowserTabTitle();
+    }
 });

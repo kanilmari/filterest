@@ -18,7 +18,7 @@ import {
 } from './filterbar';
 
 export type CardView = 'normal' | 'big';
-export type ViewMode = 'table' | 'card' | 'normal' | 'tree' | 'transposed' | 'ticket' | 'settings';
+export type ViewMode = 'table' | 'card' | 'article_view' | 'normal' | 'tree' | 'transposed' | 'ticket' | 'settings';
 export type SwitchToViewOptions = {
   allowMissing?: boolean;
 };
@@ -27,6 +27,7 @@ export type SwitchToViewOptions = {
 const DIRECT_VIEW_TEST_IDS: Partial<Record<ViewMode, string>> = {
   table: 'view-btn-table',
   card: 'view-btn-card',
+  article_view: 'view-btn-article_view',
   normal: 'view-btn-normal',
   transposed: 'view-btn-transposed',
 };
@@ -42,6 +43,7 @@ const DROPDOWN_VIEW_TEST_IDS: Partial<Record<ViewMode, string>> = {
 const VIEW_SURFACE_SUFFIXES: Record<ViewMode, string> = {
   table: 'table_view_container',
   card: 'card_view_container',
+  article_view: 'article_view_container',
   normal: 'normal_view_container',
   tree: 'tree_view_container',
   transposed: 'transposed_view_container',

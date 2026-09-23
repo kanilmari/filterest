@@ -17,6 +17,7 @@ const getParamsMock = vi.fn(() => ({}));
 const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
 const closeRowArticleMock = vi.fn();
+const updateBrowserTabTitleMock = vi.fn(async () => true);
 
 async function loadModule() {
     vi.resetModules();
@@ -51,6 +52,9 @@ async function loadModule() {
     vi.doMock("./card_view/row_article_ui_handler.js", () => ({
         closeRowArticle: closeRowArticleMock,
     }));
+    vi.doMock("../navigation/nav_engine/browser_tab_title_writer.js", () => ({
+        updateBrowserTabTitle: updateBrowserTabTitleMock,
+    }));
 
     return import("./view_selector_printer.js");
 }
@@ -71,6 +75,16 @@ describe("view_selector_printer", () => {
         setParamsMock.mockReset();
         updateURLMock.mockReset();
         closeRowArticleMock.mockReset();
+        updateBrowserTabTitleMock.mockClear();
+    });
+
+    test("retitles the browser tab for the view the person chose", async () => {
+        const { selectDatasetView } = await loadModule();
+
+        selectDatasetView("demo_table", "article_view", "card");
+
+        expect(localStorage.getItem("demo_table_view")).toBe("article_view");
+        expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: "demo_table" });
     });
 
     test("the dataset default button is available without granting other views", async () => {

@@ -13,6 +13,7 @@ import {
     canReadDatasetFromRegistry,
     hasDatasetAccessSnapshot,
 } from '../navigation/nav_engine/dataset_access_registry.js';
+import { updateBrowserTabTitle } from '../navigation/nav_engine/browser_tab_title_writer.js';
 
 // ==========================================
 // Stage Implementations
@@ -133,6 +134,21 @@ async function viewRenderStage(ctx) {
     );
 }
 
+/**
+ * browserTabTitleStage — retitles the browser tab for the navigation that just
+ * settled. It runs after viewRender so the dataset, view and any open article
+ * are already the ones the person is looking at, and it is skipped for an
+ * aborted navigation because the pipeline returns before this stage.
+ *
+ * A custom view is not a dataset, so it passes no dataset identity and the
+ * title owner falls back to the site name, matching the server's own rule.
+ *
+ * @param {Object} ctx - Navigation context with name and isCustomView
+ */
+async function browserTabTitleStage(ctx) {
+    await updateBrowserTabTitle({ dataset: ctx.isCustomView ? null : ctx.name });
+}
+
 // ==========================================
 // Pipeline Configuration
 // ==========================================
@@ -142,6 +158,7 @@ const navigationStages = [
     createStage('permissionCheck',  permissionCheckStage, false),
     createStage('urlUpdate',        urlUpdateStage,       false),
     createStage('viewRender',       viewRenderStage,      true),
+    createStage('browserTabTitle',  browserTabTitleStage, true),
 ];
 
 /**

@@ -15,6 +15,7 @@ import { resolveDatasetDefaultView } from "./dataset_default_view.js";
 import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
 import { getParams, setParams, updateURL } from "../navigation/nav_engine/query_params.js";
+import { updateBrowserTabTitle } from "../navigation/nav_engine/browser_tab_title_writer.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
 import { closeRowArticle } from "./card_view/row_article_ui_handler.js";
 import {
@@ -234,6 +235,9 @@ export function selectDatasetView(tableName, viewKey, currentView = null) {
         rememberDatasetViewUrlState(tableName, nextViewKey);
     }
     refreshTableUnified(tableName);
+    // The chosen view is committed above, so the tab can already be retitled.
+    // An article that this selection opens retitles it again from its own event.
+    void updateBrowserTabTitle({ dataset: tableName });
 }
 
 function isRowArticleOpenForTable(tableName) {

@@ -276,6 +276,17 @@ let currentChosenLang = "";
 let translationRequestSequence = 0;
 let translationRenderQueue = Promise.resolve();
 
+/**
+ * Tells whether translated copy is available to code that builds labels itself.
+ * Between the loaded translation dictionaries and callers that must not show a
+ * raw key or an untranslated fallback in place of real copy.
+ * Exists so such a caller can wait for readable text instead of guessing.
+ */
+export function hasLoadedTranslations() {
+    return Object.keys(currentTranslations).length > 0
+        || Object.keys(defaultTranslations).length > 0;
+}
+
 const TRANSLATABLE_SELECTOR = '[data-lang-key], [data-html-lang-key], [data-title-lang-key], [data-aria-label-lang-key]';
 const TRANSLATABLE_ATTRIBUTE_FILTER = [
     'data-lang-key',

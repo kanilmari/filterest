@@ -10,6 +10,7 @@ import {
     updateURL,
 } from "../../navigation/nav_engine/query_params.js";
 import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation_handler_helpers.js";
+import { updateBrowserTabTitle } from "../../navigation/nav_engine/browser_tab_title_writer.js";
 import { getUnifiedTableState, setUnifiedTableState, refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { datasetSearchState } from "./dataset_search_state_reader.js";
 import { ongoingSearchResults } from "./dataset_search_executor.js";
@@ -67,6 +68,9 @@ export function notifyCommittedDatasetSearchChanged(tableName) {
             },
         })
     );
+    // A committed search is a settled boundary: it can leave, keep or replace
+    // the article the browser tab is describing.
+    void updateBrowserTabTitle({ dataset: tableName });
 }
 
 /**

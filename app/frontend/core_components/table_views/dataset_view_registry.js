@@ -307,6 +307,18 @@ export function resolveDatasetViewSelectionTarget(viewKey) {
 }
 
 /**
+ * Tells whether a selected view key means "the article view is showing".
+ * Operates between the persisted per-dataset view selection and every surface
+ * that has to know whether the article presentation owns the content area.
+ * Exists as the one authoritative answer to that question: it follows the view
+ * the person chose, so it stays true for an article view that has no rows and
+ * therefore never emits an article-open event.
+ */
+export function isArticleDatasetView(viewKey) {
+    return resolveDatasetViewSelectionTarget(viewKey) === ARTICLE_VIEW_KEY;
+}
+
+/**
  * Tells whether a view key is selector-only rather than directly renderable.
  * Operates between view-selector permission logic and registry metadata.
  * Exists so aliases such as article can intentionally avoid new route checks.

@@ -36,15 +36,52 @@ describe("shouldShowSharedTopBar", () => {
         ).toBe(false);
     });
 
-    test("allows the big-card override to force the shared topbar open", () => {
+    test("allows the selected article view to force the shared topbar open", () => {
         expect(
             shouldShowSharedTopBar({
                 navbarVisible: true,
                 filterbarVisible: true,
-                bigCardOpen: true,
+                articleViewActive: true,
                 allowBigCardSearchBar: true,
             })
         ).toBe(true);
+    });
+
+    test("keeps the article view's header even when no row can open", () => {
+        // An article view whose search matches nothing never opens a row, so no
+        // article-open event ever arrives. The bar must still carry the dataset
+        // title and search field instead of hiding itself.
+        expect(
+            shouldShowSharedTopBar({
+                navbarVisible: true,
+                filterbarVisible: true,
+                articleViewActive: true,
+                allowBigCardSearchBar: true,
+                inlineHeroVisible: false,
+            })
+        ).toBe(true);
+    });
+
+    test("leaves the other views with both sidebars unchanged", () => {
+        expect(
+            shouldShowSharedTopBar({
+                navbarVisible: true,
+                filterbarVisible: true,
+                articleViewActive: false,
+                allowBigCardSearchBar: true,
+            })
+        ).toBe(false);
+    });
+
+    test("honours an installation that forbids the flat bar in the article view", () => {
+        expect(
+            shouldShowSharedTopBar({
+                navbarVisible: true,
+                filterbarVisible: true,
+                articleViewActive: true,
+                allowBigCardSearchBar: false,
+            })
+        ).toBe(false);
     });
 
     test("suppresses the repeated flat topbar while the inline hero is visible", () => {

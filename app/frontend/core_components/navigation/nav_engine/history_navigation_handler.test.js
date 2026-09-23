@@ -26,6 +26,11 @@ const {
     tableStates: new Map(),
 }));
 
+const browserTabTitle = vi.hoisted(() => ({ update: vi.fn(async () => true) }));
+vi.mock("./browser_tab_title_writer.js", () => ({
+    updateBrowserTabTitle: browserTabTitle.update,
+}));
+
 const ifavHistory = vi.hoisted(() => ({ handle: vi.fn(async () => false) }));
 vi.mock("./image_first_view_history.js", () => ({ handleImageFirstViewHistory: ifavHistory.handle }));
 
@@ -93,6 +98,7 @@ await import("./history_navigation_handler.js");
 describe("history_navigation_handler", () => {
     beforeEach(() => {
         ifavHistory.handle.mockResolvedValue(false);
+        browserTabTitle.update.mockClear();
         closeRowArticleMock.mockClear();
         vi.mocked(canRestoreCardArticleReturn).mockReturnValue(false);
         handleAllNavigationMock.mockClear();
@@ -104,6 +110,20 @@ describe("history_navigation_handler", () => {
         document.body.innerHTML = "";
         window.__bigCardClosing = false;
         window.history.replaceState({}, "", "/events");
+    });
+
+    test("retitles the browser tab even when an early return skips navigation", async () => {
+        // The image-first history path answers the entry itself and returns
+        // before any navigation runs; the tab must still describe where the
+        // person landed.
+        ifavHistory.handle.mockResolvedValue(true);
+
+        window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(handleAllNavigationMock).not.toHaveBeenCalled();
+        expect(browserTabTitle.update).toHaveBeenCalledTimes(1);
     });
 
     test("restores calendar view when browser Back closes a calendar-opened article", async () => {

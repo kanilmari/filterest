@@ -17,12 +17,28 @@ import {
     getDatasetViewScrollDirection,
     getDatasetViewSelectorOptions,
     getDatasetViewSelectorTextForLanguage,
+    isArticleDatasetView,
     isDatasetViewSelectorAlias,
     resolveDatasetViewSelectionTarget,
     usesFullWidthDatasetContent,
 } from "./dataset_view_registry.js";
 
 describe("dataset_view_registry", () => {
+    test("answers whether the article view is the selected presentation", () => {
+        // One authoritative answer, used wherever a surface has to know that the
+        // article presentation owns the content area. It must stay true for an
+        // article view that has no rows and so never opens an article.
+        expect(isArticleDatasetView("article_view")).toBe(true);
+        expect(isArticleDatasetView("article")).toBe(true);
+        expect(isArticleDatasetView("big_card")).toBe(true);
+        expect(isArticleDatasetView("row_article")).toBe(true);
+        expect(isArticleDatasetView("card")).toBe(false);
+        expect(isArticleDatasetView("table")).toBe(false);
+        expect(isArticleDatasetView("image_first_view")).toBe(false);
+        expect(isArticleDatasetView("")).toBe(false);
+        expect(isArticleDatasetView(undefined)).toBe(false);
+    });
+
     test("builds stable container IDs from registered suffixes", () => {
         expect(getDatasetViewContainerId("card", "demo_dataset"))
             .toBe("demo_dataset_card_view_container");

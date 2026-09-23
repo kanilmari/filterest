@@ -12,6 +12,7 @@ import { navigateToDefaultDataset, waitForDataLoaded } from '../helpers/navigati
 import { switchToView, openBigCard } from '../helpers/view-switch';
 
 const SECTION_KEY = 'field_sets';
+const NO_MATCH_SEARCH_QUERY = 'zzqqxx-no-such-row';
 
 type FilterbarLayout = {
   section_order: string[];
@@ -348,5 +349,64 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       expect(geometry.imageContentPaddingLeft).toBe(16);
     }
     expect(geometry.actionBorderTop).toBe('1px');
+  });
+  test('keeps the article view header when the search matches no rows', async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.metadata?.screenWidth !== 'desktop'
+        || testInfo.project.metadata?.cardView !== 'normal',
+      'This empty-article proof drives its own wide viewport and only needs one project.',
+    );
+
+    // With both sidebars visible the shared bar used to need an article-open
+    // event. A search that matches nothing can never open a row, so the whole
+    // header — dataset title, search field and close control — disappeared.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.evaluate(() => localStorage.setItem('navVisibleWide', 'true'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await navigateToDefaultDataset(page);
+    await waitForDataLoaded(page);
+    await switchToView(page, 'table');
+
+    const searchInput = page.locator(
+      '.tab_parts_container:visible [data-dataset-search-input]:visible',
+    ).first();
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill(NO_MATCH_SEARCH_QUERY);
+    await searchInput.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`(?:\\?|&)search=${NO_MATCH_SEARCH_QUERY}(?:&|$)`));
+
+    await switchToView(page, 'article_view');
+
+    const datasetName = await readActiveDatasetName(page);
+    const sharedTopBar = page.locator(
+      `.dataset-shared-topbar[data-filterbar-shared-topbar-for="${datasetName}"]`,
+    ).first();
+    await expect(sharedTopBar).toBeVisible({ timeout: 15000 });
+    await expect(sharedTopBar).toHaveAttribute('aria-hidden', 'false');
+    await expect(
+      sharedTopBar.locator('.dataset-shared-topbar__dataset-title'),
+    ).not.toBeEmpty();
+    await expect(
+      sharedTopBar.locator('[data-testid="dataset-search-input-search-only"]'),
+    ).toBeVisible();
+    await expect(
+      sharedTopBar.locator('[data-testid="shared-topbar-article-close"]'),
+    ).toBeVisible();
+
+    const emptyState = await page.evaluate((name) => {
+      const container = document.getElementById(`${name}_container`);
+      return {
+        renderedCards: container?.querySelectorAll('.card[data-id]').length ?? -1,
+        openArticles: container?.querySelectorAll('.active_row_article, .active_big_card').length ?? -1,
+        navbarVisible: !document.getElementById('navbar')?.classList.contains('collapsed'),
+        filterbarVisible: !document.getElementById(`${name}_filterBar_panel`)
+          ?.classList.contains('filterbar-panel--hidden'),
+      };
+    }, datasetName);
+
+    expect(emptyState.renderedCards).toBe(0);
+    expect(emptyState.openArticles).toBe(0);
+    expect(emptyState.navbarVisible).toBe(true);
+    expect(emptyState.filterbarVisible).toBe(true);
   });
 });

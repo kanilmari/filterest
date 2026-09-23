@@ -62,6 +62,10 @@ import {
     isSharedTopBarHostActive,
     shouldShowSharedTopBar,
 } from "./shared_topbar_builder.js";
+import {
+    CARD_VIEW_KEY,
+    isArticleDatasetView,
+} from "../table_views/dataset_view_registry.js";
 import { createDatasetCornerControls, isHeroControlAreaVisible } from "./dataset_corner_controls.js";
 import { createHeroDatasetTabs } from "../navigation/main_tabs/hero_dataset_tabs.js";
 import { buildFilterbarDisclosureSection } from "./filterbar_section_heading_builder.js";
@@ -1295,20 +1299,24 @@ export function create_filter_bar(
         const navbarVisible = isNavbarVisible();
         const filterbarVisible = !isHidden();
         const activeView =
-            localStorage.getItem(`${tableName}_view`) || currentView || "card";
+            localStorage.getItem(`${tableName}_view`) || currentView || CARD_VIEW_KEY;
+        // The selected view is the authoritative answer to "is the article view
+        // showing". An article-open event cannot answer it, because an article
+        // view with no matching rows never opens a row and never emits one.
+        const articleViewActive = isArticleDatasetView(activeView);
         const shouldShowBar =
             isSharedTopBarHostActive(sharedTopBar) &&
             shouldShowSharedTopBar({
                 navbarVisible,
                 filterbarVisible,
-                bigCardOpen,
+                articleViewActive,
                 allowBigCardSearchBar: show_search_only_bar_in_big_card_view,
                 inlineHeroVisible,
             });
 
         setSharedTopBarVisibility(shouldShowBar);
         setSharedTopBarArticleCloseVisibility(
-            shouldShowBar && (bigCardOpen || activeView !== "card")
+            shouldShowBar && (bigCardOpen || activeView !== CARD_VIEW_KEY)
         );
 
         syncCornerControls();
