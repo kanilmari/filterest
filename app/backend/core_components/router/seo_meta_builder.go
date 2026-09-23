@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	backend "easelect/backend/core_components"
 )
@@ -115,14 +116,7 @@ func resolvePageMeta(r *http.Request) pageMeta {
 	meta.CanonicalURL = baseURL + canonicalPath
 	meta.OGURL = meta.CanonicalURL
 
-	// Fetch translated title from system_lang_keys
-	frontPageKey := datasetName + "_front_page"
-	title := fetchTranslation(frontPageKey, lang)
-	if title == "" {
-		// Fallback: humanize the table name
-		title = strings.ReplaceAll(datasetName, "_", " ")
-		title = strings.Title(title) //nolint:staticcheck
-	}
+	title := resolveDatasetTabTitle(datasetName, lang)
 
 	// Fetch description / search slogan
 	sloganKey := "search_slogan_" + datasetName
@@ -135,7 +129,7 @@ func resolvePageMeta(r *http.Request) pageMeta {
 		description = title
 	}
 
-	meta.PageTitle = fmt.Sprintf("%s — %s", title, siteName)
+	meta.PageTitle = composeBrowserTabTitle("", title, siteName)
 	meta.MetaDescription = description
 	meta.OGTitle = title
 	meta.OGDescription = description
@@ -150,13 +144,134 @@ func resolvePageMeta(r *http.Request) pageMeta {
 		}
 		rowTitle := fetchRowTitle(datasetName, rowID, lang)
 		if rowTitle != "" {
-			meta.PageTitle = fmt.Sprintf("%s — %s — %s", rowTitle, title, siteName)
+			meta.PageTitle = composeBrowserTabTitle(rowTitle, title, siteName)
 			meta.OGTitle = rowTitle
 			meta.OGType = "article"
 		}
 	}
 
 	return meta
+}
+
+// browserTabTitleSeparator joins the parts of the browser tab title.
+// Its frontend twin is BROWSER_TAB_TITLE_SEPARATOR in
+// app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js.
+const browserTabTitleSeparator = " — "
+
+// resolveDatasetTabTitle answers what the application's own tab calls this dataset.
+// Between the translated interface copy and the first-load browser tab title.
+// Why: the browser tab must open with the words the tab bar prints, and the tab bar
+// labels a dataset tab by the language key that is the dataset's own name
+// (main_tab_lang_keys.js). The remaining steps are the fallback chain for an
+// installation that has not translated that label, in the same order as
+// resolveTabTitleForBrowserTab in
+// app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js.
+func resolveDatasetTabTitle(datasetName string, lang string) string {
+	if title := datasetTitleTranslationReader(mainTabLangKey(datasetName), lang); title != "" {
+		return title
+	}
+	if title := datasetTitleTranslationReader(datasetName+"_front_page", lang); title != "" {
+		return title
+	}
+	if title := datasetDisplayNameReader(datasetName); title != "" {
+		return title
+	}
+	return humanizeDatasetNameForTitle(datasetName)
+}
+
+// The dataset title sources this package reads, named so a test can answer them without a
+// database, the same way configuredSiteNameReader does for the site identity.
+var (
+	datasetTitleTranslationReader = fetchTranslation
+	datasetDisplayNameReader      = fetchDatasetDisplayName
+)
+
+// mainTabLangKeyOverrides lists the tabs whose visible label comes from a different
+// language key than the tab's own name. Everything else is labelled by its own name.
+// Its frontend twin is MAIN_TAB_LANG_KEY_OVERRIDES in
+// app/frontend/core_components/navigation/main_tabs/main_tab_lang_keys.js, and both are
+// checked against the same examples in
+// app/testing/shared_contracts/site_name_in_title_examples.json.
+var mainTabLangKeyOverrides = map[string]string{
+	// The people dataset is named system_users, but its tab says "Users".
+	"system_users": "users",
+	// The account view is named user, but its tab says "Account".
+	"user": "account",
+}
+
+// mainTabLangKey answers which language key the application's own tab bar prints for
+// one tab. Its frontend twin is getMainTabLangKey in main_tab_lang_keys.js.
+func mainTabLangKey(tabIdentity string) string {
+	identity := strings.TrimSpace(tabIdentity)
+	if identity == "" {
+		return ""
+	}
+	if labelKey, overridden := mainTabLangKeyOverrides[identity]; overridden {
+		return labelKey
+	}
+	return identity
+}
+
+// humanizeDatasetNameForTitle turns a raw dataset name into readable copy.
+// Its frontend twin is humanizeDatasetNameForTitle in
+// app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js.
+func humanizeDatasetNameForTitle(datasetName string) string {
+	readable := strings.ReplaceAll(datasetName, "_", " ")
+	return strings.Title(readable) //nolint:staticcheck
+}
+
+// composeBrowserTabTitle joins the first-load browser tab title in the order the
+// application keeps after it takes the title over: the open article, then the
+// application tab's own label, then the site name. Empty parts are dropped.
+// Its frontend twin is composeBrowserTabTitle in
+// app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js.
+func composeBrowserTabTitle(articleTitle string, tabTitle string, siteName string) string {
+	readableTabTitle := strings.TrimSpace(tabTitle)
+	readableSiteName := strings.TrimSpace(siteName)
+	sitePart := readableSiteName
+	if titleAlreadyOpensWithSiteName(readableTabTitle, readableSiteName) {
+		sitePart = ""
+	}
+
+	parts := make([]string, 0, 3)
+	for _, part := range []string{strings.TrimSpace(articleTitle), readableTabTitle, sitePart} {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return strings.Join(parts, browserTabTitleSeparator)
+}
+
+// titleAlreadyOpensWithSiteName tells whether a title already opens with the site's own
+// name, so the tab title must not name the site a second time.
+//
+// The name counts as repeated only at the very start of the title, compared without case
+// or surrounding whitespace, and only when the title either ends there or continues with
+// something that is not a letter or a digit. That keeps a longer word such as
+// "Serlogistics" a different word, and leaves a site name in the middle of a title alone.
+//
+// Its frontend twin is titleAlreadyOpensWithSiteName in
+// app/frontend/core_components/state_stores/site_identity_reader.js. Both are checked
+// against the same examples in
+// app/testing/shared_contracts/site_name_in_title_examples.json, so the pair cannot
+// drift apart silently.
+func titleAlreadyOpensWithSiteName(title string, siteName string) bool {
+	readableTitle := []rune(strings.TrimSpace(title))
+	readableSiteName := []rune(strings.TrimSpace(siteName))
+	if len(readableTitle) == 0 || len(readableSiteName) == 0 {
+		return false
+	}
+	if len(readableTitle) < len(readableSiteName) {
+		return false
+	}
+	if !strings.EqualFold(string(readableTitle[:len(readableSiteName)]), string(readableSiteName)) {
+		return false
+	}
+	if len(readableTitle) == len(readableSiteName) {
+		return true
+	}
+	characterAfterSiteName := readableTitle[len(readableSiteName)]
+	return !unicode.IsLetter(characterAfterSiteName) && !unicode.IsDigit(characterAfterSiteName)
 }
 
 // resolvePageSiteName returns the browser-facing site name for SEO metadata.
@@ -363,6 +478,20 @@ func fetchTranslation(langKey string, lang string) string {
 		return strings.TrimSpace(value.String)
 	}
 	return ""
+}
+
+// fetchDatasetDisplayName retrieves the administrator-given display name from
+// system_db_tables, the same value the frontend reads from its table_specs cache.
+func fetchDatasetDisplayName(tableName string) string {
+	if backend.Db == nil {
+		return ""
+	}
+	var displayName sql.NullString
+	err := backend.Db.QueryRow(`SELECT display_name FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&displayName)
+	if err != nil || !displayName.Valid {
+		return ""
+	}
+	return strings.TrimSpace(displayName.String)
 }
 
 // fetchDatasetDescription retrieves the description column from system_db_tables.

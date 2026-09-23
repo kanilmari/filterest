@@ -2,6 +2,8 @@
 // Owns the browser tab title for every state the application reaches after the first page load.
 // Bridges settled navigation, view selection, article open/close, search and history restoration
 // with the one document.title the browser shows.
+// The title opens with the words the application's own tab shows, so the browser tab and the
+// tab bar name the same thing.
 // Exists because the server only titles the initial HTML, so without an owner the tab kept
 // describing whatever was last fully loaded.
 
@@ -12,6 +14,7 @@ import {
 } from "../../state_stores/site_identity_reader.js";
 import { getTableSpec } from "../../state_stores/table_specs_reader.js";
 import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
+import { getMainTabLangKey } from "../main_tabs/main_tab_lang_keys.js";
 import { DATASET_PREFIX } from "./query_params.js";
 import { getPrefixFromPathname, parseDeepLink } from "./history_navigation_handler_helpers.js";
 
@@ -27,32 +30,32 @@ let languageChangeObserver = null;
 
 /**
  * Joins the parts of a tab title in the server's order and drops empty parts.
- * Produces "Article — Dataset — Site", "Dataset — Site" or the bare site name,
- * exactly as `seo_meta_builder.go` does for the initial HTML.
+ * Produces "Article — Application tab — Site", "Application tab — Site" or the bare
+ * site name, exactly as `seo_meta_builder.go` does for the initial HTML.
  *
- * The site part is left out when the dataset's own title already opens with the
- * site name, so a stored title such as "Serlog.com – Service catalog" names the
- * site once instead of twice. The dataset heading applies that same rule.
+ * The site part is left out when the application tab's own label already opens with
+ * the site name, so a title such as "Serlog.com – Service catalog" names the site
+ * once instead of twice. The dataset heading applies that same rule.
  */
 export function composeBrowserTabTitle({
     articleTitle = "",
-    datasetTitle = "",
+    tabTitle = "",
     siteName = "",
 } = {}) {
-    const readableDatasetTitle = String(datasetTitle ?? "").trim();
+    const readableTabTitle = String(tabTitle ?? "").trim();
     const readableSiteName = String(siteName ?? "").trim();
-    const sitePart = titleAlreadyOpensWithSiteName(readableDatasetTitle, readableSiteName)
+    const sitePart = titleAlreadyOpensWithSiteName(readableTabTitle, readableSiteName)
         ? ""
         : readableSiteName;
 
-    return [String(articleTitle ?? "").trim(), readableDatasetTitle, sitePart]
+    return [String(articleTitle ?? "").trim(), readableTabTitle, sitePart]
         .filter(Boolean)
         .join(BROWSER_TAB_TITLE_SEPARATOR);
 }
 
 /**
  * Turns a raw dataset name into the readable fallback the server also uses
- * when the dataset has no translated front-page title.
+ * when the dataset has no translated tab label and no front-page title.
  */
 export function humanizeDatasetNameForTitle(datasetName) {
     return String(datasetName || "")
@@ -62,38 +65,72 @@ export function humanizeDatasetNameForTitle(datasetName) {
 }
 
 /**
- * Resolves the dataset name the tab title should describe.
- * The URL path owns that identity, the same way it does on the server, so a
- * custom view or an administrator page yields no dataset and only the site name.
+ * Resolves which application tab the address describes: the dataset a dataset tab
+ * opened, or the view name of a tab that is not a dataset, such as an administrator
+ * page or the account view.
+ * The URL path owns that identity, the same way it does on the server.
+ *
+ * @param {string} [pathname] Address to read; the current one by default.
+ * @returns {{ name: string, isDataset: boolean }} Tab identity, empty when there is none.
+ */
+export function readBrowserTabIdentity(pathname = window.location.pathname) {
+    const prefix = getPrefixFromPathname(pathname, DATASET_PREFIX);
+    if (!prefix) {
+        // The site root names no tab of its own, yet the application opens a dataset
+        // tab there and that is the tab the person is looking at. The stored selection
+        // is the application's own answer to which one, and only a dataset is ever
+        // stored, so a custom view cannot arrive here.
+        const restoredDataset = getSelectedDataset();
+        return restoredDataset
+            ? { name: restoredDataset, isDataset: true }
+            : { name: "", isDataset: false };
+    }
+    const { name } = parseDeepLink(pathname.slice(prefix.length));
+    if (!name) {
+        return { name: "", isDataset: false };
+    }
+    // An administrator page is never a dataset, and neither is a custom view that
+    // happens to sit on the dataset prefix.
+    const isDataset = prefix !== ADMIN_PATH_PREFIX
+        && (Boolean(getTableSpec(name)) || getSelectedDataset() === name);
+    return { name, isDataset };
+}
+
+/**
+ * Resolves the dataset name the tab title should describe, or "" when the person is
+ * not on a dataset tab. Only a dataset can hold an open article.
  */
 export function readBrowserTabTitleDatasetName(
     pathname = window.location.pathname
 ) {
-    const prefix = getPrefixFromPathname(pathname, DATASET_PREFIX);
-    if (!prefix || prefix === ADMIN_PATH_PREFIX) {
-        return "";
-    }
-    const { name } = parseDeepLink(pathname.slice(prefix.length));
-    if (!name) {
-        return "";
-    }
-    // Only a real dataset gets a dataset title; custom views are not datasets.
-    const isKnownDataset = Boolean(getTableSpec(name)) || getSelectedDataset() === name;
-    return isKnownDataset ? name : "";
+    const { name, isDataset } = readBrowserTabIdentity(pathname);
+    return isDataset ? name : "";
 }
 
 /**
- * Resolves the dataset title from the same translated copy the interface shows,
- * so the tab follows the chosen interface language in fi, en, ch and yue.
+ * Resolves the label the application's own tab bar shows for this tab, from the very
+ * same language key it prints (`main_tab_lang_keys.js`), so the browser tab opens with
+ * the words the person just clicked and follows the interface language in fi, en, ch
+ * and yue.
+ *
+ * A dataset keeps a fallback chain for an installation that has not translated its tab
+ * label: the dataset's front-page heading, its administrator-given display name, and
+ * finally a readable form of its raw name — the same order the server uses.
+ * A tab that is not a dataset has only its own key, because inventing a title out of a
+ * URL segment would name the tab something the interface never calls it.
  */
-function resolveDatasetTitleForBrowserTab(datasetName) {
-    if (!datasetName) {
+function resolveTabTitleForBrowserTab({ name, isDataset }) {
+    if (!name) {
         return "";
     }
-    return readTranslatedLabelOrEmpty(`${datasetName}_front_page`)
-        || readTranslatedLabelOrEmpty(datasetName)
-        || String(getTableSpec(datasetName)?.display_name || "").trim()
-        || humanizeDatasetNameForTitle(datasetName);
+    const tabLabel = readTranslatedLabelOrEmpty(getMainTabLangKey(name));
+    if (!isDataset) {
+        return tabLabel;
+    }
+    return tabLabel
+        || readTranslatedLabelOrEmpty(`${name}_front_page`)
+        || String(getTableSpec(name)?.display_name || "").trim()
+        || humanizeDatasetNameForTitle(name);
 }
 
 /**
@@ -121,10 +158,12 @@ function readOpenArticleTitleForBrowserTab(datasetName) {
 
 /** Resolves the whole title from the state the application is in right now. */
 function resolveBrowserTabTitle() {
-    const datasetName = readBrowserTabTitleDatasetName();
+    const identity = readBrowserTabIdentity();
     return composeBrowserTabTitle({
-        articleTitle: readOpenArticleTitleForBrowserTab(datasetName),
-        datasetTitle: resolveDatasetTitleForBrowserTab(datasetName),
+        articleTitle: readOpenArticleTitleForBrowserTab(
+            identity.isDataset ? identity.name : ""
+        ),
+        tabTitle: resolveTabTitleForBrowserTab(identity),
         siteName: getCurrentSiteName(),
     });
 }

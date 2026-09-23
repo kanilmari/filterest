@@ -5,6 +5,7 @@
 
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getTabIconPath } from "./tab_icon_library.js";
+import { getMainTabLangKey } from "./main_tab_lang_keys.js";
 import {
     beginDatasetAccessRefresh, getDatasetAccessResponseGeneration,
     isCurrentDatasetAccessRefresh, primeDatasetAccessRegistry,
@@ -16,7 +17,7 @@ export const staticTabsData = [
         userContent: true,
         id: "user",
         text: "Account",
-        langKey: "account",
+        langKey: getMainTabLangKey("user"),
         svgPath: getTabIconPath("person"),
         route: "/user",
     },
@@ -24,14 +25,14 @@ export const staticTabsData = [
         userContent: true,
         id: "system_users",
         text: "Users",
-        langKey: "users",
+        langKey: getMainTabLangKey("system_users"),
         iconKey: "group_center_filled",
     },
     {
         nonUserContent: true,
         id: "register",
         text: "Register",
-        langKey: "register",
+        langKey: getMainTabLangKey("register"),
         svgPath: getTabIconPath("group"),
         route: "/register_ndYOyXV0INOK3F",
     },
@@ -39,7 +40,7 @@ export const staticTabsData = [
         nonUserContent: true,
         id: "login",
         text: "Login",
-        langKey: "login",
+        langKey: getMainTabLangKey("login"),
         svgPath: getTabIconPath("login"),
         route: "/login",
     },
@@ -47,7 +48,7 @@ export const staticTabsData = [
         userContent: true,
         id: "logout",
         text: "Logout",
-        langKey: "logout",
+        langKey: getMainTabLangKey("logout"),
         svgPath: getTabIconPath("logout"),
         alwaysNarrowButton: true,
         route: "/ui-logout",
@@ -109,7 +110,7 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
                     userContent: true,
                     id: 'system_users',
                     text: 'Users',
-                    langKey: 'users',
+                    langKey: getMainTabLangKey('system_users'),
                     iconKey: table.icon_key || 'group_center_filled',
                     hasPresentationMedia,
                 };
@@ -119,7 +120,7 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
                     userContent: true,
                     id: "system_about",
                     text: "About",
-                    langKey: "system_about",
+                    langKey: getMainTabLangKey("system_about"),
                     iconKey: getDatasetTabIconKey(table) || "help",
                     isProjectTable: false,
                     dataset: "system_about",
@@ -130,7 +131,7 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
             return {
                 id: table.dataset_name,
                 text: formatTableName(table.dataset_name),
-                langKey: table.dataset_name,
+                langKey: getMainTabLangKey(table.dataset_name),
                 iconKey: getDatasetTabIconKey(table),
                 isProjectTable: true,
                 dataset: table.dataset_name,

@@ -160,8 +160,10 @@ async function datasetAddressStage(ctx) {
  * are already the ones the person is looking at, and it is skipped for an
  * aborted navigation because the pipeline returns before this stage.
  *
- * A custom view is not a dataset, so it passes no dataset identity and the
- * title owner falls back to the site name, matching the server's own rule.
+ * A custom view is not a dataset, so it passes no dataset identity; the title
+ * owner still names that tab after the label its own button shows, because it
+ * reads the settled address rather than this stage's dataset hint. The hint only
+ * lets a late answer about a dataset the person already left be recognised.
  *
  * @param {Object} ctx - Navigation context with name and isCustomView
  */

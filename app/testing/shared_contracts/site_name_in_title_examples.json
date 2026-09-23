@@ -1,0 +1,91 @@
+{
+    "purpose": "One set of examples for the two implementations of the browser tab title rules, so a change to one side that the other does not follow fails a test instead of reaching a person's browser tab.",
+    "implementations": {
+        "site_name_rule_frontend": "app/frontend/core_components/state_stores/site_identity_reader.js (titleAlreadyOpensWithSiteName)",
+        "site_name_rule_backend": "app/backend/core_components/router/seo_meta_builder.go (titleAlreadyOpensWithSiteName)",
+        "composition_frontend": "app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js (composeBrowserTabTitle)",
+        "composition_backend": "app/backend/core_components/router/seo_meta_builder.go (composeBrowserTabTitle)",
+        "tab_label_key_frontend": "app/frontend/core_components/navigation/main_tabs/main_tab_lang_keys.js (getMainTabLangKey)",
+        "tab_label_key_backend": "app/backend/core_components/router/seo_meta_builder.go (mainTabLangKey)",
+        "readable_name_frontend": "app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js (humanizeDatasetNameForTitle)",
+        "readable_name_backend": "app/backend/core_components/router/seo_meta_builder.go (humanizeDatasetNameForTitle)"
+    },
+    "humanizeDatasetNameForTitle": [
+        { "datasetName": "travel_deals", "expected": "Travel Deals" },
+        { "datasetName": "app_service_catalog", "expected": "App Service Catalog" },
+        { "datasetName": "system_users", "expected": "System Users" },
+        { "datasetName": "subscriptions", "expected": "Subscriptions" },
+        { "datasetName": "", "expected": "" }
+    ],
+    "mainTabLangKey": [
+        { "why": "An ordinary dataset tab is labelled by its own name.", "tabIdentity": "app_service_catalog", "expected": "app_service_catalog" },
+        { "why": "So is the about dataset.", "tabIdentity": "system_about", "expected": "system_about" },
+        { "why": "So is an administrator view.", "tabIdentity": "permissions", "expected": "permissions" },
+        { "why": "The people dataset tab says Users.", "tabIdentity": "system_users", "expected": "users" },
+        { "why": "The account view tab says Account.", "tabIdentity": "user", "expected": "account" },
+        { "why": "No tab at all has no label key.", "tabIdentity": "", "expected": "" },
+        { "why": "Surrounding whitespace is not a different tab.", "tabIdentity": "  system_users  ", "expected": "users" }
+    ],
+    "titleAlreadyOpensWithSiteName": [
+        { "title": "Serlog.com – Service catalog", "siteName": "Serlog.com", "expected": true },
+        { "title": "Serlog.com - Service catalog", "siteName": "Serlog.com", "expected": true },
+        { "title": "serlog.com — service catalog", "siteName": "Serlog.com", "expected": true },
+        { "title": "Serlog.com: Service catalog", "siteName": "Serlog.com", "expected": true },
+        { "title": "Serlog.com | Service catalog", "siteName": "Serlog.com", "expected": true },
+        { "title": "Serlog.com Service catalog", "siteName": "Serlog.com", "expected": true },
+        { "title": "  Serlog.com – Service catalog  ", "siteName": "  Serlog.com  ", "expected": true },
+        { "title": "Serlog.com", "siteName": "Serlog.com", "expected": true },
+        { "title": "Serlog.com – 服务目录", "siteName": "Serlog.com", "expected": true },
+        { "title": "Service catalog", "siteName": "Serlog.com", "expected": false },
+        { "title": "Service catalog of Serlog.com", "siteName": "Serlog.com", "expected": false },
+        { "title": "Palveluhakemisto – Serlog.com – tiedot", "siteName": "Serlog.com", "expected": false },
+        { "title": "Serlogistics catalog", "siteName": "Serlog", "expected": false },
+        { "title": "Serlog.commerce", "siteName": "Serlog.com", "expected": false },
+        { "title": "", "siteName": "Serlog.com", "expected": false },
+        { "title": "Service catalog", "siteName": "", "expected": false }
+    ],
+    "composeBrowserTabTitle": [
+        {
+            "why": "An article names itself first, then the application tab, then the site.",
+            "articleTitle": "Cleaning service",
+            "tabTitle": "Service catalog",
+            "siteName": "serlog.com",
+            "expected": "Cleaning service — Service catalog — serlog.com"
+        },
+        {
+            "why": "A dataset tab opens with the label its own tab shows.",
+            "articleTitle": "",
+            "tabTitle": "Service catalog",
+            "siteName": "serlog.com",
+            "expected": "Service catalog — serlog.com"
+        },
+        {
+            "why": "A tab label that already opens with the site name does not repeat it.",
+            "articleTitle": "",
+            "tabTitle": "Serlog.com – Service catalog",
+            "siteName": "Serlog.com",
+            "expected": "Serlog.com – Service catalog"
+        },
+        {
+            "why": "An article inside such a tab keeps the single site mention.",
+            "articleTitle": "Cleaning service",
+            "tabTitle": "serlog.com: Service catalog",
+            "siteName": "Serlog.com",
+            "expected": "Cleaning service — serlog.com: Service catalog"
+        },
+        {
+            "why": "A site name in the middle of a tab label is not a repetition.",
+            "articleTitle": "",
+            "tabTitle": "Service catalog of Serlog.com",
+            "siteName": "Serlog.com",
+            "expected": "Service catalog of Serlog.com — Serlog.com"
+        },
+        {
+            "why": "Without any tab of its own, the tab carries the bare site name.",
+            "articleTitle": "",
+            "tabTitle": "",
+            "siteName": "serlog.com",
+            "expected": "serlog.com"
+        }
+    ]
+}

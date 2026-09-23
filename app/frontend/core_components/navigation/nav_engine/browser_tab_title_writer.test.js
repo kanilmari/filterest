@@ -1,12 +1,26 @@
 // @vitest-environment jsdom
 // browser_tab_title_writer.test.js
 // Verifies that one owner titles the browser tab for every settled application state.
-// Bridges translated dataset copy, the open article's own heading and the site identity
+// Bridges the application tab's own label, the open article's heading and the site identity
 // with the document.title a person reads on the browser tab.
 // Exists because the server only titles the initial HTML, so an unowned tab kept
 // describing whatever was last fully loaded.
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// The same composed titles the server is checked against, so the two sides cannot drift.
+// Its twin reader is TestComposeBrowserTabTitleMatchesTheSharedExamples in
+// app/backend/core_components/router/seo_meta_builder_test.go.
+const sharedTitleExamples = JSON.parse(readFileSync(
+    resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../../../testing/shared_contracts/site_name_in_title_examples.json"
+    ),
+    "utf8"
+));
 
 const translations = new Map();
 let translationsLoaded = true;
@@ -68,43 +82,17 @@ describe("browser tab title ownership", () => {
         module.resetBrowserTabTitleOwnershipForTests();
     });
 
-    test("joins the parts the way the server builds the first-load title", async () => {
+    test.each(sharedTitleExamples.composeBrowserTabTitle.map(
+        ({ why, articleTitle, tabTitle, siteName, expected }) => [
+            why, articleTitle, tabTitle, siteName, expected,
+        ]
+    ))("composes the same title as the server: %s", async (
+        _why, articleTitle, tabTitle, siteName, expected
+    ) => {
         const { composeBrowserTabTitle } = await loadTitleWriter();
 
-        expect(composeBrowserTabTitle({
-            articleTitle: "Sunset in Lapland",
-            datasetTitle: "Travel deals",
-            siteName: "fintravel.fi",
-        })).toBe("Sunset in Lapland — Travel deals — fintravel.fi");
-
-        expect(composeBrowserTabTitle({
-            datasetTitle: "Travel deals",
-            siteName: "fintravel.fi",
-        })).toBe("Travel deals — fintravel.fi");
-
-        expect(composeBrowserTabTitle({ siteName: "fintravel.fi" }))
-            .toBe("fintravel.fi");
-    });
-
-    test("names the site once when the dataset title already opens with it", async () => {
-        const { composeBrowserTabTitle } = await loadTitleWriter();
-
-        expect(composeBrowserTabTitle({
-            datasetTitle: "Serlog.com – Service catalog",
-            siteName: "Serlog.com",
-        })).toBe("Serlog.com – Service catalog");
-
-        expect(composeBrowserTabTitle({
-            articleTitle: "Cleaning service",
-            datasetTitle: "serlog.com: Service catalog",
-            siteName: "Serlog.com",
-        })).toBe("Cleaning service — serlog.com: Service catalog");
-
-        // A site name in the middle of the title is not a repetition.
-        expect(composeBrowserTabTitle({
-            datasetTitle: "Service catalog of Serlog.com",
-            siteName: "Serlog.com",
-        })).toBe("Service catalog of Serlog.com — Serlog.com");
+        expect(composeBrowserTabTitle({ articleTitle, tabTitle, siteName }))
+            .toBe(expected);
     });
 
     test("keeps the site name beside a dataset title in the language that does not repeat it", async () => {
@@ -218,25 +206,125 @@ describe("browser tab title ownership", () => {
     });
 
     test("falls back to the readable dataset name the server would also use", async () => {
+        // Neither the tab label key nor the front page key is translated here.
         localStorage.setItem("table_specs", JSON.stringify({ travel_deals: {} }));
         mountDataset("travel_deals");
-        const { updateBrowserTabTitle, humanizeDatasetNameForTitle } =
-            await loadTitleWriter();
+        const { updateBrowserTabTitle } = await loadTitleWriter();
 
         await updateBrowserTabTitle({ dataset: "travel_deals" });
 
-        expect(humanizeDatasetNameForTitle("travel_deals")).toBe("Travel Deals");
         expect(document.title).toBe("Travel Deals — fintravel.fi");
     });
 
-    test("gives an administrator page and an unknown view only the site name", async () => {
+    test.each(sharedTitleExamples.humanizeDatasetNameForTitle.map(
+        ({ datasetName, expected }) => [datasetName, expected]
+    ))("reads %j the same way the server does", async (datasetName, expected) => {
+        const { humanizeDatasetNameForTitle } = await loadTitleWriter();
+
+        expect(humanizeDatasetNameForTitle(datasetName)).toBe(expected);
+    });
+
+    test("opens with the label the application's own tab shows for the dataset", async () => {
+        // The tab bar prints the dataset's own name as its language key; the front page
+        // key is the large heading on the page and must not win the browser tab.
+        translations.set("travel_deals", "Travel deals");
+        translations.set("travel_deals_front_page", "fintravel.fi – Travel deals");
+        mountDataset("travel_deals");
+        const { updateBrowserTabTitle } = await loadTitleWriter();
+
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+
+        expect(document.title).toBe("Travel deals — fintravel.fi");
+    });
+
+    test("opens with the article's own title and gives the tab label back on close", async () => {
+        translations.set("travel_deals", "Travel deals");
+        translations.set("travel_deals_front_page", "fintravel.fi – Travel deals");
+        mountDataset("travel_deals", { articleHeading: "Sunset in Lapland" });
+        window.history.replaceState({}, "", "/travel_deals/12-sunset-in-lapland");
+        const { updateBrowserTabTitle } = await loadTitleWriter();
+
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+        expect(document.title).toBe(
+            "Sunset in Lapland — Travel deals — fintravel.fi"
+        );
+
+        mountDataset("travel_deals");
+        window.history.replaceState({}, "", "/travel_deals");
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+
+        expect(document.title).toBe("Travel deals — fintravel.fi");
+    });
+
+    test("uses the key the people tab prints instead of its dataset name", async () => {
+        translations.set("users", "Users");
+        translations.set("system_users", "Never shown on the tab");
+        localStorage.setItem("table_specs", JSON.stringify({ system_users: {} }));
+        mountDataset("system_users");
+        window.history.replaceState({}, "", "/system_users");
+        const { updateBrowserTabTitle } = await loadTitleWriter();
+
+        await updateBrowserTabTitle({ dataset: "system_users" });
+
+        expect(document.title).toBe("Users — fintravel.fi");
+    });
+
+    test("names an administrator page and the account view after their own tabs", async () => {
+        translations.set("permissions", "Permissions");
+        translations.set("account", "Account");
+        const { updateBrowserTabTitle, readBrowserTabIdentity } =
+            await loadTitleWriter();
+
+        expect(readBrowserTabIdentity("/admin/permissions"))
+            .toEqual({ name: "permissions", isDataset: false });
+
+        window.history.replaceState({}, "", "/admin/permissions");
+        await updateBrowserTabTitle({ dataset: null });
+        expect(document.title).toBe("Permissions — fintravel.fi");
+
+        window.history.replaceState({}, "", "/user");
+        await updateBrowserTabTitle({ dataset: null });
+        expect(document.title).toBe("Account — fintravel.fi");
+    });
+
+    test("names the tab the site root reopened, which the address itself cannot say", async () => {
+        // Opening https://<site>/ opens a dataset tab and the tab bar shows its label,
+        // while the address itself still names nothing.
+        translations.set("travel_deals", "Travel deals");
+        sessionStorage.setItem("selected_dataset", "travel_deals");
+        mountDataset("travel_deals");
+        window.history.replaceState({}, "", "/");
+        const { updateBrowserTabTitle, readBrowserTabIdentity } =
+            await loadTitleWriter();
+
+        expect(readBrowserTabIdentity("/"))
+            .toEqual({ name: "travel_deals", isDataset: true });
+
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+
+        expect(document.title).toBe("Travel deals — fintravel.fi");
+    });
+
+    test("leaves the site root with the bare site name when no tab was restored", async () => {
+        const { updateBrowserTabTitle, readBrowserTabIdentity } =
+            await loadTitleWriter();
+
+        expect(readBrowserTabIdentity("/")).toEqual({ name: "", isDataset: false });
+
+        window.history.replaceState({}, "", "/");
+        await updateBrowserTabTitle({ dataset: null });
+
+        expect(document.title).toBe("fintravel.fi");
+    });
+
+    test("leaves an untranslated view with the bare site name it had before", async () => {
         const { updateBrowserTabTitle, readBrowserTabTitleDatasetName } =
             await loadTitleWriter();
 
         expect(readBrowserTabTitleDatasetName("/admin/permissions")).toBe("");
         expect(readBrowserTabTitleDatasetName("/")).toBe("");
 
-        window.history.replaceState({}, "", "/admin/permissions");
+        window.history.replaceState({}, "", "/admin/an_unnamed_tool");
         await updateBrowserTabTitle({ dataset: null });
 
         expect(document.title).toBe("fintravel.fi");

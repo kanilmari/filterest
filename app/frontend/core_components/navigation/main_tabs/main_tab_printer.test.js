@@ -20,6 +20,8 @@ import {
 } from "../../route_permission_checker.js";
 import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
 
+// The retitle boundary is verified in main_tab_printer_browser_tab_title.test.js.
+vi.mock("../nav_engine/browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: vi.fn() }));
 vi.mock("../nav_engine/navigation_handler.js", () => ({
     handle_all_navigation: vi.fn().mockResolvedValue(undefined),
 }));

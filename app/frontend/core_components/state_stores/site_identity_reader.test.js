@@ -4,12 +4,27 @@
 // Bridges server-rendered metadata fallbacks with deterministic frontend unit fixtures.
 // Exists to keep dynamic site identity out of translated and hardcoded component copy.
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, test } from "vitest";
 import {
     formatSiteNameForDisplay,
     getCurrentSiteName,
     titleAlreadyOpensWithSiteName,
 } from "./site_identity_reader.js";
+
+// One example set for both implementations of this rule. Its twin reader is
+// TestTitleAlreadyOpensWithSiteNameMatchesTheSharedExamples in
+// app/backend/core_components/router/seo_meta_builder_test.go, so a change here that the
+// server does not follow fails a test instead of reaching a person's browser tab.
+const sharedTitleExamples = JSON.parse(readFileSync(
+    resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../../testing/shared_contracts/site_name_in_title_examples.json"
+    ),
+    "utf8"
+));
 
 describe("getCurrentSiteName", () => {
     beforeEach(() => {
@@ -48,30 +63,15 @@ describe("formatSiteNameForDisplay", () => {
 });
 
 describe("titleAlreadyOpensWithSiteName", () => {
-    test.each([
-        ["Serlog.com – Service catalog", "Serlog.com", true],
-        ["Serlog.com - Service catalog", "Serlog.com", true],
-        ["serlog.com — service catalog", "Serlog.com", true],
-        ["Serlog.com: Service catalog", "Serlog.com", true],
-        ["Serlog.com | Service catalog", "Serlog.com", true],
-        ["Serlog.com Service catalog", "Serlog.com", true],
-        ["  Serlog.com – Service catalog  ", "  Serlog.com  ", true],
-        ["Serlog.com", "Serlog.com", true],
-        ["Serlog.com – 服务目录", "Serlog.com", true],
-    ])("treats %j as already naming %j", (title, siteName, expected) => {
+    test.each(sharedTitleExamples.titleAlreadyOpensWithSiteName.map(
+        ({ title, siteName, expected }) => [title, siteName, expected]
+    ))("answers %j beside %j the way the server does", (title, siteName, expected) => {
         expect(titleAlreadyOpensWithSiteName(title, siteName)).toBe(expected);
     });
 
-    test.each([
-        ["Service catalog", "Serlog.com", false],
-        ["Service catalog of Serlog.com", "Serlog.com", false],
-        ["Palveluhakemisto – Serlog.com – tiedot", "Serlog.com", false],
-        ["Serlogistics catalog", "Serlog", false],
-        ["Serlog.commerce", "Serlog.com", false],
-        ["", "Serlog.com", false],
-        ["Service catalog", "", false],
-        [undefined, undefined, false],
-    ])("leaves %j alone beside %j", (title, siteName, expected) => {
-        expect(titleAlreadyOpensWithSiteName(title, siteName)).toBe(expected);
+    // Only this side can be handed a missing value at all; the shared examples are text.
+    test("treats a missing title or site name as no repetition", () => {
+        expect(titleAlreadyOpensWithSiteName(undefined, undefined)).toBe(false);
+        expect(titleAlreadyOpensWithSiteName(null, "Serlog.com")).toBe(false);
     });
 });

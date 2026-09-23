@@ -471,6 +471,21 @@ during unattended runs. Test changed multilingual components with non-English
 copy and with both explicit application themes, including forced light over
 an OS dark preference.
 
+### A rule that must exist in both the frontend and the server
+
+Some rules have to be stated twice, because the server composes the first page a
+person receives and the application composes every page after it. Keep the two
+statements from drifting apart with one example file under
+[testing/shared_contracts/](../../testing/shared_contracts/) that both sides'
+tests read, and have each implementation's comment name its twin by path. The
+browser tab title is the worked example:
+`site_name_in_title_examples.json` is answered by
+`app/backend/core_components/router/seo_meta_builder_test.go` and by the
+frontend tests beside `site_identity_reader.js`,
+`browser_tab_title_writer.js` and `main_tab_lang_keys.js`. Do not add a second
+implementation without adding its examples; a rule that only one side follows is
+a defect the tests should catch before a person does.
+
 ### Page-load network waste
 
 When changing catalog/login media, bootstrap GETs, or login-shell imports,

@@ -31,6 +31,7 @@ import {
     applyMainTabActiveState,
     refreshMainTabPresentation,
 } from "./main_tab_active_state.js";
+import { updateBrowserTabTitle } from "../nav_engine/browser_tab_title_writer.js";
 import { NAVBAR_VISIBILITY_CHANGED_EVENT } from "../menu_button/navbar_visibility_handler.js";
 import { resolveFilterBarElement } from "../../filterbar/filterbar_engine/filterbar_visibility_handler.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
@@ -522,6 +523,11 @@ export async function openNavTab(tableName, options = {}) {
 
     /* 2) Päivitetään SVG-tabien aktiivisuus ja visuaalinen tila ---------- */
     applyMainTabActiveState(tableName, { viewDatasetName: tableName });
+    // A tab can settle here without the navigation pipeline having run: the site root
+    // reopens a tab with skipNavigation when its content is already loaded, so nothing
+    // else asks for a retitle. The title owner keeps one title per transition, so
+    // asking again after an ordinary navigation writes nothing new.
+    void updateBrowserTabTitle({ dataset: tableName });
     scheduleNavTabTextLineClassSync();
     focusPrimaryDatasetSearch(tableName);
     return { abort: false };
