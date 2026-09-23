@@ -113,6 +113,12 @@
     --filterbar-hero-content-max-width: 550px;
     --filterbar-search-only-max-width: 800px;
 
+    /* Empty space above the hero header icon, i.e. the top margin of
+       .filter-content-inner (morphing_filterbar_content.css). The appearance
+       palette overwrites this on :root from the saved site presentation
+       settings; this declaration is the value an untouched installation uses. */
+    --filterbar-content-top-space: 40px;
+
     /* Legacy Color Mapping (Connecting old vars to new system) */
     --bg_color: var(--bg-base);
     --bg_color_1_5: hsl(var(--brand-hue) 10% 98.5%);

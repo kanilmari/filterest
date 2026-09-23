@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
     DEFAULT_DATASET_COVER_THEME, PUBLIC_PRESENTATION_CACHE_KEY, brandColorComponents,
     createSitePresentationState, resetSitePresentationStatesForTests, isValidThemeConfig, normalizePresentationSettings,
+    FILTERBAR_CONTENT_TOP_SPACE, clampFilterbarContentTopSpace,
 } from './site_presentation_state.js';
 import { mountDatasetCoverTestPalette } from './dataset_cover_test_palette.js';
 
@@ -390,5 +391,112 @@ describe('palette lifecycle', () => {
         control.resetPreview();
         expect(hue()).toBe('340');
         control.destroy();
+    });
+});
+
+// The empty space above the hero header icon is one named value: the palette
+// writes it, --filterbar-content-top-space carries it, and the filterbar
+// stylesheet is its only consumer.
+describe('hero header top space', () => {
+    const topSpace = () => document.documentElement.style.getPropertyValue('--filterbar-content-top-space');
+    const hero = () => document.body.appendChild(document.createElement('section'));
+    const paletteOptions = (settingsRequestFn, saveRequestFn = async (payload) => payload) => ({
+        settingsRequestFn, saveRequestFn,
+        requestFn: async () => ({ view_admin_cover_image_test_palette: true }),
+        permissionCheck: () => true,
+    });
+    const withTopSpace = (value) => {
+        const snapshot = settings();
+        snapshot.dataset_cover_theme.shared.filterbar_content_top_space = value;
+        return snapshot;
+    };
+
+    test('an untouched installation gets the owner-approved 40px, in code and in the stylesheet', async () => {
+        expect(DEFAULT_DATASET_COVER_THEME.shared.filterbar_content_top_space)
+            .toBe(FILTERBAR_CONTENT_TOP_SPACE.default);
+        expect(FILTERBAR_CONTENT_TOP_SPACE.default).toBe(40);
+        expect(normalizePresentationSettings(null).dataset_cover_theme.shared.filterbar_content_top_space).toBe(40);
+
+        const legacy = settings();
+        delete legacy.dataset_cover_theme.shared.filterbar_content_top_space;
+        const state = createSitePresentationState({ requestFn: async () => legacy });
+        await state.loadSettings();
+        state.paint();
+        expect(state.savedSettings().dataset_cover_theme.shared.filterbar_content_top_space).toBe(40);
+        expect(topSpace()).toBe('40px');
+
+        const variables = readFileSync('frontend/styles/variables.css', 'utf8');
+        expect(variables).toContain('--filterbar-content-top-space: 40px;');
+    });
+
+    test('clamps a stored value to the palette slider range instead of writing an unusable margin', async () => {
+        expect(clampFilterbarContentTopSpace(96)).toBe(96);
+        expect(clampFilterbarContentTopSpace(-40)).toBe(FILTERBAR_CONTENT_TOP_SPACE.minimum);
+        expect(clampFilterbarContentTopSpace(4000)).toBe(FILTERBAR_CONTENT_TOP_SPACE.maximum);
+        expect(clampFilterbarContentTopSpace('nope')).toBe(FILTERBAR_CONTENT_TOP_SPACE.default);
+        expect(clampFilterbarContentTopSpace(undefined)).toBe(FILTERBAR_CONTENT_TOP_SPACE.default);
+
+        const state = createSitePresentationState({ requestFn: async () => withTopSpace(4000) });
+        await state.loadSettings();
+        state.paint();
+        expect(topSpace()).toBe(`${FILTERBAR_CONTENT_TOP_SPACE.maximum}px`);
+    });
+
+    test('the palette slider previews and saves the value the filterbar stylesheet reads', async () => {
+        const saved = [];
+        const control = await mountDatasetCoverTestPalette(hero(), 'demo', paletteOptions(
+            async () => withTopSpace(24),
+            async (payload) => { saved.push(payload); return payload; },
+        ));
+        const slider = control.panel.querySelector('[data-testid="dataset-cover-test-palette-filterbar-content-top-space"]');
+        const output = control.panel.querySelector('[data-testid="dataset-cover-test-palette-filterbar-content-top-space-value"]');
+        expect(slider.min).toBe(String(FILTERBAR_CONTENT_TOP_SPACE.minimum));
+        expect(slider.max).toBe(String(FILTERBAR_CONTENT_TOP_SPACE.maximum));
+        expect(slider.value).toBe('24');
+        expect(output.value).toBe('24px');
+        expect(topSpace()).toBe('24px');
+
+        slider.value = '88';
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(output.value).toBe('88px');
+        expect(topSpace()).toBe('88px');
+
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
+        await vi.waitFor(() => expect(toastTexts()).toMatch(/saved/i));
+        expect(saved.at(-1).dataset_cover_theme.shared.filterbar_content_top_space).toBe(88);
+        expect(topSpace()).toBe('88px');
+
+        control.resetPreview();
+        expect(topSpace()).toBe('88px');
+        control.destroy();
+
+        const filterbarCss = readFileSync(
+            'frontend/core_components/filterbar/morphing_filterbar_content.css', 'utf8');
+        const contentRule = filterbarCss.match(/\n\.filter-content-inner\s*\{([\s\S]*?)\n\}/)[1];
+        const heroRule = filterbarCss.match(
+            /\.filterbar-inline-hero \.filter-content-inner\s*\{([\s\S]*?)\n\}/)[1];
+        expect(contentRule).toContain('margin: var(--filterbar-content-top-space, 40px)');
+        expect(heroRule).toContain('margin: var(--filterbar-content-top-space, 40px) auto 0;');
+        // One named value, not a number repeated per rule.
+        expect(filterbarCss.match(/var\(--filterbar-content-top-space/g)).toHaveLength(2);
+    });
+
+    test('offers the label in every language the palette has copy for', async () => {
+        const labels = new Map();
+        for (const language of ['fi', 'en', 'ch', 'yue']) {
+            document.documentElement.lang = language;
+            const control = await mountDatasetCoverTestPalette(hero(), `demo-${language}`,
+                paletteOptions(async () => settings()));
+            const slider = control.panel.querySelector(
+                '[data-testid="dataset-cover-test-palette-filterbar-content-top-space"]');
+            labels.set(language, slider.getAttribute('aria-label'));
+            // A partially translated language still renders the rest of the palette.
+            expect(control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').textContent)
+                .not.toMatch(/undefined/);
+            control.destroy();
+        }
+        expect(new Set(labels.values()).size).toBe(4);
+        expect(labels.get('en')).toBe('Space above the header icon');
+        expect(labels.get('fi')).toBe('Tyhjä tila otsikkokuvakkeen yläpuolella');
     });
 });

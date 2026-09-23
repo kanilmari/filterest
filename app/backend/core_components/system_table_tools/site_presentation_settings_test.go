@@ -65,6 +65,10 @@ func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T)
 	if shared.ActiveTabGlowIntensity != 0.5 || shared.ActiveTabGlowWidth != 2 || shared.ActiveTabGlowBlur != 4 {
 		t.Fatalf("shared glow defaults = %#v", shared)
 	}
+	// The stylesheet's own --filterbar-content-top-space default is the same 40px.
+	if shared.FilterbarContentTopSpace != defaultFilterbarContentTopSpace {
+		t.Fatalf("hero header top space default = %v", shared.FilterbarContentTopSpace)
+	}
 	if settings.RowArticleTimestampDisplayMode != rowArticleTimestampDateTime {
 		t.Fatalf("timestamp mode = %q", settings.RowArticleTimestampDisplayMode)
 	}

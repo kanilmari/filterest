@@ -26,6 +26,12 @@ const (
 	rowArticleTimestampDisplayKey = "row_article_timestamp_display_mode"
 	rowArticleTimestampDateTime   = "date_time"
 	rowArticleTimestampDateOnly   = "date_only"
+
+	// Empty space above the dataset hero's header icon, in pixels. The stylesheet
+	// keeps the same 40px default, so an installation that never opens the
+	// appearance palette already renders the intended spacing.
+	defaultFilterbarContentTopSpace = 40
+	maximumFilterbarContentTopSpace = 200
 )
 
 const readSitePresentationSettingsSQL = `
@@ -53,7 +59,7 @@ const upsertDatasetCoverThemeSQL = `
 		'Admin-managed, theme-aware dataset cover presentation settings.'
 	)
 	ON CONFLICT (key) DO UPDATE
-	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
 		EXCLUDED.json_value,
 		'{shared,card_show_all_fields}',
 		CASE
@@ -83,13 +89,21 @@ const upsertDatasetCoverThemeSQL = `
 				THEN public.system_config.json_value #> '{shared,article_image_caption_position}'
 			ELSE '"below"'::jsonb
 		END
+	), '{shared,filterbar_content_top_space}',
+		CASE
+			WHEN NOT $7::boolean THEN EXCLUDED.json_value #> '{shared,filterbar_content_top_space}'
+			WHEN jsonb_typeof(public.system_config.json_value #> '{shared,filterbar_content_top_space}') = 'number'
+				THEN public.system_config.json_value #> '{shared,filterbar_content_top_space}'
+			ELSE '40'::jsonb
+		END
 	),
 	    creation_spec = COALESCE(NULLIF(public.system_config.creation_spec, ''), EXCLUDED.creation_spec),
 	    updated = NOW()
 	RETURNING (json_value #>> '{shared,card_show_all_fields}')::boolean,
 	          json_value #>> '{shared,card_style_variant}',
 	          (json_value #>> '{shared,card_detail_columns}')::int,
-	          json_value #>> '{shared,article_image_caption_position}'`
+	          json_value #>> '{shared,article_image_caption_position}',
+	          (json_value #>> '{shared,filterbar_content_top_space}')::float8`
 
 const upsertRowArticleTimestampDisplaySQL = `
 	INSERT INTO public.system_config (
@@ -145,7 +159,9 @@ type DatasetCoverSharedValues struct {
 	ActiveTabGlowIntensity      float64 `json:"active_tab_glow_intensity"`
 	ActiveTabGlowWidth          float64 `json:"active_tab_glow_width"`
 	ActiveTabGlowBlur           float64 `json:"active_tab_glow_blur"`
-	BrandColor                  string  `json:"brand_color"`
+	// FilterbarContentTopSpace is the empty space above the hero header icon.
+	FilterbarContentTopSpace float64 `json:"filterbar_content_top_space"`
+	BrandColor               string  `json:"brand_color"`
 }
 
 // DatasetCoverThemeConfig groups light, dark, and shared cover settings.
@@ -164,6 +180,7 @@ type SitePresentationSettingsResponse struct {
 	preserveStoredCardStyleVariant            bool
 	preserveStoredCardDetailColumns           bool
 	preserveStoredArticleImageCaptionPosition bool
+	preserveStoredFilterbarContentTopSpace    bool
 }
 
 var readSitePresentationSettings = readSitePresentationSettingsFromDB
@@ -187,7 +204,8 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 		settings.preserveStoredCardStyleVariant,
 		settings.preserveStoredCardDetailColumns,
 		settings.preserveStoredArticleImageCaptionPosition,
-	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition)
+		settings.preserveStoredFilterbarContentTopSpace,
+	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition, &settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace)
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("save cover theme: %w", err)
 	}
@@ -353,6 +371,17 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 		}
 		sharedKeys = append(sharedKeys, "article_image_caption_position")
 	}
+	topSpace, topSpaceProvided := sharedParts["filterbar_content_top_space"]
+	if topSpaceProvided {
+		// A pointer rejects an explicit JSON null, which decodes into a float64 silently.
+		var value *float64
+		if json.Unmarshal(topSpace, &value) != nil || value == nil ||
+			*value < 0 || *value > maximumFilterbarContentTopSpace {
+			return SitePresentationSettingsResponse{}, fmt.Errorf(
+				"filterbar_content_top_space must be a number between 0 and %d", maximumFilterbarContentTopSpace)
+		}
+		sharedKeys = append(sharedKeys, "filterbar_content_top_space")
+	}
 	if err := requireExactJSONKeys(themeParts["shared"], sharedKeys); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -362,10 +391,12 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	settings.DatasetCoverTheme.Shared.CardStyleVariant = "modern"
 	settings.DatasetCoverTheme.Shared.CardDetailColumns = 2
 	settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition = "below"
+	settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace = defaultFilterbarContentTopSpace
 	settings.preserveStoredCardShowAllFields = !provided
 	settings.preserveStoredCardStyleVariant = !styleProvided
 	settings.preserveStoredCardDetailColumns = !columnsProvided
 	settings.preserveStoredArticleImageCaptionPosition = !captionProvided
+	settings.preserveStoredFilterbarContentTopSpace = !topSpaceProvided
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -503,6 +534,12 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if err := validateRange("shared.active_tab_glow_blur", config.Shared.ActiveTabGlowBlur, 0, 12); err != nil {
 		return err
 	}
+	if err := validateRange(
+		"shared.filterbar_content_top_space",
+		config.Shared.FilterbarContentTopSpace, 0, maximumFilterbarContentTopSpace,
+	); err != nil {
+		return err
+	}
 	return validateHexColor("shared.brand_color", config.Shared.BrandColor)
 }
 
@@ -581,6 +618,7 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 				ActiveTabGlowIntensity:      0.5,
 				ActiveTabGlowWidth:          2,
 				ActiveTabGlowBlur:           4,
+				FilterbarContentTopSpace:    defaultFilterbarContentTopSpace,
 				BrandColor:                  "#1a8fe6",
 			},
 		},

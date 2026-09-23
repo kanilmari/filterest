@@ -18,7 +18,7 @@ import { buildCardImagePresentationControl } from './dataset_cover_card_image_co
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import {
     DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
-    getSitePresentationState,
+    getSitePresentationState, FILTERBAR_CONTENT_TOP_SPACE,
 } from './site_presentation_state.js';
 export { DEFAULT_DATASET_COVER_THEME } from './site_presentation_state.js';
 
@@ -29,6 +29,7 @@ const TOOLBOX_ICON_PATHS = Object.freeze({
     backgroundCover: '/frontend/icons/symbols/image.svg',
     cardLayout: '/frontend/icons/symbols/grid_view.svg',
     articleImages: '/frontend/icons/symbols/image.svg',
+    datasetHeader: '/frontend/icons/symbols/ruler.svg',
     navigation: '/frontend/icons/symbols/settings.svg',
 });
 
@@ -50,6 +51,7 @@ const RANGE_CONTROLS = Object.freeze([
     { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
     { id: 'card-detail-columns', key: 'card_detail_columns', label: 'cardDetailColumns', hint: 'cardDetailColumnsHint', css: 'card-detail-columns', min: 1, max: 4, step: 1, unit: '', shared: true, group: 'cardLayout' },
     { id: 'card-description-lines', key: 'card_description_lines', label: 'cardDescriptionLines', css: 'card-description-lines', min: 1, max: 12, step: 1, unit: '', shared: true, group: 'cardLayout' },
+    { id: 'filterbar-content-top-space', key: 'filterbar_content_top_space', label: 'filterbarContentTopSpace', hint: 'filterbarContentTopSpaceHint', css: 'filterbar-content-top-space', min: FILTERBAR_CONTENT_TOP_SPACE.minimum, max: FILTERBAR_CONTENT_TOP_SPACE.maximum, step: FILTERBAR_CONTENT_TOP_SPACE.step, unit: 'px', shared: true, group: 'datasetHeader' },
     { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', min: 0, max: 100, step: 1, unit: 'px', shared: true, group: 'navigation' },
     { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
     { id: 'active-tab-glow-intensity', key: 'active_tab_glow_intensity', label: 'activeTabGlowIntensity', css: 'active-tab-glow-intensity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
@@ -104,9 +106,11 @@ function clone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
+// English carries the complete dictionary, so a language that only translates
+// part of the palette still renders every label instead of "undefined".
 function getCopy() {
     const language = String(document.documentElement.lang.trim() || getLanguageWithBrowserFallback() || 'en').toLowerCase();
-    return COPY[language] || COPY[language.split('-')[0]] || COPY.en;
+    return { ...COPY.en, ...(COPY[language] || COPY[language.split('-')[0]] || {}) };
 }
 
 function renderControlValue(value, unit) {
@@ -332,7 +336,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
     sharedToolboxes.classList.add('dataset-cover-test-palette__toolboxes');
     sharedToolboxes.dataset.testid = 'dataset-cover-test-palette-shared-controls';
     const toolboxByGroup = new Map();
-    ['backgroundCover', 'cardLayout', 'articleImages', 'navigation']
+    ['backgroundCover', 'cardLayout', 'articleImages', 'datasetHeader', 'navigation']
         .forEach((groupName) => {
             const toolbox = createPaletteToolbox(copy[groupName], {
                 iconPath: TOOLBOX_ICON_PATHS[groupName],

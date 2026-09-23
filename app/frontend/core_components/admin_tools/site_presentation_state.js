@@ -12,6 +12,22 @@ import { CARD_STYLE_VARIANT_VALUES, DEFAULT_CARD_DETAIL_COLUMNS } from '../table
 export const PUBLIC_PRESENTATION_CACHE_KEY = 'filterest_public_presentation_v1';
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
+/** Empty space above the hero header icon, in pixels. One definition serves the
+ *  saved default, the palette slider's range and the guard that keeps a stale or
+ *  hand-edited value from writing an unusable margin into the stylesheet. */
+export const FILTERBAR_CONTENT_TOP_SPACE = Object.freeze({
+    default: 40, minimum: 0, maximum: 200, step: 2,
+});
+
+export function clampFilterbarContentTopSpace(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return FILTERBAR_CONTENT_TOP_SPACE.default;
+    return Math.min(
+        Math.max(numericValue, FILTERBAR_CONTENT_TOP_SPACE.minimum),
+        FILTERBAR_CONTENT_TOP_SPACE.maximum
+    );
+}
+
 export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
     light: Object.freeze({
         oval_enabled: true,
@@ -59,6 +75,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         active_tab_glow_intensity: 0.5,
         active_tab_glow_width: 2,
         active_tab_glow_blur: 4,
+        filterbar_content_top_space: FILTERBAR_CONTENT_TOP_SPACE.default,
         brand_color: '#1a8fe6',
     }),
 });
@@ -178,6 +195,10 @@ export function applySitePresentationGlobals(config, { preserveKnownBrand = fals
     documentRoot.style.setProperty(
         '--navtab-active-glow-blur',
         `${config.shared.active_tab_glow_blur}px`
+    );
+    documentRoot.style.setProperty(
+        '--filterbar-content-top-space',
+        `${clampFilterbarContentTopSpace(config.shared.filterbar_content_top_space)}px`
     );
     if (!preserveKnownBrand || !documentRoot.style.getPropertyValue('--brand-hue')) {
         const brand = brandColorComponents(config.shared.brand_color);

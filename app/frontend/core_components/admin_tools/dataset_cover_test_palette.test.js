@@ -451,7 +451,7 @@ describe('dataset cover presentation settings', () => {
         control.destroy();
         control = await mountDatasetCoverTestPalette(createCoverHero(), 'another_dataset', options);
         const restored = [...control.panel.querySelectorAll('details')];
-        expect(restored.map(group => group.open)).toEqual([false, true, false, false]);
+        expect(restored.map(group => group.open)).toEqual([false, true, false, false, false]);
         restored[1].querySelector('summary').click();
         await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('false'));
         expect(options.saveRequestFn).not.toHaveBeenCalled();
@@ -504,7 +504,7 @@ describe('dataset cover presentation settings', () => {
         )).toHaveLength(14);
         expect(panel.querySelectorAll(
             '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(8);
+        )).toHaveLength(9);
         const background = panel.querySelector('[data-testid="dataset-cover-test-palette-backgroundImage"]');
         const cover = panel.querySelector('[data-testid="dataset-cover-test-palette-coverImage"]');
         expect(background.querySelectorAll('input[type="range"]')).toHaveLength(1);
@@ -522,9 +522,9 @@ describe('dataset cover presentation settings', () => {
         document.documentElement.lang = 'en';
         await Promise.resolve();
         const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
-        expect(toolboxes).toHaveLength(4);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(4);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(4);
+        expect(toolboxes).toHaveLength(5);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(5);
+        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(5);
         expect([...toolboxes].every(toolbox => !toolbox.open)).toBe(true);
         expect(toolboxes[2].open).toBe(false);
         toolboxes[2].querySelector('summary').click();

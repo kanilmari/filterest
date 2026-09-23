@@ -68,7 +68,10 @@
   display: flex;
   flex-direction: column;
   gap: 15px;
-  margin: 12px var(--filterbar-panel-inline-space, 24px) 0;
+  /* --filterbar-content-top-space is the single named value for the empty space
+     above the hero header icon; variables.css holds its 40px default and the
+     appearance palette overwrites it on :root. */
+  margin: var(--filterbar-content-top-space, 40px) var(--filterbar-panel-inline-space, 24px) 0;
   box-sizing: border-box;
   transition:
     gap 180ms ease,
@@ -184,7 +187,7 @@
 .filterbar-inline-hero .filter-content-inner {
   max-width: var(--filterbar-hero-title-max-width, 1200px);
   width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-title-max-width, 1200px));
-  margin: 12px auto 0;
+  margin: var(--filterbar-content-top-space, 40px) auto 0;
 }
 .filterbar-panel--wide .filter-content-inner > :not(.morphing-header),
 .filterbar-inline-hero .filter-content-inner > :not(.morphing-header) {

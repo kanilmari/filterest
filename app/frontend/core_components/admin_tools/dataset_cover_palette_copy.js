@@ -1,7 +1,9 @@
 // dataset_cover_palette_copy.js
-// Defines Finnish and English labels for the appearance palette.
+// Defines the appearance palette's labels in the interface languages it has copy for.
 // Connects palette controls and status messages to one local copy dictionary.
 // Keeps presentation terminology consistent while the mounted editor changes language.
+// English is the complete dictionary; a partial language section (ch, yue) falls back
+// to it key by key, so untranslated labels stay readable instead of disappearing.
 
 export const DATASET_COVER_PALETTE_COPY = Object.freeze({
     en: Object.freeze({
@@ -11,6 +13,9 @@ export const DATASET_COVER_PALETTE_COPY = Object.freeze({
         themeGroup: 'Selected theme', sharedGroup: 'Shared by both themes',
         backgroundCover: 'Background and cover image', backgroundImage: 'Background image', coverImage: 'Cover image',
         cardLayout: 'Card layout', articleImages: 'Article images', navigation: 'Dataset tabs',
+        datasetHeader: 'Dataset header',
+        filterbarContentTopSpace: 'Space above the header icon',
+        filterbarContentTopSpaceHint: 'Empty space between the dataset tabs and the header icon, on every dataset.',
         save: 'Save site defaults', saving: 'Saving…', saved: 'Settings saved.', saveFailed: 'Saving failed.',
         ovalX: 'Oval width', ovalY: 'Oval height', ovalPositionY: 'Oval vertical position',
         centerOpacity: 'Centre opacity', midOpacity: 'Mid opacity', edgeOpacity: 'Edge opacity',
@@ -50,6 +55,9 @@ export const DATASET_COVER_PALETTE_COPY = Object.freeze({
         themeGroup: 'Valittu teema', sharedGroup: 'Molemmille teemoille yhteiset',
         backgroundCover: 'Tausta- ja kansikuva', backgroundImage: 'Taustakuva', coverImage: 'Kansikuva',
         cardLayout: 'Korttien asettelu', articleImages: 'Artikkelikuvat', navigation: 'Aineistovälilehdet',
+        datasetHeader: 'Aineiston otsikkoalue',
+        filterbarContentTopSpace: 'Tyhjä tila otsikkokuvakkeen yläpuolella',
+        filterbarContentTopSpaceHint: 'Tyhjä tila aineistovälilehtien ja otsikkokuvakkeen välissä, kaikissa aineistoissa.',
         save: 'Tallenna sivuston oletukset', saving: 'Tallennetaan…', saved: 'Asetukset tallennettu.', saveFailed: 'Tallennus epäonnistui.',
         ovalX: 'Ovaalin leveys', ovalY: 'Ovaalin korkeus', ovalPositionY: 'Ovaalin pystysijainti',
         centerOpacity: 'Keskustan peittävyys', midOpacity: 'Keskialueen peittävyys', edgeOpacity: 'Reunan peittävyys',
@@ -82,5 +90,17 @@ export const DATASET_COVER_PALETTE_COPY = Object.freeze({
         activeTabGlowIntensity: 'Aktiivisen välilehden hohdon voimakkuus',
         activeTabGlowWidth: 'Aktiivisen välilehden hohdon leveys',
         activeTabGlowBlur: 'Aktiivisen välilehden hohdon sumennus', brandColor: 'Sivuston brändiväri',
+    }),
+    // Chinese (ch) and Cantonese (yue) are still partial: the keys below are
+    // translated and every other label falls back to the English dictionary.
+    ch: Object.freeze({
+        datasetHeader: '数据集标题区',
+        filterbarContentTopSpace: '标题图标上方的留白',
+        filterbarContentTopSpaceHint: '数据集标签页与标题图标之间的留白，适用于所有数据集。',
+    }),
+    yue: Object.freeze({
+        datasetHeader: '資料集標題區',
+        filterbarContentTopSpace: '標題圖示上面嘅留白',
+        filterbarContentTopSpaceHint: '資料集分頁同標題圖示之間嘅留白，適用於所有資料集。',
     }),
 });
