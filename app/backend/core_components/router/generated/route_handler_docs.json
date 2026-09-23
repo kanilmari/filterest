@@ -111,6 +111,7 @@
   "media_library.AttachHandler": "AttachHandler links one existing image to an existing editable parent.",
   "media_library.DetachHandler": "DetachHandler removes one exact use; it never removes physical image bytes.",
   "media_library.ListHandler": "ListHandler returns only authorized candidates; filtering precedes the bounded page. No global counts, invisible filenames, storage journal, or captions leak.",
+  "missing_media_check.AdminMissingMediaCheckHandler": "AdminMissingMediaCheckHandler reads the current state (GET) and runs or reconfigures the check (POST). It never repairs or deletes anything.",
   "payment_gateway.CreatePaymentHandler": "CreatePaymentHandler handles POST /api/payments/create",
   "payment_gateway.GetPaymentStatusHandler": "GetPaymentStatusHandler handles GET /api/payments/:token or /api/payments/:token/status",
   "payment_gateway.WebhookHandler": "WebhookHandler handles POST /api/payments/webhook",

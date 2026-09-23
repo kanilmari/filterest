@@ -192,6 +192,20 @@ func coerceStorageReferenceToInt64(value interface{}) (int64, bool) {
 	}
 }
 
+// ResolveSharedAssetStorageLocation exposes the canonical mapping from a stored
+// asset reference to its live storage coordinates, so readers such as the
+// missing-media-files check resolve a path exactly the way deletion does.
+// It accepts the retired flat filename form (`<table_uid>_<row_id>_<child_id>.ext`)
+// as well as a structured `<table_uid>/<row_id>/...` reference, and falls back to
+// the caller's parent coordinates when the value carries none of its own.
+func ResolveSharedAssetStorageLocation(
+	storedFilename string,
+	defaultTableUID string,
+	defaultRowID int64,
+) (string, int64, string) {
+	return resolveSharedAssetStorageLocation(storedFilename, defaultTableUID, defaultRowID)
+}
+
 func resolveSharedAssetStorageLocation(
 	storedFilename string,
 	defaultTableUID string,

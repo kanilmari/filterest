@@ -35,6 +35,7 @@ import (
 	"easelect/backend/core_components/event_bus"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	lang "easelect/backend/core_components/lang"
+	missing_media_check "easelect/backend/core_components/missing_media_check"
 	productidentity "easelect/backend/core_components/product_identity"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/symbol_registry"
@@ -241,6 +242,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/check-media-rows", system_table_tools.CheckMediaRowFoldersHandler, "system_table_tools.CheckMediaRowFoldersHandler", http.MethodGet)
 	functionRegisterHandler("/api/check-media-subfolders", system_table_tools.CheckMediaSubfoldersHandler, "system_table_tools.CheckMediaSubfoldersHandler", http.MethodGet)
 	functionRegisterHandler("/api/fix-media-subfolders", system_table_tools.FixMediaSubfoldersHandler, "system_table_tools.FixMediaSubfoldersHandler", http.MethodPost)
+	functionRegisterHandler("/api/admin/missing-media-check", missing_media_check.AdminMissingMediaCheckHandler, "missing_media_check.AdminMissingMediaCheckHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/check-db-consistency", system_table_tools.CheckDatabaseConsistencyHandler, "system_table_tools.CheckDatabaseConsistencyHandler", http.MethodGet)
 	functionRegisterHandler("/api/fix-db-consistency", system_table_tools.FixDatabaseConsistencyHandler, "system_table_tools.FixDatabaseConsistencyHandler", http.MethodPost)
 	functionRegisterHandler("/api/log-retention/preview", system_table_tools.PreviewLogRetentionHandler, "system_table_tools.PreviewLogRetentionHandler", http.MethodGet)

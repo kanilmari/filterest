@@ -4,6 +4,7 @@
 // Exists to let admins repair missing media directories and thumbnails from one screen.
 
 import { endpoint_router } from '../endpoints/endpoint_router.js';
+import { generate_missing_media_check_panel } from './missing_media_check_panel.js';
 
 /**
  * Generoi media-alikansioiden korjausnäkymän annettuun containeriin.
@@ -352,6 +353,10 @@ export async function generate_fix_media_subfolders_view(container) {
             allResults.setAttribute('aria-busy', 'false');
         }
     });
+
+    // The same screen now also answers the other media question: not "is a folder
+    // missing" but "is the file a row points at still there at all".
+    await generate_missing_media_check_panel(frame);
 }
 
 /**

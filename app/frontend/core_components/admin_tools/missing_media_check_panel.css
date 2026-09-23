@@ -1,0 +1,136 @@
+/* missing_media_check_panel.css
+ * Styles the missing-media-files section of the media maintenance administration screen.
+ * Between the panel's generated elements and the shared theme variables.
+ * Exists so the report stays readable in both themes and down to a phone-width screen.
+ */
+
+.missing-media-check {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 2px solid var(--border-subtle);
+    color: var(--text-main);
+}
+
+.missing-media-check__description {
+    margin: 4px 0 12px;
+    color: var(--text-muted);
+    max-width: 70ch;
+}
+
+.missing-media-check__settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: flex-end;
+    margin-bottom: 12px;
+}
+
+.missing-media-check__field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.missing-media-check__field--checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.missing-media-check__field input[type='number'] {
+    min-width: 8ch;
+    max-width: 14ch;
+    padding: 4px 6px;
+    color: var(--text-main);
+    background-color: var(--input_bg_color, var(--bg-surface));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border_radius_small, 4px);
+}
+
+.missing-media-check__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.missing-media-check__status {
+    min-height: 1.5em;
+}
+
+.missing-media-check__summary-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 2px 0;
+}
+
+.missing-media-check__summary-line span {
+    color: var(--text-muted);
+}
+
+.missing-media-check__muted {
+    color: var(--text-muted);
+}
+
+.missing-media-check__ok {
+    color: var(--text-main);
+}
+
+.missing-media-check__notice {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-left: 3px solid var(--color-brand);
+    background-color: var(--bg-surface-hover);
+    max-width: 70ch;
+}
+
+.missing-media-check__error {
+    color: var(--color-error);
+}
+
+.missing-media-check__missing-list {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    max-height: 22em;
+    overflow-y: auto;
+}
+
+.missing-media-check__missing-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.missing-media-check__missing-identity {
+    font-weight: 600;
+}
+
+.missing-media-check__missing-list code {
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.missing-media-check__tag {
+    font-size: 0.8em;
+    padding: 1px 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border_radius_small, 4px);
+    color: var(--text-muted);
+}
+
+@media (width <= 480px) {
+    .missing-media-check__settings {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .missing-media-check__field input[type='number'] {
+        max-width: 100%;
+    }
+}

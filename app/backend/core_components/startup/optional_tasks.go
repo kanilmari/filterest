@@ -13,6 +13,7 @@ import (
 	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
+	missing_media_check "easelect/backend/core_components/missing_media_check"
 	"easelect/backend/core_components/runtimepaths"
 	"easelect/backend/core_components/system_table_tools"
 )
@@ -64,6 +65,7 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	EnsureAppDBCompatibilityLangKeys(backend.Db)
 	EnsureLoginPageLangKeys(backend.Db)
 	EnsureViewSelectorLangKeys(backend.Db)
+	EnsureMissingMediaCheckLangKeys(backend.Db)
 	EnsureFilterestBusinessID(backend.Db)
 
 	EnsureLangEmbeddingTables()
@@ -83,6 +85,10 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 		orphanCount, deOrphaned := system_table_tools.MarkOrphanLangKeys()
 		log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
 	}
+	// The missing-media-files check reads storage, so it starts only after the
+	// rest of startup maintenance is done, and it never blocks the server.
+	missing_media_check.StartStartupRun()
+
 	log.Println("[STARTUP] Optional maintenance completed.")
 }
 
