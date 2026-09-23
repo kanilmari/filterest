@@ -337,12 +337,35 @@ func TestWithAccessControl_DevModeAllowsPermittedAdminSchemaRequests(t *testing.
 	}
 }
 
-// TestWithAccessControl_AnonymousUser_LoginRequired redirects anonymous users
-// to /login when login_to_browse = true.
+// expectSignInEndedAnswer asserts the machine-readable answer a data request gets
+// when the sign-in can no longer be accepted. A redirect here would be followed
+// silently by the browser, handing the caller a web page with a success status.
+func expectSignInEndedAnswer(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	if rr.Code == http.StatusSeeOther {
+		t.Fatalf("a data request was redirected to %q instead of being told the sign-in ended",
+			rr.Header().Get("Location"))
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusForbidden)
+	}
+	var body map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode answer: %v", err)
+	}
+	if body["auth_failure"] != true {
+		t.Fatalf("the answer does not say the sign-in ended: %#v", body)
+	}
+}
+
+// TestWithAccessControl_AnonymousUser_LoginRequired tells an anonymous data
+// request that it needs a sign-in when login_to_browse = true.
 func TestWithAccessControl_AnonymousUser_LoginRequired(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, acMockConfig{loginToBrowse: true})
 	req := buildReq(t, store, http.MethodGet, "/api/get-results", nil, nil, "")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -351,12 +374,7 @@ func TestWithAccessControl_AnonymousUser_LoginRequired(t *testing.T) {
 	if called {
 		t.Error("handler must not be called for anonymous user when login required")
 	}
-	if rr.Code != http.StatusSeeOther {
-		t.Errorf("status: got %d, want %d (redirect)", rr.Code, http.StatusSeeOther)
-	}
-	if loc := rr.Header().Get("Location"); loc != "/login" {
-		t.Errorf("Location: got %q, want /login", loc)
-	}
+	expectSignInEndedAnswer(t, rr)
 }
 
 func TestWithAccessControl_AnonymousDocument_LoginRequiredExplainsSessionEnd(t *testing.T) {
@@ -387,6 +405,8 @@ func TestWithAccessControl_StaleGuestSession_LoginRequired(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, acMockConfig{loginToBrowse: true})
 	req := buildReq(t, store, http.MethodGet, "/api/get-results", 1, nil, "")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -395,12 +415,7 @@ func TestWithAccessControl_StaleGuestSession_LoginRequired(t *testing.T) {
 	if called {
 		t.Error("handler must not be called for stale guest session when login required")
 	}
-	if rr.Code != http.StatusSeeOther {
-		t.Errorf("status: got %d, want %d (redirect)", rr.Code, http.StatusSeeOther)
-	}
-	if loc := rr.Header().Get("Location"); loc != "/login" {
-		t.Errorf("Location: got %q, want /login", loc)
-	}
+	expectSignInEndedAnswer(t, rr)
 }
 
 // TestWithAccessControl_AnonymousUser_GuestAllowed assigns a guest session

@@ -326,8 +326,10 @@ func TestRootHandlerClearsStaleAuthenticatedSessionBeforeRendering(t *testing.T)
 	if rr.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
 	}
-	if got := rr.Header().Get("Location"); got != "/login" {
-		t.Fatalf("Location = %q, want /login", got)
+	// A sign-in that was revoked is not the same as never having signed in, so
+	// the login page reached this way is told to explain why it appeared.
+	if got := rr.Header().Get("Location"); got != "/login?auth_notice=session-ended&redirect=%2F" {
+		t.Fatalf("Location = %q, want the login page with its explanation", got)
 	}
 	responseCookies := rr.Result().Cookies()
 	if len(responseCookies) == 0 {

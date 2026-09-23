@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/permissions"
 	productidentity "easelect/backend/core_components/product_identity"
+	"easelect/backend/core_components/session_expiry"
 	"easelect/backend/pipeline"
 )
 
@@ -233,16 +233,17 @@ func guestCanReadDataset(name string, guestUserID int) bool {
 	return allowed
 }
 
+// redirectProtectedDatasetRequestToLogin sends a page navigation to the login
+// page with the explanation of why it appeared. The address and its markers are
+// built by easelect/backend/core_components/session_expiry, which owns that one
+// login address for the whole application.
 func redirectProtectedDatasetRequestToLogin(w http.ResponseWriter, r *http.Request) {
 	redirectTarget := r.URL.RequestURI()
 	if redirectTarget == "" {
 		redirectTarget = "/"
 	}
 
-	query := url.Values{}
-	query.Set("auth_notice", "session-ended")
-	query.Set("redirect", redirectTarget)
-	http.Redirect(w, r, "/login?"+query.Encode(), http.StatusSeeOther)
+	http.Redirect(w, r, session_expiry.LoginPathWithSessionEndedNotice(redirectTarget), http.StatusSeeOther)
 }
 
 func shouldRedirectGuestDeepLinkToLogin(r *http.Request, firstSeg string, statErr error, firstSegIsDataset bool, guestUserID int) bool {

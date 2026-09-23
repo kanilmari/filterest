@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 
@@ -20,6 +19,7 @@ import (
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/permissions"
+	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
 
 	"github.com/google/uuid"
@@ -166,50 +166,23 @@ func routeTableIdentifiersMatch(tableName, tableUID string) (bool, error) {
 	return matches, err
 }
 
-const sessionEndedLoginNotice = "session-ended"
-
-func isBrowserDocumentNavigation(r *http.Request) bool {
-	if r.Method != http.MethodGet || strings.HasPrefix(r.URL.Path, "/api/") {
-		return false
-	}
-	if !strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/html") {
-		return false
-	}
-	fetchMode := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Mode")))
-	if fetchMode != "" && fetchMode != "navigate" {
-		return false
-	}
-	return true
-}
-
-// redirectBrowserDocumentToLogin turns an unauthenticated page navigation into
-// a recoverable browser flow while leaving API behavior unchanged. The fixed
-// notice code is rendered as localized copy by the login page and removed from
-// the address bar after it has been consumed.
-func redirectBrowserDocumentToLogin(w http.ResponseWriter, r *http.Request, session *sessions.Session) bool {
-	if !isBrowserDocumentNavigation(r) {
-		return false
-	}
-
-	returnPath := r.URL.RequestURI()
-	if returnPath == "" || strings.HasPrefix(returnPath, "/login") {
-		returnPath = "/"
-	}
-	session.Values["redirect_after_login"] = returnPath
-	if err := session.Save(r, w); err != nil {
-		log.Printf("\033[31m[WithAccessControl] browser-login redirect session save failed: %v\033[0m", err)
-	}
-	query := url.Values{}
-	query.Set("auth_notice", sessionEndedLoginNotice)
-	query.Set("redirect", returnPath)
-	http.Redirect(w, r, "/login?"+query.Encode(), http.StatusSeeOther)
-	return true
-}
-
-// redirectGuestDocumentToLogin scopes the shared browser redirect to a denied
-// guest shell. Authenticated authorization denials must remain ordinary 403s.
+// redirectGuestDocumentToLogin turns a denied guest page navigation into a
+// recoverable browser flow. The shared responder in
+// easelect/backend/core_components/session_expiry owns both the decision of what
+// counts as a page navigation and the login address that explains itself.
+// A signed-in person's authorization denial must remain an ordinary 403, so this
+// path is deliberately limited to the guest identity.
 func redirectGuestDocumentToLogin(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int) bool {
-	return userID == 1 && redirectBrowserDocumentToLogin(w, r, session)
+	if userID != 1 || !session_expiry.IsBrowserDocumentNavigation(r) {
+		return false
+	}
+	requireSignIn(w, r, session, "a guest opened a page that needs a sign-in")
+	return true
+}
+
+// requireSignIn is this stage's one call into the shared ended-sign-in answer.
+func requireSignIn(w http.ResponseWriter, r *http.Request, session *sessions.Session, reason string) {
+	session_expiry.RespondSignInNoLongerValid(w, r, session, reason)
 }
 
 func denyRouteAccess(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, message string) {
@@ -324,7 +297,7 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 		session, err := e_sessions.GetOrCreateSession(w, r)
 		if err != nil {
 			log.Printf("\033[31m[WithAccessControl][%s] session lookup failed: %v\033[0m", handlerName, err)
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			requireSignIn(w, r, nil, "the session could not be read")
 			return
 		}
 
@@ -347,15 +320,8 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 		userIDVal, ok := session.Values["user_id"]
 		if !ok {
 			if loginToBrowse {
-				log.Printf("\033[31m[WithAccessControl][%s] Anonymous user -> redirecting to login page\033[0m", handlerName)
-				if redirectBrowserDocumentToLogin(w, r, session) {
-					return
-				}
-				session.Values["redirect_after_login"] = r.URL.RequestURI()
-				if errSave := session.Save(r, w); errSave != nil {
-					log.Printf("\033[31m[WithAccessControl][%s] session save failed: %v\033[0m", handlerName, errSave)
-				}
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				log.Printf("\033[31m[WithAccessControl][%s] anonymous visitor on a site that requires a sign-in\033[0m", handlerName)
+				requireSignIn(w, r, session, "no sign-in on a site that requires one")
 				return
 			}
 
@@ -367,23 +333,12 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 		userID, ok2 := userIDVal.(int)
 		if !ok2 {
 			log.Printf("\033[31m[WithAccessControl][%s] user_id is not int -> no permissions\033[0m", handlerName)
-			httpresponse.RespondWithAuthFailure(w, "403 - Forbidden")
+			requireSignIn(w, r, session, "the session's user identity is unreadable")
 			return
 		}
 		if userID == 1 && loginToBrowse {
-			log.Printf("\033[31m[WithAccessControl][%s] Guest session blocked because login_to_browse=true -> redirecting to login page\033[0m", handlerName)
-			delete(session.Values, "authenticated")
-			delete(session.Values, "user_id")
-			delete(session.Values, "username")
-			delete(session.Values, "user_role")
-			if redirectBrowserDocumentToLogin(w, r, session) {
-				return
-			}
-			session.Values["redirect_after_login"] = r.URL.RequestURI()
-			if errSave := session.Save(r, w); errSave != nil {
-				log.Printf("\033[31m[WithAccessControl][%s] guest-session clear failed: %v\033[0m", handlerName, errSave)
-			}
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			log.Printf("\033[31m[WithAccessControl][%s] guest browsing is not allowed on this site\033[0m", handlerName)
+			requireSignIn(w, r, session, "guest browsing is not allowed on this site")
 			return
 		}
 

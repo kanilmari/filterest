@@ -12,6 +12,7 @@ import (
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
+	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
 	"github.com/google/uuid"
@@ -64,6 +65,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authShellEntry := isAuthShellEntryRequest(r)
+	signInWasJustRevoked := false
 	userIDVal, onkoKayttaja := session.Values["user_id"]
 	if onkoKayttaja {
 		if userID, castOK := userIDVal.(int); castOK && userID > 1 {
@@ -87,6 +89,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				userIDVal = nil
 				onkoKayttaja = false
+				// This browser arrived with a sign-in that has since been revoked
+				// or superseded, which is different from never having signed in.
+				// A login page reached this way should say why it appeared.
+				signInWasJustRevoked = true
 			}
 		}
 	}
@@ -102,6 +108,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				redirectProtectedDatasetRequestToLogin(w, r)
+				return
+			}
+			if signInWasJustRevoked {
+				http.Redirect(w, r, session_expiry.LoginPathWithSessionEndedNotice("/"), http.StatusSeeOther)
 				return
 			}
 			http.Redirect(w, r, "/login", http.StatusSeeOther)

@@ -11,6 +11,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
@@ -18,26 +19,29 @@ import (
 // It bridges session identity, system_users.admin_access_allowed, and downstream
 // admin handlers, seeding an admin request actor so the later transaction stage
 // uses the intended role-specific pool.
+//
+// The two outcomes stay apart on purpose. An unusable session is an ended sign-in
+// and goes through session_expiry.RespondSignInNoLongerValid, which takes the
+// person to sign in. A readable, signed-in person without administrator access is
+// an ordinary permission denial and keeps its plain refusal.
 func WithAdminUserCheck(innerHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, err := e_sessions.GetOrCreateSession(w, r)
 		if err != nil {
 			log.Printf("\033[31m[WithAdminUserCheck] session error: %v\033[0m", err)
-			httpresponse.RespondWithAuthFailure(w, "403 - Forbidden")
+			session_expiry.RespondSignInNoLongerValid(w, r, nil, "admin stage could not read the session")
 			return
 		}
 
 		userIDVal, ok := session.Values["user_id"]
 		if !ok {
-			log.Printf("\033[31m[WithAdminUserCheck] no user_id in session\033[0m")
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			session_expiry.RespondSignInNoLongerValid(w, r, session, "no sign-in on an administrator route")
 			return
 		}
 
 		userID, ok := userIDVal.(int)
 		if !ok {
-			log.Printf("\033[31m[WithAdminUserCheck] user_id is not int\033[0m")
-			httpresponse.RespondWithAuthFailure(w, "403 - Forbidden")
+			session_expiry.RespondSignInNoLongerValid(w, r, session, "the session's user identity is unreadable")
 			return
 		}
 

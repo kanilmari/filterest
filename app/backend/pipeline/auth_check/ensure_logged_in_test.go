@@ -45,6 +45,43 @@ func setupTestStore(t *testing.T) *gorillaSessions.CookieStore {
 	return testStore
 }
 
+// dataRequest marks a request as a script's background request for data, which
+// is what every call the application makes on its own looks like.
+func dataRequest(request *http.Request) *http.Request {
+	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Sec-Fetch-Mode", "cors")
+	return request
+}
+
+// pageNavigation marks a request as a person opening or following an address.
+func pageNavigation(request *http.Request) *http.Request {
+	request.Header.Set("Accept", "text/html,application/xhtml+xml")
+	request.Header.Set("Sec-Fetch-Mode", "navigate")
+	return request
+}
+
+// expectSignInEndedAnswer asserts the machine-readable answer a data request gets
+// when the sign-in can no longer be accepted. The earlier answer was a redirect
+// to the login page, which a browser follows silently, so the caller received a
+// web page with a success status instead of something it could act on.
+func expectSignInEndedAnswer(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	if rr.Code == http.StatusSeeOther {
+		t.Fatalf("a data request was redirected to %q instead of being told the sign-in ended",
+			rr.Header().Get("Location"))
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusForbidden)
+	}
+	var body map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode answer: %v", err)
+	}
+	if body["auth_failure"] != true {
+		t.Fatalf("the answer does not say the sign-in ended: %#v", body)
+	}
+}
+
 func buildReq(t *testing.T, store *gorillaSessions.CookieStore, method, target string, userID interface{}) *http.Request {
 	t.Helper()
 	cookieW := httptest.NewRecorder()
@@ -210,7 +247,7 @@ func setupMockDB(t *testing.T, cfg mockConfig) {
 func TestEnsureLoggedIn_AnonymousUser_LoginRequired(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, mockConfig{loginToBrowse: true})
-	req := buildReq(t, store, http.MethodGet, "/api/get-results", nil)
+	req := dataRequest(buildReq(t, store, http.MethodGet, "/api/get-results", nil))
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -219,11 +256,29 @@ func TestEnsureLoggedIn_AnonymousUser_LoginRequired(t *testing.T) {
 	if called {
 		t.Error("handler must not be called for anonymous user when login is required")
 	}
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusSeeOther)
+	expectSignInEndedAnswer(t, rr)
+}
+
+// A person opening an address still reaches the login page, and it now carries
+// the explanation of why it appeared.
+func TestEnsureLoggedIn_AnonymousPageNavigation_ReachesLoginWithNotice(t *testing.T) {
+	store := setupTestStore(t)
+	setupMockDB(t, mockConfig{loginToBrowse: true})
+	req := pageNavigation(buildReq(t, store, http.MethodGet, "/reports", nil))
+	rr := httptest.NewRecorder()
+	called := false
+
+	EnsureLoggedIn(noopHandler(&called))(rr, req)
+
+	if called {
+		t.Error("handler must not be called for anonymous user when login is required")
 	}
-	if loc := rr.Header().Get("Location"); loc != "/login" {
-		t.Fatalf("Location: got %q, want /login", loc)
+	location := rr.Header().Get("Location")
+	if rr.Code != http.StatusSeeOther || !strings.HasPrefix(location, "/login?") {
+		t.Fatalf("page navigation result: status %d, Location %q", rr.Code, location)
+	}
+	if !strings.Contains(location, "auth_notice=session-ended") {
+		t.Fatalf("the login page is not told to explain itself: %q", location)
 	}
 }
 
@@ -255,7 +310,7 @@ func TestEnsureLoggedIn_AnonymousUser_GuestAllowed(t *testing.T) {
 func TestEnsureLoggedIn_StaleGuestSession_LoginRequired(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, mockConfig{loginToBrowse: true})
-	req := buildReq(t, store, http.MethodGet, "/api/get-results", 1)
+	req := dataRequest(buildReq(t, store, http.MethodGet, "/api/get-results", 1))
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -264,12 +319,7 @@ func TestEnsureLoggedIn_StaleGuestSession_LoginRequired(t *testing.T) {
 	if called {
 		t.Error("handler must not be called for stale guest session when login is required")
 	}
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusSeeOther)
-	}
-	if loc := rr.Header().Get("Location"); loc != "/login" {
-		t.Fatalf("Location: got %q, want /login", loc)
-	}
+	expectSignInEndedAnswer(t, rr)
 	sess := savedSessionFromResponse(t, store, "/api/get-results", rr)
 	if _, ok := sess.Values["user_id"]; ok {
 		t.Fatalf("expected user_id to be cleared, got %#v", sess.Values["user_id"])
@@ -279,7 +329,7 @@ func TestEnsureLoggedIn_StaleGuestSession_LoginRequired(t *testing.T) {
 func TestEnsureLoggedIn_AnonymousUser_ConfigErrorFailsClosed(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, mockConfig{loginToBrowseErr: true})
-	req := buildReq(t, store, http.MethodGet, "/api/get-results", nil)
+	req := dataRequest(buildReq(t, store, http.MethodGet, "/api/get-results", nil))
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -288,17 +338,12 @@ func TestEnsureLoggedIn_AnonymousUser_ConfigErrorFailsClosed(t *testing.T) {
 	if called {
 		t.Error("handler must not be called when login_to_browse lookup fails")
 	}
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusSeeOther)
-	}
-	if loc := rr.Header().Get("Location"); loc != "/login" {
-		t.Fatalf("Location: got %q, want /login", loc)
-	}
+	expectSignInEndedAnswer(t, rr)
 }
 
 func TestEnsureLoggedIn_WrongTypeUserID(t *testing.T) {
 	store := setupTestStore(t)
-	req := buildReq(t, store, http.MethodGet, "/api/get-results", "wrong-type")
+	req := dataRequest(buildReq(t, store, http.MethodGet, "/api/get-results", "wrong-type"))
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -339,15 +384,16 @@ func TestEnsureLoggedIn_AuthenticatedUserUsesConfidentialGenerationRead(t *testi
 func TestEnsureLoggedIn_StaleAuthenticatedSessionIsCleared(t *testing.T) {
 	store := setupTestStore(t)
 	setupMockDB(t, mockConfig{loginToBrowse: true, authGeneration: 2})
-	req := buildReq(t, store, http.MethodGet, "/api/get-results", 42)
+	req := dataRequest(buildReq(t, store, http.MethodGet, "/api/get-results", 42))
 	rr := httptest.NewRecorder()
 	called := false
 
 	EnsureLoggedIn(noopHandler(&called))(rr, req)
 
-	if called || rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" {
-		t.Fatalf("stale session result: called=%v status=%d location=%q", called, rr.Code, rr.Header().Get("Location"))
+	if called {
+		t.Fatal("handler must not be called for a stale authenticated session")
 	}
+	expectSignInEndedAnswer(t, rr)
 	session := savedSessionFromResponse(t, store, "/api/get-results", rr)
 	if _, exists := session.Values["user_id"]; exists {
 		t.Fatal("stale authenticated identity was not cleared")

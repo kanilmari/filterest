@@ -40,14 +40,23 @@ function shownNotices() {
     }));
 }
 
-function buildResponse(body, { ok = true, status = 200, statusText = 'OK', contentType = 'application/json' } = {}) {
+function buildResponse(body, {
+    ok = true,
+    status = 200,
+    statusText = 'OK',
+    contentType = 'application/json',
+    redirected = false,
+    url = 'https://example.test/api/get-results',
+} = {}) {
     const payload = typeof body === 'string' ? body : body == null ? '' : JSON.stringify(body);
     return {
         ok,
         status,
         statusText,
+        redirected,
+        url,
         clone() {
-            return buildResponse(payload, { ok, status, statusText, contentType });
+            return buildResponse(payload, { ok, status, statusText, contentType, redirected, url });
         },
         text: async () => payload,
         json: async () => (payload ? JSON.parse(payload) : null),
@@ -58,6 +67,9 @@ function buildResponse(body, { ok = true, status = 200, statusText = 'OK', conte
         },
     };
 }
+
+/** The application shell a followed redirect to the login page hands back. */
+const LOGIN_PAGE_DOCUMENT = '<!DOCTYPE html><html lang="en"><head><title>Sign in</title></head><body></body></html>';
 
 describe('api_pipeline', () => {
     beforeEach(() => {
@@ -165,6 +177,52 @@ describe('api_pipeline', () => {
         ]);
         expect(showAccessDeniedToastMock).toHaveBeenCalledWith('updateRow');
         expect(showErrorToastMock).not.toHaveBeenCalled();
+    });
+
+    // The reported failure: a request for the person's rights was answered with a
+    // redirect the browser followed to the application shell, so the caller got a
+    // web page with a success status, read no rights out of it, and left the
+    // person looking at an interface with nothing in it and no explanation.
+    test('treats a data request answered with a page as an ended sign-in', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(LOGIN_PAGE_DOCUMENT, {
+            contentType: 'text/html; charset=utf-8',
+            redirected: true,
+            url: 'https://example.test/',
+        })));
+        const mod = await loadModule();
+
+        const result = await mod.runApiPipeline({ routeName: 'fetchUserPermissions' });
+
+        expect(result).toMatchObject({ abort: true, reason: 'auth_redirect' });
+        expect(requestLoginRedirectMock).toHaveBeenCalledWith({ authenticationFailure: true });
+        expect(showAccessDeniedToastMock).not.toHaveBeenCalled();
+    });
+
+    test('leaves a page answer to its caller when the caller asked for the raw response', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(LOGIN_PAGE_DOCUMENT, {
+            contentType: 'text/html; charset=utf-8',
+            redirected: true,
+            url: 'https://example.test/',
+        })));
+        const mod = await loadModule();
+
+        const result = await mod.runApiPipeline({ routeName: 'logout', returnResponse: true });
+
+        expect(result.abort).toBeUndefined();
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
+    });
+
+    test('leaves an ordinary redirect that stayed on an API address alone', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse({ datasets: [] }, {
+            redirected: true,
+            url: 'https://example.test/api/datasets',
+        })));
+        const mod = await loadModule();
+
+        const result = await mod.runApiPipeline({ routeName: 'datasetNames' });
+
+        expect(result.abort).toBeUndefined();
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
     });
 
     test.each(['login', 'logout'])('keeps a %s shell on the public page after a permission-only 403', async (buttonState) => {

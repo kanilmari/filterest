@@ -1,6 +1,6 @@
 // ensure_logged_in.go
 // Pipeline stage that enforces authentication for protected routes.
-// Bridges the session store and downstream handlers, redirecting or returning 401 as needed.
+// Bridges the session store and downstream handlers, answering an ended sign-in through one shared responder.
 // Exists to gate protected routes on login status, with guest-user fallback when login_to_browse is false.
 package auth_check
 
@@ -12,19 +12,25 @@ import (
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
+	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
 // EnsureLoggedIn enforces that protected pipeline routes have an authenticated session.
 // It bridges session state, the login_to_browse runtime setting, and downstream
 // handlers so anonymous users either become guests when browsing is public or
-// get redirected/marked as auth failures when login is required.
+// are told, in one agreed shape, that they have to sign in.
+//
+// Every refusal here goes through session_expiry.RespondSignInNoLongerValid: a
+// page navigation reaches the login page with its explanation, and a background
+// request gets a machine-readable authentication failure rather than the login
+// page's own HTML with a success status.
 func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, err := e_sessions.GetOrCreateSession(w, r)
 		if err != nil {
 			log.Printf("\033[31m[EnsureLoggedIn] session lookup failed: %v\033[0m", err)
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			session_expiry.RespondSignInNoLongerValid(w, r, nil, "the session could not be read")
 			return
 		}
 
@@ -58,8 +64,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 			}
 
 			if loginToBrowse {
-				log.Printf("\033[31m[EnsureLoggedIn] anonymous user -> redirecting to login page\033[0m")
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				session_expiry.RespondSignInNoLongerValid(w, r, session, "no sign-in on a site that requires one")
 				return
 			}
 
@@ -77,8 +82,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 
 		userID, ok2 := user_id_val.(int)
 		if !ok2 {
-			log.Printf("\033[31m[EnsureLoggedIn] user_id is not int -> no permissions\033[0m")
-			httpresponse.RespondWithAuthFailure(w, "403 - Forbidden")
+			session_expiry.RespondSignInNoLongerValid(w, r, session, "the session's user identity is unreadable")
 			return
 		}
 
@@ -89,12 +93,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 				loginToBrowse = true
 			}
 			if loginToBrowse {
-				auth_generation.ClearIdentity(session)
-				if saveErr := session.Save(r, w); saveErr != nil {
-					log.Printf("\033[31m[EnsureLoggedIn] guest-session clear failed: %v\033[0m", saveErr)
-				}
-				log.Printf("\033[31m[EnsureLoggedIn] guest session blocked because login_to_browse=true -> redirecting to login page\033[0m")
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				session_expiry.RespondSignInNoLongerValid(w, r, session, "guest browsing is not allowed on this site")
 				return
 			}
 		}

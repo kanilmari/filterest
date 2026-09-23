@@ -11,6 +11,7 @@ import {
     resolveEndpointUrl,
     buildFetchOptions,
     isAuthFailure403,
+    isDataRequestAnsweredWithPage,
     isCsrfFailureResponse,
     createAuthError,
     createRateLimitError,
@@ -411,11 +412,20 @@ async function csrfRecoveryStage(ctx) {
 }
 
 /**
- * authRedirectStage — handles auth redirects for 401/403 responses.
+ * authRedirectStage — decides when an answer means "your sign-in has ended".
  * 401 always redirects to login (unless ctx.suppressAuthRedirect is set).
  * 403 redirects only when the backend sets auth_failure=true (via RespondWithAuthFailure).
  * All other 403s remain permission denials, independent of cached login state.
  * The error stage shows localized permission feedback unless the caller owns it.
+ *
+ * A data request that followed a redirect onto a page means the same thing. The
+ * server is not supposed to answer that way — see
+ * app/backend/core_components/session_expiry/session_expiry_responder.go — but if
+ * it ever does, the browser follows the redirect silently and the caller would
+ * receive a login page with a success status. Treating that as an ended sign-in
+ * is what keeps the person from being left with an interface that has nothing in
+ * it and no explanation. Callers that asked for the raw response own the answer
+ * themselves, so they are left alone.
  *
  * When ctx.suppressAuthRedirect is true, the stage still detects auth failures
  * and aborts the pipeline, but does NOT navigate to /login. This allows callers
@@ -423,6 +433,17 @@ async function csrfRecoveryStage(ctx) {
  */
 async function authRedirectStage(ctx) {
     const status = ctx.response.status;
+    if (!ctx.returnResponse && !ctx.stream && isDataRequestAnsweredWithPage(ctx.response)) {
+        console.warn(`[api_pipeline] ${ctx.routeName}: answered with a page, treating it as an ended sign-in`);
+        if (!ctx.suppressAuthRedirect) {
+            requestLoginRedirect({ authenticationFailure: true });
+        }
+        return {
+            abort: true,
+            reason: 'auth_redirect',
+            error: createAuthError(status, ctx.routeName),
+        };
+    }
     if (status === 401) {
         if (!ctx.suppressAuthRedirect) {
             requestLoginRedirect({ authenticationFailure: true });

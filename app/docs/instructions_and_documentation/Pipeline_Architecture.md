@@ -283,20 +283,52 @@ The backend uses a **structured JSON field** to distinguish session/auth failure
 The `auth_failure` field uses `omitempty` — it only appears in the JSON when `true`.
 
 **When adding new 403 responses in Go code:**
-- If it's a **session/auth problem** (corrupt session, missing user_id) → use `httpresponse.RespondWithAuthFailure(w, "message")`
+- If it's a **session/auth problem** (an ended or revoked sign-in, a lost device or fingerprint binding, a corrupt session, a missing user_id) → call `session_expiry.RespondSignInNoLongerValid(w, r, session, reason)`
 - If it's a **business-logic permission denial** → use `httpresponse.RespondWithError(w, http.StatusForbidden, "message")`
 - **No frontend changes needed.** The frontend only redirects when `auth_failure === true`.
 
-**Current auth-failure call sites** (the only places using `RespondWithAuthFailure`):
-
-| File | Reason |
-|------|--------|
-| `ensure_logged_in.go` | user_id in session is not an int (corrupt session) |
-| `admin_user_check.go` (2 sites) | session error / user_id not int |
-| `access_control.go` | user_id not int |
-
 This distinction prevents a permission denial from being misread as a broken
 session and triggering an unnecessary login redirect.
+
+### An ended sign-in is never answered with the login page
+
+`app/backend/core_components/session_expiry/session_expiry_responder.go` owns the
+one answer the application gives when a request arrives with a sign-in the server
+can no longer accept. Every authentication stage calls it rather than deciding for
+itself:
+
+| Stage | Calls it when |
+|-------|---------------|
+| `auth_check/ensure_logged_in.go` | no sign-in on a site that requires one, a blocked guest session, an unreadable session or user identity |
+| `fingerprint_check/fingerprint_check.go` | the browser's fingerprint binding is missing or does not match |
+| `device_id_check/device_id_check.go` | the browser's device binding is missing or does not match |
+| `admin_check/admin_user_check.go` | the session cannot be read, or carries no readable user identity |
+| `access_control/access_control.go` | the same session problems, plus a guest opening a page that needs a sign-in |
+
+The responder does three things: it drops the ended sign-in from the session, so
+`GET /login` no longer sends an apparently signed-in visitor back to the page that
+just refused them; it sends a **page navigation** to
+`/login?auth_notice=session-ended&redirect=…`, which the login page turns into a
+sentence in the person's own language; and it answers **every other request** with
+`RespondWithAuthFailure`, so the application's own fetches get something they can
+act on.
+
+The rule they all follow is that a request for data is never answered with a
+redirect to a page. A browser follows such a redirect silently, and the caller
+receives the login page's HTML with status 200 — indistinguishable from real data.
+That is what once left a person with a top bar, no navigation and no explanation,
+because the reader of their access rights had quietly parsed a web page instead.
+
+The frontend states the same rule as a detector, in
+`isDataRequestAnsweredWithPage` in
+`app/frontend/core_components/pipeline/api_pipeline_helpers.js`: a response that
+followed a redirect off `/api/` and came back as markup is treated as an ended
+sign-in. It is a guard against this class of mistake returning, not a second
+implementation of the decision.
+
+An administrator route refusing a signed-in person without administrator access,
+and any other authorization denial, stay ordinary `RespondWithError` 403s. Those
+two cases must never get the same words or the same recovery.
 
 ---
 

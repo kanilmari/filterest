@@ -120,6 +120,37 @@ export function isAuthFailure403(bodyText) {
 }
 
 /**
+ * Checks whether a data request was answered with a page instead of data.
+ *
+ * The server's twin of this rule is
+ * app/backend/core_components/session_expiry/session_expiry_responder.go: when a
+ * sign-in can no longer be accepted, a background request must be told so in a
+ * form it can read, never handed the login page with a success status. A browser
+ * follows such a redirect silently, so the caller would otherwise parse an HTML
+ * document as if it were its data and quietly show an empty interface.
+ *
+ * This stays deliberately narrow: the response must have followed a redirect and
+ * landed on an address outside /api/ that returned markup. A route that answers
+ * an API address with markup, and a caller that asked for the raw response, are
+ * both untouched.
+ *
+ * @param {Response} response - The response the pipeline received
+ * @returns {boolean}
+ */
+export function isDataRequestAnsweredWithPage(response) {
+    if (!response || response.redirected !== true) return false;
+    const contentType = String(response.headers?.get?.('Content-Type') || '').toLowerCase();
+    if (!contentType.includes('text/html')) return false;
+    try {
+        // After a redirect, response.url is where the request actually ended up.
+        const finalPath = new URL(response.url).pathname;
+        return !finalPath.startsWith('/api/');
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Checks if a 403 response body indicates a CSRF-token mismatch or missing token.
  * Used to decide when the frontend may safely fetch a fresh token and retry once.
  *

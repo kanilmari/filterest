@@ -162,9 +162,15 @@ func setupMockDB(t *testing.T, cfg mockConfig) {
 	})
 }
 
-func TestWithAdminUserCheck_MissingUserIDRedirectsToLogin(t *testing.T) {
+// An administrator route asked for by a request with no sign-in is an ended
+// sign-in, not a permission denial. It used to be answered with a redirect to
+// the login page, which a browser follows silently, so the caller received a web
+// page with a success status instead of something it could act on.
+func TestWithAdminUserCheck_MissingUserIDTellsTheCallerTheSignInEnded(t *testing.T) {
 	store := setupTestStore(t)
 	req := buildReq(t, store, "/api/admin", nil)
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
 	rr := httptest.NewRecorder()
 	called := false
 
@@ -173,11 +179,19 @@ func TestWithAdminUserCheck_MissingUserIDRedirectsToLogin(t *testing.T) {
 	if called {
 		t.Error("handler must not be called when user_id is missing")
 	}
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusSeeOther)
+	if rr.Code == http.StatusSeeOther {
+		t.Fatalf("the data request was redirected to %q instead of being told the sign-in ended",
+			rr.Header().Get("Location"))
 	}
-	if loc := rr.Header().Get("Location"); loc != "/login" {
-		t.Fatalf("Location: got %q, want /login", loc)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusForbidden)
+	}
+	var body map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode answer: %v", err)
+	}
+	if body["auth_failure"] != true {
+		t.Fatalf("the answer does not say the sign-in ended: %#v", body)
 	}
 }
 
