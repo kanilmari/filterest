@@ -67,10 +67,13 @@ describe('dataset creation card roles', () => {
         expect(form.classList.contains('dataset-form')).toBe(true);
         // The form sets no colour, size or spacing of its own; dataset_form.css
         // draws all of it. A shared component's icon primitive carries only the
-        // picture it draws, which is that component's business, not the form's.
+        // picture it draws, which is that component's business, not the form's:
+        // symbol_asset_resolver states it as --metadata-symbol-url, and older
+        // callers still set mask-image directly.
         expect([form, ...form.querySelectorAll('*')].filter((element) => element.getAttribute('style'))
             .filter((element) => element.style.display !== 'none')
-            .filter((element) => !element.style.maskImage)).toEqual([]);
+            .filter((element) => !element.style.maskImage)
+            .filter((element) => !element.style.getPropertyValue('--metadata-symbol-url'))).toEqual([]);
     });
 
     test('keeps column, length and role FormData aligned through type changes and removal', async () => {

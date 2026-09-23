@@ -18,11 +18,9 @@ form.dataset-removal-dialog label {
     outline: 2px solid var(--primary_color);
     outline-offset: 2px;
 }
-.dataset-removal-dialog .form-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
+/* The action row itself is the shared dialog row (modals.css); only the side
+   the confirming button sits on belongs to this dialog, because cancel stays
+   on the left of a permanent deletion. */
 .dataset-removal-dialog .form-actions .submit-button {
     margin-inline-start: auto;
 }
