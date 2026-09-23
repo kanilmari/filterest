@@ -1,6 +1,8 @@
 // card_detail_single_line_helpers.js
 // Renders single-line card detail rows with filesystem-backed metadata symbols.
 // Bridges metadata-driven label/icon settings and the card detail DOM structure.
+// Also holds the label/icon helpers the other card detail renderers share, so a
+// detail field is described the same way whichever renderer draws it.
 // Exists so database-held legacy SVG can never enter the DOM rendering path.
 
 import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
@@ -8,6 +10,11 @@ import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 import { normalizeCardDetailColumns } from "./card_detail_layout_options.js";
+import { parseRoleString } from "./card_field_formatter.js";
+import {
+    CARD_FIELD_LABEL_PLACEMENTS,
+    resolveCardFieldLabelPlacement,
+} from "./card_field_label_placement.js";
 
 const SINGLE_LINE_CARD_DETAIL_DESKTOP_COLUMNS = 2;
 const FALLBACK_CARD_DETAIL_ICON_KEY = "info";
@@ -20,7 +27,29 @@ export function normalizeClientCardDetailLabelMode(labelMode) {
     return "label";
 }
 
-function resolveCardDetailMetadata(detailEntry, dataTypes = {}) {
+/**
+ * Where one card detail field's name goes, read from the column that owns it.
+ *
+ * This is the detail renderers' adapter to the one card-wide rule in
+ * card_field_label_placement.js: it unpacks the column's own description — its
+ * card roles, its declared type and its stated arrangement — and asks that rule.
+ * It decides nothing itself, so a tile, a single-line row and a key/value pair
+ * can never answer the same question differently.
+ *
+ * @param {string} labelText - the field's name as this card would print it
+ * @param {object} [labelMeta] - the column's metadata row
+ * @returns {"hidden"|"inline"|"stacked"}
+ */
+export function resolveCardDetailFieldLabelPlacement(labelText, labelMeta = {}) {
+    return resolveCardFieldLabelPlacement({
+        labelRequested: Boolean(String(labelText || "").trim()),
+        baseRoles: parseRoleString(labelMeta?.card_element || "").baseRoles,
+        dataType: labelMeta?.data_type,
+        labelValueLayout: labelMeta?.label_value_layout,
+    });
+}
+
+export function resolveCardDetailMetadata(detailEntry, dataTypes = {}) {
     const metadataColumnName = String(
         detailEntry?.sourceColumn
         || detailEntry?.dataColumn
@@ -144,17 +173,23 @@ export function renderSingleLineCardDetails(containerElement, detailEntries, dat
         );
 
         const labelText = String(detailEntry?.label || detailEntry?.column || "").trim();
+        // The column decides where its name goes; one row's text never does.
+        const labelPlacement = resolveCardDetailFieldLabelPlacement(labelText, labelMeta);
         const displayValue = String(detailEntry?.rawValue ?? "").trim();
         const renderedIcon = (
             labelMode === "icon" || labelMode === "both"
         ) && appendConfiguredCardDetailIcon(label, labelMeta, detailEntry?.column);
 
-        if (renderedIcon && labelMode === "icon" && labelText) {
+        // A hidden name leaves the field's own symbol in place: the icon shows what
+        // the field is, and the rule only decides whether its name is spelled out.
+        const shouldRenderLabelText = labelPlacement !== CARD_FIELD_LABEL_PLACEMENTS.HIDDEN
+            && (labelMode === "label" || labelMode === "both" || !renderedIcon);
+
+        if (renderedIcon && !shouldRenderLabelText && labelText) {
             label.setAttribute("aria-label", labelText);
             label.title = labelText;
         }
 
-        const shouldRenderLabelText = labelMode === "label" || labelMode === "both" || !renderedIcon;
         if (shouldRenderLabelText && labelText) {
             const labelTextElement = document.createElement("span");
             labelTextElement.className = "card_detail_row_label_text";
@@ -170,10 +205,14 @@ export function renderSingleLineCardDetails(containerElement, detailEntries, dat
 
         if (!label.childNodes.length) {
             row.classList.add("card_detail_row_single_line--value-only");
+            // Nothing visible names this value any more, so the row itself carries
+            // the name for assistive technology. The value keeps its own hover text.
+            if (labelText) row.setAttribute("aria-label", labelText);
         } else {
             row.appendChild(label);
         }
 
+        row.dataset.cardLabelPlacement = labelPlacement;
         const valueElement = createSingleLineCardDetailValue(detailEntry);
         row.appendChild(valueElement);
         applyLabelValueLayout(row, label.parentNode === row ? label : null, valueElement, labelMeta?.label_value_layout);

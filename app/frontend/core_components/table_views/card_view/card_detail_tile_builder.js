@@ -7,7 +7,10 @@ import { applyLabelValueLayout } from "../../../reusable_components/key_value_co
 import {
     appendConfiguredCardDetailIcon,
     normalizeClientCardDetailLabelMode,
+    resolveCardDetailFieldLabelPlacement,
+    resolveCardDetailMetadata,
 } from "./card_detail_single_line_helpers.js";
+import { CARD_FIELD_LABEL_PLACEMENTS } from "./card_field_label_placement.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 
 import { DEFAULT_CARD_DETAIL_COLUMNS, normalizeCardDetailColumns } from "./card_detail_layout_options.js";
@@ -15,17 +18,6 @@ import { DEFAULT_CARD_DETAIL_COLUMNS, normalizeCardDetailColumns } from "./card_
 const MODERN_CARD_DETAIL_DESKTOP_COLUMNS = DEFAULT_CARD_DETAIL_COLUMNS;
 const MODERN_CARD_DETAIL_LABEL_MIN_CH = 4;
 const MODERN_CARD_DETAIL_LABEL_MAX_CH = 32;
-
-function resolveCardDetailMetadata(detailEntry, dataTypes = {}) {
-    const metadataColumnName = String(
-        detailEntry?.sourceColumn
-        || detailEntry?.dataColumn
-        || detailEntry?.column
-        || ""
-    ).trim();
-
-    return dataTypes[metadataColumnName] || {};
-}
 
 function createModernCardDetailTileValue(detailEntry) {
     const valueElement = document.createElement("div");
@@ -63,9 +55,13 @@ function createModernCardDetailTileValue(detailEntry) {
     return valueElement;
 }
 
-function createModernCardDetailTileLabel(detailEntry, labelMode, renderedIcon) {
+function createModernCardDetailTileLabel(detailEntry, labelMode, renderedIcon, labelPlacement) {
     const labelText = String(detailEntry?.label || detailEntry?.column || "").trim();
-    if (!labelText || (labelMode === "icon" && renderedIcon)) {
+    if (
+        !labelText
+        || labelPlacement === CARD_FIELD_LABEL_PLACEMENTS.HIDDEN
+        || (labelMode === "icon" && renderedIcon)
+    ) {
         return null;
     }
 
@@ -173,11 +169,15 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
         const textElement = document.createElement("div");
         textElement.className = "card_detail_tile_text";
 
+        // The column decides where its name goes; one row's text never does.
+        const labelPlacement = resolveCardDetailFieldLabelPlacement(labelText, labelMeta);
         const labelElement = createModernCardDetailTileLabel(
             detailEntry,
             labelMode,
-            renderedIcon
+            renderedIcon,
+            labelPlacement
         );
+        textElement.dataset.cardLabelPlacement = labelPlacement;
         if (labelElement) {
             maxVisibleLabelLength = Math.max(
                 maxVisibleLabelLength,

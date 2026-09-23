@@ -40,3 +40,85 @@
     align-items: start;
     height: auto;
 }
+
+/* ------------------------------------------------------------------------
+ * The card's detail fields: modern tiles, single-line rows and key/value
+ * pairs. They are three renderers with three visual designs, and the rule
+ * above is the same for all three: the same marker, and the same colon drawn
+ * by style. A single-line row already put the name beside its value, so only
+ * the colon is new there; the other two renderers need the arrangement too.
+ * ------------------------------------------------------------------------ */
+
+/* The colon follows the name's own element, so a language change replaces the
+ * translated text and leaves the punctuation alone. A field shown as an icon
+ * alone has no name element here and therefore gets no colon. */
+.card_details_kv [data-card-label-placement="inline"] > .card_detail_tile_label::after,
+.card_details_kv [data-card-label-placement="inline"] .card_detail_row_label_text::after {
+    content: ":";
+}
+
+/* A modern tile stacked its name above the value. It now reads as running text:
+ * name, colon, value on one line, wrapping only when the line runs out. */
+.card_details_kv .card_detail_tile_text[data-card-label-placement="inline"] {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: baseline;
+    gap: 0 0.45rem;
+}
+
+/* A key/value pair let one row's measured text decide the same thing, and it
+ * reads the same way now. Its name carries the field's icon inside itself, so
+ * the name's baseline is the icon's rather than its text's; these pairs align
+ * on the first line instead, which keeps the name on the value's first line. */
+.card_details_kv .kv-pair-conditional[data-card-label-placement="inline"]:not(.card_detail_row_single_line),
+.card_details_kv .kv-pair-stacked[data-card-label-placement="inline"],
+.card_details_kv .kv-pair-inline[data-card-label-placement="inline"] {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: flex-start;
+    gap: 0 0.45rem;
+}
+
+/* The name keeps the width it needs. Cutting it to a fixed column would hide
+ * what the value even is, which costs more than the line it was meant to save. */
+.card_details_kv [data-card-label-placement="inline"] > .card_detail_tile_label,
+.card_details_kv [data-card-label-placement="inline"] > .kv-key {
+    flex: 0 0 auto;
+    max-width: 100%;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: normal;
+    text-overflow: clip;
+}
+
+.card_details_kv [data-card-label-placement="inline"] > .card_detail_tile_value,
+.card_details_kv [data-card-label-placement="inline"] > .kv-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 0;
+    margin-left: 0;
+}
+
+/* A card shows a couple of lines of a field, whatever arrangement its name has.
+ * The shared pair layout lifts that cap for article-sized surfaces; inside a
+ * card the cap stays, so one long value cannot push the rest of the card down. */
+.card_details_kv .label-value-layout[data-label-value-layout] > .label-value-layout__value {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+
+/* A link inside such a value stays ordinary inline text rather than a second
+ * clipped box, exactly as it does in the renderers' own stylesheets. */
+.card_details_kv .label-value-layout[data-label-value-layout] > .label-value-layout__value > a {
+    display: inline;
+}
+
+/* A field whose name the card leaves out gives its value the whole row. */
+.card_details_kv [data-card-label-placement="hidden"] > .kv-value {
+    padding-left: 0;
+    margin-left: 0;
+}

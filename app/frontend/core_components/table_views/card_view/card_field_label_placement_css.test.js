@@ -21,10 +21,32 @@ describe('card field label placement CSS', () => {
         expect(css).toContain('content: ":"');
     });
 
-    test('loads after the legacy card rules it has to outrank', () => {
-        const imports = readFileSync(IMPORTS_PATH, 'utf8');
+    test('draws the same colon for the card detail renderers', () => {
+        const css = readFileSync(CSS_PATH, 'utf8');
 
-        expect(imports.indexOf('card_field_label_placement.css'))
-            .toBeGreaterThan(imports.indexOf('card_view/cards.css'));
+        expect(css).toContain(
+            '.card_details_kv [data-card-label-placement="inline"] > .card_detail_tile_label::after'
+        );
+        expect(css).toContain(
+            '.card_details_kv [data-card-label-placement="inline"] .card_detail_row_label_text::after'
+        );
+    });
+
+    test('keeps a card detail value capped at two lines in every arrangement', () => {
+        const css = readFileSync(CSS_PATH, 'utf8');
+
+        expect(css).toContain(
+            '.card_details_kv .label-value-layout[data-label-value-layout] > .label-value-layout__value'
+        );
+        expect(css).toContain('-webkit-line-clamp: 2');
+    });
+
+    test('loads after every arrangement it has to outrank', () => {
+        const imports = readFileSync(IMPORTS_PATH, 'utf8');
+        const placement = imports.indexOf('card_field_label_placement.css');
+
+        expect(placement).toBeGreaterThan(imports.indexOf('card_view/cards.css'));
+        // The shared key/value pair layout would otherwise win the ties.
+        expect(placement).toBeGreaterThan(imports.indexOf('key_value_container/kv_container.css'));
     });
 });

@@ -51,4 +51,48 @@ describe("decorateStandardCardDetailKey", () => {
         expect(keyElement.querySelector(".card_detail_row_icon_svg")).toBe(icon);
         expect(keyElement.textContent).toContain("Luotu");
     });
+
+    describe("the name placement it states for the key-value renderer", () => {
+        function decorate(labelMeta) {
+            const keyElement = document.createElement("div");
+            keyElement.className = "kv-key";
+            keyElement.dataset.langKey = "summary";
+            keyElement.textContent = "Summary";
+            return decorateStandardCardDetailKey(keyElement, {
+                key: "summary", labelText: "Summary", column: "summary", labelMeta,
+            });
+        }
+
+        test("a long text field states that its name is left out", () => {
+            expect(decorate({ card_element: "description", data_type: "text" }))
+                .toEqual({ labelPlacement: "hidden" });
+            expect(decorate({ card_element: "", data_type: "jsonb" }))
+                .toEqual({ labelPlacement: "hidden" });
+        });
+
+        test("a short value states that its name shares the value's line", () => {
+            expect(decorate({ card_element: "details", data_type: "character varying(200)" }))
+                .toEqual({ labelPlacement: "inline" });
+            expect(decorate({ card_element: "", data_type: "numeric(10,2)" }))
+                .toEqual({ labelPlacement: "inline" });
+        });
+
+        test("a column that states its own arrangement still decides for itself", () => {
+            expect(decorate({
+                card_element: "description", data_type: "text",
+                label_value_layout: "stacked",
+            })).toEqual({ labelPlacement: "stacked" });
+            expect(decorate({
+                card_element: "description", data_type: "text",
+                label_value_layout: "inline",
+            })).toEqual({ labelPlacement: "inline" });
+        });
+
+        test("a field without a name of its own states that no name is shown", () => {
+            const keyElement = document.createElement("div");
+            keyElement.className = "kv-key";
+            expect(decorateStandardCardDetailKey(keyElement, { labelMeta: {} }))
+                .toEqual({ labelPlacement: "hidden" });
+        });
+    });
 });

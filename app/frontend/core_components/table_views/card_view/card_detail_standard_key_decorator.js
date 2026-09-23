@@ -1,12 +1,29 @@
-// Adds semantic field icons to ordinary card-detail labels.
-// Bridges the shared key-value renderer and card-detail icon metadata.
-// Exists so standard cards match article and modern-card semantics without changing generic KV defaults.
+// Adapts a generic key/value pair to card-detail semantics.
+// Bridges the shared key-value renderer and card-detail column metadata: it adds
+// the field's icon, and it tells the renderer where that field's name belongs.
+// Exists so standard cards match article and modern-card semantics without teaching
+// the portable key-value component anything about card roles.
 
-import { appendConfiguredCardDetailIcon } from "./card_detail_single_line_helpers.js";
+import {
+    appendConfiguredCardDetailIcon,
+    resolveCardDetailFieldLabelPlacement,
+} from "./card_detail_single_line_helpers.js";
 
+/**
+ * Decorate one card-detail key and state the pair's name placement.
+ *
+ * The placement is read from the column that owns the field — never from the one
+ * row being drawn — through the single card-wide rule in
+ * card_field_label_placement.js. The key-value renderer applies whatever this
+ * returns; it does not decide it.
+ *
+ * @param {HTMLElement} keyElement - the pair's key element, already carrying its text
+ * @param {object} [pairData] - the pair the renderer is building, including labelMeta
+ * @returns {{labelPlacement: "hidden"|"inline"|"stacked"}|undefined}
+ */
 export function decorateStandardCardDetailKey(keyElement, pairData = {}) {
     if (!(keyElement instanceof HTMLElement)) {
-        return;
+        return undefined;
     }
 
     const labelText = String(
@@ -18,6 +35,10 @@ export function decorateStandardCardDetailKey(keyElement, pairData = {}) {
     const metadataColumn = String(
         pairData?.sourceColumn || pairData?.dataColumn || pairData?.column || pairData?.key || ""
     ).trim();
+    const labelPlacement = resolveCardDetailFieldLabelPlacement(
+        labelText,
+        pairData?.labelMeta
+    );
 
     const iconElement = document.createElement("span");
     iconElement.className = "card_detail_row_icon";
@@ -28,7 +49,7 @@ export function decorateStandardCardDetailKey(keyElement, pairData = {}) {
     );
 
     if (!renderedIcon) {
-        return;
+        return { labelPlacement };
     }
 
     iconElement.setAttribute("aria-hidden", "true");
@@ -42,4 +63,6 @@ export function decorateStandardCardDetailKey(keyElement, pairData = {}) {
     keyElement.removeAttribute("data-lang-key");
     keyElement.classList.add("card_detail_row_label");
     keyElement.replaceChildren(iconElement, labelTextElement);
+
+    return { labelPlacement };
 }

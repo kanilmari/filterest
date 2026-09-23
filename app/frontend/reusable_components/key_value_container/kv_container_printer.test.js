@@ -206,4 +206,100 @@ describe("renderKeyValuePairs", () => {
         },
     );
 
+    describe("a name placement stated by the caller's key hook", () => {
+        const decorateWith = (labelPlacement) => () => ({ labelPlacement });
+
+        test.each(["conditional", "stacked", "inline"])(
+            "leaves a hidden name out of the pair in %s mode", (layoutMode) => {
+                const kvContainer = document.createElement("div");
+                document.body.append(kvContainer);
+
+                renderKeyValuePairs(kvContainer, [{
+                    key: "summary", labelText: "Summary",
+                    value: "A paragraph that would otherwise be headed by its own name.",
+                    columnClass: "column_orders_summary",
+                }], { layoutMode, decorateKeyElement: decorateWith("hidden") });
+
+                const pair = kvContainer.querySelector(".column_orders_summary");
+                expect(pair?.dataset.cardLabelPlacement).toBe("hidden");
+                expect(pair?.querySelector(".kv-key")).toBeNull();
+                expect(pair?.textContent).toContain("A paragraph");
+                expect(pair?.classList).toContain("label-value-layout--value-only");
+            },
+        );
+
+        test.each(["conditional", "stacked", "inline"])(
+            "keeps a short value's name on the value's line in %s mode", (layoutMode) => {
+                const kvContainer = document.createElement("div");
+                document.body.append(kvContainer);
+
+                renderKeyValuePairs(kvContainer, [{
+                    key: "price", labelText: "Price", value: "129 €",
+                    columnClass: "column_orders_price",
+                }], { layoutMode, decorateKeyElement: decorateWith("inline") });
+
+                const pair = kvContainer.querySelector(".column_orders_price");
+                expect(pair?.dataset.cardLabelPlacement).toBe("inline");
+                expect(pair?.dataset.labelValueLayout).toBe("inline");
+                // The colon belongs to style, never to the translated name element.
+                expect(pair?.querySelector(".kv-key")?.textContent).toBe("Price");
+                expect(pair?.querySelector(".kv-value")?.classList)
+                    .toContain("label-value-layout__value");
+            },
+        );
+
+        test("a stated placement overrules the column's own setting", () => {
+            const kvContainer = document.createElement("div");
+            document.body.append(kvContainer);
+
+            renderKeyValuePairs(kvContainer, [{
+                key: "summary", labelText: "Summary", value: "Long text",
+                columnClass: "column_orders_summary",
+                labelMeta: { label_value_layout: "auto" },
+            }], { layoutMode: "conditional", decorateKeyElement: decorateWith("stacked") });
+
+            const pair = kvContainer.querySelector(".column_orders_summary");
+            expect(pair?.dataset.cardLabelPlacement).toBe("stacked");
+            expect(pair?.dataset.labelValueLayout).toBe("stacked");
+        });
+
+        test("a stated placement is never re-decided by one row's measured text", () => {
+            const kvContainer = document.createElement("div");
+            document.body.append(kvContainer);
+
+            renderKeyValuePairs(kvContainer, [{
+                key: "price", labelText: "Price",
+                value: "A value far too wide to fit beside its own name in this column.",
+                columnClass: "column_orders_price",
+            }], { layoutMode: "conditional", decorateKeyElement: decorateWith("inline") });
+
+            expect(kvContainer.querySelector(".kv-dropped")).toBeNull();
+            expect(kvContainer.querySelector(".kv-value")?.style.marginLeft).toBe("");
+        });
+
+        test("keeps link handling and its safety rules untouched by the placement", () => {
+            const kvContainer = document.createElement("div");
+            document.body.append(kvContainer);
+
+            renderKeyValuePairs(kvContainer, [
+                {
+                    key: "homepage", labelText: "Homepage", value: "https://example.test",
+                    isLink: true, columnClass: "column_orders_homepage",
+                },
+                {
+                    key: "note", labelText: "Note", value: "javascript:alert(1)",
+                    isLink: true, columnClass: "column_orders_note",
+                },
+            ], { layoutMode: "conditional", decorateKeyElement: decorateWith("hidden") });
+
+            const link = kvContainer.querySelector(".column_orders_homepage a");
+            expect(link?.getAttribute("href")).toBe("https://example.test");
+            expect(link?.getAttribute("target")).toBe("_blank");
+            expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+
+            const unsafe = kvContainer.querySelector(".column_orders_note");
+            expect(unsafe?.querySelector("a")).toBeNull();
+            expect(unsafe?.textContent).toContain("javascript:alert(1)");
+        });
+    });
 });

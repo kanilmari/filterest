@@ -204,4 +204,116 @@ describe("card_detail_single_line_helpers", () => {
         },
     );
 
+    describe("where a single-line row puts the field's name", () => {
+        test("a long text field prints no name beside its text", () => {
+            const container = document.createElement("div");
+
+            renderSingleLineCardDetails(container, [{
+                column: "summary",
+                label: "Summary",
+                rawValue: "A paragraph that would otherwise spend a card line on its own name.",
+            }], { summary: { card_element: "description", data_type: "text" } });
+
+            const row = container.querySelector(".card_detail_row_single_line");
+            expect(row?.dataset.cardLabelPlacement).toBe("hidden");
+            expect(container.querySelector(".card_detail_row_label_text")).toBeNull();
+            expect(row?.classList.contains("card_detail_row_single_line--value-only")).toBe(true);
+            expect(row?.getAttribute("aria-label")).toBe("Summary");
+        });
+
+        test("a column with no role but an unbounded type counts as long text", () => {
+            const container = document.createElement("div");
+
+            renderSingleLineCardDetails(container, [{
+                column: "notes", label: "Notes", rawValue: "Free text",
+            }], { notes: { card_element: "", data_type: "text" } });
+
+            expect(container.querySelector(".card_detail_row_single_line")
+                ?.dataset.cardLabelPlacement).toBe("hidden");
+            expect(container.querySelector(".card_detail_row_label_text")).toBeNull();
+        });
+
+        test("a short value keeps its name on the value's line", () => {
+            const container = document.createElement("div");
+
+            renderSingleLineCardDetails(container, [{
+                column: "price", label: "Price", rawValue: "129 €",
+            }], { price: { card_element: "details", data_type: "numeric(10,2)" } });
+
+            const row = container.querySelector(".card_detail_row_single_line");
+            const labelText = container.querySelector(".card_detail_row_label_text");
+            expect(row?.dataset.cardLabelPlacement).toBe("inline");
+            // The colon is drawn by style; the name element carries only its key.
+            expect(labelText?.textContent).toBe("Price");
+            expect(labelText?.dataset.langKey).toBe("price");
+        });
+
+        test("a column that states its own arrangement still decides for itself", () => {
+            const container = document.createElement("div");
+
+            renderSingleLineCardDetails(container, [{
+                column: "summary", label: "Summary",
+                rawValue: "Long text the column wants headed after all.",
+            }], {
+                summary: {
+                    card_element: "description", data_type: "text",
+                    label_value_layout: "stacked",
+                },
+            });
+
+            const row = container.querySelector(".card_detail_row_single_line");
+            expect(row?.dataset.cardLabelPlacement).toBe("stacked");
+            expect(container.querySelector(".card_detail_row_label_text")?.textContent)
+                .toBe("Summary");
+        });
+
+        test("a hidden name keeps the field's own icon and the row's accessible name", () => {
+            const container = document.createElement("div");
+
+            renderSingleLineCardDetails(container, [{
+                column: "summary", label: "Summary", rawValue: "Long text",
+            }], {
+                summary: {
+                    card_element: "description", data_type: "text",
+                    card_detail_label_mode: "both", card_detail_icon_key: "calendar",
+                },
+            });
+
+            const label = container.querySelector(".card_detail_row_label");
+            expect(label?.querySelector(".card_detail_row_icon_svg")?.dataset.symbolKey)
+                .toBe("calendar");
+            expect(container.querySelector(".card_detail_row_label_text")).toBeNull();
+            expect(label?.getAttribute("aria-label")).toBe("Summary");
+            expect(label?.getAttribute("title")).toBe("Summary");
+        });
+
+        test("keeps link handling and its safety rules untouched by the placement", () => {
+            const container = document.createElement("div");
+
+            renderSingleLineCardDetails(container, [
+                {
+                    column: "homepage", label: "Homepage",
+                    rawValue: "https://example.test", isLink: true,
+                },
+                {
+                    column: "note", label: "Note",
+                    rawValue: "javascript:alert(1)", isLink: true,
+                },
+            ], {
+                homepage: { card_element: "details_link", data_type: "character varying(200)" },
+                note: { card_element: "", data_type: "text" },
+            });
+
+            const rows = container.querySelectorAll(".card_detail_row_single_line");
+            const link = rows[0].querySelector(".card_detail_row_value_link");
+            expect(rows[0].dataset.cardLabelPlacement).toBe("inline");
+            expect(link?.getAttribute("href")).toBe("https://example.test");
+            expect(link?.getAttribute("target")).toBe("_blank");
+            expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+
+            expect(rows[1].dataset.cardLabelPlacement).toBe("hidden");
+            expect(rows[1].querySelector(".card_detail_row_value_link")).toBeNull();
+            expect(rows[1].textContent).toContain("javascript:alert(1)");
+        });
+    });
 });

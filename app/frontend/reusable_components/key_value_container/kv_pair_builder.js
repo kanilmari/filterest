@@ -10,6 +10,23 @@ function isEmptyValue(value) {
     return value === "" || value === null || value === undefined;
 }
 
+/**
+ * The arrangements a caller's key hook may state for one pair: leave the name
+ * out, put it on the value's line, or keep it on its own line above the value.
+ */
+const STATED_LABEL_PLACEMENTS = new Set(["hidden", "inline", "stacked"]);
+const HIDDEN_LABEL_PLACEMENT = "hidden";
+
+/**
+ * Read the arrangement the caller's key hook stated, if it stated one.
+ * This component never decides the arrangement itself; without a stated one the
+ * pair keeps the column's own setting and this renderer's existing behaviour.
+ */
+function readStatedLabelPlacement(decoration) {
+    const stated = String(decoration?.labelPlacement || "").trim().toLowerCase();
+    return STATED_LABEL_PLACEMENTS.has(stated) ? stated : null;
+}
+
 const OPEN_IN_NEW_TAB_LANG_KEY = "open_in_new_tab";
 const OPEN_IN_NEW_TAB_FALLBACK = "Avaa uudessa välilehdessä";
 const OPEN_IN_NEW_TAB_ICON_PATHS = [
@@ -40,7 +57,19 @@ function appendOpenInNewTabIcon(linkElement) {
 }
 
 
-/** Build one renderer's pair factories with its localized copy and key decoration. */
+/**
+ * Build one renderer's pair factories with its localized copy and key decoration.
+ *
+ * @param {object} options
+ * @param {Function} options.translate - the caller's translation lookup
+ * @param {Function|null} [options.decorateKeyElement] - the caller's key hook. It
+ *   decorates the key element, and it may return `{labelPlacement}` — `hidden`,
+ *   `inline` or `stacked` — to state where that field's name belongs. The caller
+ *   owns that decision; these factories only apply it, and fall back to the
+ *   column's own `label_value_layout` setting when nothing is stated. A stated
+ *   placement is repeated on the pair as `data-card-label-placement`, which is
+ *   the caller's own marker: its stylesheet is what dresses the arrangement.
+ */
 export function createKvPairBuilders({ translate, decorateKeyElement }) {
     /* --------------------------------------------------
        YLEINEN ARVON RENDERÖINTI: teksti vs linkki
@@ -101,8 +130,19 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
 
     function decorateRenderedKey(keyElement, pairObj) {
         if (typeof decorateKeyElement === "function") {
-            decorateKeyElement(keyElement, pairObj);
+            return readStatedLabelPlacement(decorateKeyElement(keyElement, pairObj));
         }
+        return null;
+    }
+
+    /**
+     * The arrangement this pair is drawn with. A stated placement wins, because it
+     * was read from the column; otherwise the column's own setting applies as before.
+     * A hidden name leaves the value alone in the pair's single column.
+     */
+    function resolvePairLayout(statedPlacement, pairObj) {
+        if (statedPlacement === HIDDEN_LABEL_PLACEMENT) return "inline";
+        return statedPlacement || pairObj?.labelMeta?.label_value_layout;
     }
 
     function applyPairColumnClass(pairElement, pairObj) {
@@ -112,7 +152,14 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
         }
     }
 
-    function createInlineElements(pairObj) {
+    /** DEPRECATED inline mode: key and value share a 50/50 grid cell. */
+    function createInlineElement(pairObj) {
+
+        const wrap = document.createElement("div");
+        wrap.className = "kv-pair-inline";
+        applyPairColumnClass(wrap, pairObj);
+        wrap.style.display = "grid";
+        wrap.style.gridTemplateColumns = "1fr 1fr";
 
         const keySp = document.createElement("span");
         keySp.className = "kv-key";
@@ -127,9 +174,16 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
             keySp.classList.add("kv-empty");
         }
 
-        decorateRenderedKey(keySp, pairObj);
+        const placement = decorateRenderedKey(keySp, pairObj);
+        const showsName = placement !== HIDDEN_LABEL_PLACEMENT;
 
-        return [keySp, valSp];
+        if (placement) wrap.dataset.cardLabelPlacement = placement;
+        if (showsName) wrap.appendChild(keySp);
+        wrap.appendChild(valSp);
+        applyLabelValueLayout(
+            wrap, showsName ? keySp : null, valSp, resolvePairLayout(placement, pairObj)
+        );
+        return wrap;
     }
 
     function createStackedElement(pairObj) {
@@ -151,11 +205,15 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
             keyDiv.classList.add("kv-empty");
         }
 
-        decorateRenderedKey(keyDiv, pairObj);
+        const placement = decorateRenderedKey(keyDiv, pairObj);
+        const showsName = placement !== HIDDEN_LABEL_PLACEMENT;
 
-        wrap.appendChild(keyDiv);
+        if (placement) wrap.dataset.cardLabelPlacement = placement;
+        if (showsName) wrap.appendChild(keyDiv);
         wrap.appendChild(valDiv);
-        applyLabelValueLayout(wrap, keyDiv, valDiv, pairObj?.labelMeta?.label_value_layout);
+        applyLabelValueLayout(
+            wrap, showsName ? keyDiv : null, valDiv, resolvePairLayout(placement, pairObj)
+        );
         return wrap;
     }
 
@@ -183,18 +241,24 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
             keyDiv.classList.add("kv-empty");
         }
 
-        decorateRenderedKey(keyDiv, pairObj);
+        const placement = decorateRenderedKey(keyDiv, pairObj);
+        const showsName = placement !== HIDDEN_LABEL_PLACEMENT;
 
-        wrap.appendChild(keyDiv);
+        if (placement) wrap.dataset.cardLabelPlacement = placement;
+        if (showsName) wrap.appendChild(keyDiv);
         wrap.appendChild(valDiv);
-        wrap._kvKeyElement = keyDiv;
+        // A pair whose arrangement the caller stated is not measured: the smart
+        // wrap below reads one row's own text, and that must never move a name.
+        wrap._kvKeyElement = showsName ? keyDiv : null;
         wrap._kvValueElement = valDiv;
         wrap._kvValueText = pairObj?.value ?? "";
         wrap._kvHasLink = pairObj?.isLink === true && !isEmptyValue(pairObj?.value);
-        applyLabelValueLayout(wrap, keyDiv, valDiv, pairObj?.labelMeta?.label_value_layout);
+        applyLabelValueLayout(
+            wrap, showsName ? keyDiv : null, valDiv, resolvePairLayout(placement, pairObj)
+        );
         return wrap;
     }
 
 
-    return { createInlineElements, createStackedElement, createConditionalElement, applyPairColumnClass };
+    return { createInlineElement, createStackedElement, createConditionalElement };
 }

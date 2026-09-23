@@ -215,4 +215,133 @@ describe("card_detail_tile_builder", () => {
         },
     );
 
+    describe("where a tile puts the field's name", () => {
+        test("a long text field prints no name above its text", () => {
+            const container = document.createElement("div");
+
+            renderModernCardDetails(container, [{
+                column: "summary",
+                label: "Summary",
+                rawValue: "A paragraph that would otherwise spend a card line on its own name.",
+            }], {
+                summary: { card_element: "description", data_type: "text" },
+            });
+
+            const text = container.querySelector(".card_detail_tile_text");
+            expect(text?.dataset.cardLabelPlacement).toBe("hidden");
+            expect(container.querySelector(".card_detail_tile_label")).toBeNull();
+            expect(container.querySelector(".card_detail_tile_value")?.textContent)
+                .toContain("A paragraph");
+            // The name still reaches assistive technology through the tile itself.
+            expect(container.querySelector(".card_detail_tile")?.getAttribute("aria-label"))
+                .toBe("Summary");
+        });
+
+        test("a column with no role but an unbounded type counts as long text", () => {
+            const container = document.createElement("div");
+
+            renderModernCardDetails(container, [{
+                column: "notes", label: "Notes", rawValue: "Free text",
+            }], { notes: { card_element: "", data_type: "text" } });
+
+            expect(container.querySelector(".card_detail_tile_text")?.dataset.cardLabelPlacement)
+                .toBe("hidden");
+            expect(container.querySelector(".card_detail_tile_label")).toBeNull();
+        });
+
+        test("a short value keeps its name on the value's line", () => {
+            const container = document.createElement("div");
+
+            renderModernCardDetails(container, [{
+                column: "price", label: "Price", rawValue: "129 €",
+            }], { price: { card_element: "details", data_type: "numeric(10,2)" } });
+
+            const text = container.querySelector(".card_detail_tile_text");
+            expect(text?.dataset.cardLabelPlacement).toBe("inline");
+            const label = container.querySelector(".card_detail_tile_label");
+            // The colon is drawn by style, so a retranslation never has to carry it.
+            expect(label?.textContent).toBe("Price");
+            expect(label?.dataset.langKey).toBe("price");
+        });
+
+        test("a column that states its own arrangement still decides for itself", () => {
+            const container = document.createElement("div");
+
+            renderModernCardDetails(container, [
+                {
+                    column: "summary", label: "Summary",
+                    rawValue: "Long text the column wants headed after all.",
+                },
+                { column: "price", label: "Price", rawValue: "129 €" },
+            ], {
+                summary: {
+                    card_element: "description", data_type: "text",
+                    label_value_layout: "stacked",
+                },
+                price: {
+                    card_element: "details", data_type: "numeric(10,2)",
+                    label_value_layout: "stacked",
+                },
+            });
+
+            const texts = container.querySelectorAll(".card_detail_tile_text");
+            expect(texts[0].dataset.cardLabelPlacement).toBe("stacked");
+            expect(texts[0].querySelector(".card_detail_tile_label")?.textContent).toBe("Summary");
+            expect(texts[1].dataset.cardLabelPlacement).toBe("stacked");
+        });
+
+        test("keeps link handling and its safety rules untouched by the placement", () => {
+            const container = document.createElement("div");
+
+            renderModernCardDetails(container, [
+                {
+                    column: "homepage", label: "Homepage",
+                    rawValue: "https://example.test", isLink: true,
+                },
+                {
+                    column: "note", label: "Note",
+                    rawValue: "javascript:alert(1)", isLink: true,
+                },
+            ], {
+                homepage: { card_element: "details_link", data_type: "character varying(200)" },
+                note: { card_element: "", data_type: "text" },
+            });
+
+            const tiles = container.querySelectorAll(".card_detail_tile");
+            const link = tiles[0].querySelector(".card_detail_tile_value_link");
+            expect(tiles[0].querySelector(".card_detail_tile_text").dataset.cardLabelPlacement)
+                .toBe("inline");
+            expect(link?.getAttribute("href")).toBe("https://example.test");
+            expect(link?.getAttribute("target")).toBe("_blank");
+            expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+
+            expect(tiles[1].querySelector(".card_detail_tile_text").dataset.cardLabelPlacement)
+                .toBe("hidden");
+            expect(tiles[1].querySelector(".card_detail_tile_value_link")).toBeNull();
+            expect(tiles[1].querySelector(".card_detail_tile_value")?.textContent)
+                .toBe("javascript:alert(1)");
+        });
+
+        test("a hidden name leaves the field's icon and the tile order in place", () => {
+            const container = document.createElement("div");
+
+            renderModernCardDetails(container, [
+                { column: "summary", label: "Summary", rawValue: "Long text" },
+                { column: "price", label: "Price", rawValue: "129 €" },
+            ], {
+                summary: {
+                    card_element: "description", data_type: "text",
+                    card_detail_icon_key: "calendar",
+                },
+                price: { card_element: "details", data_type: "numeric(10,2)" },
+            });
+
+            const tiles = container.querySelectorAll(".card_detail_tile");
+            expect(tiles[0].querySelector(".card_detail_tile_icon .card_detail_row_icon_svg")
+                ?.dataset.symbolKey).toBe("calendar");
+            expect([...tiles].map((tile) =>
+                tile.querySelector(".card_detail_tile_value")?.textContent))
+                .toEqual(["Long text", "129 €"]);
+        });
+    });
 });

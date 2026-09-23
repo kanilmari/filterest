@@ -4,7 +4,6 @@
 // Exists to centralise reusable key-value rendering behavior for cards, details, and modal content.
 
 import { createKvPairBuilders } from "./kv_pair_builder.js";
-import { applyLabelValueLayout } from "./label_value_layout.js";
 
 const kvResizeCallbacks = new Map();
 let sharedKvResizeObserver = null;
@@ -55,7 +54,10 @@ function observeKvContainer(target, onResize) {
  * @param {number}   [userOptions.singleColumnBreakpoint=0] - Jos containerin leveys on alle tämän, käytetään 1 saraketta
  * @param {boolean}  [userOptions.animateHeight=false] - Animoi containerin korkeuden muutokset
  * @param {number}   [userOptions.deferResponsiveLayoutMs=0] - Lykkää conditional-tilan ensimmäistä relayoutia ja observereita
- * @param {Function|null} [userOptions.decorateKeyElement=null] - Valinnainen avainelementin koristelija
+ * @param {Function|null} [userOptions.decorateKeyElement=null] - Valinnainen avainelementin koristelija.
+ *        Se voi lisäksi palauttaa `{labelPlacement}` ("hidden", "inline" tai "stacked"),
+ *        jolloin kutsuja päättää kentän nimen paikan ja tämä komponentti vain toteuttaa sen.
+ *        Ilman palautettua arvoa pari noudattaa sarakkeen omaa asetusta kuten ennenkin.
  *
  * @returns {Function} unmount
  */
@@ -181,7 +183,7 @@ export function renderKeyValuePairs(
         }
     }
 
-    const { createInlineElements, createStackedElement, createConditionalElement, applyPairColumnClass } =
+    const { createInlineElement, createStackedElement, createConditionalElement } =
         createKvPairBuilders({ translate, decorateKeyElement });
 
     /**
@@ -442,16 +444,7 @@ export function renderKeyValuePairs(
                     for (let col = 0; col < cols; col++) {
                         const pair = columnArrays[col][row];
                         if (!pair) continue;
-                        const wrap = document.createElement("div");
-                        wrap.className = "kv-pair-inline";
-                        applyPairColumnClass(wrap, pair);
-                        wrap.style.display = "grid";
-                        wrap.style.gridTemplateColumns = "1fr 1fr";
-                        const [k, v] = createInlineElements(pair);
-                        wrap.appendChild(k);
-                        wrap.appendChild(v);
-                        applyLabelValueLayout(wrap, k, v, pair?.labelMeta?.label_value_layout);
-                        containerElement.appendChild(wrap);
+                        containerElement.appendChild(createInlineElement(pair));
                     }
                 }
             } else if (mode === "conditional") {
