@@ -43,12 +43,22 @@ test.describe('E10 — Site identity and menu contract', () => {
     expect(siteName).not.toBe('');
 
     const hero = page.locator('.tab_parts_container:visible .morphing-title').first();
-    const renderedSiteName = String(
-      await hero.locator('.morphing-title__site-name').textContent() || '',
+    const datasetTitle = String(
+      await hero.locator('.morphing-title__dataset-name').textContent() || '',
     ).trim();
-    expect(renderedSiteName.toLocaleLowerCase()).toBe(siteName.toLocaleLowerCase());
-    await expect(hero.locator('.morphing-title__separator')).toHaveText(' – ');
-    await expect(hero.locator('.morphing-title__dataset-name')).not.toHaveText('');
+    expect(datasetTitle).not.toBe('');
+    if (datasetTitle.toLocaleLowerCase().startsWith(siteName.toLocaleLowerCase())) {
+      // A dataset whose own title already opens with the site name must not be branded
+      // a second time; the heading still names the site, once.
+      await expect(hero.locator('.morphing-title__site-name')).toHaveCount(0);
+      await expect(hero.locator('.morphing-title__separator')).toHaveCount(0);
+    } else {
+      const renderedSiteName = String(
+        await hero.locator('.morphing-title__site-name').textContent() || '',
+      ).trim();
+      expect(renderedSiteName.toLocaleLowerCase()).toBe(siteName.toLocaleLowerCase());
+      await expect(hero.locator('.morphing-title__separator')).toHaveText(' – ');
+    }
     await expect(page.locator('.navbar-site-identity')).toHaveCount(0);
 
     const heroHeader = page

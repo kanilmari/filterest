@@ -5,8 +5,11 @@
 // Exists because the server only titles the initial HTML, so without an owner the tab kept
 // describing whatever was last fully loaded.
 
-import { getTranslationForKey, hasLoadedTranslations } from "../../lang/translation_handler.js";
-import { getCurrentSiteName } from "../../state_stores/site_identity_reader.js";
+import { hasLoadedTranslations, readTranslatedLabelOrEmpty } from "../../lang/translation_handler.js";
+import {
+    getCurrentSiteName,
+    titleAlreadyOpensWithSiteName,
+} from "../../state_stores/site_identity_reader.js";
 import { getTableSpec } from "../../state_stores/table_specs_reader.js";
 import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
 import { DATASET_PREFIX } from "./query_params.js";
@@ -26,14 +29,23 @@ let languageChangeObserver = null;
  * Joins the parts of a tab title in the server's order and drops empty parts.
  * Produces "Article — Dataset — Site", "Dataset — Site" or the bare site name,
  * exactly as `seo_meta_builder.go` does for the initial HTML.
+ *
+ * The site part is left out when the dataset's own title already opens with the
+ * site name, so a stored title such as "Serlog.com – Service catalog" names the
+ * site once instead of twice. The dataset heading applies that same rule.
  */
 export function composeBrowserTabTitle({
     articleTitle = "",
     datasetTitle = "",
     siteName = "",
 } = {}) {
-    return [articleTitle, datasetTitle, siteName]
-        .map((part) => String(part ?? "").trim())
+    const readableDatasetTitle = String(datasetTitle ?? "").trim();
+    const readableSiteName = String(siteName ?? "").trim();
+    const sitePart = titleAlreadyOpensWithSiteName(readableDatasetTitle, readableSiteName)
+        ? ""
+        : readableSiteName;
+
+    return [String(articleTitle ?? "").trim(), readableDatasetTitle, sitePart]
         .filter(Boolean)
         .join(BROWSER_TAB_TITLE_SEPARATOR);
 }
@@ -47,24 +59,6 @@ export function humanizeDatasetNameForTitle(datasetName) {
         .replace(/_/g, " ")
         .replace(/\b\p{Ll}/gu, (letter) => letter.toLocaleUpperCase())
         .trim();
-}
-
-/**
- * Reads one translated label without letting the translation handler return
- * its "missing key" placeholder or register the key as missing.
- */
-function readTranslatedLabel(translationKey) {
-    if (!translationKey || !hasLoadedTranslations()) {
-        return "";
-    }
-    // A sentinel no real translation can equal, so the handler's readable
-    // "missing key" placeholder never reaches the browser tab.
-    const missingMarker = `\u0000missing\u0000${translationKey}`;
-    const label = getTranslationForKey(translationKey, {
-        fallback: missingMarker,
-        countUsage: false,
-    });
-    return label === missingMarker ? "" : String(label ?? "").trim();
 }
 
 /**
@@ -96,8 +90,8 @@ function resolveDatasetTitleForBrowserTab(datasetName) {
     if (!datasetName) {
         return "";
     }
-    return readTranslatedLabel(`${datasetName}_front_page`)
-        || readTranslatedLabel(datasetName)
+    return readTranslatedLabelOrEmpty(`${datasetName}_front_page`)
+        || readTranslatedLabelOrEmpty(datasetName)
         || String(getTableSpec(datasetName)?.display_name || "").trim()
         || humanizeDatasetNameForTitle(datasetName);
 }

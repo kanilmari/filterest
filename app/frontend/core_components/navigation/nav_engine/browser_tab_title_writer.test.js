@@ -16,6 +16,11 @@ vi.mock("../../lang/translation_handler.js", () => ({
     getTranslationForKey: (key, { fallback = "" } = {}) => (
         translations.has(key) ? translations.get(key) : fallback
     ),
+    readTranslatedLabelOrEmpty: (key) => (
+        translationsLoaded && translations.has(key)
+            ? String(translations.get(key)).trim()
+            : ""
+    ),
 }));
 
 async function loadTitleWriter() {
@@ -79,6 +84,41 @@ describe("browser tab title ownership", () => {
 
         expect(composeBrowserTabTitle({ siteName: "fintravel.fi" }))
             .toBe("fintravel.fi");
+    });
+
+    test("names the site once when the dataset title already opens with it", async () => {
+        const { composeBrowserTabTitle } = await loadTitleWriter();
+
+        expect(composeBrowserTabTitle({
+            datasetTitle: "Serlog.com – Service catalog",
+            siteName: "Serlog.com",
+        })).toBe("Serlog.com – Service catalog");
+
+        expect(composeBrowserTabTitle({
+            articleTitle: "Cleaning service",
+            datasetTitle: "serlog.com: Service catalog",
+            siteName: "Serlog.com",
+        })).toBe("Cleaning service — serlog.com: Service catalog");
+
+        // A site name in the middle of the title is not a repetition.
+        expect(composeBrowserTabTitle({
+            datasetTitle: "Service catalog of Serlog.com",
+            siteName: "Serlog.com",
+        })).toBe("Service catalog of Serlog.com — Serlog.com");
+    });
+
+    test("keeps the site name beside a dataset title in the language that does not repeat it", async () => {
+        translations.set("travel_deals_front_page", "fintravel.fi – Matkatarjoukset");
+        mountDataset("travel_deals");
+        const { updateBrowserTabTitle } = await loadTitleWriter();
+
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+        expect(document.title).toBe("fintravel.fi – Matkatarjoukset");
+
+        translations.set("travel_deals_front_page", "Travel deals");
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+
+        expect(document.title).toBe("Travel deals — fintravel.fi");
     });
 
     test("replaces a title left behind by another dataset", async () => {

@@ -879,6 +879,31 @@ export function getTranslationForKey(
 }
 
 /**
+ * Reads one translated label and answers with an empty string when the key has no
+ * translation, instead of the readable "missing key" placeholder page rendering uses.
+ * Between the loaded dictionaries and code that composes a label itself, such as the
+ * browser tab title and the dataset heading.
+ * Exists so such a caller can tell "no readable copy yet" apart from real copy without
+ * registering the key as missing.
+ *
+ * @param {string} translationKey Language key to read.
+ * @returns {string} Trimmed translated copy, or "" when the key has none.
+ */
+export function readTranslatedLabelOrEmpty(translationKey) {
+    if (!translationKey || !hasLoadedTranslations()) {
+        return "";
+    }
+    // A sentinel no real translation can equal, so the handler's readable
+    // "missing key" placeholder never reaches a caller that composes its own label.
+    const missingMarker = ` missing ${translationKey}`;
+    const label = getTranslationForKey(translationKey, {
+        fallback: missingMarker,
+        countUsage: false,
+    });
+    return label === missingMarker ? "" : String(label ?? "").trim();
+}
+
+/**
  * Hakee kieliavaimen kaikki käännökset backendistä (fi, en, ch, yue).
  * Palauttaa objektin { fi, en, ch, yue } tai tyhjät arvot virhetilanteessa.
  * Hyödyllinen tilanteissa joissa tarvitaan useamman kielen teksti kerralla

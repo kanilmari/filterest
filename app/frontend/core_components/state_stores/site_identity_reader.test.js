@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import {
     formatSiteNameForDisplay,
     getCurrentSiteName,
+    titleAlreadyOpensWithSiteName,
 } from "./site_identity_reader.js";
 
 describe("getCurrentSiteName", () => {
@@ -43,5 +44,34 @@ describe("formatSiteNameForDisplay", () => {
         ["", ""],
     ])("normalizes %j without translating it", (siteName, expected) => {
         expect(formatSiteNameForDisplay(siteName)).toBe(expected);
+    });
+});
+
+describe("titleAlreadyOpensWithSiteName", () => {
+    test.each([
+        ["Serlog.com – Service catalog", "Serlog.com", true],
+        ["Serlog.com - Service catalog", "Serlog.com", true],
+        ["serlog.com — service catalog", "Serlog.com", true],
+        ["Serlog.com: Service catalog", "Serlog.com", true],
+        ["Serlog.com | Service catalog", "Serlog.com", true],
+        ["Serlog.com Service catalog", "Serlog.com", true],
+        ["  Serlog.com – Service catalog  ", "  Serlog.com  ", true],
+        ["Serlog.com", "Serlog.com", true],
+        ["Serlog.com – 服务目录", "Serlog.com", true],
+    ])("treats %j as already naming %j", (title, siteName, expected) => {
+        expect(titleAlreadyOpensWithSiteName(title, siteName)).toBe(expected);
+    });
+
+    test.each([
+        ["Service catalog", "Serlog.com", false],
+        ["Service catalog of Serlog.com", "Serlog.com", false],
+        ["Palveluhakemisto – Serlog.com – tiedot", "Serlog.com", false],
+        ["Serlogistics catalog", "Serlog", false],
+        ["Serlog.commerce", "Serlog.com", false],
+        ["", "Serlog.com", false],
+        ["Service catalog", "", false],
+        [undefined, undefined, false],
+    ])("leaves %j alone beside %j", (title, siteName, expected) => {
+        expect(titleAlreadyOpensWithSiteName(title, siteName)).toBe(expected);
     });
 });
