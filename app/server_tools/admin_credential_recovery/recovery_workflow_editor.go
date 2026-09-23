@@ -49,6 +49,8 @@ func executeRecoveryWorkflow(
 		return err
 	}
 	if len(administrators) == 0 {
+		terminal.Printf("This installation has no eligible active administrator to restore.\n")
+		terminal.Printf("Run this command with --create-admin to create one new administrator account instead.\n")
 		return credentials.ErrAdministratorNotFound
 	}
 	terminal.Printf("Eligible active administrators:\n")

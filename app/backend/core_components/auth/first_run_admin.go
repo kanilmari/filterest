@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth/credentials"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
@@ -15,9 +16,7 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
-	"net/mail"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -25,22 +24,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	firstRunConfigKey                = "first_run"
+	firstRunConfigKey                = credentials.FirstRunSetupConfigKey
 	installationEnvironmentConfigKey = "installation_environment"
 	siteNameConfigKey                = "site_name"
 	firstRunCreationSpec             = "first-run administrator browser setup"
-	minimumAdminPassword             = 12
-	maximumAdminPassword             = 128
-	maximumAdminUsername             = 64
 	maximumSiteName                  = 100
 )
 
 var (
-	firstRunUsernamePattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 	errFirstRunClosed        = errors.New("first-run administrator setup is closed")
 	errFirstRunUsernameTaken = errors.New("first-run administrator username is already in use")
 	errFirstRunEmailTaken    = errors.New("first-run administrator email is already in use")
@@ -195,14 +189,15 @@ func validateFirstRunAdminInput(input firstRunAdminInput) firstRunAdminErrors {
 			}
 		}
 	}
-	if len(input.Username) < 3 || len(input.Username) > maximumAdminUsername || !firstRunUsernamePattern.MatchString(input.Username) {
+	if credentials.ValidateAdministratorUsername(input.Username) != nil {
 		validation.Username = "first_run_username_invalid"
 	}
-	parsedAddress, emailErr := mail.ParseAddress(input.Email)
-	if emailErr != nil || !strings.EqualFold(parsedAddress.Address, input.Email) {
+	if credentials.ValidateAdministratorEmail(input.Email) != nil {
 		validation.Email = "first_run_email_invalid"
 	}
-	if len(input.Password) < minimumAdminPassword || len(input.Password) > maximumAdminPassword {
+	// The shared administrator password policy counts characters rather than bytes, which is what the
+	// translated "12-128 characters" message has always promised, and refuses what bcrypt cannot hash.
+	if credentials.ValidatePassword(input.Password) != nil {
 		validation.Password = "first_run_password_invalid"
 	} else if input.Password != input.ConfirmPassword {
 		validation.Password = "first_run_password_mismatch"
@@ -254,21 +249,12 @@ func IsFirstRunAdminSetupPending(ctx context.Context, db *sql.DB) (bool, error) 
 
 // createFirstRunAdmin serializes concurrent attempts by locking the first-run row.
 // Every account, credential, permission, and flag change shares one transaction.
+// The account itself is written by the shared administrator definition in the credentials
+// package, so the browser form and the operator recovery command create the same thing.
 func createFirstRunAdmin(ctx context.Context, db *sql.DB, input firstRunAdminInput) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
 	method, err := parseLoginVerificationMethod(input.VerificationMethod)
 	if err != nil {
 		return err
-	}
-	var fixedPINHash string
-	if method == verificationFixedPIN {
-		fixedPINHash, err = hashFixedPIN(input.FixedPIN)
-		if err != nil {
-			return err
-		}
 	}
 	var totpSecret string
 	if method == verificationTOTP {
@@ -349,52 +335,25 @@ func createFirstRunAdmin(ctx context.Context, db *sql.DB, input firstRunAdminInp
 		return errors.New("site name config is unavailable")
 	}
 
-	err = tx.QueryRowContext(ctx, `SELECT 1 FROM system_users WHERE lower(username) = lower($1) LIMIT 1`, input.Username).Scan(&existing)
-	if err == nil {
-		return errFirstRunUsernameTaken
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	err = tx.QueryRowContext(ctx, `SELECT 1 FROM restricted.users_restricted WHERE lower(email) = lower($1) LIMIT 1`, input.Email).Scan(&existing)
-	if err == nil {
-		return errFirstRunEmailTaken
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-
-	var adminGroupID int64
-	if err = tx.QueryRowContext(ctx, `SELECT id FROM system_user_groups WHERE name = 'admins'`).Scan(&adminGroupID); err != nil {
-		return err
-	}
-
-	var userID int64
-	if err = tx.QueryRowContext(ctx, `
-		INSERT INTO system_users (
-			username, full_name, created, updated, enabled, privileged,
-			main_group_id, creation_spec, admin_access_allowed
-		)
-		VALUES ($1, $1, NOW(), NOW(), TRUE, FALSE, $2, $3, TRUE)
-		RETURNING id
-	`, input.Username, adminGroupID, firstRunCreationSpec).Scan(&userID); err != nil {
-		return err
+	if _, err = credentials.CreateAdministratorAccount(ctx, tx, credentials.AdministratorAccountInput{
+		Username:           input.Username,
+		Email:              input.Email,
+		Password:           input.Password,
+		VerificationMethod: credentials.VerificationMethod(method),
+		FixedPIN:           input.FixedPIN,
+		TOTPSecret:         totpSecret,
+		CreationSpec:       firstRunCreationSpec,
+	}); err != nil {
+		switch {
+		case errors.Is(err, credentials.ErrAdministratorUsernameTaken):
+			return errFirstRunUsernameTaken
+		case errors.Is(err, credentials.ErrAdministratorEmailTaken):
+			return errFirstRunEmailTaken
+		default:
+			return err
+		}
 	}
 
-	if _, err = tx.ExecContext(ctx, `
-		INSERT INTO system_user_group_memberships (user_id, group_id, created, updated, creation_spec)
-		VALUES ($1, $2, NOW(), NOW(), $3)
-	`, userID, adminGroupID, firstRunCreationSpec); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, `
-		INSERT INTO restricted.users_restricted (
-			id, password, email, login_verification_method, fixed_pin_hash, totp_secret
-		)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''))
-	`, userID, string(hashedPassword), input.Email, string(method), fixedPINHash, totpSecret); err != nil {
-		return err
-	}
 	result, err = tx.ExecContext(ctx, `
 		UPDATE system_config
 		SET boolean_value = FALSE,

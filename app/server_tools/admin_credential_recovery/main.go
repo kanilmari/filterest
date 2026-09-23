@@ -1,5 +1,5 @@
 // main.go
-// Runs the local operator command for recovering one existing administrator account.
+// Runs the local operator command that restores one existing administrator, or creates a new one.
 // Bridges a protected TTY, an explicitly selected PostgreSQL target, and shared recovery logic.
 // Exists so a locked-out deployment can recover access without public recovery routes or plaintext arguments.
 package main
@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/user"
 	"strings"
 	"time"
 
@@ -24,13 +25,14 @@ import (
 const databaseConnectionTimeout = 10 * time.Second
 
 type commandConfig struct {
-	host       string
-	port       string
-	dbName     string
-	dbUser     string
-	sslMode    string
-	siteDomain string
-	dryRun     bool
+	host                string
+	port                string
+	dbName              string
+	dbUser              string
+	sslMode             string
+	siteDomain          string
+	dryRun              bool
+	createAdministrator bool
 }
 
 type commandDependencies struct {
@@ -74,7 +76,11 @@ func run(ctx context.Context, args []string, dependencies commandDependencies) e
 	}
 	defer terminal.Close()
 
-	terminal.Printf("Filterest administrator credential recovery\n")
+	if config.createAdministrator {
+		terminal.Printf("Filterest administrator account creation\n")
+	} else {
+		terminal.Printf("Filterest administrator credential recovery\n")
+	}
 	terminal.Printf("Connection target: %s:%s database=%s role=%s sslmode=%s\n", config.host, config.port, config.dbName, config.dbUser, config.sslMode)
 	databasePassword, usesRuntimeSecret := resolveRuntimeDatabasePassword(config, dependencies.lookupEnv)
 	if usesRuntimeSecret {
@@ -108,7 +114,34 @@ func run(ctx context.Context, args []string, dependencies commandDependencies) e
 		firstConfiguredValue(dependencies.lookupEnv, "POSTMARK_API_KEY", "POSTMARK_SERVER_TOKEN"),
 		firstConfiguredValue(dependencies.lookupEnv, "EMAIL_FROM_ADDRESS", "POSTMARK_FROM_ADDRESS"),
 	)
+	if config.createAdministrator {
+		return executeAdministratorCreationWorkflow(ctx, terminal, editor, administratorCreationSettings{
+			siteDomain:              config.siteDomain,
+			dryRun:                  config.dryRun,
+			emailDeliveryConfigured: emailDeliveryReady,
+			operatorReference:       resolveOperatorReference(dependencies.lookupEnv),
+		})
+	}
 	return executeRecoveryWorkflow(ctx, terminal, editor, config.siteDomain, config.dryRun, emailDeliveryReady)
+}
+
+// resolveOperatorReference names the operating-system account and host that ran the command.
+// It is audit evidence of who acted, never an authentication claim and never a secret.
+func resolveOperatorReference(lookupEnv func(string) string) string {
+	accountName := firstConfiguredValue(lookupEnv, "SUDO_USER", "USER", "LOGNAME")
+	if accountName == "" {
+		if currentUser, err := user.Current(); err == nil {
+			accountName = strings.TrimSpace(currentUser.Username)
+		}
+	}
+	if accountName == "" {
+		accountName = fmt.Sprintf("uid:%d", os.Getuid())
+	}
+	hostName, err := os.Hostname()
+	if err != nil || strings.TrimSpace(hostName) == "" {
+		hostName = "unknown-host"
+	}
+	return fmt.Sprintf("%s@%s (pid %d)", accountName, strings.TrimSpace(hostName), os.Getpid())
 }
 
 // resolveRuntimeDatabasePassword uses an existing protected runtime admin credential only for its matching role.
@@ -134,6 +167,7 @@ func parseCommandConfig(args []string, lookupEnv func(string) string) (commandCo
 	flags.StringVar(&config.dbUser, "db-user", configuredValueOrDefault(lookupEnv, "DB_ADMIN_USER", "filterest_admin"), "privileged PostgreSQL role")
 	flags.StringVar(&config.sslMode, "sslmode", configuredValueOrDefault(lookupEnv, "DB_SSLMODE", "require"), "PostgreSQL SSL mode")
 	flags.BoolVar(&config.dryRun, "dry-run", false, "show target identity and eligible administrators without changing credentials")
+	flags.BoolVar(&config.createAdministrator, "create-admin", false, "create one NEW administrator account instead of restoring an existing one")
 	if err := flags.Parse(args); err != nil {
 		return config, err
 	}

@@ -177,6 +177,37 @@ func TestValidateFirstRunAdminInputRejectsUnsafeValues(t *testing.T) {
 	}
 }
 
+// TestValidateFirstRunAdminInputUsesTheSharedPasswordPolicy pins the form to the one administrator
+// password rule: characters rather than bytes, as the translated message promises, and nothing bcrypt
+// would silently refuse. The form previously counted bytes and let the refusal surface as a generic error.
+func TestValidateFirstRunAdminInputUsesTheSharedPasswordPolicy(t *testing.T) {
+	base := firstRunAdminInput{
+		SiteName: "Example Workspace", Username: "owner", Email: "owner@example.com",
+		Environment: "dev", VerificationMethod: "none",
+	}
+	for name, password := range map[string]string{
+		"too few characters despite enough bytes": strings.Repeat("字", 4),
+		"more bytes than bcrypt accepts":          strings.Repeat("a", 73),
+		"control character":                       "long enough\tpassword",
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := base
+			input.Password = password
+			input.ConfirmPassword = password
+			if errs := validateFirstRunAdminInput(input); errs.Password != "first_run_password_invalid" {
+				t.Fatalf("password error = %q, want first_run_password_invalid", errs.Password)
+			}
+		})
+	}
+
+	accepted := base
+	accepted.Password = strings.Repeat("字", 12)
+	accepted.ConfirmPassword = accepted.Password
+	if errs := validateFirstRunAdminInput(accepted); errs != (firstRunAdminErrors{}) {
+		t.Fatalf("twelve multi-byte characters rejected: %+v", errs)
+	}
+}
+
 func TestValidateFirstRunAdminInputRejectsPasswordMismatch(t *testing.T) {
 	errs := validateFirstRunAdminInput(firstRunAdminInput{
 		SiteName:           "Example Workspace",

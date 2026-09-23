@@ -237,6 +237,10 @@ The bundled public seed contains synthetic multilingual example datasets and
 media only. See `app/server_tools/public_bootstrap/README.md` for the seed and
 first-administrator boundaries.
 
+If an installation later loses access to its administrator accounts, `SECURITY.md`
+describes the operator-only command that restores an existing administrator and,
+when none is usable, creates a new one.
+
 ### Reverse-proxy client identity
 
 When Filterest runs behind a host reverse proxy, client-IP headers are trusted

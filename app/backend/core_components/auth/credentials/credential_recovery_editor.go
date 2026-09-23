@@ -59,6 +59,22 @@ type Administrator struct {
 	AuthenticationGeneration int64
 }
 
+// eligibleAdministratorSource is the one definition of a login-ready administrator account:
+// an enabled account with administrator access that belongs to the canonical 'admins' group and
+// holds restricted credentials. Listing, locking and counting all read this same definition.
+const eligibleAdministratorSource = `
+		FROM system_users u
+		JOIN restricted.users_restricted ur ON ur.id = u.id
+		WHERE u.enabled IS TRUE
+		  AND u.admin_access_allowed IS TRUE
+		  AND EXISTS (
+		      SELECT 1
+		      FROM system_user_group_memberships membership
+		      JOIN system_user_groups user_group ON user_group.id = membership.group_id
+		      WHERE membership.user_id = u.id
+		        AND user_group.name = 'admins'
+		  )`
+
 // InstanceIdentity is the database-owned target information shown before a recovery mutation.
 type InstanceIdentity struct {
 	DatabaseName    string
@@ -142,18 +158,8 @@ func (editor *RecoveryEditor) ListEligibleAdministrators(ctx context.Context) ([
 		       u.username,
 		       ur.login_verification_method,
 		       ur.email,
-		       ur.authentication_generation
-		FROM system_users u
-		JOIN restricted.users_restricted ur ON ur.id = u.id
-		WHERE u.enabled IS TRUE
-		  AND u.admin_access_allowed IS TRUE
-		  AND EXISTS (
-		      SELECT 1
-		      FROM system_user_group_memberships membership
-		      JOIN system_user_groups user_group ON user_group.id = membership.group_id
-		      WHERE membership.user_id = u.id
-		        AND user_group.name = 'admins'
-		  )
+		       ur.authentication_generation`+
+		eligibleAdministratorSource+`
 		ORDER BY LOWER(u.username), u.id
 	`)
 	if err != nil {
@@ -362,19 +368,9 @@ func lockEligibleAdministrator(ctx context.Context, tx *sql.Tx, userID int64) (A
 		       u.username,
 		       ur.login_verification_method,
 		       ur.email,
-		       ur.authentication_generation
-		FROM system_users u
-		JOIN restricted.users_restricted ur ON ur.id = u.id
-		WHERE u.id = $1
-		  AND u.enabled IS TRUE
-		  AND u.admin_access_allowed IS TRUE
-		  AND EXISTS (
-		      SELECT 1
-		      FROM system_user_group_memberships membership
-		      JOIN system_user_groups user_group ON user_group.id = membership.group_id
-		      WHERE membership.user_id = u.id
-		        AND user_group.name = 'admins'
-		  )
+		       ur.authentication_generation`+
+		eligibleAdministratorSource+`
+		  AND u.id = $1
 		FOR UPDATE OF u, ur
 	`, userID).Scan(
 		&administrator.ID,

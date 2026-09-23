@@ -63,6 +63,13 @@ disposable automated preview when
 `FILTEREST_AUTOMATED_PREVIEW_INITIAL_ADMIN=1` is set. It is not the normal
 installation flow and does not define production authentication behavior.
 
+An installation that has already completed setup but has lost every usable
+administrator — for example a restored or rebuilt site — is not returned to this
+form. The operator-only recovery command restores an existing administrator, or
+creates one under the same protections when none is usable, writing the same
+account definition this form writes. The repository's `SECURITY.md` is the
+canonical description of both modes.
+
 Before a public GitHub release, review the schema boundary and seed contents
 against the publication checklist.
 
