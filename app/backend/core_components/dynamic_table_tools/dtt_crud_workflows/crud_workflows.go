@@ -25,7 +25,6 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
 	"easelect/backend/core_components/security"
-	e_sessions "easelect/backend/core_components/sessions"
 )
 
 type CreateTableRequest struct {
@@ -554,126 +553,6 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Muutokset tallennettu onnistuneesti"})
-}
-
-type SimpleCreateTableRequest struct {
-	Name    string                   `json:"name"`
-	Columns []map[string]interface{} `json:"columns"` // [{"name": "col1", "type": "varchar(255)"}]
-}
-
-func SimpleCreateTableHandler(w http.ResponseWriter, r *http.Request) {
-
-	// Tarkista autentikointi: vaadi kirjautuminen
-	session, err := e_sessions.GetOrCreateSession(w, r)
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "session error")
-		return
-	}
-	userID := session.Values["user_id"]
-	if userID == nil {
-		httpresponse.RespondWithError(w, http.StatusUnauthorized, "login required")
-		return
-	}
-
-	var req SimpleCreateTableRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Errorf("invalid input: %w", err).Error())
-		return
-	}
-
-	tableName, err := security.SanitizeIdentifier(req.Name)
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if len(req.Columns) == 0 {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "at least one column is required")
-		return
-	}
-
-	sanitizedColumns := make(map[string]string)
-	for _, col := range req.Columns {
-		colName, ok := col["name"].(string)
-		if !ok {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "column requires 'name'")
-			return
-		}
-		colType, ok := col["type"].(string)
-		if !ok {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "column requires 'type'")
-			return
-		}
-
-		sColName, err := security.SanitizeIdentifier(colName)
-		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("invalid column name: %s", colName))
-			return
-		}
-		if !isAllowedDataType(colType) {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("column '%s' uses a forbidden data type '%s'", colName, colType))
-			return
-		}
-		sanitizedColumns[sColName] = colType
-	}
-
-	// Auto-inject system columns — reject if user already supplied them
-	for _, reserved := range []string{"id", "created", "updated"} {
-		if _, exists := sanitizedColumns[reserved]; exists {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("column '%s' is reserved and auto-generated", reserved))
-			return
-		}
-	}
-	sanitizedColumns["id"] = "serial"
-	sanitizedColumns["created"] = "timestamp default now()"
-	sanitizedColumns["updated"] = "timestamp default now()"
-
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction not available")
-		return
-	}
-
-	err = dtt_3_table_create.CreateNewTableInDatabase(tx, tableName, sanitizedColumns, nil) // Ei foreign keys
-	if err != nil {
-		_ = tx.Rollback()
-		if writeCreateTableLangKeyError(w, err) {
-			return
-		}
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Errorf("error creating table: %w", err).Error())
-		return
-	}
-
-	// Päivitä OID:t
-	err = UpdateOidsAndTableNamesWithBridge(tx)
-	if err != nil {
-		_ = tx.Rollback()
-		log.Printf("\033[31merror: [SimpleCreateTableHandler] OID update failed: %v\033[0m", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to update OID values")
-		return
-	}
-
-	if metaErr := dtt_2_column_update.UpdateColumnMetadata(tx); metaErr != nil {
-		_ = tx.Rollback()
-		log.Printf("\033[31merror: [SimpleCreateTableHandler] metadata refresh failed for %s: %v\033[0m", tableName, metaErr)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to refresh column metadata")
-		return
-	}
-
-	dtt_1_row_read.InvalidateSchemaCache(tableName)
-	dtt_1_row_read.InvalidateDatasetExistsCache(tableName)
-
-	// Myönnä oikeudet — API:n kautta luoduille tauluille admin saa täydet oikeudet,
-	// users ja guests saavat lukuoikeudet oletuksena
-	if err := ensureTablePermissions(tx, tableName, true, false); err != nil {
-		_ = tx.Rollback()
-		log.Printf("\033[31merror: [SimpleCreateTableHandler] permission setup failed for %s: %v\033[0m", tableName, err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but permission setup failed: %v", err))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Taulu luotu onnistuneesti", "table": tableName})
 }
 
 type SimpleQueryTableRequest struct {

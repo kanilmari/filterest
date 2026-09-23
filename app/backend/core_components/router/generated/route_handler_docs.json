@@ -79,7 +79,6 @@
   "dtt_crud_workflows.CreateTableHandler": "",
   "dtt_crud_workflows.ModifyColumnsHandler": "",
   "dtt_crud_workflows.SetCommentsHandler": "SetCommentsHandler handles POST /api/set-comments. Sets COMMENT ON TABLE and/or COMMENT ON COLUMN for a given table. All identifiers are sanitized. Comment text is parameterized (no injection risk).",
-  "dtt_crud_workflows.SimpleCreateTableHandler": "",
   "dtt_crud_workflows.SimpleQueryTableHandler": "",
   "dtt_foreign_keys.AddForeignKeyHandler": "",
   "dtt_foreign_keys.DeleteForeignKeyHandler": "",

@@ -254,13 +254,16 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 		t.Fatalf("expected CreateTableHandler development profile to be admin")
 	}
 
-	simpleCreateTable := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.SimpleCreateTableHandler")
-	assertScenarioNames(t, simpleCreateTable, []string{"api_language"})
-	if simpleCreateTable.ConditionalSource != "ENABLE_API_LANGUAGE=true" {
-		t.Fatalf("expected SimpleCreateTableHandler conditional source to describe API language gating, got %q", simpleCreateTable.ConditionalSource)
+	// The API-language switch is the manifest's only conditional gate, so one
+	// route behind it carries the contract. /api/create-table used to be the
+	// example here until its second dataset-creation route was removed.
+	simpleQueryTable := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.SimpleQueryTableHandler")
+	assertScenarioNames(t, simpleQueryTable, []string{"api_language"})
+	if simpleQueryTable.ConditionalSource != "ENABLE_API_LANGUAGE=true" {
+		t.Fatalf("expected SimpleQueryTableHandler conditional source to describe API language gating, got %q", simpleQueryTable.ConditionalSource)
 	}
-	if mustFindScenarioProfile(t, simpleCreateTable, "api_language").ProfileName != "admin" {
-		t.Fatalf("expected SimpleCreateTableHandler api_language profile to be admin")
+	if mustFindScenarioProfile(t, simpleQueryTable, "api_language").ProfileName != "admin" {
+		t.Fatalf("expected SimpleQueryTableHandler api_language profile to be admin")
 	}
 
 	fkCacheTriggers := mustFindManifestRoute(t, manifest, "system_table_tools.ListFKCacheTriggersHandler")

@@ -197,6 +197,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.PruneArchivedMediaTableFoldersHandler": AdminProfile,
 	"system_table_tools.CheckMediaRowFoldersHandler":           AdminProfile,
 	"system_table_tools.CheckMediaSubfoldersHandler":           AdminProfile,
+	"missing_media_check.AdminMissingMediaCheckHandler":        AdminProfile,
 	"system_table_tools.ListFKCacheTriggersHandler":            AdminProfile,
 	"system_table_tools.RefreshFKCacheHandler":                 AdminProfile,
 	"system_table_tools.GetCardVisibilityHandler":              AdminProfile,
@@ -253,7 +254,6 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_crud_workflows.CreateIndexesHandler":     AdminProfile,
 	"dtt_crud_workflows.SetCommentsHandler":       AdminProfile,
 	"dtt_crud_workflows.CreateTableHandler":       AdminProfile,
-	"dtt_crud_workflows.SimpleCreateTableHandler": AdminProfile, // AI-powered table creation (ENABLE_API_LANGUAGE)
 	"dtt_3_table_delete.DropTableHandler":         AdminProfile,
 	"dtt_triggers.CreateTriggerHandler":           AdminProfile, // Trigger creation is a schema-level operation
 	// devtools.CheckJsonInTextColumnsHandler — registered conditionally in init() below

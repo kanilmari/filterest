@@ -105,7 +105,6 @@ var legacyMethodNotAllowedResponses = map[string]methodNotAllowedResponse{
 	"dtt_crud_workflows.CreateTableHandler":                    {Message: "only POST method is allowed"},
 	"dtt_crud_workflows.ModifyColumnsHandler":                  {Message: "only GET and POST allowed"},
 	"dtt_crud_workflows.SetCommentsHandler":                    {Message: "Method not allowed"},
-	"dtt_crud_workflows.SimpleCreateTableHandler":              {Message: "only POST method is allowed"},
 	"dtt_crud_workflows.SimpleQueryTableHandler":               {Message: "only POST method is allowed"},
 	"dtt_foreign_keys.AddForeignKeyHandler":                    {Message: "Method not allowed"},
 	"dtt_foreign_keys.DeleteForeignKeyHandler":                 {Message: "Metodi ei ole sallittu"},

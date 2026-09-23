@@ -318,13 +318,14 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/rename-tree-node", dtt_system_table_folders.HandleRenameTreeNode, "dtt_system_table_folders.HandleRenameTreeNode", http.MethodPost)
 	if os.Getenv("ENABLE_API_LANGUAGE") == "true" {
 		const apiLanguageCondition = "ENABLE_API_LANGUAGE=true"
-		log.Printf("Registering /api/create-table because ENABLE_API_LANGUAGE=true")
-		functionRegisterConditionalHandler("/api/create-table", dtt_crud_workflows.SimpleCreateTableHandler, "dtt_crud_workflows.SimpleCreateTableHandler", apiLanguageCondition, http.MethodPost)
 		log.Printf("Registering /api/query-table because ENABLE_API_LANGUAGE=true")
 		functionRegisterConditionalHandler("/api/query-table", dtt_crud_workflows.SimpleQueryTableHandler, "dtt_crud_workflows.SimpleQueryTableHandler", apiLanguageCondition, http.MethodPost)
 	} else {
-		log.Printf("Not registering /api/create-table because ENABLE_API_LANGUAGE=%s", os.Getenv("ENABLE_API_LANGUAGE"))
+		log.Printf("Not registering /api/query-table because ENABLE_API_LANGUAGE=%s", os.Getenv("ENABLE_API_LANGUAGE"))
 	}
+	// Creating a dataset has exactly one route. /api/create-table was a second,
+	// AI-gated one that skipped folder placement, so its datasets landed in
+	// database / other_tables and stayed out of the site navigation.
 	functionRegisterHandler("/api/create_dataset", dtt_crud_workflows.CreateTableHandler, "dtt_crud_workflows.CreateTableHandler", http.MethodPost)
 	functionRegisterHandler("/api/generateTranslations", lang.GenerateTranslationsHandler, "lang.GenerateTranslationsHandler", http.MethodPost)
 	functionRegisterHandler("/api/fix-translations", lang.FixTableTranslationsHandler, "lang.FixTableTranslationsHandler", http.MethodPost)

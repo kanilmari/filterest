@@ -35,7 +35,6 @@ KNOWN_LEGACY=(
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_child_items.go"
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_child_items_test.go"
     "backend/core_components/dynamic_table_tools/dtt_asset_linking/image_asset_linking_handlers_test.go"
-    "backend/core_components/dynamic_table_tools/dtt_crud_workflows/crud_workflows.go"
     "backend/core_components/dynamic_table_tools/dtt_table_folders/table_folders_test.go"
     "backend/core_components/router/health_handler_test.go"
     "backend/core_components/router/routing_builder.go"

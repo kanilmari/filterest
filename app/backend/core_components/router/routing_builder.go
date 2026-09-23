@@ -352,9 +352,8 @@ func getPackageNameFromHandler(handlerName string) string {
 // route that takes no dataset can never satisfy a dataset-scoped permission
 // check, so leaving the stored value would keep refusing every request.
 var tablelessReconciliationHandlers = map[string]bool{
-	"dtt_crud_workflows.SimpleCreateTableHandler": true,
-	"dtt_crud_workflows.SimpleQueryTableHandler":  true,
-	"dtt_1_row_read.ChatAttachmentHandler":        true,
+	"dtt_crud_workflows.SimpleQueryTableHandler": true,
+	"dtt_1_row_read.ChatAttachmentHandler":       true,
 }
 
 func defaultSpecificTableRelated(handlerName string) bool {
@@ -367,7 +366,6 @@ func defaultSpecificTableRelated(handlerName string) bool {
 		// between folders must be bound to the specific dataset permission.
 		return true
 	case "dtt_foreign_keys.GetTableNamesHandler",
-		"dtt_crud_workflows.SimpleCreateTableHandler",
 		"dtt_crud_workflows.SimpleQueryTableHandler",
 		"system_table_tools.AdminRowGroupsHandler",
 		"system_table_tools.AdminRowGroupMembershipsHandler",

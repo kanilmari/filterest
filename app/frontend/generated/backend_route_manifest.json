@@ -2118,24 +2118,6 @@
       ]
     },
     {
-      "path_pattern": "/api/create-table",
-      "match_type": "exact",
-      "handler_name": "dtt_crud_workflows.SimpleCreateTableHandler",
-      "methods": [
-        "POST"
-      ],
-      "method_source": "route_registration",
-      "conditional_source": "ENABLE_API_LANGUAGE=true",
-      "scenarios": [
-        {
-          "name": "api_language",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        }
-      ]
-    },
-    {
       "path_pattern": "/api/create_dataset",
       "match_type": "exact",
       "handler_name": "dtt_crud_workflows.CreateTableHandler",
