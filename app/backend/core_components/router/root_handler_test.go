@@ -30,6 +30,13 @@ import (
 var rootHandlerDriverCounter int64
 var rootHandlerTestKey = []byte("root-handler-test-secret-32-bytes")
 
+// The one browser every root-handler fixture speaks for. See
+// attachRootHandlerSessionUser for why a test session carries a binding at all.
+const (
+	rootHandlerTestDeviceID    = "root-handler-test-device"
+	rootHandlerTestFingerprint = "root-handler-test-fingerprint"
+)
+
 type rootHandlerMockDriver struct {
 	loginToBrowse bool
 	instanceRole  string
@@ -238,6 +245,14 @@ func setupRootHandlerFrontend(t *testing.T) {
 	})
 }
 
+// attachRootHandlerSessionUser gives the request the session of a real browser:
+// an identity, and the device and fingerprint values that bind that identity to
+// this one browser. A signed-in request always carries both, because they are
+// written at sign-in and the pipeline stages compare every protected request
+// against them; the root page refuses a sign-in that arrives without them. A
+// fixture that supplied only the identity would therefore describe a browser
+// that cannot exist. The values are the same for every test session, which is
+// all a single-browser test needs.
 func attachRootHandlerSessionUser(t *testing.T, req *http.Request, userID int) {
 	t.Helper()
 
@@ -246,6 +261,8 @@ func attachRootHandlerSessionUser(t *testing.T, req *http.Request, userID int) {
 		t.Fatalf("Store.Get() error = %v", err)
 	}
 	session.Values["user_id"] = userID
+	session.Values["device_id"] = rootHandlerTestDeviceID
+	session.Values["fingerprint_hash"] = rootHandlerTestFingerprint
 
 	rr := httptest.NewRecorder()
 	if err := session.Save(req, rr); err != nil {
@@ -254,6 +271,8 @@ func attachRootHandlerSessionUser(t *testing.T, req *http.Request, userID int) {
 	for _, cookie := range rr.Result().Cookies() {
 		req.AddCookie(cookie)
 	}
+	req.AddCookie(&http.Cookie{Name: e_sessions.DeviceIDCookieName(), Value: rootHandlerTestDeviceID})
+	req.AddCookie(&http.Cookie{Name: e_sessions.FingerprintCookieName(), Value: rootHandlerTestFingerprint})
 }
 
 func withRootAuthenticationGenerationMatch(

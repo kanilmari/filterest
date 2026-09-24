@@ -15,7 +15,6 @@ import (
 	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
-	"github.com/google/uuid"
 	"html/template"
 	"log"
 	"net/http"
@@ -133,45 +132,29 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Device_id ja fingerprint varmistetaan,
 	// jos login_to_browse on false (ja ollaan siis 'guest'-tilassa).
-	// Muussa tapauksessa nämä kannattaa hoitaa omassa middleware-funktiossa, jos haluat.
+	// Muussa tapauksessa nämä hoitaa laitteen ja sormenjäljen putkivaihe.
 	if !loginToBrowse {
-		changed := false
-
-		// Varmista device_id
-		cDev, cDevErr := r.Cookie(e_sessions.DeviceIDCookieName())
-		var deviceID string
-		if cDevErr != nil || cDev.Value == "" {
-			deviceID = uuid.NewString()
-			changed = true
-		} else {
-			deviceID = cDev.Value
-		}
-		if sessID, _ := session.Values["device_id"].(string); sessID != deviceID {
-			session.Values["device_id"] = deviceID
-			changed = true
-		}
-		if changed {
-			e_sessions.SetDeviceIDCookie(w, deviceID)
-		}
-
-		// Varmista fingerprint
-		cF, cFErr := r.Cookie(e_sessions.FingerprintCookieName())
-		var fingerprint string
-		if cFErr != nil || cF.Value == "" {
-			fingerprint = uuid.NewString()
-			changed = true
-		} else {
-			fingerprint = cF.Value
-		}
-		if sessFp, _ := session.Values["fingerprint_hash"].(string); sessFp != fingerprint {
-			session.Values["fingerprint_hash"] = fingerprint
-			changed = true
-		}
-		if changed {
-			e_sessions.SetFingerprintCookie(w, fingerprint)
-			if errSave := session.Save(r, w); errSave != nil {
-				log.Printf("\033[31merror: session save failed: %s\033[0m\n", errSave.Error())
+		if isSignedInUserID(userIDVal) {
+			// Establishing a browser binding is a guest's affair only. A person
+			// who signed in already has one: it was written when they signed in
+			// and it is exactly what the device and fingerprint pipeline stages
+			// compare every protected request against. This page is public and
+			// runs neither stage, so minting a binding here for whatever cookies
+			// a request happens to carry would let a request that owns nothing
+			// but a stolen session cookie hand itself the proof of being the
+			// browser that signed in. A signed-in request therefore has to
+			// arrive with the binding its own session stores, and one that does
+			// not is answered the way an ended sign-in is answered everywhere
+			// else in the application.
+			if !requestCarriesSessionBrowserBinding(r, session) {
+				session_expiry.RespondSignInNoLongerValid(
+					w, r, session,
+					"the root page was reached with a sign-in whose browser binding is missing or different",
+				)
+				return
 			}
+		} else {
+			establishGuestBrowserBinding(w, r, session)
 		}
 	}
 

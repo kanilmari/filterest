@@ -304,6 +304,7 @@ itself:
 | `device_id_check/device_id_check.go` | the browser's device binding is missing or does not match |
 | `admin_check/admin_user_check.go` | the session cannot be read, or carries no readable user identity |
 | `access_control/access_control.go` | the same session problems, plus a guest opening a page that needs a sign-in |
+| `router/root_handler.go` | a sign-in reaches the public root page without the browser binding its own session stores |
 
 The responder does three things: it drops the ended sign-in from the session, so
 `GET /login` no longer sends an apparently signed-in visitor back to the page that
@@ -360,6 +361,36 @@ changed `authentication_generation` for that user, ends it before its time.
 
 `app/backend/pipeline/session_binding_renewal_test.go` walks one browser through
 the journey with a cookie jar that drops what has run out.
+
+### Only a visitor without a sign-in may be given a binding
+
+A binding is minted where there is no sign-in to protect: at sign-in itself, and
+for a guest on a site that allows public browsing. Every other place compares.
+
+That distinction matters most on a **public route**, because a public route runs
+neither binding stage. The public root page (`router/root_handler.go`) sets a
+guest up on a site where `login_to_browse` is off, and it used to run that setup
+for every visitor, signed in or not — taking the binding cookies the request
+happened to carry, minting fresh ones when there were none, and writing them into
+the session. A request holding nothing but a stolen session cookie could
+therefore ask `/` for the very values that prove it is the browser which signed
+in, and use them on the protected routes afterwards.
+
+The root page now asks who the visitor is before it decides:
+
+- **no sign-in** — the guest setup runs exactly as before, so a visitor who never
+  signed in still browses the public site unchanged;
+- **signed in** — nothing is minted. The request must already carry the device
+  and fingerprint values its own session stores, and one that does not gets the
+  single ended-sign-in answer above.
+
+`app/backend/core_components/router/root_browser_binding.go` holds that decision,
+and `root_browser_binding_test.go` walks the attack: a session cookie alone, a
+request to the root page, then a protected request with whatever came back.
+
+The same question applies to any new public route that writes `device_id` or
+`fingerprint_hash` into a session: it may establish a binding only for a visitor
+who has no sign-in to protect.
 
 ---
 
