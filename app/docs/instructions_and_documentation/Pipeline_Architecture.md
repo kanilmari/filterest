@@ -368,25 +368,41 @@ A binding is minted where there is no sign-in to protect: at sign-in itself, and
 for a guest on a site that allows public browsing. Every other place compares.
 
 That distinction matters most on a **public route**, because a public route runs
-neither binding stage. The public root page (`router/root_handler.go`) sets a
-guest up on a site where `login_to_browse` is off, and it used to run that setup
-for every visitor, signed in or not — taking the binding cookies the request
-happened to carry, minting fresh ones when there were none, and writing them into
-the session. A request holding nothing but a stolen session cookie could
-therefore ask `/` for the very values that prove it is the browser which signed
-in, and use them on the protected routes afterwards.
+neither binding stage — on any kind of site. The public root page
+(`router/root_handler.go`) sets a guest up on a site where `login_to_browse` is
+off, and it used to run that setup for every visitor, signed in or not — taking
+the binding cookies the request happened to carry, minting fresh ones when there
+were none, and writing them into the session. A request holding nothing but a
+stolen session cookie could therefore ask `/` for the very values that prove it
+is the browser which signed in, and use them on the protected routes afterwards.
 
 The root page now asks who the visitor is before it decides:
 
-- **no sign-in** — the guest setup runs exactly as before, so a visitor who never
-  signed in still browses the public site unchanged;
-- **signed in** — nothing is minted. The request must already carry the device
-  and fingerprint values its own session stores, and one that does not gets the
-  single ended-sign-in answer above.
+- **signed in** — nothing is minted, on either kind of site. The request must
+  already carry the device and fingerprint values its own session stores, and one
+  that does not gets the single ended-sign-in answer above.
+- **no sign-in** — on a site that allows public browsing the guest setup runs
+  exactly as before, so a visitor who never signed in browses unchanged. A site
+  that requires a sign-in enrols no guest at all: such a visitor has already been
+  sent to the login page further up the handler.
+
+The comparison runs on **both** kinds of site, and the first repair of this hole
+ran it only where public browsing is allowed. That left a sign-in-only site — what
+a production installation is — answering a stolen session cookie with the page
+itself. The page is not empty: `router/seo_meta_builder.go` composes the dataset's
+title and description into it, and at a row address the row's own title, before
+any protected request has refused anything. Account access stayed closed, but the
+content did not.
 
 `app/backend/core_components/router/root_browser_binding.go` holds that decision,
-and `root_browser_binding_test.go` walks the attack: a session cookie alone, a
-request to the root page, then a protected request with whatever came back.
+and `root_browser_binding_test.go` walks the attack on both kinds of site: a
+session cookie alone, a request to the root page and to a dataset and row address,
+then a protected request with whatever came back.
+
+The frontend's own files and the favicon are answered earlier in the handler,
+before the session is even read, and they stay that way. They have to: the login
+page a refused request is sent to needs its own stylesheet to look like a page,
+and a file that is identical for everyone discloses nothing.
 
 The same question applies to any new public route that writes `device_id` or
 `fingerprint_hash` into a session: it may establish a binding only for a visitor

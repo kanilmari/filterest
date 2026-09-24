@@ -1,10 +1,13 @@
 // root_browser_binding_test.go
-// Verifies that only a visitor without a sign-in can obtain a browser binding from the root page.
+// Verifies the root page compares a sign-in against its own browser on every kind of site.
 // Between the public root page, the browser's cookies and the device and fingerprint pipeline stages.
 // Exists because the root page used to hand a signed-in request fresh device and
 // fingerprint values taken from whatever cookies it carried, so a request holding
 // nothing but a stolen session cookie could ask this page for the proof that it
-// was the browser which signed in, and then use it on the protected routes.
+// was the browser which signed in, and then use it on the protected routes; and
+// because the first repair ran only where a site lets a visitor browse without
+// signing in, leaving a site that requires a sign-in writing a dataset's
+// description and a row's own title into the page such a request got back.
 // Uses the package's mocked configuration reads and no network.
 package router
 
@@ -159,26 +162,17 @@ func TestSignedInSessionWithoutItsBindingIsNotGivenAWorkingOne(t *testing.T) {
 
 	rootHandler(recorder, request)
 
-	if recorder.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want %d (the ended sign-in answer)", recorder.Code, http.StatusSeeOther)
-	}
-	if location := recorder.Header().Get("Location"); !strings.Contains(location, "auth_notice=session-ended") {
-		t.Fatalf("Location = %q, want the login page with its explanation", location)
-	}
-
 	handedBackDevice := responseCookie(recorder, e_sessions.DeviceIDCookieName())
-	if handedBackDevice != nil && handedBackDevice.Value != "" {
-		t.Fatalf("the root page minted a device binding for a signed-in request: %q", handedBackDevice.Value)
-	}
 	handedBackFingerprint := responseCookie(recorder, e_sessions.FingerprintCookieName())
-	if handedBackFingerprint != nil && handedBackFingerprint.Value != "" {
-		t.Fatalf("the root page minted a fingerprint binding for a signed-in request: %q", handedBackFingerprint.Value)
-	}
-
-	// Whatever came back is now replayed against a protected route, both with the
-	// session cookie the root page returned and with the one the request arrived
-	// with. Neither may act as the person who signed in.
 	returnedSession := responseCookie(recorder, e_sessions.SessionName)
+
+	// The attack itself runs first. Whatever came back is replayed against a
+	// protected route, both with the session cookie the root page returned and
+	// with the one the request arrived with. Neither may act as the person who
+	// signed in. Asserting the answer's shape before this point would let a
+	// wrong-shaped answer stop the test before the attack was ever attempted,
+	// so an unrepaired root page would fail for the wrong reason and never say
+	// that the replay succeeded.
 	for _, replay := range []struct {
 		name          string
 		sessionCookie *http.Cookie
@@ -200,47 +194,230 @@ func TestSignedInSessionWithoutItsBindingIsNotGivenAWorkingOne(t *testing.T) {
 			}
 		})
 	}
+
+	if handedBackDevice != nil && handedBackDevice.Value != "" {
+		t.Errorf("the root page minted a device binding for a signed-in request: %q", handedBackDevice.Value)
+	}
+	if handedBackFingerprint != nil && handedBackFingerprint.Value != "" {
+		t.Errorf("the root page minted a fingerprint binding for a signed-in request: %q", handedBackFingerprint.Value)
+	}
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d (the ended sign-in answer)", recorder.Code, http.StatusSeeOther)
+	}
+	if location := recorder.Header().Get("Location"); !strings.Contains(location, "auth_notice=session-ended") {
+		t.Fatalf("Location = %q, want the login page with its explanation", location)
+	}
 }
 
-// A person who signed in and whose browser still carries its binding must not
-// notice any of this.
-func TestSignedInVisitorWithItsBindingIsUnaffected(t *testing.T) {
-	setupRootHandlerMockDB(t, false)
+// The two kinds of site this application is installed as. A site that requires a
+// sign-in is what the production sites are; a site that permits public browsing
+// is what the local development installation is. Every rule about the browser
+// binding has to hold on both, which is exactly what the first repair missed.
+var rootPageSiteKinds = []struct {
+	name          string
+	loginToBrowse bool
+}{
+	{"on a site that requires a sign-in", true},
+	{"on a site that permits public browsing", false},
+}
+
+// The addresses a person reaches the root page by: the front page, a dataset,
+// and a single row of that dataset. The last two are where the page carries
+// content of its own.
+var rootPageAddresses = []string{"/", "/service_catalog", "/service_catalog/125-the-newest-service"}
+
+// What this installation's dataset and its row say. A page that reached the
+// wrong browser would have disclosed these, so a test looks for them by name.
+// Plain words only: the page is HTML, so an apostrophe would arrive escaped and a
+// test looking for the unescaped sentence would miss a disclosure that happened.
+const (
+	disclosableDatasetDescription = "What this catalogue is for, in the words of the company that owns it"
+	disclosableRowTitle           = "The service nobody outside the company may learn about"
+)
+
+// setupSiteWithReadableContent builds a site of the given kind whose one dataset
+// has a description and whose one row has a title.
+func setupSiteWithReadableContent(t *testing.T, loginToBrowse bool) {
+	t.Helper()
+	setupRootHandlerMockDBWithConfig(t, rootHandlerMockConfig{
+		loginToBrowse:      loginToBrowse,
+		datasetDescription: disclosableDatasetDescription,
+		rowTitle:           disclosableRowTitle,
+	})
 	setupRootHandlerSessionStore(t)
 	setupRootHandlerFrontend(t)
+}
+
+// assertDisclosesNothing fails when the answer carries the dataset's description
+// or the row's own title, whatever else the answer happens to be.
+func assertDisclosesNothing(t *testing.T, body string) {
+	t.Helper()
+	for _, secret := range []string{disclosableDatasetDescription, disclosableRowTitle} {
+		if strings.Contains(body, secret) {
+			t.Errorf("the answer disclosed %q", secret)
+		}
+	}
+}
+
+// The consequence the first repair left behind. On a site that requires a
+// sign-in, a request holding nothing but a session cookie used to be handed the
+// page itself, and the page carries the dataset's description and, for a row
+// address, that row's own title. Nothing in the pipeline refused it first: this
+// route is public, so it runs neither binding stage on any kind of site.
+func TestSignInOnlySiteDisclosesNothingToASessionWithoutItsBinding(t *testing.T) {
+	setupSiteWithReadableContent(t, true)
 	acceptSignInGeneration(t)
 
 	browser := buildRootHandlerBrowserSession(t, 42, "the-signed-in-device", "the-signed-in-fingerprint")
 
-	for _, page := range []string{"/", "/service_catalog"} {
-		t.Run(page, func(t *testing.T) {
-			request := rootPageNavigation(page, browser.sessionCookie, browser.deviceCookie, browser.fingerprintCookie)
+	for _, address := range rootPageAddresses {
+		t.Run(address, func(t *testing.T) {
+			// Only the session cookie travels; the binding cookies stay behind.
+			request := rootPageNavigation(address, browser.sessionCookie)
 			recorder := httptest.NewRecorder()
 
 			rootHandler(recorder, request)
 
-			if recorder.Code != http.StatusOK {
-				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+			assertDisclosesNothing(t, recorder.Body.String())
+			if recorder.Code != http.StatusSeeOther {
+				t.Fatalf("status = %d, want %d (the ended sign-in answer)", recorder.Code, http.StatusSeeOther)
 			}
-			if location := recorder.Header().Get("Location"); location != "" {
-				t.Fatalf("unexpected redirect Location = %q", location)
-			}
-			if !strings.Contains(recorder.Body.String(), "root-shell") {
-				t.Fatalf("expected the root shell, got %q", recorder.Body.String())
-			}
-			if rotated := responseCookie(recorder, e_sessions.DeviceIDCookieName()); rotated != nil {
-				t.Fatalf("the device binding was rewritten during ordinary browsing: %q", rotated.Value)
-			}
-			if rotated := responseCookie(recorder, e_sessions.FingerprintCookieName()); rotated != nil {
-				t.Fatalf("the fingerprint binding was rewritten during ordinary browsing: %q", rotated.Value)
+			if location := recorder.Header().Get("Location"); !strings.Contains(location, "auth_notice=session-ended") {
+				t.Fatalf("Location = %q, want the login page with its explanation", location)
 			}
 		})
 	}
 }
 
-// A visitor who never signed in keeps the public site exactly as it was: the
-// page loads and the browser is still given the values the rest of the
-// application expects to find.
+// A person who signed in and whose browser still carries its binding must not
+// notice any of this, on either kind of site, and must still be given the page
+// with everything it is meant to say.
+func TestSignedInVisitorWithItsBindingIsUnaffected(t *testing.T) {
+	for _, site := range rootPageSiteKinds {
+		t.Run(site.name, func(t *testing.T) {
+			setupSiteWithReadableContent(t, site.loginToBrowse)
+			acceptSignInGeneration(t)
+
+			browser := buildRootHandlerBrowserSession(t, 42, "the-signed-in-device", "the-signed-in-fingerprint")
+
+			for _, address := range rootPageAddresses {
+				t.Run(address, func(t *testing.T) {
+					request := rootPageNavigation(address, browser.sessionCookie, browser.deviceCookie, browser.fingerprintCookie)
+					recorder := httptest.NewRecorder()
+
+					rootHandler(recorder, request)
+
+					if recorder.Code != http.StatusOK {
+						t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+					}
+					if location := recorder.Header().Get("Location"); location != "" {
+						t.Fatalf("unexpected redirect Location = %q", location)
+					}
+					if !strings.Contains(recorder.Body.String(), "root-shell") {
+						t.Fatalf("expected the root shell, got %q", recorder.Body.String())
+					}
+					if address == "/service_catalog/125-the-newest-service" &&
+						!strings.Contains(recorder.Body.String(), disclosableRowTitle) {
+						t.Fatalf("the person who signed in was not given the row they asked for: %q", recorder.Body.String())
+					}
+					if rotated := responseCookie(recorder, e_sessions.DeviceIDCookieName()); rotated != nil {
+						t.Fatalf("the device binding was rewritten during ordinary browsing: %q", rotated.Value)
+					}
+					if rotated := responseCookie(recorder, e_sessions.FingerprintCookieName()); rotated != nil {
+						t.Fatalf("the fingerprint binding was rewritten during ordinary browsing: %q", rotated.Value)
+					}
+				})
+			}
+		})
+	}
+}
+
+// A visitor who never signed in, on a site that requires one, meets exactly the
+// login page they met before: the front page sends them there plainly, a deep
+// link sends them there with the address they wanted, and neither hands them a
+// browser binding, because enrolling a guest is still something that happens
+// only where public browsing is allowed.
+func TestGuestOnASignInOnlySiteMeetsTheSameLoginPageAsBefore(t *testing.T) {
+	setupSiteWithReadableContent(t, true)
+
+	for _, expected := range []struct {
+		address  string
+		location string
+	}{
+		{"/", "/login"},
+		{"/service_catalog", "/login?auth_notice=session-ended&redirect=%2Fservice_catalog"},
+		{
+			"/service_catalog/125-the-newest-service",
+			"/login?auth_notice=session-ended&redirect=%2Fservice_catalog%2F125-the-newest-service",
+		},
+	} {
+		t.Run(expected.address, func(t *testing.T) {
+			request := rootPageNavigation(expected.address)
+			recorder := httptest.NewRecorder()
+
+			rootHandler(recorder, request)
+
+			assertDisclosesNothing(t, recorder.Body.String())
+			if recorder.Code != http.StatusSeeOther {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusSeeOther)
+			}
+			if location := recorder.Header().Get("Location"); location != expected.location {
+				t.Fatalf("Location = %q, want %q", location, expected.location)
+			}
+			if minted := responseCookie(recorder, e_sessions.DeviceIDCookieName()); minted != nil && minted.Value != "" {
+				t.Fatalf("a guest on a sign-in-only site was given a device binding: %q", minted.Value)
+			}
+			if minted := responseCookie(recorder, e_sessions.FingerprintCookieName()); minted != nil && minted.Value != "" {
+				t.Fatalf("a guest on a sign-in-only site was given a fingerprint binding: %q", minted.Value)
+			}
+		})
+	}
+}
+
+// The frontend's own files and the favicon are answered before the page ever
+// asks who is asking, on either kind of site. They have to be: the login page a
+// refused request is sent to needs its own stylesheet to look like a page at
+// all, and a file that is the same for everyone discloses nothing.
+func TestPublicFilesAreStillServedWhateverTheSignInLooksLike(t *testing.T) {
+	for _, site := range rootPageSiteKinds {
+		t.Run(site.name, func(t *testing.T) {
+			setupSiteWithReadableContent(t, site.loginToBrowse)
+			acceptSignInGeneration(t)
+
+			// The worst case a file request can carry: a sign-in with no binding.
+			browser := buildRootHandlerBrowserSession(t, 42, "the-signed-in-device", "the-signed-in-fingerprint")
+
+			for _, expected := range []struct {
+				address string
+				body    string
+			}{
+				{"/favicon4S.png", "png"},
+				{"/" + rootHandlerTestStylesheet, rootHandlerTestStylesheetBody},
+			} {
+				t.Run(expected.address, func(t *testing.T) {
+					request := rootPageNavigation(expected.address, browser.sessionCookie)
+					recorder := httptest.NewRecorder()
+
+					rootHandler(recorder, request)
+
+					if recorder.Code != http.StatusOK {
+						t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+					}
+					if location := recorder.Header().Get("Location"); location != "" {
+						t.Fatalf("a public file was answered with a redirect to %q", location)
+					}
+					if body := recorder.Body.String(); body != expected.body {
+						t.Fatalf("body = %q, want %q", body, expected.body)
+					}
+				})
+			}
+		})
+	}
+}
+
+// A visitor who never signed in, on a site that permits public browsing, keeps
+// that site exactly as it was: the page loads and the browser is still given the
+// values the rest of the application expects to find.
 func TestSignedOutVisitorStillReceivesItsGuestBinding(t *testing.T) {
 	setupRootHandlerMockDB(t, false)
 	setupRootHandlerSessionStore(t)

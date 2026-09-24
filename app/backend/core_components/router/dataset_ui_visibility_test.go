@@ -30,7 +30,7 @@ type hiddenRootConn struct {
 }
 
 func (d hiddenRootDriver) Open(string) (driver.Conn, error) {
-	return hiddenRootConn{&rootHandlerMockConn{loginToBrowse: false}, d.hidden, d.fail}, nil
+	return hiddenRootConn{&rootHandlerMockConn{config: rootHandlerMockConfig{loginToBrowse: false}}, d.hidden, d.fail}, nil
 }
 func (c hiddenRootConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	if strings.Contains(q, "dataset.ui_hidden") {

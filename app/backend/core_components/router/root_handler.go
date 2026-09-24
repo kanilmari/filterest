@@ -130,32 +130,34 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Device_id ja fingerprint varmistetaan,
-	// jos login_to_browse on false (ja ollaan siis 'guest'-tilassa).
-	// Muussa tapauksessa nämä hoitaa laitteen ja sormenjäljen putkivaihe.
-	if !loginToBrowse {
-		if isSignedInUserID(userIDVal) {
-			// Establishing a browser binding is a guest's affair only. A person
-			// who signed in already has one: it was written when they signed in
-			// and it is exactly what the device and fingerprint pipeline stages
-			// compare every protected request against. This page is public and
-			// runs neither stage, so minting a binding here for whatever cookies
-			// a request happens to carry would let a request that owns nothing
-			// but a stolen session cookie hand itself the proof of being the
-			// browser that signed in. A signed-in request therefore has to
-			// arrive with the binding its own session stores, and one that does
-			// not is answered the way an ended sign-in is answered everywhere
-			// else in the application.
-			if !requestCarriesSessionBrowserBinding(r, session) {
-				session_expiry.RespondSignInNoLongerValid(
-					w, r, session,
-					"the root page was reached with a sign-in whose browser binding is missing or different",
-				)
-				return
-			}
-		} else {
-			establishGuestBrowserBinding(w, r, session)
+	// A person who signed in already has a browser binding: it was written when
+	// they signed in, and it is exactly what the device and fingerprint pipeline
+	// stages compare every protected request against. This page runs neither
+	// stage on any kind of site, because it is on the public route profile
+	// (app/backend/pipeline/route_profiles.go), so it has to make the comparison
+	// itself. Without it, a request that owns nothing but a stolen session cookie
+	// is answered with the page — and the page carries the dataset's description
+	// and, at a row address, that row's own title, composed by resolvePageMeta.
+	// The comparison therefore runs on every kind of site, and a sign-in that
+	// does not match its own browser is answered the way an ended sign-in is
+	// answered everywhere else in the application.
+	//
+	// Giving a browser a binding, rather than checking one, stays a guest's
+	// affair on a site that permits public browsing. Minting values there is safe
+	// precisely because there is no sign-in to protect; minting them for a
+	// signed-in request would hand it the very proof the protected routes demand
+	// afterwards. A site that requires a sign-in enrols no guest at all: a
+	// visitor without one has already been sent to the login page above.
+	if isSignedInUserID(userIDVal) {
+		if !requestCarriesSessionBrowserBinding(r, session) {
+			session_expiry.RespondSignInNoLongerValid(
+				w, r, session,
+				"the root page was reached with a sign-in whose browser binding is missing or different",
+			)
+			return
 		}
+	} else if !loginToBrowse {
+		establishGuestBrowserBinding(w, r, session)
 	}
 
 	// Jos polku on "/", palvellaan index.html
