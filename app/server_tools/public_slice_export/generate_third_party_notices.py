@@ -67,8 +67,14 @@ EMBEDDED_VECTOR_TEST_SUFFIXES = (
     ".spec.js", ".spec.jsx", ".spec.ts", ".spec.tsx",
     ".test.js", ".test.jsx", ".test.ts", ".test.tsx", "_test.go",
 )
+# One pass over a source file, recognising a comment before a string. An
+# apostrophe in prose -- "the renderer's own geometry" -- would otherwise open a
+# string that swallows the rest of the file, and every icon path inside it would
+# escape review. Comment alternatives are matched only so they can be skipped;
+# the caller keeps the `literal` group.
 SOURCE_STRING_LITERAL_RE = re.compile(
-    r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`''',
+    r'''(?P<comment>//[^\n]*|/\*.*?\*/)'''
+    r'''|(?P<literal>"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)''',
     re.DOTALL,
 )
 SVG_PATH_VALUE_RE = re.compile(
@@ -899,7 +905,12 @@ def embedded_vector_matches(
     """Locate static SVG/icon geometry and return offsets plus evidence kinds."""
     matches: list[tuple[int, str]] = []
     for literal_match in SOURCE_STRING_LITERAL_RE.finditer(content):
-        value = literal_match.group(0)[1:-1]
+        literal = literal_match.group("literal")
+        if literal is None:
+            # A comment. Skipped so that an apostrophe in prose cannot be read
+            # as the start of a string.
+            continue
+        value = literal[1:-1]
         if not SVG_PATH_VALUE_RE.search(value):
             continue
         if test_source and not is_substantive_test_path(value):
