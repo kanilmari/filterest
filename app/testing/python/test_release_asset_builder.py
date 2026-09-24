@@ -20,6 +20,7 @@ PASSING_CHECK_STANDINS = (
     "scripts/validate_app_db_compatibility.py",
     "public_slice_export/audit_public_bootstrap.py",
     "release/audit_public_demo_assets.py",
+    "release/audit_browser_bundle.py",
 )
 
 

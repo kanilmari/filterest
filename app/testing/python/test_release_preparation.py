@@ -35,6 +35,19 @@ def snapshot(root):
             if path.is_file() and ".git" not in path.relative_to(root).parts}
 
 
+# A stand-in for the Vite build: the miniature fixture has no frontend to
+# compile, but preparation must still stage whatever the builder produced.
+FIXTURE_BUNDLE = {"main.new.min.js": b"fixture bundle\n", "imports.new.min.css": b"fixture styles\n"}
+STALE_BUNDLE_FILE = release.browser_bundle.BUNDLE_DIRECTORY + "/main.old.min.js"
+
+
+def build_fixture_bundle(root, output_dir):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for name, content in FIXTURE_BUNDLE.items():
+        (output_dir / name).write_bytes(content)
+    return dict(FIXTURE_BUNDLE)
+
+
 @pytest.fixture
 def candidate(tmp_path, monkeypatch):
     root = tmp_path / "miniature-source"
@@ -64,6 +77,7 @@ def candidate(tmp_path, monkeypatch):
                  "source_files": {"filterest/" + source_relative: {"sha256": hashlib.sha256(b"source bytes").hexdigest()}}}),
              "app/server_tools/licenses/asset_provenance.json": release.json_bytes(provenance),
              "app/server_tools/licenses/browser_bundle_provenance.json": "{}\n",
+             STALE_BUNDLE_FILE: "previous browser bundle\n",
              "THIRD_PARTY_NOTICES.md": "Previous reviewed notices\n",
              "THIRD_PARTY_LICENSES/obsolete-license": "Previous retained document\n",
              release.RELEASE_NOTES: "Previous release notes\n"}
@@ -76,8 +90,10 @@ def candidate(tmp_path, monkeypatch):
         source_commit=commit, release_notes=notes, manifest_notes="Fixture candidate", created_at="2026-09-11T00:00:00Z", apply=False)
     monkeypatch.setattr(release.notices, "collect_go_modules", lambda target, **kwargs: ([], "fixture Go inventory"))
     monkeypatch.setattr(release.notices, "collect_npm_packages", lambda target: ([], "fixture npm inventory"))
-    monkeypatch.setattr(release.notices, "collect_browser_bundle_dependencies", lambda target: ([], "fixture browser inventory"))
+    monkeypatch.setattr(release.notices, "collect_browser_bundle_dependencies",
+                        lambda target, **kwargs: ([], "fixture browser inventory"))
     monkeypatch.setattr(release.notices, "collect_assets", lambda target: [])
+    monkeypatch.setattr(release.browser_bundle, "build_browser_bundle", build_fixture_bundle)
     return root, args
 
 
@@ -178,6 +194,47 @@ def test_symlink_output_preserves_external_file(candidate, tmp_path):
     with pytest.raises(release.PreparationError, match="symlink"):
         release.prepare(args)
     assert external.read_text() == "do not change"
+
+
+def test_candidate_carries_a_freshly_built_browser_bundle(candidate):
+    root, args = candidate
+    args.apply = True
+    result = release.prepare(args)
+    after = snapshot(root)
+    assert STALE_BUNDLE_FILE in result["changed_paths"]
+    assert STALE_BUNDLE_FILE not in after  # Nothing the build no longer produces survives.
+    for name, content in FIXTURE_BUNDLE.items():
+        relative = release.browser_bundle.BUNDLE_DIRECTORY + "/" + name
+        assert after[relative] == content
+        assert relative in result["sha256"]
+
+
+def test_notices_describe_the_bundle_this_candidate_ships(candidate, monkeypatch):
+    root, args = candidate
+    inspected = {}
+    def collect(target, *, dist_dir=None):
+        inspected.update(release.browser_bundle.bundle_files(dist_dir))
+        return [], "fixture browser inventory"
+    monkeypatch.setattr(release.notices, "collect_browser_bundle_dependencies", collect)
+    release.prepare(args)
+    assert inspected == FIXTURE_BUNDLE
+
+
+def test_unbuildable_bundle_stops_preparation_without_touching_source(candidate, monkeypatch):
+    root, args = candidate
+    args.apply = True
+    before = snapshot(root)
+    def unavailable(target, output_dir):
+        raise release.browser_bundle.BundleBuildError("npm is not installed")
+    monkeypatch.setattr(release.browser_bundle, "build_browser_bundle", unavailable)
+    with pytest.raises(release.browser_bundle.BundleBuildError, match="npm is not installed"):
+        release.prepare(args)
+    assert snapshot(root) == before
+    assert release.main([
+        "--target", str(root), "--expect-current-version", "1.2.3", "--version", "1.2.4",
+        "--source-commit", args.source_commit, "--release-notes", str(args.release_notes),
+        "--manifest-notes", "Fixture candidate",
+    ]) == 1
 
 
 def test_inventory_failure_preserves_previous_license_bundle(candidate, monkeypatch):

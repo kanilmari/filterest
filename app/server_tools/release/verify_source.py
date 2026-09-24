@@ -4,9 +4,13 @@
 This is `./filterest release verify`, and `./filterest release build` runs it
 before building. It checks, in order: the source boundary, the reviewed
 repository-root files, the release ledger, the app/database compatibility
-record, the public bootstrap package and the demo media. Each check runs from
-the checked tree itself, so a checkout is judged by its own rules, and the
-first failure stops the run.
+record, the public bootstrap package, the demo media and the tracked browser
+bundle. Each check runs from the checked tree itself, so a checkout is judged
+by its own rules, and the first failure stops the run.
+
+The browser bundle check rebuilds the frontend, so this command needs the
+installation's Node dependencies and takes a few seconds longer than the
+metadata checks alone. It runs last because it is the slowest.
 
 A workspace that embeds Filterest passes the private names that must not reach
 this repository with --forbidden-name (source) and --forbidden-marker (demo
@@ -55,6 +59,10 @@ def source_checks(
             python, str(tools / "release/audit_public_demo_assets.py"), "--target", str(target),
             "--allow-local-mutable-homes",
             *(f"--forbidden-marker={marker}" for marker in forbidden_markers),
+        ]),
+        # Slowest check last: it rebuilds the frontend before comparing.
+        ("browser bundle", [
+            python, str(tools / "release/audit_browser_bundle.py"), "--target", str(target),
         ]),
     ]
 

@@ -36,9 +36,11 @@ new source mirror, a disposable clone, or a private parent repository.
 - Verify the release in the intended local runtime. Match additional browser,
   upgrade and recovery checks to the changes; record observations without
   presenting historical results as new tests.
-- Commit candidate metadata separately from the reviewed source, including
-  generated frontend files in the reviewed source before preparation. Build and
-  verify the candidate, then use the [promotion command](../../server_tools/release/PROMOTING_RELEASES.md).
+- Commit candidate metadata separately from the reviewed source. Preparation
+  builds the minified browser bundle itself and stages it with the metadata, so
+  the generated frontend files belong to the candidate commit and need no
+  separate rebuild by hand. Build and verify the candidate, then use the
+  [promotion command](../../server_tools/release/PROMOTING_RELEASES.md).
   Commit only the promoted identity and appended ledger row as the final release
   commit. Rebuild final assets from that clean commit so both binaries identify it.
 

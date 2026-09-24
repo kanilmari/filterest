@@ -132,7 +132,11 @@ alone does not mean the backend failed. Dist mode requires current hashed
 bundles and skips HMR; non-development runtimes always serve dist.
 [Vite](../../frontend/vite.config.mjs) handles development Go-template substitution.
 Do not edit generated `app/frontend/dist/` or rewrite template hashes manually;
-the backend selects the current bundles.
+the backend selects the current bundles. Candidate preparation rebuilds that
+bundle and stages it with the release metadata, and `./filterest release verify`
+rebuilds it again and refuses a bundle the source no longer produces, so nobody
+has to remember it. `./filterest build --outDir dist` refreshes the tracked
+bundle outside a release.
 
 After backend changes, rebuild/restart the intended instance and verify its
 readiness before handoff. Browser-facing work needs a verified result URL and

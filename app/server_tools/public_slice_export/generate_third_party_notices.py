@@ -608,8 +608,17 @@ def read_browser_bundle_provenance(target: pathlib.Path) -> dict:
     return value
 
 
-def collect_browser_bundle_dependencies(target: pathlib.Path) -> tuple[list[Dependency], str]:
-    """Collect reviewed build-tool code that is present in production JS output."""
+def collect_browser_bundle_dependencies(
+    target: pathlib.Path,
+    *,
+    dist_dir: pathlib.Path | None = None,
+) -> tuple[list[Dependency], str]:
+    """Collect reviewed build-tool code that is present in production JS output.
+
+    The evidence is read from the tracked bundle by default. Candidate
+    preparation passes the bundle it has just built instead, so the notices
+    describe the bytes that release will actually ship.
+    """
 
     provenance = read_browser_bundle_provenance(target)
     lock_path = target / "app" / "package-lock.json"
@@ -618,7 +627,7 @@ def collect_browser_bundle_dependencies(target: pathlib.Path) -> tuple[list[Depe
     packages = json.loads(read_text(lock_path)).get("packages", {})
     if not isinstance(packages, dict):
         raise InventoryCollectionError("package-lock.json packages are missing")
-    dist_dir = target / "app" / "frontend" / "dist"
+    dist_dir = dist_dir if dist_dir is not None else target / "app" / "frontend" / "dist"
     bundle_files = sorted(
         path
         for path in dist_dir.rglob("*.js")

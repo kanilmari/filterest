@@ -141,9 +141,17 @@ def test_plan_rejects_uncommitted_candidate_source(release_candidate):
         promotion.promote(args)
 
 
-def test_candidate_cannot_smuggle_frontend_or_backend_changes(release_candidate):
+@pytest.mark.parametrize("relative", ["app/frontend/main.js", "app/main.go"])
+def test_candidate_cannot_smuggle_frontend_or_backend_changes(release_candidate, relative):
+    """Hand-written source never travels with candidate metadata.
+
+    The built bundle under app/frontend/dist is a preparation output, and the
+    other promotion tests carry one; the browser bundle check in
+    `./filterest release verify` is what proves those bytes match their source.
+    Everything preparation does not generate stays refused here.
+    """
     root, args, _ = release_candidate
-    write(root, "app/frontend/dist/unreviewed.js", "unreviewed generated source")
+    write(root, relative, "unreviewed source\n")
     args.candidate_commit = commit_fixture(root)
     with pytest.raises(promotion.PromotionError, match="outside preparation outputs"):
         promotion.promote(args)

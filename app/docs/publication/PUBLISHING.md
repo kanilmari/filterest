@@ -57,7 +57,8 @@ release files; this workflow does not require GitHub Actions.
 
 The standalone `./filterest release verify` command runs the release source
 checks on this checkout: source boundary, repository-root files, release ledger,
-app/database compatibility, public bootstrap and demo media. The standalone
+app/database compatibility, public bootstrap, demo media and the tracked browser
+bundle, which it rebuilds from this source and compares. The standalone
 `./filterest release build` command runs those checks first, then assembles
 Linux server binaries, notices and checksums from this repository. Its [build
 contract and commands](../../server_tools/release/BUILDING_LINUX_ASSETS.md)

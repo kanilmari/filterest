@@ -20,6 +20,7 @@ CHECK_SCRIPTS = (
     "scripts/validate_app_db_compatibility.py",
     "public_slice_export/audit_public_bootstrap.py",
     "release/audit_public_demo_assets.py",
+    "release/audit_browser_bundle.py",
 )
 
 
@@ -62,7 +63,8 @@ def test_every_check_runs_in_order_with_supplied_private_names(tmp_path, capsys)
     assert arguments["scripts/validate_app_db_compatibility.py"] == [
         "--repository-root", str(target.resolve() / "app"),
     ]
-    assert "Release source checks passed (6 checks)" in capsys.readouterr().out
+    assert arguments["release/audit_browser_bundle.py"] == ["--target", str(target.resolve())]
+    assert "Release source checks passed (7 checks)" in capsys.readouterr().out
 
 
 def test_the_first_failing_check_stops_the_run(tmp_path, capsys):

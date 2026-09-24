@@ -152,6 +152,9 @@ else
 fi
 
 # 14. Vite build (catches broken imports that static checks miss)
+# This only proves the frontend still compiles; the result is discarded.
+# Whether the tracked bundle in app/frontend/dist matches its source is a
+# release question, checked by audit_browser_bundle.py in release verify.
 echo "🏗️  Building frontend..."
 npm run build -- --outDir "$QA_TEMP_DIR/frontend-dist"
 

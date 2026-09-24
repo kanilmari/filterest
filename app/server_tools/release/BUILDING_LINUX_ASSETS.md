@@ -25,7 +25,13 @@ guide). In order, and stopping at the first failure, they check:
 - the release ledger, the app/database compatibility record and the public
   bootstrap package;
 - the demo media (`audit_public_demo_assets.py`), including secret-like text and
-  any extra marker passed with `--forbidden-marker`.
+  any extra marker passed with `--forbidden-marker`;
+- the tracked browser bundle (`audit_browser_bundle.py`): the minified files
+  under `app/frontend/dist/` are rebuilt into a temporary directory and compared
+  with the tracked ones, so no release ships an interface that its own source no
+  longer produces. This check runs the frontend build and therefore needs the
+  installation's Node dependencies; when it cannot build, it fails and says so
+  rather than passing quietly.
 
 Filterest lists no private names itself; a workspace that embeds it supplies
 them. Each check can also run alone, for example

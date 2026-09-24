@@ -31,6 +31,13 @@ it may populate the installation's ignored dependency caches. Missing dependency
 metadata or stale provenance stops preparation. Development setup must already
 provide the Go and npm dependencies and the reviewed browser build inputs.
 
+Preparation builds the minified browser bundle from the reviewed source into a
+temporary directory and stages the result, so a candidate always ships the
+interface its own code produces and nobody has to rebuild it by hand. A build
+that cannot run stops preparation instead of leaving the previous bundle in
+place. The dependency notices read the bundle that was just built, so their
+evidence describes the bytes this candidate ships.
+
 An unfinished working tree may be inspected as a plan. Its `source_clean` and
 `ready_to_apply` fields are false, and its bytes are not represented as a reviewed
 release. To apply, first review and commit the intended source changes, then rerun
@@ -46,7 +53,10 @@ Preparation changes only:
 - one appended release-ledger record and its derived `app/BUILD_IDENTITY.json`;
 - the bootstrap manifest's application version;
 - `app/docs/publication/RELEASE_NOTES.md` from the supplied reviewed text;
-- `THIRD_PARTY_NOTICES.md` and the regenerated `THIRD_PARTY_LICENSES/` documents.
+- `THIRD_PARTY_NOTICES.md` and the regenerated `THIRD_PARTY_LICENSES/` documents;
+- the rebuilt browser bundle in `app/frontend/dist/`, whose content-hashed
+  filenames change with the frontend source; files the build no longer produces
+  are removed rather than left beside their replacements.
 
 The new identity is always **stable/runtime candidate**. Existing ledger bytes
 remain unchanged, including published history. The old active compatibility row
@@ -109,7 +119,11 @@ history; it does not need the preparation flag again.
 
 `publication_ready` is always false. Candidate preparation does not build a
 binary, prove browser behavior, promote a candidate to published, create a Git
-commit or tag, upload files, or deploy a site. Review the resulting diff, run the
+commit or tag, upload files, or deploy a site. `./filterest release verify`
+rebuilds the browser bundle once more and refuses a candidate whose tracked
+bundle differs, so a release cut by hand is held to the same rule.
+
+Review the resulting diff, run the
 [release checklist](../../docs/publication/PUBLICATION_CHECKLIST.md), and commit
 only the intended derived metadata. The existing [Linux asset builder](BUILDING_LINUX_ASSETS.md)
 then requires clean source and verifies the binary dependency and ABI contracts.

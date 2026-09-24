@@ -36,6 +36,10 @@ PREPARATION_PATHS = PROMOTION_PATHS | {
     "app/VERSION_APP", preparation.COMPATIBILITY, preparation.BOOTSTRAP,
     preparation.RELEASE_NOTES, "THIRD_PARTY_NOTICES.md",
 }
+# Preparation regenerates whole directories — the license bundle and the
+# browser bundle — whose individual filenames it chooses, so a candidate may
+# change any file below them. Preparation owns that list.
+PREPARATION_PREFIXES = tuple(directory + "/" for directory in preparation.REGENERATED_DIRECTORIES)
 
 
 class PromotionError(ValueError):
@@ -121,7 +125,7 @@ def inspect_candidate(root, candidate_commit, reviewed_source_commit, expected_v
     if candidate["source"]["commit"] != reviewed_source_commit:
         raise PromotionError("candidate does not bind the requested reviewed source commit")
     paths = changed_paths(root, reviewed_source_commit, candidate_commit)
-    forbidden = sorted(path for path in paths if path not in PREPARATION_PATHS and not path.startswith("THIRD_PARTY_LICENSES/"))
+    forbidden = sorted(path for path in paths if path not in PREPARATION_PATHS and not path.startswith(PREPARATION_PREFIXES))
     if forbidden:
         raise PromotionError("candidate includes changes outside preparation outputs: " + ", ".join(forbidden))
     previous_ledger = show(root, reviewed_source_commit, preparation.LEDGER)
