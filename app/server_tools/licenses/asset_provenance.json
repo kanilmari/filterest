@@ -76,14 +76,14 @@
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-      "sha256": "a5561a1070e7959092463cbe4e2cc451355332f93268a80f36acfbeffb3bebfe",
+      "sha256": "eca74daea22bf458b4acd3d86388191963b6651af13bb27fe162bff06207c8e1",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
-      "sha256": "84871599f69947db7834b3499983c6d620ab7f09b0433183844f7c8335345129",
+      "sha256": "896fb10ffe51892f54f26d00c45a252972db8b7921ef66a50da4acb0533cab21",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {
@@ -868,6 +868,6 @@
       "sha256": "adca8974a9d808d286286dc6529024d8aa2b3837c417224008f69805cd32b113"
     }
   ],
-  "reviewed_on": "2026-08-31",
+  "reviewed_on": "2026-09-24",
   "schema_version": 2
 }
