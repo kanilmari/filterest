@@ -95,8 +95,8 @@ Defined in `pipeline_order.go`. This is the **single source of truth** for the r
 | 4  | `error_handling` | Yes       | Catches panics from downstream, writes JSON 500       |
 | 5  | `auth`           | No        | Verifies session / login status                       |
 | 6  | `csrf`           | No        | Validates CSRF token for state-changing methods       |
-| 7  | `fingerprint`    | No        | Validates browser fingerprint matches session         |
-| 8  | `device_id`      | No        | Validates device ID matches session                   |
+| 7  | `fingerprint`    | No        | Validates the browser fingerprint against the session, and renews it |
+| 8  | `device_id`      | No        | Validates the device ID against the session, and renews it |
 | 9  | `access_control` | No        | Checks function-level permissions (user group rights) |
 | 10 | `admin_check`    | No        | Requires `admin_access_allowed = true` on user        |
 | 11 | `transaction`    | No        | Lazy database transaction (commit/rollback)           |
@@ -329,6 +329,37 @@ implementation of the decision.
 An administrator route refusing a signed-in person without administrator access,
 and any other authorization denial, stay ordinary `RespondWithError` 403s. Those
 two cases must never get the same words or the same recovery.
+
+### The browser binding keeps pace with the session
+
+A sign-in is carried by three cookies that each last seven days: the session
+itself, and the two cookies that tie it to one browser (`device_id_*` and
+`fingerprint_*`). The session's seven days restart every time a request writes
+it, but the binding cookies were once written only at sign-in. A person who kept
+using the site therefore reached a day where the session was still readable and
+the binding had already run out underneath it, and was signed out although they
+had never been away.
+
+The two binding stages now renew the binding on the session's own terms. When a
+request's binding has been compared with the session's and found equal, the
+stage writes that same value back with a full fresh lifetime, so an active
+person's binding cannot expire under a session that is still being extended.
+
+Renewing is not accepting:
+
+- the write happens only **after** the equality check, so the value handed back
+  is the one the request already carried, never a new one;
+- a request with a different or absent binding is refused before it reaches the
+  renewal, and still gets the one ended-sign-in answer above;
+- nothing renews without use — a browser that stops visiting keeps nothing, and
+  comes back to that same answer.
+
+There is deliberately no absolute maximum on how long an active sign-in may be
+extended. The session has never had one either: only an explicit sign-out, or a
+changed `authentication_generation` for that user, ends it before its time.
+
+`app/backend/pipeline/session_binding_renewal_test.go` walks one browser through
+the journey with a cookie jar that drops what has run out.
 
 ---
 

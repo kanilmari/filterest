@@ -16,10 +16,21 @@ import (
 // guest requests pass while treating a logged-in session with a missing or
 // mismatched device identifier as a sign-in the server can no longer accept.
 //
-// Like the fingerprint binding, the device cookie is written at sign-in and lives
-// seven days, so a long-absent person can return with a readable session and no
-// binding. session_expiry.RespondSignInNoLongerValid owns that answer for the
-// whole application.
+// Like the fingerprint binding, the device cookie used to be written only at
+// sign-in while the session's seven days restarted every time a request wrote
+// the session, so a person who kept using the site was eventually signed out by
+// a binding that had expired underneath a still-readable session. This stage now
+// renews the binding on the session's own terms: a request that proves the
+// binding is still the right one re-issues it for a full seven days, using the
+// value the session itself holds and only after the comparison has succeeded. A
+// request with a different or absent device identifier is refused exactly as
+// before and reaches no renewal, and a genuinely long-absent person still
+// returns with a readable session and no binding.
+// session_expiry.RespondSignInNoLongerValid owns that answer for the whole
+// application.
+//
+// The fingerprint binding's twin is
+// app/backend/pipeline/fingerprint_check/fingerprint_check.go.
 func WithDeviceIDCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, err := e_sessions.GetOrCreateSession(w, r)
@@ -55,6 +66,13 @@ func WithDeviceIDCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
 			session_expiry.RespondSignInNoLongerValid(w, r, session, "device_id cookie does not match the session")
 			return
 		}
+
+		// The binding has just proved this is the same browser, so it is given
+		// the same fresh seven days the session gets whenever a request writes
+		// it. The server re-issues its own stored value, never the request's, so
+		// an active person's binding cannot expire under a session that is still
+		// being extended.
+		e_sessions.SetDeviceIDCookie(w, sess_device_id)
 
 		// OK -> jatketaan varsinaiseen handleriin
 		originalHandler(w, r)
