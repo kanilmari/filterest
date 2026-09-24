@@ -18,6 +18,9 @@ import pytest
 APPLICATION_SOURCE_ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_SOURCE_ROOT = APPLICATION_SOURCE_ROOT.parent
 BYTECODE_HELPER = APPLICATION_SOURCE_ROOT / "server_tools/lib/python_bytecode_cache.sh"
+# app/filterest also sources the interpreter selector, so a launcher fixture
+# that carries only the cache helper cannot start at all.
+VENV_HELPER = APPLICATION_SOURCE_ROOT / "server_tools/lib/project_python_venv.sh"
 
 
 def _clean_environment() -> dict[str, str]:
@@ -45,6 +48,7 @@ def _copy_helper(application_root: Path) -> Path:
     helper = application_root / "server_tools/lib/python_bytecode_cache.sh"
     helper.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(BYTECODE_HELPER, helper)
+    shutil.copy2(VENV_HELPER, helper.parent / VENV_HELPER.name)
     return helper
 
 

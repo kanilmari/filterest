@@ -30,43 +30,57 @@ def api_curl_response(status, payload):
     )
 
 
+# A standalone Filterest installation serves its native development instance on
+# 8100; an embedded private-shell checkout keeps the legacy 8082. The loopback
+# trust boundary is the same rule in both, so pin each port here instead of
+# reading the installation's own constant, which would make the assertions
+# depend on where the suite happens to run and pass vacuously elsewhere.
+NATIVE_DEVELOPMENT_PORTS = (8100, 8082)
+
+
 class DBTaskHTTPHelpersTest(unittest.TestCase):
-    def test_load_credentials_reads_e2e_admin_fallback(self):
+    def test_standalone_load_credentials_reads_e2e_admin_fallback(self):
+        # A public installation keeps its protected files in keys/filterest_runtime.
+        # The reserved end-to-end admin account lives in the separate credential
+        # file the public launcher points at, and every value read from disk must
+        # stay non-explicit so a remote target cannot reuse it.
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            (root / ".git").mkdir()
-            (root / "VERSION_EASELECT").write_text("1.0.0\n", encoding="utf-8")
-            key_root = root.parent / f"{root.name}-keys"
-            development_root = key_root / "easelect_development"
-            development_root.mkdir(parents=True)
-            (development_root / "runtime_environment.env").write_text(
-                "DB_NAME=easelect\n",
+            project_root = Path(temp_dir) / "filterest"
+            app_root = project_root / "app"
+            app_root.mkdir(parents=True)
+            (app_root / "go.mod").write_text(
+                "module example.invalid/filterest\n",
                 encoding="utf-8",
             )
-            (development_root / "development_environment.env").write_text(
+            (app_root / "VERSION_APP").write_text("1.0.0\n", encoding="utf-8")
+            protected_root = project_root / "keys/filterest_runtime"
+            protected_root.mkdir(parents=True)
+            (protected_root / "runtime_environment.env").write_text(
+                "DB_NAME=filterest\n",
+                encoding="utf-8",
+            )
+            (protected_root / "development_environment.env").write_text(
                 "LOGIN_OTP_CODE=123456\n",
                 encoding="utf-8",
             )
-            (root / "dev_env_test_creds.txt").write_text(
+            (protected_root / "dev_env_test_creds.txt").write_text(
                 "TEST_ADMIN_USER=test_admin\nTEST_ADMIN_PASS=test-password\n",
                 encoding="utf-8",
             )
 
             with (
-                patch.object(db_task, "PROJECT_ROOT", temp_dir),
+                patch.object(db_task, "PROJECT_ROOT", str(project_root)),
                 patch.object(
                     db_task,
                     "TEST_CREDENTIALS_FILE",
-                    str(root / "dev_env_test_creds.txt"),
+                    str(protected_root / "dev_env_test_creds.txt"),
                 ),
-                patch.dict(
-                    os.environ,
-                    {"EASELECT_KEY_ROOT": str(key_root)},
-                    clear=True,
-                ),
+                patch.object(db_task, "_IS_EMBEDDED_EASELECT_CHECKOUT", False),
+                patch.dict(os.environ, {}, clear=True),
             ):
                 credentials = db_task._load_credentials()
 
+        self.assertEqual(credentials["DB_NAME"], "filterest")
         self.assertEqual(credentials["TEST_ADMIN_USER"], "test_admin")
         self.assertEqual(credentials["TEST_ADMIN_PASS"], "test-password")
         self.assertEqual(credentials["LOGIN_OTP_CODE"], "123456")
@@ -273,60 +287,85 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
             "TEST_ADMIN_PASS": "test-password",
         }
 
-        attempts = db_task._credential_attempts(
-            credentials,
-            base_url="https://localhost:8082",
-            environment={},
-        )
+        for native_port in NATIVE_DEVELOPMENT_PORTS:
+            with (
+                self.subTest(native_port=native_port),
+                patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+            ):
+                attempts = db_task._credential_attempts(
+                    credentials,
+                    base_url=f"https://localhost:{native_port}",
+                    environment={},
+                )
 
-        self.assertEqual(
-            attempts,
-            [
-                ("explicit_user", "explicit-password"),
-                ("test_admin", "test-password"),
-            ],
-        )
+                self.assertEqual(
+                    attempts,
+                    [
+                        ("explicit_user", "explicit-password"),
+                        ("test_admin", "test-password"),
+                    ],
+                )
 
     def test_credential_attempts_use_e2e_admin_when_dev_credentials_are_absent(self):
-        attempts = db_task._credential_attempts({
-            "TEST_ADMIN_USER": "test_admin",
-            "TEST_ADMIN_PASS": "test-password",
-        }, base_url="https://127.0.0.1:8082", environment={})
+        for native_port in NATIVE_DEVELOPMENT_PORTS:
+            with (
+                self.subTest(native_port=native_port),
+                patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+            ):
+                attempts = db_task._credential_attempts({
+                    "TEST_ADMIN_USER": "test_admin",
+                    "TEST_ADMIN_PASS": "test-password",
+                }, base_url=f"https://127.0.0.1:{native_port}", environment={})
 
-        self.assertEqual(attempts[0], ("test_admin", "test-password"))
+                self.assertEqual(attempts[0], ("test_admin", "test-password"))
 
     def test_credential_attempts_reject_noncanonical_ipv6_loopback_url(self):
-        attempts = db_task._credential_attempts({
-            "TEST_ADMIN_USER": "test_admin",
-            "TEST_ADMIN_PASS": "test-password",
-        }, base_url="https://[::1]:8082/", environment={})
+        # The port is the installation's own, so only the bracketed IPv6 host
+        # can be the reason the implicit credentials are withheld.
+        for native_port in NATIVE_DEVELOPMENT_PORTS:
+            with (
+                self.subTest(native_port=native_port),
+                patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+            ):
+                attempts = db_task._credential_attempts({
+                    "TEST_ADMIN_USER": "test_admin",
+                    "TEST_ADMIN_PASS": "test-password",
+                }, base_url=f"https://[::1]:{native_port}/", environment={})
 
-        self.assertEqual(attempts, [])
+                self.assertEqual(attempts, [])
 
     def test_credential_attempts_reject_implicit_credentials_for_non_native_targets(self):
         credentials = {
             "TEST_ADMIN_USER": "test_admin",
             "TEST_ADMIN_PASS": "test-password",
         }
-        unsafe_targets = [
-            "https://example.com:8082",
-            "https://localhost:8090",
-            "http://localhost:8082",
-            "https://localhost.evil.example:8082",
-            "https://user:password@localhost:8082",
-            "https://localhost:8082/api",
-        ]
 
-        for target in unsafe_targets:
-            with self.subTest(target=target):
-                self.assertEqual(
-                    db_task._credential_attempts(
-                        credentials,
-                        base_url=target,
-                        environment={},
-                    ),
-                    [],
-                )
+        for native_port in NATIVE_DEVELOPMENT_PORTS:
+            # Every entry but the second keeps the native port, so each target is
+            # rejected for its own defect — wrong host, scheme, embedded
+            # credentials or extra path — rather than for a mismatched port.
+            unsafe_targets = [
+                f"https://example.com:{native_port}",
+                f"https://localhost:{native_port + 1}",
+                f"http://localhost:{native_port}",
+                f"https://localhost.evil.example:{native_port}",
+                f"https://user:password@localhost:{native_port}",
+                f"https://localhost:{native_port}/api",
+            ]
+
+            for target in unsafe_targets:
+                with (
+                    self.subTest(target=target),
+                    patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+                ):
+                    self.assertEqual(
+                        db_task._credential_attempts(
+                            credentials,
+                            base_url=target,
+                            environment={},
+                        ),
+                        [],
+                    )
 
     def test_credential_attempts_keep_only_explicit_credentials_for_remote_target(self):
         attempts = db_task._credential_attempts({
@@ -412,25 +451,34 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
         self.assertNotIn(secret, stderr.getvalue())
 
     def test_local_direct_db_shadow_requires_exact_native_https_origin(self):
-        allowed = [
-            "https://localhost:8082",
-            "https://localhost:8082/",
-            "https://127.0.0.1:8082",
-        ]
-        rejected = [
-            "http://localhost:8082",
-            "https://localhost:8090",
-            "https://127.0.0.1:8082/api",
-            "https://[::1]:8082",
-            "https://localhost.evil.example:8082",
-        ]
+        for native_port in NATIVE_DEVELOPMENT_PORTS:
+            allowed = [
+                f"https://localhost:{native_port}",
+                f"https://localhost:{native_port}/",
+                f"https://127.0.0.1:{native_port}",
+            ]
+            rejected = [
+                f"http://localhost:{native_port}",
+                f"https://localhost:{native_port + 1}",
+                f"https://127.0.0.1:{native_port}/api",
+                f"https://[::1]:{native_port}",
+                f"https://localhost.evil.example:{native_port}",
+            ]
 
-        for target in allowed:
-            with self.subTest(target=target), patch.object(db_task, "BASE_URL", target):
-                self.assertTrue(db_task._base_url_supports_local_direct_db_shadow())
-        for target in rejected:
-            with self.subTest(target=target), patch.object(db_task, "BASE_URL", target):
-                self.assertFalse(db_task._base_url_supports_local_direct_db_shadow())
+            for target in allowed:
+                with (
+                    self.subTest(target=target),
+                    patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+                    patch.object(db_task, "BASE_URL", target),
+                ):
+                    self.assertTrue(db_task._base_url_supports_local_direct_db_shadow())
+            for target in rejected:
+                with (
+                    self.subTest(target=target),
+                    patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+                    patch.object(db_task, "BASE_URL", target),
+                ):
+                    self.assertFalse(db_task._base_url_supports_local_direct_db_shadow())
 
     def test_cookie_jar_is_owner_only_and_cleanup_removes_it(self):
         with (
@@ -577,7 +625,7 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
             "ALL_PROXY": "socks5://credential-sink.example:1080",
         }
 
-        for port in (8082, 8100):
+        for port in NATIVE_DEVELOPMENT_PORTS:
             target = f"https://localhost:{port}"
             with (
                 self.subTest(target=target),
@@ -760,10 +808,15 @@ class DBTaskHTTPHelpersTest(unittest.TestCase):
         self.assertNotIn("Unexpected response", stderr.getvalue())
 
     def test_curl_insecure_tls_requires_exact_local_target_or_opt_in(self):
-        self.assertTrue(db_task._curl_uses_insecure_tls(
-            base_url="https://localhost:8082",
-            environment={},
-        ))
+        for native_port in NATIVE_DEVELOPMENT_PORTS:
+            with (
+                self.subTest(native_port=native_port),
+                patch.object(db_task, "LOCAL_NATIVE_PORT", native_port),
+            ):
+                self.assertTrue(db_task._curl_uses_insecure_tls(
+                    base_url=f"https://localhost:{native_port}",
+                    environment={},
+                ))
         self.assertFalse(db_task._curl_uses_insecure_tls(
             base_url="https://tasks.example.com",
             environment={},
