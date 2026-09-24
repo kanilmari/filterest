@@ -85,9 +85,16 @@ def test_nginx_downstream_client_headers_are_canonical_not_appended() -> None:
     assert "server_tools/nginx/filterest_sanitized_proxy_headers.conf" in readme
 
 def test_login_logging_has_no_reverse_dns_or_hostname_cache() -> None:
+    # A login attempt is recognised by the numeric client address the firewall
+    # already verified. Resolving that address to a name would put public traffic
+    # on a resolver path and grow an unbounded hostname cache, so neither a
+    # lookup nor a name cache may appear here.
     source = (
         PUBLIC_SOURCE_ROOT / "backend/core_components/auth/login_rate_checker.go"
     ).read_text(encoding="utf-8")
     assert "LookupAddr(" not in source
     assert "loginReverseDNS" not in source
-    assert "logLoginAttemptIP" in source
+    # The address comes from the shared extractor, never from a header this file
+    # reads itself. This replaces an assertion naming the log helper that
+    # d7e111f removed with the sign-in logging bypass.
+    assert "getClientIP(r)" in source

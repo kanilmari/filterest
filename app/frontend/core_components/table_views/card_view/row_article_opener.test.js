@@ -85,6 +85,12 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({
     DATASET_PREFIX: "",
     getParams: getParamsMock,
     setParams: setParamsMock,
+    // The address owner imports this from the same module, so a stand-in that
+    // leaves it out makes every address it writes throw.
+    normalizePath: (pathname) =>
+        pathname && pathname !== "/" && pathname.endsWith("/")
+            ? pathname.slice(0, -1)
+            : pathname,
 }));
 
 vi.mock("../../route_permission_checker.js", () => ({
