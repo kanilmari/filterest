@@ -104,39 +104,6 @@ FROM public.system_functions functions
 WHERE functions.disabled IS FALSE
   AND COALESCE(functions.specific_table_related, TRUE) IS TRUE;
 
-INSERT INTO public.system_group_table_func_rights (
-  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
-)
-SELECT 1, functions.id, 'public', 'public fixture seed', table_uids.table_uid
-FROM (VALUES (7), (8), (9), (10)) AS table_uids(table_uid)
-JOIN public.system_functions functions
-  ON functions.name IN (
-    'dtt_crud_workflows.ModifyColumnsHandler',
-    'dtt_3_table_delete.DropTableHandler'
-  );
-
-INSERT INTO public.system_group_table_func_rights (
-  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
-)
-SELECT group_ids.user_group_id, functions.id, 'public', 'public fixture seed', table_uids.table_uid
-FROM (VALUES (1), (2), (3)) AS group_ids(user_group_id)
-CROSS JOIN (VALUES
-  (7), (8), (9), (10),
-  (56), (74), (75), (76), (77), (105),
-  (300), (301), (302), (303)
-) AS table_uids(table_uid)
-JOIN public.system_functions functions
-  ON functions.name IN (
-    'dtt_1_row_read.GetResultsHandlerWrapper',
-    'dtt_1_row_read.GetRowCountHandlerWrapper',
-    'dtt_1_row_read.GetFilterOptionsHandler',
-    'dtt_1_row_read.GetIntelligentResultsHandlerWrapper',
-    'dtt_1_row_read.GetResultsVector',
-    'dtt_3_table_read.GetTableViewHandlerWrapper',
-    'dtt_2_column_crud.GetTableColumnsHandler',
-    'dtt_1_row_read.GetDynamicChildItemsHandler'
-  );
-
 INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, creation_spec) VALUES
   ('select_menu_language', 'Valitse kieli', 'Select language', '选择语言', 'public fixture seed'),
   ('login', 'Kirjaudu', 'Login', '登录', 'public fixture seed'),
@@ -654,7 +621,7 @@ WHERE f.name = 'system_table_tools.AdminDatasetUIVisibilityHandler'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.system_db_version (version, description)
-VALUES ('9.8.1', 'Filterest generated public bootstrap');
+VALUES ('9.9.0', 'Filterest generated public bootstrap');
 
 -- Administrator coding agents require an explicit production opt-in.
 INSERT INTO public.system_config (key, value_type, boolean_value, text_value, json_value)
@@ -3311,6 +3278,47 @@ WHERE keys.lang_key IN (
         'article_language_load_failed'
 )
 ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
+-- dataset_rights.seed.sql
+-- Grants the starter groups their read and structure rights on the seeded datasets.
+-- Bridges the datasets several reviewed seed fragments create with the permission
+-- rows that decide who may read, filter and change each of them.
+-- Exists as its own fragment because a right names the dataset it is granted on:
+-- it can only be seeded once that dataset row exists, and these grants reach
+-- across fragments, so they are assembled last. The foreign key restored in
+-- database version 9.9.0 turns that ordering from a convention into a rule.
+
+INSERT INTO public.system_group_table_func_rights (
+  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT 1, functions.id, 'public', 'public fixture seed', table_uids.table_uid
+FROM (VALUES (7), (8), (9), (10)) AS table_uids(table_uid)
+JOIN public.system_functions functions
+  ON functions.name IN (
+    'dtt_crud_workflows.ModifyColumnsHandler',
+    'dtt_3_table_delete.DropTableHandler'
+  );
+
+INSERT INTO public.system_group_table_func_rights (
+  user_group_id, function_id, target_schema_name, creation_spec, target_table_uid
+)
+SELECT group_ids.user_group_id, functions.id, 'public', 'public fixture seed', table_uids.table_uid
+FROM (VALUES (1), (2), (3)) AS group_ids(user_group_id)
+CROSS JOIN (VALUES
+  (7), (8), (9), (10),
+  (56), (74), (75), (76), (77), (105),
+  (300), (301), (302), (303)
+) AS table_uids(table_uid)
+JOIN public.system_functions functions
+  ON functions.name IN (
+    'dtt_1_row_read.GetResultsHandlerWrapper',
+    'dtt_1_row_read.GetRowCountHandlerWrapper',
+    'dtt_1_row_read.GetFilterOptionsHandler',
+    'dtt_1_row_read.GetIntelligentResultsHandlerWrapper',
+    'dtt_1_row_read.GetResultsVector',
+    'dtt_3_table_read.GetTableViewHandlerWrapper',
+    'dtt_2_column_crud.GetTableColumnsHandler',
+    'dtt_1_row_read.GetDynamicChildItemsHandler'
+  );
 -- 20260919000009_seed_developer_workflow_metadata.sql
 -- Seeds product-owned workflow vocabularies, table metadata, and interface labels.
 -- Bridges the developer schema with generic dataset discovery and multilingual UI paths.
@@ -5113,5 +5121,7 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260922000004_seed_request_notice_and_interface_language_keys.sql'),
   ('20260922000005_seed_interface_language_keys_of_9_8_1.sql'),
   ('20260922000006_seed_dataset_creation_warning_language_key.sql'),
-  ('20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql')
+  ('20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql'),
+  ('20260926000001_restore_system_foreign_keys.sql'),
+  ('20260926000002_record_system_foreign_key_release.sql')
 ON CONFLICT (filename) DO NOTHING;

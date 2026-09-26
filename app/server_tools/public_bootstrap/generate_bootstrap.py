@@ -31,7 +31,7 @@ for path in (bootstrap_dir.parent.parent, bootstrap_dir.parent, bootstrap_dir,
         parser.error("Bootstrap output cannot use a symlink")
 
 schema_sources = ("base.schema.sql", "runtime.schema.sql", "db_9_7_0.schema.sql", "app_tables.schema.sql", "column_supported_views.schema.sql", "media_assets.schema.sql")
-seed_sources = ("base.seed.sql", "runtime.seed.sql", "app_tables.seed.sql", "app_tables.lang_keys.sql", "db_9_7_0.seed.sql", "db_9_7_0.lang_keys.sql", "field_settings.lang_keys.sql", "label_value_layout.lang_keys.sql", "article_view.seed.sql", "column_supported_views.seed.sql", "media_library.lang_keys.sql", "image_picker.lang_keys.sql", "search_filter_fallback.lang_keys.sql", "article_editor.lang_keys.sql")
+seed_sources = ("base.seed.sql", "runtime.seed.sql", "app_tables.seed.sql", "app_tables.lang_keys.sql", "db_9_7_0.seed.sql", "db_9_7_0.lang_keys.sql", "field_settings.lang_keys.sql", "label_value_layout.lang_keys.sql", "article_view.seed.sql", "column_supported_views.seed.sql", "media_library.lang_keys.sql", "image_picker.lang_keys.sql", "search_filter_fallback.lang_keys.sql", "article_editor.lang_keys.sql", "dataset_rights.seed.sql")
 developer_workflow_schema_migrations = (
     "20260919000007_create_developer_ticket_schema.sql",
     "20260919000008_create_developer_workline_schema.sql",
@@ -48,10 +48,12 @@ language_seed_migrations = (
     "20260922000006_seed_dataset_creation_warning_language_key.sql",
     "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
 )
-# Tables an upgrade creates where a site lacks them are created for a new
-# installation by the same file, so both end with the same table.
+# What an upgrade adds where a site lacks it — a table, or a relationship between
+# two tables — is added for a new installation by the same file, so an upgraded
+# database and a newly installed one end with the same schema, stated once.
 repair_schema_migrations = (
     "20260922000002_create_missing_deletion_log.sql",
+    "20260926000001_restore_system_foreign_keys.sql",
 )
 # Runs after every table exists, as the importing application role, so a new
 # installation withholds table creation from PUBLIC exactly as an upgrade does.
@@ -216,6 +218,7 @@ source_files = [
     public_bootstrap_sources / "image_picker.lang_keys.sql",
     public_bootstrap_sources / "search_filter_fallback.lang_keys.sql",
     public_bootstrap_sources / "article_editor.lang_keys.sql",
+    public_bootstrap_sources / "dataset_rights.seed.sql",
     public_bootstrap_sources / "fixtures/runtime_media.v1.json",
 ]
 source_files.extend(sorted(public_migrations.glob("*.sql")))
