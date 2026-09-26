@@ -98,6 +98,14 @@ func InitSessionStore() {
 		}
 	}
 
+	// Assigning Options alone would leave the signature's own age at the
+	// library's thirty-day default, which is set once when the store is built.
+	// The browser would be told seven days while the server went on accepting a
+	// signature for thirty -- so a session cookie kept elsewhere and presented on
+	// day eight would still be read, and, since a used sign-in is renewed, given
+	// seven fresh days. MaxAge sets both the options and every codec, so the age
+	// the server enforces is SignInLifetime too.
+	Store.MaxAge(int(SignInLifetime.Seconds()))
 	Store.Options = SessionCookieOptions()
 }
 
