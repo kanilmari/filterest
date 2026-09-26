@@ -160,4 +160,52 @@ func TestAMatchingDeviceBindingPassesThrough(t *testing.T) {
 	if !called || recorder.Code != http.StatusOK {
 		t.Fatalf("a valid binding was rejected: called=%v status=%d", called, recorder.Code)
 	}
+	// This request proved its device but never presented a fingerprint, so the
+	// stage passes it on and renews nothing: a renewal that wrote here would hand
+	// back a fingerprint the request did not carry.
+	if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("a request that never proved its fingerprint was handed %d cookie(s)", len(cookies))
+	}
+}
+
+// A request that has proved both bindings has used its sign-in, and this is the
+// stage that says so: all three cookies leave renewed, with the session's own
+// values and the one lifetime a sign-in writes.
+func TestAProvedBindingRenewsAllThreeSignInCookies(t *testing.T) {
+	store := setupTestStore(t)
+	store.Options = e_sessions.SessionCookieOptions()
+	request := dataRequestHeaders(buildRequest(t, store, "/api/user-permissions", map[any]any{
+		"user_id":          42,
+		"device_id":        "the-device",
+		"fingerprint_hash": "the-fingerprint",
+	}, "the-device"))
+	request.AddCookie(&http.Cookie{Name: e_sessions.FingerprintCookieName(), Value: "the-fingerprint"})
+	recorder := httptest.NewRecorder()
+	called := false
+
+	WithDeviceIDCheck(noopHandler(&called))(recorder, request)
+
+	if !called || recorder.Code != http.StatusOK {
+		t.Fatalf("a valid binding was rejected: called=%v status=%d", called, recorder.Code)
+	}
+	renewed := map[string]*http.Cookie{}
+	for _, cookie := range recorder.Result().Cookies() {
+		renewed[cookie.Name] = cookie
+	}
+	wantMaxAge := int(e_sessions.SignInLifetime.Seconds())
+	for name, wantValue := range map[string]string{
+		e_sessions.DeviceIDCookieName():    "the-device",
+		e_sessions.FingerprintCookieName(): "the-fingerprint",
+	} {
+		cookie, present := renewed[name]
+		if !present {
+			t.Fatalf("%q was not renewed", name)
+		}
+		if cookie.Value != wantValue || cookie.MaxAge != wantMaxAge {
+			t.Fatalf("%q renewed as %q for %d seconds, want %q for %d", name, cookie.Value, cookie.MaxAge, wantValue, wantMaxAge)
+		}
+	}
+	if cookie, present := renewed[e_sessions.SessionName]; !present || cookie.MaxAge != wantMaxAge {
+		t.Fatalf("the session was not renewed with the sign-in lifetime: %#v", cookie)
+	}
 }

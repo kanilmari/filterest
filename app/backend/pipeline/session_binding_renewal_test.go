@@ -1,9 +1,10 @@
 // session_binding_renewal_test.go
-// Verifies that a person who keeps using the site keeps the browser binding that carries their sign-in.
-// Between the two authentication stages that check the binding and the browser that holds it.
-// Exists because the binding cookies were written only at sign-in while the session's seven days
-// restarted on every use, so a regular visitor was signed out by a binding that quietly ran out
-// underneath a session the server still accepted. Uses no database and no network.
+// Verifies that a person who keeps using the site keeps all three cookies that carry their sign-in.
+// Between the two authentication stages that compare the browser binding, the renewal they share,
+// and the browser that holds the cookies.
+// Exists because the session and its two bindings used to renew on different rhythms — first the
+// bindings lapsed under a live session, then the session lapsed under live bindings — so a regular
+// visitor was signed out by whichever cookie happened to run out first. Uses no database and no network.
 package pipeline_test
 
 import (
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/pipeline"
 	"easelect/backend/pipeline/device_id_check"
 	"easelect/backend/pipeline/fingerprint_check"
 
@@ -24,7 +26,6 @@ const (
 	bindingTestUserID      = 42
 	bindingTestFingerprint = "the-signed-fingerprint-value"
 	bindingTestDeviceID    = "the-signed-device-value"
-	bindingTestSessionDays = 7
 )
 
 var bindingTestSessionKey = []byte("test-secret-key-32-bytes-padding!")
@@ -49,7 +50,8 @@ func newBrowserCookieJar() *browserCookieJar {
 	return &browserCookieJar{held: map[string]heldCookie{}}
 }
 
-// store records what a response told the browser to keep.
+// store records what a response told the browser to keep. When one response
+// names the same cookie twice, the last word wins, as it does in a browser.
 func (jar *browserCookieJar) store(recorder *httptest.ResponseRecorder, now time.Time) {
 	for _, cookie := range recorder.Result().Cookies() {
 		if cookie.MaxAge < 0 || cookie.Value == "" {
@@ -84,18 +86,28 @@ func (jar *browserCookieJar) holds(name string, now time.Time) bool {
 	return held.expires.IsZero() || now.Before(held.expires)
 }
 
-// useTestSessionStore installs a cookie store with the runtime's own seven-day
-// session lifetime and no database behind it.
+// expiry reports the moment the browser will drop the named cookie.
+func (jar *browserCookieJar) expiry(name string) time.Time {
+	return jar.held[name].expires
+}
+
+// signInCookieNames are the three cookies that together carry a sign-in.
+func signInCookieNames() []string {
+	return []string{
+		e_sessions.SessionName,
+		e_sessions.DeviceIDCookieName(),
+		e_sessions.FingerprintCookieName(),
+	}
+}
+
+// useTestSessionStore installs a cookie store with the runtime's own session
+// cookie options and no database behind it.
 func useTestSessionStore(t *testing.T) *gorillaSessions.CookieStore {
 	t.Helper()
 	originalStore := e_sessions.Store
 	originalName := e_sessions.SessionName
 	store := gorillaSessions.NewCookieStore(bindingTestSessionKey)
-	store.Options = &gorillaSessions.Options{
-		Path:     "/",
-		MaxAge:   bindingTestSessionDays * 24 * 60 * 60,
-		HttpOnly: true,
-	}
+	store.Options = e_sessions.SessionCookieOptions()
 	e_sessions.Store = store
 	e_sessions.SessionName = "session"
 	t.Cleanup(func() {
@@ -126,9 +138,9 @@ func signIn(t *testing.T, store *gorillaSessions.CookieStore, jar *browserCookie
 	jar.store(recorder, now)
 }
 
-// refreshSession models the half of the pair that never expired. An ordinary
-// page load calls auth.GetAuthModesHandler, which writes the session on every
-// call, and that write restarts the session cookie's seven days.
+// refreshSession models a full page load: auth.GetAuthModesHandler writes the
+// session on every call, and that write alone restarts the session cookie's
+// lifetime. It is the only ordinary request that did so before the shared renewal.
 func refreshSession(t *testing.T, store *gorillaSessions.CookieStore, jar *browserCookieJar, now time.Time) {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodGet, "/api/auth-modes", nil)
@@ -147,10 +159,12 @@ func refreshSession(t *testing.T, store *gorillaSessions.CookieStore, jar *brows
 	jar.store(recorder, now)
 }
 
-// visitProtectedRoute sends one ordinary request for data through both binding
-// stages in the order PipelineOrder wires them, and lets the browser keep
-// whatever the answer handed back.
-func visitProtectedRoute(t *testing.T, jar *browserCookieJar, now time.Time) (bool, *httptest.ResponseRecorder) {
+// visitProtectedRoute sends one ordinary request for data — what an
+// in-application tab switch makes — through both binding stages in the order
+// PipelineOrder wires them, lets the browser keep whatever the answer handed
+// back, and reports the identity the request acted as at the handler: zero when
+// it never got there, or when the browser no longer carried a readable session.
+func visitProtectedRoute(t *testing.T, jar *browserCookieJar, now time.Time) (int, *httptest.ResponseRecorder) {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodGet, "/api/user-permissions", nil)
 	request.Header.Set("Accept", "*/*")
@@ -158,22 +172,66 @@ func visitProtectedRoute(t *testing.T, jar *browserCookieJar, now time.Time) (bo
 	jar.attach(request, now)
 
 	recorder := httptest.NewRecorder()
-	reached := false
+	actedAs := 0
 	handler := fingerprint_check.WithFingerprintCheck(
-		device_id_check.WithDeviceIDCheck(func(w http.ResponseWriter, _ *http.Request) {
-			reached = true
+		device_id_check.WithDeviceIDCheck(func(w http.ResponseWriter, r *http.Request) {
+			if session, err := e_sessions.GetOrCreateSession(w, r); err == nil {
+				actedAs, _ = session.Values["user_id"].(int)
+			}
 			w.WriteHeader(http.StatusOK)
 		}),
 	)
 	handler(recorder, request)
 	jar.store(recorder, now)
-	return reached, recorder
+	return actedAs, recorder
 }
 
-// The owner's decision, at the level of one browser: a person who keeps using
-// the site stays signed in. This fails on the code before the renewal, where
-// day three refreshed the session and left both bindings on the seven days they
-// were given at sign-in.
+// assertSignInCookiesRunOutTogether checks that the browser holds all three
+// sign-in cookies and that they will run out at one and the same moment, a full
+// lifetime after the visit that renewed them.
+func assertSignInCookiesRunOutTogether(t *testing.T, jar *browserCookieJar, visitedAt time.Time) {
+	t.Helper()
+	want := visitedAt.Add(e_sessions.SignInLifetime)
+	for _, name := range signInCookieNames() {
+		if !jar.holds(name, visitedAt) {
+			t.Fatalf("after the visit at %s the browser no longer holds %q", visitedAt.Format(time.RFC3339), name)
+		}
+		if got := jar.expiry(name); !got.Equal(want) {
+			t.Fatalf("after the visit at %s, %q runs out at %s; the other two run out at %s, and all three must move together",
+				visitedAt.Format(time.RFC3339), name, got.Format(time.RFC3339), want.Format(time.RFC3339))
+		}
+	}
+}
+
+// The owner's observation, at the level of one browser. Someone who uses the
+// site every day but only ever inside the application — requests for data, never
+// a full page load — must stay signed in past the seven days their session was
+// given at sign-in, with all three cookies running out at the same moment.
+// Before the shared renewal the two bindings moved on every such request while
+// the session moved only when a page load wrote it, so this browser was signed
+// out on day eight. On that code this fails on day one already: the session
+// cookie did not move with the bindings.
+func TestAPersonWhoOnlyNavigatesInsideTheApplicationStaysSignedIn(t *testing.T) {
+	store := useTestSessionStore(t)
+	jar := newBrowserCookieJar()
+
+	signedInAt := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	signIn(t, store, jar, signedInAt)
+
+	for day := 1; day <= 10; day++ {
+		visitedAt := signedInAt.Add(time.Duration(day) * 24 * time.Hour)
+		actedAs, recorder := visitProtectedRoute(t, jar, visitedAt)
+		if actedAs != bindingTestUserID {
+			t.Fatalf("on day %d the person was no longer signed in (the request acted as %d): status %d, body %s",
+				day, actedAs, recorder.Code, recorder.Body.String())
+		}
+		assertSignInCookiesRunOutTogether(t, jar, visitedAt)
+	}
+}
+
+// The earlier repair's journey, kept: a page load on day three, then nothing but
+// in-application use until day eight, past the seven days the bindings were
+// given at sign-in.
 func TestAnActivePersonStaysSignedInPastTheOriginalBindingLifetime(t *testing.T) {
 	store := useTestSessionStore(t)
 	jar := newBrowserCookieJar()
@@ -183,17 +241,15 @@ func TestAnActivePersonStaysSignedInPastTheOriginalBindingLifetime(t *testing.T)
 
 	dayThree := signedInAt.Add(3 * 24 * time.Hour)
 	refreshSession(t, store, jar, dayThree)
-	if reached, recorder := visitProtectedRoute(t, jar, dayThree); !reached {
-		t.Fatalf("the person was stopped on day three: status %d, body %s", recorder.Code, recorder.Body.String())
+	if actedAs, recorder := visitProtectedRoute(t, jar, dayThree); actedAs != bindingTestUserID {
+		t.Fatalf("the person was stopped on day three: acted as %d, status %d, body %s", actedAs, recorder.Code, recorder.Body.String())
 	}
 
-	// Day eight is past the seven days the bindings were given at sign-in, and
-	// well inside the seven days the day-three visit gave the session.
 	dayEight := signedInAt.Add(8 * 24 * time.Hour)
-	reached, recorder := visitProtectedRoute(t, jar, dayEight)
-	if !reached {
-		t.Fatalf("a person who kept using the site was signed out on day eight: status %d, body %s",
-			recorder.Code, recorder.Body.String())
+	actedAs, recorder := visitProtectedRoute(t, jar, dayEight)
+	if actedAs != bindingTestUserID {
+		t.Fatalf("a person who kept using the site was signed out on day eight: acted as %d, status %d, body %s",
+			actedAs, recorder.Code, recorder.Body.String())
 	}
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("day eight status: got %d, want %d", recorder.Code, http.StatusOK)
@@ -203,7 +259,7 @@ func TestAnActivePersonStaysSignedInPastTheOriginalBindingLifetime(t *testing.T)
 // Renewal follows use, not the calendar: a browser that stops visiting keeps
 // nothing. The two stages' own tests then cover what such a browser is told
 // when it comes back with a session but no binding.
-func TestAnIdleBrowserLosesItsBindingsBecauseNothingRenewedThem(t *testing.T) {
+func TestAnIdleBrowserLosesAllThreeCookiesBecauseNothingRenewedThem(t *testing.T) {
 	store := useTestSessionStore(t)
 	jar := newBrowserCookieJar()
 
@@ -211,25 +267,21 @@ func TestAnIdleBrowserLosesItsBindingsBecauseNothingRenewedThem(t *testing.T) {
 	signIn(t, store, jar, signedInAt)
 
 	dayEight := signedInAt.Add(8 * 24 * time.Hour)
-	for _, name := range []string{
-		e_sessions.FingerprintCookieName(),
-		e_sessions.DeviceIDCookieName(),
-		e_sessions.SessionName,
-	} {
+	for _, name := range signInCookieNames() {
 		if jar.holds(name, dayEight) {
 			t.Fatalf("an idle browser still holds %q after eight days", name)
 		}
 	}
+	if actedAs, _ := visitProtectedRoute(t, jar, dayEight); actedAs == bindingTestUserID {
+		t.Fatal("an idle browser was still signed in on day eight")
+	}
 }
 
 // Renewing a binding is not accepting one. A request that arrives with someone
-// else's binding is refused exactly as before, and the answer never hands back a
-// binding the request did not already carry.
-//
-// Each stage writes a binding only after that binding's own value has been found
-// equal to the session's, so the value written is byte-identical to the one the
-// request presented. A request that gets one binding right and the other wrong is
-// therefore still refused, and leaves with nothing it did not arrive with.
+// else's binding is refused exactly as before, and the answer hands back no
+// binding at all — not even the one it presented. The renewal happens only once
+// both bindings have been compared, so a request that gets one right and the
+// other wrong leaves with nothing.
 func TestSomeoneElsesBindingIsRefusedAndNeverRenewed(t *testing.T) {
 	store := useTestSessionStore(t)
 
@@ -242,10 +294,6 @@ func TestSomeoneElsesBindingIsRefusedAndNeverRenewed(t *testing.T) {
 		{"no binding at all", "", ""},
 	} {
 		t.Run(stolen.name, func(t *testing.T) {
-			arrivedWith := map[string]string{
-				e_sessions.FingerprintCookieName(): stolen.fingerprint,
-				e_sessions.DeviceIDCookieName():    stolen.deviceValue,
-			}
 			jar := newBrowserCookieJar()
 			signedInAt := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
 			signIn(t, store, jar, signedInAt)
@@ -260,9 +308,9 @@ func TestSomeoneElsesBindingIsRefusedAndNeverRenewed(t *testing.T) {
 				jar.held[e_sessions.DeviceIDCookieName()] = heldCookie{value: stolen.deviceValue}
 			}
 
-			reached, recorder := visitProtectedRoute(t, jar, signedInAt.Add(time.Hour))
-			if reached {
-				t.Fatal("a request carrying another browser's binding reached the handler")
+			actedAs, recorder := visitProtectedRoute(t, jar, signedInAt.Add(time.Hour))
+			if actedAs != 0 {
+				t.Fatalf("a request carrying another browser's binding reached the handler as %d", actedAs)
 			}
 			if recorder.Code != http.StatusForbidden {
 				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusForbidden)
@@ -275,22 +323,17 @@ func TestSomeoneElsesBindingIsRefusedAndNeverRenewed(t *testing.T) {
 				t.Fatalf("the answer does not say the sign-in ended: %#v", body)
 			}
 			for _, cookie := range recorder.Result().Cookies() {
-				presented, isBinding := arrivedWith[cookie.Name]
-				if !isBinding || cookie.Value == "" {
-					continue
-				}
-				if cookie.Value != presented {
-					t.Fatalf("the refused request left with %q = %q, which it did not arrive with (%q)",
-						cookie.Name, cookie.Value, presented)
+				if cookie.Name == e_sessions.FingerprintCookieName() || cookie.Name == e_sessions.DeviceIDCookieName() {
+					t.Fatalf("the refused request was handed %q = %q; a refusal renews nothing", cookie.Name, cookie.Value)
 				}
 			}
 		})
 	}
 }
 
-// The renewal must be a full fresh lifetime, not a leftover: it has to match the
-// lifetime a sign-in writes, or the binding would still drift behind the session.
-func TestARenewedBindingCarriesTheSameLifetimeSignInWrites(t *testing.T) {
+// The renewal is one full fresh lifetime for all three, read from the one place
+// that states it; a shorter or uneven renewal would let the cookies drift apart.
+func TestARenewedSignInCarriesOneLifetimeForAllThreeCookies(t *testing.T) {
 	store := useTestSessionStore(t)
 	jar := newBrowserCookieJar()
 
@@ -303,19 +346,41 @@ func TestARenewedBindingCarriesTheSameLifetimeSignInWrites(t *testing.T) {
 		renewed[cookie.Name] = cookie.MaxAge
 	}
 
-	// The lifetime a sign-in writes, read from the writer itself rather than
-	// repeated as a number here.
-	signInLifetime := httptest.NewRecorder()
-	e_sessions.SetFingerprintCookie(signInLifetime, bindingTestFingerprint)
-	wantMaxAge := signInLifetime.Result().Cookies()[0].MaxAge
-
-	for _, name := range []string{e_sessions.FingerprintCookieName(), e_sessions.DeviceIDCookieName()} {
+	wantMaxAge := int(e_sessions.SignInLifetime.Seconds())
+	for _, name := range signInCookieNames() {
 		got, present := renewed[name]
 		if !present {
 			t.Fatalf("a passing request did not renew %q", name)
 		}
 		if got != wantMaxAge {
 			t.Fatalf("%q renewed for %d seconds, want the sign-in lifetime %d", name, got, wantMaxAge)
+		}
+	}
+}
+
+// The renewal is made once, at the end of the pair of binding stages, so that
+// has to be the end of a pair everywhere: the pipeline must run the device stage
+// after the fingerprint stage, and no route may run one of the two without the
+// other.
+func TestTheBindingStagesRunTogetherWithTheDeviceStageLast(t *testing.T) {
+	fingerprintAt, deviceAt := -1, -1
+	for index, stage := range pipeline.PipelineOrder {
+		switch stage.Name {
+		case "fingerprint":
+			fingerprintAt = index
+		case "device_id":
+			deviceAt = index
+		}
+	}
+	if fingerprintAt < 0 || deviceAt < 0 {
+		t.Fatalf("the pipeline order lacks a binding stage: fingerprint at %d, device_id at %d", fingerprintAt, deviceAt)
+	}
+	if deviceAt < fingerprintAt {
+		t.Fatalf("the device stage (%d) runs before the fingerprint stage (%d), so its renewal would precede the fingerprint comparison", deviceAt, fingerprintAt)
+	}
+	for handlerName, profile := range pipeline.RouteProfiles {
+		if profile.Skips("fingerprint") != profile.Skips("device_id") {
+			t.Errorf("%s runs one binding stage without the other", handlerName)
 		}
 	}
 }

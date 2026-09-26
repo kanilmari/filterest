@@ -98,10 +98,18 @@ func InitSessionStore() {
 		}
 	}
 
-	// Asetukset:
-	Store.Options = &sessions.Options{
+	Store.Options = SessionCookieOptions()
+}
+
+// SessionCookieOptions returns the options every session cookie is written
+// with: the store applies them to each session it loads, and the sign-in and
+// login-page handlers apply them to a session they replace. The lifetime is
+// SignInLifetime, shared with the two binding cookies, so a session written
+// anywhere lasts exactly as long as the bindings written beside it.
+func SessionCookieOptions() *sessions.Options {
+	return &sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 7, // 7 päivää
+		MaxAge:   int(SignInLifetime.Seconds()),
 		HttpOnly: true,
 		Secure:   ShouldUseSecureCookies(),
 		SameSite: http.SameSiteLaxMode, // CSRF-suoja

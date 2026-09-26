@@ -142,14 +142,19 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	// does not match its own browser is answered the way an ended sign-in is
 	// answered everywhere else in the application.
 	//
-	// Giving a browser a binding, rather than checking one, stays a guest's
+	// A sign-in that does match has just been used, and opening the front page
+	// is as much use as any protected request: the same renewal the device stage
+	// makes re-issues all three cookies here, with the session's own values, so
+	// the front page can never be the visit that lets one of them lapse.
+	//
+	// Giving a browser a binding, rather than renewing one, stays a guest's
 	// affair on a site that permits public browsing. Minting values there is safe
 	// precisely because there is no sign-in to protect; minting them for a
 	// signed-in request would hand it the very proof the protected routes demand
 	// afterwards. A site that requires a sign-in enrols no guest at all: a
 	// visitor without one has already been sent to the login page above.
 	if isSignedInUserID(userIDVal) {
-		if !requestCarriesSessionBrowserBinding(r, session) {
+		if !e_sessions.RenewUsedSignIn(w, r, session) {
 			session_expiry.RespondSignInNoLongerValid(
 				w, r, session,
 				"the root page was reached with a sign-in whose browser binding is missing or different",

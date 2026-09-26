@@ -16,20 +16,19 @@ import (
 // guest requests pass while treating a logged-in session with a missing or
 // mismatched fingerprint as a sign-in the server can no longer accept.
 //
-// A session cookie lives seven days and its seven days restart every time a
-// request writes the session. The fingerprint cookie used to be written only at
-// sign-in, so a person who kept using the site reached a day where the session
-// was still readable and the binding had already expired underneath it, and was
-// signed out although they had never been away. This stage therefore renews the
-// binding on the same terms the session renews itself: a request that proves the
-// binding is still the right one re-issues it for a full seven days.
+// This stage compares and never writes. A sign-in is carried by three cookies
+// that must run out together — the session and its two bindings — and they are
+// renewed in one place, e_sessions.RenewUsedSignIn, once a request has proved
+// both bindings. The device stage, which the pipeline runs right after this one
+// (app/backend/pipeline/pipeline_order.go), makes that call; a renewal here as
+// well would write the same cookies twice on every protected request, and a
+// renewal here alone would hand a fingerprint back before the device binding
+// had been compared at all.
 //
-// Renewing is not accepting. The value written back is the one the session
-// itself holds, and it is written only after the request's own cookie has been
-// compared with it. A request arriving with a different or absent fingerprint is
-// refused exactly as before, and reaches no renewal — that remains an ordinary
-// ended sign-in, answered by session_expiry.RespondSignInNoLongerValid and never
-// by sending the login page back to a request that asked for data.
+// A request arriving with a different or absent fingerprint is refused here and
+// reaches no renewal — that remains an ordinary ended sign-in, answered by
+// session_expiry.RespondSignInNoLongerValid and never by sending the login page
+// back to a request that asked for data.
 //
 // The device binding's twin is app/backend/pipeline/device_id_check/device_id_check.go.
 func WithFingerprintCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
@@ -71,14 +70,8 @@ func WithFingerprintCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// The binding has just proved this is the same browser, so it is given
-		// the same fresh seven days the session gets whenever a request writes
-		// it. The server re-issues its own stored value, never the request's, so
-		// an active person's binding cannot expire under a session that is still
-		// being extended.
-		e_sessions.SetFingerprintCookie(w, sessFingerprint)
-
-		// OK -> jatketaan
+		// OK -> jatketaan. The renewal of all three sign-in cookies happens in
+		// the device stage, once it has compared the second binding too.
 		originalHandler(w, r)
 	}
 }

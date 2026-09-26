@@ -19,9 +19,16 @@ import (
 const (
 	authCookieModeIsolated    = "isolated"
 	authCookieModeReplicaPool = "replica-pool"
-	authCookieLifetime        = 7 * 24 * time.Hour
 	maxExplicitCookieNameLen  = 128
 )
+
+// SignInLifetime is how long the three cookies that carry a sign-in — the
+// session and the device and fingerprint bindings that tie it to one browser —
+// last from the moment they are written. It is stated here once: the session
+// store reads it through SessionCookieOptions, the binding writers below read it
+// directly, and RenewUsedSignIn restarts all three from it together, so the
+// three cookies can only ever run out at the same moment.
+const SignInLifetime = 7 * 24 * time.Hour
 
 // AuthCookieNames contains the complete browser-cookie namespace owned by one
 // isolated instance or one explicitly shared replica pool.
@@ -121,8 +128,8 @@ func setPersistentAuthCookie(w http.ResponseWriter, name, value string) {
 		Name:     name,
 		Value:    value,
 		Path:     "/",
-		Expires:  time.Now().Add(authCookieLifetime),
-		MaxAge:   int(authCookieLifetime.Seconds()),
+		Expires:  time.Now().Add(SignInLifetime),
+		MaxAge:   int(SignInLifetime.Seconds()),
 		HttpOnly: true,
 		Secure:   ShouldUseSecureCookies(),
 		SameSite: http.SameSiteLaxMode,

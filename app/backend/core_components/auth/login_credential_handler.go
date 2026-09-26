@@ -336,13 +336,7 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return
 	}
-	session.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7,
-		HttpOnly: true,
-		Secure:   e_sessions.ShouldUseSecureCookies(),
-		SameSite: http.SameSiteLaxMode,
-	}
+	session.Options = e_sessions.SessionCookieOptions()
 
 	if err = setAuthenticatedSessionIdentityAtGeneration(session, userID, username, authenticationGeneration); err != nil {
 		logging.Errorf("[login-json] session identity setup failed for user %d: %v", userID, err)

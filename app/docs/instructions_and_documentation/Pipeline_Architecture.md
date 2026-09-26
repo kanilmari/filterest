@@ -95,8 +95,8 @@ Defined in `pipeline_order.go`. This is the **single source of truth** for the r
 | 4  | `error_handling` | Yes       | Catches panics from downstream, writes JSON 500       |
 | 5  | `auth`           | No        | Verifies session / login status                       |
 | 6  | `csrf`           | No        | Validates CSRF token for state-changing methods       |
-| 7  | `fingerprint`    | No        | Validates the browser fingerprint against the session, and renews it |
-| 8  | `device_id`      | No        | Validates the device ID against the session, and renews it |
+| 7  | `fingerprint`    | No        | Validates the browser fingerprint against the session   |
+| 8  | `device_id`      | No        | Validates the device ID against the session, then renews all three sign-in cookies together |
 | 9  | `access_control` | No        | Checks function-level permissions (user group rights) |
 | 10 | `admin_check`    | No        | Requires `admin_access_allowed = true` on user        |
 | 11 | `transaction`    | No        | Lazy database transaction (commit/rollback)           |
@@ -331,36 +331,60 @@ An administrator route refusing a signed-in person without administrator access,
 and any other authorization denial, stay ordinary `RespondWithError` 403s. Those
 two cases must never get the same words or the same recovery.
 
-### The browser binding keeps pace with the session
+### The three cookies of a sign-in renew together
 
-A sign-in is carried by three cookies that each last seven days: the session
-itself, and the two cookies that tie it to one browser (`device_id_*` and
-`fingerprint_*`). The session's seven days restart every time a request writes
-it, but the binding cookies were once written only at sign-in. A person who kept
-using the site therefore reached a day where the session was still readable and
-the binding had already run out underneath it, and was signed out although they
-had never been away.
+A sign-in is carried by three cookies: the session itself, and the two that tie
+it to one browser (`device_id_*` and `fingerprint_*`). Each lasts `SignInLifetime`
+— seven days, stated once in
+`app/backend/core_components/sessions/auth_cookie_identity.go`; the session store
+and the sign-in handlers read it through `SessionCookieOptions`, the binding
+writers read it directly. They renew in one place,
+`e_sessions.RenewUsedSignIn` in `sessions/sign_in_renewal.go`, which re-issues
+all three with that same fresh lifetime the moment a request has proved it
+carries a valid sign-in with a matching binding:
 
-The two binding stages now renew the binding on the session's own terms. When a
-request's binding has been compared with the session's and found equal, the
-stage writes that same value back with a full fresh lifetime, so an active
-person's binding cannot expire under a session that is still being extended.
+- the `device_id` stage calls it after its own comparison. The pipeline runs
+  that stage right after the `fingerprint` stage, so both bindings have been
+  compared by then, and no route profile skips one of the two without the other;
+  `session_binding_renewal_test.go` pins both facts;
+- the public root page (`router/root_handler.go`) calls it in place of the two
+  stages it does not run, for a visitor who signed in.
+
+Two earlier rhythms met here. The bindings were once written only at sign-in
+while the session's seven days restarted whenever a handler wrote it, so a
+regular visitor's binding lapsed under a live session. The first repair renewed
+each binding in its own stage, which inverted the problem: the bindings then
+moved on every protected request but the session only when a handler saved it —
+an in-application tab switch saves nothing, and of the ordinary requests only a
+full page load's `/api/auth-modes` did — so a person who used the site every day
+without a page load would have been signed out on day eight. One renewal for all
+three ends both.
 
 Renewing is not accepting:
 
-- the write happens only **after** the equality check, so the value handed back
-  is the one the request already carried, never a new one;
-- a request with a different or absent binding is refused before it reaches the
-  renewal, and still gets the one ended-sign-in answer above;
+- nothing is written unless the request already carries both binding values
+  the session stores, so the renewal cannot become a minting path however it is
+  reached, and the values written are the session's own;
+- a request with a different or absent binding is refused before the renewal,
+  gets the one ended-sign-in answer above, and is handed no binding at all — not
+  even the one it presented;
 - nothing renews without use — a browser that stops visiting keeps nothing, and
-  comes back to that same answer.
+  comes back to that same answer;
+- signing out (`auth/logout_handler.go`) still ends all three at once.
+
+The session cookie can appear twice in one response when a handler later writes
+the session itself, as `/api/auth-modes` does on a page load; the browser keeps
+the last one, and both carry the same lifetime.
 
 There is deliberately no absolute maximum on how long an active sign-in may be
 extended. The session has never had one either: only an explicit sign-out, or a
 changed `authentication_generation` for that user, ends it before its time.
 
 `app/backend/pipeline/session_binding_renewal_test.go` walks one browser through
-the journey with a cookie jar that drops what has run out.
+the journey with a cookie jar that drops what has run out, including ten days of
+nothing but in-application navigation; `sessions/sign_in_renewal_test.go` pins
+what the renewal writes and what it refuses; `router/sign_out_cookies_test.go`
+pins the sign-out.
 
 ### Only a visitor without a sign-in may be given a binding
 
@@ -379,8 +403,9 @@ is the browser which signed in, and use them on the protected routes afterwards.
 The root page now asks who the visitor is before it decides:
 
 - **signed in** — nothing is minted, on either kind of site. The request must
-  already carry the device and fingerprint values its own session stores, and one
-  that does not gets the single ended-sign-in answer above.
+  already carry the device and fingerprint values its own session stores; one
+  that does is renewed, never rewritten, and one that does not gets the single
+  ended-sign-in answer above.
 - **no sign-in** — on a site that allows public browsing the guest setup runs
   exactly as before, so a visitor who never signed in browses unchanged. A site
   that requires a sign-in enrols no guest at all: such a visitor has already been
@@ -394,8 +419,9 @@ title and description into it, and at a row address the row's own title, before
 any protected request has refused anything. Account access stayed closed, but the
 content did not.
 
-`app/backend/core_components/router/root_browser_binding.go` holds that decision,
-and `root_browser_binding_test.go` walks the attack on both kinds of site: a
+`app/backend/core_components/router/root_browser_binding.go` holds the guest
+side of that decision and `e_sessions.RequestCarriesSessionBinding` the
+comparison, and `root_browser_binding_test.go` walks the attack on both kinds of site: a
 session cookie alone, a request to the root page and to a dataset and row address,
 then a protected request with whatever came back.
 

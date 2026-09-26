@@ -291,8 +291,10 @@ func TestSignInOnlySiteDisclosesNothingToASessionWithoutItsBinding(t *testing.T)
 
 // A person who signed in and whose browser still carries its binding must not
 // notice any of this, on either kind of site, and must still be given the page
-// with everything it is meant to say.
-func TestSignedInVisitorWithItsBindingIsUnaffected(t *testing.T) {
+// with everything it is meant to say. Opening the page is use, so all three
+// sign-in cookies come back renewed — with the values the browser already had,
+// never rewritten.
+func TestSignedInVisitorWithItsBindingIsServedAndRenewed(t *testing.T) {
 	for _, site := range rootPageSiteKinds {
 		t.Run(site.name, func(t *testing.T) {
 			setupSiteWithReadableContent(t, site.loginToBrowse)
@@ -320,11 +322,20 @@ func TestSignedInVisitorWithItsBindingIsUnaffected(t *testing.T) {
 						!strings.Contains(recorder.Body.String(), disclosableRowTitle) {
 						t.Fatalf("the person who signed in was not given the row they asked for: %q", recorder.Body.String())
 					}
-					if rotated := responseCookie(recorder, e_sessions.DeviceIDCookieName()); rotated != nil {
-						t.Fatalf("the device binding was rewritten during ordinary browsing: %q", rotated.Value)
+					for _, renewed := range []struct{ name, had string }{
+						{e_sessions.DeviceIDCookieName(), "the-signed-in-device"},
+						{e_sessions.FingerprintCookieName(), "the-signed-in-fingerprint"},
+					} {
+						cookie := responseCookie(recorder, renewed.name)
+						if cookie == nil {
+							t.Fatalf("the front page did not renew %q for a person who signed in", renewed.name)
+						}
+						if cookie.Value != renewed.had {
+							t.Fatalf("the front page rewrote %q to %q during ordinary browsing", renewed.name, cookie.Value)
+						}
 					}
-					if rotated := responseCookie(recorder, e_sessions.FingerprintCookieName()); rotated != nil {
-						t.Fatalf("the fingerprint binding was rewritten during ordinary browsing: %q", rotated.Value)
+					if responseCookie(recorder, e_sessions.SessionName) == nil {
+						t.Fatal("the front page did not renew the session for a person who signed in")
 					}
 				})
 			}
@@ -472,52 +483,6 @@ func TestReturningGuestKeepsTheBindingItAlreadyCarries(t *testing.T) {
 	}
 	if rotated := responseCookie(recorder, e_sessions.FingerprintCookieName()); rotated != nil && rotated.Value != "the-guest-fingerprint" {
 		t.Fatalf("the returning guest's fingerprint binding changed to %q", rotated.Value)
-	}
-}
-
-func TestRequestCarriesSessionBrowserBinding(t *testing.T) {
-	store := gorillaSessions.NewCookieStore(rootHandlerTestKey)
-	newSession := func(deviceID, fingerprint string) *gorillaSessions.Session {
-		session := gorillaSessions.NewSession(store, "session")
-		if deviceID != "" {
-			session.Values["device_id"] = deviceID
-		}
-		if fingerprint != "" {
-			session.Values["fingerprint_hash"] = fingerprint
-		}
-		return session
-	}
-	requestWith := func(deviceID, fingerprint string) *http.Request {
-		request := httptest.NewRequest(http.MethodGet, "/", nil)
-		if deviceID != "" {
-			request.AddCookie(&http.Cookie{Name: e_sessions.DeviceIDCookieName(), Value: deviceID})
-		}
-		if fingerprint != "" {
-			request.AddCookie(&http.Cookie{Name: e_sessions.FingerprintCookieName(), Value: fingerprint})
-		}
-		return request
-	}
-
-	for _, testCase := range []struct {
-		name    string
-		request *http.Request
-		session *gorillaSessions.Session
-		want    bool
-	}{
-		{"the same browser", requestWith("d", "f"), newSession("d", "f"), true},
-		{"no device cookie", requestWith("", "f"), newSession("d", "f"), false},
-		{"no fingerprint cookie", requestWith("d", ""), newSession("d", "f"), false},
-		{"a different device", requestWith("other", "f"), newSession("d", "f"), false},
-		{"a different fingerprint", requestWith("d", "other"), newSession("d", "f"), false},
-		{"nothing stored in the session", requestWith("d", "f"), newSession("", ""), false},
-		{"no request", nil, newSession("d", "f"), false},
-		{"no session", requestWith("d", "f"), nil, false},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			if got := requestCarriesSessionBrowserBinding(testCase.request, testCase.session); got != testCase.want {
-				t.Fatalf("requestCarriesSessionBrowserBinding = %v, want %v", got, testCase.want)
-			}
-		})
 	}
 }
 

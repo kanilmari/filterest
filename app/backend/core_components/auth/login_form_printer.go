@@ -137,13 +137,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	if err != nil {
 		log.Printf("[showLoginForm] session get failed: %v, resetting", err)
 		session = sessions.NewSession(store, e_sessions.SessionName)
-		session.Options = &sessions.Options{
-			Path:     "/",
-			MaxAge:   86400 * 7, // 7 days
-			HttpOnly: true,
-			Secure:   e_sessions.ShouldUseSecureCookies(),
-			SameSite: http.SameSiteLaxMode,
-		}
+		session.Options = e_sessions.SessionCookieOptions()
 	}
 
 	if _, errCookie := r.Cookie(e_sessions.SessionName); errCookie == nil {

@@ -189,4 +189,9 @@ func TestAMatchingFingerprintPassesThrough(t *testing.T) {
 	if !called || recorder.Code != http.StatusOK {
 		t.Fatalf("a valid binding was rejected: called=%v status=%d", called, recorder.Code)
 	}
+	// Renewing the sign-in belongs to the device stage, which runs after this
+	// one and only then knows both bindings; this stage alone writes nothing.
+	if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("the fingerprint stage wrote %d cookie(s) on its own; renewal belongs to the device stage", len(cookies))
+	}
 }

@@ -3,7 +3,9 @@
 // Between the public root page and the device and fingerprint pipeline stages.
 // Exists because the root page runs neither of those stages, so a request that
 // owns nothing but a stolen session cookie must not be able to ask this page for
-// the very values that later prove it is the browser which signed in.
+// the very values that later prove it is the browser which signed in. A visitor
+// who did sign in is compared with, and renewed by, e_sessions.RenewUsedSignIn —
+// the same call the device stage makes — so this file owns only the guest side.
 package router
 
 import (
@@ -19,10 +21,10 @@ import (
 // The session entries "device_id" and "fingerprint_hash" are what together bind
 // a session to one browser. The stages that enforce them are
 // app/backend/pipeline/device_id_check and app/backend/pipeline/fingerprint_check;
-// this file only compares the same values, never decides what they mean. The two
-// names are spelled as literals here because that is how every other file in the
-// application spells them, and a constant covering only this one would leave the
-// application with two spellings for one key.
+// this file only writes the same values for a guest, never decides what they
+// mean. The two names are spelled as literals here because that is how every
+// other file in the application spells them, and a constant covering only this
+// one would leave the application with two spellings for one key.
 
 // isSignedInUserID reports whether a session identity belongs to a person who
 // signed in, rather than to the shared guest identity (1) or to no identity at
@@ -31,38 +33,6 @@ import (
 func isSignedInUserID(userIDVal interface{}) bool {
 	userID, ok := userIDVal.(int)
 	return ok && userID > 1
-}
-
-// requestCarriesSessionBrowserBinding reports whether this request already
-// presents the device and fingerprint values its own session stores.
-//
-// It compares and never writes. On a public page, a value accepted from the
-// request would immediately become the proof that the protected routes demand
-// afterwards, so the only safe question here is whether the browser already
-// holds what the session holds.
-func requestCarriesSessionBrowserBinding(r *http.Request, session *sessions.Session) bool {
-	if r == nil || session == nil {
-		return false
-	}
-	return requestCookieMatchesSessionValue(r, e_sessions.DeviceIDCookieName(), session, "device_id") &&
-		requestCookieMatchesSessionValue(r, e_sessions.FingerprintCookieName(), session, "fingerprint_hash")
-}
-
-// requestCookieMatchesSessionValue treats an absent session value the same as a
-// mismatch: a sign-in with nothing to compare against cannot have proved
-// anything, which is also how the device stage reads it.
-func requestCookieMatchesSessionValue(
-	r *http.Request,
-	cookieName string,
-	session *sessions.Session,
-	sessionKey string,
-) bool {
-	storedValue, _ := session.Values[sessionKey].(string)
-	if storedValue == "" {
-		return false
-	}
-	cookie, cookieErr := r.Cookie(cookieName)
-	return cookieErr == nil && cookie.Value == storedValue
 }
 
 // establishGuestBrowserBinding gives a visitor who has not signed in the device
