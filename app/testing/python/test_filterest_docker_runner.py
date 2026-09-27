@@ -435,6 +435,38 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         self.assertIn("must not be a symbolic link", completed.stderr)
         self.assertEqual(list(outside_directory.iterdir()), [])
 
+    def test_setup_opens_database_bootstrap_sources_to_the_database_container(self) -> None:
+        # A checkout made under umask 077 leaves both mounted sources private to
+        # their owner, which the PostgreSQL image's postgres user is not.
+        sources = [
+            self.app_root / "server_tools" / name
+            for name in ("db_init", "public_bootstrap")
+        ]
+        for source in sources:
+            source.mkdir(parents=True)
+            script = source / "01_example.sh"
+            script.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+            script.chmod(0o700)
+            data = source / "example.sql"
+            data.write_text("SELECT 1;\n", encoding="utf-8")
+            data.chmod(0o600)
+            source.chmod(0o700)
+
+        completed = self.run_runner("setup")
+
+        for source in sources:
+            self.assertEqual(stat.S_IMODE(source.stat().st_mode), 0o705)
+            self.assertEqual(
+                stat.S_IMODE((source / "01_example.sh").stat().st_mode), 0o705
+            )
+            self.assertEqual(
+                stat.S_IMODE((source / "example.sql").stat().st_mode), 0o604
+            )
+        self.assertIn("readable for the database container", completed.stdout)
+
+        repeated = self.run_runner("setup")
+        self.assertNotIn("readable for the database container", repeated.stdout)
+
     def test_dry_run_does_not_create_settings_or_call_docker(self) -> None:
         completed = self.run_runner("start", "--dry-run")
 

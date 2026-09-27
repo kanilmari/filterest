@@ -123,6 +123,10 @@ COPY server_tools/public_bootstrap/source/fixtures/ ./server_tools/public_bootst
 COPY VERSION_* ./
 COPY docker/docker-entrypoint.sh ./docker/docker-entrypoint.sh
 
+# COPY keeps the modes the files had in the build folder, so a checkout made
+# under a restrictive umask would leave the source and the entrypoint readable
+# only by root. The one lock below makes the tree readable by the runtime user
+# and read-only for everyone, whatever the host's umask was.
 RUN mkdir -p \
         /filterest/config \
         /filterest/keys/tls \
@@ -133,7 +137,7 @@ RUN mkdir -p \
         /filterest/data/storage_deleted \
         /filterest/data/runtime \
         /filterest/backups && \
-    chmod -R a-w /filterest/app
+    chmod -R a+rX,a-w /filterest/app
 
 USER filterest
 

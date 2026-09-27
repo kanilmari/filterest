@@ -172,12 +172,16 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             PUBLIC_SOURCE_ROOT / "docker/docker-entrypoint.sh"
         ).read_text(encoding="utf-8")
         runtime_stage = dockerfile.split("FROM alpine:3.24\n", maxsplit=1)[1]
+        # One lock makes the copied tree readable by the runtime user and
+        # read-only for everyone, independent of the build folder's modes.
+        permission_lock = "chmod -R a+rX,a-w /filterest/app"
 
+        self.assertIn(permission_lock, runtime_stage)
         self.assertIn("COPY backend/ ./backend/", dockerfile)
         self.assertIn("COPY backend/ ./backend/", runtime_stage)
         self.assertLess(
             runtime_stage.index("COPY backend/ ./backend/"),
-            runtime_stage.index("chmod -R a-w /filterest/app"),
+            runtime_stage.index(permission_lock),
         )
         fixture_copy = (
             "COPY server_tools/public_bootstrap/source/fixtures/ "
@@ -186,7 +190,11 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         self.assertIn(fixture_copy, runtime_stage)
         self.assertLess(
             runtime_stage.index(fixture_copy),
-            runtime_stage.index("chmod -R a-w /filterest/app"),
+            runtime_stage.index(permission_lock),
+        )
+        self.assertLess(
+            runtime_stage.index("COPY docker/docker-entrypoint.sh"),
+            runtime_stage.index(permission_lock),
         )
         self.assertIn(
             "RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build", dockerfile

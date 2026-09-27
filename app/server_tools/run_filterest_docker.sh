@@ -304,6 +304,32 @@ prepare_tls_identity() {
     printf '✓ Created the protected local TLS identity.\n'
 }
 
+# Gives the database container read access to the two source folders it mounts.
+# Between a checkout made under a restrictive umask and the PostgreSQL image,
+# whose postgres user is neither the owner of these files nor in their group.
+# Why: without it the image cannot list /docker-entrypoint-initdb.d, the first
+# start loops on "Permission denied", and Compose reports only an unhealthy database.
+ensure_database_mounts_readable() {
+    local mount_source=""
+    local opened=0
+
+    for mount_source in \
+        "$APPLICATION_ROOT/server_tools/db_init" \
+        "$APPLICATION_ROOT/server_tools/public_bootstrap"
+    do
+        [[ -e "$mount_source" ]] || continue
+        [[ ! -L "$mount_source" && -d "$mount_source" ]] || \
+            die "Database bootstrap source must be a real directory: $mount_source"
+        if [[ -n "$(find "$mount_source" \( -type d ! -perm -o=rx \) -o \( -type f ! -perm -o=r \) -print -quit)" ]]; then
+            chmod -R o+rX "$mount_source"
+            opened=1
+        fi
+    done
+    if [[ "$opened" -eq 1 ]]; then
+        printf '✓ Made the database bootstrap folders readable for the database container.\n'
+    fi
+}
+
 prepare_environment() {
     local installation_id=""
     local compose_project=""
@@ -327,6 +353,7 @@ prepare_environment() {
     chmod 600 "$ENV_FILE"
 
     prepare_installation_directories
+    ensure_database_mounts_readable
     prepare_runtime_environment
     migrate_docker_openai_api_key
     prepare_tls_identity
