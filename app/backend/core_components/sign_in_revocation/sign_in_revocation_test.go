@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"easelect/backend/core_components/sign_in_deadline"
+
 	"github.com/gorilla/sessions"
 )
 
@@ -35,6 +37,7 @@ type revocationStore struct {
 	writeFailure     error
 	reads            int
 	writes           int
+	lastUnlimited    *bool
 }
 
 type revocationDriver struct{ store *revocationStore }
@@ -69,10 +72,24 @@ func (c *revocationConn) QueryContext(_ context.Context, query string, args []dr
 		return nil, c.store.readFailure
 	}
 	signInID, _ := args[0].Value.(string)
+	expiresAt, _ := args[1].Value.(int64)
+	unlimited, _ := args[2].Value.(bool)
+	c.store.lastUnlimited = &unlimited
+
+	// The statement asks two things of one clock: is this sign-in still within
+	// the deadline it was given, and is there a record still refusing it. Whether
+	// the sign-in is unlimited comes from the third argument, exactly as the
+	// statement reads it. Working it out here from a negative number instead
+	// would leave the wiring between Go and the statement untested -- the fake
+	// would agree with itself whatever Go actually sent.
+	withinDeadline := unlimited || c.store.now.Before(time.Unix(expiresAt, 0))
 	expiry, recorded := c.store.expiryBySignInID[signInID]
-	// The query compares expires_at > now(); a record that has run out answers no.
-	stillRefusing := recorded && expiry.After(c.store.now)
-	return &revocationRows{names: []string{"exists"}, values: []driver.Value{stillRefusing}}, nil
+	stillRefused := recorded && expiry.After(c.store.now)
+
+	return &revocationRows{
+		names:  []string{"usable"},
+		values: []driver.Value{withinDeadline && !stillRefused},
+	}, nil
 }
 
 func (c *revocationConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -83,19 +100,35 @@ func (c *revocationConn) ExecContext(_ context.Context, query string, args []dri
 	if c.store.writeFailure != nil {
 		return nil, c.store.writeFailure
 	}
-	// The same statement first removes every record that has run out.
+	// The same statement first removes every record that has run out. A record
+	// with no end -- the sign-in was given no deadline -- is never among them.
 	for signInID, expiry := range c.store.expiryBySignInID {
-		if !expiry.After(c.store.now) {
+		if expiry != forever && !expiry.After(c.store.now) {
 			delete(c.store.expiryBySignInID, signInID)
 		}
 	}
 	signInID, _ := args[0].Value.(string)
-	seconds, _ := args[1].Value.(float64)
+	expiresAt, _ := args[1].Value.(int64)
+	unlimited, _ := args[2].Value.(bool)
+
+	// A sign-in already past its deadline is refused by the deadline itself, so
+	// the statement's WHERE writes nothing for it.
+	if !unlimited && !time.Unix(expiresAt, 0).After(c.store.now) {
+		return driver.RowsAffected(0), nil
+	}
 	if _, already := c.store.expiryBySignInID[signInID]; !already {
-		c.store.expiryBySignInID[signInID] = c.store.now.Add(time.Duration(seconds) * time.Second)
+		if unlimited {
+			c.store.expiryBySignInID[signInID] = forever
+		} else {
+			c.store.expiryBySignInID[signInID] = time.Unix(expiresAt, 0)
+		}
 	}
 	return driver.RowsAffected(1), nil
 }
+
+// forever stands in for the database's own infinity: the end of a record that
+// refuses a sign-in which was never given a deadline.
+var forever = time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
 
 var revocationTestCounter int64
 
@@ -125,19 +158,26 @@ func sessionWithSignInID(signInID string) *sessions.Session {
 	return session
 }
 
-const testSignInLifetime = 7 * 24 * time.Hour
+// deadlineAfter is the moment a sign-in started now would be given, as the
+// session carries it: whole seconds since the epoch.
+func deadlineAfter(from time.Time, after time.Duration) int64 {
+	return from.Add(after).Unix()
+}
+
+const testSignInLimit = 30 * 24 * time.Hour
 
 // Every sign-in gets its own identity, and nobody holding nothing can guess it.
 func TestEachSignInGetsItsOwnUnguessableIdentity(t *testing.T) {
 	seen := map[string]bool{}
 	for attempt := 0; attempt < 64; attempt++ {
-		session := &sessions.Session{Values: map[interface{}]interface{}{}}
-		if err := Set(session); err != nil {
+		signInID, err := NewSignInID()
+		if err != nil {
 			t.Fatalf("mint a sign-in identity: %v", err)
 		}
-		signInID, present := SessionValue(session)
-		if !present {
-			t.Fatal("a session that was just signed in carries no sign-in identity")
+		// What the sign-in handler then writes, and what the boundary reads back.
+		session := &sessions.Session{Values: map[interface{}]interface{}{SessionKey: signInID}}
+		if readBack, present := SessionValue(session); !present || readBack != signInID {
+			t.Fatalf("the identity read back as %q, %v", readBack, present)
 		}
 		if decoded, err := hex.DecodeString(signInID); err != nil || len(decoded) != signInIDRandomBytes {
 			t.Fatalf("the identity %q is not %d random bytes: %v", signInID, signInIDRandomBytes, err)
@@ -149,46 +189,134 @@ func TestEachSignInGetsItsOwnUnguessableIdentity(t *testing.T) {
 	}
 }
 
-// The promise the repair rests on: what has been signed out stays signed out.
-func TestASignedOutSignInIsRefusedForAsLongAsItsCookiesCouldLive(t *testing.T) {
+// The promise the repair rests on: what has been signed out stays signed out,
+// for exactly as long as it could otherwise have been presented.
+func TestASignedOutSignInIsRefusedUntilItsOwnDeadline(t *testing.T) {
 	store := &revocationStore{}
 	database := openRevocationStore(t, store)
-	signedOutAt := store.now
+	signedInAt := store.now
+	deadline := deadlineAfter(signedInAt, testSignInLimit)
 
-	if err := Record(context.Background(), database, "the-signed-out-sign-in", testSignInLifetime); err != nil {
+	if err := Record(context.Background(), database, "the-signed-out-sign-in", deadline); err != nil {
 		t.Fatalf("record the sign-out: %v", err)
 	}
 
-	for _, moment := range []time.Duration{0, time.Second, 24 * time.Hour, testSignInLifetime - time.Second} {
-		store.now = signedOutAt.Add(moment)
-		revoked, err := Revoked(context.Background(), database, "the-signed-out-sign-in")
+	for _, moment := range []time.Duration{0, time.Second, 24 * time.Hour, testSignInLimit - time.Second} {
+		store.now = signedInAt.Add(moment)
+		usable, err := StillUsable(context.Background(), database, "the-signed-out-sign-in", deadline)
 		if err != nil {
 			t.Fatalf("read the record %v after the sign-out: %v", moment, err)
 		}
-		if !revoked {
+		if usable {
 			t.Fatalf("%v after the sign-out the sign-in was accepted again", moment)
 		}
 	}
 }
 
-// The record only has to outlive the sign-in it refuses. Once the cookies could
-// no longer be read anyway, it stops answering and may be thrown away.
-func TestTheRecordStopsRefusingOnceTheSignInCouldNoLongerBeRead(t *testing.T) {
+// The record only has to outlive the sign-in it refuses, and it is written to end
+// at exactly that moment. Past it, the deadline refuses the same sign-in on its
+// own, so the record may be thrown away without letting anything back in.
+func TestOnceTheRecordEndsTheDeadlineRefusesTheSameSignIn(t *testing.T) {
 	store := &revocationStore{}
 	database := openRevocationStore(t, store)
-	signedOutAt := store.now
+	signedInAt := store.now
+	deadline := deadlineAfter(signedInAt, testSignInLimit)
 
-	if err := Record(context.Background(), database, "the-signed-out-sign-in", testSignInLifetime); err != nil {
+	if err := Record(context.Background(), database, "the-signed-out-sign-in", deadline); err != nil {
 		t.Fatalf("record the sign-out: %v", err)
 	}
 
-	store.now = signedOutAt.Add(testSignInLifetime + time.Second)
-	revoked, err := Revoked(context.Background(), database, "the-signed-out-sign-in")
+	// Past the deadline the record has run out. The sign-in must still be refused.
+	store.now = signedInAt.Add(testSignInLimit + time.Second)
+	usable, err := StillUsable(context.Background(), database, "the-signed-out-sign-in", deadline)
 	if err != nil {
-		t.Fatalf("read the record after it ran out: %v", err)
+		t.Fatalf("read after the record ran out: %v", err)
 	}
-	if revoked {
-		t.Fatal("a record that has run out is still refusing, so the table would only ever grow")
+	if usable {
+		t.Fatal("once its record expired the sign-in was accepted again; the deadline is not being enforced")
+	}
+}
+
+// A sign-in nobody signed out is still finished when its time is up. This is what
+// closes the gap the revocation record alone could not: a cookie kept readable by
+// being signed again elsewhere still carries the deadline it was born with.
+func TestASignInIsRefusedAtItsDeadlineWithoutAnySignOut(t *testing.T) {
+	store := &revocationStore{}
+	database := openRevocationStore(t, store)
+	signedInAt := store.now
+	deadline := deadlineAfter(signedInAt, testSignInLimit)
+
+	for _, testCase := range []struct {
+		when time.Duration
+		want bool
+	}{
+		{testSignInLimit - time.Second, true},
+		// Exactly at the deadline it is already finished. Anything else leaves one
+		// instant in which a sign-in is neither current nor yet expired.
+		{testSignInLimit, false},
+		{testSignInLimit + time.Second, false},
+	} {
+		store.now = signedInAt.Add(testCase.when)
+		usable, err := StillUsable(context.Background(), database, "a-sign-in-nobody-ended", deadline)
+		if err != nil {
+			t.Fatalf("%v after signing in: %v", testCase.when, err)
+		}
+		if usable != testCase.want {
+			t.Fatalf("%v after signing in the sign-in was usable = %v, want %v", testCase.when, usable, testCase.want)
+		}
+	}
+}
+
+// A sign-in made while the limit was switched off has no deadline to reach, so
+// only a sign-out can end it -- and that record may never be dropped, because
+// nothing would ever prove it spent.
+func TestASignInWithNoDeadlineIsRefusedForGoodOnceSignedOut(t *testing.T) {
+	store := &revocationStore{}
+	database := openRevocationStore(t, store)
+	signedInAt := store.now
+
+	usable, err := StillUsable(context.Background(), database, "an-unlimited-sign-in", sign_in_deadline.NeverExpires)
+	if err != nil {
+		t.Fatalf("read an unlimited sign-in: %v", err)
+	}
+	if !usable {
+		t.Fatal("a sign-in with no deadline was refused although nobody signed it out")
+	}
+
+	if err := Record(context.Background(), database, "an-unlimited-sign-in", sign_in_deadline.NeverExpires); err != nil {
+		t.Fatalf("record the sign-out: %v", err)
+	}
+	for _, moment := range []time.Duration{time.Second, 10 * 365 * 24 * time.Hour} {
+		store.now = signedInAt.Add(moment)
+		usable, err := StillUsable(context.Background(), database, "an-unlimited-sign-in", sign_in_deadline.NeverExpires)
+		if err != nil {
+			t.Fatalf("read %v after the sign-out: %v", moment, err)
+		}
+		if usable {
+			t.Fatalf("%v after signing out, a sign-in with no deadline was accepted again", moment)
+		}
+	}
+}
+
+// A sign-in already past its deadline is refused by the deadline itself, so there
+// is nothing worth writing down about it.
+func TestSigningOutAnAlreadyFinishedSignInWritesNothing(t *testing.T) {
+	store := &revocationStore{}
+	database := openRevocationStore(t, store)
+	deadline := deadlineAfter(store.now, -time.Hour)
+
+	if err := Record(context.Background(), database, "a-finished-sign-in", deadline); err != nil {
+		t.Fatalf("signing out a finished sign-in must still succeed: %v", err)
+	}
+	if len(store.expiryBySignInID) != 0 {
+		t.Fatalf("a finished sign-in left %d record(s) behind", len(store.expiryBySignInID))
+	}
+	usable, err := StillUsable(context.Background(), database, "a-finished-sign-in", deadline)
+	if err != nil {
+		t.Fatalf("read a finished sign-in: %v", err)
+	}
+	if usable {
+		t.Fatal("a sign-in past its deadline was accepted")
 	}
 }
 
@@ -199,137 +327,178 @@ func TestASignOutClearsTheRecordsThatHaveRunOut(t *testing.T) {
 	database := openRevocationStore(t, store)
 	firstSignOutAt := store.now
 
-	for _, signInID := range []string{"old-one", "old-two", "old-three"} {
-		if err := Record(context.Background(), database, signInID, testSignInLifetime); err != nil {
-			t.Fatalf("record the sign-out of %s: %v", signInID, err)
+	for _, signInID := range []string{"one-old-sign-out", "another-old-sign-out"} {
+		if err := Record(context.Background(), database, signInID, deadlineAfter(firstSignOutAt, testSignInLimit)); err != nil {
+			t.Fatalf("record %q: %v", signInID, err)
 		}
 	}
-	if len(store.expiryBySignInID) != 3 {
-		t.Fatalf("the store holds %d records, want 3", len(store.expiryBySignInID))
+	if len(store.expiryBySignInID) != 2 {
+		t.Fatalf("the store holds %d records, want 2", len(store.expiryBySignInID))
 	}
 
-	store.now = firstSignOutAt.Add(testSignInLifetime + time.Hour)
-	if err := Record(context.Background(), database, "a-later-sign-out", testSignInLifetime); err != nil {
+	store.now = firstSignOutAt.Add(testSignInLimit + time.Hour)
+	if err := Record(context.Background(), database, "a-later-sign-out", deadlineAfter(store.now, testSignInLimit)); err != nil {
 		t.Fatalf("record the later sign-out: %v", err)
 	}
-
 	if len(store.expiryBySignInID) != 1 {
-		t.Fatalf("after a later sign-out the store holds %d records, want only the new one", len(store.expiryBySignInID))
+		t.Fatalf("after a later sign-out the store holds %d records, want only the newest", len(store.expiryBySignInID))
 	}
 	if _, kept := store.expiryBySignInID["a-later-sign-out"]; !kept {
-		t.Fatal("the later sign-out was not recorded")
+		t.Fatal("the sign-out that did the clearing cleared itself away")
 	}
 }
 
-// Signing out on one browser must not sign the same person out of another.
+// Signing out on a phone must not sign the same person out of their desktop.
 func TestOnlyTheBrowserThatSignedOutIsRefused(t *testing.T) {
 	store := &revocationStore{}
 	database := openRevocationStore(t, store)
+	deadline := deadlineAfter(store.now, testSignInLimit)
 
-	if err := Record(context.Background(), database, "the-phone", testSignInLifetime); err != nil {
+	if err := Record(context.Background(), database, "the-phone", deadline); err != nil {
 		t.Fatalf("record the phone's sign-out: %v", err)
 	}
 
-	revoked, err := Revoked(context.Background(), database, "the-desktop")
+	usable, err := StillUsable(context.Background(), database, "the-desktop", deadline)
 	if err != nil {
-		t.Fatalf("read the desktop's record: %v", err)
+		t.Fatalf("read the desktop's sign-in: %v", err)
 	}
-	if revoked {
-		t.Fatal("signing out on one browser signed the same person out of the other")
+	if !usable {
+		t.Fatal("signing out on one browser signed the same person out of another")
 	}
 }
 
-// Signing out the same browser twice records one sign-out, so a browser cannot
-// be used to fill the table.
+// Two sign-outs of the same browser leave one record, and the first one's end
+// stands: a second sign-out may not push a refusal further into the future than
+// the sign-in it refuses could ever reach.
 func TestSigningTheSameBrowserOutTwiceRecordsItOnce(t *testing.T) {
 	store := &revocationStore{}
 	database := openRevocationStore(t, store)
+	deadline := deadlineAfter(store.now, testSignInLimit)
 
-	for attempt := 0; attempt < 5; attempt++ {
-		if err := Record(context.Background(), database, "one-browser", testSignInLifetime); err != nil {
-			t.Fatalf("record sign-out %d: %v", attempt, err)
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := Record(context.Background(), database, "one-browser", deadline); err != nil {
+			t.Fatalf("sign-out %d: %v", attempt+1, err)
 		}
 	}
 	if len(store.expiryBySignInID) != 1 {
-		t.Fatalf("five sign-outs of one browser left %d records, want 1", len(store.expiryBySignInID))
+		t.Fatalf("two sign-outs of one browser left %d records", len(store.expiryBySignInID))
+	}
+	if got := store.expiryBySignInID["one-browser"]; !got.Equal(time.Unix(deadline, 0)) {
+		t.Fatalf("the record ends at %v, want the sign-in's own deadline %v", got, time.Unix(deadline, 0))
 	}
 }
 
-// A visitor who never signed in, and a sign-in made before this contract existed,
-// carry no identity. Neither costs a question of the database.
-func TestASessionWithNoSignInIdentityAsksTheDatabaseNothing(t *testing.T) {
+// A visitor who never signed in carries no identity, and nothing is asked of the
+// database on their behalf.
+func TestASignInWithNoIdentityAsksTheDatabaseNothing(t *testing.T) {
 	store := &revocationStore{}
 	database := openRevocationStore(t, store)
 
-	for _, session := range []*sessions.Session{nil, sessionWithSignInID(""), {Values: map[interface{}]interface{}{"user_id": 42}}} {
-		revoked, err := SessionRevoked(context.Background(), database, session)
-		if err != nil || revoked {
-			t.Fatalf("a session with no sign-in identity was answered revoked=%v, err=%v", revoked, err)
-		}
+	usable, err := StillUsable(context.Background(), database, "", deadlineAfter(store.now, testSignInLimit))
+	if err != nil {
+		t.Fatalf("an unidentified sign-in: %v", err)
+	}
+	if !usable {
+		t.Fatal("a request carrying no sign-in identity was refused here rather than at the boundary")
 	}
 	if store.reads != 0 {
-		t.Fatalf("the database was asked %d times about sessions that have nothing to ask about", store.reads)
+		t.Fatalf("the database was asked %d times about a request that carries no sign-in", store.reads)
 	}
 }
 
-// A session that does carry an identity is compared against the store.
+// A session that carries an identity is compared, and a signed-out one refused.
 func TestASessionCarryingAnIdentityIsCompared(t *testing.T) {
 	store := &revocationStore{}
 	database := openRevocationStore(t, store)
-	if err := Record(context.Background(), database, "the-signed-out-sign-in", testSignInLifetime); err != nil {
+	deadline := deadlineAfter(store.now, testSignInLimit)
+
+	if err := Record(context.Background(), database, "the-signed-out-sign-in", deadline); err != nil {
 		t.Fatalf("record the sign-out: %v", err)
 	}
 
-	revoked, err := SessionRevoked(context.Background(), database, sessionWithSignInID("the-signed-out-sign-in"))
+	signInID, present := SessionValue(sessionWithSignInID("the-signed-out-sign-in"))
+	if !present {
+		t.Fatal("a signed-in session reported no identity")
+	}
+	usable, err := StillUsable(context.Background(), database, signInID, deadline)
 	if err != nil {
 		t.Fatalf("compare the session: %v", err)
 	}
-	if !revoked {
-		t.Fatal("a session whose sign-in was signed out was not refused")
+	if usable {
+		t.Fatal("a session naming a signed-out sign-in was accepted")
+	}
+	if store.reads != 1 {
+		t.Fatalf("the database was asked %d times, want once", store.reads)
 	}
 }
 
-// A store that cannot be reached is not an answer. The callers turn this into
-// "try again", never into a pass, and a visitor who never signed in never
-// reaches it, so public browsing is unaffected by the outage.
+// A store that cannot be read is never read as a pass.
 func TestAnUnreachableStoreIsNeverReadAsAPass(t *testing.T) {
-	store := &revocationStore{readFailure: errors.New("the database is unreachable")}
+	store := &revocationStore{readFailure: errors.New("the store is unreachable")}
 	database := openRevocationStore(t, store)
+	deadline := deadlineAfter(store.now, testSignInLimit)
 
-	revoked, err := SessionRevoked(context.Background(), database, sessionWithSignInID("any-sign-in"))
+	usable, err := StillUsable(context.Background(), database, "any-sign-in", deadline)
 	if err == nil {
-		t.Fatal("an unreachable store answered without an error")
+		t.Fatal("an unreadable store answered without an error")
 	}
-	if revoked {
-		t.Fatal("an unreachable store must not claim a sign-in is revoked either")
+	if usable {
+		t.Fatal("an unreadable store was read as a pass")
 	}
 
-	if _, err := Revoked(context.Background(), nil, "any-sign-in"); !errors.Is(err, ErrStoreUnavailable) {
-		t.Fatalf("with no store at all: got %v, want %v", err, ErrStoreUnavailable)
+	if _, err := StillUsable(context.Background(), nil, "any-sign-in", deadline); !errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("a missing store answered %v, want %v", err, ErrStoreUnavailable)
 	}
 	var missingDatabase *sql.DB
-	if _, err := Revoked(context.Background(), missingDatabase, "any-sign-in"); !errors.Is(err, ErrStoreUnavailable) {
-		t.Fatalf("with a nil database: got %v, want %v", err, ErrStoreUnavailable)
+	if _, err := StillUsable(context.Background(), missingDatabase, "any-sign-in", deadline); !errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("a nil database answered %v, want %v", err, ErrStoreUnavailable)
 	}
 }
 
-// A sign-out that could not be written must say so, so the handler does not
-// present an incomplete sign-out as finished.
+// A sign-out that could not be written is reported, so the person is told rather
+// than shown a sign-out that did not happen.
 func TestARecordThatCannotBeWrittenIsReported(t *testing.T) {
-	store := &revocationStore{writeFailure: errors.New("the database is unreachable")}
+	store := &revocationStore{writeFailure: errors.New("the store is unreachable")}
+	database := openRevocationStore(t, store)
+	deadline := deadlineAfter(store.now, testSignInLimit)
+
+	if err := Record(context.Background(), database, "the-sign-in", deadline); err == nil {
+		t.Fatal("a sign-out that could not be written was reported as done")
+	}
+	if err := Record(context.Background(), database, "", deadline); err == nil {
+		t.Fatal("a sign-out with no sign-in identity was accepted")
+	}
+	if err := Record(context.Background(), nil, "the-sign-in", deadline); !errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("a missing store answered %v, want %v", err, ErrStoreUnavailable)
+	}
+}
+
+// The statement is handed three things, and the third is the one the SQL actually
+// branches on. A fake that worked "unlimited" out for itself from a negative
+// number would agree with itself whatever Go sent, so this pins the wiring: what
+// the package decides in Go is what arrives at the statement.
+func TestTheStatementIsToldWhetherTheSignInIsUnlimited(t *testing.T) {
+	store := &revocationStore{}
 	database := openRevocationStore(t, store)
 
-	if err := Record(context.Background(), database, "the-sign-in", testSignInLifetime); err == nil {
-		t.Fatal("a sign-out that could not be written was reported as written")
-	}
-
-	if err := Record(context.Background(), database, "", testSignInLifetime); err == nil {
-		t.Fatal("a sign-out with no identity was accepted")
-	}
-	if err := Record(context.Background(), database, "the-sign-in", 0); err == nil {
-		t.Fatal("a record with no lifetime was accepted; it would refuse nothing")
-	}
-	if err := Record(context.Background(), nil, "the-sign-in", testSignInLifetime); !errors.Is(err, ErrStoreUnavailable) {
-		t.Fatalf("with no store at all: got %v, want %v", err, ErrStoreUnavailable)
+	for _, testCase := range []struct {
+		name      string
+		expiresAt int64
+		unlimited bool
+	}{
+		{"an ordinary deadline", deadlineAfter(store.now, testSignInLimit), false},
+		{"no deadline at all", sign_in_deadline.NeverExpires, true},
+	} {
+		store.lastUnlimited = nil
+		if _, err := StillUsable(context.Background(), database, "a-sign-in", testCase.expiresAt); err != nil {
+			t.Fatalf("%s: %v", testCase.name, err)
+		}
+		if store.lastUnlimited == nil {
+			t.Fatalf("%s: the statement was never told whether the sign-in is unlimited", testCase.name)
+		}
+		if *store.lastUnlimited != testCase.unlimited {
+			t.Fatalf("%s: the statement was told unlimited = %v, want %v",
+				testCase.name, *store.lastUnlimited, testCase.unlimited)
+		}
 	}
 }

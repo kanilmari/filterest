@@ -582,6 +582,55 @@ class EaselectAPIClientTest(unittest.TestCase):
             }],
         )
 
+    def _client_holding_a_cached_sign_in(self):
+        client = EaselectAPIClient.__new__(EaselectAPIClient)
+        client._authenticated = True
+        client._csrf_token = "a-cached-token"
+        return client
+
+    def test_an_ended_sign_in_is_forgotten_so_the_next_login_really_signs_in(self) -> None:
+        """A sign-in now has a last moment, so a long-running tool can be signed out
+        by the clock while it is still working. Without forgetting the cached flag,
+        the failed call was followed by a login() that answered "already signed in"
+        from memory, and every call after that failed too.
+        """
+        for status, body in ((401, ""), (403, '{"auth_failure": true}'),
+                             (403, '{"error": "session_no_longer_valid"}')):
+            with self.subTest(status=status, body=body):
+                client = self._client_holding_a_cached_sign_in()
+                client._forget_authentication_if_ended(status, body)
+                self.assertFalse(client._authenticated,
+                                 "the tool still believes it is signed in")
+                self.assertIsNone(client._csrf_token)
+
+    def test_an_ordinary_refusal_does_not_end_the_sign_in(self) -> None:
+        """A missing right or a rejected token says nothing about whether this
+        sign-in is still current, and signing in again would not help.
+        """
+        for status, body in ((403, '{"error": "csrf_token_invalid"}'),
+                             (403, '{"error": "forbidden"}'),
+                             (404, ""), (500, '{"auth_failure": true}')):
+            with self.subTest(status=status, body=body):
+                client = self._client_holding_a_cached_sign_in()
+                client._forget_authentication_if_ended(status, body)
+                self.assertTrue(client._authenticated,
+                                "an ordinary refusal threw away a working sign-in")
+                self.assertEqual(client._csrf_token, "a-cached-token")
+
+    def test_both_transports_forget_an_ended_sign_in(self) -> None:
+        """The file-carrying transport has its own error handler, and adding this to
+        one of the two left row creation unable to recover.
+        """
+        import inspect
+
+        for method in (EaselectAPIClient.request, EaselectAPIClient.request_multipart):
+            with self.subTest(transport=method.__name__):
+                self.assertIn(
+                    "_forget_authentication_if_ended",
+                    inspect.getsource(method),
+                    f"{method.__name__} cannot recover from an ended sign-in",
+                )
+
     def test_login_reuses_authenticated_client_session(self) -> None:
         client = EaselectAPIClient.__new__(EaselectAPIClient)
         client._authenticated = True

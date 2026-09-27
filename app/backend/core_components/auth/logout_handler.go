@@ -19,6 +19,7 @@ import (
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
@@ -104,7 +105,17 @@ func recordSignOutOfThisBrowser(r *http.Request, session *sessions.Session) bool
 		return true
 	}
 
-	if err := sign_in_revocation.Record(r.Context(), backend.Db, signInID, e_sessions.SignInLifetime); err != nil {
+	// The record is kept to this sign-in's own deadline, so it lasts exactly as
+	// long as the sign-in it refuses could be presented and no longer. A sign-in
+	// with no deadline is refused for good, because nothing would ever prove it
+	// spent.
+	expiresAt, dated := sign_in_deadline.SessionValue(session)
+	if !dated {
+		log.Printf("[logout] the sign-in of this browser carries no deadline; it predates the sign-in limit and the shared boundary already refuses it")
+		return true
+	}
+
+	if err := sign_in_revocation.Record(r.Context(), backend.Db, signInID, expiresAt); err != nil {
 		log.Printf("\033[31merror: [logout] the sign-out could not be recorded and can still be undone by a request already in flight: %v\033[0m", err)
 		return false
 	}

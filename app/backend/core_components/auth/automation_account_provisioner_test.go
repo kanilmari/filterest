@@ -115,6 +115,8 @@ func (connection *automationProvisionerMockConn) QueryContext(
 	defer connection.state.mu.Unlock()
 
 	switch {
+	case isSignInLimitQuery(query):
+		return answerSignInLimit(), nil
 	case strings.Contains(normalized, "LEFT JOIN restricted.users_restricted credentials"):
 		return &automationProvisionerMockRows{
 			columns: []string{"id", "username", "enabled", "admin", "privileged", "creation_spec", "membership", "method", "generation", "api_only"},

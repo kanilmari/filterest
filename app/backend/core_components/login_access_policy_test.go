@@ -14,7 +14,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
@@ -36,6 +38,10 @@ type loginPolicyRows struct {
 	done   bool
 }
 
+// testFarFutureDeadline stands for a sign-in whose last moment is still far off,
+// so these tests are about admission and not about expiry.
+var testFarFutureDeadline = time.Now().Add(30 * 24 * time.Hour).Unix()
+
 func (d loginPolicyDriver) Open(string) (driver.Conn, error)   { return &loginPolicyConn{d.cfg}, nil }
 func (c *loginPolicyConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("unused") }
 func (c *loginPolicyConn) Close() error                        { return nil }
@@ -56,9 +62,15 @@ func (c *loginPolicyConn) QueryContext(_ context.Context, query string, args []d
 	}
 	switch {
 	case strings.Contains(query, "public.system_revoked_sign_ins"):
+		// The statement answers one question: may this sign-in still be used? It
+		// is no if the sign-in was signed out, and no if it has reached the
+		// deadline it was given.
 		signInID, _ := args[0].Value.(string)
-		return &loginPolicyRows{names: []string{"exists"},
-			values: []driver.Value{c.cfg.revokedSignIns[signInID]}}, nil
+		expiresAt, _ := args[1].Value.(int64)
+		unlimited, _ := args[2].Value.(bool)
+		withinDeadline := unlimited || time.Now().Before(time.Unix(expiresAt, 0))
+		return &loginPolicyRows{names: []string{"usable"},
+			values: []driver.Value{withinDeadline && !c.cfg.revokedSignIns[signInID]}}, nil
 	case strings.Contains(query, "FROM system_config"):
 		value, present := c.cfg.settings[args[0].Value.(string)]
 		return &loginPolicyRows{names: []string{"boolean_value"}, values: []driver.Value{value}, done: !present}, nil
@@ -157,6 +169,9 @@ func TestActiveSessionRechecksAdmissionWithoutTrustingCookieRole(t *testing.T) {
 		// Every sign-in made now carries its own identity; the boundary refuses one
 		// that does not, so this fixture has to be a sign-in that could really exist.
 		sign_in_revocation.SessionKey: "this-browsers-sign-in",
+		// Every sign-in made now also carries the last moment it may be used; the
+		// boundary refuses one that does not.
+		sign_in_deadline.SessionKey: testFarFutureDeadline,
 	}}
 	matches, err := AuthenticatedSessionMatches(context.Background(), db, session, 42)
 	if err != nil || !matches {
@@ -198,6 +213,7 @@ func TestASignedOutSignInIsRefusedAtTheSharedSessionBoundary(t *testing.T) {
 		}
 		if signInID != "" {
 			values[sign_in_revocation.SessionKey] = signInID
+			values[sign_in_deadline.SessionKey] = testFarFutureDeadline
 		}
 		return &sessions.Session{Values: values}
 	}

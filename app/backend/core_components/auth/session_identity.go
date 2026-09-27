@@ -10,6 +10,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
@@ -50,16 +51,35 @@ func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, user
 		return err
 	}
 
+	// Everything that can fail is asked before anything is written. A session is
+	// shared for the whole request -- the audit stage reads it after the handler
+	// returns -- so a half-written identity left behind by a failure part way
+	// through would be seen by whatever looked next. Nothing below this line can
+	// fail, so the session either gains the whole identity or none of it.
+	//
+	// The last moment this sign-in may be used is decided here, once, from the
+	// database's own clock, and never revised afterwards.
+	signInID, err := sign_in_revocation.NewSignInID()
+	if err != nil {
+		return err
+	}
+	expiresAt, err := sign_in_deadline.Decide(context.Background(), backend.Db)
+	if err != nil {
+		return err
+	}
+
 	session.Values["authenticated"] = true
 	session.Values["user_id"] = userID
 	session.Values["username"] = username
 	session.Values["user_role"] = userRole
 	// This one sign-in gets its own identity, so signing out here can be refused
-	// afterwards without touching the same person's other browsers. It is minted
-	// where the identity is established, so every way of signing in carries one.
-	if err = sign_in_revocation.Set(session); err != nil {
-		return err
-	}
+	// afterwards without touching the same person's other browsers. Both it and the
+	// deadline are written every time rather than only when absent: signing in
+	// again in a browser that still holds an old session reuses that session, and a
+	// value left over from the previous sign-in would either cut this one short or
+	// outlive it.
+	session.Values[sign_in_revocation.SessionKey] = signInID
+	session.Values[sign_in_deadline.SessionKey] = expiresAt
 	if err = auth_generation.Set(session, authenticationGeneration); err != nil {
 		return err
 	}

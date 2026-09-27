@@ -363,11 +363,34 @@ class EaselectAPIClient:
                 return self._parse_response_body(response_body, expect_json=expect_json)
         except urllib.error.HTTPError as err:
             error_body = err.read().decode("utf-8", errors="replace")
+            self._forget_authentication_if_ended(err.code, error_body)
             raise EaselectAPIError(
                 f"{method.upper()} {path} failed: HTTP {err.code}: {error_body}"
             ) from err
         except urllib.error.URLError as err:
             raise EaselectAPIError(f"{method.upper()} {path} failed: {err}") from err
+
+    def _forget_authentication_if_ended(self, status, body):
+        """Drop the cached sign-in when the server says it is over.
+
+        A sign-in now has a last moment it may be used, so a long-running process
+        can be signed in when it starts and signed out by the clock while it is
+        still working. Without this, the cached flag below went on saying yes: the
+        request failed, the caller called login() again, and login() answered
+        "already signed in" from the cache, so every call after that failed too.
+
+        The failure is still raised. Nothing is retried here on the client's
+        behalf, because a write that failed may or may not have been applied, and
+        the caller is the only one who knows whether repeating it is safe.
+        """
+        if status not in (401, 403):
+            return
+        if status == 403 and "auth_failure" not in body and "session_no_longer_valid" not in body:
+            # An ordinary refusal -- a missing right, a rejected token -- says
+            # nothing about whether this sign-in is still current.
+            return
+        self._authenticated = False
+        self._csrf_token = None
 
     def request_multipart(self, method, path, *, fields=None, query=None, csrf=False):
         """Send multipart form fields between agent tools and file-capable app APIs."""
@@ -392,6 +415,7 @@ class EaselectAPIClient:
                 return self._parse_response_body(response_body, expect_json=True)
         except urllib.error.HTTPError as err:
             error_body = err.read().decode("utf-8", errors="replace")
+            self._forget_authentication_if_ended(err.code, error_body)
             raise EaselectAPIError(
                 f"{method.upper()} {path} failed: HTTP {err.code}: {error_body}"
             ) from err

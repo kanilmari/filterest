@@ -396,10 +396,13 @@ The session cookie can appear twice in one response when a handler later writes
 the session itself, as `/api/auth-modes` does on a page load; the browser keeps
 the last one, and both carry the same lifetime.
 
-There is deliberately no absolute maximum on how long an active sign-in may be
-extended. The session has never had one either: only an explicit sign-out, or a
-changed `authentication_generation` for that user, ends it before its time. Both
-of those are now enforced by the server rather than by the browser alone.
+An active sign-in is renewed on use, so the seven days never run out for someone
+who keeps visiting — but the sign-in as a whole now has an outer limit it cannot
+pass. That limit is stamped into it when it begins and is described under the
+sign-in deadline below. Before that, only an explicit sign-out or a changed
+`authentication_generation` for that user ended a sign-in early. The generation
+has always been checked by the server; the sign-out was the one the browser was
+trusted with, and it is not any more.
 
 `app/backend/pipeline/session_binding_renewal_test.go` walks one browser through
 the journey with a cookie jar that drops what has run out, including ten days of
@@ -444,9 +447,13 @@ sign-in that row names.
   Measured on a store holding ten thousand records: an index scan on the primary
   key, two or three shared buffer hits, 0.05–0.08 ms, beside the two reads of user
   and configuration rows the same function already made.
-- **How long the record lives, and how it goes away.** `expires_at` is
-  `SignInLifetime` from the sign-out, computed by the database from its own clock
-  so a clock difference cannot shorten it. The same statement that writes a record
+- **How long the record lives, and how it goes away.** `expires_at` is the
+  deadline the sign-in itself was given, taken from the cookie rather than
+  recomputed at sign-out, so the record lasts exactly as long as the sign-in it
+  refuses could still be presented. A sign-in that had no deadline leaves a record
+  with none — the database's own infinity — because nothing would ever prove it
+  spent, and a sign-in already past its deadline leaves no record at all, since the
+  deadline refuses it anyway. The same statement that writes a record
   deletes every record that has run out, so housekeeping is paid for by the act
   that creates the work and there is no schedule to miss and no switch to leave
   off. It is opportunistic rather than a promise: on a site where nobody signs out
@@ -459,23 +466,55 @@ sign-in that row names.
   unobservable, because the audit log records each sign-out with its user, address
   and time, and the two can be lined up by when they happened. Pseudonymous storage
   beside an existing record, not anonymity.
-- **A cookie presented weeks later, and what this does not reach.** The record has
-  to outlive the cookie it refuses, and against an untouched cookie it does: the
-  session store accepts a signature only for `SignInLifetime`, which
-  `sessions/session_signature_age_test.go` pins, and a copy last signed before the
-  sign-out becomes unreadable before the record expires.
+- **A cookie presented weeks later.** What refuses it is the deadline, not the age
+  of its signature. The session store does stop reading a signature older than
+  `SignInLifetime`, which `sessions/session_signature_age_test.go` pins, but that is
+  a separate seven days and it is not what the guarantee rests on: with the limit
+  set to one hour, a sign-in signed out immediately leaves a record that ends in an
+  hour while its original signature stays readable for a week. The cookie is still
+  refused, because the deadline inside it has passed.
 
-  That holds only while nothing signs the cookie again. Signing out no longer does
-  — it writes the three cookies out directly and saves no session — but the
+  That would hold only while nothing signs the cookie again. Signing out no longer
+  does — it writes the three cookies out directly and saves no session — but the
   application has around thirty other places that write a session, several on
   routes reachable without signing in, and each writes a fresh signature over
-  whatever the session holds. Someone already holding a stolen cookie can use one
-  of those to outlast the record. Closing them off one at a time would be a list
-  kept in step by hand; the durable fix is a sign-in deadline stamped once, not
-  extendable, checked at this same boundary against the database clock. Until that
-  exists the guarantee is bounded and should be stated as such: a sign-out holds
-  against an ordinary copy and against a request already in flight, not against
-  someone deliberately refreshing a stolen one.
+  whatever the session holds. Someone already holding a stolen cookie could use one
+  of those to keep it readable and outlast the record. Closing them off one at a
+  time would be a list kept in step by hand, so the cookie's readability is not
+  what the guarantee rests on. The deadline below is.
+- **The last moment a sign-in may be used** (`core_components/sign_in_deadline`).
+  Every sign-in is stamped, when it begins, with the moment it ends: read from the
+  database's own clock, carried inside the signed session cookie as whole seconds,
+  and never rewritten by anything afterwards. The shared boundary refuses a sign-in
+  that has reached it, in the same statement and against the same reading of the
+  clock as the revocation lookup, so the two cannot disagree about what time it is
+  and the boundary still pays for one round trip. A sign-in is refused **at** its
+  deadline, not merely after it, so no instant is left in which a sign-in is
+  neither current nor yet expired.
+
+  It is a moment and not a length, and that is the whole of the design. Storing the
+  sign-in's start and comparing it against whatever the setting says today would
+  leave the setting itself as a way to extend a sign-in: sign out under a one-day
+  limit, keep the cookie signed through some public route, then raise the limit to
+  thirty days, and the same cookie is accepted again once its refusal record has run
+  out. Changing the setting therefore governs sign-ins made after the change and
+  never touches one already given. A revocation record is likewise kept to the
+  sign-in's own stamped deadline rather than to a length computed at sign-out.
+
+  The ceiling is one settings row, `absolute_sign_in_limit`, holding
+  `limit_enabled`, `limit_unit` (hours or days, counted as elapsed time) and
+  `limit_amount`. The three are one row because none of them means anything alone.
+  The default is thirty days. A row that is missing or that cannot be read as a
+  policy gives that same default and says so in the log — the protective answer,
+  never the permissive one — while a database that cannot be *asked* is an error and
+  never falls back to this machine's clock. Switching the limit off is possible but
+  has to be said: such a sign-in is stamped with an explicit "no deadline", and a
+  sign-out of it is remembered for good, because nothing would ever prove it spent.
+
+  What this costs is that everyone signs in again once the limit is reached,
+  whatever they are doing. Unsaved text in a page is lost when that happens, exactly
+  as it already is when a session expires; preserving it is separate work and is not
+  done here.
 - **When the store cannot be read.** The error is handed on exactly as a credential
   read that could not be made already was, so this adds no new failure behaviour and
   inherits whatever each boundary does. That is not one answer everywhere: most say
@@ -495,8 +534,10 @@ sign-in that row names.
   deliberately promises nothing further: closing a tab ends nothing that has left
   the browser, and signing in and out again would record only the new sign-in and
   leave the old credentials untouched.
-- **Sign-ins made before this change** carry no identity, so they cannot be signed
-  out and made to stay out. They are refused at the shared boundary instead and the
+- **Sign-ins made before this change** carry neither an identity nor a deadline, so
+  they cannot be signed out and made to stay out, and no last moment can be given to
+  them after the fact — deriving one now, from a cookie that may have been re-signed
+  any number of times, would be exactly the extension the deadline prevents. They are refused at the shared boundary instead and the
   person signs in once more. Letting them continue was considered and rejected: a
   used sign-in is renewed, so one visited daily would never have run out on its own.
   The one-off cost is that everyone signed in at the time of the upgrade signs in

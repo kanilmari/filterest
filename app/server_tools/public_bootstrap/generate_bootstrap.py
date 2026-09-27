@@ -48,6 +48,12 @@ language_seed_migrations = (
     "20260922000006_seed_dataset_creation_warning_language_key.sql",
     "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
 )
+# A setting an upgrade adds is added for a new installation by the same file, so
+# the default is written once and an upgraded site and a new one start with the
+# same policy. Each of these leaves an existing value alone.
+setting_seed_migrations = (
+    "20260927000001_add_absolute_sign_in_limit.sql",
+)
 # What an upgrade adds where a site lacks it — a table, or a relationship between
 # two tables — is added for a new installation by the same file, so an upgraded
 # database and a newly installed one end with the same schema, stated once.
@@ -84,6 +90,7 @@ seed_sql = (
     "".join(reviewed_source(name).replace("__FILTEREST_DB_VERSION__", db_version) for name in seed_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
+    + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
 )
 
 # Enforce the same explicit content boundary used by the public release audit.

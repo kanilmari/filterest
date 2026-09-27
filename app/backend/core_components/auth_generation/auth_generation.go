@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
@@ -108,6 +109,10 @@ func ClearIdentity(session *sessions.Session) {
 		// sign-in it no longer is. The key is named by its owning package so the
 		// application keeps one spelling of it.
 		sign_in_revocation.SessionKey,
+		// The deadline goes with the sign-in it belongs to, for the same reason:
+		// a session left holding it after being emptied would carry the last
+		// moment of a sign-in it no longer is.
+		sign_in_deadline.SessionKey,
 		AutomationSessionKey,
 	} {
 		delete(session.Values, key)

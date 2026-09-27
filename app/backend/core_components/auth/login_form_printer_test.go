@@ -79,6 +79,8 @@ func (c *loginHandlerMockConn) Query(query string, args []driver.Value) (driver.
 
 func (c *loginHandlerMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case isSignInLimitQuery(query):
+		return answerSignInLimit(), nil
 	case strings.Contains(query, "login_to_browse"):
 		return &loginHandlerMockRows{
 			cols: []string{"boolean_value"},

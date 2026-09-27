@@ -123,6 +123,8 @@ func (connection *adminAuthenticationMockConn) QueryContext(
 	defer connection.state.mu.Unlock()
 
 	switch {
+	case isSignInLimitQuery(query):
+		return answerSignInLimit(), nil
 	case strings.Contains(normalized, "SELECT id FROM system_functions WHERE url_route_endpoint"):
 		return &adminAuthenticationMockRows{columns: []string{"id"}}, nil
 	case strings.Contains(normalized, "ORDER BY lower(u.username), u.id"):

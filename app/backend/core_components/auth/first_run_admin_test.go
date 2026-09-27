@@ -72,6 +72,8 @@ func (r *firstRunTransactionRows) Next(destination []driver.Value) error {
 
 func (c *firstRunTransactionConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case isSignInLimitQuery(query):
+		return answerSignInLimit(), nil
 	case strings.Contains(query, "FOR UPDATE"):
 		return &firstRunTransactionRows{values: []driver.Value{true}}, nil
 	case strings.Contains(query, "JOIN restricted.users_restricted"):

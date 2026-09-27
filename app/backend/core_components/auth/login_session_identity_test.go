@@ -6,8 +6,10 @@ package auth
 
 import (
 	"testing"
+	"time"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
@@ -62,6 +64,73 @@ func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	secondSignInID, _ := sign_in_revocation.SessionValue(secondSession)
 	if secondSignInID == firstSignInID {
 		t.Fatal("two sign-ins of the same person share one identity, so signing out of one would sign out both")
+	}
+
+	// And its last moment, without which the boundary refuses it outright. The
+	// deadline is asserted here, in the setter's own test, because every other
+	// place that exercises a signed-in session builds one by hand: removing the
+	// production line that writes it would leave all of those green.
+	expiresAt, dated := sign_in_deadline.SessionValue(session)
+	if !dated {
+		t.Fatal("a completed sign-in carries no deadline, so the shared boundary would refuse it")
+	}
+	if sign_in_deadline.Unlimited(expiresAt) {
+		t.Fatal("a sign-in made under an ordinary limit was given no deadline at all")
+	}
+	if expiresAt <= time.Now().Unix() {
+		t.Fatalf("the sign-in ends at %v, which has already passed", time.Unix(expiresAt, 0))
+	}
+}
+
+// Signing in has to ask everything that can fail before it writes anything. The
+// session belongs to the whole request -- the audit stage reads it after the
+// handler returns -- so an identity left half written by a failure part way
+// through would be read by whatever looked next, and a browser that was already
+// signed in would have its working identity replaced by a broken one.
+func TestAFailedSignInLeavesTheSessionExactlyAsItWas(t *testing.T) {
+	origGuest, origAdmin, origConfidential := backend.DbGuest, backend.DbAdmin, backend.DbConfidential
+	origDb := backend.Db
+	// Everything this sign-in needs is answered except the one read that decides
+	// its deadline, so the failure lands exactly where the ordering matters and
+	// not at the first step.
+	database := openCredentialMockDB(t, credentialMockConfig{
+		adminGroupMember: true, authGeneration: 7, signInLimitError: true,
+	})
+	backend.DbGuest, backend.DbAdmin, backend.DbConfidential = database, nil, database
+	backend.Db = database
+	t.Cleanup(func() {
+		backend.DbGuest, backend.DbAdmin, backend.DbConfidential = origGuest, origAdmin, origConfidential
+		backend.Db = origDb
+	})
+
+	// A browser that is already signed in, with everything a real one carries.
+	before := map[interface{}]interface{}{
+		"authenticated":               true,
+		"user_id":                     9,
+		"username":                    "someone-else",
+		"user_role":                   "basic",
+		"authentication_generation":   int64(3),
+		sign_in_revocation.SessionKey: "the-sign-in-already-here",
+		sign_in_deadline.SessionKey:   time.Now().Add(72 * time.Hour).Unix(),
+	}
+	session := &sessions.Session{Values: map[interface{}]interface{}{}}
+	for key, value := range before {
+		session.Values[key] = value
+	}
+
+	if err := setAuthenticatedSessionIdentity(session, 42, "alice"); err == nil {
+		t.Fatal("signing in succeeded although the sign-in limit could not be read")
+	}
+
+	for key, want := range before {
+		if got := session.Values[key]; got != want {
+			t.Fatalf("a failed sign-in changed %v from %#v to %#v; the session was written before everything that can fail had been asked",
+				key, want, got)
+		}
+	}
+	if len(session.Values) != len(before) {
+		t.Fatalf("a failed sign-in left %d values behind, want the %d that were there",
+			len(session.Values), len(before))
 	}
 }
 

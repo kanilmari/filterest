@@ -19,6 +19,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -52,10 +53,14 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 		return nil, fmt.Errorf("configured read failure")
 	}
 	switch {
+	case isSignInLimitQuery(q):
+		return answerSignInLimit(), nil
 	// The shared boundary asks first whether this sign-in has been signed out.
 	// The administrator in these cases is still signed in, so the answer is no.
+	// One question: may this sign-in still be used? The administrator in these
+	// cases is signed in and within their deadline, so yes.
 	case strings.Contains(q, "system_revoked_sign_ins"):
-		return &authModesMockRows{cols: []string{"exists"}, vals: []driver.Value{false}}, nil
+		return &authModesMockRows{cols: []string{"usable"}, vals: []driver.Value{true}}, nil
 	case strings.Contains(q, "SELECT ur.authentication_generation"):
 		if !s.enabled {
 			return authModesEmptyRow("authentication_generation"), nil
@@ -145,7 +150,7 @@ func withRegistrationFormBody(req *http.Request, body string) *http.Request {
 func validRegistrationAdminSession() map[interface{}]interface{} {
 	// The shared boundary refuses a sign-in that carries no identity of its own, so
 	// a fixture standing in for a signed-in administrator has to carry one.
-	return map[interface{}]interface{}{"user_id": 42, "authenticated": true, "user_role": "admin", "username": "original_admin", "authentication_generation": int64(7), "csrf_token": "test-csrf", sign_in_revocation.SessionKey: "this-browsers-sign-in"}
+	return map[interface{}]interface{}{"user_id": 42, "authenticated": true, "user_role": "admin", "username": "original_admin", "authentication_generation": int64(7), "csrf_token": "test-csrf", sign_in_revocation.SessionKey: "this-browsers-sign-in", sign_in_deadline.SessionKey: time.Now().Add(30 * 24 * time.Hour).Unix()}
 }
 func TestClosedRegistrationAllowsCurrentAdminWithoutReplacingSession(t *testing.T) {
 	state := setupRegisterAdmin(t)

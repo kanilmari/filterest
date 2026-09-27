@@ -162,6 +162,8 @@ func (c *authModesMockConn) Query(query string, args []driver.Value) (driver.Row
 
 func (c *authModesMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case isSignInLimitQuery(query):
+		return answerSignInLimit(), nil
 	case strings.Contains(query, "FROM system_config") && len(args) == 1:
 		if c.cfg.policyError {
 			return nil, fmt.Errorf("policy unavailable")

@@ -39,6 +39,7 @@ type credentialMockConfig struct {
 	totpSecret         string
 	authGeneration     int64
 	apiOnly            bool
+	signInLimitError   bool
 }
 
 type credentialMockDriver struct{ cfg credentialMockConfig }
@@ -83,6 +84,11 @@ func (c *credentialMockConn) Query(query string, args []driver.Value) (driver.Ro
 
 func (c *credentialMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case isSignInLimitQuery(query):
+		if c.cfg.signInLimitError {
+			return nil, errors.New("the sign-in limit could not be read")
+		}
+		return answerSignInLimit(), nil
 	case strings.Contains(query, "FROM system_config") && len(args) == 1:
 		if c.cfg.policyError {
 			return nil, errors.New("policy unavailable")

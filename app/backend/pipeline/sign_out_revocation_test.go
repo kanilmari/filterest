@@ -27,6 +27,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 	"easelect/backend/pipeline/auth_check"
 	"easelect/backend/pipeline/device_id_check"
@@ -42,7 +43,8 @@ type signOutTestSite struct {
 	loginRequiredToBrowse    bool
 	authenticationGeneration int64
 	revokedSignIns           map[string]time.Time
-	recordedLifetimeSeconds  float64
+	recordedDeadline         time.Time
+	signInLimit              time.Duration
 	now                      time.Time
 	unreachable              bool
 	revocationReads          int
@@ -77,11 +79,22 @@ func (c *signOutTestConn) QueryContext(_ context.Context, query string, args []d
 	}
 	switch {
 	case strings.Contains(query, "public.system_revoked_sign_ins"):
+		// One question: may this sign-in still be used? No if it was signed out,
+		// and no if it has reached the deadline it was given.
 		c.site.revocationReads++
 		signInID, _ := args[0].Value.(string)
+		expiresAt, _ := args[1].Value.(int64)
+		unlimited, _ := args[2].Value.(bool)
+		withinDeadline := unlimited || c.site.now.Before(time.Unix(expiresAt, 0))
 		expiry, recorded := c.site.revokedSignIns[signInID]
-		return &signOutTestRows{names: []string{"exists"},
-			values: []driver.Value{recorded && expiry.After(c.site.now)}}, nil
+		stillRefused := recorded && expiry.After(c.site.now)
+		return &signOutTestRows{names: []string{"usable"},
+			values: []driver.Value{withinDeadline && !stillRefused}}, nil
+	case strings.Contains(query, "SELECT now()") && strings.Contains(query, "system_config"):
+		// What a sign-in asks before it is stamped: the database's own clock and
+		// the configured ceiling.
+		return &signOutTestRows{names: []string{"now", "json_value"},
+			values: []driver.Value{c.site.now, c.site.signInLimitPolicy()}}, nil
 	case strings.Contains(query, "'login_to_browse'"):
 		return &signOutTestRows{names: []string{"boolean_value"},
 			values: []driver.Value{c.site.loginRequiredToBrowse}}, nil
@@ -108,12 +121,46 @@ func (c *signOutTestConn) ExecContext(_ context.Context, query string, args []dr
 		}
 	}
 	signInID, _ := args[0].Value.(string)
-	seconds, _ := args[1].Value.(float64)
-	c.site.recordedLifetimeSeconds = seconds
+	expiresAt, _ := args[1].Value.(int64)
+	unlimited, _ := args[2].Value.(bool)
+
+	// A sign-in already past its deadline needs no record; the deadline refuses it.
+	if !unlimited && !time.Unix(expiresAt, 0).After(c.site.now) {
+		return driver.RowsAffected(0), nil
+	}
+	deadline := signOutForever
+	if !unlimited {
+		deadline = time.Unix(expiresAt, 0)
+	}
+	c.site.recordedDeadline = deadline
 	if _, already := c.site.revokedSignIns[signInID]; !already {
-		c.site.revokedSignIns[signInID] = c.site.now.Add(time.Duration(seconds) * time.Second)
+		c.site.revokedSignIns[signInID] = deadline
 	}
 	return driver.RowsAffected(1), nil
+}
+
+// signOutForever stands in for the database's infinity: the end of a record for a
+// sign-in that was never given a deadline.
+var signOutForever = time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// signInLimitPolicy is what this site's settings row says. A site that names no
+// limit is given the ordinary thirty days.
+func (s *signOutTestSite) signInLimitPolicy() string {
+	limit := s.signInLimit
+	if limit == 0 {
+		limit = 30 * 24 * time.Hour
+	}
+	return fmt.Sprintf(`{"limit_enabled": true, "limit_unit": "hours", "limit_amount": %d}`,
+		int(limit/time.Hour))
+}
+
+// signInDeadline is the moment a sign-in started at this site would be given.
+func (s *signOutTestSite) signInDeadline(signedInAt time.Time) time.Time {
+	limit := s.signInLimit
+	if limit == 0 {
+		limit = 30 * 24 * time.Hour
+	}
+	return signedInAt.Add(limit)
 }
 
 var signOutTestCounter int64
@@ -173,8 +220,15 @@ func signInOneBrowser(
 	session.Values["authentication_generation"] = site.authenticationGeneration
 	session.Values["device_id"] = deviceID
 	session.Values["fingerprint_hash"] = fingerprint
-	if err := sign_in_revocation.Set(session); err != nil {
+	signInIDFromMint, err := sign_in_revocation.NewSignInID()
+	if err != nil {
 		t.Fatalf("sign-in: mint the sign-in identity: %v", err)
+	}
+	session.Values[sign_in_revocation.SessionKey] = signInIDFromMint
+	// The same stamp the sign-in handler writes: the last moment this sign-in may
+	// be used, decided once from the site's clock and never revised.
+	if err := sign_in_deadline.Stamp(context.Background(), backend.Db, session); err != nil {
+		t.Fatalf("sign-in: stamp the deadline: %v", err)
 	}
 	signInID, present := sign_in_revocation.SessionValue(session)
 	if !present {
@@ -448,15 +502,15 @@ func TestTheBrowserBindingIsStillCheckedAfterTheSignOutCheck(t *testing.T) {
 	}
 }
 
-// The record has to outlive every cookie that could still present the sign-in it
-// refuses, and it must not be asked to outlive more than that or the table would
-// keep rows nobody can use. Both ends are the one sign-in lifetime: the cookies
-// are written with it, and the session store accepts a signature only that old,
-// which sessions/session_signature_age_test.go pins. So there is no moment at
-// which the record is gone and the cookie can still be read: a copy of the
-// cookie kept outside the browser and presented weeks later is refused by its
-// own age even after the record has been thrown away.
-func TestTheRecordCoversExactlyTheTimeTheCookiesCouldStillBeUsed(t *testing.T) {
+// The record is kept to the sign-in's own deadline: exactly as long as that
+// sign-in could still be presented, and not one moment more. It must not be a
+// length recomputed from whatever the setting says today, because a setting that
+// can shorten a record is a way to bring a signed-out sign-in back -- and one
+// that can lengthen it keeps rows nobody can use.
+//
+// Past that deadline nothing is left to refuse: the sign-in is finished on its
+// own, whatever signed the cookie since.
+func TestTheRecordIsKeptToTheSignInsOwnDeadline(t *testing.T) {
 	store := useTestSessionStore(t)
 	site := useTestSite(t, &signOutTestSite{loginRequiredToBrowse: true})
 	jar := newBrowserCookieJar()
@@ -465,11 +519,13 @@ func TestTheRecordCoversExactlyTheTimeTheCookiesCouldStillBeUsed(t *testing.T) {
 	signInOneBrowser(t, store, jar, site, bindingTestDeviceID, bindingTestFingerprint, signedInAt)
 	signOut(t, jar, signedInAt)
 
-	if got := time.Duration(site.recordedLifetimeSeconds) * time.Second; got != e_sessions.SignInLifetime {
-		t.Fatalf("the sign-out was recorded for %v; the cookies it must refuse last %v", got, e_sessions.SignInLifetime)
+	want := site.signInDeadline(signedInAt)
+	if !site.recordedDeadline.Equal(want) {
+		t.Fatalf("the sign-out was recorded until %v; the sign-in it refuses ends at %v",
+			site.recordedDeadline, want)
 	}
 	if got := time.Duration(store.Options.MaxAge) * time.Second; got != e_sessions.SignInLifetime {
-		t.Fatalf("the session cookie is written for %v while the record covers %v", got, e_sessions.SignInLifetime)
+		t.Fatalf("the session cookie is written for %v, which is no longer what it was", got)
 	}
 }
 

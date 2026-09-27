@@ -19,6 +19,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
 	gorillaSessions "github.com/gorilla/sessions"
@@ -98,6 +99,7 @@ func buildReq(t *testing.T, store *gorillaSessions.CookieStore, method, target s
 			// The boundary refuses a sign-in that carries no identity of its own,
 			// so a fixture standing in for a signed-in browser has to carry one.
 			sess.Values[sign_in_revocation.SessionKey] = "this-browsers-sign-in"
+			sess.Values[sign_in_deadline.SessionKey] = time.Now().Add(30 * 24 * time.Hour).Unix()
 		}
 	}
 	if saveErr := sess.Save(cookieR, cookieW); saveErr != nil {
@@ -197,11 +199,17 @@ func (c *mockConn) QueryContext(_ context.Context, query string, args []driver.N
 	// The shared boundary asks first whether this sign-in has been signed out.
 	// These fixtures are about sign-ins that are still in use, so the answer is no
 	// unless a case says otherwise.
+	// The shared boundary asks in one question whether this sign-in has been
+	// signed out and whether it has reached its deadline. These fixtures are about
+	// sign-ins still in use, so the answer is yes unless a case says otherwise.
 	if strings.Contains(query, "system_revoked_sign_ins") {
 		if c.cfg.revokedSignInErr {
 			return nil, fmt.Errorf("simulated revoked sign-in store failure")
 		}
-		return mockBoolRow("exists", c.cfg.signInRevoked), nil
+		expiresAt, _ := args[1].Value.(int64)
+		unlimited, _ := args[2].Value.(bool)
+		withinDeadline := unlimited || time.Now().Before(time.Unix(expiresAt, 0))
+		return mockBoolRow("usable", withinDeadline && !c.cfg.signInRevoked), nil
 	}
 	if strings.Contains(query, "FROM system_config") && len(args) == 1 {
 		if c.cfg.policyError {

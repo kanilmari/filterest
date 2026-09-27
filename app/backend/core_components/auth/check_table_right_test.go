@@ -96,6 +96,8 @@ func (c *checkTableRightsMockConn) Query(query string, args []driver.Value) (dri
 
 func (c *checkTableRightsMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case isSignInLimitQuery(query):
+		return answerSignInLimit(), nil
 	case strings.Contains(query, "SELECT table_uid FROM system_db_tables WHERE table_name = $1"):
 		return &checkTableRightsMockRows{
 			cols: []string{"table_uid"},
