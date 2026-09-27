@@ -8,9 +8,11 @@ import { custom_views } from "../admin_and_user_tools/custom_view_reader.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { handleLoginShellEntry } from "../../auth/login_shell_entry.js";
 import { requestLoginRedirect } from "../../auth/login_redirect_handler.js";
+import { showRequestFailureNotice } from "../../error_and_status_handling/request_failure_notice.js";
 import {
     navigateToPostLogoutPath,
     performSpaLogoutReset,
+    navigateToSignOut,
 } from "../../auth/logout_shell_reset.js";
 import { getButtonState, setAuthModes } from "../../admin_tools/auth_mode_handler.js";
 import {
@@ -505,8 +507,15 @@ export async function openNavTab(tableName, options = {}) {
             await initTabs({ dataAlreadyLoaded: false });
             await handleLoginShellEntry();
         } catch (err) {
-            console.warn("SPA logout reset failed, falling back to full navigation:", err);
-            window.location.assign("/api/logout");
+            console.warn("SPA logout reset failed, falling back to a full sign-out:", err);
+            if (!(await navigateToSignOut())) {
+                // Nothing reached the server, so nothing signed the person out --
+                // and they are not shown a page that pretends otherwise. The
+                // sentence is the same one the server uses when it cannot record a
+                // sign-out: it could not be confirmed, close the tabs, and sign in
+                // and out again once the connection is back.
+                showRequestFailureNotice("sign_out_not_recorded_close_tabs");
+            }
         }
         return;
     }

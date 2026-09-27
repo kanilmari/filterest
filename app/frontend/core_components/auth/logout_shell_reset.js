@@ -4,6 +4,7 @@
 // Exists to clear local auth state before loading the backend-selected destination.
 
 import { endpoint_router } from "../endpoints/endpoint_router.js";
+import { ensureCsrfToken } from "../pipeline/api_pipeline.js";
 import { clearPermissionCache } from "../route_permission_checker.js";
 import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { destroy_chat } from "../ai_features/table_chat/table_chat_printer.js";
@@ -116,8 +117,51 @@ export async function applyLoggedOutShellReset({ postLogoutPath = "/" } = {}) {
     return { postLogoutPath };
 }
 
+// navigateToSignOut signs out the whole page rather than the shell inside it. It
+// is what is left when the in-page sign-out above could not finish: the person
+// still wants to be signed out, and the server still has to hear it.
+//
+// It is a submitted form and not a plain address change, because signing out is
+// now a POST carrying the token only this application's own pages hold. The form
+// is the one shape that both posts and navigates, so the person still lands on
+// whichever page the server sends them to.
+//
+// Without a token there is nothing to submit, and there is nothing useful to
+// navigate to either: a cached token can be stale, so one refresh is worth trying,
+// but if that also comes back empty the server is unreachable and the sign-out
+// cannot happen at all. Sending the person to the login page would be the worst
+// of both -- their sign-in is intact, so that page sends them straight back to the
+// site, and they would have watched a sign-out that did nothing. This reports
+// failure instead, and the caller says so.
+export async function navigateToSignOut({ signOutPath = "/api/logout" } = {}) {
+    const token = (await ensureCsrfToken()) || (await ensureCsrfToken({ forceRefresh: true }));
+    if (!token) {
+        return false;
+    }
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = signOutPath;
+    form.hidden = true;
+
+    const tokenField = document.createElement("input");
+    tokenField.type = "hidden";
+    tokenField.name = "csrf_token";
+    tokenField.value = token;
+    form.appendChild(tokenField);
+
+    document.body.appendChild(form);
+    form.submit();
+    return true;
+}
+
 export async function performSpaLogoutReset() {
+    // Signing out is a POST because it is no longer something the browser can be
+    // talked into by following a link. The sign-out is written down and stands, so
+    // another site must not be able to cause one; the request now has to carry the
+    // token only this application's own pages hold, which the pipeline attaches.
     const response = await endpoint_router("logout", {
+        method: "POST",
         returnResponse: true,
         suppressAuthRedirect: true,
     });

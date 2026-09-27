@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 
+	"easelect/backend/core_components/sign_in_revocation"
+
 	"github.com/gorilla/sessions"
 )
 
@@ -101,6 +103,11 @@ func ClearIdentity(session *sessions.Session) {
 		"username",
 		"user_role",
 		SessionKey,
+		// The sign-in's own identity goes with the identity it belongs to. A
+		// session left holding it after being emptied would carry the name of a
+		// sign-in it no longer is. The key is named by its owning package so the
+		// application keeps one spelling of it.
+		sign_in_revocation.SessionKey,
 		AutomationSessionKey,
 	} {
 		delete(session.Values, key)

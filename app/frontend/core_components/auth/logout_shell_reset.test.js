@@ -10,6 +10,7 @@ const endpointRouterMock = vi.fn();
 const destroyChatMock = vi.fn();
 const publishAuthLogoutMock = vi.fn();
 const stopAdminUpdateNoticeSubscriberMock = vi.fn();
+const ensureCsrfTokenMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
@@ -24,6 +25,9 @@ async function loadModule() {
     }));
     vi.doMock("../admin_tools/admin_update_notice_subscriber.js", () => ({
         stopAdminUpdateNoticeSubscriber: stopAdminUpdateNoticeSubscriberMock,
+    }));
+    vi.doMock("../pipeline/api_pipeline.js", () => ({
+        ensureCsrfToken: ensureCsrfTokenMock,
     }));
     return import("./logout_shell_reset.js");
 }
@@ -83,7 +87,11 @@ describe("performSpaLogoutReset", () => {
 
         expect(result).toEqual({ postLogoutPath: "/login" });
         expect(localStorage.getItem("filterest_public_presentation_v1")).toBe("public-site-only");
+        // Signing out is a POST, so another site cannot cause one by sending the
+        // browser to a link. The method is pinned here because a quiet return to a
+        // plain read would put that back without anything else noticing.
         expect(endpointRouterMock).toHaveBeenCalledWith("logout", {
+            method: "POST",
             returnResponse: true,
             suppressAuthRedirect: true,
         });
@@ -136,5 +144,63 @@ describe("performSpaLogoutReset", () => {
         expect(locationObject.assign).toHaveBeenCalledWith("/login");
         expect(mod.navigateToPostLogoutPath("", locationObject)).toBe(false);
         expect(locationObject.assign).toHaveBeenCalledTimes(1);
+    });
+});
+
+// The whole-page sign-out, used when the in-page one could not finish. It exists
+// to actually sign the person out, so it must either do that or say it could not.
+describe("navigateToSignOut", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        document.body.replaceChildren();
+    });
+
+    test("posts the sign-out with the token the server will demand", async () => {
+        ensureCsrfTokenMock.mockResolvedValue("a-real-token");
+        const mod = await loadModule();
+        const submitted = [];
+        HTMLFormElement.prototype.submit = function submitStub() {
+            submitted.push(this);
+        };
+
+        expect(await mod.navigateToSignOut()).toBe(true);
+        expect(submitted).toHaveLength(1);
+        expect(submitted[0].method.toUpperCase()).toBe("POST");
+        expect(submitted[0].getAttribute("action")).toBe("/api/logout");
+        expect(submitted[0].querySelector('input[name="csrf_token"]').value).toBe("a-real-token");
+    });
+
+    test("refreshes a stale token once before giving up", async () => {
+        ensureCsrfTokenMock
+            .mockResolvedValueOnce("")
+            .mockResolvedValueOnce("a-refreshed-token");
+        const mod = await loadModule();
+        const submitted = [];
+        HTMLFormElement.prototype.submit = function submitStub() {
+            submitted.push(this);
+        };
+
+        expect(await mod.navigateToSignOut()).toBe(true);
+        expect(ensureCsrfTokenMock).toHaveBeenLastCalledWith({ forceRefresh: true });
+        expect(submitted[0].querySelector('input[name="csrf_token"]').value).toBe("a-refreshed-token");
+    });
+
+    // Without a token nothing can reach the server, so nothing signs the person
+    // out. It must not navigate anyway: their sign-in is intact, so the login page
+    // would send them straight back to the site and they would have watched a
+    // sign-out that did nothing at all.
+    test("reports failure instead of pretending, when no token can be had", async () => {
+        ensureCsrfTokenMock.mockResolvedValue("");
+        const mod = await loadModule();
+        const assign = vi.fn();
+        const submitted = [];
+        HTMLFormElement.prototype.submit = function submitStub() {
+            submitted.push(this);
+        };
+        vi.spyOn(window, "location", "get").mockReturnValue({ assign, origin: window.origin });
+
+        expect(await mod.navigateToSignOut()).toBe(false);
+        expect(submitted).toHaveLength(0);
+        expect(assign).not.toHaveBeenCalled();
     });
 });

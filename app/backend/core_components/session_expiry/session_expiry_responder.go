@@ -24,8 +24,13 @@ import (
 const (
 	AuthNoticeParameter = "auth_notice"
 	SessionEndedNotice  = "session-ended"
-	RedirectParameter   = "redirect"
-	LoginPath           = "/login"
+	// SignOutNotRecordedNotice is the answer to a sign-out this server could not
+	// write down. The browser's cookies are gone either way, but without the
+	// record a request that was already in flight could still put them back, so
+	// the person is told to close the site's tabs rather than left to assume.
+	SignOutNotRecordedNotice = "sign-out-not-recorded"
+	RedirectParameter        = "redirect"
+	LoginPath                = "/login"
 )
 
 // SessionNoLongerValidMessage is the machine-readable reason in the JSON answer.
@@ -53,13 +58,22 @@ func IsBrowserDocumentNavigation(r *http.Request) bool {
 	return true
 }
 
-// LoginPathWithSessionEndedNotice builds the login address that explains itself,
-// carrying the address the person was trying to reach so sign-in can return there.
-func LoginPathWithSessionEndedNotice(returnPath string) string {
+// LoginPathWithNotice builds the login address that explains itself, carrying the
+// address the person was trying to reach so sign-in can return there. The notice
+// is a fixed marker; the sentence the person reads is the login page's own
+// language key, chosen from the marker by
+// app/frontend/core_components/auth/auth_session_notice_handler.js.
+func LoginPathWithNotice(notice, returnPath string) string {
 	query := url.Values{}
-	query.Set(AuthNoticeParameter, SessionEndedNotice)
+	query.Set(AuthNoticeParameter, notice)
 	query.Set(RedirectParameter, returnPath)
 	return LoginPath + "?" + query.Encode()
+}
+
+// LoginPathWithSessionEndedNotice is the address for the one notice this file's
+// own responder gives.
+func LoginPathWithSessionEndedNotice(returnPath string) string {
+	return LoginPathWithNotice(SessionEndedNotice, returnPath)
 }
 
 // RespondSignInNoLongerValid is the one answer the whole application gives when a

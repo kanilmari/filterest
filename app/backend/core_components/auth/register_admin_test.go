@@ -19,6 +19,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_revocation"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -51,6 +52,10 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 		return nil, fmt.Errorf("configured read failure")
 	}
 	switch {
+	// The shared boundary asks first whether this sign-in has been signed out.
+	// The administrator in these cases is still signed in, so the answer is no.
+	case strings.Contains(q, "system_revoked_sign_ins"):
+		return &authModesMockRows{cols: []string{"exists"}, vals: []driver.Value{false}}, nil
 	case strings.Contains(q, "SELECT ur.authentication_generation"):
 		if !s.enabled {
 			return authModesEmptyRow("authentication_generation"), nil
@@ -138,7 +143,9 @@ func withRegistrationFormBody(req *http.Request, body string) *http.Request {
 	return next
 }
 func validRegistrationAdminSession() map[interface{}]interface{} {
-	return map[interface{}]interface{}{"user_id": 42, "authenticated": true, "user_role": "admin", "username": "original_admin", "authentication_generation": int64(7), "csrf_token": "test-csrf"}
+	// The shared boundary refuses a sign-in that carries no identity of its own, so
+	// a fixture standing in for a signed-in administrator has to carry one.
+	return map[interface{}]interface{}{"user_id": 42, "authenticated": true, "user_role": "admin", "username": "original_admin", "authentication_generation": int64(7), "csrf_token": "test-csrf", sign_in_revocation.SessionKey: "this-browsers-sign-in"}
 }
 func TestClosedRegistrationAllowsCurrentAdminWithoutReplacingSession(t *testing.T) {
 	state := setupRegisterAdmin(t)

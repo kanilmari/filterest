@@ -56,6 +56,26 @@ var StorageProfile = RouteProfile{
 	SkipStages: publicSkips,
 }
 
+// signOutSkips is publicSkips with the forgery check kept. Signing out must stay
+// reachable without being signed in -- a session that can no longer be read still
+// has cookies to clear -- but it may not be triggered by another site. It is the
+// one public route whose effect now outlives the request: the sign-out is written
+// down, so a sign-out someone else caused cannot be undone by carrying on, and the
+// person has to sign in again.
+var signOutSkips = map[string]bool{
+	"auth":           true,
+	"fingerprint":    true,
+	"device_id":      true,
+	"access_control": true,
+	"admin_check":    true,
+}
+
+// SignOutProfile requires no sign-in but does require the request to prove it
+// came from this application's own pages.
+var SignOutProfile = RouteProfile{
+	SkipStages: signOutSkips,
+}
+
 // LoginOnlyProfile requires login but no function/table-level permissions.
 var LoginOnlyProfile = RouteProfile{
 	SkipStages: loginOnlySkips,
@@ -125,7 +145,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"auth.ResetPasswordWithOTPHandler":            PublicProfile,
 	"auth.RegisterHandler":                        PublicProfile,
 	"auth.RegisterAPIHandler":                     PublicProfile,
-	"auth.LogoutHandler":                          PublicProfile,
+	"auth.LogoutHandler":                          SignOutProfile,
 	"auth.CSRFTokenHandler":                       PublicProfile,
 	"auth.GetAuthModesHandler":                    PublicProfile,
 	"auth.CheckFingerprintHandler":                PublicProfile,
@@ -464,6 +484,8 @@ func profileName(profile RouteProfile) string {
 	switch {
 	case routeProfilesEqual(profile, PublicProfile):
 		return "public"
+	case routeProfilesEqual(profile, SignOutProfile):
+		return "sign_out"
 	case routeProfilesEqual(profile, LoginOnlyProfile):
 		return "login_only"
 	case routeProfilesEqual(profile, AdminProfile):

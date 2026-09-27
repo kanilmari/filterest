@@ -19,6 +19,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_revocation"
 
 	gorillaSessions "github.com/gorilla/sessions"
 )
@@ -94,6 +95,9 @@ func buildReq(t *testing.T, store *gorillaSessions.CookieStore, method, target s
 		sess.Values["user_id"] = userID
 		if numericUserID, ok := userID.(int); ok && numericUserID > 1 {
 			sess.Values["authentication_generation"] = int64(1)
+			// The boundary refuses a sign-in that carries no identity of its own,
+			// so a fixture standing in for a signed-in browser has to carry one.
+			sess.Values[sign_in_revocation.SessionKey] = "this-browsers-sign-in"
 		}
 	}
 	if saveErr := sess.Save(cookieR, cookieW); saveErr != nil {
@@ -141,6 +145,8 @@ type mockConfig struct {
 	loginToBrowseErr  bool
 	authGeneration    int64
 	authGenerationErr bool
+	signInRevoked     bool
+	revokedSignInErr  bool
 }
 
 type mockDriver struct{ cfg mockConfig }
@@ -188,6 +194,15 @@ func (c *mockConn) Query(query string, args []driver.Value) (driver.Rows, error)
 }
 
 func (c *mockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	// The shared boundary asks first whether this sign-in has been signed out.
+	// These fixtures are about sign-ins that are still in use, so the answer is no
+	// unless a case says otherwise.
+	if strings.Contains(query, "system_revoked_sign_ins") {
+		if c.cfg.revokedSignInErr {
+			return nil, fmt.Errorf("simulated revoked sign-in store failure")
+		}
+		return mockBoolRow("exists", c.cfg.signInRevoked), nil
+	}
 	if strings.Contains(query, "FROM system_config") && len(args) == 1 {
 		if c.cfg.policyError {
 			return nil, fmt.Errorf("policy unavailable")

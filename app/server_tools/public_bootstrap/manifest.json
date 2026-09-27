@@ -125,7 +125,8 @@
     "20260922000006_seed_dataset_creation_warning_language_key.sql",
     "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
     "20260926000001_restore_system_foreign_keys.sql",
-    "20260926000002_record_system_foreign_key_release.sql"
+    "20260926000002_record_system_foreign_key_release.sql",
+    "20260926000003_create_revoked_sign_in_store.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -186,6 +187,7 @@
     "public.system_media_assets",
     "public.system_permission_actions",
     "public.system_permission_categories",
+    "public.system_revoked_sign_ins",
     "public.system_row_access_rule_events",
     "public.system_row_access_rules",
     "public.system_row_group_memberships",
@@ -268,7 +270,7 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 153,
-    "public.system_lang_keys": 697,
+    "public.system_lang_keys": 698,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
@@ -283,10 +285,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "1562a3fa35d5bd39026d0c02173e403a351016b5259c6ee25b408a0c952f02a2"
+      "sha256": "92887f1ab42343bb3a63e19477744b035454f90605c1796787d87c8735fce012"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "eef3b491d9e0090f7b7c57e42b756fc63325d754dfd03c346a7652c2d0c6e3cf"
+      "sha256": "42a532ace31f517d4c80441a37c6dcf9ae423a0c2a9b6f5e06bdcafbe0dd163d"
     }
   },
   "source_files": {
@@ -303,10 +305,10 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "e7914534febdff6f39356480e9ebb06225a18da288e4d0aa75b8684cf0624f29"
+      "sha256": "76b13da95d4183adf691ca73c6b67f03273940585796bbdc5d9081a3e64da03f"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
-      "sha256": "726924de4e4231f5ba07ef79282535c45eda13b34b08e3ced0d5630809a2c9c5"
+      "sha256": "d9f8a33b61252d1e8dbdcb5bf3156d45ff4c8efa1af8eb441c4139514015f52e"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.schema.sql": {
       "sha256": "d78b9e231e499f7982c15231722450020b7844386fb31d98067f625891a33801"
@@ -718,6 +720,9 @@
     },
     "filterest/app/server_tools/migrations/20260926000002_record_system_foreign_key_release.sql": {
       "sha256": "738636f1e5da1498940f4a9b6cf73c25433b902b92f6343912055cc86e0b13dd"
+    },
+    "filterest/app/server_tools/migrations/20260926000003_create_revoked_sign_in_store.sql": {
+      "sha256": "ffe4bc92d1d056dcce6f3923d14b01610940b11eb674b9ce714f967ed7276ee4"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

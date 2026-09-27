@@ -6,7 +6,6 @@ package auth
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	e_sessions "easelect/backend/core_components/sessions"
@@ -31,13 +30,13 @@ func saveSession(w http.ResponseWriter, r *http.Request, session *sessions.Sessi
 		return err
 	}
 
-	if cookie := w.Header().Get("Set-Cookie"); cookie != "" {
-		val := cookie
-		if len(val) > 60 {
-			val = val[:60]
-		}
-		log.Printf("[saveSession] Set-Cookie: %s...", val)
-	}
+	// Nothing about the written cookie is logged. What used to be logged here was
+	// the first sixty characters of the Set-Cookie header, which is the start of
+	// the signed session value itself -- a piece of the credential, written to a
+	// file on every sign-in and every renewal. Sixty characters are short of the
+	// signature and so not usable on their own, which is exactly why it survived
+	// so long; a credential still does not belong in a log at any length. A save
+	// that fails is reported above, and that is the part worth knowing.
 
 	// Palauta alkuperäiset arvot
 	*session.Options = origOptions

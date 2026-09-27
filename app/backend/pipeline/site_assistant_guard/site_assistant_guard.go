@@ -21,6 +21,11 @@ import (
 // The request-size stage already rejects larger bodies on protected routes.
 const maxGuardedRequestBody = 8 << 20
 
+// signOutPath is the one write an assistant may make without a plan: ending its
+// own session. It is spelled here rather than imported so this guard keeps no
+// dependency on the routing package it runs in front of.
+const signOutPath = "/api/logout"
+
 // WithSiteAssistantGuard checks the delegation behind an assistant session.
 // Requests without an assistant session pass through untouched.
 func WithSiteAssistantGuard(next http.HandlerFunc) http.HandlerFunc {
@@ -59,6 +64,17 @@ func WithSiteAssistantGuardStore(store *site_assistant.Store, next http.HandlerF
 			return
 		}
 		if !site_assistant.RequestIsWrite(r.Method) {
+			next(w, r)
+			return
+		}
+
+		// Giving up its own delegation is not an operation on the site, so it does
+		// not wait for the owner's plan. The route ends this session and nothing
+		// else; refusing it would leave an assistant unable to put down what it was
+		// lent, which is the opposite of what approval is for. Sign-out became a
+		// POST so that another site cannot cause one, and that change must not turn
+		// into an assistant that can only be signed out by someone else.
+		if r.URL.Path == signOutPath {
 			next(w, r)
 			return
 		}

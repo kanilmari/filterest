@@ -93,7 +93,7 @@ Defined in `pipeline_order.go`. This is the **single source of truth** for the r
 | 2  | `request_size_limit` | Yes   | Rejects oversized request bodies early                |
 | 3  | `logging`        | Yes       | Logs every request for analytics and debugging        |
 | 4  | `error_handling` | Yes       | Catches panics from downstream, writes JSON 500       |
-| 5  | `auth`           | No        | Verifies session / login status                       |
+| 5  | `auth`           | No        | Verifies session / login status, and refuses a sign-in that has been signed out |
 | 6  | `csrf`           | No        | Validates CSRF token for state-changing methods       |
 | 7  | `fingerprint`    | No        | Validates the browser fingerprint against the session   |
 | 8  | `device_id`      | No        | Validates the device ID against the session, then renews all three sign-in cookies together |
@@ -142,7 +142,7 @@ These are commented out in `pipeline_order.go` and can be activated by uncomment
 
 ## 4. Route Profiles
 
-Defined in `route_profiles.go`. Six reusable profile templates exist:
+Defined in `route_profiles.go`. Seven reusable profile templates exist:
 
 ### PublicProfile
 
@@ -160,6 +160,23 @@ the storage handler performs path-aware public-asset allowlisting and
 row-scoped authorization through the storage authorization layer.
 
 Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_handling` → `transaction` → `audit` → **handler**
+
+### SignOutProfile
+
+Skips: `auth`, `fingerprint`, `device_id`, `access_control`, `admin_check` —
+everything `PublicProfile` skips **except** `csrf`.
+
+Used for: `auth.LogoutHandler`, and nothing else.
+
+Signing out has to stay reachable without being signed in, because a session that
+can no longer be read still leaves cookies to clear. But it is the one public
+route whose effect now outlives the request: the sign-out is written down and the
+sign-in is refused from then on, so a sign-out someone else caused cannot be
+undone by carrying on — the person has to sign in again. Keeping the forgery
+check means another site cannot cause one, and it is why `/api/logout` is a POST
+rather than an address the browser can be sent to.
+
+Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_handling` → `csrf` → `transaction` → `audit` → **handler**
 
 ### LoginOnlyProfile
 
@@ -305,6 +322,7 @@ itself:
 | `admin_check/admin_user_check.go` | the session cannot be read, or carries no readable user identity |
 | `access_control/access_control.go` | the same session problems, plus a guest opening a page that needs a sign-in |
 | `router/root_handler.go` | a sign-in reaches the public root page without the browser binding its own session stores |
+| `core_components/login_access_policy.go` | the sign-in has been signed out, its credential generation has moved on, or the site no longer admits that person — asked once for every boundary above through `AuthenticatedSessionMatches` |
 
 The responder does three things: it drops the ended sign-in from the session, so
 `GET /login` no longer sends an apparently signed-in visitor back to the page that
@@ -370,7 +388,9 @@ Renewing is not accepting:
   even the one it presented;
 - nothing renews without use — a browser that stops visiting keeps nothing, and
   comes back to that same answer;
-- signing out (`auth/logout_handler.go`) still ends all three at once.
+- signing out (`auth/logout_handler.go`) still ends all three at once, and is now
+  also written down, so an answer that arrives after it cannot put them back —
+  see the next section.
 
 The session cookie can appear twice in one response when a handler later writes
 the session itself, as `/api/auth-modes` does on a page load; the browser keeps
@@ -378,13 +398,119 @@ the last one, and both carry the same lifetime.
 
 There is deliberately no absolute maximum on how long an active sign-in may be
 extended. The session has never had one either: only an explicit sign-out, or a
-changed `authentication_generation` for that user, ends it before its time.
+changed `authentication_generation` for that user, ends it before its time. Both
+of those are now enforced by the server rather than by the browser alone.
 
 `app/backend/pipeline/session_binding_renewal_test.go` walks one browser through
 the journey with a cookie jar that drops what has run out, including ten days of
 nothing but in-application navigation; `sessions/sign_in_renewal_test.go` pins
 what the renewal writes and what it refuses; `router/sign_out_cookies_test.go`
 pins the sign-out.
+
+### Signing out is remembered, for that one browser
+
+Signing out used to be something only the browser knew about. The handler expired
+the three cookies and the server kept no record, because it keeps no record of
+sessions at all — the sign-in lives entirely in the cookies. So if another tab had
+a request in flight at that moment, that request's answer arrived afterwards, and
+because every protected request renews a used sign-in it wrote all three cookies
+back with a fresh seven days. The person believed they had left; the browser held
+working credentials again.
+
+`auth/logout_handler.go` now writes one row into `public.system_revoked_sign_ins`
+before it touches the cookies, and every authentication boundary refuses the
+sign-in that row names.
+
+- **What identifies one sign-in.** A session had no identity of its own, so it was
+  given one: `sign_in_id`, 128 bits from `crypto/rand`, minted in
+  `auth/session_identity.go` — the one function that turns a session into an
+  authenticated one — and carried inside the signed session cookie, where a
+  browser cannot choose or alter it; the signature is what makes it trustworthy.
+  Whether a browser can *read* it depends on the installation, because session
+  encryption is optional. Nothing relies on it being secret from the browser
+  holding it, only on its being unguessable by anyone else, so that no one can end
+  a sign-in that is not theirs. It names one sign-in, not one account,
+  so signing out on a phone leaves the same person's desktop alone. Ending every
+  sign-in of an account at once remains `authentication_generation`, which belongs
+  to a credential change or a disabled account; the two are deliberately separate.
+  `auth_generation.ClearIdentity` removes the sign-in identity with the rest of the
+  authenticated identity.
+- **Where the check goes.** In `backend.AuthenticatedSessionMatches`, which every
+  signed-session boundary already calls — the pipeline's `auth` stage, the root
+  page, the storage route, `/api/auth-modes`, registration and the dataset sort
+  defaults. One place, six boundaries, no call-site changes. It is asked first
+  because it is the cheapest of the three questions there and because a sign-in
+  that has been signed out should not cause a restricted credential row to be read.
+  Measured on a store holding ten thousand records: an index scan on the primary
+  key, two or three shared buffer hits, 0.05–0.08 ms, beside the two reads of user
+  and configuration rows the same function already made.
+- **How long the record lives, and how it goes away.** `expires_at` is
+  `SignInLifetime` from the sign-out, computed by the database from its own clock
+  so a clock difference cannot shorten it. The same statement that writes a record
+  deletes every record that has run out, so housekeeping is paid for by the act
+  that creates the work and there is no schedule to miss and no switch to leave
+  off. It is opportunistic rather than a promise: on a site where nobody signs out
+  again, expired rows simply stay, so this is not a seven-day maximum retention and
+  must not be described as one. They refuse nothing while they sit there, because
+  the check reads only records that are current.
+
+  The row holds one opaque identity and two times — no user, no address, no
+  browser. That makes the table itself unrevealing; it does not make a sign-out
+  unobservable, because the audit log records each sign-out with its user, address
+  and time, and the two can be lined up by when they happened. Pseudonymous storage
+  beside an existing record, not anonymity.
+- **A cookie presented weeks later, and what this does not reach.** The record has
+  to outlive the cookie it refuses, and against an untouched cookie it does: the
+  session store accepts a signature only for `SignInLifetime`, which
+  `sessions/session_signature_age_test.go` pins, and a copy last signed before the
+  sign-out becomes unreadable before the record expires.
+
+  That holds only while nothing signs the cookie again. Signing out no longer does
+  — it writes the three cookies out directly and saves no session — but the
+  application has around thirty other places that write a session, several on
+  routes reachable without signing in, and each writes a fresh signature over
+  whatever the session holds. Someone already holding a stolen cookie can use one
+  of those to outlast the record. Closing them off one at a time would be a list
+  kept in step by hand; the durable fix is a sign-in deadline stamped once, not
+  extendable, checked at this same boundary against the database clock. Until that
+  exists the guarantee is bounded and should be stated as such: a sign-out holds
+  against an ordinary copy and against a request already in flight, not against
+  someone deliberately refreshing a stolen one.
+- **When the store cannot be read.** The error is handed on exactly as a credential
+  read that could not be made already was, so this adds no new failure behaviour and
+  inherits whatever each boundary does. That is not one answer everywhere: most say
+  "authentication state unavailable" (503), registration refuses (403) and the
+  storage route answers as if the file were not there (404). The sign-in is left
+  intact. A visitor who never signed in does not reach the check — though that alone
+  does not keep a site browsable through a database outage, because the automation
+  stage and configuration reads beside it can fail too. Failing open would turn
+  signing out off during an outage
+  without anyone noticing; sending the person to the login page would sign them out
+  over a fault that is about to pass.
+- **When the record cannot be written.** The sign-out is not presented as finished.
+  The cookies are expired anyway — this browser is out either way — and the person
+  is sent to `/login?auth_notice=sign-out-not-recorded`, whose sentence
+  (`sign_out_not_recorded_close_tabs`) tells them to close the site's tabs and, if
+  the device or connection is not theirs, to change their password. The sentence
+  deliberately promises nothing further: closing a tab ends nothing that has left
+  the browser, and signing in and out again would record only the new sign-in and
+  leave the old credentials untouched.
+- **Sign-ins made before this change** carry no identity, so they cannot be signed
+  out and made to stay out. They are refused at the shared boundary instead and the
+  person signs in once more. Letting them continue was considered and rejected: a
+  used sign-in is renewed, so one visited daily would never have run out on its own.
+  The one-off cost is that everyone signed in at the time of the upgrade signs in
+  again.
+
+`app/backend/pipeline/sign_out_revocation_test.go` walks the race with the cookie
+jar: sign in, ask for data, sign out from inside that request, let its answer reach
+the browser, and show that the cookies it wrote no longer work. It also pins that
+an ordinary sign-out still signs out, that the same person's other browser stays
+signed in, that a visitor is untouched and costs no lookup, and that the binding
+stages still refuse another browser's binding.
+`core_components/sign_in_revocation/sign_in_revocation_test.go` owns the store's
+behaviour and `app/testing/python/test_revoked_sign_in_store.py` runs the migration
+and the application's own two statements against real PostgreSQL.
 
 ### Only a visitor without a sign-in may be given a binding
 

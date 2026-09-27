@@ -54,6 +54,7 @@ language_seed_migrations = (
 repair_schema_migrations = (
     "20260922000002_create_missing_deletion_log.sql",
     "20260926000001_restore_system_foreign_keys.sql",
+    "20260926000003_create_revoked_sign_in_store.sql",
 )
 # Runs after every table exists, as the importing application role, so a new
 # installation withholds table creation from PUBLIC exactly as an upgrade does.

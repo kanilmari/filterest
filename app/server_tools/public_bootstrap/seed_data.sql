@@ -5123,5 +5123,6 @@ INSERT INTO public.system_schema_migrations (filename) VALUES
   ('20260922000006_seed_dataset_creation_warning_language_key.sql'),
   ('20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql'),
   ('20260926000001_restore_system_foreign_keys.sql'),
-  ('20260926000002_record_system_foreign_key_release.sql')
+  ('20260926000002_record_system_foreign_key_release.sql'),
+  ('20260926000003_create_revoked_sign_in_store.sql')
 ON CONFLICT (filename) DO NOTHING;

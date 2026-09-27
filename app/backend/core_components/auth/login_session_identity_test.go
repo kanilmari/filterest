@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
 )
@@ -45,6 +46,22 @@ func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	}
 	if got := session.Values["authentication_generation"]; got != int64(7) {
 		t.Fatalf("authentication_generation = %#v, want 7", got)
+	}
+
+	// Every sign-in also gets its own identity, so signing out in this browser can
+	// be refused afterwards without touching the same person's other browsers.
+	firstSignInID, present := sign_in_revocation.SessionValue(session)
+	if !present {
+		t.Fatal("a completed sign-in carries no sign-in identity, so signing out of it could never be recorded")
+	}
+
+	secondSession := &sessions.Session{Values: map[interface{}]interface{}{}}
+	if err := setAuthenticatedSessionIdentity(secondSession, 42, "alice"); err != nil {
+		t.Fatalf("second sign-in returned error: %v", err)
+	}
+	secondSignInID, _ := sign_in_revocation.SessionValue(secondSession)
+	if secondSignInID == firstSignInID {
+		t.Fatal("two sign-ins of the same person share one identity, so signing out of one would sign out both")
 	}
 }
 

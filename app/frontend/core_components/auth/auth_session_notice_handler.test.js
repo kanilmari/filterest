@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
     AUTH_SESSION_NOTICE_PARAM,
     OTHER_TAB_LOGOUT_NOTICE,
     SESSION_ENDED_NOTICE,
+    SIGN_OUT_NOT_RECORDED_NOTICE,
     authSessionNoticeLangKey,
     buildLoginPathWithAuthNotice,
     initializeAuthSessionNotice,
@@ -26,7 +30,54 @@ describe('auth session notices', () => {
     test('names the language key behind each notice marker', () => {
         expect(authSessionNoticeLangKey(SESSION_ENDED_NOTICE)).toBe('session_ended_sign_in_again');
         expect(authSessionNoticeLangKey(OTHER_TAB_LOGOUT_NOTICE)).toBe('signed_out_in_another_tab');
+        expect(authSessionNoticeLangKey(SIGN_OUT_NOT_RECORDED_NOTICE)).toBe('sign_out_not_recorded_close_tabs');
         expect(authSessionNoticeLangKey('untrusted-copy')).toBe('');
+    });
+
+    // Every marker this page understands, held against the one shared list the
+    // server's own test reads. Pinning the literals here alone would let a marker
+    // be renamed on the server with both sides' tests still green, and the person
+    // would meet a login page that explains nothing.
+    test('spells every notice marker the way the shared contract does', () => {
+        const contract = JSON.parse(
+            readFileSync(
+                resolve(
+                    dirname(fileURLToPath(import.meta.url)),
+                    '../../../testing/shared_contracts/auth_session_notice_markers.json',
+                ),
+                'utf8',
+            ),
+        );
+        expect(AUTH_SESSION_NOTICE_PARAM).toBe(contract.parameter);
+        const understoodHere = {
+            'session-ended': SESSION_ENDED_NOTICE,
+            'sign-out-not-recorded': SIGN_OUT_NOT_RECORDED_NOTICE,
+            'logged-out-another-tab': OTHER_TAB_LOGOUT_NOTICE,
+        };
+        expect(contract.notices.map((notice) => notice.marker).sort())
+            .toEqual(Object.keys(understoodHere).sort());
+        contract.notices.forEach((notice) => {
+            expect(understoodHere[notice.marker]).toBe(notice.marker);
+            expect(authSessionNoticeLangKey(notice.marker)).toBe(notice.langKey);
+        });
+    });
+
+    // The marker the sign-out handler writes when it could not record the
+    // sign-out. Its twin is SignOutNotRecordedNotice in
+    // app/backend/core_components/session_expiry/session_expiry_responder.go; the
+    // two spell the same fixed word, and a page that did not know it would show
+    // the person nothing at all.
+    test('explains a sign-out the site could not record, in every supported language', () => {
+        expect(SIGN_OUT_NOT_RECORDED_NOTICE).toBe('sign-out-not-recorded');
+        [
+            ['fi', 'Sulje tämän sivuston kaikki välilehdet'],
+            ['en', 'Close every tab of this site'],
+            ['zh-CN', '请关闭本站的所有标签页'],
+            ['yue', '請閂晒本站所有分頁'],
+        ].forEach(([languageCode, expectedAdvice]) => {
+            expect(resolveAuthSessionNoticeCopy(SIGN_OUT_NOT_RECORDED_NOTICE, languageCode))
+                .toContain(expectedAdvice);
+        });
     });
 
     // The sentence has to read the same in every supported language, and a site's

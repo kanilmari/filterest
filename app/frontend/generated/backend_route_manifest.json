@@ -3989,19 +3989,17 @@
       "match_type": "exact",
       "handler_name": "auth.LogoutHandler",
       "methods": [
-        "GET",
-        "HEAD"
+        "POST"
       ],
       "method_source": "route_registration",
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "public",
+          "profile_name": "sign_out",
           "skip_stages": [
             "access_control",
             "admin_check",
             "auth",
-            "csrf",
             "device_id",
             "fingerprint"
           ],
@@ -4009,12 +4007,11 @@
         },
         {
           "name": "development",
-          "profile_name": "public",
+          "profile_name": "sign_out",
           "skip_stages": [
             "access_control",
             "admin_check",
             "auth",
-            "csrf",
             "device_id",
             "fingerprint"
           ],
@@ -4022,12 +4019,11 @@
         },
         {
           "name": "api_language",
-          "profile_name": "public",
+          "profile_name": "sign_out",
           "skip_stages": [
             "access_control",
             "admin_check",
             "auth",
-            "csrf",
             "device_id",
             "fingerprint"
           ],

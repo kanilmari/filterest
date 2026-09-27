@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"easelect/backend/core_components/sign_in_revocation"
+
 	"github.com/gorilla/sessions"
 )
 
@@ -23,6 +25,8 @@ type loginPolicyFixture struct {
 	enabled, flag, member bool
 	failure               bool
 	generation            int64
+	// The sign-ins this site has recorded as signed out, by their own identity.
+	revokedSignIns map[string]bool
 }
 type loginPolicyDriver struct{ cfg *loginPolicyFixture }
 type loginPolicyConn struct{ cfg *loginPolicyFixture }
@@ -51,6 +55,10 @@ func (c *loginPolicyConn) QueryContext(_ context.Context, query string, args []d
 		return nil, errors.New("policy database failed")
 	}
 	switch {
+	case strings.Contains(query, "public.system_revoked_sign_ins"):
+		signInID, _ := args[0].Value.(string)
+		return &loginPolicyRows{names: []string{"exists"},
+			values: []driver.Value{c.cfg.revokedSignIns[signInID]}}, nil
 	case strings.Contains(query, "FROM system_config"):
 		value, present := c.cfg.settings[args[0].Value.(string)]
 		return &loginPolicyRows{names: []string{"boolean_value"}, values: []driver.Value{value}, done: !present}, nil
@@ -144,7 +152,12 @@ func TestLoginPolicyDoesNotFallBackOnMalformedOrUnavailableSettings(t *testing.T
 func TestActiveSessionRechecksAdmissionWithoutTrustingCookieRole(t *testing.T) {
 	cfg := &loginPolicyFixture{settings: map[string]driver.Value{}, enabled: true, generation: 7}
 	db := setupLoginPolicyFixture(t, cfg)
-	session := &sessions.Session{Values: map[interface{}]interface{}{"authenticated": true, "user_id": 42, "user_role": "admin", "authentication_generation": int64(7)}}
+	session := &sessions.Session{Values: map[interface{}]interface{}{
+		"authenticated": true, "user_id": 42, "user_role": "admin", "authentication_generation": int64(7),
+		// Every sign-in made now carries its own identity; the boundary refuses one
+		// that does not, so this fixture has to be a sign-in that could really exist.
+		sign_in_revocation.SessionKey: "this-browsers-sign-in",
+	}}
 	matches, err := AuthenticatedSessionMatches(context.Background(), db, session, 42)
 	if err != nil || !matches {
 		t.Fatalf("default policy rejected existing identity: %v,%v", matches, err)
@@ -161,5 +174,58 @@ func TestActiveSessionRechecksAdmissionWithoutTrustingCookieRole(t *testing.T) {
 	cfg.generation = 8
 	if matches, err = AuthenticatedSessionMatches(context.Background(), db, session, 42); err != nil || matches {
 		t.Fatal("new policy bypassed credential generation")
+	}
+}
+
+// The one place every signed-session boundary already passes through is also
+// where a sign-in that has been signed out is refused. The record names one
+// sign-in, so the same person's other browser, which carries a different one,
+// is unaffected — and a session from before this contract, carrying no sign-in
+// identity at all, keeps behaving as it did.
+func TestASignedOutSignInIsRefusedAtTheSharedSessionBoundary(t *testing.T) {
+	cfg := &loginPolicyFixture{
+		settings:       map[string]driver.Value{},
+		enabled:        true,
+		generation:     7,
+		revokedSignIns: map[string]bool{"the-phones-sign-in": true},
+	}
+	db := setupLoginPolicyFixture(t, cfg)
+
+	signedInSession := func(signInID string) *sessions.Session {
+		values := map[interface{}]interface{}{
+			"authenticated": true, "user_id": 42, "user_role": "basic",
+			"authentication_generation": int64(7),
+		}
+		if signInID != "" {
+			values[sign_in_revocation.SessionKey] = signInID
+		}
+		return &sessions.Session{Values: values}
+	}
+
+	for name, testCase := range map[string]struct {
+		signInID string
+		want     bool
+	}{
+		"the browser that signed out":     {"the-phones-sign-in", false},
+		"the same person's other browser": {"the-desktops-sign-in", true},
+		// A sign-in with no identity of its own cannot be signed out and made to
+		// stay out, and a used sign-in is renewed, so one in daily use would carry
+		// on indefinitely. Only sign-ins made before this existed are in that state;
+		// they are refused once and the person signs in again.
+		"a sign-in made before this change": {"", false},
+	} {
+		matches, err := AuthenticatedSessionMatches(context.Background(), db, signedInSession(testCase.signInID), 42)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if matches != testCase.want {
+			t.Fatalf("%s: accepted = %v, want %v", name, matches, testCase.want)
+		}
+	}
+
+	// A store that cannot be read is never read as a pass.
+	cfg.failure = true
+	if matches, err := AuthenticatedSessionMatches(context.Background(), db, signedInSession("the-desktops-sign-in"), 42); err == nil || matches {
+		t.Fatalf("an unreadable revoked sign-in store failed open: %v,%v", matches, err)
 	}
 }

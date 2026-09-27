@@ -1,0 +1,27 @@
+{
+    "purpose": "One list of the fixed markers the server puts in the login page's address and the browser turns into a sentence, so a marker renamed on one side fails a test instead of showing a person an empty login page.",
+    "implementations": {
+        "markers_backend": "app/backend/core_components/session_expiry/session_expiry_responder.go (AuthNoticeParameter, SessionEndedNotice, SignOutNotRecordedNotice)",
+        "markers_frontend": "app/frontend/core_components/auth/auth_session_notice_handler.js (AUTH_SESSION_NOTICE_PARAM, SESSION_ENDED_NOTICE, SIGN_OUT_NOT_RECORDED_NOTICE)",
+        "sentences_frontend": "app/frontend/core_components/auth/auth_session_notice_copy.js (COPY)"
+    },
+    "note": "The browser alone writes logged-out-another-tab: one tab tells the others. The server never sends it, so it has no backend twin and is listed here only so the set is complete.",
+    "parameter": "auth_notice",
+    "notices": [
+        {
+            "marker": "session-ended",
+            "langKey": "session_ended_sign_in_again",
+            "writtenBy": ["backend", "frontend"]
+        },
+        {
+            "marker": "sign-out-not-recorded",
+            "langKey": "sign_out_not_recorded_close_tabs",
+            "writtenBy": ["backend", "frontend"]
+        },
+        {
+            "marker": "logged-out-another-tab",
+            "langKey": "signed_out_in_another_tab",
+            "writtenBy": ["frontend"]
+        }
+    ]
+}

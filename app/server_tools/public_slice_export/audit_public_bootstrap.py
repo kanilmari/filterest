@@ -80,6 +80,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_schema_migrations",
     "public.system_permission_actions",
     "public.system_permission_categories",
+    "public.system_revoked_sign_ins",
     "public.system_row_access_rule_events",
     "public.system_row_access_rules",
     "public.system_table_folders",

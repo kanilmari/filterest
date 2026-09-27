@@ -170,7 +170,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/login", auth.LoginAPIHandler, "auth.LoginAPIHandler", http.MethodPost)
 	functionRegisterHandler("/api/request-password-reset-otp", auth.RequestPasswordResetOTPHandler, "auth.RequestPasswordResetOTPHandler", http.MethodPost)
 	functionRegisterHandler("/api/reset-password", auth.ResetPasswordWithOTPHandler, "auth.ResetPasswordWithOTPHandler", http.MethodPost)
-	functionRegisterHandler("/api/logout", auth.LogoutHandler, "auth.LogoutHandler", http.MethodGet)
+	functionRegisterHandler("/api/logout", auth.LogoutHandler, "auth.LogoutHandler", http.MethodPost)
 	functionRegisterHandler("/api/register_ndYOyXV0INOK3F", auth.RegisterAPIHandler, "auth.RegisterAPIHandler", http.MethodPost)
 	functionRegisterHandler("/api/csrf-token", auth.CSRFTokenHandler, "auth.CSRFTokenHandler", http.MethodGet)
 	functionRegisterHandler("/api/user-profile", auth.UserProfileFetchHandler, "auth.UserProfileFetchHandler", http.MethodGet)

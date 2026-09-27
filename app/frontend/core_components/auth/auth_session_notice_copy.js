@@ -20,6 +20,21 @@ const COPY = {
         "您已在另一个标签页中退出登录。",
         "你喺另一個分頁度已經登出咗。",
     ],
+    // This sentence has been wrong twice, in two different ways, so what it may
+    // not say is worth writing down. It may not say that closing the tabs makes
+    // the person "sure": closing a tab ends nothing that has already left this
+    // browser. And it may not tell them to sign in and out again to make it hold:
+    // a new sign-in is a different sign-in, so signing out of that one records
+    // only the new one and leaves the old credentials exactly as they were.
+    // Closing the tabs is still worth doing, because it stops another tab of this
+    // site writing the sign-in back, and that is all it is asked for. What cannot
+    // be promised is simply stated as uncertain.
+    sign_out_not_recorded_close_tabs: [
+        "Sinut kirjattiin ulos tästä selaimesta, mutta sivusto ei saanut merkittyä uloskirjautumista muistiin, joten sitä ei voida vahvistaa. Sulje tämän sivuston kaikki välilehdet. Jos laite tai yhteys ei ole sinun hallinnassasi, vaihda salasanasi.",
+        "You were signed out of this browser, but the site could not record the sign-out, so it cannot be confirmed. Close every tab of this site. If this device or connection is not under your control, change your password.",
+        "您已从此浏览器退出登录，但网站未能记录这次退出，因此无法确认。请关闭本站的所有标签页。如果此设备或网络不在您的掌控之中，请修改密码。",
+        "你已經喺呢個瀏覽器登出咗，但係網站記錄唔到今次登出，所以無法確認。請閂晒本站所有分頁。如果部機或者個網絡唔係你控制嘅，請改密碼。",
+    ],
 };
 
 const LANGUAGES = ["fi", "en", "ch", "yue"];

@@ -10,6 +10,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
+	"easelect/backend/core_components/sign_in_revocation"
 
 	"github.com/gorilla/sessions"
 )
@@ -53,6 +54,12 @@ func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, user
 	session.Values["user_id"] = userID
 	session.Values["username"] = username
 	session.Values["user_role"] = userRole
+	// This one sign-in gets its own identity, so signing out here can be refused
+	// afterwards without touching the same person's other browsers. It is minted
+	// where the identity is established, so every way of signing in carries one.
+	if err = sign_in_revocation.Set(session); err != nil {
+		return err
+	}
 	if err = auth_generation.Set(session, authenticationGeneration); err != nil {
 		return err
 	}

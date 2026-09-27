@@ -9,6 +9,7 @@ import { resolveAuthSessionNoticeFallback } from './auth_session_notice_copy.js'
 export const AUTH_SESSION_NOTICE_PARAM = 'auth_notice';
 export const SESSION_ENDED_NOTICE = 'session-ended';
 export const OTHER_TAB_LOGOUT_NOTICE = 'logged-out-another-tab';
+export const SIGN_OUT_NOT_RECORDED_NOTICE = 'sign-out-not-recorded';
 
 // The notice code travels in the address, so it stays a short fixed marker. The
 // sentence a person reads is a language key, which is why the two are separate.
@@ -17,6 +18,7 @@ export const OTHER_TAB_LOGOUT_NOTICE = 'logged-out-another-tab';
 const NOTICE_LANG_KEYS = Object.freeze({
     [SESSION_ENDED_NOTICE]: 'session_ended_sign_in_again',
     [OTHER_TAB_LOGOUT_NOTICE]: 'signed_out_in_another_tab',
+    [SIGN_OUT_NOT_RECORDED_NOTICE]: 'sign_out_not_recorded_close_tabs',
 });
 
 const SUPPORTED_NOTICE_CODES = new Set(Object.keys(NOTICE_LANG_KEYS));

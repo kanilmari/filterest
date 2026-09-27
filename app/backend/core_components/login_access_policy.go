@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"easelect/backend/core_components/auth_generation"
+	"easelect/backend/core_components/sign_in_revocation"
 	"github.com/gorilla/sessions"
 )
 
@@ -102,7 +103,39 @@ func UserLoginAllowed(ctx context.Context, db *sql.DB, userID int) (bool, error)
 // AuthenticatedSessionMatches preserves credential-generation validation and adds current admission.
 // Every existing signed-session boundary uses this wrapper so enabling administrator-only login
 // also ends a non-admin's authenticated identity on their next request without disabling guests.
+//
+// Because every such boundary is already here — the pipeline's authentication stage, the public
+// root page, the storage route, the authentication-modes bootstrap, registration and the dataset
+// sort defaults — this is also where a sign-in that has been signed out is refused, once, rather
+// than in each of them. Its callers all answer a false the same way: they empty the authenticated
+// identity out of the session and go on as a visitor, or send the person to sign in again.
 func AuthenticatedSessionMatches(ctx context.Context, credentialDB auth_generation.Querier, session *sessions.Session, userID int) (bool, error) {
+	// Signed out is asked first, and is the cheapest of the three questions here:
+	// one lookup by primary key on a table holding only the sign-outs of the last
+	// seven days, against two reads of user and configuration rows below. Asking
+	// it first also means a sign-in that has been signed out never causes a
+	// restricted credential row to be read at all.
+	signInID, identified := sign_in_revocation.SessionValue(session)
+
+	// A sign-in with no identity of its own cannot be signed out and made to stay
+	// out: nothing names it, so a sign-out has nothing to record and this check has
+	// nothing to compare. Only sign-ins made before per-sign-in revocation existed
+	// are in that state, and they do not fade away by themselves -- a used sign-in
+	// is renewed, so one visited daily would carry on indefinitely. They are
+	// refused once instead, and the person signs in again; every sign-in made after
+	// that carries an identity. The guest identity is never signed in and never
+	// carries one, so it is not asked.
+	if !identified && userID > 1 {
+		return false, nil
+	}
+
+	revoked, err := sign_in_revocation.Revoked(ctx, Db, signInID)
+	if err != nil {
+		return false, err
+	}
+	if revoked {
+		return false, nil
+	}
 	matches, err := auth_generation.Matches(ctx, credentialDB, session, userID)
 	if err != nil || !matches {
 		return matches, err

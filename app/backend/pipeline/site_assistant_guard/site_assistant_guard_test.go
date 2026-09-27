@@ -197,3 +197,37 @@ func TestGuardRejectsExpiredDelegationAndForeignUser(t *testing.T) {
 		t.Fatalf("session user differing from the delegation = %d, want 401", mismatchRecorder.Code)
 	}
 }
+
+// TestGuardLetsAnAssistantSignItselfOutWithoutAPlan covers the one write that is
+// not an operation on the site. Signing out became a POST so that another site
+// cannot cause one, and a POST is a write, so without this the guard would have
+// left an assistant unable to put down the delegation it was lent -- it could only
+// be ended by someone else. Approval exists to control what an assistant does to
+// the site, not to keep it holding credentials it wants to give up.
+func TestGuardLetsAnAssistantSignItselfOutWithoutAPlan(t *testing.T) {
+	sessionStore := setupGuardSessionStore(t)
+	delegationStore, delegation := issueGuardDelegation(t)
+	sessionValues := map[string]interface{}{
+		"user_id":                           40861,
+		site_assistant.SessionDelegationKey: delegation.ID,
+	}
+	var seen string
+
+	recorder := httptest.NewRecorder()
+	WithSiteAssistantGuardStore(delegationStore, echoHandler(&seen))(recorder,
+		requestWithAssistantSession(t, sessionStore, http.MethodPost, signOutPath, "", sessionValues))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("an assistant signing itself out = %d, want %d; it cannot give up its own delegation",
+			recorder.Code, http.StatusOK)
+	}
+
+	// Everything else it might post is still held to the plan, so the exemption
+	// cannot be read as "assistants may write".
+	writeRecorder := httptest.NewRecorder()
+	WithSiteAssistantGuardStore(delegationStore, echoHandler(&seen))(writeRecorder,
+		requestWithAssistantSession(t, sessionStore, http.MethodPost, "/api/update-row", `{"id":3}`, sessionValues))
+	if writeRecorder.Code != http.StatusForbidden {
+		t.Fatalf("an ordinary assistant write = %d, want %d", writeRecorder.Code, http.StatusForbidden)
+	}
+}
