@@ -1,11 +1,53 @@
-Filterest 9.3.18 makes a browser tab say where you are, tells a person plainly when their sign-in has ended instead of showing an empty page, and keeps a regular visitor signed in. Database compatibility stays at 9.8.1; no migration runs and existing installations keep their rows.
+# Filterest 9.3.19
 
-- The browser's own tab now names the tab you are on in the application, then the site; an open article puts its own title first, and an administrator page or the account view names itself instead of showing the bare site name. A site whose dataset title already begins with the site's name is no longer named twice, in the heading or the tab. A dataset's first load is titled by the server from the same names in the same order.
-- A sign-in that the server no longer accepts now says so. Returning to a site long after signing in could leave a page with nothing on it but the top bar and a refusal notice, repaired only by signing out and back in; a page load now goes to the sign-in page with a sentence in the reader's own language, and any other request is refused in a way the interface recognises. A visitor who never signed in still browses the public site exactly as before, and a person missing one right still gets the ordinary refusal without losing their page.
-- A person who keeps visiting stays signed in. A sign-in is carried by three cookies lasting seven days each, but two of them were written only at sign-in while the session's seven days restarted on every visit, so a regular visitor eventually met a day when the session was valid and the browser binding under it had expired. Each binding now gets the same fresh seven days once it has been compared and found equal. Renewal follows use: a browser that stops visiting still loses its sign-in and is told so.
-- A browser binding is given only to a visitor who has no sign-in. The front page used to write whatever binding cookies a request carried into a signed-in session, so a request owning nothing but a stolen session cookie could be handed the proof of being the browser that signed in, and on a site requiring a sign-in it could read a dataset's title and description and a row's own title from the page itself. The comparison now runs wherever a request carries a sign-in; minting a binding stays a guest's affair on a site that permits public browsing. The pages' own stylesheets and scripts are still served to everyone.
-- A release builds the browser bundle itself and refuses one that does not match its source. Preparing a release builds the minified browser files into a temporary directory and carries the result through the same reviewed replacement as the version stamp and the licence notices; a seventh release check rebuilds and compares them, so a release assembled by hand is refused too. When the build toolchain is missing, both stop and name the command that installs it.
-- The licence scan that finds icon artwork in source no longer loses its place at an apostrophe in ordinary prose, and a new check compares the whole repository's scan against its reviewed record, so a file that stops being seen is noticed rather than read as an out-of-date review.
-- Filterest's own test suite passes in a clone of Filterest alone. Five checks could only pass where a private maintenance shell had composed the product, and two more passed without ever reaching the rules they name; they guard a boundary the product owns, so they stayed in the public suite and stopped naming the shell.
+Signing out now holds, and a sign-in has a last moment it cannot pass.
 
-Existing installations retain their data and settings.
+## Signing out stays signed out
+
+Signing out only expired the three cookies in the browser, and the server kept no
+record of it. A request that was already in flight in another tab finished
+afterwards, wrote all three back, and the person held working credentials they
+believed they had given up. The sign-out itself handed one back too: the session
+store signs whatever the session still holds every time it is written, and telling
+the browser to delete a cookie does not stop that, so the reply to a sign-out
+carried a valid, newly signed sign-in.
+
+Each sign-in now carries its own unguessable identity inside the signed cookie. A
+sign-out writes that identity into one small table -- no user, no address, no
+browser details -- and every boundary that checks a sign-in refuses it from then
+on. This ends one browser's sign-in, not the account: signing out on a phone
+leaves the same person's desktop alone.
+
+Signing out is now a POST carrying the token only this application's own pages
+hold, so another site cannot cause one by sending a browser to a link.
+
+## A sign-in has a last moment
+
+A sign-in was renewed on every visit, so one used daily never ended. Every sign-in
+is now given, when it begins, the moment it ends: read from the database's own
+clock, carried inside the signed cookie, and never rewritten afterwards. Changing
+the setting governs sign-ins made after the change and never extends one already
+given.
+
+How long a sign-in may last is one setting, `absolute_sign_in_limit`, holding
+whether the limit is on, the unit and the amount. The default is thirty days.
+
+## What this means for people using a site
+
+Everyone signed in at the time of the upgrade signs in once more, because a
+sign-in made before this carries neither an identity nor a deadline. After that,
+every sign-in ends at most thirty days after it began.
+
+A tab left open from before the upgrade runs the previous page code and its sign-out
+button will fail until the page is reloaded. Reload open tabs after the upgrade.
+
+## Twenty internal relationships restored
+
+An installed site was born without twenty of the links Filterest declares between
+its own bookkeeping tables, because the install package shipped none of them. They
+are restored, and the install package now ships them.
+
+## Also
+
+A piece of the session cookie is no longer written to the log, and a long-running
+tool whose sign-in ends can sign in again instead of failing every later call.
