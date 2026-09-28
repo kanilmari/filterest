@@ -62,6 +62,10 @@ services:
       SESSION_COOKIE_MODE: isolated
       SESSION_COOKIE_NAME: ""
       ENABLE_SQL_MIGRATIONS: ${ENABLE_SQL_MIGRATIONS:-false}
+      # No value: passed only when the caller sets it, as ./filterest update does
+      # (empty, so every pending migration runs). Otherwise it stays unset, and a
+      # filter saved in keys/filterest_runtime/runtime_environment.env still applies.
+      EASELECT_MIGRATION_FILE_ALLOWLIST:
       ENABLE_API_LANGUAGE: ${ENABLE_API_LANGUAGE:-false}
       EASELECT_TRUSTED_PROXY_PEER_IPS: ${EASELECT_TRUSTED_PROXY_PEER_IPS:-}
       OPENAI_API_MODEL: ${OPENAI_API_MODEL:-}

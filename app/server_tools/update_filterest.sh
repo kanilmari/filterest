@@ -2,7 +2,8 @@
 # update_filterest.sh
 # Updates one generated Filterest checkout to a verified published stable tag.
 # Bridges GitHub release evidence, local backups, fast-forward Git, and the
-# existing profile-aware installer so an operator does not repeat the process.
+# existing profile-aware installer or Docker runner so an operator does not
+# repeat the process.
 
 set -euo pipefail
 
@@ -21,17 +22,22 @@ if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
 fi
 APP_VERSION_FILE="$SOURCE_ROOT/VERSION_APP"
 DB_VERSION_FILE="$SOURCE_ROOT/VERSION_DB"
+DOCKER_RUNNER="$SOURCE_ROOT/server_tools/run_filterest_docker.sh"
 cd "$INSTALLATION_ROOT"
 
 ASSUME_YES=0
 DRY_RUN=0
 REQUESTED_VERSION=""
+READY_TIMEOUT=""
 RELEASE_REPOSITORY="${FILTEREST_RELEASE_REPOSITORY:-}"
 TEMP_DIR=""
 TARGET_TAG=""
 TARGET_COMMIT=""
 TARGET_VERSION=""
 PROFILE=""
+BACKUP_DIR=""
+APP_IMAGE_ID=""
+RECOVERY_HINT=""
 
 usage() {
     cat <<'USAGE'
@@ -40,15 +46,20 @@ Usage: ./filterest update [options]
 Updates a generated Filterest checkout to a published stable GitHub release.
 
 Options:
-  --version VERSION  Install this exact published stable version.
-  --dry-run          Verify and show the update plan without changing local data.
-  --yes              Apply the verified plan without another confirmation.
-  -h, --help         Show this help.
+  --version VERSION        Install this exact published stable version.
+  --dry-run                Verify and show the update plan without changing local data.
+  --yes                    Apply the verified plan without another confirmation.
+  --ready-timeout SECONDS  Docker only: how long to wait for the updated
+                           installation to report ready (default 600).
+  -h, --help               Show this help.
 
 The updater refuses dirty checkouts, development snapshots, draft/prerelease
 GitHub releases, non-fast-forward histories, and unapproved release origins.
 Before changing the checkout it backs up PostgreSQL, storage directories, and
 the installation-owned bootstrap state that records completed starter-media runs.
+A Docker installation (keys/docker.env) is dumped through its database
+container, also backs up keys/, config/ and projects/, and is rebuilt with the
+release's pending migrations enabled.
 USAGE
 }
 
@@ -58,6 +69,10 @@ die() {
 }
 
 cleanup() {
+    local status=$?
+    if [[ "$status" -ne 0 && -n "$RECOVERY_HINT" ]]; then
+        printf '%s\n' "$RECOVERY_HINT" >&2
+    fi
     if [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]]; then
         case "$TEMP_DIR" in
             /tmp/filterest-update.*|"${TMPDIR:-/tmp}"/filterest-update.*)
@@ -83,6 +98,12 @@ parse_arguments() {
             --yes)
                 ASSUME_YES=1
                 shift
+                ;;
+            --ready-timeout)
+                [[ "$#" -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || \
+                    die "--ready-timeout requires a positive number of seconds"
+                READY_TIMEOUT="$2"
+                shift 2
                 ;;
             -h|--help)
                 usage
@@ -183,6 +204,7 @@ fetch_and_verify_target() {
     local identity_file="$TEMP_DIR/BUILD_IDENTITY.json"
     local mutable_tracked_paths=""
     local tag_commit=""
+    local docker_path=""
     git -C "$INSTALLATION_ROOT" fetch --quiet origin "refs/tags/${TARGET_TAG}:refs/tags/${TARGET_TAG}"
     TARGET_COMMIT="$(git -C "$INSTALLATION_ROOT" rev-parse "${TARGET_TAG}^{commit}")"
     tag_commit="$(git -C "$INSTALLATION_ROOT" rev-list -n 1 "$TARGET_TAG")"
@@ -214,6 +236,16 @@ PY
         die "release commit has no immutable app/VERSION_APP"
     git -C "$INSTALLATION_ROOT" cat-file -e "${TARGET_COMMIT}:${GIT_SOURCE_PREFIX}server_tools/install_filterest.sh" || \
         die "release commit has no immutable app installer"
+    if [[ "$PROFILE" == "docker" ]]; then
+        for docker_path in \
+            "${GIT_SOURCE_PREFIX}server_tools/run_filterest_docker.sh" \
+            "${GIT_SOURCE_PREFIX}docker/docker-compose.yml" \
+            compose.yml
+        do
+            git -C "$INSTALLATION_ROOT" cat-file -e "${TARGET_COMMIT}:${docker_path}" || \
+                die "release commit has no Docker contract file: $docker_path"
+        done
+    fi
     mutable_tracked_paths="$(
         git -C "$INSTALLATION_ROOT" ls-tree -r --name-only "$TARGET_COMMIT" -- \
             config keys projects data backups
@@ -227,9 +259,40 @@ PY
         die "the published release is not a fast-forward from this checkout"
 }
 
-installed_profile() {
+# Runs one Docker runner action against this installation root.
+docker_runner() {
+    FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT" "$DOCKER_RUNNER" "$@"
+}
+
+# Chooses the native or Docker update path from the installation's own records.
+# Between the native setup marker and keys/docker.env, which only the Docker runner reads.
+# Why: a folder that claims both, or a marker without exactly one known profile,
+# would be stopped, backed up and restarted the wrong way, so it is refused
+# before anything changes.
+resolve_profile() {
     local marker="$RUNTIME_ROOT/filterest-setup-complete"
-    sed -n 's/^profile=//p' "$marker" 2>/dev/null | head -1 || true
+    local docker_profile=""
+
+    if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" && -f "$DOCKER_RUNNER" ]]; then
+        docker_profile="$(docker_runner profile)"
+    fi
+    if [[ -e "$marker" || -L "$marker" ]]; then
+        [[ "$docker_profile" != "docker" ]] || \
+            die "this installation has both a native setup marker ($marker) and Docker settings (keys/docker.env); keep only the one that matches how Filterest runs here"
+        [[ -f "$marker" && ! -L "$marker" ]] || die "the native setup marker is not a regular file: $marker"
+        PROFILE=""
+        if [[ "$(grep -c '^profile=' "$marker" || true)" == "1" ]]; then
+            PROFILE="$(sed -n 's/^profile=//p' "$marker")"
+        fi
+        case "$PROFILE" in
+            admin|development) ;;
+            *) die "the native setup marker must record exactly one profile, admin or development: $marker" ;;
+        esac
+    elif [[ "$docker_profile" == "docker" ]]; then
+        PROFILE="docker"
+    else
+        die "completed Filterest setup profile is missing; run ./filterest setup or ./filterest docker setup first"
+    fi
 }
 
 resolve_private_environment() {
@@ -270,7 +333,11 @@ show_plan() {
     printf '  Published version: %s\n' "$TARGET_VERSION"
     printf '  Release commit: %s\n' "$TARGET_COMMIT"
     printf '  Profile: %s\n' "$PROFILE"
-    printf '  Safety: database + mutable-data backup, then fast-forward-only update\n'
+    if [[ "$PROFILE" == "docker" ]]; then
+        printf '  Safety: database dump from the database container + mutable-data and settings backup, then fast-forward-only update and image rebuild\n'
+    else
+        printf '  Safety: database + mutable-data backup, then fast-forward-only update\n'
+    fi
     if [[ "$current_version" == "$TARGET_VERSION" && "$(git -C "$INSTALLATION_ROOT" rev-parse HEAD)" == "$TARGET_COMMIT" ]]; then
         printf '\nFilterest is already on the latest published stable release.\n'
         exit 0
@@ -293,8 +360,32 @@ confirm_plan() {
     esac
 }
 
+# Allows one update per installation from the stop until this process exits.
+# Between concurrent ./filterest update runs and the services, backups and checkout they change.
+# Why: the kernel drops the lock with the process, so a killed update leaves nothing to
+# remove; started services get descriptor 9 closed so they cannot keep holding it.
+acquire_update_lock() {
+    mkdir -p "$RUNTIME_ROOT"
+    exec 9>>"$RUNTIME_ROOT/filterest-update.lock"
+    python3 - <<'PY' || die "another Filterest update is already running for this installation"
+import fcntl
+import sys
+
+try:
+    fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    sys.exit(1)
+PY
+}
+
 stop_runtime() {
-    if [[ "$PROFILE" == "admin" ]]; then
+    if [[ "$PROFILE" == "docker" ]]; then
+        RECOVERY_HINT="The update stopped before changing the installation. Start the installed version again with: ./filterest docker start"
+        # Read while the container still runs, for the backup manifest only.
+        APP_IMAGE_ID="$(docker_runner app-image-id)" || APP_IMAGE_ID=""
+        APP_IMAGE_ID="${APP_IMAGE_ID%%$'\n'*}"
+        docker_runner stop-app
+    elif [[ "$PROFILE" == "admin" ]]; then
         "$SOURCE_ROOT/server_tools/run_filterest_admin.sh" stop
     else
         "$INSTALLATION_ROOT/ctl" --stop
@@ -309,24 +400,31 @@ create_backup() {
     local user=""
     local password=""
     local database=""
+    local settings_paths=()
+    local name=""
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     backup_dir="$BACKUP_ROOT/update_${stamp}_$(tr -d '[:space:]' < "$APP_VERSION_FILE")_to_${TARGET_VERSION}"
-    mkdir -p "$backup_dir"
-    chmod 700 "$backup_dir"
+    mkdir -p "$BACKUP_ROOT"
+    [[ ! -e "$backup_dir" && ! -L "$backup_dir" ]] || die "backup folder already exists: $backup_dir"
+    mkdir -m 700 "$backup_dir"
 
-    host="$(environment_value DB_HOST)"
-    port="$(environment_value DB_PORT)"
-    user="$(environment_value DB_ADMIN_USER)"
-    password="$(environment_value DB_ADMIN_PASSWORD)"
-    database="$(environment_value DB_NAME)"
-    host="${host:-localhost}"
-    port="${port:-5432}"
-    database="${database:-filterest}"
-    [[ -n "$user" && -n "$password" ]] || die "database backup credentials are missing"
-    PGPASSWORD="$password" pg_dump --format=custom --no-owner --no-privileges \
-        --host "$host" --port "$port" --username "$user" --dbname "$database" \
-        --file "$backup_dir/database.dump"
-    chmod 600 "$backup_dir/database.dump"
+    if [[ "$PROFILE" == "docker" ]]; then
+        docker_runner dump-database --output "$backup_dir/database.dump"
+    else
+        host="$(environment_value DB_HOST)"
+        port="$(environment_value DB_PORT)"
+        user="$(environment_value DB_ADMIN_USER)"
+        password="$(environment_value DB_ADMIN_PASSWORD)"
+        database="$(environment_value DB_NAME)"
+        host="${host:-localhost}"
+        port="${port:-5432}"
+        database="${database:-filterest}"
+        [[ -n "$user" && -n "$password" ]] || die "database backup credentials are missing"
+        PGPASSWORD="$password" pg_dump --format=custom --no-owner --no-privileges \
+            --host "$host" --port "$port" --username "$user" --dbname "$database" \
+            --file "$backup_dir/database.dump"
+        chmod 600 "$backup_dir/database.dump"
+    fi
 
     if [[ -e "$INSTALLATION_ROOT/data/storage" || -e "$INSTALLATION_ROOT/data/storage_deleted" ]]; then
         local storage_paths=()
@@ -346,28 +444,91 @@ create_backup() {
         tar -C "$INSTALLATION_ROOT/data" -czf "$backup_dir/bootstrap.tar.gz" bootstrap
         chmod 600 "$backup_dir/bootstrap.tar.gz"
     fi
-    printf 'from_version=%s\nto_version=%s\nrelease_tag=%s\nrelease_commit=%s\ncreated_at=%s\n' \
-        "$(tr -d '[:space:]' < "$APP_VERSION_FILE")" "$TARGET_VERSION" \
-        "$TARGET_TAG" "$TARGET_COMMIT" "$stamp" > "$backup_dir/manifest.txt"
-    chmod 600 "$backup_dir/manifest.txt"
+    if [[ "$PROFILE" == "docker" ]]; then
+        # Docker keeps its secrets, TLS identity and path contracts in these folders,
+        # so the backup alone can restart the previous version. Links stay links.
+        for name in keys config projects; do
+            if [[ -e "$INSTALLATION_ROOT/$name" ]]; then
+                settings_paths+=("$name")
+            fi
+        done
+        if [[ "${#settings_paths[@]}" -gt 0 ]]; then
+            tar -C "$INSTALLATION_ROOT" -czf "$backup_dir/installation_settings.tar.gz" "${settings_paths[@]}"
+            chmod 600 "$backup_dir/installation_settings.tar.gz"
+        fi
+    fi
+    # Renamed into place last: a backup folder without manifest.txt is incomplete.
+    {
+        printf 'from_version=%s\nto_version=%s\nrelease_tag=%s\nrelease_commit=%s\ncreated_at=%s\n' \
+            "$(tr -d '[:space:]' < "$APP_VERSION_FILE")" "$TARGET_VERSION" \
+            "$TARGET_TAG" "$TARGET_COMMIT" "$stamp"
+        if [[ "$PROFILE" == "docker" ]]; then
+            printf 'profile=%s\nsource_commit=%s\napp_image_id=%s\n' \
+                "$PROFILE" "$(git -C "$INSTALLATION_ROOT" rev-parse HEAD)" "${APP_IMAGE_ID:-unknown}"
+        fi
+    } > "$backup_dir/manifest.txt.partial"
+    chmod 600 "$backup_dir/manifest.txt.partial"
+    mv "$backup_dir/manifest.txt.partial" "$backup_dir/manifest.txt"
+    BACKUP_DIR="$backup_dir"
     printf 'Backup created: %s\n' "$backup_dir"
+    if [[ "$PROFILE" == "docker" ]]; then
+        RECOVERY_HINT="The update stopped before changing the installation; the backup in $backup_dir is complete. Start the installed version again with: ./filterest docker start"
+    fi
 }
 
 apply_update() {
     git -C "$INSTALLATION_ROOT" merge --ff-only "$TARGET_COMMIT"
-    "$SOURCE_ROOT/server_tools/install_filterest.sh" --profile "$PROFILE" --yes --no-start
+    if [[ "$PROFILE" != "docker" ]]; then
+        "$SOURCE_ROOT/server_tools/install_filterest.sh" --profile "$PROFILE" --yes --no-start
+    fi
+}
+
+# Rebuilds and starts the updated Docker stack with the release's pending migrations.
+# Between the fast-forwarded checkout, the runner's Compose call, and /system/ready.
+# Why: a stack that does not report the new version ready is stopped rather than left
+# serving on a schema it may not match; the database and the backup stay for recovery.
+start_updated_docker_runtime() {
+    local status=0
+    local stop_status=0
+    local outcome=""
+    local ready_options=()
+
+    RECOVERY_HINT=""
+    if [[ -n "$READY_TIMEOUT" ]]; then
+        ready_options=(--timeout "$READY_TIMEOUT")
+    fi
+    ENABLE_SQL_MIGRATIONS=true EASELECT_MIGRATION_FILE_ALLOWLIST="" \
+        docker_runner start --for-update 9>&- || status=$?
+    if [[ "$status" -eq 0 ]]; then
+        docker_runner ready-check --expect-version "$TARGET_VERSION" ${ready_options[@]+"${ready_options[@]}"} || \
+            status=$?
+    fi
+    if [[ "$status" -ne 0 ]]; then
+        docker_runner stop-app || stop_status=$?
+        if [[ "$stop_status" -eq 0 ]]; then
+            outcome="so its application container was stopped"
+        else
+            outcome="and stopping its application container failed, so it may still be running; stop it with ./filterest docker stop-app"
+        fi
+        die "Filterest $TARGET_VERSION did not start and report ready, $outcome. The checkout is at release commit $TARGET_COMMIT, the database keeps any migrations that completed, and the pre-update backup is in $BACKUP_DIR. README.md, section \"Updating A Git Checkout\", describes returning to the previous version."
+    fi
+    docker_runner status
 }
 
 start_updated_runtime() {
     local port=""
+    if [[ "$PROFILE" == "docker" ]]; then
+        start_updated_docker_runtime
+        return
+    fi
     if [[ "$PROFILE" == "admin" ]]; then
         ENABLE_SQL_MIGRATIONS=true EASELECT_MIGRATION_FILE_ALLOWLIST="" \
-            "$SOURCE_ROOT/server_tools/run_filterest_admin.sh" start
+            "$SOURCE_ROOT/server_tools/run_filterest_admin.sh" start 9>&-
     else
         port="$(environment_value APP_PORT)"
         port="${port:-8100}"
         ENABLE_SQL_MIGRATIONS=true EASELECT_MIGRATION_FILE_ALLOWLIST="" \
-            "$INSTALLATION_ROOT/ctl" -p "$port"
+            "$INSTALLATION_ROOT/ctl" -p "$port" 9>&-
     fi
     mkdir -p "$RUNTIME_ROOT"
     printf 'profile=%s\napp_version=%s\ndb_version=%s\n' \
@@ -383,20 +544,27 @@ main() {
     require_command curl
     require_command git
     require_command python3
-    require_command pg_dump
     require_command tar
     verify_checkout
+    resolve_profile
+    if [[ "$PROFILE" != "docker" ]]; then
+        require_command pg_dump
+    fi
     TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/filterest-update.XXXXXX")"
     download_release_evidence
     fetch_and_verify_target
-    PROFILE="$(installed_profile)"
-    case "$PROFILE" in
-        admin|development) ;;
-        *) die "completed Filterest setup profile is missing; run ./filterest setup first" ;;
-    esac
-    resolve_private_environment
+    if [[ "$PROFILE" == "docker" ]]; then
+        # Settings only: a dry run neither needs nor calls Docker.
+        docker_runner update-preflight --dry-run
+    else
+        resolve_private_environment
+    fi
     show_plan
+    if [[ "$PROFILE" == "docker" ]]; then
+        docker_runner update-preflight
+    fi
     confirm_plan
+    acquire_update_lock
     stop_runtime
     create_backup
     apply_update

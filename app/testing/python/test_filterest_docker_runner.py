@@ -6,12 +6,15 @@ The fake Docker executable records only command arguments in an isolated test fo
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import stat
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -61,10 +64,84 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "        esac\n"
             "    done\n"
             "fi\n"
+            # Compose calls carry --project-directory, --file and --env-file first.
+            "if [ \"${1:-}\" = compose ] && [ \"${2:-}\" = --project-directory ]; then\n"
+            "    shift 7\n"
+            "    case \"$*\" in\n"
+            "        'ps --status running --services')\n"
+            "            printf '%b' \"${FILTEREST_DOCKER_TEST_SERVICES-app\\\\ndb\\\\n}\" ;;\n"
+            "        'images --quiet app')\n"
+            "            printf '%s\\n' \"${FILTEREST_DOCKER_TEST_IMAGE_ID:-}\" ;;\n"
+            "        'exec -T db sh -c '*)\n"
+            "            printf '%s' \"${FILTEREST_DOCKER_TEST_DUMP-PGDMP test dump}\"\n"
+            "            if [ -n \"${FILTEREST_DOCKER_TEST_DUMP_HANG:-}\" ]; then sleep 30; fi\n"
+            "            exit \"${FILTEREST_DOCKER_TEST_DUMP_STATUS:-0}\" ;;\n"
+            "        'exec -T db pg_restore --list')\n"
+            "            cat > /dev/null\n"
+            "            exit \"${FILTEREST_DOCKER_TEST_RESTORE_STATUS:-0}\" ;;\n"
+            "        'up '*)\n"
+            "            printf 'up-environment ENABLE_SQL_MIGRATIONS=%s "
+            "EASELECT_MIGRATION_FILE_ALLOWLIST=%s FILTEREST_APP_VERSION=%s\\n' "
+            "\"${ENABLE_SQL_MIGRATIONS-<unset>}\" "
+            "\"${EASELECT_MIGRATION_FILE_ALLOWLIST-<unset>}\" "
+            "\"${FILTEREST_APP_VERSION-<unset>}\" "
+            ">> \"$FILTEREST_DOCKER_TEST_LOG\" ;;\n"
+            "    esac\n"
+            "fi\n"
             "exit 0\n",
             encoding="utf-8",
         )
         fake_docker.chmod(0o755)
+
+        # Answers /system/ready from numbered files: N.status holds an HTTP
+        # status or "refused", N.body the JSON; the last pair repeats. An
+        # answer delayed past --max-time times out as the real curl would.
+        self.curl_responses = self.root / "curl-responses"
+        self.curl_responses.mkdir()
+        fake_curl = self.fake_bin / "curl"
+        fake_curl.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            "out=''\n"
+            "url=''\n"
+            "max_time=''\n"
+            "while [ \"$#\" -gt 0 ]; do\n"
+            "    case \"$1\" in\n"
+            "        --output) out=$2; shift 2 ;;\n"
+            "        --max-time) max_time=$2; shift 2 ;;\n"
+            "        --write-out|--cacert|--connect-timeout) shift 2 ;;\n"
+            "        -*) shift ;;\n"
+            "        *) url=$1; shift ;;\n"
+            "    esac\n"
+            "done\n"
+            "responses=$FILTEREST_CURL_TEST_RESPONSES\n"
+            "count=$(( $(cat \"$responses/count\" 2>/dev/null || echo 0) + 1 ))\n"
+            "printf '%s\\n' \"$count\" > \"$responses/count\"\n"
+            "printf '%s\\n' \"$url\" >> \"$responses/urls\"\n"
+            "printf '%s\\n' \"$max_time\" >> \"$responses/max_times\"\n"
+            "delay=${FILTEREST_CURL_TEST_DELAY:-0}\n"
+            "if [ \"$delay\" -gt \"$max_time\" ]; then\n"
+            "    sleep \"$max_time\"\n"
+            "    echo 'curl: (28) Operation timed out' >&2\n"
+            "    printf '000'\n"
+            "    exit 28\n"
+            "fi\n"
+            "sleep \"$delay\"\n"
+            "number=$count\n"
+            "while [ ! -f \"$responses/$number.status\" ] && [ \"$number\" -gt 1 ]; do\n"
+            "    number=$((number - 1))\n"
+            "done\n"
+            "status=$(cat \"$responses/$number.status\")\n"
+            "if [ \"$status\" = refused ]; then\n"
+            "    echo 'curl: (7) Failed to connect to localhost' >&2\n"
+            "    printf '000'\n"
+            "    exit 7\n"
+            "fi\n"
+            "cat \"$responses/$number.body\" > \"$out\"\n"
+            "printf '%s' \"$status\"\n",
+            encoding="utf-8",
+        )
+        fake_curl.chmod(0o755)
 
     def environment(
         self, extra: dict[str, str] | None = None
@@ -87,6 +164,55 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             text=True,
             env=self.environment(extra_environment),
         )
+
+    def settings(self) -> dict[str, str]:
+        return dict(
+            line.split("=", 1)
+            for line in (self.root / "keys/docker.env").read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line and not line.startswith("#") and "=" in line
+        )
+
+    def run_update_action(
+        self,
+        *arguments: str,
+        extra_environment: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        """Runs an update action without an inherited copy of any Docker setting."""
+
+        environment = self.environment()
+        for key in self.settings():
+            environment.pop(key, None)
+        environment["FILTEREST_CURL_TEST_RESPONSES"] = str(self.curl_responses)
+        if extra_environment:
+            environment.update(extra_environment)
+        return subprocess.run(
+            ["bash", str(RUNNER), *arguments],
+            check=check,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+
+    def add_ready_response(self, number: int, status: str, body: object = "") -> None:
+        (self.curl_responses / f"{number}.status").write_text(status, encoding="utf-8")
+        (self.curl_responses / f"{number}.body").write_text(
+            body if isinstance(body, str) else json.dumps(body), encoding="utf-8"
+        )
+
+    def ready_body(self, **overrides: object) -> dict[str, object]:
+        body: dict[str, object] = {
+            "ready": True,
+            "status": "ready",
+            "reasons": [],
+            "db_compatible": True,
+            "app_version": "8.43.0",
+            "instance_id": self.settings()["INSTANCE_NAME"],
+        }
+        body.update(overrides)
+        return body
 
     def test_setup_generates_protected_non_placeholder_settings(self) -> None:
         completed = self.run_runner("setup")
@@ -474,6 +600,350 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         self.assertFalse(self.docker_log.exists())
         self.assertIn("prepare", completed.stdout)
         self.assertIn("docker compose", completed.stdout)
+
+    def test_profile_reads_the_docker_profile_without_changing_anything(self) -> None:
+        self.assertEqual(self.run_runner("profile").stdout, "")
+        self.assertFalse((self.root / "keys").exists())
+
+        self.run_runner("setup")
+        settings_before = (self.root / "keys/docker.env").read_bytes()
+        completed = self.run_runner("profile")
+
+        self.assertEqual(completed.stdout, "docker\n")
+        self.assertEqual((self.root / "keys/docker.env").read_bytes(), settings_before)
+        self.assertFalse(self.docker_log.exists())
+
+    def test_update_actions_refuse_inherited_values_that_compose_would_prefer(self) -> None:
+        shutil.copy2(
+            SOURCE_ROOT / "docker/docker-compose.yml",
+            self.app_root / "docker/docker-compose.yml",
+        )
+        self.run_runner("setup")
+        settings = self.settings()
+
+        refused = self.run_update_action(
+            "update-preflight",
+            "--dry-run",
+            extra_environment={
+                "DB_NAME": "another_database",
+                "COMPOSE_PROJECT_NAME": "another-stack",
+                # Matching today, but the update rewrites it before it restarts.
+                "FILTEREST_APP_VERSION": settings["FILTEREST_APP_VERSION"],
+            },
+            check=False,
+        )
+
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("COMPOSE_PROJECT_NAME DB_NAME FILTEREST_APP_VERSION", refused.stderr)
+        self.assertNotIn("another_database", refused.stderr)
+        self.assertNotIn("another-stack", refused.stderr)
+        self.assertFalse(self.docker_log.exists())
+
+        accepted = self.run_update_action(
+            "update-preflight",
+            "--dry-run",
+            extra_environment={
+                # A key Compose never substitutes, and the two migration
+                # switches the update sets itself, are harmless.
+                "PORT": "3000",
+                "ENABLE_SQL_MIGRATIONS": "true",
+                "EASELECT_MIGRATION_FILE_ALLOWLIST": "",
+            },
+        )
+        self.assertIn("keys/docker.env as written", accepted.stdout)
+        self.assertFalse(self.docker_log.exists())
+
+    def test_update_preflight_requires_a_running_database_container(self) -> None:
+        self.run_runner("setup")
+
+        refused = self.run_update_action(
+            "update-preflight",
+            extra_environment={"FILTEREST_DOCKER_TEST_SERVICES": "app\\n"},
+            check=False,
+        )
+        accepted = self.run_update_action(
+            "update-preflight",
+            extra_environment={"FILTEREST_DOCKER_TEST_SERVICES": "app\\ndb\\n"},
+        )
+
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("database container is not running", refused.stderr)
+        self.assertIn("ready for the update", accepted.stdout)
+        docker_calls = self.docker_log.read_text(encoding="utf-8")
+        self.assertIn("compose version", docker_calls)
+        self.assertIn("ps --status running --services", docker_calls)
+
+    def test_stop_app_stops_only_the_application_container(self) -> None:
+        self.run_runner("setup")
+
+        image = self.run_update_action(
+            "app-image-id",
+            extra_environment={"FILTEREST_DOCKER_TEST_IMAGE_ID": "sha256:current-app"},
+        )
+        stopped = self.run_update_action("stop-app")
+
+        docker_calls = self.docker_log.read_text(encoding="utf-8")
+        self.assertEqual(image.stdout, "sha256:current-app\n")
+        self.assertIn("images --quiet app", docker_calls)
+        self.assertIn("stop app", docker_calls)
+        self.assertNotIn(" down", docker_calls)
+        self.assertIn("database keeps running", stopped.stdout)
+
+    def test_dump_database_writes_a_read_back_owner_only_file(self) -> None:
+        self.run_runner("setup")
+        settings = self.settings()
+        target = self.root / "backups/database.dump"
+
+        completed = self.run_update_action("dump-database", "--output", str(target))
+
+        self.assertEqual(target.read_text(encoding="utf-8"), "PGDMP test dump")
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+        self.assertEqual([path.name for path in target.parent.iterdir()], ["database.dump"])
+        docker_calls = self.docker_log.read_text(encoding="utf-8")
+        self.assertIn("exec -T db sh -c", docker_calls)
+        self.assertIn("exec -T db pg_restore --list", docker_calls)
+        self.assertNotIn("--no-privileges", docker_calls)
+        for key in ("DB_ADMIN_PASSWORD", "DB_PASSWORD", "SESSION_SECRET_KEY"):
+            for output in (docker_calls, completed.stdout, completed.stderr):
+                self.assertNotIn(settings[key], output, key)
+
+        repeated = self.run_update_action(
+            "dump-database", "--output", str(target), check=False
+        )
+        self.assertNotEqual(repeated.returncode, 0)
+        self.assertIn("already exists", repeated.stderr)
+        self.assertEqual(target.read_text(encoding="utf-8"), "PGDMP test dump")
+
+    def test_dump_database_leaves_nothing_when_the_dump_is_empty_or_unreadable(self) -> None:
+        self.run_runner("setup")
+        target = self.root / "backups/database.dump"
+
+        for failure in (
+            {"FILTEREST_DOCKER_TEST_DUMP": ""},
+            {"FILTEREST_DOCKER_TEST_DUMP_STATUS": "1"},
+            {"FILTEREST_DOCKER_TEST_RESTORE_STATUS": "1"},
+        ):
+            with self.subTest(failure=failure):
+                failed = self.run_update_action(
+                    "dump-database",
+                    "--output",
+                    str(target),
+                    extra_environment=failure,
+                    check=False,
+                )
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertIn("nothing was written", failed.stderr)
+                self.assertEqual(list(target.parent.iterdir()), [])
+
+    def test_start_for_update_returns_without_the_health_wait(self) -> None:
+        self.run_runner("setup")
+
+        completed = self.run_update_action(
+            "start",
+            "--for-update",
+            extra_environment={
+                "ENABLE_SQL_MIGRATIONS": "true",
+                "EASELECT_MIGRATION_FILE_ALLOWLIST": "",
+            },
+        )
+
+        docker_calls = self.docker_log.read_text(encoding="utf-8")
+        self.assertIn("up --build --detach\n", docker_calls)
+        self.assertNotIn("--wait", docker_calls)
+        self.assertIn(
+            "up-environment ENABLE_SQL_MIGRATIONS=true EASELECT_MIGRATION_FILE_ALLOWLIST= "
+            "FILTEREST_APP_VERSION=<unset>\n",
+            docker_calls,
+        )
+        self.assertNotIn("first-run", completed.stdout)
+
+        misplaced = self.run_update_action("stop", "--for-update", check=False)
+        self.assertNotEqual(misplaced.returncode, 0)
+        self.assertIn("--for-update applies only to start", misplaced.stderr)
+
+    def test_ready_check_waits_until_this_installation_reports_the_version(self) -> None:
+        self.run_runner("setup")
+        self.add_ready_response(
+            1,
+            "503",
+            self.ready_body(
+                ready=False, db_compatible=False, reasons=["db_version_incompatible"]
+            ),
+        )
+        self.add_ready_response(2, "200", self.ready_body())
+
+        completed = self.run_update_action(
+            "ready-check", "--expect-version", "8.43.0", "--timeout", "30"
+        )
+
+        self.assertIn("8.43.0 is ready", completed.stdout)
+        self.assertEqual(
+            (self.curl_responses / "urls").read_text(encoding="utf-8").splitlines(),
+            [f"https://localhost:{self.settings()['APP_PORT']}/system/ready"] * 2,
+        )
+
+    def test_update_actions_read_quoted_settings_as_compose_does(self) -> None:
+        shutil.copy2(
+            SOURCE_ROOT / "docker/docker-compose.yml",
+            self.app_root / "docker/docker-compose.yml",
+        )
+        self.run_runner("setup")
+        secret = self.settings()["DB_ADMIN_PASSWORD"]
+        env_file = self.root / "keys/docker.env"
+        quoted = {
+            "FILTEREST_INSTALL_PROFILE": '"docker"',
+            "APP_PORT": "'18123'",
+            "INSTANCE_NAME": '  "quoted-instance"  # set by hand',
+            "DB_ADMIN_PASSWORD": f"{secret}  # generated",
+        }
+        env_file.write_text(
+            "".join(
+                f"{key}={quoted[key]}\n" if key in quoted else f"{line}\n"
+                for line in env_file.read_text(encoding="utf-8").splitlines()
+                for key in [line.split("=", 1)[0]]
+            ),
+            encoding="utf-8",
+        )
+        self.add_ready_response(
+            1, "200", self.ready_body(instance_id="quoted-instance")
+        )
+
+        profile = self.run_runner("profile")
+        preflight = self.run_update_action("update-preflight", "--dry-run")
+        ready = self.run_update_action(
+            "ready-check", "--expect-version", "8.43.0", "--timeout", "1"
+        )
+
+        self.assertEqual(profile.stdout, "docker\n")
+        self.assertIn("as written", preflight.stdout)
+        self.assertIn("8.43.0 is ready", ready.stdout)
+        for output in (profile.stdout, preflight.stdout, ready.stdout, ready.stderr):
+            self.assertNotIn(secret, output)
+        self.assertEqual(
+            (self.curl_responses / "urls").read_text(encoding="utf-8"),
+            "https://localhost:18123/system/ready\n",
+        )
+
+    def test_start_for_update_refuses_an_inherited_copy_before_writing_settings(self) -> None:
+        shutil.copy2(
+            SOURCE_ROOT / "docker/docker-compose.yml",
+            self.app_root / "docker/docker-compose.yml",
+        )
+        self.run_runner("setup")
+        settings_before = (self.root / "keys/docker.env").read_bytes()
+        installed_version = self.settings()["FILTEREST_APP_VERSION"]
+        (self.app_root / "VERSION_APP").write_text("8.43.0\n", encoding="utf-8")
+
+        refused = self.run_update_action(
+            "start",
+            "--for-update",
+            extra_environment={"FILTEREST_APP_VERSION": installed_version},
+            check=False,
+        )
+
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("FILTEREST_APP_VERSION", refused.stderr)
+        self.assertEqual((self.root / "keys/docker.env").read_bytes(), settings_before)
+        self.assertFalse(self.docker_log.exists())
+
+    def test_ready_check_never_waits_for_an_answer_past_its_deadline(self) -> None:
+        self.run_runner("setup")
+        self.add_ready_response(1, "200", self.ready_body())
+
+        started = time.monotonic()
+        failed = self.run_update_action(
+            "ready-check",
+            "--expect-version",
+            "8.43.0",
+            "--timeout",
+            "2",
+            extra_environment={"FILTEREST_CURL_TEST_DELAY": "8"},
+            check=False,
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("curl: (28)", failed.stderr)
+        self.assertLess(elapsed, 6)
+        [max_time] = (self.curl_responses / "max_times").read_text(encoding="utf-8").split()
+        self.assertLessEqual(int(max_time), 2)
+
+    def test_ready_check_starts_no_request_at_its_deadline(self) -> None:
+        self.run_runner("setup")
+        self.add_ready_response(
+            1, "503", self.ready_body(ready=False, reasons=["database_unavailable"])
+        )
+        # Would succeed, but only after the deadline has passed.
+        self.add_ready_response(2, "200", self.ready_body())
+
+        failed = self.run_update_action(
+            "ready-check", "--expect-version", "8.43.0", "--timeout", "3", check=False
+        )
+
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("HTTP 503 (database_unavailable)", failed.stderr)
+        self.assertEqual(
+            (self.curl_responses / "count").read_text(encoding="utf-8").strip(), "1"
+        )
+
+    def test_dump_database_removes_its_partial_file_when_interrupted(self) -> None:
+        self.run_runner("setup")
+        backups = self.root / "backups"
+        environment = self.environment()
+        for key in self.settings():
+            environment.pop(key, None)
+        environment["FILTEREST_DOCKER_TEST_DUMP_HANG"] = "1"
+
+        dump = subprocess.Popen(
+            ["bash", str(RUNNER), "dump-database", "--output", str(backups / "database.dump")],
+            env=environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while not list(backups.glob("database.dump.partial.*")):
+                self.assertLess(time.monotonic(), deadline, "the dump never started")
+                time.sleep(0.05)
+            os.killpg(dump.pid, signal.SIGTERM)
+            returncode = dump.wait(timeout=10)
+        finally:
+            if dump.poll() is None:
+                os.killpg(dump.pid, signal.SIGKILL)
+                dump.wait()
+
+        self.assertNotEqual(returncode, 0)
+        self.assertEqual(list(backups.iterdir()), [])
+
+    def test_ready_check_rejects_another_version_installation_or_answer(self) -> None:
+        self.run_runner("setup")
+
+        for status, body, expected_error in (
+            ("refused", "", "no response (curl: (7)"),
+            ("503", self.ready_body(ready=False, reasons=["database_unavailable"]),
+             "HTTP 503 (database_unavailable)"),
+            ("200", "not json", "without a JSON readiness object"),
+            ("200", self.ready_body(db_compatible=False), "not ready"),
+            ("200", self.ready_body(app_version="8.42.1"), "version '8.42.1' answered"),
+            ("200", self.ready_body(instance_id="another-installation"),
+             "installation 'another-installation' answered"),
+        ):
+            with self.subTest(expected_error=expected_error):
+                for response in self.curl_responses.iterdir():
+                    response.unlink()
+                self.add_ready_response(1, status, body)
+                failed = self.run_update_action(
+                    "ready-check",
+                    "--expect-version",
+                    "8.43.0",
+                    "--timeout",
+                    "1",
+                    check=False,
+                )
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertIn("did not report ready within 1 seconds", failed.stderr)
+                self.assertIn(expected_error, failed.stderr)
 
 
 if __name__ == "__main__":

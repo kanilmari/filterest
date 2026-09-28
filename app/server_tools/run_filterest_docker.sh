@@ -21,6 +21,12 @@ COMPOSE_FILE="$PROJECT_ROOT/compose.yml"
 DRY_RUN=0
 APP_PORT_OVERRIDE=""
 DB_PORT_OVERRIDE=""
+FOR_UPDATE=0
+DUMP_OUTPUT=""
+DUMP_PARTIAL=""
+EXPECTED_VERSION=""
+READY_TIMEOUT_SECONDS=600
+READY_POLL_SECONDS=3
 
 usage() {
     cat <<'USAGE'
@@ -33,11 +39,23 @@ Actions:
   status      Show application and database container status
   logs        Follow application and database logs
 
+Actions used by ./filterest update:
+  profile           Print the install profile recorded in keys/docker.env
+  update-preflight  Check that the update can use keys/docker.env as written
+  app-image-id      Print the image ID of the application container
+  stop-app          Stop the application; the database keeps running
+  dump-database     Write a verified database dump to --output PATH
+  ready-check       Wait until /system/ready reports --expect-version VERSION
+
 Options:
-  --dry-run   Show the intended setup or Docker command without changing anything
-  --app-port  Bind the browser application to a different localhost port
-  --db-port   Bind PostgreSQL to a different localhost port
-  -h, --help  Show this help
+  --dry-run          Show the intended setup or Docker command without changing anything
+  --app-port         Bind the browser application to a different localhost port
+  --db-port          Bind PostgreSQL to a different localhost port
+  --for-update       With start: return once the containers start; ready-check follows
+  --output PATH      With dump-database: the new dump file
+  --expect-version   With ready-check: the application version that must answer
+  --timeout SECONDS  With ready-check: how long to wait (default 600)
+  -h, --help         Show this help
 USAGE
 }
 
@@ -86,6 +104,31 @@ env_file_value() {
 env_value() {
     local key="$1"
     env_file_value "$ENV_FILE" "$key"
+}
+
+# Returns a keys/docker.env value as Compose reads it: leading blanks trimmed,
+# then either the text inside the first pair of quotes, whatever follows them,
+# or an unquoted value without its " #" comment and trailing blanks.
+# Why: operators may quote values by hand, and an update must compare and use
+# exactly the values Compose passes to the containers.
+compose_env_value() {
+    local value=""
+    local quote=""
+    local rest=""
+
+    value="$(env_value "$1")"
+    value="${value#"${value%%[![:space:]]*}"}"
+    quote="${value:0:1}"
+    if [[ "$quote" == '"' || "$quote" == "'" ]]; then
+        rest="${value:1}"
+        if [[ "$rest" == *"$quote"* ]]; then
+            value="${rest%%"$quote"*}"
+        fi
+    else
+        value="${value%%[[:space:]]#*}"
+        value="${value%"${value##*[![:space:]]}"}"
+    fi
+    printf '%s' "$value"
 }
 
 # Replaces one protected setting through a same-directory mode-0600 file.
@@ -533,6 +576,207 @@ compose() {
         "$@"
 }
 
+# Lists each key keys/docker.env assigns, in the grammar env_file_value reads.
+settings_keys() {
+    local line=""
+    local assignment_pattern='^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*='
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ $line =~ $assignment_pattern ]]; then
+            printf '%s\n' "${BASH_REMATCH[2]}"
+        fi
+    done < "$ENV_FILE"
+}
+
+# Refuses inherited copies of keys/docker.env settings that Compose would read.
+# Between the operator's shell and Compose, which prefers the shell over --env-file
+# for its own COMPOSE_* settings and for every ${NAME} its files substitute.
+# Why: an update must stop, back up and restart this installation as configured; a
+# stray COMPOSE_PROJECT_NAME or DB_NAME would aim it at another stack or database.
+# Even a copy that matches today is refused, because the update itself rewrites
+# values such as FILTEREST_APP_VERSION, after which that copy would override them.
+# The two migration switches are exempt because the update sets them itself, and
+# --file and --env-file on every Compose call take precedence over their variables.
+require_settings_not_overridden() {
+    local substituted_names=""
+    local key=""
+    local inherited=""
+
+    substituted_names=" $(
+        { grep -ohE '\$\{?[A-Za-z_][A-Za-z0-9_]*' \
+            "$COMPOSE_FILE" "$APPLICATION_ROOT/docker/docker-compose.yml" || true; } |
+            tr -d '${' | sort -u | tr '\n' ' '
+    )"
+    while IFS= read -r key; do
+        case "$key" in
+            ENABLE_SQL_MIGRATIONS|EASELECT_MIGRATION_FILE_ALLOWLIST) continue ;;
+            COMPOSE_FILE|COMPOSE_ENV_FILES) continue ;;
+            COMPOSE_*) ;;
+            *) [[ "$substituted_names" == *" $key "* ]] || continue ;;
+        esac
+        printenv "$key" > /dev/null || continue
+        inherited+="${inherited:+ }$key"
+    done < <(settings_keys | sort -u)
+    [[ -z "$inherited" ]] || \
+        die "Inherited environment variables would override keys/docker.env in Docker Compose: $inherited; unset them, then run the update again"
+}
+
+# Confirms, without changing the file, the Docker settings an update action uses.
+require_update_settings() {
+    [[ ! -L "$ENV_FILE" && -f "$ENV_FILE" ]] || \
+        die "Docker settings must be a regular file for an update: $ENV_FILE"
+    [[ -f "$COMPOSE_FILE" ]] || die "Filterest Compose contract is missing: $COMPOSE_FILE"
+    [[ "$(compose_env_value FILTEREST_INSTALL_PROFILE)" == "docker" ]] || \
+        die "keys/docker.env does not record FILTEREST_INSTALL_PROFILE=docker; run ./filterest docker setup once"
+    require_settings_not_overridden
+}
+
+require_running_database() {
+    local running_services=""
+
+    running_services="$(compose ps --status running --services)"
+    [[ $'\n'"$running_services"$'\n' == *$'\n'db$'\n'* ]] || \
+        die "The database container is not running; start Filterest with ./filterest docker start, then run the update again"
+}
+
+# Writes one custom-format dump of the running database to a new owner-only file.
+# Between the database container, which alone holds its superuser password, and backups/.
+# Why: the dump is renamed into place only after pg_restore has read it back, so an
+# interrupted or unreadable dump never looks like a finished backup.
+dump_database() {
+    local target="$DUMP_OUTPUT"
+    local target_directory=""
+    local status=0
+
+    [[ -n "$target" ]] || die "dump-database requires --output PATH"
+    target_directory="$(dirname "$target")"
+    [[ -d "$target_directory" && ! -L "$target_directory" ]] || \
+        die "Dump folder must be an existing real directory: $target_directory"
+    [[ ! -e "$target" && ! -L "$target" ]] || die "Dump target already exists: $target"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        compose exec -T db pg_dump --format=custom --no-owner
+        return
+    fi
+
+    # Whatever ends this process early, an interrupt included, removes the partial file.
+    trap '[[ -z "$DUMP_PARTIAL" ]] || rm -f -- "$DUMP_PARTIAL"' EXIT
+    trap 'exit 130' INT TERM
+    DUMP_PARTIAL="$(mktemp "${target}.partial.XXXXXX")"
+    # The container expands its own POSTGRES_* values, so no credential passes
+    # through this shell, its process arguments, or the dump folder. Privileges
+    # stay in the dump: the grants made at first start and by the running
+    # application exist nowhere else, and the limited roles need them after a restore.
+    compose exec -T db sh -c \
+        'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+        > "$DUMP_PARTIAL" || status=$?
+    if [[ "$status" -eq 0 && ! -s "$DUMP_PARTIAL" ]]; then
+        status=1
+    fi
+    if [[ "$status" -eq 0 ]]; then
+        compose exec -T db pg_restore --list < "$DUMP_PARTIAL" > /dev/null || status=$?
+    fi
+    if [[ "$status" -ne 0 ]]; then
+        die "The database dump failed or could not be read back; nothing was written to $target"
+    fi
+    chmod 600 "$DUMP_PARTIAL"
+    mv -- "$DUMP_PARTIAL" "$target"
+    DUMP_PARTIAL=""
+    printf '✓ Database dump written and read back: %s\n' "$target"
+}
+
+# Waits until this installation's /system/ready reports the expected version ready.
+# Between the containers an update just started and ./filterest update's success message.
+# Why: the container health check reads /health, which passes on an old schema, so only
+# /system/ready shows that migrations finished for this installation and this version.
+ready_check() {
+    local port=""
+    local expected_instance=""
+    local work_directory=""
+    local http_status=""
+    local verdict="no check completed"
+    local deadline=0
+    local remaining=0
+    local request_limit=0
+    local connect_limit=0
+
+    [[ -n "$EXPECTED_VERSION" ]] || die "ready-check requires --expect-version VERSION"
+    port="$(compose_env_value APP_PORT)"
+    port="${port:-8100}"
+    expected_instance="$(compose_env_value INSTANCE_NAME)"
+    expected_instance="${expected_instance:-filterest-local}"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf '  [dry-run] wait for https://localhost:%s/system/ready to report %s ready\n' \
+            "$port" "$EXPECTED_VERSION"
+        return
+    fi
+    command -v curl >/dev/null 2>&1 || die "curl is required for the readiness check"
+    command -v python3 >/dev/null 2>&1 || die "python3 is required for the readiness check"
+
+    work_directory="$(mktemp -d)"
+    deadline=$((SECONDS + READY_TIMEOUT_SECONDS))
+    printf 'Waiting up to %s seconds for Filterest %s to report ready...\n' \
+        "$READY_TIMEOUT_SECONDS" "$EXPECTED_VERSION"
+    while :; do
+        # No request starts at or runs past the deadline, so no answer counts after it.
+        remaining=$((deadline - SECONDS))
+        if (( remaining <= 0 )); then
+            rm -r -- "$work_directory"
+            die "Filterest did not report ready within ${READY_TIMEOUT_SECONDS} seconds; last check: $verdict"
+        fi
+        request_limit=$(( remaining < 10 ? remaining : 10 ))
+        connect_limit=$(( request_limit < 5 ? request_limit : 5 ))
+        : > "$work_directory/response.json"
+        if ! http_status="$(curl --silent --show-error \
+            --cacert "$TLS_DIRECTORY/localhost.crt" \
+            --connect-timeout "$connect_limit" --max-time "$request_limit" \
+            --output "$work_directory/response.json" --write-out '%{http_code}' \
+            "https://localhost:${port}/system/ready" 2> "$work_directory/curl.err")"; then
+            verdict="no response ($(tail -n 1 "$work_directory/curl.err"))"
+        else
+            verdict="$(python3 - "$work_directory/response.json" "$http_status" \
+                "$EXPECTED_VERSION" "$expected_instance" <<'PY'
+import json
+import sys
+
+response_path, http_status, expected_version, expected_instance = sys.argv[1:5]
+try:
+    with open(response_path, encoding="utf-8") as handle:
+        state = json.load(handle)
+except (OSError, ValueError):
+    state = None
+if not isinstance(state, dict):
+    state = None
+reasons = (state or {}).get("reasons")
+reasons = ", ".join(map(str, reasons)) if isinstance(reasons, list) else ""
+detail = f" ({reasons})" if reasons else ""
+if http_status != "200":
+    print(f"HTTP {http_status}{detail}")
+elif state is None:
+    print("HTTP 200 without a JSON readiness object")
+elif state.get("ready") is not True or state.get("db_compatible") is not True:
+    print(f"not ready{detail}")
+elif state.get("app_version") != expected_version:
+    print(f"version {state.get('app_version')!r} answered, expected {expected_version!r}")
+elif state.get("instance_id") != expected_instance:
+    print(f"installation {state.get('instance_id')!r} answered, expected {expected_instance!r}")
+else:
+    print("ready")
+PY
+            )"
+        fi
+        if [[ "$verdict" == "ready" ]]; then
+            rm -r -- "$work_directory"
+            printf '✓ Filterest %s is ready and its database schema is compatible.\n' \
+                "$EXPECTED_VERSION"
+            return
+        fi
+        remaining=$((deadline - SECONDS))
+        if (( remaining > 0 )); then
+            sleep $(( remaining < READY_POLL_SECONDS ? remaining : READY_POLL_SECONDS ))
+        fi
+    done
+}
+
 parse_arguments() {
     ACTION="${1:-start}"
     [[ "$#" -eq 0 ]] || shift
@@ -553,6 +797,25 @@ parse_arguments() {
                 validate_port "--db-port" "$DB_PORT_OVERRIDE"
                 shift
                 ;;
+            --for-update)
+                FOR_UPDATE=1
+                ;;
+            --output)
+                [[ "$#" -ge 2 ]] || die "--output requires a file path"
+                DUMP_OUTPUT="$2"
+                shift
+                ;;
+            --expect-version)
+                [[ "$#" -ge 2 ]] || die "--expect-version requires a version"
+                EXPECTED_VERSION="$2"
+                shift
+                ;;
+            --timeout)
+                [[ "$#" -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || \
+                    die "--timeout requires a positive number of seconds"
+                READY_TIMEOUT_SECONDS="$2"
+                shift
+                ;;
             -h|--help)
                 usage
                 exit 0
@@ -563,6 +826,9 @@ parse_arguments() {
         esac
         shift
     done
+    if [[ "$FOR_UPDATE" -eq 1 && "$ACTION" != "start" ]]; then
+        die "--for-update applies only to start"
+    fi
 }
 
 main() {
@@ -575,15 +841,28 @@ main() {
             prepare_environment
             ;;
         start)
+            if [[ "$FOR_UPDATE" -eq 1 && "$DRY_RUN" -eq 0 && -f "$ENV_FILE" ]]; then
+                # Refused before setup rewrites any value in keys/docker.env.
+                require_settings_not_overridden
+            fi
             prepare_environment
+            if [[ "$FOR_UPDATE" -eq 1 && "$DRY_RUN" -eq 0 ]]; then
+                require_update_settings
+            fi
             if [[ "$DRY_RUN" -eq 0 ]]; then
                 require_docker_compose
                 migrate_legacy_named_volumes
             fi
-            compose up --build --detach --wait
-            if [[ "$DRY_RUN" -eq 0 ]]; then
-                port="$(env_value APP_PORT)"
-                printf 'Filterest is ready: https://localhost:%s/first-run\n' "${port:-8100}"
+            if [[ "$FOR_UPDATE" -eq 1 ]]; then
+                # No --wait: it waits for the /health check, which also passes on
+                # an old schema. ./filterest update runs ready-check instead.
+                compose up --build --detach
+            else
+                compose up --build --detach --wait
+                if [[ "$DRY_RUN" -eq 0 ]]; then
+                    port="$(env_value APP_PORT)"
+                    printf 'Filterest is ready: https://localhost:%s/first-run\n' "${port:-8100}"
+                fi
             fi
             ;;
         stop)
@@ -608,6 +887,50 @@ main() {
                 require_docker_compose
             fi
             compose logs --follow app db
+            ;;
+        profile)
+            # Reads only, so ./filterest update can choose its path before any change.
+            if [[ -e "$ENV_FILE" || -L "$ENV_FILE" ]]; then
+                [[ ! -L "$ENV_FILE" && -f "$ENV_FILE" ]] || \
+                    die "Docker settings path must be a regular file: $ENV_FILE"
+                printf '%s\n' "$(compose_env_value FILTEREST_INSTALL_PROFILE)"
+            fi
+            ;;
+        update-preflight)
+            require_update_settings
+            if [[ "$DRY_RUN" -eq 0 ]]; then
+                require_docker_compose
+                require_running_database
+                printf '✓ Docker Compose and the database container are ready for the update.\n'
+            else
+                printf '✓ The update will use keys/docker.env as written.\n'
+            fi
+            ;;
+        app-image-id)
+            require_update_settings
+            if [[ "$DRY_RUN" -eq 0 ]]; then
+                require_docker_compose
+            fi
+            compose images --quiet app
+            ;;
+        stop-app)
+            require_update_settings
+            if [[ "$DRY_RUN" -eq 0 ]]; then
+                require_docker_compose
+            fi
+            compose stop app
+            printf 'Filterest application stopped; its database keeps running.\n'
+            ;;
+        dump-database)
+            require_update_settings
+            if [[ "$DRY_RUN" -eq 0 ]]; then
+                require_docker_compose
+            fi
+            dump_database
+            ;;
+        ready-check)
+            require_update_settings
+            ready_check
             ;;
         -h|--help|help)
             usage

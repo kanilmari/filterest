@@ -284,6 +284,83 @@ It rejects any release commit that tracks content below `config/`, `keys/`,
 claim operator-owned state. The tracked `app/` source and root bridges advance
 together while those five mutable sibling directories remain in place.
 
+### Docker installations
+
+The same command updates a Docker installation in the folder layout shown
+above, recognized by `FILTEREST_INSTALL_PROFILE=docker` in `keys/docker.env`.
+It stops only the application container, dumps the database through the
+running database container and reads the dump back, and also backs up
+`keys/`, `config/`, and `projects/`. Each `backups/update_*` folder is complete
+only once its `manifest.txt` exists; the manifest records the previous commit
+as `source_commit`. The updater then fast-forwards, rebuilds the images with
+the release's pending migrations enabled, and reports success only when
+`/system/ready` shows the new version ready for this installation
+(`--ready-timeout SECONDS`, default 600). An installation that has both a
+native setup marker and Docker settings, or a shell variable that would
+override a `keys/docker.env` value in Docker Compose, is refused before anything
+changes.
+
+If the new version does not become ready, the updater stops its application
+container and leaves the database container running. To return to the backed-up
+version, fill in the update folder and run this block from the installation
+folder. It stops at the first failing command. It restores the checkout, the
+settings, the stored files, and the database together, and moves what the new
+version left behind into a `backups/replaced_*` folder instead of deleting it:
+
+```bash
+(
+set -euo pipefail
+backup=backups/<update folder>
+aside="backups/replaced_$(date -u +%Y%m%dT%H%M%SZ)"
+./filterest docker stop
+git reset --hard "$(sed -n 's/^source_commit=//p' "$backup/manifest.txt")"
+mkdir -m 700 "$aside" "$aside/data"
+mv keys config projects "$aside/"
+mv data/storage data/storage_deleted data/bootstrap "$aside/data/"
+tar -xzf "$backup/installation_settings.tar.gz"
+tar -xzf "$backup/storage.tar.gz" -C data
+tar -xzf "$backup/bootstrap.tar.gz" -C data
+docker compose --env-file keys/docker.env up --detach --wait db
+docker compose --env-file keys/docker.env exec -T db pg_restore --list < "$backup/database.dump" > /dev/null
+docker compose --env-file keys/docker.env exec -T db sh -c \
+  'dropdb --force -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+docker compose --env-file keys/docker.env exec -T db sh -c \
+  'pg_restore --exit-on-error --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$backup/database.dump"
+./filterest docker start
+)
+```
+
+Docker installations from releases whose updater predates Docker support move
+to the first release with it by hand, once. Confirm on GitHub that
+`v<version>` is a published stable release, fill in the version, and run this
+block from the installation folder. It stops at the first failing command, and
+if the new version does not report ready, it stops the application again:
+
+```bash
+(
+set -euo pipefail
+umask 077
+version=<version>
+backup="backups/manual_update_$(date -u +%Y%m%dT%H%M%SZ)"
+git fetch origin tag "v$version"
+git show "v$version:app/BUILD_IDENTITY.json" | grep -F '"product":"filterest"' | grep -F '"channel":"stable"' \
+  | grep -F '"artifact_type":"runtime"' | grep -F "\"app_version\":\"$version\"" > /dev/null
+git merge-base --is-ancestor HEAD "v$version"
+docker compose --env-file keys/docker.env stop app
+mkdir "$backup"
+docker compose --env-file keys/docker.env exec -T db sh -c \
+  'pg_dump --format=custom --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "$backup/database.dump"
+docker compose --env-file keys/docker.env exec -T db pg_restore --list < "$backup/database.dump" > /dev/null
+tar -czf "$backup/files.tar.gz" data/storage data/storage_deleted data/bootstrap keys config projects
+git merge --ff-only "v$version"
+ENABLE_SQL_MIGRATIONS=true EASELECT_MIGRATION_FILE_ALLOWLIST= ./filterest docker start --for-update &&
+  ./filterest docker ready-check --expect-version "$version" ||
+  { ./filterest docker stop-app; exit 1; }
+)
+```
+
+Later updates use `./filterest update`.
+
 A Gitless copy can be installed and run normally, but it cannot use this
 Git-verified updater. Upgrade it from a complete reviewed release folder and
 carry forward only the five operator-owned directories after taking a backup.
