@@ -117,6 +117,15 @@ Standalone native defaults are `https://localhost:8100` and Vite/HMR port `9100`
 Read the actual target and readiness output; a default does not prove a running
 service. Preserve configured data, credentials and session identity on restart.
 
+The native port is chosen in one place,
+[native_development_ports.env](../../server_tools/lib/native_development_ports.env):
+this product's port, and the private Easelect checkout's port for that checkout
+alone. The launchers, installer, updater, agent tools, Vite and the browser tools
+all read it there, and a configured `APP_PORT`, `PORT` or `EASELECT_PORT`, or an
+explicit `-p`, still wins. Change a port in that file only;
+[test_native_development_ports.py](../../testing/python/test_native_development_ports.py)
+fails when a tool states the choice itself.
+
 The maintained lifecycle code is
 [ctl_main.sh](../../server_tools/ctl/ctl_main.sh), reached through
 [root ctl](../../../ctl) and [app/ctl](../../ctl). Native and the public

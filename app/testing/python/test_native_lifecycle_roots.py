@@ -17,6 +17,8 @@ import time
 
 import pytest
 
+from installation_fixture_files import LIFECYCLE_LIBRARY_FILES
+
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = SOURCE_ROOT / "server_tools/install_filterest.sh"
@@ -30,6 +32,13 @@ SETUP_RUNTIME_PATHS = SOURCE_ROOT / "server_tools/lib/setup_runtime_paths.sh"
 SCAFFOLD = SOURCE_ROOT / "server_tools/scaffold.sh"
 CTL_LAUNCHER = SOURCE_ROOT / "ctl"
 WORKER_LAUNCHER = SOURCE_ROOT / "worker_agent"
+
+
+def copy_lifecycle_libraries(app_root: Path) -> None:
+    for relative_path in LIFECYCLE_LIBRARY_FILES:
+        destination = app_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SOURCE_ROOT / relative_path, destination)
 
 
 def source_snapshot(root: Path) -> dict[str, str]:
@@ -108,9 +117,14 @@ def copy_ctl_probe(application_root: Path) -> None:
     """Install the real app launcher around a minimal lifecycle probe."""
 
     shutil.copy2(CTL_LAUNCHER, application_root / "ctl")
-    helper = application_root / "server_tools/lib/python_bytecode_cache.sh"
-    helper.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(SOURCE_ROOT / "server_tools/lib/python_bytecode_cache.sh", helper)
+    # The launcher reads the standalone native port through the port library.
+    for relative_path in (
+        "server_tools/lib/python_bytecode_cache.sh",
+        *LIFECYCLE_LIBRARY_FILES,
+    ):
+        helper = application_root / relative_path
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SOURCE_ROOT / relative_path, helper)
     resolver = application_root / "server_tools/ctl/lib/resolve_env.sh"
     resolver.parent.mkdir(parents=True, exist_ok=True)
     resolver.write_text(
@@ -264,14 +278,7 @@ def test_nested_installer_dry_run_preserves_app_tree(tmp_path: Path) -> None:
     app_root = installation_root / "app"
     (app_root / "server_tools/lib").mkdir(parents=True)
     shutil.copy2(INSTALLER, app_root / "server_tools/install_filterest.sh")
-    shutil.copy2(
-        SOURCE_ROOT / "server_tools/lib/easelect_private_paths.sh",
-        app_root / "server_tools/lib/easelect_private_paths.sh",
-    )
-    shutil.copy2(
-        SOURCE_ROOT / "server_tools/lib/filterest_paths.py",
-        app_root / "server_tools/lib/filterest_paths.py",
-    )
+    copy_lifecycle_libraries(app_root)
     shutil.copy2(SOURCE_ROOT / "go.mod", app_root / "go.mod")
     shutil.copy2(SOURCE_ROOT / "VERSION_APP", app_root / "VERSION_APP")
     shutil.copy2(SOURCE_ROOT / "VERSION_DB", app_root / "VERSION_DB")
@@ -295,6 +302,9 @@ def test_nested_installer_dry_run_preserves_app_tree(tmp_path: Path) -> None:
     )
 
     assert "Filterest installation completed" in completed.stdout
+    # The public product's native port, read from native_development_ports.env.
+    assert "Browser address: https://localhost:8100/first-run" in completed.stdout
+    assert "Open: https://localhost:8100/first-run" in completed.stdout
     assert source_snapshot(app_root) == before
 
 
@@ -316,14 +326,7 @@ def test_nested_updater_dry_run_verifies_app_without_mutation(tmp_path: Path) ->
     app_root = seed / "app"
     (app_root / "server_tools/lib").mkdir(parents=True)
     shutil.copy2(UPDATER, app_root / "server_tools/update_filterest.sh")
-    shutil.copy2(
-        SOURCE_ROOT / "server_tools/lib/easelect_private_paths.sh",
-        app_root / "server_tools/lib/easelect_private_paths.sh",
-    )
-    shutil.copy2(
-        SOURCE_ROOT / "server_tools/lib/filterest_paths.py",
-        app_root / "server_tools/lib/filterest_paths.py",
-    )
+    copy_lifecycle_libraries(app_root)
     (app_root / "server_tools/install_filterest.sh").write_text(
         "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8"
     )
@@ -537,7 +540,7 @@ FAKE_UPDATE_TOOLS = {
     "pg_dump": (
         "#!/usr/bin/env bash\n"
         "set -eu\n"
-        "printf 'pg_dump\\n' >> \"$FILTEREST_TEST_LOG\"\n"
+        "printf 'pg_dump %s\\n' \"$*\" >> \"$FILTEREST_TEST_LOG\"\n"
         "while [ \"$#\" -gt 0 ]; do\n"
         "    if [ \"$1\" = --file ]; then printf 'native dump' > \"$2\"; shift 2; else shift; fi\n"
         "done\n"
@@ -577,12 +580,11 @@ def build_update_fixture(tmp_path: Path, profile: str) -> dict[str, object]:
     for relative_path in (
         "server_tools/update_filterest.sh",
         "server_tools/run_filterest_docker.sh",
-        "server_tools/lib/easelect_private_paths.sh",
-        "server_tools/lib/filterest_paths.py",
         "docker/docker-compose.yml",
         ".env.example",
     ):
         shutil.copy2(SOURCE_ROOT / relative_path, app_root / relative_path)
+    copy_lifecycle_libraries(app_root)
     shutil.copy2(SOURCE_ROOT.parent / "compose.yml", seed / "compose.yml")
     for recorder in (
         app_root / "server_tools/install_filterest.sh",
@@ -855,8 +857,9 @@ def test_docker_updater_changes_nothing_when_the_dump_fails(tmp_path: Path) -> N
 @pytest.mark.parametrize(
     ("change", "expected_error"),
     (
-        ("native-marker", "both a native setup marker"),
-        ("empty-native-marker", "both a native setup marker"),
+        ("native-marker", "records both a Docker installation"),
+        ("empty-native-marker", "records both a Docker installation"),
+        ("native-settings", "records both a Docker installation"),
         ("inherited-setting", "COMPOSE_PROJECT_NAME"),
         # Matching today, but the update rewrites it before the restart.
         ("inherited-matching-version", "FILTEREST_APP_VERSION"),
@@ -875,6 +878,10 @@ def test_docker_updater_refuses_ambiguous_installations_before_any_change(
         )
     elif change == "empty-native-marker":
         (checkout / "data/runtime/filterest-setup-complete").write_text("", encoding="utf-8")
+    elif change == "native-settings":
+        # A native setup that stopped before its completion marker.
+        native_settings = checkout / "keys/filterest_runtime/development_environment.env"
+        native_settings.write_text("FILTEREST_INSTALL_PROFILE=development\n", encoding="utf-8")
     elif change == "inherited-matching-version":
         extra_environment["FILTEREST_APP_VERSION"] = "8.50.0"
     else:
@@ -1084,6 +1091,10 @@ def test_native_updater_applies_the_release_for_each_profile(
         ],
     )
     assert not [call for call in calls if call.startswith("docker")]
+    # The backup keeps the restricted roles' grants: a restore needs them.
+    [dump_call] = [call.split() for call in calls if call.startswith("pg_dump")]
+    assert {"--format=custom", "--no-owner"} <= set(dump_call)
+    assert "--no-privileges" not in dump_call
     assert git_output(checkout, "rev-parse", "HEAD") == fixture["target_commit"]
     assert (checkout / "data/runtime/filterest-setup-complete").read_text(
         encoding="utf-8"
@@ -1533,6 +1544,10 @@ def test_fresh_nested_development_layout_runs_root_node_commands_without_app_bri
     shutil.copy2(
         SOURCE_ROOT / "server_tools/lib/project_python_venv.sh",
         app_root / "server_tools/lib/project_python_venv.sh",
+    )
+    shutil.copy2(
+        SOURCE_ROOT / "server_tools/lib/installation_records.sh",
+        app_root / "server_tools/lib/installation_records.sh",
     )
     (app_root / "package.json").write_text(
         json.dumps(

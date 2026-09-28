@@ -18,7 +18,16 @@ NC='\033[0m'
 
 # Default values
 LOG_FILE="${FILTEREST_LOG_FILE_OVERRIDE:-server_output.log}"
-PORT=${EASELECT_PORT:-${FILTEREST_STANDALONE_DEFAULT_PORT:-8082}}
+if ! declare -F filterest_native_default_port >/dev/null; then
+    # shellcheck source=../../lib/filterest_port_preflight.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/../../lib/filterest_port_preflight.sh"
+fi
+# A launcher-supplied port first; without one, the checkout's own native
+# development port (native_development_ports.env), 8082 in private Easelect.
+PORT="${EASELECT_PORT:-${FILTEREST_STANDALONE_DEFAULT_PORT:-}}"
+if [[ -z "$PORT" ]]; then
+    PORT="$(filterest_native_default_port "${PROJECT_ROOT:-.}")"
+fi
 LOCAL_BINARY_DIR="${FILTEREST_RUNTIME_ROOT:-${PROJECT_ROOT:-.}/runtime}/bin"
 LOCAL_BINARY_PATH="$LOCAL_BINARY_DIR/easelect_dev"
 : "${EASELECT_RUNTIME_ENV_FILE:=${PROJECT_ROOT:-.}/.env}"
@@ -78,7 +87,9 @@ _standalone_configured_backend_port() {
     configured="$(_read_local_env_value "APP_PORT" "$env_file")"
     [[ -n "$configured" ]] || configured="$(_read_local_env_value "PORT" "$env_file")"
     [[ -n "$configured" ]] || configured="$(_read_local_env_value "EASELECT_PORT" "$env_file")"
-    printf '%s' "${configured:-${FILTEREST_STANDALONE_DEFAULT_PORT:-8100}}"
+    [[ -n "$configured" ]] || configured="${FILTEREST_STANDALONE_DEFAULT_PORT:-}"
+    [[ -n "$configured" ]] || configured="$(filterest_native_default_port "$PROJECT_ROOT")"
+    printf '%s' "$configured"
 }
 
 _standalone_configured_vite_port() {

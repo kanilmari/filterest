@@ -11,6 +11,9 @@ RUN npm ci
 
 COPY frontend/ ./frontend/
 COPY server_tools/lib/easelect_private_paths.mjs ./server_tools/lib/easelect_private_paths.mjs
+# The Vite configuration takes its development port from the shared port rule.
+COPY server_tools/lib/native_development_ports.env ./server_tools/lib/native_development_ports.env
+COPY server_tools/scripts/local_filterest_target.cjs ./server_tools/scripts/local_filterest_target.cjs
 RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build
 
 FROM golang:1.26.5-alpine3.24 AS backend-builder

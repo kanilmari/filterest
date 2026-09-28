@@ -48,6 +48,7 @@ export FILTEREST_NODE_MODULES_ROOT="$INSTALLATION_ROOT/data/runtime/node/node_mo
 export NODE_PATH="$FILTEREST_NODE_MODULES_ROOT"
 export PATH="$FILTEREST_NODE_MODULES_ROOT/.bin:$PATH"
 export FILTEREST_TEST_CREDENTIAL_FILE="${FILTEREST_TEST_CREDENTIAL_FILE:-$INSTALLATION_ROOT/keys/filterest_runtime/dev_env_test_creds.txt}"
-export FILTEREST_E2E_BASE_URL="${FILTEREST_E2E_BASE_URL:-https://localhost:8100}"
+# Browser tools default to this installation's native port themselves
+# (local_filterest_target.cjs); an operator's FILTEREST_E2E_BASE_URL still wins.
 
 cd "$APPLICATION_ROOT" && exec "$APPLICATION_ROOT/filterest" "$@"

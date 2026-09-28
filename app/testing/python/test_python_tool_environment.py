@@ -19,7 +19,12 @@ class PythonToolEnvironmentTest(unittest.TestCase):
         app = root / "app"
         (app / "server_tools/lib").mkdir(parents=True)
         (app / "server_tools/ctl/lib").mkdir(parents=True)
-        for relative in ("filterest", "server_tools/lib/project_python_venv.sh", "server_tools/lib/python_bytecode_cache.sh"):
+        for relative in (
+            "filterest",
+            "server_tools/lib/project_python_venv.sh",
+            "server_tools/lib/python_bytecode_cache.sh",
+            "server_tools/lib/installation_records.sh",
+        ):
             shutil.copy2(SOURCE / relative, app / relative)
         shutil.copy2(INSTALLATION / "filterest", root / "filterest")
         (app / "go.mod").write_text("module fixture\n")

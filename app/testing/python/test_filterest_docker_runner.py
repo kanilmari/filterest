@@ -67,6 +67,15 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             # Compose calls carry --project-directory, --file and --env-file first.
             "if [ \"${1:-}\" = compose ] && [ \"${2:-}\" = --project-directory ]; then\n"
             "    shift 7\n"
+            # Runs the database container's own shell command against a fake
+            # container pg_dump, so the argument boundaries are the real ones.
+            "    if [ -n \"${FILTEREST_DOCKER_TEST_CONTAINER_BIN:-}\" ] && "
+            "[ \"$1 $2 $3 $4 $5\" = 'exec -T db sh -c' ]; then\n"
+            "        shift 4\n"
+            "        POSTGRES_USER=container_owner POSTGRES_DB=container_database "
+            "POSTGRES_PASSWORD=container-only-password "
+            "PATH=\"$FILTEREST_DOCKER_TEST_CONTAINER_BIN:$PATH\" exec sh \"$@\"\n"
+            "    fi\n"
             "    case \"$*\" in\n"
             "        'ps --status running --services')\n"
             "            printf '%b' \"${FILTEREST_DOCKER_TEST_SERVICES-app\\\\ndb\\\\n}\" ;;\n"
@@ -713,6 +722,52 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         self.assertNotEqual(repeated.returncode, 0)
         self.assertIn("already exists", repeated.stderr)
         self.assertEqual(target.read_text(encoding="utf-8"), "PGDMP test dump")
+
+    def test_dump_database_keeps_privileges_and_passes_each_option_separately(self) -> None:
+        self.run_runner("setup")
+        settings = self.settings()
+        container_bin = self.root / "container-bin"
+        container_bin.mkdir()
+        pg_dump_log = self.root / "container-pg_dump.log"
+        container_pg_dump = container_bin / "pg_dump"
+        container_pg_dump.write_text(
+            "#!/bin/sh\n"
+            "for argument in \"$@\"; do\n"
+            "    printf 'argument %s\\n' \"$argument\" >> \"$FILTEREST_DOCKER_TEST_PG_DUMP_LOG\"\n"
+            "done\n"
+            "printf 'password %s\\n' \"${PGPASSWORD:+set}\" >> \"$FILTEREST_DOCKER_TEST_PG_DUMP_LOG\"\n"
+            "printf 'PGDMP container dump'\n",
+            encoding="utf-8",
+        )
+        container_pg_dump.chmod(0o755)
+        target = self.root / "backups/database.dump"
+
+        self.run_update_action(
+            "dump-database",
+            "--output",
+            str(target),
+            extra_environment={
+                "FILTEREST_DOCKER_TEST_CONTAINER_BIN": str(container_bin),
+                "FILTEREST_DOCKER_TEST_PG_DUMP_LOG": str(pg_dump_log),
+            },
+        )
+
+        # One line per argument: an option glued to its neighbour, or the first
+        # option taken as the shell's $0, would show here.
+        self.assertEqual(
+            pg_dump_log.read_text(encoding="utf-8").splitlines(),
+            [
+                "argument --format=custom",
+                "argument --no-owner",
+                "argument --username=container_owner",
+                "argument --dbname=container_database",
+                "password set",
+            ],
+        )
+        self.assertEqual(target.read_text(encoding="utf-8"), "PGDMP container dump")
+        docker_calls = self.docker_log.read_text(encoding="utf-8")
+        self.assertNotIn("container-only-password", docker_calls)
+        self.assertNotIn(settings["DB_ADMIN_PASSWORD"], docker_calls)
 
     def test_dump_database_leaves_nothing_when_the_dump_is_empty_or_unreadable(self) -> None:
         self.run_runner("setup")

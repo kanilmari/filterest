@@ -28,10 +28,11 @@ make_probe_launcher() {
     local path="$1"
     {
         printf '%s\n' '#!/usr/bin/env bash'
-        printf '%s\n' 'printf '\''pwd=%s\nroot=%s\nbuild=%s\nruntime=%s\nlog=%s\nnode=%s\nnodepath=%s\ngomod=%s\ngocache=%s\nargs=%s\n'\'' \'
+        printf '%s\n' 'printf '\''pwd=%s\nroot=%s\nbuild=%s\nruntime=%s\nlog=%s\nnode=%s\nnodepath=%s\ngomod=%s\ngocache=%s\nport=%s\nargs=%s\n'\'' \'
         printf '%s\n' '    "$PWD" "$FILTEREST_ROOT" "$FILTEREST_BUILD_ROOT_OVERRIDE" \'
         printf '%s\n' '    "$FILTEREST_RUNTIME_ROOT_OVERRIDE" "$FILTEREST_LOG_FILE_OVERRIDE" \'
-        printf '%s\n' '    "$FILTEREST_NODE_MODULES_ROOT" "$NODE_PATH" "$GOMODCACHE" "$GOCACHE" "$*"'
+        printf '%s\n' '    "$FILTEREST_NODE_MODULES_ROOT" "$NODE_PATH" "$GOMODCACHE" "$GOCACHE" \'
+        printf '%s\n' '    "${FILTEREST_STANDALONE_DEFAULT_PORT:-}" "$*"'
     } > "$path"
     chmod +x "$path"
 }
@@ -42,8 +43,13 @@ assert_root_launcher_contract() {
     local sandbox="$TEST_ROOT/$launcher_name"
     local output=""
 
-    mkdir -p "$sandbox/app"
+    mkdir -p "$sandbox/app/server_tools/lib"
     cp "$INSTALLATION_ROOT/$launcher_name" "$sandbox/$launcher_name"
+    # The root ctl reads the standalone native port through the port library.
+    cp "$SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh" \
+        "$SOURCE_ROOT/server_tools/lib/native_development_ports.env" \
+        "$SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh" \
+        "$sandbox/app/server_tools/lib/"
     : > "$sandbox/app/go.mod"
     : > "$sandbox/app/VERSION_APP"
     make_probe_launcher "$sandbox/app/$delegated_name"
@@ -66,6 +72,9 @@ assert_root_launcher_contract() {
     assert_equal "$sandbox/data/runtime/go/module-cache" "$(sed -n 's/^gomod=//p' <<< "$output")" "$launcher_name Go module cache"
     assert_equal "$sandbox/data/runtime/go/build-cache" "$(sed -n 's/^gocache=//p' <<< "$output")" "$launcher_name Go build cache"
     assert_equal "start --root /subcommand/root" "$(sed -n 's/^args=//p' <<< "$output")" "$launcher_name argument forwarding"
+    if [[ "$launcher_name" == "ctl" ]]; then
+        assert_equal "8100" "$(sed -n 's/^port=//p' <<< "$output")" "ctl standalone native port"
+    fi
 }
 
 assert_root_launcher_contract filterest filterest

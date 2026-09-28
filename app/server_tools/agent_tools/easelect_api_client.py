@@ -26,12 +26,22 @@ try:
         resolve_embedded_project_root,
     )
     from ..lib.filterest_paths import is_private_easelect_source_checkout
+    from ..lib.native_origin import (
+        is_local_native_base_url,
+        native_development_base_url,
+        native_development_port,
+    )
 except ImportError:
     from server_tools.lib.easelect_private_paths import (
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
     from server_tools.lib.filterest_paths import is_private_easelect_source_checkout
+    from server_tools.lib.native_origin import (
+        is_local_native_base_url,
+        native_development_base_url,
+        native_development_port,
+    )
 
 
 PROJECT_ROOT = str(resolve_embedded_project_root(CANONICAL_FILTEREST_ROOT))
@@ -40,8 +50,8 @@ _IS_EMBEDDED_EASELECT_CHECKOUT = is_private_easelect_source_checkout(
 )
 
 
-LOCAL_NATIVE_PORT = 8082 if _IS_EMBEDDED_EASELECT_CHECKOUT else 8100
-DEFAULT_BASE_URL = f"https://localhost:{LOCAL_NATIVE_PORT}"
+LOCAL_NATIVE_PORT = native_development_port(PROJECT_ROOT)
+DEFAULT_BASE_URL = native_development_base_url(PROJECT_ROOT)
 FILTEREST_API_BASE_URL_ENV = "FILTEREST_API_BASE_URL"
 FILTEREST_API_USERNAME_ENV = "FILTEREST_API_USERNAME"
 FILTEREST_API_PASSWORD_ENV = "FILTEREST_API_PASSWORD"
@@ -158,8 +168,7 @@ def _project_is_private_easelect(project_root):
 
 
 def _default_base_url_for_project(project_root):
-    port = 8082 if _project_is_private_easelect(project_root) else 8100
-    return f"https://localhost:{port}"
+    return native_development_base_url(project_root)
 
 
 def resolve_api_base_url(project_root=PROJECT_ROOT, environment=None):
@@ -195,14 +204,14 @@ class EaselectAPIClient:
         resolved_environment = os.environ if environment is None else environment
         self.project_root = project_root
         self.is_embedded_easelect = _project_is_private_easelect(project_root)
-        self.local_native_port = 8082 if self.is_embedded_easelect else 8100
+        self.local_native_port = native_development_port(project_root)
         self.base_url = _validate_api_base_url(str(
             base_url
             or resolve_api_base_url(project_root, resolved_environment)
         ).rstrip("/"))
-        self.is_local_native_target = self._is_local_native_base_url(
+        self.is_local_native_target = is_local_native_base_url(
             self.base_url,
-            native_port=self.local_native_port,
+            self.local_native_port,
         )
 
         # Protected project files and generic development variables belong only
@@ -300,9 +309,9 @@ class EaselectAPIClient:
             else embedded_easelect
         )
         if (
-            EaselectAPIClient._is_local_native_base_url(
+            is_local_native_base_url(
                 base_url,
-                native_port=native_port,
+                LOCAL_NATIVE_PORT if native_port is None else native_port,
             )
             or resolved_environment.get(INSECURE_TLS_ENV) == "1"
             or (
@@ -313,26 +322,6 @@ class EaselectAPIClient:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
         return context
-
-    @staticmethod
-    def _is_local_native_base_url(base_url, native_port=None):
-        """Recognize only the exact native loopback origin used for development."""
-        try:
-            parsed = urllib.parse.urlsplit(base_url)
-            port = parsed.port
-        except (TypeError, ValueError):
-            return False
-
-        return (
-            parsed.scheme == "https"
-            and parsed.hostname in {"localhost", "127.0.0.1"}
-            and port == (LOCAL_NATIVE_PORT if native_port is None else native_port)
-            and parsed.username is None
-            and parsed.password is None
-            and parsed.path in {"", "/"}
-            and not parsed.query
-            and not parsed.fragment
-        )
 
     def _url(self, path, query=None):
         if not path.startswith("/"):

@@ -102,8 +102,12 @@ describe('immutable app test-output contract', () => {
     const targetSource = source('server_tools/scripts/local_filterest_target.cjs');
     expect(targetSource).toContain('.git');
     expect(targetSource).toContain('VERSION_EASELECT');
-    expect(targetSource).toContain('https://localhost:8100');
-    expect(targetSource).toContain('https://localhost:8082');
+    // The ports come from the one file every language reads; the numbers are
+    // named here on purpose, so a wrong value in that file cannot pass.
+    expect(targetSource).toContain('native_development_ports.env');
+    const nativePorts = source('server_tools/lib/native_development_ports.env');
+    expect(nativePorts).toMatch(/^FILTEREST_NATIVE_PORT=8100$/m);
+    expect(nativePorts).toMatch(/^EASELECT_NATIVE_PORT=8082$/m);
 
     for (const relativePath of [
       'playwright.config.ts',

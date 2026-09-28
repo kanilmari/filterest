@@ -27,6 +27,7 @@ try:
         resolve_embedded_project_root,
     )
     from ..lib.filterest_paths import is_private_easelect_source_checkout
+    from ..lib.native_origin import is_local_native_base_url, native_development_port
     from .easelect_api_client import (
         DEFAULT_BASE_URL,
         EaselectAPIClient,
@@ -39,6 +40,10 @@ except ImportError:
         resolve_embedded_project_root,
     )
     from server_tools.lib.filterest_paths import is_private_easelect_source_checkout
+    from server_tools.lib.native_origin import (
+        is_local_native_base_url,
+        native_development_port,
+    )
     from server_tools.agent_tools.easelect_api_client import (
         DEFAULT_BASE_URL,
         EaselectAPIClient,
@@ -75,14 +80,9 @@ def _require_native_credential_target(
     """Allow credential setup only against this product's exact loopback origin."""
 
     resolved_project = Path(project_root or PROJECT_ROOT).resolve()
-    native_port = (
-        8082 if is_private_easelect_source_checkout(resolved_project) else 8100
-    )
+    native_port = native_development_port(resolved_project)
     normalized_target = str(target or "").strip().rstrip("/")
-    if not EaselectAPIClient._is_local_native_base_url(
-        normalized_target,
-        native_port=native_port,
-    ):
+    if not is_local_native_base_url(normalized_target, native_port):
         raise AgentCredentialConfigurationError(
             "persistent agent credentials can be configured only through the "
             f"exact native loopback service on port {native_port}"

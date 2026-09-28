@@ -26,6 +26,14 @@ cd "$INSTALLATION_ROOT"
 # shellcheck source=server_tools/lib/easelect_private_paths.sh
 source "$SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
 
+# Prints this checkout's native development port, the one the installer writes
+# into BASE_URL and shows; native_development_ports.env holds the rule.
+installation_native_port() {
+    # shellcheck source=server_tools/lib/filterest_port_preflight.sh
+    source "$SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
+    filterest_native_default_port "$INSTALLATION_ROOT"
+}
+
 resolve_installation_private_paths() {
     easelect_resolve_private_paths "$INSTALLATION_ROOT"
     if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
@@ -158,6 +166,7 @@ choose_profile() {
 }
 
 show_plan() {
+    local native_port=""
     if [[ "$DEPENDENCIES_ONLY" -eq 1 ]]; then
         printf '\nFilterest development dependency plan\n'
         printf '  Install declared Go, Node, Python test packages and Playwright Chromium.\n'
@@ -165,18 +174,18 @@ show_plan() {
         printf '  No database, protected settings, service or full-setup changes.\n\n'
         return
     fi
+    native_port="$(installation_native_port)" || return
     printf '\nFilterest installation plan\n'
     printf '  Profile: %s\n' "$PROFILE"
     printf '  Common runtime: PostgreSQL %s, PostGIS, pgvector, local configuration, demo database\n' "$POSTGRESQL_MAJOR"
     if [[ "$PROFILE" == "admin" ]]; then
         printf '  Application: verified prebuilt Filterest binary\n'
         printf '  Development tools: Go and Node.js will not be installed\n'
-        printf '  Browser address: https://localhost:8100/first-run\n'
     else
         printf '  Application: built locally from source\n'
         printf '  Development tools: Go, Node.js, npm packages, and Playwright Chromium\n'
-        printf '  Browser address: https://localhost:8100/first-run\n'
     fi
+    printf '  Browser address: https://localhost:%s/first-run\n' "$native_port"
     printf '  Administrator account: created in the guarded browser form\n'
     printf '  Privileges: sudo is used only when host packages or the initial PostgreSQL role are missing\n\n'
 }
@@ -542,7 +551,8 @@ configure_environment_files() {
     local value=""
     local file=""
     local environment_type="dev"
-    local base_url="https://localhost:8100"
+    local native_port=""
+    local base_url=""
     local local_tls=""
     local secret_keys=(
         DB_ADMIN_PASSWORD DB_PASSWORD DB_READONLY_PASSWORD DB_CONFIDENTIAL_PASSWORD
@@ -553,6 +563,8 @@ configure_environment_files() {
         printf '  [dry-run] create an isolated installation identity, protected runtime configuration, and random local secrets\n'
         return
     fi
+    native_port="$(installation_native_port)" || return
+    base_url="https://localhost:${native_port}"
     "$SOURCE_ROOT/server_tools/scaffold.sh" setup
     resolve_installation_private_paths
     runtime_file="$EASELECT_RUNTIME_ENV_FILE"
@@ -606,6 +618,7 @@ configure_environment_files() {
 # bootstrap so repeated installations cannot keep serving an obsolete DB.
 stop_stale_checkout_server_before_install() {
     local port=""
+    local native_port=""
 
     if [[ "$DRY_RUN" -eq 1 ]]; then
         printf '  [dry-run] retire an obsolete same-checkout Filterest server before installation\n'
@@ -614,7 +627,8 @@ stop_stale_checkout_server_before_install() {
     # shellcheck source=server_tools/lib/filterest_port_preflight.sh
     source "$SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
     resolve_installation_private_paths
-    port="$(filterest_configured_port 8100 "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
+    native_port="$(installation_native_port)" || return
+    port="$(filterest_configured_port "$native_port" "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
     filterest_preflight_stale_checkout_listener "$port" "$PROJECT_ROOT" "$ASSUME_YES"
 }
 
@@ -879,6 +893,7 @@ bootstrap_database_and_dependencies() {
 
 start_installed_filterest() {
     local port=""
+    local native_port=""
     [[ "$NO_START" -eq 0 ]] || return 0
     if [[ "$DRY_RUN" -eq 1 ]]; then
         printf '  [dry-run] start Filterest and verify the first-run browser address\n'
@@ -892,13 +907,15 @@ start_installed_filterest() {
         # shellcheck source=server_tools/lib/filterest_port_preflight.sh
         source "$SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
         resolve_installation_private_paths
-        port="$(filterest_configured_port 8100 "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
+        native_port="$(installation_native_port)" || return
+        port="$(filterest_configured_port "$native_port" "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
         filterest_preflight_port "$port"
         "$INSTALLATION_ROOT/ctl" -p "$port"
     fi
 }
 
 main() {
+    local native_port=""
     parse_arguments "$@"
     choose_profile
     if [[ "$DEPENDENCIES_ONLY" -eq 1 && "$PROFILE" != "development" ]]; then
@@ -935,12 +952,9 @@ main() {
     bootstrap_database_and_dependencies
     start_installed_filterest
 
+    native_port="$(installation_native_port)" || return
     printf '\nFilterest installation completed.\n'
-    if [[ "$PROFILE" == "admin" ]]; then
-        printf 'Open: https://localhost:8100/first-run\n'
-    else
-        printf 'Open: https://localhost:8100/first-run\n'
-    fi
+    printf 'Open: https://localhost:%s/first-run\n' "$native_port"
 }
 
 if [[ "${FILTEREST_INSTALLER_LIBRARY_ONLY:-0}" != "1" ]]; then

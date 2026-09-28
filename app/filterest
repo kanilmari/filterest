@@ -21,6 +21,8 @@ filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
 # Admin-only installs retain their host Python and distro-provided dependencies.
 # shellcheck source=server_tools/lib/project_python_venv.sh
 source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/project_python_venv.sh"
+# shellcheck source=server_tools/lib/installation_records.sh
+source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/installation_records.sh"
 FILTEREST_COMMAND_PYTHON=python3
 if [[ -x "$FILTEREST_PROJECT_PYTHON" ]]; then
     FILTEREST_COMMAND_PYTHON="$FILTEREST_PROJECT_PYTHON"
@@ -87,12 +89,32 @@ resolve_environment() {
 	easelect_resolve_private_paths "$PROJECT_ROOT"
 }
 
+# Prints the install profile this folder records: "docker" from keys/docker.env,
+# otherwise the native profile named in the protected native settings.
+# Refuses a folder that records both, so no command starts or sets it up the wrong
+# way. Callers read it once with a plain assignment: a failure then stops the
+# command instead of reading as "no profile", which would start the installer.
 installed_profile() {
     local candidate_file=""
     local profile=""
+    local docker_profile=""
+    local record=""
+    local native_records=()
 
-    resolve_environment
-    for candidate_file in "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE"; do
+    resolve_environment || return
+    docker_profile="$(filterest_docker_install_profile \
+        "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" "$PROJECT_ROOT")" || return
+    if [[ "$docker_profile" == "docker" ]]; then
+        while IFS= read -r record; do
+            native_records+=("$record")
+        done < <(filterest_native_setup_records "$RUNTIME_ROOT/filterest-setup-complete" \
+            "${EASELECT_DEV_ENV_FILE:-}" "${EASELECT_RUNTIME_ENV_FILE:-}")
+        filterest_refuse_mixed_installation "$docker_profile" \
+            ${native_records[@]+"${native_records[@]}"} || return
+        printf 'docker'
+        return
+    fi
+    for candidate_file in "${EASELECT_DEV_ENV_FILE:-}" "${EASELECT_RUNTIME_ENV_FILE:-}"; do
         [[ -f "$candidate_file" ]] || continue
         profile="$(grep -E '^FILTEREST_INSTALL_PROFILE=' "$candidate_file" 2>/dev/null | tail -1 | cut -d'=' -f2- || true)"
         if [[ -n "$profile" ]]; then
@@ -160,11 +182,10 @@ completed_setup_profile() {
 # Between generated-release identity, protected settings, and the completion marker it detects
 # both fresh downloads and interrupted installations without consulting an uninitialized DB.
 filterest_setup_is_required() {
-    local configured_profile=""
+    local configured_profile="$1"
     local completed_profile=""
 
 	[[ -f "$CANONICAL_FILTEREST_ROOT/VERSION_APP" ]] || return 1
-    configured_profile="$(installed_profile)"
     completed_profile="$(completed_setup_profile)"
     [[ -n "$configured_profile" && "$configured_profile" == "$completed_profile" ]] && return 1
     return 0
@@ -174,8 +195,7 @@ filterest_setup_is_required() {
 # Between the start command and profile-aware installer it preserves a partial setup's profile
 # and lets the installer resume safely before starting the application itself.
 run_setup_before_first_start() {
-    local profile=""
-    profile="$(installed_profile)"
+    local profile="$1"
     [[ -n "$profile" ]] || profile="$(completed_setup_profile)"
 
     printf 'Welcome to Filterest!\n'
@@ -190,10 +210,12 @@ run_setup_before_first_start() {
 # build the server or perform database-backed startup work.
 preflight_development_start_port() {
     local port=""
+    local default_port=""
     resolve_environment
     # shellcheck source=server_tools/lib/filterest_port_preflight.sh
 	source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/filterest_port_preflight.sh"
-    port="$(filterest_configured_port 8100 "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
+    default_port="$(filterest_native_default_port "$PROJECT_ROOT")"
+    port="$(filterest_configured_port "$default_port" "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
     filterest_preflight_port "$port"
 }
 
@@ -212,6 +234,11 @@ case "$command_name" in
         exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" "$@"
         ;;
     setup)
+        profile="$(installed_profile)"
+        if [[ "$profile" == "docker" ]]; then
+            printf 'error: this installation runs in Docker; prepare it with ./filterest docker setup, or start it with ./filterest docker start\n' >&2
+            exit 2
+        fi
         # Setup is already owned by the canonical Filterest source even while
         # unrelated lifecycle commands still use outer Easelect bridges.
         exec "$CANONICAL_FILTEREST_ROOT/server_tools/install_filterest.sh" "$@"
@@ -220,16 +247,21 @@ case "$command_name" in
         exec "$CANONICAL_FILTEREST_ROOT/server_tools/update_filterest.sh" "$@"
         ;;
     start|ctl)
-        if [[ "$(installed_profile)" == "docker" ]]; then
+        profile="$(installed_profile)"
+        if [[ "$profile" == "docker" ]]; then
+            if [[ "${1:-}" == "--stop" ]]; then
+                printf 'error: this installation runs in Docker; stop it with ./filterest docker stop\n' >&2
+                exit 2
+            fi
             exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" start "$@"
         fi
-        if start_action_was_requested "$@" && filterest_setup_is_required; then
-            run_setup_before_first_start
+        if start_action_was_requested "$@" && filterest_setup_is_required "$profile"; then
+            run_setup_before_first_start "$profile"
         fi
         if start_action_was_requested "$@"; then
             enable_local_public_schema_repairs
         fi
-        if [[ "$(installed_profile)" == "admin" ]]; then
+        if [[ "$profile" == "admin" ]]; then
 			exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_admin.sh" "$@"
         fi
         if start_action_was_requested "$@"; then
@@ -238,6 +270,10 @@ case "$command_name" in
 		exec "$CANONICAL_FILTEREST_ROOT/ctl" "$@"
         ;;
     status)
+        profile="$(installed_profile)"
+        if [[ "$profile" == "docker" ]]; then
+            exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" status "$@"
+        fi
         resolve_environment
         exec "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/agent_tools/dev_status.py" "$@"
         ;;

@@ -4,6 +4,52 @@
 # Bridges installer/startup approval with captured process identity and ownership checks.
 # Exists so stale or replaced processes cannot redirect shutdown signals to unrelated work.
 
+# Prints a checkout's native development port before any setting: the private
+# Easelect checkout's own port, otherwise the public product's, both read from
+# native_development_ports.env, which the Python and JavaScript tools read too.
+# The project root is one the caller has already resolved. A configured APP_PORT,
+# PORT or EASELECT_PORT (filterest_configured_port) or an explicit -p still wins.
+filterest_native_default_port() {
+    local project_root="$1"
+    local library_root=""
+    local ports_file=""
+    local line=""
+    local filterest_port=""
+    local easelect_port=""
+
+    library_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+    ports_file="$library_root/native_development_ports.env"
+    if [[ ! -f "$ports_file" ]]; then
+        printf 'error: the native development ports file is missing: %s\n' "$ports_file" >&2
+        return 1
+    fi
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            FILTEREST_NATIVE_PORT=*) filterest_port="${line#*=}" ;;
+            EASELECT_NATIVE_PORT=*) easelect_port="${line#*=}" ;;
+        esac
+    done < "$ports_file" || return 1
+    # The same rule as native_origin.py and local_filterest_target.cjs: digits
+    # naming a port from 1 to 65535.
+    if [[ ! "$filterest_port" =~ ^0*[0-9]{1,5}$ || ! "$easelect_port" =~ ^0*[0-9]{1,5}$ ]] \
+        || (( 10#$filterest_port < 1 || 10#$filterest_port > 65535 \
+            || 10#$easelect_port < 1 || 10#$easelect_port > 65535 )); then
+        printf 'error: %s must name both native development ports (1-65535)\n' "$ports_file" >&2
+        return 1
+    fi
+    filterest_port=$((10#$filterest_port))
+    easelect_port=$((10#$easelect_port))
+    if ! declare -F easelect_is_private_source_checkout >/dev/null; then
+        # shellcheck source=server_tools/lib/easelect_private_paths.sh
+        source "$library_root/easelect_private_paths.sh"
+    fi
+    if easelect_is_private_source_checkout "$project_root"; then
+        printf '%s' "$easelect_port"
+    else
+        printf '%s' "$filterest_port"
+    fi
+}
+
 filterest_configured_port() {
     local default_port="$1"
     shift

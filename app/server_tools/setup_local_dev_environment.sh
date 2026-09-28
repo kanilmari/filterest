@@ -1078,7 +1078,11 @@ else
 fi
 ACCESS_PORT="$(get_env_value "APP_PORT")"
 ACCESS_PORT="${ACCESS_PORT:-$(get_env_value "PORT")}"
-ACCESS_PORT="${ACCESS_PORT:-8082}"
+if [[ -z "$ACCESS_PORT" ]]; then
+    # shellcheck source=server_tools/lib/filterest_port_preflight.sh
+    source "$SCRIPT_DIR/lib/filterest_port_preflight.sh"
+    ACCESS_PORT="$(filterest_native_default_port "$PROJECT_ROOT")"
+fi
 if [[ "$SETUP_PROFILE" == "admin" ]]; then
     echo -e "  Access: ${BLUE}https://localhost:${ACCESS_PORT}${NC}"
 else

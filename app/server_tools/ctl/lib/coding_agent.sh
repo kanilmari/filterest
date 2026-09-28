@@ -35,7 +35,9 @@ coding_agent_port() {
     [[ -n "$port" ]] || port="$(_coding_agent_env_value APP_PORT)"
     [[ -n "$port" ]] || port="$(_coding_agent_env_value PORT)"
     [[ -n "$port" ]] || port="$(_coding_agent_env_value EASELECT_PORT)"
-    printf '%s' "${port:-${PORT:-8082}}"
+    [[ -n "$port" ]] || port="${PORT:-}"
+    [[ -n "$port" ]] || port="$(filterest_native_default_port "$PROJECT_ROOT")"
+    printf '%s' "$port"
 }
 
 # Resolve every runner path for one local site. Sets CODING_AGENT_* variables.

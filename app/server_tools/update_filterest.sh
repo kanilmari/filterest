@@ -23,6 +23,12 @@ fi
 APP_VERSION_FILE="$SOURCE_ROOT/VERSION_APP"
 DB_VERSION_FILE="$SOURCE_ROOT/VERSION_DB"
 DOCKER_RUNNER="$SOURCE_ROOT/server_tools/run_filterest_docker.sh"
+# shellcheck source=server_tools/lib/database_dump_options.sh
+source "$SOURCE_ROOT/server_tools/lib/database_dump_options.sh"
+# shellcheck source=server_tools/lib/installation_records.sh
+source "$SOURCE_ROOT/server_tools/lib/installation_records.sh"
+# shellcheck source=server_tools/lib/filterest_port_preflight.sh
+source "$SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
 cd "$INSTALLATION_ROOT"
 
 ASSUME_YES=0
@@ -264,21 +270,25 @@ docker_runner() {
     FILTEREST_PROJECT_ROOT_OVERRIDE="$INSTALLATION_ROOT" "$DOCKER_RUNNER" "$@"
 }
 
-# Chooses the native or Docker update path from the installation's own records.
-# Between the native setup marker and keys/docker.env, which only the Docker runner reads.
-# Why: a folder that claims both, or a marker without exactly one known profile,
-# would be stopped, backed up and restarted the wrong way, so it is refused
-# before anything changes.
+# Chooses the native or Docker update path from the installation's own records,
+# with the launcher's rule for a folder that records both (installation_records.sh).
+# Why: such a folder, or a native marker without exactly one known profile, would
+# be stopped, backed up and restarted the wrong way, so it is refused before
+# anything changes. A native update also needs its setup to have completed.
 resolve_profile() {
     local marker="$RUNTIME_ROOT/filterest-setup-complete"
     local docker_profile=""
+    local record=""
+    local native_records=()
 
-    if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" && -f "$DOCKER_RUNNER" ]]; then
-        docker_profile="$(docker_runner profile)"
+    if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
+        docker_profile="$(filterest_docker_install_profile "$DOCKER_RUNNER" "$INSTALLATION_ROOT")"
     fi
+    while IFS= read -r record; do
+        native_records+=("$record")
+    done < <(filterest_native_setup_records "$marker" "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")
+    filterest_refuse_mixed_installation "$docker_profile" ${native_records[@]+"${native_records[@]}"}
     if [[ -e "$marker" || -L "$marker" ]]; then
-        [[ "$docker_profile" != "docker" ]] || \
-            die "this installation has both a native setup marker ($marker) and Docker settings (keys/docker.env); keep only the one that matches how Filterest runs here"
         [[ -f "$marker" && ! -L "$marker" ]] || die "the native setup marker is not a regular file: $marker"
         PROFILE=""
         if [[ "$(grep -c '^profile=' "$marker" || true)" == "1" ]]; then
@@ -420,7 +430,7 @@ create_backup() {
         port="${port:-5432}"
         database="${database:-filterest}"
         [[ -n "$user" && -n "$password" ]] || die "database backup credentials are missing"
-        PGPASSWORD="$password" pg_dump --format=custom --no-owner --no-privileges \
+        PGPASSWORD="$password" pg_dump "${FILTEREST_DATABASE_DUMP_OPTIONS[@]}" \
             --host "$host" --port "$port" --username "$user" --dbname "$database" \
             --file "$backup_dir/database.dump"
         chmod 600 "$backup_dir/database.dump"
@@ -526,7 +536,9 @@ start_updated_runtime() {
             "$SOURCE_ROOT/server_tools/run_filterest_admin.sh" start 9>&-
     else
         port="$(environment_value APP_PORT)"
-        port="${port:-8100}"
+        if [[ -z "$port" ]]; then
+            port="$(filterest_native_default_port "$INSTALLATION_ROOT")"
+        fi
         ENABLE_SQL_MIGRATIONS=true EASELECT_MIGRATION_FILE_ALLOWLIST="" \
             "$INSTALLATION_ROOT/ctl" -p "$port" 9>&-
     fi
@@ -546,6 +558,8 @@ main() {
     require_command python3
     require_command tar
     verify_checkout
+    # Path resolution only; the native settings it names are also native records.
+    resolve_private_environment
     resolve_profile
     if [[ "$PROFILE" != "docker" ]]; then
         require_command pg_dump
@@ -556,8 +570,6 @@ main() {
     if [[ "$PROFILE" == "docker" ]]; then
         # Settings only: a dry run neither needs nor calls Docker.
         docker_runner update-preflight --dry-run
-    else
-        resolve_private_environment
     fi
     show_plan
     if [[ "$PROFILE" == "docker" ]]; then

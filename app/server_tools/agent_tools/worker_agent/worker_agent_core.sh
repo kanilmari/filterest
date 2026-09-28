@@ -53,7 +53,13 @@ CODEX_REQUIRED_VERSION="${WORKER_CODEX_VERSION:-$DEFAULT_CODEX_VERSION}"
 CODEX_ACTUAL_VERSION=""
 DEFAULT_OUTPUT_DIR_REL="${FILTEREST_WORKER_OUTPUT_DIR_REL:-agent_tasks/_artifacts/worker_runs}"
 LEGACY_OUTPUT_DIR_REL="${FILTEREST_WORKER_LEGACY_OUTPUT_DIR_REL:-agent_tasks/20_in_progress}"
-WORKER_DEV_PORT="${FILTEREST_WORKER_DEV_PORT:-8100}"
+WORKER_DEV_PORT="${FILTEREST_WORKER_DEV_PORT:-}"
+if [[ -z "$WORKER_DEV_PORT" ]]; then
+    # The workspace's own native development server (native_development_ports.env).
+    # shellcheck source=../../lib/filterest_port_preflight.sh
+    source "$FILTEREST_ROOT/server_tools/lib/filterest_port_preflight.sh"
+    WORKER_DEV_PORT="$(filterest_native_default_port "$WORKSPACE_ROOT")"
+fi
 WORKER_DB_PORT="${FILTEREST_WORKER_DB_PORT:-5432}"
 PROGRESS_MARKER_SECONDS="${WORKER_AGENT_PROGRESS_MARKER_SECONDS:-20}"
 PROGRESS_MINUTE_SECONDS="${WORKER_AGENT_PROGRESS_MINUTE_SECONDS:-60}"

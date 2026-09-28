@@ -31,12 +31,17 @@ try:
         resolve_embedded_project_root,
     )
     from ..lib.filterest_paths import is_private_easelect_source_checkout
+    from ..lib.native_origin import is_local_native_base_url, native_port_for_checkout
 except ImportError:
     from server_tools.lib.easelect_private_paths import (
         resolve_easelect_private_paths,
         resolve_embedded_project_root,
     )
     from server_tools.lib.filterest_paths import is_private_easelect_source_checkout
+    from server_tools.lib.native_origin import (
+        is_local_native_base_url,
+        native_port_for_checkout,
+    )
 
 
 PROJECT_ROOT = str(resolve_embedded_project_root(_CANONICAL_FILTEREST_ROOT))
@@ -70,7 +75,7 @@ WORKER_AGENT_COMMAND = os.environ.get(
 REMOTE_TEST_ADMIN_FALLBACK_ENV = "DB_TASK_ALLOW_REMOTE_TEST_ADMIN_FALLBACK"
 REMOTE_DEV_CREDENTIALS_ENV = "DB_TASK_ALLOW_REMOTE_DEV_CREDENTIALS"
 INSECURE_TLS_ENV = "DB_TASK_ALLOW_INSECURE_TLS"
-LOCAL_NATIVE_PORT = 8082 if _IS_EMBEDDED_EASELECT_CHECKOUT else 8100
+LOCAL_NATIVE_PORT = native_port_for_checkout(_IS_EMBEDDED_EASELECT_CHECKOUT)
 FILTEREST_API_BASE_URL_ENV = "FILTEREST_API_BASE_URL"
 FILTEREST_API_USERNAME_ENV = "FILTEREST_API_USERNAME"
 FILTEREST_API_PASSWORD_ENV = "FILTEREST_API_PASSWORD"
@@ -88,7 +93,7 @@ def _resolve_db_task_base_url(environment=None):
     """Keep the task-specific target while gating Easelect's legacy target."""
 
     resolved_environment = os.environ if environment is None else environment
-    default_port = 8082 if _IS_EMBEDDED_EASELECT_CHECKOUT else 8100
+    default_port = native_port_for_checkout(_IS_EMBEDDED_EASELECT_CHECKOUT)
     target = (
         resolved_environment.get("DB_TASK_BASE_URL")
         or resolved_environment.get(FILTEREST_API_BASE_URL_ENV)
@@ -768,22 +773,8 @@ def _load_credentials():
 
 def _is_local_native_base_url(base_url):
     """Allow implicit development credentials only for the native loopback app."""
-    try:
-        parsed = urllib.parse.urlsplit(base_url)
-        port = parsed.port
-    except (TypeError, ValueError):
-        return False
-
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname in {"localhost", "127.0.0.1"}
-        and port == LOCAL_NATIVE_PORT
-        and parsed.username is None
-        and parsed.password is None
-        and parsed.path in {"", "/"}
-        and not parsed.query
-        and not parsed.fragment
-    )
+    # The port is read at call time, so a test may pin LOCAL_NATIVE_PORT.
+    return is_local_native_base_url(base_url, LOCAL_NATIVE_PORT)
 
 
 def _credential_attempts(creds, *, base_url=None, environment=None):

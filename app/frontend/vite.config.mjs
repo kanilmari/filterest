@@ -14,6 +14,7 @@ import {
   resolveEaselectPrivatePaths,
   resolveFilterestProjectBoundary,
 } from '../server_tools/lib/easelect_private_paths.mjs';
+import localFilterestTarget from '../server_tools/scripts/local_filterest_target.cjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const canonicalApplicationRoot = resolve(__dirname, '..');
@@ -33,7 +34,7 @@ export function resolveViteProjectLayout(
     projectRoot,
     privateEaselect,
     nestedStandalone,
-    backendPort: privateEaselect ? 8082 : 8100,
+    backendPort: localFilterestTarget.nativeDevelopmentPort(privateEaselect),
     defaultSiteName: privateEaselect ? 'Easelect' : 'Filterest',
     viteCacheDir: nestedStandalone
       ? join(projectRoot, 'data', 'runtime', 'node', 'vite-cache')

@@ -85,7 +85,7 @@ Database access:
 - The database is a live development instance. Treat it as read-only.
 
 Building and running the server:
-- Use \`./ctl -p ${WORKER_PORT}\` if you need to start the server (NOT port 8082 — that is the dev server).
+- Use \`./ctl -p ${WORKER_PORT}\` if you need to start the server (NOT port ${WORKER_DEV_PORT} — that is the dev server).
 - After verifying, ALWAYS stop the server: \`./ctl --stop\` or \`fuser -k ${WORKER_PORT}/tcp\`.
 - For compile-only checks (preferred): \`go build ./backend/...\` and \`npm run build\`.
 

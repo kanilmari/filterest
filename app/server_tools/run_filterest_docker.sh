@@ -7,6 +7,8 @@
 set -euo pipefail
 
 SCRIPT_APPLICATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck source=server_tools/lib/database_dump_options.sh
+source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/database_dump_options.sh"
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$(cd "$SCRIPT_APPLICATION_ROOT/.." && pwd -P)}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
 APPLICATION_ROOT="$PROJECT_ROOT/app"
@@ -654,7 +656,7 @@ dump_database() {
         die "Dump folder must be an existing real directory: $target_directory"
     [[ ! -e "$target" && ! -L "$target" ]] || die "Dump target already exists: $target"
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        compose exec -T db pg_dump --format=custom --no-owner
+        compose exec -T db pg_dump "${FILTEREST_DATABASE_DUMP_OPTIONS[@]}"
         return
     fi
 
@@ -663,11 +665,11 @@ dump_database() {
     trap 'exit 130' INT TERM
     DUMP_PARTIAL="$(mktemp "${target}.partial.XXXXXX")"
     # The container expands its own POSTGRES_* values, so no credential passes
-    # through this shell, its process arguments, or the dump folder. Privileges
-    # stay in the dump: the grants made at first start and by the running
-    # application exist nowhere else, and the limited roles need them after a restore.
+    # through this shell, its process arguments, or the dump folder. The shared
+    # options arrive as separate arguments after the "sh" that fills $0.
     compose exec -T db sh -c \
-        'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+        'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump "$@" --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+        sh "${FILTEREST_DATABASE_DUMP_OPTIONS[@]}" \
         > "$DUMP_PARTIAL" || status=$?
     if [[ "$status" -eq 0 && ! -s "$DUMP_PARTIAL" ]]; then
         status=1

@@ -18,7 +18,8 @@ list_instances() {
     git_branch=$(git -C "$PROJECT_ROOT" branch --show-current 2>/dev/null || echo "unknown")
 
     # ── Collect local dev data ────────────────────────────────────────────────
-    local local_app_port="8082"
+    local local_app_port=""
+    local_app_port="$(filterest_native_default_port "$PROJECT_ROOT")"
     if [[ -f "$EASELECT_DEV_ENV_FILE" ]]; then
         local env_port=$(grep -E "^APP_PORT=" "$EASELECT_DEV_ENV_FILE" 2>/dev/null | cut -d'=' -f2)
         [[ -n "$env_port" ]] && local_app_port="$env_port"

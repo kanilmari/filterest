@@ -52,7 +52,10 @@ configured_port() {
     local port=""
     port="$(env_value APP_PORT || true)"
     [[ -n "$port" ]] || port="$(env_value PORT || true)"
-    printf '%s' "${port:-8100}"
+    if [[ -z "$port" ]]; then
+        port="$(filterest_native_default_port "$PROJECT_ROOT")" || return
+    fi
+    printf '%s' "$port"
 }
 
 running_pid() {

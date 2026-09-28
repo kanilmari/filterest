@@ -12,7 +12,8 @@ export FILTEREST_TEST_CREDENTIAL_FILE="$INSTALLATION_ROOT/keys/filterest_runtime
 export GOWORK=off PYTHONPYCACHEPREFIX="$INSTALLATION_ROOT/data/runtime/python-cache" FILTEREST_RUNTIME_ROOT_OVERRIDE="$INSTALLATION_ROOT/data/runtime"
 export FILTEREST_WORKER_OUTPUT_DIR_REL="data/runtime/agent_tasks/_artifacts/worker_runs"
 export FILTEREST_WORKER_LEGACY_OUTPUT_DIR_REL="data/runtime/agent_tasks/20_in_progress"
-export FILTEREST_WORKER_DEV_PORT="8100"
+# The worker core derives this installation's native port from its workspace.
+unset FILTEREST_WORKER_DEV_PORT
 export FILTEREST_WORKER_DB_PORT="5432"
 export FILTEREST_DATABASE_DISPLAY_COMMAND="./filterest database"
 unset FILTEREST_WORKER_ROUTINE_RUNNER FILTEREST_WORKER_ROUTINES_DIR
