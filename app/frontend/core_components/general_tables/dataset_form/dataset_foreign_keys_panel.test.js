@@ -24,6 +24,7 @@ const {
     readDatasetForeignKeys,
     selectOutgoingForeignKeys,
 } = await import('./dataset_foreign_keys_panel.js');
+const { observeDatasetFormLanguage } = await import('./dataset_form_text.js');
 
 const links = [
     {
@@ -204,10 +205,10 @@ describe('the offer to connect two fields', () => {
         yue: '連接兩個欄位',
     };
     const EXPLANATION_TEXTS = {
-        fi: 'Tämän aineiston rivi osoittaa toisen aineiston riviin, jolloin toisen rivin tiedot voidaan näyttää tässä ja arvo pysyy kelvollisena (viiteavain).',
-        en: "A row of this dataset points at a row of another dataset, so the other row's information can be shown here and the value stays valid (foreign key).",
-        'zh-CN': '本数据集中的一行指向另一个数据集中的一行，这样就能在这里显示另一行的信息，并且该值始终有效（外键）。',
-        yue: '呢個資料集嘅一行會指向另一個資料集嘅一行，噉就可以喺呢度顯示嗰行嘅資料，個值亦會一直有效（外鍵）。',
+        fi: 'Tämän aineiston rivi osoittaa toisen aineiston riviin, jolloin toisen rivin tiedot voidaan näyttää tässä ja arvo pysyy kelvollisena. Linkki kulkee tämän aineiston viittaavasta sarakkeesta toisen aineiston viitattavaan sarakkeeseen. Tunnetaan myös nimellä viiteavain.',
+        en: "A row of this dataset points at a row of another dataset, so the other row's information can be shown here and the value stays valid. The link runs from the referencing column of this dataset to the referenced column of the other one. Also known as a foreign key.",
+        'zh-CN': '本数据集中的一行指向另一个数据集中的一行，这样就能在这里显示另一行的信息，并且该值始终有效。链接从本数据集的引用列指向另一个数据集的被引用列。也称为外键。',
+        yue: '呢個資料集嘅一行會指向另一個資料集嘅一行，噉就可以喺呢度顯示嗰行嘅資料，個值亦會一直有效。連結由呢個資料集嘅引用欄位指向另一個資料集嘅被引用欄位。亦叫做外鍵。',
     };
 
     test.each(Object.keys(BUTTON_TEXTS))('names the act and explains it in %s', async (language) => {
@@ -219,10 +220,27 @@ describe('the offer to connect two fields', () => {
         expect(explanation(panel).textContent).toBe(EXPLANATION_TEXTS[language]);
     });
 
-    test('the explanation names the technical term the developer knows', async () => {
+    test('the explanation names both columns and the technical term the developer knows', async () => {
         const panel = mount({ editing: false });
         await panel.ready;
-        expect(explanation(panel).textContent).toContain('(foreign key)');
+        const text = explanation(panel).textContent;
+        expect(text).toContain('referencing column');
+        expect(text).toContain('referenced column');
+        expect(text).toContain('Also known as a foreign key.');
+    });
+
+    test('a drafted link is labelled in the form\'s own words, not the technical page\'s', async () => {
+        document.documentElement.lang = 'en';
+        const panel = mount({ editing: true });
+        await panel.ready;
+        const [draft] = drafts(panel);
+        const labelOf = (select) => select.closest('label').querySelector('span').textContent;
+
+        expect(labelOf(draft.referencing)).toBe('Referencing column');
+        expect(labelOf(draft.referencedTable)).toBe('Referenced dataset');
+        expect(labelOf(draft.referencedColumn)).toBe('Referenced column');
+        expect(draft.referencing.options[0].textContent).toBe('Choose a column');
+        expect(draft.referencedColumn.options[0].textContent).toBe('Choose a column');
     });
 
     test('an information symbol with a name of its own opens the explanation', async () => {
@@ -254,5 +272,25 @@ describe('the offer to connect two fields', () => {
         expect(addButton(panel)).toBeNull();
         expect(explainButton(panel).closest('.dataset-foreign-keys-title')).not.toBeNull();
         expect(explanation(panel).textContent).toBe(EXPLANATION_TEXTS.en);
+    });
+
+    test('the symbol beside the title survives the form rewriting its texts', async () => {
+        document.documentElement.lang = 'en';
+        const panel = mount();
+        await panel.ready;
+        // The open form rewrites every text at once and again when the language
+        // changes; the title's own text changes, and the symbol stays beside it.
+        const stop = observeDatasetFormLanguage(panel.element);
+        const title = panel.element.querySelector('.dataset-foreign-keys-title');
+        expect(title.textContent).toContain('Links to other datasets');
+        expect(explainButton(panel).closest('.dataset-foreign-keys-title')).toBe(title);
+
+        document.documentElement.lang = 'fi';
+        await vi.waitFor(() => expect(title.textContent).toContain('Linkit toisiin aineistoihin'));
+        expect(explainButton(panel).closest('.dataset-foreign-keys-title')).toBe(title);
+        expect(explainButton(panel).querySelector('.dataset-form-explain-name').textContent)
+            .toBe('Mitä kahden kentän yhdistäminen tarkoittaa?');
+        stop();
+        document.documentElement.lang = 'en';
     });
 });

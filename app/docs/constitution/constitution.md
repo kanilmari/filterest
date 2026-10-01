@@ -14,6 +14,8 @@ Finding these faults is part of maintaining the product, not a favour to it. A p
 
 Design complete features with predictable behavior, clear language and consistent interaction. Preserve supported languages, accessibility, and the application's explicit light and dark themes. Keep detailed visual rules in the design guide and reusable code patterns in the reference implementations.
 
+Report outcomes truthfully. Software says that an operation succeeded only when it did; a failed, skipped or partly completed operation is reported as such and names what did not succeed. Reaching the end of the code is not evidence of success. The development guide sets how one-off scripts meet this; services and the application meet it through their existing error and notification handling, and a false success found anywhere is a defect to fix.
+
 ## 2. Keep one authoritative source and manage the whole data lifecycle
 
 Maintain one authoritative implementation for each capability and one authoritative definition for each setting. Store mutable user and administrator behavior in validated, permission-checked runtime configuration with stable identities. Keep immutable protocols, migrations and safe bootstrap defaults in source.

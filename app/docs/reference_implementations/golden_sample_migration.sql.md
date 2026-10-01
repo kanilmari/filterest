@@ -51,3 +51,13 @@ declare `-- VERSION_DB_OWNER: <owner migration filename>` and must not repeat
 the insert. A few historical repair migrations both delegate authority and
 repeat an idempotent insert; that compatibility exception is not a new-release
 pattern.
+
+Name the owner so it runs last in its release. The runner applies files in
+name order, each in its own transaction, so a history row written first would
+claim the version even when a later file of the release failed. While a
+version is unreleased, a file added to it is named to run before the owner,
+renaming the owner if needed; the ledger of a development database may then
+keep the owner's former name, which the runner ignores. Once a version is
+released, new changes open the next version. 9.9.1 is the example:
+`20260929000001` seeds copy, `20260929000002` repairs, and
+`20260929000003_record_database_release_9_9_1.sql` records the release.

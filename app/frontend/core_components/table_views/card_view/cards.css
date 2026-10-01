@@ -178,7 +178,9 @@ body.dark-mode .card--modern {
 .card--modern .card_description_container {
     display: grid;
     grid-template-columns: 2.35rem minmax(0, 1fr);
-    align-items: start;
+    /* The text sits in the middle of the icon row whatever its line count: one
+       line would otherwise hug the top of the taller icon box. */
+    align-items: center;
     gap: 0.85rem;
     padding: 8px;
     border: 1px solid var(--card-modern-surface-border);
@@ -289,7 +291,7 @@ body.dark-mode .card--modern {
     margin: 0;
     border: 0;
     border-radius: var(--border_radius);
-    background: color-mix(in srgb, var(--bg_color_extreme) 58%, transparent);
+    background: var(--keyword_label_bg_color);
 }
 
 .card--modern .card_modern_info_panel {
@@ -1001,7 +1003,7 @@ body.dark-mode .card--modern {
 }
 
 .keyword_tag {
-    background-color: var(--bg_color);
+    background-color: var(--keyword_label_bg_color);
     border-radius: 10px;
     padding: 1px 3px;
     margin: 3px;

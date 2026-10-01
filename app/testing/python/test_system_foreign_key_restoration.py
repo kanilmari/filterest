@@ -23,6 +23,10 @@ RECORD = MIGRATIONS / "20260926000002_record_system_foreign_key_release.sql"
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 GENERATOR = BOOTSTRAP / "generate_bootstrap.py"
 
+
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
 # The twenty relationships as a production database that has them stores them:
 # child table, constraint name, child column, parent table, parent column, and the
 # delete rule ('a' = NO ACTION, 'c' = CASCADE, 'n' = SET NULL). Ten of the names are
@@ -146,7 +150,8 @@ def test_every_expected_relationship_is_named_in_the_migration():
     for _, constraint_name, _, _, _, _ in EXPECTED:
         assert f"'{constraint_name}'" in text, constraint_name
     assert text.count("-- VERSION_DB: 9.9.0") == 1
-    assert (APP / "VERSION_DB").read_text().strip() == "9.9.0"
+    # The restoration opened 9.9.0, and every later release carries it.
+    assert _version((APP / "VERSION_DB").read_text().strip()) >= (9, 9, 0)
 
 
 @pytest.fixture
@@ -287,5 +292,8 @@ def test_a_new_installation_is_born_with_them_without_running_the_migration(clus
     for name in (RESTORE.name, RECORD.name):
         assert cluster(f"SELECT count(*) FROM system_schema_migrations WHERE filename = '{name}';",
                        database="installed").stdout.strip() == "1", name
-    assert cluster("SELECT count(*) FROM system_db_version WHERE version = '9.9.0';",
+    # A new installation records the release it was generated at, 9.9.0 or later.
+    current = (APP / "VERSION_DB").read_text().strip()
+    assert _version(current) >= (9, 9, 0)
+    assert cluster(f"SELECT count(*) FROM system_db_version WHERE version = '{current}';",
                    database="installed").stdout.strip() == "1"

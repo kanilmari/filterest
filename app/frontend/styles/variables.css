@@ -134,6 +134,9 @@
     --navbar_shadow_color: var(--border-subtle);
 
     --card_border_color: var(--border-subtle);
+    /* Keyword chips on cards and in the article view: a neutral lift that
+       stands apart from the white or near-black card surface in each theme. */
+    --keyword_label_bg_color: hsl(var(--brand-hue) 14% 91%);
     --card_text_max_width: 650px;
     --card_body_gap: 10px;
     --card_image_large_width: 300px;
@@ -206,6 +209,7 @@
 
         /* Specific Dark Mode Mappings */
         --bg_color_extreme: hsl(var(--brand-hue) 20% 5%);
+        --keyword_label_bg_color: hsl(var(--brand-hue) 18% 18%);
         --input_bg_color: var(--bg-surface);
         --bg_color_blended: hsl(var(--brand-hue) 10% 90% / 10%);
         
@@ -249,30 +253,31 @@ body.light-mode {
     
     --navbar_shadow_color: var(--border-subtle);
     --card_border_color: var(--border-subtle);
-    
+    --keyword_label_bg_color: hsl(var(--brand-hue) 14% 91%);
+
     --text_color: var(--text-main);
     --empty_field_text_color: var(--text-muted);
     --border_color: var(--border-strong);
     --table_border_color: var(--border-subtle);
-    
+
     --button_bg_color: var(--bg-surface);
     --button_text_color: var(--text-main);
     --button_hover_bg_color: var(--bg-surface-hover);
     --button_hover_text_color: var(--text-main);
-    
+
     --button_active_bg_color: var(--bg_color_extreme);
     --button_active_text_color: var(--text-main);
     --button_active_border_color: var(--border-strong);
-    
+
     --dropdown_button_bg_color: var(--bg-surface);
     --dropdown_button_text_color: var(--text-main);
     --dropdown_button_hover_bg_color: var(--bg-surface-hover);
     --dropdown_content_bg_color: var(--bg_color_extreme);
-    
+
     --primary_color: var(--color-brand);
     --primary_color_hover: var(--color-brand-hover);
     --primary_text_color: var(--color-brand-text);
-    
+
     --filter_panel_bg: var(--bg-surface);
     --filter_panel_border: var(--border-subtle);
     
@@ -325,30 +330,31 @@ body.dark-mode {
     
     --navbar_shadow_color: var(--border-subtle);
     --card_border_color: var(--border-subtle);
-    
+    --keyword_label_bg_color: hsl(var(--brand-hue) 18% 18%);
+
     --text_color: var(--text-main);
     --empty_field_text_color: var(--text-muted);
     --border_color: var(--border-strong);
     --table_border_color: var(--border-subtle);
-    
+
     --button_bg_color: var(--bg-surface);
     --button_text_color: var(--text-main);
     --button_hover_bg_color: var(--bg-surface-hover);
     --button_hover_text_color: var(--text-main);
-    
+
     --button_active_bg_color: var(--bg_color_extreme);
     --button_active_text_color: var(--text-main);
     --button_active_border_color: var(--border-strong);
-    
+
     --dropdown_button_bg_color: var(--bg-surface);
     --dropdown_button_text_color: var(--text-main);
     --dropdown_button_hover_bg_color: var(--bg-surface-hover);
     --dropdown_content_bg_color: var(--bg_color_extreme);
-    
+
     --primary_color: var(--color-brand);
     --primary_color_hover: var(--color-brand-hover);
     --primary_text_color: var(--color-brand-text);
-    
+
     --filter_panel_border: var(--border-subtle);
 
     /* Framework overrides for Light Mode */

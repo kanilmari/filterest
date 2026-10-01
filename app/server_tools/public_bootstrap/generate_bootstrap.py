@@ -40,13 +40,16 @@ developer_workflow_seed_migrations = (
     "20260919000009_seed_developer_workflow_metadata.sql",
 )
 # Interface copy an upgrade seeds is seeded for a new installation by the same
-# file, after every language row the reviewed sources above provide.
+# file, after every language row the reviewed sources above provide, and in the
+# order an upgrade runs them.
 language_seed_migrations = (
+    "20260919000005_seed_dataset_form_dimension_language_keys.sql",
     "20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql",
     "20260922000004_seed_request_notice_and_interface_language_keys.sql",
     "20260922000005_seed_interface_language_keys_of_9_8_1.sql",
     "20260922000006_seed_dataset_creation_warning_language_key.sql",
     "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
+    "20260929000001_seed_connect_two_fields_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the

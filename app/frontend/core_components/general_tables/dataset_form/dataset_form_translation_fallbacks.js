@@ -201,15 +201,18 @@ const COPY = {
         yue: "連接兩個欄位係咩意思？",
     },
     connect_two_fields_explanation: {
-        fi: "Tämän aineiston rivi osoittaa toisen aineiston riviin, jolloin toisen rivin tiedot voidaan näyttää tässä ja arvo pysyy kelvollisena (viiteavain).",
-        en: "A row of this dataset points at a row of another dataset, so the other row's information can be shown here and the value stays valid (foreign key).",
-        ch: "本数据集中的一行指向另一个数据集中的一行，这样就能在这里显示另一行的信息，并且该值始终有效（外键）。",
-        yue: "呢個資料集嘅一行會指向另一個資料集嘅一行，噉就可以喺呢度顯示嗰行嘅資料，個值亦會一直有效（外鍵）。",
+        fi: "Tämän aineiston rivi osoittaa toisen aineiston riviin, jolloin toisen rivin tiedot voidaan näyttää tässä ja arvo pysyy kelvollisena. Linkki kulkee tämän aineiston viittaavasta sarakkeesta toisen aineiston viitattavaan sarakkeeseen. Tunnetaan myös nimellä viiteavain.",
+        en: "A row of this dataset points at a row of another dataset, so the other row's information can be shown here and the value stays valid. The link runs from the referencing column of this dataset to the referenced column of the other one. Also known as a foreign key.",
+        ch: "本数据集中的一行指向另一个数据集中的一行，这样就能在这里显示另一行的信息，并且该值始终有效。链接从本数据集的引用列指向另一个数据集的被引用列。也称为外键。",
+        yue: "呢個資料集嘅一行會指向另一個資料集嘅一行，噉就可以喺呢度顯示嗰行嘅資料，個值亦會一直有效。連結由呢個資料集嘅引用欄位指向另一個資料集嘅被引用欄位。亦叫做外鍵。",
     },
-    referencing_column: { fi: "Viittaava sarake", en: "Referencing column", ch: "引用列", yue: "參照欄位" },
-    referenced_table: { fi: "Viitattava aineisto", en: "Referenced dataset", ch: "被引用的数据集", yue: "被參照資料集" },
-    referenced_column: { fi: "Viitattava sarake", en: "Referenced column", ch: "被引用的列", yue: "被參照欄位" },
-    select_column: { fi: "Valitse sarake", en: "Choose a column", ch: "选择列", yue: "選擇欄位" },
+    // The form's own labels; the foreign-keys page keeps the shared technical keys.
+    connect_two_fields_referencing_column: { fi: "Viittaava sarake", en: "Referencing column", ch: "引用列", yue: "引用欄位" },
+    connect_two_fields_referenced_dataset: {
+        fi: "Viitattava aineisto", en: "Referenced dataset", ch: "被引用的数据集", yue: "被引用資料集",
+    },
+    connect_two_fields_referenced_column: { fi: "Viitattava sarake", en: "Referenced column", ch: "被引用的列", yue: "被引用欄位" },
+    connect_two_fields_choose_column: { fi: "Valitse sarake", en: "Choose a column", ch: "选择列", yue: "選擇欄位" },
     dataset_select_target: { fi: "Valitse aineisto", en: "Choose a dataset", ch: "选择数据集", yue: "選擇資料集" },
 
     // --- Checks before a new dataset is sent ---

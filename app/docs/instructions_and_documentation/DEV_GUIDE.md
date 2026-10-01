@@ -304,6 +304,43 @@ namespaces or protocols. Database prefixes such as `system_`, `app_`, and
 `dev_`, migration ordering, public API fields, environment keys, release
 artifacts, and toolchain-reserved filenames remain controlled contracts.
 
+### Truthful Outcome Reporting
+
+This applies the Constitution's outcome principle
+([section 1](../constitution/constitution.md#1-build-a-dependable-understandable-product))
+to one-off scripts and commands: installation, update, backup, repair and
+maintenance scripts, and command-line tools that run a sequence of steps and
+then exit. That is where false success messages have occurred.
+
+Long-running services and the application already meet the principle through
+their existing error, logging and notification handling. Do not add step
+counters or a second reporting layer to them. When a false success is found
+there, fix that case within the existing handling.
+
+For one-off scripts and commands:
+
+- **Success is earned, not reached.** Print a success message only after every
+  step reported success. Decide it from the recorded step results, never from
+  the fact that execution reached the last line.
+- **Number the steps.** A script with several steps numbers them as they start
+  (`2/5`) and ends with the tally, for example `Completed: 5/5 steps succeeded.`
+- **Every other outcome has its own ending.** A failed, skipped or partly
+  completed step ends with a different final message that names the step, for
+  example `NOT completed: 3/5 steps succeeded; failed: backup check.`, and the
+  script or command exits with a non-zero status.
+- **Continuing after a failure is a decision, not a default.** Stop at the first
+  failure when later steps depend on it. When independent checks deliberately
+  continue, the ending still names the failures and the exit status is non-zero.
+- **Keep the status honest through wrappers.** A pipeline, `|| true`, a
+  background job or a helper function must not turn a failure into success. In
+  languages where a function returns everything it prints, such as PowerShell,
+  send native command output to the console and return the exit code separately.
+
+The [script outcome sample](../reference_implementations/golden_sample_script_outcome.sh.md)
+shows the pattern in Bash. Before writing the first such script in another
+language, add that language's sample beside it, so every language follows the
+same contract.
+
 ### Go (Backend)
 - **Error Messages**: Print in red, start with lowercase. `log.Printf("\033[31merror: %v\033[0m", err)`
 - **Transactions**: New code should use `WithLazyTransaction` (alias `WithLazyTx`) — opens a connection only on first `dbutils.RequireTx(ctx)` / `dbutils.GetTx(ctx)`. `WithTransaction` is kept as a backward-compat alias and now delegates to `WithLazyTransaction`; do not introduce new callers.

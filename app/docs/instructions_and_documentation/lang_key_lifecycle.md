@@ -295,8 +295,13 @@ Their upgrade migration fills missing values while preserving nonempty
 site-authored translations. Finnish and English are recorded as reviewed;
 legacy Chinese/Cantonese fallbacks do not constitute approval of new locales.
 A seed migration can instead be run by the bootstrap itself: list it in
-`language_seed_migrations` in `generate_bootstrap.py`, so the copy is written
-once. `20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql`
+`language_seed_migrations` in `generate_bootstrap.py`, in the order an upgrade
+runs the files, so the copy is written once. A seed left off that list still
+reaches a new installation as applied, because the bootstrap records every
+migration as already embodied, so its rows never arrive there:
+`20260919000005_seed_dataset_form_dimension_language_keys.sql` was missing from
+new installations this way until 9.9.1.
+`20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql`
 does this, and also shows how to retire wording generated from a key's name:
 only that exact text is replaced, never a translation a site has changed.
 `20260922000005_seed_interface_language_keys_of_9_8_1.sql` retires

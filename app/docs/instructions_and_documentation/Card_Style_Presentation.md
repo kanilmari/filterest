@@ -78,6 +78,11 @@ Borders, icon backgrounds, keyword chips, selection states and photo contrast
 treatments remain distinct UI elements. The card reveals 20% of the page
 background as already composed; it does not override the dataset image's own
 separate fade. Local compact-summary states retain their own selection treatment.
+Keyword chips, on cards in both styles and in the article view, take one theme
+token, `--keyword_label_bg_color` in `styles/variables.css`: a neutral lift with
+its own light and dark value, so a chip stands apart from the white or
+near-black card surface. In Glowy the description text is centred vertically
+against its icon, whether it has one line or several.
 These are fixed style values, not additional palette settings. Card image
 presentation, field visibility, translated values, URL/view selection and navigation remain separate
 settings and behaviors.

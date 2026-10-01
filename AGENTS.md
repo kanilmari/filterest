@@ -101,6 +101,12 @@ matter?", "is anything blocked?" and "what is needed next?" before describing
 files and commands. Never claim completion you have not verified; say what you
 actually checked.
 
+Separate the running narration from the closing summary. When a turn ends with
+a summary of results, state, decisions or next steps, start that summary after
+a horizontal rule on its own line: an empty line, then `---`. Without the empty
+line, `---` directly under a sentence turns that sentence into a heading. The
+person then sees at a glance where the working notes end and the summary begins.
+
 ## Relationship To The Maintenance Shell
 
 Some installations compose Filterest from a private maintenance shell that adds

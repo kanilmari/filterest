@@ -99,8 +99,12 @@ export function createDatasetForeignKeyPanel({
     const section = document.createElement("section");
     section.className = "dataset-foreign-keys dataset-form-section";
     section.dataset.testid = "dataset-foreign-keys";
-    const title = setDatasetFormText(document.createElement("div"), "dataset_foreign_keys_title");
+    // The title's text is an element of its own: the form rewrites every text
+    // when it opens and when the language changes (observeDatasetFormLanguage),
+    // which would otherwise wipe the information symbol placed beside it.
+    const title = document.createElement("div");
     title.className = "dataset-foreign-keys-title dataset-form-section-title";
+    title.appendChild(setDatasetFormText(document.createElement("span"), "dataset_foreign_keys_title"));
     section.appendChild(title);
     const explainer = createConnectTwoFieldsExplainer();
     // The explanation belongs beside the button that offers the act. Editing an
@@ -149,22 +153,24 @@ export function createDatasetForeignKeyPanel({
     function addDraft() {
         const row = document.createElement("div");
         row.className = "dataset-foreign-key-draft dataset-form-fields";
-        const referencing = labelledSelect(row, "referencing_column", "fk_referencing_column");
-        const referencedTable = labelledSelect(row, "referenced_table", "fk_referenced_dataset");
-        const referencedColumn = labelledSelect(row, "referenced_column", "fk_referenced_column");
-        fill(referencing, "select_column", columnNames());
+        // The form names these in its own words, so its keys are its own: the
+        // technical foreign-keys page keeps the older wording under the shared keys.
+        const referencing = labelledSelect(row, "connect_two_fields_referencing_column", "fk_referencing_column");
+        const referencedTable = labelledSelect(row, "connect_two_fields_referenced_dataset", "fk_referenced_dataset");
+        const referencedColumn = labelledSelect(row, "connect_two_fields_referenced_column", "fk_referenced_column");
+        fill(referencing, "connect_two_fields_choose_column", columnNames());
         fill(referencedTable, "dataset_select_target", targets);
-        placeholder(referencedColumn, "select_column");
+        placeholder(referencedColumn, "connect_two_fields_choose_column");
 
         // The column choices follow the form the person is editing, so a column
         // added in the same save can carry the new link.
-        referencing.addEventListener("focus", () => fill(referencing, "select_column", columnNames()));
+        referencing.addEventListener("focus", () => fill(referencing, "connect_two_fields_choose_column", columnNames()));
         referencedTable.addEventListener("change", async () => {
-            placeholder(referencedColumn, "select_column");
+            placeholder(referencedColumn, "connect_two_fields_choose_column");
             if (!referencedTable.value) return;
             try {
                 const columns = await readColumns(referencedTable.value);
-                fill(referencedColumn, "select_column",
+                fill(referencedColumn, "connect_two_fields_choose_column",
                     (columns || []).map((column) => String(column?.column_name || "")).filter(Boolean));
             } catch (error) {
                 status.show("dataset_foreign_keys_unavailable");
@@ -226,7 +232,7 @@ export function createDatasetForeignKeyPanel({
         .then(([names, links]) => {
             targets = (Array.isArray(names) ? names : []).map(String);
             for (const draft of draftRows) {
-                fill(draft.referencing, "select_column", columnNames());
+                fill(draft.referencing, "connect_two_fields_choose_column", columnNames());
                 fill(draft.referencedTable, "dataset_select_target", targets);
             }
             if (stored) renderExisting(Array.isArray(links) ? links : []);
