@@ -105,3 +105,25 @@ func TestApplicationRuntimeFailsClosedOnRowGroupRuntimePermissionsBeforeTraffic(
 		t.Fatalf("row-group permission failure must terminate startup before traffic")
 	}
 }
+
+func TestApplicationRuntimeFailsClosedOnRuntimeRoleWriteRevocationsBeforeTraffic(t *testing.T) {
+	source := readApplicationRuntimeSource(t)
+	migrationIndex := strings.Index(source, "startup.RunEnabledMigrations")
+	rowGroupIndex := strings.Index(source, "backend.EnsureRowGroupRuntimeRolePermissions")
+	revocationIndex := strings.Index(source, "backend.EnsureGuestAndPrivilegeViewWriteRevocations")
+	reconcileIndex := strings.Index(source, "startup.ReconcileReservedTestUsers")
+	trafficIndex := strings.Index(source, "startRegisteredApps(port, environmentType)")
+	if migrationIndex < 0 || rowGroupIndex < 0 || revocationIndex < 0 || reconcileIndex < 0 || trafficIndex < 0 {
+		t.Fatalf("startup source is missing the runtime role write revocation stage")
+	}
+	// The revocations must follow the migrations, because older migrations grant
+	// the development role names, and must finish before any request arrives.
+	if !(migrationIndex < rowGroupIndex && rowGroupIndex < revocationIndex && revocationIndex < reconcileIndex && reconcileIndex < trafficIndex) {
+		t.Fatalf("runtime role write revocations must run after migrations and before authentication consumers or traffic")
+	}
+
+	revocationBlock := source[revocationIndex:reconcileIndex]
+	if !strings.Contains(revocationBlock, `log.Fatalf("[RUNTIME ROLE WRITE REVOCATIONS] startup reconcile failed: %v", err)`) {
+		t.Fatalf("runtime role write revocation failure must terminate startup before traffic")
+	}
+}

@@ -298,6 +298,12 @@ func Run(options Options) {
 	if err := backend.EnsureRowGroupRuntimeRolePermissions(backend.Db); err != nil {
 		log.Fatalf("[ROW GROUP PERMISSIONS] startup reconcile failed: %v", err)
 	}
+	// After the migrations, which may still grant the development role names,
+	// and before any request: visitors write nothing in the database itself, and
+	// no runtime role may use the privilege-editing views.
+	if err := backend.EnsureGuestAndPrivilegeViewWriteRevocations(backend.Db); err != nil {
+		log.Fatalf("[RUNTIME ROLE WRITE REVOCATIONS] startup reconcile failed: %v", err)
+	}
 
 	if err := startup.ReconcileReservedTestUsers(backend.Db, backend.DbConfidential, environmentType); err != nil {
 		log.Fatalf("Reserved test user reconcile failed: %v", err)

@@ -189,11 +189,28 @@ export function writeBrowserTestCredentialsFile({
   return credentialPath;
 }
 
-/** Reads the reserved browser-test administrator without logging secret values. */
+// The reserved browser-test identities and the credential keys each is read from, first match wins.
+const BROWSER_TEST_IDENTITY_KEYS = {
+  admin: {
+    username: ['TEST_ADMIN_USER', 'FILTEREST_API_USERNAME'],
+    password: ['TEST_ADMIN_PASS', 'FILTEREST_API_PASSWORD'],
+  },
+  user: { username: ['TEST_USER_USER'], password: ['TEST_USER_PASS'] },
+};
+
+/**
+ * Reads one reserved browser-test identity without logging secret values: the
+ * administrator by default, or the ordinary signed-in user with identity 'user'.
+ */
 export function loadBrowserTestCredentials({
   applicationRoot,
   environment = process.env,
+  identity = 'admin',
 } = {}) {
+  const keys = BROWSER_TEST_IDENTITY_KEYS[identity];
+  if (!keys) {
+    throw new Error(`Unknown browser-test identity: ${identity}`);
+  }
   const credentialPath = resolveBrowserTestCredentialFilePath({
     applicationRoot,
     environment,
@@ -205,16 +222,9 @@ export function loadBrowserTestCredentials({
       values.set(match[1].trim(), match[2].trim());
     }
   }
-  const username = (
-    values.get('TEST_ADMIN_USER')
-    || values.get('FILTEREST_API_USERNAME')
-    || ''
-  );
-  const password = (
-    values.get('TEST_ADMIN_PASS')
-    || values.get('FILTEREST_API_PASSWORD')
-    || ''
-  );
+  const firstValue = (names) => names.map((name) => values.get(name)).find(Boolean) || '';
+  const username = firstValue(keys.username);
+  const password = firstValue(keys.password);
   if (!username || !password) {
     throw new Error(
       'Missing browser-test username or password in the configured credential file.',

@@ -227,6 +227,14 @@ export function loadCredentials(): TestCredentials {
 }
 
 /**
+ * Loads the reserved ordinary signed-in test user (TEST_USER_USER and TEST_USER_PASS)
+ * from the same protected credential file, for checks that must not run as an administrator.
+ */
+export function loadUserCredentials(): TestCredentials {
+  return loadBrowserTestCredentials({ applicationRoot: projectRoot, identity: 'user' });
+}
+
+/**
  * Loads the explicit development OTP used by browser login flows.
  * Process configuration wins; ignored native runtime files are local fallbacks.
  * Missing configuration fails loudly instead of silently assuming a backend default.

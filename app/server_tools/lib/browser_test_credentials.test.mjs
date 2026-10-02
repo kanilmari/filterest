@@ -72,6 +72,26 @@ describe('protected browser-test runtime contract', () => {
     expect(resolveBrowserTestOtpCode({ applicationRoot, environment: {} })).toBe('standalone-otp');
   });
 
+  test('the ordinary signed-in test user is read from its own keys, never the administrator', () => {
+    const applicationRoot = path.join(temporaryRoot(), 'filterest', 'app');
+    const protectedRoot = path.join(path.dirname(applicationRoot), 'keys', 'filterest_runtime');
+    markApplication(applicationRoot);
+    fs.mkdirSync(protectedRoot, { recursive: true, mode: 0o700 });
+    fs.chmodSync(protectedRoot, 0o700);
+    const credentialFile = path.join(protectedRoot, 'dev_env_test_creds.txt');
+    fs.writeFileSync(credentialFile, 'TEST_ADMIN_USER=the-admin\nTEST_ADMIN_PASS=admin-password\n', { mode: 0o600 });
+
+    expect(() => loadBrowserTestCredentials({ applicationRoot, environment: {}, identity: 'user' }))
+      .toThrow('Missing browser-test username or password');
+    fs.appendFileSync(credentialFile, 'TEST_USER_USER=the-user\nTEST_USER_PASS=user-password\n');
+    expect(loadBrowserTestCredentials({ applicationRoot, environment: {}, identity: 'user' })).toEqual({
+      username: 'the-user',
+      password: 'user-password',
+    });
+    expect(() => loadBrowserTestCredentials({ applicationRoot, environment: {}, identity: 'guest' }))
+      .toThrow('Unknown browser-test identity: guest');
+  });
+
   test('embedded tools use the outer Easelect credential and protected key root', () => {
     const easelectRoot = path.join(temporaryRoot(), 'easelect');
     const applicationRoot = path.join(easelectRoot, 'filterest', 'app');
