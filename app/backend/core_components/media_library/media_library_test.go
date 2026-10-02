@@ -10,6 +10,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	links "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
+	"easelect/backend/core_components/runtimepaths"
 	"encoding/json"
 	"errors"
 	"os"
@@ -21,18 +22,6 @@ import (
 
 const testAssetID = "174668a1-2efa-45a6-aa6c-d8a4ee8ec069"
 
-func TestCanonicalPathsRejectTraversalAndAlternateIdentity(t *testing.T) {
-	for _, raw := range []string{"media/" + testAssetID + "/original/image.png", "media/" + testAssetID + "/300/image.png", "media/" + testAssetID + "/2160/image.jpg"} {
-		if _, _, _, ok := ParseStoragePath(raw); !ok {
-			t.Errorf("rejected %s", raw)
-		}
-	}
-	for _, raw := range []string{"media/" + testAssetID + "/original/../copy.json", "media/" + testAssetID + "/original/image.svg", "media/" + strings.ToUpper(testAssetID) + "/original/image.png", "media/" + testAssetID + "/copy.json", "media/" + testAssetID + "/x/image.png", "media/" + testAssetID + "/original/image.png?x=1", "media/" + testAssetID + "/original/other.png"} {
-		if _, _, _, ok := ParseStoragePath(raw); ok {
-			t.Errorf("accepted %s", raw)
-		}
-	}
-}
 func seedImage(t *testing.T, root string) {
 	t.Helper()
 	p := filepath.Join(root, "101/1/original")
@@ -337,5 +326,116 @@ func TestDisposableAttachReadRepeatDetachRevocationAndRollback(t *testing.T) {
 	}
 	if AuthorizeStorageRead(db, actor, rolled.AssetID, "image.png") {
 		t.Fatal("rolled back usage readable")
+	}
+}
+
+// A parent whose preview is the only reference to its own stored picture keeps
+// that picture as a gallery row through Attach, gets it back as the preview on
+// Detach, and a parent without a preview returns to having none.
+func TestDisposableAttachDetachKeepsAnOnlyCopyPreview(t *testing.T) {
+	db := disposableDB(t)
+	execSQL := func(sql string, args ...interface{}) {
+		t.Helper()
+		if _, e := db.Exec(sql, args...); e != nil {
+			t.Fatal(e)
+		}
+	}
+	execSQL(fixtureSchema)
+	canonicalResolver, e := os.ReadFile("../../../server_tools/migrations/20260902000004_finalize_row_access_fail_closed_defaults.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	resolverText := string(canonicalResolver)
+	begin := strings.Index(resolverText, "CREATE OR REPLACE FUNCTION public.resolve_effective_row_access(")
+	end := strings.Index(resolverText[begin:], "$$;") + 3
+	execSQL(resolverText[begin : begin+end])
+	specs, _ := json.Marshal(links.BuildTargetInsertSpecs(links.BuildImageFileUploadConfig("specimen_parent", 10, []string{"png"})))
+	execSQL("INSERT INTO system_foreign_key_relations_1_m VALUES(17,102,101,'parent_id',$1)", string(specs))
+	migration, e := os.ReadFile("../../../server_tools/migrations/20260908000006_add_media_asset_registry.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	execSQL(string(migration))
+
+	// The guard looks for the kept picture under the configured storage root.
+	originalPaths := runtimepaths.Current()
+	t.Cleanup(func() { _ = runtimepaths.Configure(originalPaths) })
+	installation := t.TempDir()
+	paths, e := runtimepaths.Resolve(filepath.Join(installation, "app"), installation, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = runtimepaths.Configure(paths); e != nil {
+		t.Fatal(e)
+	}
+	root := paths.StorageRoot
+	seedImage(t, root)
+	if e = os.MkdirAll(filepath.Join(root, "101/4/original"), 0750); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(root, "101/4/original/101_4_4.png"), []byte("only copy"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	execSQL("INSERT INTO specimen_parent VALUES(4,'101_4_4.png')")
+
+	actor := dbutils.NewRequestActorContext(2, "basic")
+	inTransaction := func(work func(ctx context.Context, tx *sql.Tx) error) {
+		t.Helper()
+		lt := dbutils.NewLazyTx(db)
+		ctx := dbutils.SetLazyTx(context.Background(), lt)
+		tx, e := lt.Begin()
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = work(ctx, tx); e != nil {
+			lt.Rollback()
+			t.Fatal(e)
+		}
+		if e = lt.Commit(); e != nil {
+			t.Fatal(e)
+		}
+	}
+	preview := func(parent int64) string {
+		t.Helper()
+		var value sql.NullString
+		if e := db.QueryRow("SELECT cached_image FROM specimen_parent WHERE id=$1", parent).Scan(&value); e != nil {
+			t.Fatal(e)
+		}
+		return value.String
+	}
+
+	// An attached library picture is a new gallery row: it goes after the row's other
+	// pictures, so it becomes the card picture only on a row without one (K120).
+	wantAfterAttach := map[int64]func(Result) string{
+		4: func(Result) string { return "101_4_4.png" },
+		2: func(attached Result) string { return attached.URL },
+	}
+	for _, parent := range []int64{4, 2} {
+		var attached Result
+		inTransaction(func(ctx context.Context, tx *sql.Tx) error {
+			var e error
+			attached, e = Attach(ctx, tx, root, actor, Request{Dataset: "specimen_parent", RelationID: 17, SourceRowID: 9, ParentRowID: parent})
+			return e
+		})
+		if got, want := preview(parent), wantAfterAttach[parent](attached); got != want {
+			t.Fatalf("parent %d preview after attach = %q, want %q", parent, got, want)
+		}
+		inTransaction(func(ctx context.Context, tx *sql.Tx) error {
+			return Detach(ctx, tx, actor, Request{Dataset: "specimen_parent", RelationID: 17, ParentRowID: parent, AssetID: attached.AssetID})
+		})
+	}
+
+	if got := preview(4); got != "101_4_4.png" {
+		t.Fatalf("parent 4 preview after detach = %q, want its own 101_4_4.png", got)
+	}
+	var kept int
+	if e := db.QueryRow("SELECT count(*) FROM specimen_media WHERE parent_id=4 AND filename='101_4_4.png'").Scan(&kept); e != nil {
+		t.Fatal(e)
+	}
+	if kept != 0 {
+		t.Fatalf("gallery rows for 101_4_4.png = %d, want none: the card picture was never replaced, so nothing needed keeping", kept)
+	}
+	if got := preview(2); got != "" {
+		t.Fatalf("parent 2 preview after detach = %q, want none as before", got)
 	}
 }

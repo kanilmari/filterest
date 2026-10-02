@@ -115,6 +115,114 @@ describe("ordinary article image controls", () => {
         button(article, "next").click();
         expect(caption(article).textContent).toBe("Toinen");
     });
+    test("gives an image the fresh rows no longer list way to the first row, a card-only picture first", () => {
+        const article = build("/storage/stale.jpg");
+        syncRowArticleInlineMedia(article, [{ asset_kind: "image", filename: "stale.jpg" }]);
+        const cardOnly = { asset_kind: "image", filename: "https://cdn.example/card.jpg", is_card_only_picture: true };
+        syncRowArticleInlineMedia(article, [cardOnly, ...rows]);
+        expect(article.querySelector(".row_article_inline_media img").src).toBe("https://cdn.example/card.jpg");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("1 / 4");
+        expect(bind.mock.calls.at(-1)[1]).toMatchObject({ activeImageRow: cardOnly, imageRows: [cardOnly, ...rows] });
+    });
+    test("gives a removed image way to the card's picture where the rows list it later, keeping their order", () => {
+        const article = build("/storage/stale.jpg");
+        syncRowArticleInlineMedia(article, [{ asset_kind: "image", filename: "stale.jpg" }]);
+        syncRowArticleInlineMedia(article, rows, { cardPicture: "third.jpg" });
+        expect(article.querySelector(".row_article_inline_media img").src).toContain("/storage/third.jpg");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("3 / 3");
+        expect(caption(article).textContent).toBe("Kolmas");
+        expect(bind.mock.calls.at(-1)[1]).toMatchObject({ activeImageRow: rows[2], imageRows: rows });
+    });
+    test("keeps a browsed image selected while refreshed rows still list it", () => {
+        const article = build();
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "second.jpg" });
+        button(article, "next").click();
+        syncRowArticleInlineMedia(article, [
+            { asset_kind: "image", filename: "https://cdn.example/card.jpg", is_card_only_picture: true },
+            ...rows,
+        ], { fromResponse: true, cardPicture: "https://cdn.example/card.jpg" });
+        expect(caption(article).textContent).toBe("Kolmas");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("4 / 4");
+    });
+    test("starts on the card's picture at the first response even when it also lists the row's earlier picture", () => {
+        const article = build("/storage/first.jpg");
+        // Before the response the row's own picture stands in and stays shown.
+        syncRowArticleInlineMedia(article, [{ asset_kind: "image", filename: "first.jpg" }]);
+        expect(article.querySelector(".row_article_inline_media img").src).toContain("/storage/first.jpg");
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "second.jpg" });
+        expect(article.querySelector(".row_article_inline_media img").src).toContain("/storage/second.jpg");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("2 / 3");
+        expect(caption(article).textContent).toBe("Toinen");
+        expect(bind.mock.calls.at(-1)[1]).toMatchObject({ activeImageRow: rows[1], imageRows: rows });
+    });
+    test("lets the first response decide even after the viewer browsed the row's own pictures", () => {
+        const article = build("/storage/first.jpg");
+        syncRowArticleInlineMedia(article, [rows[0], rows[1]]);
+        button(article, "next").click();
+        expect(caption(article).textContent).toBe("Toinen");
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "first.jpg" });
+        expect(caption(article).textContent).toBe("Ensimmäinen");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("1 / 3");
+    });
+    test("a later response keeps the image the viewer browsed to while it is listed", () => {
+        const article = build("/storage/first.jpg");
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "first.jpg" });
+        button(article, "next").click();
+        // After an upload or a field save the card's picture may change; the viewer's choice stays.
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "third.jpg" });
+        expect(caption(article).textContent).toBe("Toinen");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("2 / 3");
+        // Once the chosen image is gone, the main image takes over again.
+        syncRowArticleInlineMedia(article, [rows[0], rows[2]], { fromResponse: true, cardPicture: "third.jpg" });
+        expect(caption(article).textContent).toBe("Kolmas");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("2 / 2");
+    });
+    // The same path on another host, or with another query, is another picture: its
+    // pixels replace the old ones, and the opening binding follows the same picture.
+    const samePathPictures = [
+        ["another host", "https://old.example/logo.png", "https://new.example/logo.png", "https://new.example/logo.png"],
+        ["another query", "/storage/pic.png?v=1", "pic.png?v=2", "/storage/pic.png?v=2"],
+    ];
+    test.each(samePathPictures)(
+        "the first response replaces the row's earlier picture at the same path on %s",
+        (_label, oldPicture, newPicture, newAddress) => {
+            const article = build(oldPicture);
+            syncRowArticleInlineMedia(article, [{ asset_kind: "image", filename: oldPicture }]);
+            syncRowArticleInlineMedia(
+                article,
+                [{ id: 9, asset_kind: "image", filename: newPicture }],
+                { fromResponse: true, cardPicture: newPicture },
+            );
+            expect(article.querySelector(".row_article_inline_media img").getAttribute("src")).toBe(newAddress);
+            expect(bind.mock.calls.at(-1)[1]).toMatchObject({ imageSrc: newAddress });
+        },
+    );
+    test.each(samePathPictures)(
+        "a later response replaces a main picture the card no longer shows at the same path on %s",
+        (_label, oldPicture, newPicture, newAddress) => {
+            const article = build(oldPicture);
+            syncRowArticleInlineMedia(
+                article,
+                [{ id: 8, asset_kind: "image", filename: oldPicture }],
+                { fromResponse: true, cardPicture: oldPicture },
+            );
+            syncRowArticleInlineMedia(
+                article,
+                [{ id: 9, asset_kind: "image", filename: newPicture }],
+                { fromResponse: true, cardPicture: newPicture },
+            );
+            expect(article.querySelector(".row_article_inline_media img").getAttribute("src")).toBe(newAddress);
+            expect(bind.mock.calls.at(-1)[1]).toMatchObject({ imageSrc: newAddress });
+        },
+    );
+    test("a later response moves an image the viewer did not choose to the card's new picture", () => {
+        const article = build("/storage/first.jpg");
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "first.jpg" });
+        expect(caption(article).textContent).toBe("Ensimmäinen");
+        syncRowArticleInlineMedia(article, rows, { fromResponse: true, cardPicture: "third.jpg" });
+        expect(caption(article).textContent).toBe("Kolmas");
+        expect(article.querySelector("[data-testid='row-article-image-position']").textContent).toBe("3 / 3");
+    });
     test("shows no invented images when no related image is permitted", () => {
         const article = build();
         syncRowArticleInlineMedia(article, []);

@@ -50,12 +50,15 @@ language_seed_migrations = (
     "20260922000006_seed_dataset_creation_warning_language_key.sql",
     "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
     "20260929000001_seed_connect_two_fields_language_keys.sql",
+    "20260929000005_seed_missing_media_check_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
-# same policy. Each of these leaves an existing value alone.
+# same policy. Each of these leaves an existing value alone, except the two run
+# choices of the missing-media check, which its file moves to after-update only.
 setting_seed_migrations = (
     "20260927000001_add_absolute_sign_in_limit.sql",
+    "20260929000004_add_missing_media_check_setting.sql",
 )
 # What an upgrade adds where a site lacks it — a table, or a relationship between
 # two tables — is added for a new installation by the same file, so an upgraded

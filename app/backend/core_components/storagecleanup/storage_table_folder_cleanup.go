@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	media_utils "easelect/backend/core_components/media_utils"
 	"easelect/backend/core_components/runtimepaths"
 )
 
@@ -86,6 +87,15 @@ func normalizeStorageFolderName(folderName string) string {
 	return trimmed
 }
 
+// isDatasetStorageFolderName reports whether one top-level folder can belong to a
+// dataset at all. Dataset folders are named by their table_uid, a canonical positive
+// integer, so the shared image library (media/), service_catalog_logos/, lost+found,
+// backup folders and any shared root added later are never listed, archived or
+// pruned as if they were a deleted dataset's storage.
+func isDatasetStorageFolderName(folderName string) bool {
+	return media_utils.IsCanonicalStorageID(folderName)
+}
+
 // ListUnknownStorageTableFolders returns top-level storage folders whose table_uid no longer exists in system_db_tables.
 func ListUnknownStorageTableFolders() ([]string, error) {
 	storageRoot := runtimepaths.Current().StorageRoot
@@ -104,8 +114,8 @@ func ListUnknownStorageTableFolders() ([]string, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		folderName := normalizeStorageFolderName(entry.Name())
-		if folderName == "" || knownUIDs[folderName] {
+		folderName := entry.Name()
+		if !isDatasetStorageFolderName(folderName) || knownUIDs[folderName] {
 			continue
 		}
 		unknown = append(unknown, folderName)
@@ -135,8 +145,10 @@ func ListArchivedStorageTableFolders() ([]ArchivedStorageFolderStatus, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		folderName := normalizeStorageFolderName(entry.Name())
-		if folderName == "" {
+		// storage_deleted/media/ keeps deleted library pictures recoverable; only
+		// dataset-named folders are archived dataset roots.
+		folderName := entry.Name()
+		if !isDatasetStorageFolderName(folderName) {
 			continue
 		}
 		tableName, isLive := knownTables[folderName]
@@ -243,6 +255,11 @@ func ArchiveUnknownStorageTableFolders() ([]string, error) {
 
 	archived := make([]string, 0, len(unknownFolders))
 	for _, folderName := range unknownFolders {
+		// The listing already applies this rule; repeating it here keeps the move
+		// itself safe if the listing ever changes.
+		if !isDatasetStorageFolderName(folderName) {
+			continue
+		}
 		if err := ArchiveTableStorageFolder(folderName); err != nil {
 			return archived, err
 		}
@@ -287,7 +304,9 @@ func PruneArchivedStorageTableFolders(targetFolders []string) ([]string, error) 
 	storageDeletedRoot := runtimepaths.Current().StorageDeletedRoot
 	pruned := make([]string, 0, len(requestedFolders))
 	for _, folderName := range requestedFolders {
-		if !prunable[folderName] {
+		// Permanent removal is limited to dataset-named folders even if a caller
+		// names another root, so the archived image library can never be destroyed.
+		if !prunable[folderName] || !isDatasetStorageFolderName(folderName) {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(storageDeletedRoot, folderName)); err != nil {

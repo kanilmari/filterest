@@ -198,6 +198,15 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 		return
 	}
 
+	// The preview resync runs before file moves are settled: a picture that a
+	// remaining gallery row or the parent's preview still names stays live.
+	if err := dtt_asset_linking.ResyncSharedAssetParentCache(tx, cacheSyncPlan); err != nil {
+		log.Printf("error syncing shared asset cache: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Error syncing shared asset cache")
+		return
+	}
+	sharedAssetFileMoves = dtt_asset_linking.OmitStillReferencedSharedAssetFileMoves(tx, table_name, sharedAssetFileMoves)
+
 	fileMoves := append([]dtt_asset_linking.SharedAssetFileMove(nil), sharedAssetFileMoves...)
 	storageMoves := append([]rowStorageMove(nil), childStorageMoves...)
 	storageMoves = append(storageMoves, rowStorageMoves...)
@@ -211,12 +220,6 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 			// mutation has nevertheless succeeded before this fallback runs.
 			applyStorageMoves()
 		}
-	}
-
-	if err := dtt_asset_linking.ResyncSharedAssetParentCache(tx, cacheSyncPlan); err != nil {
-		log.Printf("error syncing shared asset cache: %v", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Error syncing shared asset cache")
-		return
 	}
 
 	publishDeleteEvents := func() {

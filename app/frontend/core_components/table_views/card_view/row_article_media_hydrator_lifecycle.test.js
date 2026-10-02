@@ -40,7 +40,7 @@ function fixture() {
     document.body.append(view);
     const article = view.querySelector("article"), content = view.querySelector(".content");
     const session = { fetchDynamicChildren: vi.fn(async () => ({ child_tables: [] })),
-        fetchImageLinking: vi.fn(async () => null), fetchAttachmentLinking: vi.fn(async () => null) };
+        fetchAttachmentLinking: vi.fn(async () => null) };
     let current = true;
     const controller = createRowArticleMediaHydrator({
         rowArticleElement: article, rowArticleContentElement: content,

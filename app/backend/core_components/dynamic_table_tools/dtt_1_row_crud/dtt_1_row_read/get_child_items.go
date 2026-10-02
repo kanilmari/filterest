@@ -10,10 +10,12 @@ import (
 	backend "easelect/backend/core_components"
 	auth "easelect/backend/core_components/auth"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/permissions"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -454,6 +456,29 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 		log.Printf("\033[33mwarning: related table kind metadata lookup failed for %s: %s\033[0m\n", body_data.Parent_table, err.Error())
 		relationKindByChildTable = map[string]string{}
 	}
+	// The parent's one gallery, chosen by the same function the card and its writers
+	// use, so the article never lists another relation's pictures as the gallery. A
+	// gallery found by its columns alone has no upload metadata to classify it, so it
+	// is classed here as what it is: never an ordinary related tab, and always loaded.
+	gallery, galleryErr := dtt_card_picture.PictureRelationOf(currentDb, body_data.Parent_table)
+	if galleryErr != nil {
+		log.Printf("\033[33mwarning: gallery lookup failed for %s: %s\033[0m\n", body_data.Parent_table, galleryErr.Error())
+		gallery = nil
+	}
+	if gallery != nil && strings.TrimSpace(relationKindByChildTable[gallery.ChildTable]) == "" {
+		galleryKind := relatedTableKindImageAsset
+		if gallery.Shared {
+			galleryKind = relatedTableKindSharedAsset
+		}
+		relationKindByChildTable[gallery.ChildTable] = galleryKind
+	}
+	// The gallery is named to the browser only when this viewer may read its dataset;
+	// otherwise its rows are not listed either, and its name stays unknown.
+	if gallery != nil {
+		if allowed, permissionErr := canReadRelatedDataset(gallery.ChildTable); permissionErr != nil || !allowed {
+			gallery = nil
+		}
+	}
 	if body_data.Metadata_only {
 		response_writer.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(response_writer).Encode(map[string]interface{}{
@@ -470,7 +495,28 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 		body_data.Child_table,
 	)
 
-	var relatedTablesList []RelatedTableResult
+	// The gallery rows and the parent's shown picture come from one snapshot (a read-only
+	// REPEATABLE READ transaction), so a picture deleted or marked primary meanwhile cannot
+	// make them disagree. The row-security pilot dataset is read through the request's own
+	// transaction instead; when the parent or the gallery is the pilot, the rows are read
+	// first and the picture after them, so a deleted picture still cannot come back.
+	var snapshot *sql.Tx
+	if gallery != nil && body_data.Parent_table != rlsPilotTableName && gallery.ChildTable != rlsPilotTableName {
+		opened, snapshotErr := currentDb.BeginTx(request.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+		if snapshotErr != nil {
+			// Without the snapshot the gallery and the picture could disagree; a failed
+			// answer is better than one that shows a deleted picture.
+			log.Printf("\033[31merror: gallery snapshot unavailable for %s: %s\033[0m\n", body_data.Parent_table, snapshotErr.Error())
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error reading the gallery")
+			return
+		}
+		snapshot = opened
+		defer func() { _ = snapshot.Rollback() }()
+	}
+
+	// An empty list, never null: a viewer with no readable relation still gets a final
+	// answer, which the browser takes as the gallery and pictures there are.
+	relatedTablesList := []RelatedTableResult{}
 
 	for _, fk_row := range fk_infos {
 		// Optional child_table filter for lazy-loading a single tab
@@ -511,6 +557,10 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 			log.Printf("\033[31merror: related items pilot read setup failed for %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing related row visibility check")
 			return
+		}
+		isGalleryRelation := gallery != nil && gallery.ChildTable == fk_row.Referencing_table && gallery.ForeignKey == fk_row.Referencing_column
+		if isGalleryRelation && snapshot != nil {
+			readQuerier = snapshot
 		}
 
 		if !shouldEagerLoadRelatedRows(body_data.Child_table, relationKind, regularRelatedTableCount) {
@@ -566,6 +616,10 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 			log.Printf("\033[31merror: fetching row policy metadata for table %s: %s\033[0m\n", fk_row.Referencing_table, policyErr.Error())
 			continue
 		}
+		rowsOrder := ""
+		if isGalleryRelation {
+			rowsOrder = galleryRowsOrder(gallery)
+		}
 		queryRelated, queryArgs := buildRelatedItemsQueryWithReadPolicy(
 			selectColumns,
 			fk_row.Referencing_table,
@@ -575,6 +629,7 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 			userRole,
 			userID,
 			readPolicy,
+			rowsOrder,
 		)
 		relatedRows, err := readQuerier.Query(queryRelated, queryArgs...)
 		if err != nil {
@@ -623,6 +678,25 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 	resp := map[string]interface{}{
 		"child_tables": relatedTablesList,
 	}
+	if gallery != nil {
+		resp["gallery_relation"] = map[string]string{"dataset": gallery.ChildTable, "column": gallery.ForeignKey}
+	}
+	// The parent's shown picture, also for a dataset without a gallery: the browser shows
+	// a value no listed row carries as the card's own tile, and an empty value as none.
+	var pictureQuerier dbutils.Querier
+	if snapshot != nil {
+		pictureQuerier = snapshot
+	} else if pilotQuerier, pilotErr := getPilotReadQuerier(request.Context(), body_data.Parent_table, currentDb); pilotErr == nil {
+		pictureQuerier = pilotQuerier
+	}
+	if pictureQuerier != nil {
+		cardPicture, hasPictureFields, pictureErr := readRelatedCardPicture(pictureQuerier, actor, body_data.Parent_table, parent_id)
+		if pictureErr != nil {
+			log.Printf("\033[33mwarning: shown picture of %s row %d not readable: %s\033[0m\n", body_data.Parent_table, parent_id, pictureErr.Error())
+		} else if hasPictureFields {
+			resp["card_picture"] = cardPicture
+		}
+	}
 	totalRelatedRows := 0
 	for _, relatedTable := range relatedTablesList {
 		if relatedTable.RowCount > 0 {
@@ -644,6 +718,63 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding child response")
 		return
 	}
+}
+
+// readRelatedCardPicture returns the picture the parent row shows: the card list's choice
+// from the parent's picture fields (dtt_card_picture.ChooseShownPicture), with a media-
+// library picture this viewer may not open removed, as in every other row response. A
+// language map in an image field is reported as stored, because the browser reads it in
+// the viewer's language; a value that could make the browser load a media-library
+// picture this viewer may not open, written as a full or a relative address and alone or
+// inside such a map, is reported as no picture, so no language can show it.
+// hasFields is false when the parent has no field that can show a picture; otherwise an
+// empty value means the row shows none.
+func readRelatedCardPicture(querier dbutils.Querier, actor dbutils.RequestActorContext, parentTable string, parentID int) (string, bool, error) {
+	fields, err := dtt_card_picture.ReadOwnPictureFields(querier, parentTable)
+	if err != nil {
+		return "", false, err
+	}
+	columns := fields.Columns()
+	if len(columns) == 0 {
+		return "", false, nil
+	}
+	selected := make([]string, len(columns))
+	scanned := make([]sql.NullString, len(columns))
+	targets := make([]interface{}, len(columns))
+	for index, column := range columns {
+		selected[index] = pq.QuoteIdentifier(column) + "::text"
+		targets[index] = &scanned[index]
+	}
+	err = querier.QueryRow(
+		fmt.Sprintf(`SELECT %s FROM %s WHERE id = $1`, strings.Join(selected, ", "), pq.QuoteIdentifier(parentTable)),
+		parentID,
+	).Scan(targets...)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", true, nil
+	}
+	if err != nil {
+		return "", true, err
+	}
+	values := make(map[string]string, len(columns))
+	for index, column := range columns {
+		values[column] = scanned[index].String
+	}
+	shown := dtt_card_picture.ChooseShownPicture(fields, values)
+	if shown == "" {
+		return "", true, nil
+	}
+	guarded := []map[string]interface{}{{"cached_image": shown}}
+	for _, reference := range mediaLibraryReferencesIn(shown) {
+		guarded = append(guarded, map[string]interface{}{"cached_image": reference})
+	}
+	FilterIndependentMediaRows(querier, actor, guarded)
+	for _, embedded := range guarded[1:] {
+		if embedded["cached_image"] == nil {
+			return "", true, nil
+		}
+	}
+	value, _ := guarded[0]["cached_image"].(string)
+	return value, true, nil
 }
 
 // GetDynamicChildItemsHandler is a legacy alias kept for existing route/profile names.
@@ -768,6 +899,7 @@ func fetchOutgoingReferencedTableResults(
 			userRole,
 			userID,
 			readPolicy,
+			"",
 		)
 		relatedRows, err := readQuerier.Query(queryRelated, queryArgs...)
 		if err != nil {
@@ -937,7 +1069,7 @@ func buildRelatedTableKindMap(
 	querier dbutils.Querier,
 	parentTable string,
 ) (map[string]string, error) {
-	statuses, err := listRelatedMediaRelationStatuses(querier, parentTable)
+	statuses, err := dtt_card_picture.ListRelationStatuses(querier, parentTable)
 	if err != nil {
 		return nil, err
 	}
@@ -1138,12 +1270,15 @@ func buildRelatedItemsQuery(
 		"admin",
 		0,
 		ReadRowPolicy{},
+		"",
 	)
 	return query
 }
 
 // buildRelatedItemsQueryWithReadPolicy creates a related-row SELECT and returns its ordered SQL args.
 // It exists so eager-loaded child rows apply the same row policy as count-only related tabs.
+// orderBy, without the keyword, orders the rows before the limit; a gallery passes its
+// pictures-first gallery order so the first 50 rows always hold the card picture.
 func buildRelatedItemsQueryWithReadPolicy(
 	selectColumns string,
 	tableName string,
@@ -1153,6 +1288,7 @@ func buildRelatedItemsQueryWithReadPolicy(
 	userRole string,
 	userID int,
 	readPolicy ReadRowPolicy,
+	orderBy string,
 ) (string, []interface{}) {
 	whereClause, queryArgs := buildRelatedItemsWhereClause(
 		tableName,
@@ -1162,14 +1298,31 @@ func buildRelatedItemsQueryWithReadPolicy(
 		userID,
 		readPolicy,
 	)
+	orderClause := ""
+	if strings.TrimSpace(orderBy) != "" {
+		orderClause = " ORDER BY " + orderBy
+	}
 	query := fmt.Sprintf(
-		"SELECT %s FROM %s %s%s LIMIT 50",
+		"SELECT %s FROM %s %s%s%s LIMIT 50",
 		selectColumns,
 		pq.QuoteIdentifier(tableName),
 		joinClauses,
 		whereClause,
+		orderClause,
 	)
 	return query, queryArgs
+}
+
+// galleryRowsOrder orders a gallery's rows for the article: pictures — rows of the image
+// kind that name a stored file, the gallery's own definition of a picture — before
+// everything else, then the one gallery order, qualified by the gallery table so the
+// label joins of the related-row query cannot make a column ambiguous.
+func galleryRowsOrder(gallery *dtt_card_picture.PictureRelation) string {
+	terms := []string{fmt.Sprintf(`CASE WHEN %s THEN 0 ELSE 1 END`, gallery.PictureCondition(gallery.ChildTable))}
+	if order := dtt_card_picture.GalleryOrderClause(gallery.Columns, gallery.ChildTable); order != "" {
+		terms = append(terms, order)
+	}
+	return strings.Join(terms, ", ")
 }
 
 // buildRelatedItemsWhereClause creates the parent-FK WHERE clause and appends row-policy predicates.

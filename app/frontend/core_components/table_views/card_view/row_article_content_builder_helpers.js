@@ -28,10 +28,28 @@ function matchesRole(role, baseName) {
 }
 
 /**
+ * The original storage path of a structured stored name, "tableId_rowId_colId.ext",
+ * or "" when the value is no such name. Only the part before the first ? or # is
+ * the name: a query or #fragment does not change where the file is stored, so it is
+ * kept after the path. The article (resolveImagePath) and the card list
+ * (resolveImagePaths in card_element_builder_helpers.js) both find the folder here.
+ *
+ * @param {string} value - A trimmed, non-absolute image value
+ * @returns {string} "/storage/tableId/rowId/original/" + value, or ""
+ */
+export function resolveStructuredStoragePath(value) {
+    const suffixStart = value.search(/[?#]/);
+    const name = suffixStart < 0 ? value : value.slice(0, suffixStart);
+    const m = name.match(/^(\d+)_(\d+)_(\d+)\.(\w+)$/);
+    return m ? `/storage/${m[1]}/${m[2]}/original/${value}` : "";
+}
+
+/**
  * Resolve a local image filename to its storage path.
  * Returns the input unchanged if it's already an absolute URL or path.
  * For filenames matching the pattern "tableId_rowId_colId.ext", builds
- * a structured storage path.
+ * a structured storage path; a query or #fragment after such a name is kept
+ * after that path, because it does not change where the file is stored.
  *
  * @param {string} src - Image source string (URL, path, or filename)
  * @returns {string} Resolved image path
@@ -44,10 +62,7 @@ export function resolveImagePath(src) {
         return trimmed;
     }
 
-    const m = trimmed.match(/^(\d+)_(\d+)_(\d+)\.(\w+)$/);
-    return m
-        ? `/storage/${m[1]}/${m[2]}/original/${trimmed}`
-        : "/storage/" + trimmed;
+    return resolveStructuredStoragePath(trimmed) || "/storage/" + trimmed;
 }
 
 /**

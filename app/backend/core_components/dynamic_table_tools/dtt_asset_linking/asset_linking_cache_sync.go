@@ -1,7 +1,9 @@
 // asset_linking_cache_sync.go
-// Recomputes parent cached_image values after shared asset rows change.
-// Bridges shared `<parent>_assets` child rows and parent preview cache columns.
-// Exists to keep image-selection ordering and cached_image resync logic centralized.
+// Collects the parent rows a change of gallery rows affects and applies the card picture rule to them.
+// Bridges the writers of a parent's gallery (`<parent>_assets` or an older picture relation)
+// and the parent's cached_image column.
+// Exists so every gallery change — edit, delete, move, marking primary, the media library —
+// ends in the one rule of card_picture_rule.go for exactly the parents it touched.
 package dtt_asset_linking
 
 import (
@@ -10,6 +12,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 
 	"github.com/lib/pq"
 )
@@ -24,23 +27,32 @@ type SharedAssetCacheSyncPlan struct {
 	ChildTable       string
 	ForeignKeyColumn string
 	ParentRowIDs     []int64
+	// ReleasedValues are the stored references of the changed child rows as they
+	// were before the change (a deleted, renamed or detached picture). The rule
+	// never keeps them as a parent's card picture, so only these may be let go.
+	ReleasedValues []string
+	// Gallery is the parent's gallery, the relation ChildTable belongs to. A plan
+	// built by hand may leave it empty; the resync then looks it up.
+	Gallery *dtt_card_picture.PictureRelation
 }
 
-// CollectSharedAssetParentCacheSyncPlan resolves the parent rows affected by one shared `_assets` change set.
+// CollectSharedAssetParentCacheSyncPlan resolves the parent rows affected by one change of
+// gallery rows. Call it before the change: the plan then also records the references the
+// change releases. A child table that is no parent's gallery gives an empty plan.
 func CollectSharedAssetParentCacheSyncPlan(q dbutils.Querier, childTable string, childRowIDs []int64) (SharedAssetCacheSyncPlan, error) {
 	if q == nil || len(childRowIDs) == 0 {
 		return SharedAssetCacheSyncPlan{}, nil
 	}
 
-	parentTable, foreignKeyColumn, err := lookupSharedAssetParentContext(q, childTable)
+	parentTable, gallery, err := dtt_card_picture.GalleryOf(q, childTable)
 	if err != nil {
 		return SharedAssetCacheSyncPlan{}, err
 	}
-	if parentTable == "" || foreignKeyColumn == "" {
+	if parentTable == "" || gallery == nil {
 		return SharedAssetCacheSyncPlan{}, nil
 	}
 
-	parentIDs, err := lookupSharedAssetParentIDs(q, childTable, foreignKeyColumn, childRowIDs)
+	parentIDs, releasedValues, err := lookupSharedAssetParentIDs(q, gallery, childRowIDs)
 	if err != nil {
 		return SharedAssetCacheSyncPlan{}, err
 	}
@@ -48,47 +60,59 @@ func CollectSharedAssetParentCacheSyncPlan(q dbutils.Querier, childTable string,
 	return SharedAssetCacheSyncPlan{
 		ParentTable:      parentTable,
 		ChildTable:       childTable,
-		ForeignKeyColumn: foreignKeyColumn,
+		ForeignKeyColumn: gallery.ForeignKey,
 		ParentRowIDs:     parentIDs,
+		ReleasedValues:   releasedValues,
+		Gallery:          gallery,
 	}, nil
 }
 
-// ResyncSharedAssetParentCache recalculates cached_image for the affected parents after shared asset changes.
-func ResyncSharedAssetParentCache(q sharedAssetCacheQueryExecer, plan SharedAssetCacheSyncPlan) error {
-	if q == nil || plan.ParentTable == "" || plan.ChildTable == "" || plan.ForeignKeyColumn == "" || len(plan.ParentRowIDs) == 0 {
-		return nil
+// AddCurrentSharedAssetParents extends a plan collected before a child-row edit
+// with the parents those rows point at after it. A picture moved to another
+// parent then refreshes both the parent it left and the parent it joined.
+func AddCurrentSharedAssetParents(q dbutils.Querier, plan SharedAssetCacheSyncPlan, childRowIDs []int64) (SharedAssetCacheSyncPlan, error) {
+	if q == nil || plan.ParentTable == "" || plan.Gallery == nil || len(childRowIDs) == 0 {
+		return plan, nil
 	}
-
-	hasCachedImage, err := parentTableHasCachedImageColumn(q, plan.ParentTable)
-	if err != nil || !hasCachedImage {
-		return err
-	}
-
-	parentIDs := dedupeInt64(plan.ParentRowIDs)
-	imageByParentID, err := fetchPreferredSharedAssetImages(q, plan.ChildTable, plan.ForeignKeyColumn, parentIDs)
+	currentParentIDs, _, err := lookupSharedAssetParentIDs(q, plan.Gallery, childRowIDs)
 	if err != nil {
-		return err
+		return plan, err
 	}
-
-	updateQuery := fmt.Sprintf(
-		`UPDATE %s SET cached_image = $1 WHERE id = $2`,
-		pq.QuoteIdentifier(plan.ParentTable),
-	)
-
-	for _, parentID := range parentIDs {
-		filename := imageByParentID[parentID]
-		var value interface{}
-		if strings.TrimSpace(filename) != "" {
-			value = filename
-		}
-		if _, err := q.Exec(updateQuery, value, parentID); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	plan.ParentRowIDs = dedupeInt64(append(append([]int64(nil), plan.ParentRowIDs...), currentParentIDs...))
+	return plan, nil
 }
 
+// ResyncSharedAssetParentCache applies the card picture rule to the plan's parents after
+// the change. A plan whose child table is not the parent's gallery changes nothing.
+func ResyncSharedAssetParentCache(q sharedAssetCacheQueryExecer, plan SharedAssetCacheSyncPlan) error {
+	if q == nil || plan.ParentTable == "" || plan.ChildTable == "" || len(plan.ParentRowIDs) == 0 {
+		return nil
+	}
+	gallery := plan.Gallery
+	if gallery == nil {
+		resolved, err := dtt_card_picture.PictureRelationOf(q, plan.ParentTable)
+		if err != nil {
+			return err
+		}
+		gallery = resolved
+	}
+	if gallery == nil || gallery.ChildTable != plan.ChildTable {
+		return nil
+	}
+	return ApplyCardPictureRule(q, plan.ParentTable, gallery, plan.ParentRowIDs, plan.ReleasedValues)
+}
+
+// sameSharedAssetPreviewValue treats NULL and blank as the same empty picture.
+func sameSharedAssetPreviewValue(current string, next string) bool {
+	if strings.TrimSpace(current) == "" && strings.TrimSpace(next) == "" {
+		return true
+	}
+	return current == next
+}
+
+// lookupSharedAssetParentContext returns the parent and foreign key of a shared-asset
+// relation of any kind. Delete-time file moves use it: they concern every shared
+// relation's files, not only the gallery's pictures.
 func lookupSharedAssetParentContext(q dbutils.Querier, childTable string) (string, string, error) {
 	rows, err := q.Query(
 		`
@@ -131,7 +155,10 @@ func lookupSharedAssetParentContext(q dbutils.Querier, childTable string) (strin
 	return "", "", nil
 }
 
-func lookupSharedAssetParentIDs(q dbutils.Querier, childTable string, foreignKeyColumn string, childRowIDs []int64) ([]int64, error) {
+// lookupSharedAssetParentIDs returns the parents of the given gallery rows and the
+// references those rows store now, read from the gallery's own stored-name column,
+// so a caller collecting before a change knows exactly which values the change releases.
+func lookupSharedAssetParentIDs(q dbutils.Querier, gallery *dtt_card_picture.PictureRelation, childRowIDs []int64) ([]int64, []string, error) {
 	placeholders := make([]string, 0, len(childRowIDs))
 	queryArgs := make([]interface{}, 0, len(childRowIDs))
 	for idx, rowID := range childRowIDs {
@@ -140,35 +167,41 @@ func lookupSharedAssetParentIDs(q dbutils.Querier, childTable string, foreignKey
 	}
 
 	query := fmt.Sprintf(
-		`SELECT DISTINCT %s
+		`SELECT %s, %s::text
 		   FROM %s
 		  WHERE id IN (%s)
 		    AND %s IS NOT NULL`,
-		pq.QuoteIdentifier(foreignKeyColumn),
-		pq.QuoteIdentifier(childTable),
+		pq.QuoteIdentifier(gallery.ForeignKey),
+		pq.QuoteIdentifier(gallery.FilenameColumn),
+		pq.QuoteIdentifier(gallery.ChildTable),
 		strings.Join(placeholders, ", "),
-		pq.QuoteIdentifier(foreignKeyColumn),
+		pq.QuoteIdentifier(gallery.ForeignKey),
 	)
 
 	rows, err := q.Query(query, queryArgs...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
 	parentIDs := make([]int64, 0, len(childRowIDs))
+	references := make([]string, 0, len(childRowIDs))
 	for rows.Next() {
 		var parentID int64
-		if scanErr := rows.Scan(&parentID); scanErr != nil {
-			return nil, scanErr
+		var reference sql.NullString
+		if scanErr := rows.Scan(&parentID, &reference); scanErr != nil {
+			return nil, nil, scanErr
 		}
 		parentIDs = append(parentIDs, parentID)
+		if strings.TrimSpace(reference.String) != "" {
+			references = append(references, reference.String)
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return dedupeInt64(parentIDs), nil
+	return dedupeInt64(parentIDs), references, nil
 }
 
 func parentTableHasCachedImageColumn(q dbutils.Querier, parentTable string) (bool, error) {
@@ -186,61 +219,6 @@ func parentTableHasCachedImageColumn(q dbutils.Querier, parentTable string) (boo
 		parentTable,
 	).Scan(&exists)
 	return exists, err
-}
-
-func fetchPreferredSharedAssetImages(q dbutils.Querier, childTable string, foreignKeyColumn string, parentRowIDs []int64) (map[int64]string, error) {
-	if len(parentRowIDs) == 0 {
-		return nil, nil
-	}
-
-	placeholders := make([]string, 0, len(parentRowIDs))
-	queryArgs := make([]interface{}, 0, len(parentRowIDs))
-	for idx, rowID := range parentRowIDs {
-		placeholders = append(placeholders, fmt.Sprintf("$%d", idx+1))
-		queryArgs = append(queryArgs, rowID)
-	}
-
-	query := fmt.Sprintf(
-		`SELECT %s, filename
-		   FROM %s
-		  WHERE %s IN (%s)
-		    AND COALESCE(NULLIF(TRIM(filename::text), ''), '') <> ''
-		    AND COALESCE(NULLIF(TRIM(asset_kind::text), ''), 'image') = 'image'
-		  ORDER BY %s,
-		           CASE WHEN COALESCE(is_primary, false) THEN 0 ELSE 1 END,
-		           sort_order ASC,
-		           created ASC,
-		           id ASC`,
-		pq.QuoteIdentifier(foreignKeyColumn),
-		pq.QuoteIdentifier(childTable),
-		pq.QuoteIdentifier(foreignKeyColumn),
-		strings.Join(placeholders, ", "),
-		pq.QuoteIdentifier(foreignKeyColumn),
-	)
-
-	rows, err := q.Query(query, queryArgs...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	imageByParentID := make(map[int64]string, len(parentRowIDs))
-	for rows.Next() {
-		var parentID int64
-		var filename string
-		if scanErr := rows.Scan(&parentID, &filename); scanErr != nil {
-			return nil, scanErr
-		}
-		if _, exists := imageByParentID[parentID]; exists {
-			continue
-		}
-		imageByParentID[parentID] = filename
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return imageByParentID, nil
 }
 
 func dedupeInt64(values []int64) []int64 {

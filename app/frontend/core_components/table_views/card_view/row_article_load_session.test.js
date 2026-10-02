@@ -42,7 +42,7 @@ describe("createRowArticleLoadSession", () => {
         expect(refreshed).toEqual({ revision: 2 });
     });
 
-    test("caches attachment and image linking status lookups per article-open session", async () => {
+    test("caches the attachment linking status lookup per article-open session", async () => {
         const requests = [];
         const session = createRowArticleLoadSession({
             tableName: "dev_agent_tasks",
@@ -56,20 +56,36 @@ describe("createRowArticleLoadSession", () => {
             },
         });
 
-        const [firstImage, secondImage, firstAttachment, secondAttachment] = await Promise.all([
-            session.fetchImageLinking(),
-            session.fetchImageLinking(),
+        const [firstAttachment, secondAttachment] = await Promise.all([
             session.fetchAttachmentLinking(),
             session.fetchAttachmentLinking(),
         ]);
 
-        expect(firstImage).toEqual(secondImage);
         expect(firstAttachment).toEqual(secondAttachment);
         expect(requests).toEqual([
             "assetLinkingStatus",
         ]);
-        expect(firstImage?.kind).toBe("image");
         expect(firstAttachment?.kind).toBe("attachment");
+
+        await session.fetchAttachmentLinking({ forceRefresh: true });
+        expect(requests).toHaveLength(2);
+    });
+
+    test("asks again after a failed attachment linking status lookup", async () => {
+        let calls = 0;
+        const session = createRowArticleLoadSession({
+            tableName: "dev_agent_tasks",
+            rowId: 819,
+            requestFn: async () => {
+                calls += 1;
+                if (calls === 1) throw new Error("Unavailable");
+                return { attachment_asset_linkings: [{ kind: "attachment" }] };
+            },
+        });
+
+        await expect(session.fetchAttachmentLinking()).rejects.toThrow("Unavailable");
+        await expect(session.fetchAttachmentLinking()).resolves.toEqual({ kind: "attachment" });
+        expect(calls).toBe(2);
     });
 
     test("skips asset-linking status lookup when the route is not available", async () => {
@@ -84,13 +100,7 @@ describe("createRowArticleLoadSession", () => {
             },
         });
 
-        const [imageLinking, attachmentLinking] = await Promise.all([
-            session.fetchImageLinking(),
-            session.fetchAttachmentLinking(),
-        ]);
-
-        expect(imageLinking).toBeNull();
-        expect(attachmentLinking).toBeNull();
+        expect(await session.fetchAttachmentLinking()).toBeNull();
         expect(requests).toEqual([]);
     });
 });

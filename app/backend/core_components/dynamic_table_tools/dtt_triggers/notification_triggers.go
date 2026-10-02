@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
+	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/httpresponse"
 
 	"github.com/lib/pq"
@@ -365,8 +367,37 @@ func executeAction(q queryer, targetTable, actionValuesStr string, sourceRow map
 		strings.Join(columns, ", "),
 		strings.Join(placeholders, ", "))
 
-	_, execErr := q.Exec(insertQuery, values...)
-	return execErr
+	// A row an automation adds to a gallery is a new picture like any other: it goes
+	// after the parent's other pictures unless the automation gave its position, and
+	// the card picture rule runs for its parent. A row it adds to a dataset that has a
+	// gallery may carry a first card picture, which follows the rule too (owner
+	// decision K120).
+	parentTable, _, galleryErr := dtt_card_picture.GalleryOf(q, targetTable)
+	if galleryErr != nil {
+		return galleryErr
+	}
+	ownGallery, ownGalleryErr := dtt_card_picture.PictureRelationOf(q, targetTable)
+	if ownGalleryErr != nil {
+		return ownGalleryErr
+	}
+	if parentTable == "" && ownGallery == nil {
+		_, execErr := q.Exec(insertQuery, values...)
+		return execErr
+	}
+	var rowID int64
+	if err := q.QueryRow(insertQuery+" RETURNING id", values...).Scan(&rowID); err != nil {
+		return err
+	}
+	if parentTable != "" {
+		_, orderChosen := actionValues["sort_order"]
+		if err := dtt_asset_linking.SettleNewGalleryRows(q, targetTable, []int64{rowID}, orderChosen); err != nil {
+			return err
+		}
+	}
+	if ownGallery != nil {
+		return dtt_asset_linking.ApplyCardPictureRule(q, targetTable, ownGallery, []int64{rowID}, nil)
+	}
+	return nil
 }
 
 // parseActionValues käy action_values -JSONin läpi ja korvaa {{colName}} -viittaukset newRow:n arvoihin

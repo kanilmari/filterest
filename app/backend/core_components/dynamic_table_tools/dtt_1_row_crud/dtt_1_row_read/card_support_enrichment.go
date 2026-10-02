@@ -13,47 +13,11 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 
 	"github.com/lib/pq"
 )
-
-var defaultCardImageLookupKeys = []string{
-	"cached_image",
-	"image",
-	"image_url",
-	"image_path",
-	"hero_image",
-	"avatar_image",
-	"avatar_url",
-	"logo_image",
-	"thumbnail_image",
-}
-
-type publicTableColumnInfo struct {
-	name     string
-	dataType string
-}
-
-type canonicalAssetImageConfig struct {
-	childTable      string
-	foreignKeyName  string
-	filenameColumn  string
-	hasAssetKind    bool
-	hasIsPrimary    bool
-	hasSortOrder    bool
-	hasCreated      bool
-	hasID           bool
-	hasTypeID       bool
-	hasMetadataJSON bool
-	hasTitle        bool
-	hasOriginalName bool
-}
-
-type canonicalAssetRelationCandidate struct {
-	childTable     string
-	foreignKeyName string
-}
 
 type canonicalAssetImageValue struct {
 	filename     string
@@ -368,23 +332,23 @@ func enrichRowsWithCanonicalAssetImages(
 		return nil
 	}
 
-	config, err := discoverCanonicalAssetImageConfig(querier, parentTable)
-	if (config == nil || err != nil) && backend.Db != nil {
-		fallbackConfig, fallbackErr := discoverCanonicalAssetImageConfig(backend.Db, parentTable)
-		if fallbackErr == nil && fallbackConfig != nil {
-			config = fallbackConfig
+	relation, err := dtt_card_picture.PictureRelationOf(querier, parentTable)
+	if (relation == nil || err != nil) && backend.Db != nil {
+		fallbackRelation, fallbackErr := dtt_card_picture.PictureRelationOf(backend.Db, parentTable)
+		if fallbackErr == nil && fallbackRelation != nil {
+			relation = fallbackRelation
 			err = nil
 		} else if err == nil {
 			err = fallbackErr
 		}
 	}
-	if err != nil || config == nil {
+	if err != nil || relation == nil {
 		return err
 	}
 
-	imageByID, err := fetchCanonicalAssetImageValues(querier, *config, rowIDs)
+	imageByID, err := fetchCanonicalAssetImageValues(querier, *relation, rowIDs)
 	if (len(imageByID) == 0 || err != nil) && backend.Db != nil {
-		fallbackImages, fallbackErr := fetchCanonicalAssetImageValues(backend.Db, *config, rowIDs)
+		fallbackImages, fallbackErr := fetchCanonicalAssetImageValues(backend.Db, *relation, rowIDs)
 		if fallbackErr == nil && len(fallbackImages) > 0 {
 			imageByID = fallbackImages
 			err = nil
@@ -400,327 +364,15 @@ func enrichRowsWithCanonicalAssetImages(
 	return nil
 }
 
-func discoverCanonicalAssetImageConfig(querier dbutils.Querier, parentTable string) (*canonicalAssetImageConfig, error) {
-	if querier == nil {
-		return nil, nil
-	}
-
-	statuses, err := listRelatedMediaRelationStatuses(querier, parentTable)
-	if err != nil {
-		return nil, err
-	}
-	hasSharedAssetRelation := false
-	excludedTables := make(map[string]bool, len(statuses))
-	for _, status := range statuses {
-		trimmedChildTable := strings.TrimSpace(status.ChildTable)
-		if trimmedChildTable != "" {
-			excludedTables[trimmedChildTable] = true
-		}
-		if !usesSharedAssetRelation(status.UploadConfig) {
-			continue
-		}
-		hasSharedAssetRelation = true
-		if !relatedMediaConfigSupportsImage(status.UploadConfig, status.ChildTable) {
-			continue
-		}
-		config, configErr := buildCanonicalAssetImageConfigFromRelationStatus(querier, parentTable, status)
-		if configErr != nil {
-			return nil, configErr
-		}
-		if config != nil {
-			return config, nil
-		}
-	}
-	if hasSharedAssetRelation {
-		return nil, nil
-	}
-
-	relationCandidates, err := discoverCanonicalAssetRelationCandidates(querier, parentTable)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, relationCandidate := range relationCandidates {
-		if excludedTables[strings.TrimSpace(relationCandidate.childTable)] {
-			continue
-		}
-		config, configErr := buildCanonicalAssetImageConfigFromCandidate(querier, parentTable, relationCandidate)
-		if configErr != nil {
-			return nil, configErr
-		}
-		if config != nil {
-			return config, nil
-		}
-	}
-	return nil, nil
-}
-
-func buildCanonicalAssetImageConfigFromRelationStatus(
-	querier dbutils.Querier,
-	parentTable string,
-	status relatedMediaRelationStatus,
-) (*canonicalAssetImageConfig, error) {
-	return buildCanonicalAssetImageConfigFromCandidate(querier, parentTable, canonicalAssetRelationCandidate{
-		childTable:     status.ChildTable,
-		foreignKeyName: status.ForeignKeyColumn,
-	})
-}
-
-func buildCanonicalAssetImageConfigFromCandidate(
-	querier dbutils.Querier,
-	parentTable string,
-	candidate canonicalAssetRelationCandidate,
-) (*canonicalAssetImageConfig, error) {
-	childTable := strings.TrimSpace(candidate.childTable)
-	if childTable == "" {
-		return nil, nil
-	}
-
-	exists, err := doesPublicTableExist(querier, childTable)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, nil
-	}
-
-	columns, err := fetchPublicTableColumns(querier, childTable)
-	if err != nil {
-		return nil, err
-	}
-	if !tableColumnExists(columns, "asset_kind") {
-		return nil, nil
-	}
-
-	filenameColumn, ok := resolveCanonicalAssetFilenameColumn(columns)
-	if !ok {
-		return nil, nil
-	}
-
-	foreignKeyName := strings.TrimSpace(candidate.foreignKeyName)
-	if foreignKeyName == "" || !tableColumnExists(columns, foreignKeyName) {
-		foreignKeyName, ok = resolveCanonicalAssetForeignKeyColumn(parentTable, columns)
-		if !ok {
-			return nil, nil
-		}
-	}
-
-	return &canonicalAssetImageConfig{
-		childTable:      childTable,
-		foreignKeyName:  foreignKeyName,
-		filenameColumn:  filenameColumn,
-		hasAssetKind:    tableColumnExists(columns, "asset_kind"),
-		hasIsPrimary:    tableColumnExists(columns, "is_primary"),
-		hasSortOrder:    tableColumnExists(columns, "sort_order"),
-		hasCreated:      tableColumnExists(columns, "created"),
-		hasID:           tableColumnExists(columns, "id"),
-		hasTypeID:       tableColumnExists(columns, "type_id"),
-		hasMetadataJSON: tableColumnExists(columns, "metadata_json"),
-		hasTitle:        tableColumnExists(columns, "title"),
-		hasOriginalName: tableColumnExists(columns, "original_name"),
-	}, nil
-}
-
-func discoverCanonicalAssetRelationCandidates(
-	querier dbutils.Querier,
-	parentTable string,
-) ([]canonicalAssetRelationCandidate, error) {
-	if querier == nil {
-		fallbackTable := strings.TrimSpace(parentTable) + "_assets"
-		if strings.TrimSpace(parentTable) == "" {
-			return nil, nil
-		}
-		return []canonicalAssetRelationCandidate{{childTable: fallbackTable}}, nil
-	}
-
-	rows, err := querier.Query(
-		`SELECT src.table_name, fk.source_column_name
-		   FROM system_foreign_key_relations_1_m fk
-		   JOIN system_db_tables src ON src.table_uid = fk.source_table_uid
-		   JOIN system_db_tables tgt ON tgt.table_uid = fk.target_table_uid
-		  WHERE tgt.table_name = $1
-		  ORDER BY src.table_name`,
-		parentTable,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	candidates := make([]canonicalAssetRelationCandidate, 0, 2)
-	for rows.Next() {
-		var childTable string
-		var foreignKeyName string
-		if scanErr := rows.Scan(&childTable, &foreignKeyName); scanErr != nil {
-			return nil, scanErr
-		}
-		childTable = strings.TrimSpace(childTable)
-		if childTable == "" {
-			continue
-		}
-		candidates = append(candidates, canonicalAssetRelationCandidate{
-			childTable:     childTable,
-			foreignKeyName: strings.TrimSpace(foreignKeyName),
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	sort.SliceStable(candidates, func(leftIdx, rightIdx int) bool {
-		return scoreCanonicalAssetRelationCandidate(parentTable, candidates[leftIdx].childTable) <
-			scoreCanonicalAssetRelationCandidate(parentTable, candidates[rightIdx].childTable)
-	})
-
-	if len(candidates) == 0 && strings.TrimSpace(parentTable) != "" {
-		candidates = append(candidates, canonicalAssetRelationCandidate{
-			childTable: strings.TrimSpace(parentTable) + "_assets",
-		})
-	}
-
-	return candidates, nil
-}
-
-func resolveCanonicalAssetFilenameColumn(columns []publicTableColumnInfo) (string, bool) {
-	for _, candidate := range []string{"filename", "stored_filename", "original_name"} {
-		if tableColumnExists(columns, candidate) {
-			return candidate, true
-		}
-	}
-	return "", false
-}
-
-func resolveCanonicalAssetForeignKeyColumn(parentTable string, columns []publicTableColumnInfo) (string, bool) {
-	preferred := []string{
-		parentTable + "_id",
-		buildLegacyForeignKeyNameFromTable(parentTable),
-	}
-	for _, candidate := range preferred {
-		if candidate != "" && tableColumnExists(columns, candidate) {
-			return candidate, true
-		}
-	}
-
-	idColumns := make([]string, 0)
-	for _, column := range columns {
-		if column.name == "id" || !strings.HasSuffix(column.name, "_id") {
-			continue
-		}
-		idColumns = append(idColumns, column.name)
-	}
-	if len(idColumns) == 1 {
-		return idColumns[0], true
-	}
-
-	return "", false
-}
-
-func doesPublicTableExist(querier dbutils.Querier, tableName string) (bool, error) {
-	if querier == nil {
-		return false, nil
-	}
-
-	var exists bool
-	err := querier.QueryRow(
-		`SELECT EXISTS (
-			SELECT 1
-			  FROM information_schema.tables
-			 WHERE table_schema = 'public'
-			   AND table_name = $1
-		)`,
-		tableName,
-	).Scan(&exists)
-	return exists, err
-}
-
-func fetchPublicTableColumns(querier dbutils.Querier, tableName string) ([]publicTableColumnInfo, error) {
-	if querier == nil {
-		return nil, nil
-	}
-
-	rows, err := querier.Query(
-		`SELECT column_name, data_type
-		   FROM information_schema.columns
-		  WHERE table_schema = 'public'
-		    AND table_name = $1
-		  ORDER BY ordinal_position`,
-		tableName,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	columns := make([]publicTableColumnInfo, 0)
-	for rows.Next() {
-		var column publicTableColumnInfo
-		if scanErr := rows.Scan(&column.name, &column.dataType); scanErr != nil {
-			return nil, scanErr
-		}
-		columns = append(columns, column)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return columns, nil
-}
-
-func scoreCanonicalAssetRelationCandidate(parentTable string, childTable string) int {
-	trimmedChildTable := strings.TrimSpace(childTable)
-	trimmedParentTable := strings.TrimSpace(parentTable)
-	switch {
-	case trimmedParentTable != "" && trimmedChildTable == trimmedParentTable+"_assets":
-		return 0
-	case strings.HasSuffix(trimmedChildTable, "_assets"):
-		return 1
-	default:
-		return 2
-	}
-}
-
-func buildLegacyForeignKeyNameFromTable(tableName string) string {
-	tableName = strings.TrimSpace(strings.Trim(tableName, "_"))
-	if tableName == "" {
-		return ""
-	}
-
-	parts := strings.Split(tableName, "_")
-	lastToken := singularizeLegacyTableToken(parts[len(parts)-1])
-	if lastToken == "" {
-		return ""
-	}
-
-	return lastToken + "_id"
-}
-
-func singularizeLegacyTableToken(token string) string {
-	token = strings.TrimSpace(strings.ToLower(token))
-	switch {
-	case strings.HasSuffix(token, "ies") && len(token) > 3:
-		return token[:len(token)-3] + "y"
-	case strings.HasSuffix(token, "s") && !strings.HasSuffix(token, "ss") && len(token) > 1:
-		return token[:len(token)-1]
-	default:
-		return token
-	}
-}
-
-func tableColumnExists(columns []publicTableColumnInfo, columnName string) bool {
-	for _, column := range columns {
-		if column.name == columnName {
-			return true
-		}
-	}
-	return false
-}
-
+// fetchCanonicalAssetImageValues reads, per parent row, the gallery's first picture in
+// the one gallery order (dtt_card_picture.GalleryOrderClause): the read-time stand-in
+// for a card whose stored picture is still empty.
 func fetchCanonicalAssetImageValues(
 	querier dbutils.Querier,
-	config canonicalAssetImageConfig,
+	relation dtt_card_picture.PictureRelation,
 	rowIDs []int64,
 ) (map[string]canonicalAssetImageValue, error) {
-	if querier == nil || config.childTable == "" || config.foreignKeyName == "" || config.filenameColumn == "" || len(rowIDs) == 0 {
+	if querier == nil || relation.ChildTable == "" || relation.ForeignKey == "" || relation.FilenameColumn == "" || len(rowIDs) == 0 {
 		return nil, nil
 	}
 
@@ -732,35 +384,26 @@ func fetchCanonicalAssetImageValues(
 	}
 
 	orderByParts := []string{
-		pq.QuoteIdentifier(config.foreignKeyName),
+		pq.QuoteIdentifier(relation.ForeignKey),
 	}
-	if config.hasIsPrimary {
-		orderByParts = append(orderByParts, `CASE WHEN COALESCE("is_primary", false) THEN 0 ELSE 1 END`)
-	}
-	if config.hasSortOrder {
-		orderByParts = append(orderByParts, `"sort_order" ASC`)
-	}
-	if config.hasCreated {
-		orderByParts = append(orderByParts, `"created" ASC`)
-	}
-	if config.hasID {
-		orderByParts = append(orderByParts, `"id" ASC`)
+	if galleryOrder := dtt_card_picture.GalleryOrderClause(relation.Columns, ""); galleryOrder != "" {
+		orderByParts = append(orderByParts, galleryOrder)
 	}
 
 	typeIDSelect := `0 AS "type_id"`
-	if config.hasTypeID {
+	if relation.HasTypeID {
 		typeIDSelect = `COALESCE("type_id", 0) AS "type_id"`
 	}
 	metadataJSONSelect := `'' AS "metadata_json"`
-	if config.hasMetadataJSON {
+	if relation.HasMetadataJSON {
 		metadataJSONSelect = `COALESCE("metadata_json"::text, '') AS "metadata_json"`
 	}
 	titleSelect := `'' AS "title"`
-	if config.hasTitle {
+	if relation.HasTitle {
 		titleSelect = `COALESCE("title"::text, '') AS "title"`
 	}
 	originalNameSelect := `'' AS "original_name"`
-	if config.hasOriginalName {
+	if relation.HasOriginalName {
 		originalNameSelect = `COALESCE("original_name"::text, '') AS "original_name"`
 	}
 
@@ -768,21 +411,18 @@ func fetchCanonicalAssetImageValues(
 		`SELECT %s, %s, %s, %s, %s, %s
 		   FROM %s
 		  WHERE %s IN (%s)
-		    AND COALESCE(NULLIF(TRIM(%s::text), ''), '') <> ''`,
-		pq.QuoteIdentifier(config.foreignKeyName),
-		pq.QuoteIdentifier(config.filenameColumn),
+		    AND %s`,
+		pq.QuoteIdentifier(relation.ForeignKey),
+		pq.QuoteIdentifier(relation.FilenameColumn),
 		typeIDSelect,
 		metadataJSONSelect,
 		titleSelect,
 		originalNameSelect,
-		pq.QuoteIdentifier(config.childTable),
-		pq.QuoteIdentifier(config.foreignKeyName),
+		pq.QuoteIdentifier(relation.ChildTable),
+		pq.QuoteIdentifier(relation.ForeignKey),
 		strings.Join(placeholders, ", "),
-		pq.QuoteIdentifier(config.filenameColumn),
+		relation.PictureCondition(""),
 	)
-	if config.hasAssetKind {
-		query += ` AND COALESCE(NULLIF(TRIM("asset_kind"::text), ''), 'image') = 'image'`
-	}
 	query += fmt.Sprintf(` ORDER BY %s`, strings.Join(orderByParts, ", "))
 
 	rows, err := querier.Query(query, queryArgs...)
@@ -860,10 +500,10 @@ func collectRowsMissingCardImageValues(rows []map[string]interface{}, supportCol
 }
 
 func resolveCardImageLookupKeys(supportColumns []string) []string {
-	merged := make([]string, 0, len(defaultCardImageLookupKeys)+len(supportColumns))
-	seen := make(map[string]bool, len(defaultCardImageLookupKeys)+len(supportColumns))
+	merged := make([]string, 0, len(dtt_card_picture.CardPictureFields)+len(supportColumns))
+	seen := make(map[string]bool, len(dtt_card_picture.CardPictureFields)+len(supportColumns))
 
-	for _, columnName := range defaultCardImageLookupKeys {
+	for _, columnName := range dtt_card_picture.CardPictureFields {
 		if columnName == "" || seen[columnName] {
 			continue
 		}

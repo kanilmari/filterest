@@ -116,6 +116,13 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 	if tx == nil {
 		return "", "", fmt.Errorf("tx is nil")
 	}
+	pictures, err := newCSVPictureRestore(tx, sanitizedTable, cols)
+	if err != nil {
+		return "", "", err
+	}
+	if pictures.active() {
+		query += ` RETURNING id, (xmax = 0)`
+	}
 
 	for {
 		record, err := reader.Read()
@@ -135,7 +142,25 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 			}
 		}
 
-		if _, err := tx.Exec(query, vals...); err != nil {
+		if pictures.active() {
+			plan, err := pictures.beforeRow(tx, record, vals)
+			if err != nil {
+				return "", "", fmt.Errorf("error preparing the card picture of a row: %v", err)
+			}
+			var rowID int64
+			var inserted bool
+			err = tx.QueryRow(query, vals...).Scan(&rowID, &inserted)
+			if err == sql.ErrNoRows {
+				// ON CONFLICT DO NOTHING: the row exists and was left as it is.
+				continue
+			}
+			if err != nil {
+				return "", "", fmt.Errorf("error inserting row: %v", err)
+			}
+			if err := pictures.afterRow(tx, rowID, inserted, plan); err != nil {
+				return "", "", fmt.Errorf("error applying the card picture rule: %v", err)
+			}
+		} else if _, err := tx.Exec(query, vals...); err != nil {
 			return "", "", fmt.Errorf("error inserting row: %v", err)
 		}
 		if langKeyColumnIndex >= 0 && langKeyColumnIndex < len(record) {

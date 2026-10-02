@@ -19,7 +19,7 @@ export function createRowArticleLoadSession({
     canFetchLinkingStatus = true,
 } = {}) {
     const dynamicChildrenCache = new Map();
-    const linkingStatusCache = new Map();
+    let attachmentLinkingRequest = null;
 
     const invalidateDynamicChildren = ({ childTable = "" } = {}) => {
         const normalizedChildTable = String(childTable || "").trim();
@@ -64,50 +64,41 @@ export function createRowArticleLoadSession({
         return requestPromise;
     };
 
-    const fetchCombinedLinkingStatus = ({
+    // The attachment list's linking status, asked once per article opening. The image
+    // gallery needs no linking status: the related-rows response names the gallery.
+    const fetchAttachmentLinking = ({
         forceRefresh = false,
     } = {}) => {
         if (!canFetchLinkingStatus) {
-            return Promise.resolve({ image: null, attachment: null });
+            return Promise.resolve(null);
         }
 
-        const cacheKey = "combined";
         if (forceRefresh) {
-            linkingStatusCache.delete(cacheKey);
-        } else if (linkingStatusCache.has(cacheKey)) {
-            return linkingStatusCache.get(cacheKey);
+            attachmentLinkingRequest = null;
+        } else if (attachmentLinkingRequest) {
+            return attachmentLinkingRequest;
         }
 
         const requestPromise = requestFn("assetLinkingStatus", {
             url_params: `?table=${encodeURIComponent(tableName)}`,
-        }).then((payload) => ({
-            image: Array.isArray(payload?.image_asset_linkings)
-                ? payload.image_asset_linkings[0] || null
-                : null,
-            attachment: Array.isArray(payload?.attachment_asset_linkings)
+        }).then((payload) => (
+            Array.isArray(payload?.attachment_asset_linkings)
                 ? payload.attachment_asset_linkings[0] || null
-                : null,
-        })).catch((err) => {
-            if (linkingStatusCache.get(cacheKey) === requestPromise) {
-                linkingStatusCache.delete(cacheKey);
+                : null
+        )).catch((err) => {
+            if (attachmentLinkingRequest === requestPromise) {
+                attachmentLinkingRequest = null;
             }
             throw err;
         });
 
-        linkingStatusCache.set(cacheKey, requestPromise);
+        attachmentLinkingRequest = requestPromise;
         return requestPromise;
     };
 
     return {
         fetchDynamicChildren,
         invalidateDynamicChildren,
-        fetchImageLinking: async ({ forceRefresh = false } = {}) => {
-            const payload = await fetchCombinedLinkingStatus({ forceRefresh });
-            return payload?.image || null;
-        },
-        fetchAttachmentLinking: async ({ forceRefresh = false } = {}) => {
-            const payload = await fetchCombinedLinkingStatus({ forceRefresh });
-            return payload?.attachment || null;
-        },
+        fetchAttachmentLinking,
     };
 }

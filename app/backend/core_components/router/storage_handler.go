@@ -117,9 +117,11 @@ func parseDatasetMediaStoragePath(cleanRel string) (dtt_1_row_read.DatasetMediaS
 	}, true
 }
 
+// canonicalStorageID uses the one storage folder-name rule that storage cleanup
+// also applies, so a path this route serves as dataset media is exactly a folder
+// that cleanup may treat as a dataset's.
 func canonicalStorageID(value string) bool {
-	parsed, err := strconv.ParseInt(value, 10, 64)
-	return err == nil && parsed > 0 && strconv.FormatInt(parsed, 10) == value
+	return media_utils.IsCanonicalStorageID(value)
 }
 
 func storageRequestActor(w http.ResponseWriter, r *http.Request) (dbutils.RequestActorContext, storageAuthorizationDecision) {
@@ -220,7 +222,7 @@ var storageAuthorizeMediaRead = media_library.AuthorizeStorageRead
 func authorizeStorageRequest(w http.ResponseWriter, r *http.Request, cleanRel string) storageAuthorizationDecision {
 	// Reused images retain the existing protected response and contained-open path.
 	if strings.HasPrefix(cleanRel, "media/") {
-		id, _, filename, ok := media_library.ParseStoragePath(cleanRel)
+		id, _, filename, ok := media_utils.ParseMediaLibraryStoragePath(cleanRel)
 		if !ok {
 			return storageAuthorizationNotFound
 		}

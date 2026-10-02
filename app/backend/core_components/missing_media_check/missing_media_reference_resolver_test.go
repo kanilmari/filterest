@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	media_utils "easelect/backend/core_components/media_utils"
 )
 
 func writeStorageFile(t *testing.T, storageRoot string, relativePath string) {
@@ -22,6 +24,11 @@ func writeStorageFile(t *testing.T, storageRoot string, relativePath string) {
 	}
 }
 
+// fileFound answers as the check does whether any size folder holds the file.
+func fileFound(storageRoot string, relativePaths []string) bool {
+	return media_utils.StoredPictureState(relativePaths, media_utils.StoredFileState(storageRoot)) == media_utils.StoredFileExists
+}
+
 func TestReferencePresentOnDisk(t *testing.T) {
 	storageRoot := t.TempDir()
 	writeStorageFile(t, storageRoot, "117/12/original/117_12_3.jpg")
@@ -30,7 +37,7 @@ func TestReferencePresentOnDisk(t *testing.T) {
 	if !ok {
 		t.Fatal("a stored filename must resolve to storage coordinates")
 	}
-	if !anyVariantExists(storageFileExists(storageRoot), reference.RelativePaths) {
+	if !fileFound(storageRoot, reference.RelativePaths) {
 		t.Fatalf("file on disk reported as missing; looked in %v", reference.RelativePaths)
 	}
 }
@@ -47,7 +54,7 @@ func TestReferenceMissingFromDisk(t *testing.T) {
 	if !ok {
 		t.Fatal("a stored filename must resolve even when its file is gone")
 	}
-	if anyVariantExists(storageFileExists(storageRoot), reference.RelativePaths) {
+	if fileFound(storageRoot, reference.RelativePaths) {
 		t.Fatal("an empty storage folder must be reported as missing")
 	}
 }
@@ -59,7 +66,7 @@ func TestReferenceFoundThroughASizedVariantOnly(t *testing.T) {
 	writeStorageFile(t, storageRoot, "117/12/1000/117_12_3.jpg")
 
 	reference, _ := ResolveReference("117_12_3.jpg", "117", 12)
-	if !anyVariantExists(storageFileExists(storageRoot), reference.RelativePaths) {
+	if !fileFound(storageRoot, reference.RelativePaths) {
 		t.Fatal("a surviving sized variant still shows a picture and is not missing")
 	}
 }
@@ -81,7 +88,7 @@ func TestLegacyFlatFilenameKeepsItsOwnCoordinates(t *testing.T) {
 	if reference.OwnerFolder != "117/1" {
 		t.Fatalf("owner folder = %q, want 117/1 from the filename itself", reference.OwnerFolder)
 	}
-	if !anyVariantExists(storageFileExists(storageRoot), reference.RelativePaths) {
+	if !fileFound(storageRoot, reference.RelativePaths) {
 		t.Fatalf("legacy file on disk reported as missing; looked in %v", reference.RelativePaths)
 	}
 }
@@ -93,7 +100,7 @@ func TestLegacyFlatFilenameMissingIsReportedNotCrashed(t *testing.T) {
 	if !ok {
 		t.Fatal("a retired flat filename must resolve so the run can report it")
 	}
-	if anyVariantExists(storageFileExists(storageRoot), reference.RelativePaths) {
+	if fileFound(storageRoot, reference.RelativePaths) {
 		t.Fatal("nothing is on disk, so the reference must count as missing")
 	}
 }
@@ -113,7 +120,7 @@ func TestMediaLibraryReferenceUsesItsOwnFolder(t *testing.T) {
 	if reference.OwnerFolder != "media/"+assetID {
 		t.Fatalf("owner folder = %q, want the asset's own folder", reference.OwnerFolder)
 	}
-	if !anyVariantExists(storageFileExists(storageRoot), reference.RelativePaths) {
+	if !fileFound(storageRoot, reference.RelativePaths) {
 		t.Fatalf("shared asset on disk reported as missing; looked in %v", reference.RelativePaths)
 	}
 }
@@ -131,6 +138,37 @@ func TestHandEditedValueStaysInsideStorage(t *testing.T) {
 	for _, relativePath := range reference.RelativePaths {
 		if filepath.IsAbs(relativePath) || len(relativePath) > 2 && relativePath[:2] == ".." {
 			t.Fatalf("candidate path %q leaves the storage root", relativePath)
+		}
+	}
+}
+
+// A gallery row stored as a storage route address is looked for where the route serves
+// it from, not in the parent row's own folder; otherwise a file in use could be listed
+// as unused.
+func TestGalleryReferenceWithTheStoragePrefixUsesItsOwnFolder(t *testing.T) {
+	reference, ok := ResolveReference("/storage/117/5/original/photo.jpg", "300", 1)
+	if !ok || reference.OwnerFolder != "117/5" || reference.Filename != "photo.jpg" {
+		t.Fatalf("resolved to %+v (%v), want folder 117/5", reference, ok)
+	}
+}
+
+// A card picture is placed the way the card picture rule places it, so the check never
+// looks for it somewhere the writer would not.
+func TestCardPictureReferenceIsPlacedLikeTheWriterPlacesIt(t *testing.T) {
+	reference, ok := ResolveCardPictureReference("/storage/117/5/original/photo.jpg", "117", 4)
+	if !ok || reference.OwnerFolder != "117/5" || reference.Filename != "photo.jpg" {
+		t.Fatalf("a /storage/ address resolved to %+v (%v), want 117/5/photo.jpg", reference, ok)
+	}
+	if reference, ok = ResolveCardPictureReference("117_4_4.jpg", "117", 4); !ok || reference.OwnerFolder != "117/4" {
+		t.Fatalf("a flat name resolved to %+v (%v), want the row's own folder", reference, ok)
+	}
+	const assetID = "3f1c2b0e-8a4d-4f6b-9c2e-5d7a1b3c4e5f"
+	if reference, ok = ResolveCardPictureReference("/storage/media/"+assetID+"/original/image.webp", "117", 4); !ok || !reference.MediaLibrary {
+		t.Fatalf("a media-library address resolved to %+v (%v), want the library folder", reference, ok)
+	}
+	for _, unplaceable := range []string{"../../etc/passwd", "117/5/extra/original/photo.jpg", "117/5/original/photo.jpg?size=1", "null/4/photo.jpg"} {
+		if reference, ok := ResolveCardPictureReference(unplaceable, "117", 4); ok {
+			t.Errorf("%q resolved to %+v; the writer cannot place it, so neither may the check", unplaceable, reference)
 		}
 	}
 }

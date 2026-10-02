@@ -6,7 +6,11 @@
 import { createImageUploadPlaceholder } from "./row_article_image_upload.js";
 import { activateImageFirstView } from "./image_first_view_activation.js";
 import { resolveImagePath } from "./row_article_content_builder_helpers.js";
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
+import {
+    resolveRowArticleImageRows,
+    resolveRowArticleMainImageRow,
+    resolveRowArticlePictureIdentity,
+} from "./row_article_image_rows.js";
 import { createImageElement } from "./card_avatar_builder.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
@@ -26,15 +30,20 @@ const VISIBLE_THUMBNAIL_COUNT = 5;
  * @param {number|string} parentRowId - parent row id
  * @param {Object|null} childTableData - child entry from fetchDynamicChildren (has .rows, .dataset, .column) or null
  * @param {() => void} onImageAdded - callback after successful upload (caller should refresh gallery)
- * @param {{ canUpload?: boolean, canDelete?: boolean, canSetPrimary?: boolean, canEditMetadata?: boolean, parentImageRows?: Object[], imageFirstContext?: Object }} [options]
+ * @param {{ canUpload?: boolean, canDelete?: boolean, canSetPrimary?: boolean, canEditMetadata?: boolean, imageRows?: Object[], cardPicture?: string, chosenImageRow?: Object|null, onChooseImage?: (row: Object) => void, imageFirstContext?: Object }} [options]
+ *   imageRows: what the article shows, when the caller composed it; otherwise childTableData.rows as given.
+ *   cardPicture: the picture the server says the card shows; its thumbnail starts active.
+ *   chosenImageRow: a picture the viewer chose in an earlier build; it starts active instead while listed.
+ *   onChooseImage: told when the viewer chooses a thumbnail, so the next build can keep it.
  * @returns {HTMLElement}
  */
 export function buildRowArticleImageGallery(parentTableName, parentRowId, childTableData, onImageAdded, options = {}) {
     const container = document.createElement("div");
     container.classList.add("big_card_image_gallery", "row_article_image_gallery");
+    // Shown in the order given: the server orders the gallery. Rows without an id (a
+    // card-only picture or the row's own image fields) are shown without row actions.
     const rows = resolveRowArticleImageRows(
-        childTableData?.rows || [],
-        options.parentImageRows || [],
+        Array.isArray(options.imageRows) ? options.imageRows : childTableData?.rows || [],
     );
     const childDataset = childTableData?.dataset || "";
     const childColumn = childTableData?.column || "";
@@ -145,10 +154,18 @@ export function buildRowArticleImageGallery(parentTableName, parentRowId, childT
         .map((row, idx) => ({ row, idx }))
         .filter(({ row }) => typeof row?.filename === "string" && row.filename.trim() !== "");
 
-    let activeImageRow = imageEntries[0]?.row || null;
+    // The thumbnails keep the server's order. The one active first is a picture the
+    // viewer chose before a refresh rebuilt the gallery, while it still lists it;
+    // otherwise the card's picture wherever it stands, so the gallery opens on the same
+    // picture as the card.
+    const galleryRows = imageEntries.map(({ row }) => row);
+    let activeImageRow = galleryRows.find((row) => imageRowsMatch(row, options.chosenImageRow))
+        || resolveRowArticleMainImageRow(galleryRows, options.cardPicture);
     const syncActiveImageRow = (row) => {
         activeImageRow = row || null;
-        metadataEditor?.loadRow(activeImageRow);
+        // Only a stored gallery row has metadata to save; the editor stays hidden
+        // while a picture without a row id is active.
+        metadataEditor?.loadRow(activeImageRow?.id != null ? activeImageRow : null);
     };
     syncActiveImageRow(activeImageRow);
 
@@ -204,7 +221,9 @@ export function buildRowArticleImageGallery(parentTableName, parentRowId, childT
     };
 
     const attachImageContextMenu = (host, row, activateRow) => {
-        if (!(canDelete || canSetPrimary || canEditMetadata)) {
+        // Every menu action needs a stored row, so a picture without one keeps the
+        // browser's own context menu instead of an empty gallery menu.
+        if (row?.id == null || !(canDelete || canSetPrimary || canEditMetadata)) {
             return;
         }
         host.addEventListener("contextmenu", (event) => {
@@ -360,9 +379,11 @@ export function buildRowArticleImageGallery(parentTableName, parentRowId, childT
             thumb.classList.add("active_thumb");
         }
 
+        // The viewer chose this picture, so the caller keeps it active across refreshes.
         const selectThumbnail = () => {
             syncActiveImageRow(row);
             updateActiveThumbnailState();
+            options.onChooseImage?.(row);
         };
         const openThumbnailPreview = () => {
             selectThumbnail();
@@ -464,6 +485,7 @@ function buildDisabledThumbnailPlaceholder() {
     return placeholder;
 }
 
+// Stored rows match by id; rows without one, such as a card-only picture, by picture identity.
 function imageRowsMatch(left, right) {
     if (!left || !right) {
         return false;
@@ -471,7 +493,7 @@ function imageRowsMatch(left, right) {
     if (left.id != null || right.id != null) {
         return String(left.id) === String(right.id);
     }
-    return String(left.filename || "") === String(right.filename || "");
+    return resolveRowArticlePictureIdentity(left.filename) === resolveRowArticlePictureIdentity(right.filename);
 }
 
 function usesSharedAssetChildDataset(childTableData) {

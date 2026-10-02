@@ -13,6 +13,7 @@ import {
   dropTempDataset,
   openTempDataset,
 } from '../helpers/temp-dataset';
+import { switchToView } from '../helpers/view-switch';
 
 type E2EPage = import('@playwright/test').Page;
 
@@ -107,19 +108,9 @@ test.describe('C9 — Big Card Image Metadata Editor', () => {
       });
       expect(enableImageResponse.status, enableImageResponse.body).toBe(201);
 
-      await page.evaluate((targetDatasetName) => {
-        localStorage.setItem(`${targetDatasetName}_sorting_and_filtering_specs`, JSON.stringify({
-          sort: { column: null, direction: null },
-          filters: {},
-          offset: 0,
-          cardView: {
-            collapsed: true,
-            expandedId: 1,
-          },
-        }));
-      }, datasetName);
-
+      // The article is a view of its own; switching to it opens the first result's article.
       await openTempDataset(page, datasetName, 'card');
+      await switchToView(page, 'article_view');
       await expect(page.locator('[data-testid="big-card-container"]').first()).toBeVisible({ timeout: 10000 });
 
       const galleryInput = page.locator('.big_card_image_gallery input[type="file"]').first();
@@ -142,7 +133,8 @@ test.describe('C9 — Big Card Image Metadata Editor', () => {
 
       await expect(page.locator('[data-testid="big-card-image-title-input"]').first()).toHaveValue('Marketing hero', { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-image-description-input"]').first()).toHaveValue('Shared asset image description', { timeout: 15000 });
-      await expect(page.locator('[data-testid="big-card-image-thumb-0"]').first()).toHaveAttribute('src', /\/storage\//, { timeout: 5000 });
+      // The thumbnail is a presentation wrapper; the picture is the image inside it.
+      await expect(page.locator('[data-testid="big-card-image-thumb-0"] img').first()).toHaveAttribute('src', /\/storage\//, { timeout: 5000 });
     } finally {
       if (!page.isClosed()) {
         await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {

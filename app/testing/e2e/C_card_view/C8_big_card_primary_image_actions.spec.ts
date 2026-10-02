@@ -13,6 +13,7 @@ import {
   dropTempDataset,
   openTempDataset,
 } from '../helpers/temp-dataset';
+import { switchToView } from '../helpers/view-switch';
 
 type E2EPage = import('@playwright/test').Page;
 
@@ -72,6 +73,33 @@ async function postJsonWithCsrf(
   );
 }
 
+type GalleryState = {
+  cardPicture: string;
+  filenames: string[];
+};
+
+// Reads what the server reports for row 1: its shown card picture and its gallery's
+// stored names in the gallery order.
+async function readGalleryState(page: E2EPage, datasetName: string): Promise<GalleryState> {
+  const response = await postJsonWithCsrf(page, `/api/fetch-dynamic-children?dataset=${encodeURIComponent(datasetName)}`, {
+    parent_dataset: datasetName,
+    parent_pk_value: '1',
+  });
+  expect(response.ok, `Failed to read the gallery of ${datasetName}: ${response.body}`).toBe(true);
+  const body = JSON.parse(response.body);
+  const relation = body?.gallery_relation;
+  const gallery = (Array.isArray(body?.child_tables) ? body.child_tables : []).find(
+    (childTable: { dataset?: string; column?: string }) =>
+      childTable?.dataset === relation?.dataset && childTable?.column === relation?.column,
+  );
+  return {
+    cardPicture: String(body?.card_picture ?? ''),
+    filenames: (Array.isArray(gallery?.rows) ? gallery.rows : [])
+      .map((row: { filename?: string }) => String(row?.filename || ''))
+      .filter(Boolean),
+  };
+}
+
 async function confirmModal(page: E2EPage): Promise<void> {
   const confirmButton = page.locator('[data-testid="confirm-modal-confirm-button"]').first();
   await expect(confirmButton).toBeVisible({ timeout: 5000 });
@@ -113,19 +141,9 @@ test.describe('C8 — Big Card Primary Image Actions', () => {
       });
       expect(enableImageResponse.status, enableImageResponse.body).toBe(201);
 
-      await page.evaluate((targetDatasetName) => {
-        localStorage.setItem(`${targetDatasetName}_sorting_and_filtering_specs`, JSON.stringify({
-          sort: { column: null, direction: null },
-          filters: {},
-          offset: 0,
-          cardView: {
-            collapsed: true,
-            expandedId: 1,
-          },
-        }));
-      }, datasetName);
-
+      // The article is a view of its own; switching to it opens the first result's article.
       await openTempDataset(page, datasetName, 'card');
+      await switchToView(page, 'article_view');
       await expect(page.locator('[data-testid="big-card-container"]').first()).toBeVisible({ timeout: 10000 });
 
       const galleryInput = page.locator('.big_card_image_gallery input[type="file"]').first();
@@ -149,19 +167,30 @@ test.describe('C8 — Big Card Primary Image Actions', () => {
       });
       await expect(page.locator('[data-testid="big-card-image-thumb-1"]').first()).toBeVisible({ timeout: 15000 });
 
-      const firstThumbSrc = await page.locator('[data-testid="big-card-image-thumb-0"]').first().getAttribute('src');
-      const targetThumbSrc = await page.locator('[data-testid="big-card-image-thumb-1"]').first().getAttribute('src');
+      // The thumbnail is a presentation wrapper; the picture is the image inside it.
+      const thumbImage = (index: number) => page.locator(`[data-testid="big-card-image-thumb-${index}"] img`).first();
+      const firstThumbSrc = await thumbImage(0).getAttribute('src');
+      const targetThumbSrc = await thumbImage(1).getAttribute('src');
       expect(firstThumbSrc).toBeTruthy();
       expect(targetThumbSrc).toBeTruthy();
       expect(firstThumbSrc).not.toBe(targetThumbSrc);
+
+      // K120: an upload becomes the card picture only when the row has none, so the first
+      // upload stays the card picture and the second goes after it.
+      const afterUploads = await readGalleryState(page, datasetName);
+      expect(afterUploads.filenames).toHaveLength(2);
+      expect(afterUploads.cardPicture).toBe(afterUploads.filenames[0]);
 
       await page.locator('[data-testid="big-card-image-item-1"]').first().click({ button: 'right' });
       await expect(page.locator('[data-testid="big-card-image-menu-primary"]').first()).toBeVisible({ timeout: 5000 });
       await page.locator('[data-testid="big-card-image-menu-primary"]').first().click();
 
-      await expect(page.locator('[data-testid="big-card-image-thumb-0"]').first()).toHaveAttribute('src', targetThumbSrc!, { timeout: 15000 });
+      await expect(thumbImage(0)).toHaveAttribute('src', targetThumbSrc!, { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-image-primary-0"]').first()).toHaveClass(/is-primary/, { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-image-delete-0"]').first()).toBeVisible({ timeout: 5000 });
+      // The primary picture is the card picture.
+      await expect.poll(async () => (await readGalleryState(page, datasetName)).cardPicture, { timeout: 15000 })
+        .toBe(afterUploads.filenames[1]);
 
       await page.locator('[data-testid="big-card-image-item-0"]').first().click({ button: 'right' });
       await expect(page.locator('[data-testid="big-card-image-menu-delete"]').first()).toBeVisible({ timeout: 5000 });
@@ -169,8 +198,11 @@ test.describe('C8 — Big Card Primary Image Actions', () => {
       await confirmModal(page);
 
       await expect(page.locator('[data-testid^="big-card-image-thumb-"]')).toHaveCount(1, { timeout: 15000 });
-      await expect(page.locator('[data-testid="big-card-image-thumb-0"]').first()).toHaveAttribute('src', firstThumbSrc!, { timeout: 15000 });
+      await expect(thumbImage(0)).toHaveAttribute('src', firstThumbSrc!, { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-image-delete-0"]').first()).toBeVisible({ timeout: 15000 });
+      // Deleting the primary leaves the gallery's first picture on the card.
+      await expect.poll(async () => (await readGalleryState(page, datasetName)).cardPicture, { timeout: 15000 })
+        .toBe(afterUploads.filenames[0]);
     } finally {
       if (!page.isClosed()) {
         await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {

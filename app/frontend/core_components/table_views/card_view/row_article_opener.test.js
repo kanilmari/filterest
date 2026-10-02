@@ -64,12 +64,15 @@ vi.mock("./row_article_attachment_list.js", () => ({
     buildRowArticleAttachmentList: vi.fn(),
 }));
 
-vi.mock("./row_article_asset_resolver.js", () => ({
+vi.mock("./row_article_asset_resolver.js", async (importOriginal) => ({
+    // The real resolveRowArticleDisplayedImageRows composes what the article shows
+    // from the gallery child these tests steer through the mocks below.
+    ...await importOriginal(),
     filterRowArticleNonMediaChildTables: vi.fn((tables) => tables),
     resolveRowArticleAttachmentListChild: vi.fn(),
-    resolveRowArticleDynamicAssetChildren: vi.fn(() => ({})),
     resolveRowArticleImageGalleryChild: vi.fn(),
     resolveRowArticleParentImageRows: vi.fn(() => []),
+    resolveRowArticleSharedAssetChild: vi.fn(() => null),
 }));
 
 vi.mock("../../dev_tools/function_counter.js", () => ({
@@ -160,7 +163,6 @@ vi.mock("./row_article_load_session.js", () => ({
     createRowArticleLoadSession: vi.fn(() => ({
         fetchAttachmentLinking: vi.fn(),
         fetchDynamicChildren: vi.fn(),
-        fetchImageLinking: vi.fn(),
     })),
 }));
 
@@ -182,9 +184,9 @@ import { buildRowArticleImageGallery } from "./row_article_image_gallery.js";
 import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js";
 import {
     resolveRowArticleAttachmentListChild,
-    resolveRowArticleDynamicAssetChildren,
     resolveRowArticleImageGalleryChild,
     resolveRowArticleParentImageRows,
+    resolveRowArticleSharedAssetChild,
 } from "./row_article_asset_resolver.js";
 import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
@@ -229,13 +231,13 @@ describe("openRowArticleView", () => {
         vi.mocked(hasDatasetPermission).mockResolvedValue(false);
         vi.mocked(buildRowArticleAttachmentList).mockReset();
         vi.mocked(resolveRowArticleAttachmentListChild).mockReset();
-        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReset();
+        vi.mocked(resolveRowArticleSharedAssetChild).mockReset();
         vi.mocked(resolveRowArticleImageGalleryChild).mockReset();
         vi.mocked(resolveRowArticleParentImageRows).mockReset();
         vi.mocked(buildRowArticleContent).mockReset();
         vi.mocked(createRowArticleLoadSession).mockReset();
         vi.mocked(resolveRowArticleAttachmentListChild).mockReturnValue(null);
-        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReturnValue({});
+        vi.mocked(resolveRowArticleSharedAssetChild).mockReturnValue(null);
         vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValue(null);
         vi.mocked(resolveRowArticleParentImageRows).mockReturnValue([]);
         vi.mocked(parseRoleString).mockReturnValue({ baseRoles: [] });
@@ -243,7 +245,6 @@ describe("openRowArticleView", () => {
         vi.mocked(createRowArticleLoadSession).mockReturnValue({
             fetchAttachmentLinking: vi.fn(),
             fetchDynamicChildren: vi.fn(),
-            fetchImageLinking: vi.fn(),
         });
         getParamsMock.mockReturnValue({});
         setParamsMock.mockClear();
@@ -332,7 +333,6 @@ describe("openRowArticleView", () => {
         vi.mocked(createRowArticleLoadSession).mockReturnValue({
             fetchAttachmentLinking: vi.fn(async () => null),
             fetchDynamicChildren: vi.fn(async () => ({ child_tables: [] })),
-            fetchImageLinking: vi.fn(async () => null),
         });
         vi.mocked(buildRowArticleImageGallery).mockImplementation(() => document.createElement("div"));
         vi.mocked(buildRowArticleAttachmentList).mockImplementation(() => document.createElement("div"));
@@ -603,11 +603,13 @@ describe("openRowArticleView", () => {
         vi.mocked(buildRowArticleContent).mockResolvedValueOnce({ rowArticleContentElement: content });
         vi.mocked(resolveRowArticleParentImageRows).mockReturnValueOnce(parentRows);
         const child = { dataset: "tickets_assets", column: "tickets_id", rows: childRows };
-        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReturnValue({ assetsChild: child });
+        vi.mocked(resolveRowArticleSharedAssetChild).mockReturnValue(child);
         vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValue(child);
         const session = {
-            fetchDynamicChildren: vi.fn(async () => ({ child_tables: [child] })),
-            fetchImageLinking: vi.fn(async () => ({ child_table: "tickets_assets" })),
+            fetchDynamicChildren: vi.fn(async () => ({
+                gallery_relation: { dataset: "tickets_assets", column: "tickets_id" },
+                child_tables: [child],
+            })),
             fetchAttachmentLinking: vi.fn(async () => null),
         };
         vi.mocked(createRowArticleLoadSession).mockReturnValueOnce(session);
@@ -624,7 +626,7 @@ describe("openRowArticleView", () => {
 
         expect(inlineImage.querySelector(".row_article_inline_image_caption")?.textContent).toBe("Child photo credit");
         expect(session.fetchDynamicChildren).toHaveBeenCalledTimes(1);
-        expect(session.fetchImageLinking).toHaveBeenCalledTimes(1);
+        // The response names the gallery, so no linking status is asked for the pictures.
         expect(session.fetchAttachmentLinking).not.toHaveBeenCalled();
         expect(buildRowArticleImageGallery).not.toHaveBeenCalled();
         expect(buildRowArticleAttachmentList).not.toHaveBeenCalled();
@@ -669,25 +671,28 @@ describe("openRowArticleView", () => {
         const { inlineImage, session, selectedCard } = prepareInlineCaptionArticle({
             childRows: [{ filename: "10_2_1.webp", description: "Late photo credit" }],
         });
-        let resolveLinking;
+        let resolveChildren;
         let current = true;
-        session.fetchImageLinking.mockImplementationOnce(() => new Promise((resolve) => { resolveLinking = resolve; }));
+        session.fetchDynamicChildren.mockImplementationOnce(() => new Promise((resolve) => { resolveChildren = resolve; }));
         await openRowArticleView(
             { id: 2, cached_image: "10_2_1.webp" }, "tickets", selectedCard,
             { isCurrent: () => current },
         );
         await flushRowArticleHydration();
-        expect(session.fetchImageLinking).toHaveBeenCalledTimes(1);
+        expect(session.fetchDynamicChildren).toHaveBeenCalledTimes(1);
         if (state === "superseded") current = false;
         else document.querySelector(".active_row_article").remove();
-        resolveLinking({ child_table: "tickets_assets" });
+        resolveChildren({
+            gallery_relation: { dataset: "tickets_assets", column: "tickets_id" },
+            child_tables: [{ dataset: "tickets_assets", column: "tickets_id", rows: [{ filename: "10_2_1.webp", description: "Late photo credit" }] }],
+        });
         await flushRowArticleHydration();
 
         expect(inlineImage.querySelector(".row_article_inline_image_caption")).toBeNull();
         expect(buildRowArticleImageGallery).not.toHaveBeenCalled();
     });
 
-    test("passes parent image-role values to the gallery even without an image child relation", async () => {
+    test("passes only the card's picture, not the row's image fields, to the gallery when the response carries no gallery", async () => {
         document.body.innerHTML = `
             <div id="tickets_article_view_container">
                 <div class="card_view_wrapper">
@@ -707,7 +712,6 @@ describe("openRowArticleView", () => {
             asset_kind: "image",
             filename: "10_2_1.webp",
             is_parent_row_image: true,
-            is_primary: true,
         }];
         vi.mocked(parseRoleString).mockImplementation((roleString = "") => ({
             baseRoles: String(roleString).split(/\s+/).filter(Boolean),
@@ -715,8 +719,7 @@ describe("openRowArticleView", () => {
         vi.mocked(resolveRowArticleParentImageRows).mockReturnValueOnce(parentImageRows);
         vi.mocked(createRowArticleLoadSession).mockReturnValueOnce({
             fetchAttachmentLinking: vi.fn(() => Promise.resolve(null)),
-            fetchDynamicChildren: vi.fn(() => Promise.resolve({ child_tables: [] })),
-            fetchImageLinking: vi.fn(() => Promise.resolve(null)),
+            fetchDynamicChildren: vi.fn(() => Promise.resolve({ child_tables: [], card_picture: "10_2_3.webp" })),
         });
 
         await openRowArticleView(
@@ -726,6 +729,7 @@ describe("openRowArticleView", () => {
         );
         await flushRowArticleHydration();
 
+        // The row's image fields only stand in until the response arrives.
         expect(resolveRowArticleParentImageRows).toHaveBeenCalledWith(
             expect.objectContaining({ cached_image: "10_2_1.webp" }),
             ["cached_image"],
@@ -735,11 +739,14 @@ describe("openRowArticleView", () => {
             2,
             null,
             expect.any(Function),
-            expect.objectContaining({ parentImageRows }),
+            expect.objectContaining({
+                imageRows: [{ asset_kind: "image", filename: "10_2_3.webp", is_card_only_picture: true }],
+                cardPicture: "10_2_3.webp",
+            }),
         );
     });
 
-    test("does not resurrect a deleted cached image after the authoritative child gallery refreshes", async () => {
+    test("does not resurrect a deleted cached image once the response carries the gallery", async () => {
         document.body.innerHTML = `
             <div id="tickets_article_view_container">
                 <div class="card_view_wrapper">
@@ -759,7 +766,6 @@ describe("openRowArticleView", () => {
             asset_kind: "image",
             filename: "deleted-image.webp",
             is_parent_row_image: true,
-            is_primary: true,
         }];
         const authoritativeImageChild = {
             dataset: "tickets_assets",
@@ -767,19 +773,20 @@ describe("openRowArticleView", () => {
             relation_kind: "shared_asset",
             rows: [],
         };
+        const freshResponse = {
+            gallery_relation: { dataset: "tickets_assets", column: "tickets_id" },
+            card_picture: "",
+            child_tables: [authoritativeImageChild],
+        };
         vi.mocked(parseRoleString).mockImplementation((roleString = "") => ({
             baseRoles: String(roleString).split(/\s+/).filter(Boolean),
         }));
         vi.mocked(resolveRowArticleParentImageRows).mockReturnValueOnce(staleParentImageRows);
         vi.mocked(createRowArticleLoadSession).mockReturnValueOnce({
             fetchAttachmentLinking: vi.fn(() => Promise.resolve(null)),
-            fetchDynamicChildren: vi.fn(() => Promise.resolve({ child_tables: [authoritativeImageChild] })),
-            fetchImageLinking: vi.fn(() => Promise.resolve({ child_table: "tickets_assets" })),
+            fetchDynamicChildren: vi.fn(() => Promise.resolve(freshResponse)),
         });
-        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReturnValueOnce({
-            assetsChild: authoritativeImageChild,
-            imagesChild: null,
-        });
+        vi.mocked(resolveRowArticleSharedAssetChild).mockReturnValueOnce(authoritativeImageChild);
         vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValueOnce(authoritativeImageChild);
         vi.mocked(buildRowArticleImageGallery).mockReturnValueOnce(document.createElement("div"));
 
@@ -790,12 +797,14 @@ describe("openRowArticleView", () => {
         );
         await flushRowArticleHydration();
 
+        // The gallery comes from the response alone, never from linking metadata.
+        expect(resolveRowArticleImageGalleryChild).toHaveBeenCalledWith(freshResponse);
         expect(buildRowArticleImageGallery).toHaveBeenCalledWith(
             "tickets",
             2,
             authoritativeImageChild,
             expect.any(Function),
-            expect.objectContaining({ parentImageRows: [] }),
+            expect.objectContaining({ imageRows: [] }),
         );
     });
 
@@ -832,13 +841,12 @@ describe("openRowArticleView", () => {
         });
         vi.mocked(createRowArticleLoadSession).mockReturnValueOnce({
             fetchAttachmentLinking: vi.fn(() => Promise.resolve(null)),
-            fetchDynamicChildren: vi.fn(() => Promise.resolve({ child_tables: [assetsChild] })),
-            fetchImageLinking: vi.fn(() => Promise.resolve({ child_table: "app_service_catalog_assets" })),
+            fetchDynamicChildren: vi.fn(() => Promise.resolve({
+                gallery_relation: { dataset: "app_service_catalog_assets", column: "app_service_catalog_id" },
+                child_tables: [assetsChild],
+            })),
         });
-        vi.mocked(resolveRowArticleDynamicAssetChildren).mockReturnValueOnce({
-            assetsChild,
-            imagesChild: null,
-        });
+        vi.mocked(resolveRowArticleSharedAssetChild).mockReturnValueOnce(assetsChild);
         vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValueOnce(assetsChild);
         vi.mocked(buildRowArticleImageGallery).mockImplementationOnce(() => {
             const gallery = document.createElement("div");
@@ -894,7 +902,6 @@ describe("openRowArticleView", () => {
         vi.mocked(createRowArticleLoadSession).mockReturnValueOnce({
             fetchAttachmentLinking: vi.fn(() => Promise.resolve(null)),
             fetchDynamicChildren: vi.fn(() => Promise.resolve({ child_tables: [] })),
-            fetchImageLinking: vi.fn(() => Promise.resolve(null)),
         });
         vi.mocked(buildRowArticleImageGallery).mockImplementationOnce(() => {
             const gallery = document.createElement("div");

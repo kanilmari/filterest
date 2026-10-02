@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/lib/pq"
 )
@@ -126,6 +127,14 @@ func updateCacheTargetsBase(
 			continue
 		}
 
+		// The parent's card picture is no cache of the uploaded name: the one card picture
+		// rule chooses it from the gallery once the file name is stored, whatever the
+		// cache targets say (saveUploadedFiles and the gallery row writers; owner decision
+		// K120). Every other cache target is not a card picture and keeps the plain write.
+		if isParentPreviewCacheTarget(targetTblName, targetColName, targetTableName, targetColumnName) {
+			continue
+		}
+
 		updateQuery := fmt.Sprintf(
 			`UPDATE %s SET %s = $1 WHERE %s = $2`,
 			pq.QuoteIdentifier(targetTblName),
@@ -140,4 +149,12 @@ func updateCacheTargetsBase(
 	}
 
 	return nil
+}
+
+// isParentPreviewCacheTarget reports whether a cache target is the relation's own
+// parent row preview: its cached_image column, addressed by the parent's id.
+func isParentPreviewCacheTarget(targetTable string, targetColumn string, relationParentTable string, relationParentColumn string) bool {
+	return strings.EqualFold(strings.TrimSpace(targetColumn), "cached_image") &&
+		targetTable == relationParentTable &&
+		strings.EqualFold(strings.TrimSpace(relationParentColumn), "id")
 }

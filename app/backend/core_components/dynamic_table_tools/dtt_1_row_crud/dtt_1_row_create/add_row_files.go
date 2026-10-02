@@ -223,6 +223,16 @@ func saveUploadedFiles(
 			}
 			return err
 		}
+		// The gallery row now names its stored file, so the card picture rule runs for its
+		// parent, whatever the upload settings' cache targets say (owner decision K120).
+		if err := dtt_asset_linking.ApplyCardPictureRuleForGalleryRows(tx, childTableName, []int64{childRowID}); err != nil {
+			fmt.Printf("\033[31m[saveUploadedFiles -> ApplyCardPictureRuleForGalleryRows] error: %s\033[0m\n", err.Error())
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating image preview")
+			if !rollbackCleanupRegistered {
+				cleanupUpload()
+			}
+			return fmt.Errorf("apply the card picture rule after an upload: %w", err)
+		}
 
 		// Päivitetään cacheTargets myös suorissa asset-uploadeissa, kun parent-FK voidaan lukea tallennetulta riviltä.
 		if strings.TrimSpace(effectiveReferencingColumn) != "" {

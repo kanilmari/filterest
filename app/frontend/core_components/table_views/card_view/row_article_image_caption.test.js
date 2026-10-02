@@ -68,6 +68,24 @@ describe("article image captions", () => {
         expect(caption.textContent).toBe("Photo: Creator.");
     });
 
+    // The same path on another host, or with another query, is another picture.
+    test.each([
+        ["another host", "https://old.example/logo.png", "https://new.example/logo.png"],
+        ["another query", "/storage/pic.png?v=1", "/storage/pic.png?v=2"],
+    ])("takes the caption from the row showing the same picture, not one at the same path on %s", (
+        _label, otherPicture, shownPicture,
+    ) => {
+        const article = document.createElement("article");
+        article.innerHTML = '<div class="big_card_image" data-row-article-image-column="cached_image"><img></div>';
+        article.querySelector("img").setAttribute("src", shownPicture);
+        syncRowArticleInlineImageCaptions(article, [
+            { id: 1, asset_kind: "image", filename: otherPicture, description: "Other picture" },
+            { id: 2, asset_kind: "image", filename: shownPicture, description: "Shown picture" },
+        ]);
+
+        expect(article.querySelector(".row_article_inline_image_caption")?.textContent).toBe("Shown picture");
+    });
+
     test("removes a stale caption when the linked image row is no longer present", () => {
         const { article } = buildArticleImage();
         syncRowArticleInlineImageCaptions(article, [{

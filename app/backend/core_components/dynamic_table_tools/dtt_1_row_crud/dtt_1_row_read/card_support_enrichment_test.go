@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
 
@@ -580,79 +581,70 @@ func TestCoerceCardSupportRowIDAcceptsByteSliceNumbers(t *testing.T) {
 }
 
 func TestDiscoverCanonicalAssetImageConfigDoesNotGuessParentAssetsWhenSharedAssetMetadataIsAttachmentOnly(t *testing.T) {
-	got, err := discoverCanonicalAssetImageConfig(openAttachmentOnlySharedAssetMockDB(t), "contracts")
+	got, err := dtt_card_picture.PictureRelationOf(openAttachmentOnlySharedAssetMockDB(t), "contracts")
 	if err != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) returned error: %v", err)
+		t.Fatalf("PictureRelationOf(...) returned error: %v", err)
 	}
 	if got != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) = %#v, want nil when shared asset metadata is attachment-only", got)
+		t.Fatalf("PictureRelationOf(...) = %#v, want nil when shared asset metadata is attachment-only", got)
 	}
 }
 
 func TestDiscoverCanonicalAssetImageConfigFallsBackToFKCandidatesWhenOnlyLegacyMetadataExists(t *testing.T) {
-	got, err := discoverCanonicalAssetImageConfig(openMixedCanonicalFallbackMockDB(t), "app_service_catalog")
+	got, err := dtt_card_picture.PictureRelationOf(openMixedCanonicalFallbackMockDB(t), "app_service_catalog")
 	if err != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) returned error: %v", err)
+		t.Fatalf("PictureRelationOf(...) returned error: %v", err)
 	}
 	if got == nil {
-		t.Fatal("discoverCanonicalAssetImageConfig(...) = nil, want FK-discovered canonical asset config")
+		t.Fatal("PictureRelationOf(...) = nil, want FK-discovered canonical asset config")
 	}
-	if got.childTable != "app_service_catalog_assets" {
-		t.Fatalf("childTable = %q, want app_service_catalog_assets", got.childTable)
+	if got.ChildTable != "app_service_catalog_assets" {
+		t.Fatalf("childTable = %q, want app_service_catalog_assets", got.ChildTable)
 	}
-	if got.foreignKeyName != "app_service_catalog_id" {
-		t.Fatalf("foreignKeyName = %q, want app_service_catalog_id", got.foreignKeyName)
+	if got.ForeignKey != "app_service_catalog_id" {
+		t.Fatalf("foreignKeyName = %q, want app_service_catalog_id", got.ForeignKey)
 	}
 }
 
 func TestDiscoverCanonicalAssetImageConfigPrefersFKMetadataBeforeParentAssetsGuess(t *testing.T) {
-	got, err := discoverCanonicalAssetImageConfig(openRelationDiscoveredCanonicalAssetMockDB(t), "gallery_items")
+	got, err := dtt_card_picture.PictureRelationOf(openRelationDiscoveredCanonicalAssetMockDB(t), "gallery_items")
 	if err != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) returned error: %v", err)
+		t.Fatalf("PictureRelationOf(...) returned error: %v", err)
 	}
 	if got == nil {
-		t.Fatal("discoverCanonicalAssetImageConfig(...) = nil, want discovered custom asset config")
+		t.Fatal("PictureRelationOf(...) = nil, want discovered custom asset config")
 	}
-	if got.childTable != "custom_gallery_assets" {
-		t.Fatalf("childTable = %q, want custom_gallery_assets", got.childTable)
+	if got.ChildTable != "custom_gallery_assets" {
+		t.Fatalf("childTable = %q, want custom_gallery_assets", got.ChildTable)
 	}
-	if got.foreignKeyName != "gallery_item_id" {
-		t.Fatalf("foreignKeyName = %q, want gallery_item_id", got.foreignKeyName)
+	if got.ForeignKey != "gallery_item_id" {
+		t.Fatalf("foreignKeyName = %q, want gallery_item_id", got.ForeignKey)
 	}
 }
 
 func TestDiscoverCanonicalAssetImageConfigFindsCustomNamedAssetTableWithoutSuffix(t *testing.T) {
-	got, err := discoverCanonicalAssetImageConfig(openCustomNamedCanonicalAssetMockDB(t), "gallery_items")
+	got, err := dtt_card_picture.PictureRelationOf(openCustomNamedCanonicalAssetMockDB(t), "gallery_items")
 	if err != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) returned error: %v", err)
+		t.Fatalf("PictureRelationOf(...) returned error: %v", err)
 	}
 	if got == nil {
-		t.Fatal("discoverCanonicalAssetImageConfig(...) = nil, want discovered custom asset config")
+		t.Fatal("PictureRelationOf(...) = nil, want discovered custom asset config")
 	}
-	if got.childTable != "custom_gallery_media" {
-		t.Fatalf("childTable = %q, want custom_gallery_media", got.childTable)
+	if got.ChildTable != "custom_gallery_media" {
+		t.Fatalf("childTable = %q, want custom_gallery_media", got.ChildTable)
 	}
-	if got.foreignKeyName != "gallery_item_id" {
-		t.Fatalf("foreignKeyName = %q, want gallery_item_id", got.foreignKeyName)
+	if got.ForeignKey != "gallery_item_id" {
+		t.Fatalf("foreignKeyName = %q, want gallery_item_id", got.ForeignKey)
 	}
 }
 
 func TestDiscoverCanonicalAssetImageConfigSkipsParentAssetsGuessWhenNonSharedMetadataExists(t *testing.T) {
-	got, err := discoverCanonicalAssetImageConfig(openExplicitNonImageLegacyRelationMockDB(t), "manuals")
+	got, err := dtt_card_picture.PictureRelationOf(openExplicitNonImageLegacyRelationMockDB(t), "manuals")
 	if err != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) returned error: %v", err)
+		t.Fatalf("PictureRelationOf(...) returned error: %v", err)
 	}
 	if got != nil {
-		t.Fatalf("discoverCanonicalAssetImageConfig(...) = %#v, want nil when explicit non-shared metadata exists", got)
-	}
-}
-
-func TestSingularizeLegacyTableTokenHandlesPluralTrailingSegment(t *testing.T) {
-	if got := singularizeLegacyTableToken("tasks"); got != "task" {
-		t.Fatalf("singularizeLegacyTableToken(tasks) = %q, want %q", got, "task")
-	}
-	if got := singularizeLegacyTableToken("categories"); got != "category" {
-		t.Fatalf("singularizeLegacyTableToken(categories) = %q, want %q", got, "category")
+		t.Fatalf("PictureRelationOf(...) = %#v, want nil when explicit non-shared metadata exists", got)
 	}
 }
 

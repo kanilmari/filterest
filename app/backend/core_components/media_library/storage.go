@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	media_utils "easelect/backend/core_components/media_utils"
 )
 
 const maxImageBytes int64 = 50 << 20
@@ -30,7 +32,7 @@ func legacyLocation(rel relation, src source) (string, string, error) {
 	parts := strings.Split(raw, "/")
 	filename := parts[len(parts)-1]
 	ext := strings.ToLower(path.Ext(filename))
-	if !supportedExtension(ext) {
+	if !media_utils.IsMediaLibraryImageExtension(ext) {
 		return "", "", ErrUnsupported
 	}
 	tableID := strconv.FormatInt(rel.ParentUID, 10)

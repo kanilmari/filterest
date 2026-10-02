@@ -27,6 +27,9 @@ Architecture and behaviour guides in
   frontend architecture, interface components, configuration and accessibility.
 - [Asset_Linking_Architecture.md](instructions_and_documentation/Asset_Linking_Architecture.md) —
   per-dataset image and attachment support, cache fields, storage and media profiles.
+- [Missing_Media_Check.md](instructions_and_documentation/Missing_Media_Check.md) —
+  the report of pictures and attachments whose file has left storage: what it
+  checks, its settings, when it runs, its limits and what it never does.
 - [Table_Creation_Protocol.md](instructions_and_documentation/Table_Creation_Protocol.md) —
   how a dataset is created and registered.
 - [Payment_Architecture.md](instructions_and_documentation/Payment_Architecture.md) —

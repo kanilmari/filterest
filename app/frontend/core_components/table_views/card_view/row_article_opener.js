@@ -235,7 +235,6 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             selectedCard,
             rowLabel: row_presentation_label,
             parentImageRows: parent_row_image_rows,
-            tableHasImageRole: table_has_image_role,
             currentUserId: current_user_id,
             showRelatedItems: show_related_items_on_big_cards,
             sectionDefaults,

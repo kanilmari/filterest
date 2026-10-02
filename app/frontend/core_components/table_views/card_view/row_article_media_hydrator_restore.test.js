@@ -30,11 +30,12 @@ vi.mock("./row_article_inline_media.js", () => ({
     syncRowArticleInlineMedia: vi.fn(),
     disposeRowArticleInlineMedia: vi.fn(),
 }));
-vi.mock("./row_article_asset_resolver.js", () => ({
+vi.mock("./row_article_asset_resolver.js", async (importOriginal) => ({
+    ...await importOriginal(),
     filterRowArticleNonMediaChildTables: (tables) => tables,
     resolveRowArticleAttachmentListChild: vi.fn(),
-    resolveRowArticleDynamicAssetChildren: vi.fn(() => ({})),
     resolveRowArticleImageGalleryChild: vi.fn(),
+    resolveRowArticleSharedAssetChild: vi.fn(() => null),
 }));
 
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
@@ -72,7 +73,6 @@ test("hydrates Related rows open with the restored Agent task todos tab", async 
                 rows: [{ id: 101, todo_text: "Stay open after F5", status: "todo" }],
             }],
         })),
-        fetchImageLinking: vi.fn(async () => null),
         fetchAttachmentLinking: vi.fn(async () => null),
     };
     const controller = createRowArticleMediaHydrator({
@@ -151,7 +151,6 @@ test("re-applies article scroll after Related rows and todos list layout grows",
                 rows: [{ id: 101, todo_text: "Stay open after F5", status: "todo" }],
             }],
         })),
-        fetchImageLinking: vi.fn(async () => null),
         fetchAttachmentLinking: vi.fn(async () => null),
     };
     const controller = createRowArticleMediaHydrator({

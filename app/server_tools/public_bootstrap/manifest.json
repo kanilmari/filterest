@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.3.20",
-  "db_version": "9.9.1",
+  "db_version": "9.9.2",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -130,7 +130,10 @@
     "20260927000001_add_absolute_sign_in_limit.sql",
     "20260929000001_seed_connect_two_fields_language_keys.sql",
     "20260929000002_clear_missing_display_columns_and_name_column_link.sql",
-    "20260929000003_record_database_release_9_9_1.sql"
+    "20260929000003_record_database_release_9_9_1.sql",
+    "20260929000004_add_missing_media_check_setting.sql",
+    "20260929000005_seed_missing_media_check_language_keys.sql",
+    "20260929000006_record_database_release_9_9_2.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -266,7 +269,7 @@
     "public.riskienhallinta_tiketit_relation": 1,
     "public.system_about": 1,
     "public.system_column_details": 47,
-    "public.system_config": 16,
+    "public.system_config": 143,
     "public.system_db_tables": 57,
     "public.system_db_version": 1,
     "public.system_foreign_key_relations_1_m": 4,
@@ -274,11 +277,10 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 155,
-    "public.system_lang_keys": 722,
+    "public.system_lang_keys": 802,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 124,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -293,7 +295,7 @@
       "sha256": "a556f6afd917a49efc4dbc27e068cd1ab9953e81929df8081007eeee71725b42"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "463306d863acc61500a8748e7d1453abdbb59016f12f341811c4a551054c6585"
+      "sha256": "72244edb298bdc0836b29716fb70cfd1fd74a2bb355e3a150b47ede36068a2cc"
     }
   },
   "source_files": {
@@ -310,7 +312,7 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "337f44e20f10f8e812f4ce5a67ecf48abc25e593f232c83abed66ab0115ef63b"
+      "sha256": "297c1f8b4cadff1cb4a92c663ee13a72964a1345d5839ba67f0e45ae70f2ce5b"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "d9f8a33b61252d1e8dbdcb5bf3156d45ff4c8efa1af8eb441c4139514015f52e"
@@ -740,6 +742,15 @@
     },
     "filterest/app/server_tools/migrations/20260929000003_record_database_release_9_9_1.sql": {
       "sha256": "d91fd2373c67f4d7392d04bf8aa91b5c70a4bdcd51ca0d8c29544b1c907104a9"
+    },
+    "filterest/app/server_tools/migrations/20260929000004_add_missing_media_check_setting.sql": {
+      "sha256": "db483744b08959fcb585b87b840e0ab14ce4ca568e44a6102f8a8dff6d43c88d"
+    },
+    "filterest/app/server_tools/migrations/20260929000005_seed_missing_media_check_language_keys.sql": {
+      "sha256": "3821cd5c230967410e8b06a6956373edb564d38c234b3987fb57732833df377f"
+    },
+    "filterest/app/server_tools/migrations/20260929000006_record_database_release_9_9_2.sql": {
+      "sha256": "5e65d537b74b00784aa2e852468489957ce1da86c8b515652818bec94c755ceb"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

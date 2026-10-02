@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
+	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"easelect/backend/core_components/permissions"
 
@@ -274,6 +275,11 @@ func applyExistingLinks(tx *sql.Tx, mainRowID int64, links []resolvedExistingLin
 			affected, err := result.RowsAffected()
 			if err != nil || affected != int64(len(relation.RowIDs)) {
 				return errors.New("one-to-many link count changed during transaction")
+			}
+			// Linked pictures join the new row's gallery after its other pictures, and
+			// the card picture rule chooses the new row's card picture from them.
+			if err := dtt_asset_linking.SettleNewGalleryRows(tx, relation.RelatedTableName, relation.RowIDs, false); err != nil {
+				return fmt.Errorf("place linked pictures: %w", err)
 			}
 		case existingRelationManyToMany:
 			query := fmt.Sprintf(

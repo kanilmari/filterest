@@ -119,9 +119,12 @@ func Attach(ctx context.Context, tx *sql.Tx, root string, actor dbutils.RequestA
 	if _, err = tx.Exec(`INSERT INTO public.system_media_asset_usages(asset_id,relation_id,parent_row_id,child_row_id) VALUES($1,$2,$3,$4)`, a.ID, rel.ID, req.ParentRowID, result.UsageRowID); err != nil {
 		return Result{}, err
 	}
-	if err = syncParent(ctx, tx, rel, req.ParentRowID, result.UsageRowID); err != nil {
+	// An attached library picture is a new gallery row: it goes after the parent's
+	// other pictures, so it becomes the card picture only when the row has none.
+	if err = links.SettleNewGalleryRows(tx, rel.Child, []int64{result.UsageRowID}, false); err != nil {
 		return Result{}, err
 	}
+	publishParentChange(ctx, rel, req.ParentRowID, result.UsageRowID)
 	return result, nil
 }
 
@@ -179,18 +182,21 @@ func Detach(ctx context.Context, tx *sql.Tx, actor dbutils.RequestActorContext, 
 	if _, err = tx.Exec(`DELETE FROM public.system_media_asset_usages WHERE asset_id=$1 AND relation_id=$2 AND parent_row_id=$3`, a.ID, rel.ID, req.ParentRowID); err != nil {
 		return err
 	}
-	return syncParent(ctx, tx, rel, req.ParentRowID, rowID)
-}
-func syncParent(ctx context.Context, tx *sql.Tx, rel relation, parentID, childID int64) error {
-	err := links.ResyncSharedAssetParentCache(tx, links.SharedAssetCacheSyncPlan{ParentTable: rel.Parent, ChildTable: rel.Child, ForeignKeyColumn: rel.ForeignKey, ParentRowIDs: []int64{parentID}})
-	if err != nil {
+	// The detached binding is the one card picture this change may let go.
+	if err = links.ResyncSharedAssetParentCache(tx, links.SharedAssetCacheSyncPlan{ParentTable: rel.Parent, ChildTable: rel.Child, ForeignKeyColumn: rel.ForeignKey, ParentRowIDs: []int64{req.ParentRowID}, ReleasedValues: []string{storageURL(a)}}); err != nil {
 		return err
 	}
+	publishParentChange(ctx, rel, req.ParentRowID, rowID)
+	return nil
+}
+
+// publishParentChange tells open views, after commit, that the parent's card picture
+// and the gallery row may have changed.
+func publishParentChange(ctx context.Context, rel relation, parentID, childID int64) {
 	dbutils.RegisterAfterCommitHook(ctx, func() {
 		event_bus.Bus.Publish(rel.Parent, event_bus.Event{Table: rel.Parent, RowID: parentID, Action: "update", ChangedFields: []string{"cached_image"}})
 		event_bus.Bus.Publish(rel.Child, event_bus.Event{Table: rel.Child, RowID: childID, Action: "update"})
 	})
-	return nil
 }
 
 // AuthorizeStorageRead is shared by original and every thumbnail. It does not

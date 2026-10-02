@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
 )
 
@@ -581,6 +582,29 @@ func TestBuildRelatedItemsQueryQualifiesWhereColumnToAvoidAmbiguousFKNames(t *te
 	}
 }
 
+// A gallery's first 50 rows hold its pictures in the one gallery order, so attachments
+// listed before them can never push the card picture out of the article.
+func TestGalleryRowsAreOrderedPicturesFirstBeforeTheLimit(t *testing.T) {
+	gallery := &dtt_card_picture.PictureRelation{
+		ChildTable:     "about_assets",
+		FilenameColumn: "filename",
+		HasAssetKind:   true,
+		Columns:        dtt_card_picture.GalleryColumns{IsPrimary: true, SortOrder: true, Created: true, ID: true},
+	}
+	query, _ := buildRelatedItemsQueryWithReadPolicy(`"about_assets"."id" AS "id"`, "about_assets", "", "about_id", 4, "admin", 2, ReadRowPolicy{}, galleryRowsOrder(gallery))
+	// An image row without a stored file is not a picture: fifty of them must not push
+	// the first real picture out of the first fifty rows.
+	want := ` ORDER BY CASE WHEN COALESCE(NULLIF(TRIM("about_assets"."filename"::text), ''), '') <> '' AND COALESCE(NULLIF(TRIM("about_assets"."asset_kind"::text), ''), 'image') = 'image' THEN 0 ELSE 1 END, ` +
+		`CASE WHEN COALESCE("about_assets"."is_primary", false) THEN 0 ELSE 1 END, COALESCE("about_assets"."sort_order", 0) ASC, ` +
+		`"about_assets"."created" ASC NULLS FIRST, "about_assets"."id" ASC LIMIT 50`
+	if !strings.HasSuffix(query, want) {
+		t.Fatalf("gallery query = %s, want it to end with %s", query, want)
+	}
+	if plain := buildRelatedItemsQuery(`"t"."id" AS "id"`, "t", "", "parent_id"); strings.Contains(plain, "ORDER BY") {
+		t.Fatalf("an ordinary related table gained an order: %s", plain)
+	}
+}
+
 func TestBuildRelatedItemsQueryWithReadPolicyAddsOwnerFallback(t *testing.T) {
 	query, args := buildRelatedItemsQueryWithReadPolicy(
 		`"dev_agent_tasks"."id" AS "id"`,
@@ -591,6 +615,7 @@ func TestBuildRelatedItemsQueryWithReadPolicyAddsOwnerFallback(t *testing.T) {
 		"editor",
 		9,
 		legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
+		"",
 	)
 
 	if !strings.Contains(query, `WHERE "dev_agent_tasks"."queue_id" = $1 AND (("dev_agent_tasks"."published" = TRUE OR "dev_agent_tasks"."user_id" = $2)) AND (public.resolve_effective_row_access($3, "dev_agent_tasks"."id", $4, 'read', (TRUE), FALSE))`) {
@@ -633,9 +658,9 @@ func TestClassifyRelatedTableKindPrefersRelationMetadataOverSuffixGuessing(t *te
 }
 
 func TestResolveRelatedTableKindDoesNotTreatAttachmentMetadataAsLegacyImage(t *testing.T) {
-	status := relatedMediaRelationStatus{
+	status := dtt_card_picture.RelationStatus{
 		ChildTable: "custom_media_gallery",
-		UploadConfig: relatedMediaFileUploadConfig{
+		UploadConfig: dtt_card_picture.UploadConfig{
 			TargetDirectory: "attachments",
 			AssetKinds:      []string{"pdf"},
 		},

@@ -2,6 +2,7 @@
 // Pure helper functions extracted from card_element_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
 import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
+import { resolveStructuredStoragePath } from "./row_article_content_builder_helpers.js";
 
 /**
  * Build a Google Maps embed URL from address fields on a row item.
@@ -41,7 +42,8 @@ function rowMediaPaths(rawSrc, mediaFolder) {
  * Resolve a raw image source string into display and original paths.
  * Handles three formats:
  *   1. Full path: "104/133/300/104_133_38.png" → /storage/104/133/{mediaFolder}/filename
- *   2. Flat name: "104_133_38.png" → /storage/104/133/{mediaFolder}/104_133_38.png
+ *   2. Flat name: "104_133_38.png" → /storage/104/133/{mediaFolder}/104_133_38.png; a query
+ *      or #fragment after the name is kept, as in the article's resolveImagePath
  *   3. Fallback: "anything" → /storage/anything
  * External URLs (http://, https://) and non-storage rooted paths (./, /static/…) are returned as-is.
  * Rooted `/storage/{table}/{row}/{variant}/file` paths are rewritten onto `mediaFolder`.
@@ -76,13 +78,11 @@ export function resolveImagePaths(rawSrc, mediaFolder) {
         );
     }
 
-    // Format: 104_133_38.png
-    const fileMatch = rawSrc.match(/^(\d+)_(\d+)_(\d+)\.(\w+)$/);
-    if (fileMatch) {
-        return rowMediaPaths(
-            `/storage/${fileMatch[1]}/${fileMatch[2]}/original/${rawSrc}`,
-            mediaFolder
-        );
+    // Format: 104_133_38.png, also with a query or #fragment after the name. The
+    // article finds the same folder through the same function, so both load one file.
+    const structuredPath = resolveStructuredStoragePath(rawSrc);
+    if (structuredPath) {
+        return rowMediaPaths(structuredPath, mediaFolder);
     }
 
     // Fallback
@@ -129,6 +129,11 @@ function isLikelyCardImageValue(candidate) {
     );
 }
 
+// The server applies the same test to the article's picture: LikelyPictureValue in
+// app/backend/core_components/dynamic_table_tools/dtt_card_picture/card_picture_fields.go
+// repeats this function and the JavaScript it relies on. Both answer the examples in
+// app/testing/shared_contracts/card_picture_candidate_examples.json; change both together,
+// or a card and its article show different pictures.
 function normalizeFallbackImageCandidate(rawValue) {
     if (rawValue == null) {
         return "";

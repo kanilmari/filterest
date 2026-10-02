@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_triggers "easelect/backend/core_components/dynamic_table_tools/dtt_triggers"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/httpresponse"
@@ -292,6 +293,15 @@ func insertDataAccordingToPayload(
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting main row")
 		return 0, nil, err
 	}
+	// A row added straight into a gallery (a gallery upload, or an API row that names an
+	// already stored file) goes after the parent's other pictures and the card picture
+	// rule runs for its parent; an upload's file name arrives later and runs it again.
+	_, orderChosen := filteredRow["sort_order"]
+	if err := dtt_asset_linking.SettleNewGalleryRows(tx, tableName, []int64{mainRowID}, orderChosen); err != nil {
+		fmt.Printf("\033[31m[add_row_db.go] [SettleNewGalleryRows] error: %s\033[0m\n", err.Error())
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error placing the new picture")
+		return 0, nil, err
+	}
 	lang.EnsureLangKeySourceForCRUDMutationTx(tx, tableName, mainRowID, currentUsername)
 
 	childResults := []ChildInsertResult{}
@@ -430,6 +440,14 @@ func insertDataAccordingToPayload(
 	if err := applyExistingLinks(tx, mainRowID, resolvedExistingLinks); err != nil {
 		fmt.Printf("\033[31m[add_row_db.go] [applyExistingLinks] error: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error linking existing rows")
+		return 0, nil, err
+	}
+	// A new row of a dataset with a gallery: a first card picture the request supplied
+	// follows the rule too, also when no picture row came with it. Uploaded files arrive
+	// after this and run the rule again.
+	if err := dtt_asset_linking.ApplyCardPictureRuleToNewRows(tx, tableName, []int64{mainRowID}); err != nil {
+		fmt.Printf("\033[31m[add_row_db.go] [ApplyCardPictureRuleToNewRows] error: %s\033[0m\n", err.Error())
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error placing the new picture")
 		return 0, nil, err
 	}
 
@@ -656,6 +674,15 @@ func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload, co
 	err := tx.QueryRow(insertQuery, values...).Scan(&childRowID)
 	if err != nil {
 		fmt.Printf("\033[31m[add_row_db.go] [insertSingleChildRow] error: %s\033[0m\n", err.Error())
+		return 0, err
+	}
+
+	// Child rows are created in the order the form lists them, before any file is
+	// saved, so several pictures of a new row keep that order and the first is the card
+	// picture; placing them later, in the file map's random order, would lose it.
+	_, orderChosen := child.Data["sort_order"]
+	if err := dtt_asset_linking.SettleNewGalleryRows(tx, child.TableName, []int64{childRowID}, orderChosen); err != nil {
+		fmt.Printf("\033[31m[add_row_db.go] [insertSingleChildRow -> SettleNewGalleryRows] error: %s\033[0m\n", err.Error())
 		return 0, err
 	}
 

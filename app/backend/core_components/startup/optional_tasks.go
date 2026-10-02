@@ -7,13 +7,16 @@ package startup
 import (
 	"context"
 	"log"
+	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dynamic_table_tools/ai_features"
 	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
+	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	missing_media_check "easelect/backend/core_components/missing_media_check"
+	productidentity "easelect/backend/core_components/product_identity"
 	"easelect/backend/core_components/runtimepaths"
 	"easelect/backend/core_components/system_table_tools"
 )
@@ -38,6 +41,7 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	log.Println("[STARTUP] Optional maintenance continues in background.")
 
 	repairUpscaledDisplayVariants(runtimepaths.Current().StorageRoot)
+	alignCardPictures()
 	refreshFunctionSearchVectors()
 
 	if cleanupResult, err := dtt_system_table_folders.ReconcileLegacyOtherTablesFolder(backend.Db); err != nil {
@@ -65,7 +69,6 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	EnsureAppDBCompatibilityLangKeys(backend.Db)
 	EnsureLoginPageLangKeys(backend.Db)
 	EnsureViewSelectorLangKeys(backend.Db)
-	EnsureMissingMediaCheckLangKeys(backend.Db)
 	EnsureFilterestBusinessID(backend.Db)
 
 	EnsureLangEmbeddingTables()
@@ -86,10 +89,45 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 		log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
 	}
 	// The missing-media-files check reads storage, so it starts only after the
-	// rest of startup maintenance is done, and it never blocks the server.
-	missing_media_check.StartStartupRun()
+	// rest of startup maintenance is done, and it never blocks the server. It
+	// runs by itself after an update, which it recognises from these versions.
+	missing_media_check.StartStartupRun(missingMediaCheckIdentity(projectRoot))
 
 	log.Println("[STARTUP] Optional maintenance completed.")
+}
+
+// missingMediaCheckIdentity names the running installation for the missing-media
+// check: an application or database version it has not checked yet is an update.
+// The build id is passed on for information only, because every native rebuild
+// has a new one without being an update.
+func missingMediaCheckIdentity(projectRoot string) missing_media_check.RunIdentity {
+	identity := productidentity.Detect(projectRoot)
+	databaseVersion, err := readDatabaseVersion(backend.Db)
+	if err != nil {
+		log.Printf("\033[31merror: [STARTUP] reading the database version for the missing media check failed: %v\033[0m", err)
+	}
+	return missing_media_check.RunIdentity{
+		AppVersion: identity.Version,
+		DBVersion:  databaseVersion,
+		BuildID:    identity.BuildID,
+	}
+}
+
+// alignCardPictures brings card pictures chosen by the retired "newest upload wins"
+// behaviour to the one card picture rule. Rows that already follow it are not even
+// selected, so after one complete run a start reads the candidates and writes nothing.
+func alignCardPictures() {
+	result, err := dtt_asset_linking.AlignCardPictures(context.Background(), backend.Db, 2*time.Minute)
+	if err != nil {
+		log.Printf("\033[31merror: [STARTUP] card picture alignment failed: %v\033[0m", err)
+		return
+	}
+	if result.Changed > 0 || result.Skipped > 0 || result.Failed > 0 || !result.Complete {
+		log.Printf(
+			"[STARTUP] Card pictures: %d aligned to the gallery rule, %d skipped while locked, %d failed, complete %v",
+			result.Changed, result.Skipped, result.Failed, result.Complete,
+		)
+	}
 }
 
 // refreshFunctionSearchVectors keeps the route registry findable by text search.

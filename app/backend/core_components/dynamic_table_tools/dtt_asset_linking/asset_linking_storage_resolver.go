@@ -7,6 +7,7 @@ package dtt_asset_linking
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,6 +35,9 @@ type SharedAssetFileMove struct {
 	StorageTableUID string
 	StorageRowID    int64
 	Filename        string
+	// ParentRowID is the parent the deleted row belonged to; its remaining rows
+	// and preview decide whether the file is still referenced.
+	ParentRowID int64
 }
 
 // ResolveSharedAssetParentStorageContext returns the canonical parent-based storage coordinates
@@ -144,7 +148,7 @@ func CollectSharedAssetFileMoves(q dbutils.Querier, childTable string, childRowI
 			continue
 		}
 		// Independent shared media must survive parent and usage deletion.
-		if strings.HasPrefix(strings.TrimSpace(filename), "/storage/media/") || strings.HasPrefix(strings.TrimSpace(filename), "media/") {
+		if isIndependentMediaReference(filename) {
 			continue
 		}
 		storageTableUID, storageRowID, normalizedFilename := resolveSharedAssetStorageLocation(
@@ -156,6 +160,7 @@ func CollectSharedAssetFileMoves(q dbutils.Querier, childTable string, childRowI
 			StorageTableUID: storageTableUID,
 			StorageRowID:    storageRowID,
 			Filename:        normalizedFilename,
+			ParentRowID:     parentRowID,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -163,6 +168,95 @@ func CollectSharedAssetFileMoves(q dbutils.Querier, childTable string, childRowI
 	}
 
 	return moves, nil
+}
+
+// OmitStillReferencedSharedAssetFileMoves drops planned moves whose file is still
+// named by a remaining row of the same parent (in any of its upload relations) or
+// by the parent's card picture after the resync. Since a kept card picture
+// can share its stored name with another row, deleting one row must not take a
+// file another reference still shows. Call it after the delete and the resync,
+// inside the same transaction. It never fails the delete: when the references
+// cannot be read, no shared-asset file is moved and each stays in live storage.
+func OmitStillReferencedSharedAssetFileMoves(q dbutils.Querier, childTable string, moves []SharedAssetFileMove) []SharedAssetFileMove {
+	if q == nil || len(moves) == 0 {
+		return moves
+	}
+	if _, err := q.Exec(`SAVEPOINT shared_asset_file_references`); err != nil {
+		log.Printf("[shared asset files] kept %d planned file moves in live storage: savepoint unavailable: %v", len(moves), err)
+		return nil
+	}
+	kept, err := omitStillReferencedSharedAssetFileMoves(q, childTable, moves)
+	if err != nil {
+		if _, rollbackErr := q.Exec(`ROLLBACK TO SAVEPOINT shared_asset_file_references`); rollbackErr == nil {
+			_, _ = q.Exec(`RELEASE SAVEPOINT shared_asset_file_references`)
+		}
+		log.Printf("[shared asset files] kept %d planned file moves in live storage: %v", len(moves), err)
+		return nil
+	}
+	if _, err := q.Exec(`RELEASE SAVEPOINT shared_asset_file_references`); err != nil {
+		log.Printf("[shared asset files] kept %d planned file moves in live storage: savepoint release failed: %v", len(moves), err)
+		return nil
+	}
+	return kept
+}
+
+func omitStillReferencedSharedAssetFileMoves(q dbutils.Querier, childTable string, moves []SharedAssetFileMove) ([]SharedAssetFileMove, error) {
+	parentTable, _, err := lookupSharedAssetParentContext(q, childTable)
+	if err != nil {
+		return nil, err
+	}
+	if parentTable == "" {
+		return moves, nil
+	}
+	hasPreview, err := parentTableHasCachedImageColumn(q, parentTable)
+	if err != nil {
+		return nil, err
+	}
+
+	referencedByParent := make(map[int64]map[sharedAssetPreviewLocation]bool)
+	kept := make([]SharedAssetFileMove, 0, len(moves))
+	for _, move := range moves {
+		if move.ParentRowID <= 0 {
+			kept = append(kept, move)
+			continue
+		}
+		referenced, loaded := referencedByParent[move.ParentRowID]
+		if !loaded {
+			// Every row of every upload relation of the parent counts, whatever its
+			// kind, the same references the card picture rule reads.
+			references, parentTableUID, err := ReadParentPictureReferences(q, parentTable, move.ParentRowID)
+			if err != nil {
+				return nil, err
+			}
+			if hasPreview {
+				preview, found, err := readSharedAssetParentPreview(q, parentTable, move.ParentRowID, false)
+				if err != nil {
+					return nil, err
+				}
+				if found {
+					references = append(references, preview)
+				}
+			}
+			// Resolve with the rule the move itself was planned with, so an
+			// equivalent spelling of the same file also counts as a reference.
+			referenced = make(map[sharedAssetPreviewLocation]bool, len(references))
+			for _, reference := range references {
+				if strings.TrimSpace(reference) == "" || isIndependentMediaReference(reference) {
+					continue
+				}
+				storageTableUID, storageRowID, filename := resolveSharedAssetStorageLocation(reference, parentTableUID, move.ParentRowID)
+				referenced[sharedAssetPreviewLocation{TableUID: storageTableUID, RowID: storageRowID, Filename: filename}] = true
+			}
+			referencedByParent[move.ParentRowID] = referenced
+		}
+		location := sharedAssetPreviewLocation{TableUID: move.StorageTableUID, RowID: move.StorageRowID, Filename: move.Filename}
+		if referenced[location] {
+			log.Printf("[shared asset files] kept %s/%d/%s in live storage: another reference of %s row %d still uses it", move.StorageTableUID, move.StorageRowID, move.Filename, parentTable, move.ParentRowID)
+			continue
+		}
+		kept = append(kept, move)
+	}
+	return kept, nil
 }
 
 func coerceStorageReferenceToInt64(value interface{}) (int64, bool) {

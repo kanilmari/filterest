@@ -32,14 +32,17 @@ import {
     buildRowArticleRowNavigation,
     placeRowArticleDetails,
 } from "./row_article_presentation.js";
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 import {
-    resolveRowArticleDynamicAssetChildren,
+    resolveRowArticleImageRows,
+    resolveRowArticleMainImageRow,
+    resolveRowArticlePictureIdentity,
+} from "./row_article_image_rows.js";
+import {
+    resolveRowArticleDisplayedImageRows,
     resolveRowArticleImageGalleryChild,
     resolveRowArticleParentImageRows,
 } from "./row_article_asset_resolver.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
-import { hasRoutePermission } from "../../route_permission_checker.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import {
@@ -54,23 +57,18 @@ function resolveImageAltText(row = {}) {
         ?.trim() || "";
 }
 
-function normalizedImagePath(value = "") {
-    const resolved = resolveImagePath(String(value || "").trim());
-    try {
-        return new URL(resolved, window.location.origin).pathname;
-    } catch {
-        return resolved;
+/**
+ * Picks the picture the view opens on: one the viewer chose (a clicked thumbnail or
+ * article image, the picture in the address) while the rows list it, otherwise the
+ * main picture, the card's picture wherever the rows list it, otherwise the first row.
+ */
+function resolveActiveImageRow(rows, chosenRow, chosenSrc, cardPicture) {
+    if (chosenRow && rows.includes(chosenRow)) {
+        return chosenRow;
     }
-}
-
-function resolveActiveImageRow(rows, imageSrc, requestedRow) {
-    if (requestedRow && rows.includes(requestedRow)) {
-        return requestedRow;
-    }
-    const requestedPath = normalizedImagePath(requestedRow?.filename || imageSrc);
-    return rows.find((row) => normalizedImagePath(row?.filename) === requestedPath)
-        || rows[0]
-        || null;
+    const chosenPicture = resolveRowArticlePictureIdentity(chosenRow?.filename || chosenSrc);
+    return (chosenPicture && rows.find((row) => resolveRowArticlePictureIdentity(row?.filename) === chosenPicture))
+        || resolveRowArticleMainImageRow(rows, cardPicture);
 }
 
 function resolveHeaderInitial(rowItem, sortedColumns, dataTypes) {
@@ -104,6 +102,11 @@ function resolveRowPresentationLabel(rowItem, sortedColumns, dataTypes) {
     return "";
 }
 
+/**
+ * Resolves the pictures the view shows ({ rows }), the picture the server says the card
+ * shows ({ cardPicture }), and whether the opened image is the viewer's own choice
+ * ({ openedImageChosen }) or only the picture the caller last knew for the row.
+ */
 async function resolveImageRowsForView({
     rowItem,
     tableName,
@@ -111,49 +114,55 @@ async function resolveImageRowsForView({
     imageRows,
     imageSrc,
 }) {
-    const parentRows = resolveRowArticleParentImageRows(rowItem, imageRoleColumns);
+    // Rows handed over by an article or its gallery are already what that article
+    // shows, composed from its fresh response; adding the row's own image fields here
+    // would bring back a picture that response no longer lists. The opened image is
+    // the one the viewer clicked among them.
     if (Array.isArray(imageRows) && imageRows.length > 0) {
-        return resolveRowArticleImageRows(imageRows, parentRows);
+        return { rows: resolveRowArticleImageRows(imageRows), cardPicture: "", openedImageChosen: true };
     }
 
-    let childRows = [];
+    let dynamicChildren = null;
     if (rowItem?.id != null && tableName) {
         try {
-            const loadSession = createRowArticleLoadSession({
-                tableName,
-                rowId: rowItem.id,
-                canFetchLinkingStatus: hasRoutePermission("/api/asset-linking/status"),
-            });
-            const [dynamicChildren, imageLinking] = await Promise.all([
-                loadSession.fetchDynamicChildren(),
-                loadSession.fetchImageLinking(),
-            ]);
-            const { imagesChild, assetsChild } = resolveRowArticleDynamicAssetChildren(
-                dynamicChildren?.child_tables || [],
-            );
-            const imageChild = resolveRowArticleImageGalleryChild(
-                tableName,
-                imageRoleColumns.length > 0,
-                imageLinking,
-                imagesChild,
-                assetsChild,
-            );
-            childRows = imageChild?.rows || [];
+            const freshChildren = await createRowArticleLoadSession({ tableName, rowId: rowItem.id })
+                .fetchDynamicChildren();
+            if (Array.isArray(freshChildren?.child_tables)) {
+                dynamicChildren = freshChildren;
+            }
         } catch (error) {
             console.warn("image-first media lookup failed", error?.message || error);
         }
     }
 
-    const fallbackRows = [...parentRows];
+    // A fresh response alone decides what the view shows, its gallery or else only the
+    // card's picture, and the view starts on the card's picture: the opened image and
+    // the row's own image fields are what a card or article showed before, possibly a
+    // picture deleted or replaced since. They stand in, the opened image first, only
+    // without a response.
+    if (dynamicChildren) {
+        return {
+            rows: resolveRowArticleDisplayedImageRows(
+                dynamicChildren,
+                resolveRowArticleImageGalleryChild(dynamicChildren),
+            ),
+            cardPicture: dynamicChildren.card_picture,
+            openedImageChosen: false,
+        };
+    }
+    const rowImageRows = resolveRowArticleParentImageRows(rowItem, imageRoleColumns);
     if (imageSrc) {
-        fallbackRows.unshift({
+        rowImageRows.unshift({
             asset_kind: "image",
             filename: imageSrc,
-            is_primary: true,
             is_image_first_fallback: true,
         });
     }
-    return resolveRowArticleImageRows(childRows, fallbackRows);
+    return {
+        rows: resolveRowArticleDisplayedImageRows(null, null, rowImageRows),
+        cardPicture: "",
+        openedImageChosen: true,
+    };
 }
 
 function resolveTargetCardImage(targetCard) {
@@ -223,7 +232,7 @@ export async function openImageFirstView({
     const imageRoleColumns = sortedColumns.filter((column) =>
         parseRoleString(dataTypes[column]?.card_element || "").baseRoles.includes("image")
     );
-    const [resolvedRows, currentUserProfile, sectionDefaults] = await Promise.all([
+    const [{ rows: resolvedRows, cardPicture, openedImageChosen }, currentUserProfile, sectionDefaults] = await Promise.all([
         resolveImageRowsForView({
             rowItem,
             tableName,
@@ -238,10 +247,13 @@ export async function openImageFirstView({
         return null;
     }
 
+    // A restored address names the picture the viewer last showed; a clicked thumbnail
+    // or article image arrives as activeImageRow, or as the opened imageSrc.
     let currentImageRow = resolveActiveImageRow(
         resolvedRows,
-        imageSrc,
-        intent.image ? resolvedRows.find(row => row.filename === intent.image) : activeImageRow,
+        intent.image ? null : activeImageRow,
+        intent.image || (openedImageChosen ? imageSrc : ""),
+        cardPicture,
     );
     const imageEntries = resolvedRows.map((row, index) => ({ row, index }));
     const rowPresentationLabel = resolveRowPresentationLabel(

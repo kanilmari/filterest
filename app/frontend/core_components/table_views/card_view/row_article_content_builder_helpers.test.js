@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import {
     extractSuffixNumber,
     resolveImagePath,
+    resolveStructuredStoragePath,
     classifyRole,
 } from './row_article_content_builder_helpers.js';
 
@@ -28,6 +29,24 @@ describe('extractSuffixNumber', () => {
     test('handles zero suffix', () => {
         expect(extractSuffixNumber('details0')).toBe(0);
     });
+});
+
+// ---------------------------------------------------------------------------
+// resolveStructuredStoragePath
+// ---------------------------------------------------------------------------
+describe('resolveStructuredStoragePath', () => {
+    test('finds the original folder of a structured name, keeping a query or fragment after it', () => {
+        expect(resolveStructuredStoragePath('10_2_1.webp')).toBe('/storage/10/2/original/10_2_1.webp');
+        expect(resolveStructuredStoragePath('10_2_1.webp?v=1')).toBe('/storage/10/2/original/10_2_1.webp?v=1');
+        expect(resolveStructuredStoragePath('10_2_1.webp#zoom')).toBe('/storage/10/2/original/10_2_1.webp#zoom');
+    });
+
+    test.each(['avatar.png', 'avatar.png?v=1', '10_20.jpg', '104/133/300/104_133_38.png', '?v=1', ''])(
+        'is empty for %j, which is no structured name',
+        (value) => {
+            expect(resolveStructuredStoragePath(value)).toBe('');
+        },
+    );
 });
 
 // ---------------------------------------------------------------------------
@@ -65,6 +84,52 @@ describe('resolveImagePath', () => {
     test('returns empty string for empty/whitespace input', () => {
         expect(resolveImagePath('')).toBe('');
         expect(resolveImagePath('   ')).toBe('');
+    });
+
+    test('keeps a query or fragment after a structured filename behind its storage path', () => {
+        expect(resolveImagePath('10_2_1.webp?v=1')).toBe('/storage/10/2/original/10_2_1.webp?v=1');
+        expect(resolveImagePath('10_2_1.webp#zoom')).toBe('/storage/10/2/original/10_2_1.webp#zoom');
+        expect(resolveImagePath('  10_2_1.webp?v=1#zoom  ')).toBe('/storage/10/2/original/10_2_1.webp?v=1#zoom');
+        // Only the first ? or # starts the suffix; a fragment may itself contain a ?.
+        expect(resolveImagePath('10_2_1.webp#a?b')).toBe('/storage/10/2/original/10_2_1.webp#a?b');
+    });
+
+    test('resolves other values with a query or fragment as before', () => {
+        expect(resolveImagePath('avatar.png?v=1')).toBe('/storage/avatar.png?v=1');
+        expect(resolveImagePath('some_file.jpg#zoom')).toBe('/storage/some_file.jpg#zoom');
+        expect(resolveImagePath('10_20.jpg?v=1')).toBe('/storage/10_20.jpg?v=1');
+        expect(resolveImagePath('?v=1')).toBe('/storage/?v=1');
+        expect(resolveImagePath('https://x.com/10_2_1.webp?v=1')).toBe('https://x.com/10_2_1.webp?v=1');
+        expect(resolveImagePath('/storage/10/2/original/10_2_1.webp?v=1')).toBe('/storage/10/2/original/10_2_1.webp?v=1');
+        expect(resolveImagePath('./10_2_1.webp#zoom')).toBe('./10_2_1.webp#zoom');
+    });
+
+    // Without a ? or #, every value resolves byte for byte as it did before suffixes
+    // were separated from structured filenames.
+    test.each([
+        ['https://example.com/img.png', 'https://example.com/img.png'],
+        ['http://example.com/img.png', 'http://example.com/img.png'],
+        ['./images/foo.png', './images/foo.png'],
+        ['/static/img.png', '/static/img.png'],
+        ['/storage/10/2/original/10_2_1.webp', '/storage/10/2/original/10_2_1.webp'],
+        ['10_20_30.jpg', '/storage/10/20/original/10_20_30.jpg'],
+        ['1_2_3.png', '/storage/1/2/original/1_2_3.png'],
+        ['1_2_3.PNG', '/storage/1/2/original/1_2_3.PNG'],
+        ['100_200_300.webp', '/storage/100/200/original/100_200_300.webp'],
+        ['  10_20_30.jpg  ', '/storage/10/20/original/10_20_30.jpg'],
+        ['avatar.png', '/storage/avatar.png'],
+        ['some_file.jpg', '/storage/some_file.jpg'],
+        ['10_20.jpg', '/storage/10_20.jpg'],
+        ['a_2_3.png', '/storage/a_2_3.png'],
+        ['10_2_1.webp.png', '/storage/10_2_1.webp.png'],
+        ['10_20_30.tar.gz', '/storage/10_20_30.tar.gz'],
+        ['folder/10_2_1.webp', '/storage/folder/10_2_1.webp'],
+        ['ftp://host/a.png', '/storage/ftp://host/a.png'],
+        ['data:image/png;base64,AAAA', '/storage/data:image/png;base64,AAAA'],
+        ['', ''],
+        ['   ', ''],
+    ])('resolves %j without a query or fragment exactly as before', (input, expected) => {
+        expect(resolveImagePath(input)).toBe(expected);
     });
 });
 

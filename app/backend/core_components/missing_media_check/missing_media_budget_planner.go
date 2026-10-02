@@ -8,17 +8,22 @@ package missing_media_check
 import "sort"
 
 // DatasetRowCount is one dataset's total number of media-referencing rows.
+// Estimated marks a dataset too large to count exactly within the run's bounds.
 type DatasetRowCount struct {
 	Dataset    string `json:"dataset"`
 	AssetTable string `json:"asset_table"`
 	RowCount   int    `json:"row_count"`
+	Estimated  bool   `json:"row_count_estimated"`
 }
 
 // DatasetBudget is how many rows of one dataset the check is allowed to read.
+// Complete is never true for an estimated dataset: nobody knows how many rows a
+// complete check would have had to read.
 type DatasetBudget struct {
 	Dataset     string `json:"dataset"`
 	AssetTable  string `json:"asset_table"`
 	RowCount    int    `json:"row_count"`
+	Estimated   bool   `json:"row_count_estimated"`
 	PlannedRows int    `json:"planned_rows"`
 	Complete    bool   `json:"complete"`
 }
@@ -139,8 +144,9 @@ func newDatasetBudget(dataset DatasetRowCount, plannedRows int) DatasetBudget {
 		Dataset:     dataset.Dataset,
 		AssetTable:  dataset.AssetTable,
 		RowCount:    dataset.RowCount,
+		Estimated:   dataset.Estimated,
 		PlannedRows: plannedRows,
-		Complete:    plannedRows >= dataset.RowCount,
+		Complete:    !dataset.Estimated && plannedRows >= dataset.RowCount,
 	}
 }
 

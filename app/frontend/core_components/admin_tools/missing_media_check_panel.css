@@ -39,7 +39,8 @@
     gap: 8px;
 }
 
-.missing-media-check__field input[type='number'] {
+.missing-media-check__field input[type='number'],
+.missing-media-check__field select {
     min-width: 8ch;
     max-width: 14ch;
     padding: 4px 6px;
@@ -47,6 +48,26 @@
     background-color: var(--input_bg_color, var(--bg-surface));
     border: 1px solid var(--border-subtle);
     border-radius: var(--border_radius_small, 4px);
+}
+
+.missing-media-check__field select {
+    max-width: 32ch;
+}
+
+.missing-media-check__range {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.missing-media-check__problem:empty {
+    display: none;
+}
+
+.missing-media-check__problem-detail {
+    display: block;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
 }
 
 .missing-media-check__actions {
@@ -123,6 +144,68 @@
     color: var(--text-muted);
 }
 
+.missing-media-check__details {
+    margin-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 8px;
+}
+
+.missing-media-check__details-heading {
+    margin: 12px 0 4px;
+    font-size: 1em;
+}
+
+.missing-media-check__error-list,
+.missing-media-check__unreached-list {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}
+
+.missing-media-check__error-list li,
+.missing-media-check__unreached-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.missing-media-check__error-list code,
+.missing-media-check__unreached-list code {
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+/* The table scrolls sideways inside its own box, never the page. */
+.missing-media-check__table-wrapper {
+    max-width: 100%;
+    margin-top: 8px;
+    overflow-x: auto;
+}
+
+.missing-media-check__dataset-table {
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.missing-media-check__dataset-table th,
+.missing-media-check__dataset-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.missing-media-check__dataset-table th[scope='row'],
+.missing-media-check__dataset-table th[scope='col']:first-child {
+    text-align: left;
+}
+
+.missing-media-check__dataset-table th[scope='col'] {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 @media (width <= 480px) {
     .missing-media-check__settings {
         flex-direction: column;
@@ -130,7 +213,8 @@
         gap: 10px;
     }
 
-    .missing-media-check__field input[type='number'] {
+    .missing-media-check__field input[type='number'],
+    .missing-media-check__field select {
         max-width: 100%;
     }
 }

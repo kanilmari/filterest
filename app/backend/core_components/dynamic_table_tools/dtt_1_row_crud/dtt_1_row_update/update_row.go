@@ -23,6 +23,7 @@ import (
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	row_mutation_policy "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
@@ -191,6 +192,9 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	}
 
 	changedFields := make([]string, 0, len(updates))
+	var cacheSyncPlan dtt_asset_linking.SharedAssetCacheSyncPlan
+	cacheSyncPlanCollected := false
+	var releasedCardPicture *cardPictureRelease
 	for _, update := range updates {
 		// Tarkista, onko sarake sallittu muokattavaksi
 		editable, err := isColumnEditable(tableUID, update.Column, tx)
@@ -227,6 +231,38 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "Invalid value type")
 			return
+		}
+
+		// A row's card picture follows its gallery (owner decision K120). Clearing the
+		// field is an administrator's release of a picture the gallery does not carry,
+		// for example one the missing-media check lists as kept from another row's
+		// folder; any other value is refused, because the rule would replace it.
+		if update.Column == "cached_image" {
+			gallery, galleryErr := dtt_card_picture.PictureRelationOf(tx, tableName)
+			if galleryErr != nil {
+				log.Printf("\033[31merror: read the gallery of %s: %v\033[0m", tableName, galleryErr)
+				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error reading the gallery")
+				return
+			}
+			if gallery != nil {
+				if value != nil && strings.TrimSpace(fmt.Sprint(value)) != "" {
+					httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "The card picture follows the gallery: mark a gallery picture as the main one")
+					return
+				}
+				// Clearing can drop the only reference to a picture kept from another row's
+				// folder, so it is an administrator's decision, as the owner set it (K121).
+				if userRole != "admin" {
+					httpresponse.RespondWithError(response_writer, http.StatusForbidden, "Only an administrator can clear the card picture")
+					return
+				}
+				var previous sql.NullString
+				if err := tx.QueryRow(fmt.Sprintf(`SELECT cached_image::text FROM %s WHERE id = $1`, pq.QuoteIdentifier(tableName)), updateRequest.ID).Scan(&previous); err != nil {
+					log.Printf("\033[31merror: read the card picture of %s id %d: %v\033[0m", tableName, updateRequest.ID, err)
+					httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error reading the card picture")
+					return
+				}
+				releasedCardPicture = &cardPictureRelease{gallery: gallery, previous: previous.String}
+			}
 		}
 
 		// Erikoistapaus: jos system_db_tables.table_name muuttuu,
@@ -302,6 +338,19 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			whereClause,
 		)
 
+		// A shared asset row's preview plan is read before its first column changes:
+		// a renamed file is then released instead of kept as a stale preview, and
+		// the parent a moved row leaves is still known.
+		if !cacheSyncPlanCollected {
+			cacheSyncPlan, err = dtt_asset_linking.CollectSharedAssetParentCacheSyncPlan(tx, tableName, []int64{updateRequest.ID})
+			if err != nil {
+				log.Printf("\033[31merror: collect shared asset cache sync plan for %s id %d: %v\033[0m", tableName, updateRequest.ID, err)
+				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error collecting shared asset cache sync plan")
+				return
+			}
+			cacheSyncPlanCollected = true
+		}
+
 		// Suoritetaan kysely oikeaa DB-yhteyttä vasten
 		result, err := tx.Exec(query, updateArgs...)
 		if err != nil {
@@ -354,7 +403,8 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	cacheSyncPlan, err := dtt_asset_linking.CollectSharedAssetParentCacheSyncPlan(tx, tableName, []int64{updateRequest.ID})
+	// A row moved to another parent refreshes both the parent it left and the one it joined.
+	cacheSyncPlan, err = dtt_asset_linking.AddCurrentSharedAssetParents(tx, cacheSyncPlan, []int64{updateRequest.ID})
 	if err != nil {
 		log.Printf("\033[31merror: collect shared asset cache sync plan for %s id %d: %v\033[0m", tableName, updateRequest.ID, err)
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error collecting shared asset cache sync plan")
@@ -364,6 +414,13 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		log.Printf("\033[31merror: resync shared asset cache for %s id %d: %v\033[0m", tableName, updateRequest.ID, err)
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error syncing shared asset cache")
 		return
+	}
+	if releasedCardPicture != nil {
+		if err := dtt_asset_linking.ApplyCardPictureRule(tx, tableName, releasedCardPicture.gallery, []int64{updateRequest.ID}, []string{releasedCardPicture.previous}); err != nil {
+			log.Printf("\033[31merror: apply the card picture rule to %s id %d: %v\033[0m", tableName, updateRequest.ID, err)
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error choosing the card picture")
+			return
+		}
 	}
 
 	eventToPublish := event_bus.Event{
@@ -392,6 +449,13 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	_ = json.NewEncoder(response_writer).Encode(map[string]string{
 		"message": "Row updated successfully",
 	})
+}
+
+// cardPictureRelease is an administrator's clearing of a row's card picture: the rule
+// then chooses again from the gallery and never keeps the cleared value.
+type cardPictureRelease struct {
+	gallery  *dtt_card_picture.PictureRelation
+	previous string
 }
 
 // Validate before string conversion so only explicit null restores inheritance.

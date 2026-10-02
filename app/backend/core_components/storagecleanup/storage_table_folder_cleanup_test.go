@@ -283,6 +283,109 @@ func TestListArchivedStorageTableFoldersMarksOnlyMissingRootsPrunable(t *testing
 	}
 }
 
+// Shared roots are never a deleted dataset's storage: the image library in
+// media/, the public logos, the filesystem's lost+found and backup folders must
+// survive listing, archiving and pruning, while a numeric orphan is still cleaned.
+func TestStorageCleanupNeverTouchesSharedRootsButStillPrunesNumericOrphans(t *testing.T) {
+	withWorkingDirectory(t)
+
+	originalDB := backend.Db
+	backend.Db = openMediaTableFolderMockDB(t, []string{"141"})
+	t.Cleanup(func() {
+		backend.Db = originalDB
+	})
+
+	libraryPicture := filepath.Join("media", "174668a1-2efa-45a6-aa6c-d8a4ee8ec069", "original", "image.png")
+	sharedRoots := []string{"media", "service_catalog_logos", "lost+found", "backup_2026-09-23", "0141"}
+	for _, root := range []string{StorageRootDir, StorageDeletedRootDir} {
+		for _, folderName := range sharedRoots {
+			if err := os.MkdirAll(filepath.Join(root, folderName), 0755); err != nil {
+				t.Fatalf("os.MkdirAll(%s/%s): %v", root, folderName, err)
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, libraryPicture)), 0755); err != nil {
+			t.Fatalf("os.MkdirAll(library picture): %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, libraryPicture), []byte("library"), 0644); err != nil {
+			t.Fatalf("os.WriteFile(library picture): %v", err)
+		}
+	}
+	for _, folder := range []string{
+		filepath.Join(StorageRootDir, "141", "1"),
+		filepath.Join(StorageRootDir, "2868", "1"),
+		filepath.Join(StorageDeletedRootDir, "2916", "1"),
+	} {
+		if err := os.MkdirAll(folder, 0755); err != nil {
+			t.Fatalf("os.MkdirAll(%s): %v", folder, err)
+		}
+	}
+
+	unknown, err := ListUnknownStorageTableFolders()
+	if err != nil {
+		t.Fatalf("ListUnknownStorageTableFolders returned error: %v", err)
+	}
+	if len(unknown) != 1 || unknown[0] != "2868" {
+		t.Fatalf("unknown folders = %v, want only the numeric orphan 2868", unknown)
+	}
+
+	archived, err := ArchiveUnknownStorageTableFolders()
+	if err != nil {
+		t.Fatalf("ArchiveUnknownStorageTableFolders returned error: %v", err)
+	}
+	if len(archived) != 1 || archived[0] != "2868" {
+		t.Fatalf("archived folders = %v, want only 2868", archived)
+	}
+	if _, err := os.Stat(filepath.Join(StorageRootDir, libraryPicture)); err != nil {
+		t.Fatalf("live library picture was moved: %v", err)
+	}
+	for _, folderName := range sharedRoots {
+		if _, err := os.Stat(filepath.Join(StorageRootDir, folderName)); err != nil {
+			t.Fatalf("shared root %s left live storage: %v", folderName, err)
+		}
+	}
+
+	listed, err := ListArchivedStorageTableFolders()
+	if err != nil {
+		t.Fatalf("ListArchivedStorageTableFolders returned error: %v", err)
+	}
+	listedNames := make([]string, 0, len(listed))
+	for _, folder := range listed {
+		listedNames = append(listedNames, folder.FolderName)
+	}
+	sort.Strings(listedNames)
+	if len(listedNames) != 2 || listedNames[0] != "2868" || listedNames[1] != "2916" {
+		t.Fatalf("archived listing = %v, want only the numeric dataset roots 2868 and 2916", listedNames)
+	}
+
+	prunedByName, err := PruneArchivedStorageTableFolders(append([]string(nil), sharedRoots...))
+	if err != nil {
+		t.Fatalf("PruneArchivedStorageTableFolders(shared roots) returned error: %v", err)
+	}
+	if len(prunedByName) != 0 {
+		t.Fatalf("pruned shared roots by name: %v", prunedByName)
+	}
+
+	pruned, err := PruneArchivedStorageTableFolders(nil)
+	if err != nil {
+		t.Fatalf("PruneArchivedStorageTableFolders returned error: %v", err)
+	}
+	sort.Strings(pruned)
+	if len(pruned) != 2 || pruned[0] != "2868" || pruned[1] != "2916" {
+		t.Fatalf("pruned = %v, want the numeric orphans 2868 and 2916", pruned)
+	}
+	if _, err := os.Stat(filepath.Join(StorageDeletedRootDir, libraryPicture)); err != nil {
+		t.Fatalf("archived library picture was destroyed: %v", err)
+	}
+	for _, folderName := range sharedRoots {
+		if _, err := os.Stat(filepath.Join(StorageDeletedRootDir, folderName)); err != nil {
+			t.Fatalf("archived shared root %s was destroyed: %v", folderName, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(StorageDeletedRootDir, "2916")); !os.IsNotExist(err) {
+		t.Fatalf("numeric orphan 2916 should be pruned, got: %v", err)
+	}
+}
+
 func TestPruneArchivedStorageTableFoldersRemovesOnlyMissingRoots(t *testing.T) {
 	withWorkingDirectory(t)
 

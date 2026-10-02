@@ -4,18 +4,10 @@
 // Exists so image credits never leak into compact cards and change with the UI language.
 
 import { bindDatasetLanguageRenderer, resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
-import { resolveImagePath } from "./row_article_content_builder_helpers.js";
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
+import { resolveRowArticleImageRows, resolveRowArticlePictureIdentity } from "./row_article_image_rows.js";
 
-function normalizeImagePath(filename = "") {
-    const resolvedPath = resolveImagePath(String(filename || "").trim());
-    try {
-        return new URL(resolvedPath, window.location.href).pathname;
-    } catch {
-        return resolvedPath;
-    }
-}
-function resolveInlineImagePath(container) {
+/** The identity of the picture an inline image container shows, or "" for none. */
+function resolveInlinePicture(container) {
     // Logo renderers hide their inner mark from accessibility; the owning media
     // still identifies the asset. Never take a neighbouring record preview.
     const media = container?.querySelector?.(
@@ -23,11 +15,7 @@ function resolveInlineImagePath(container) {
     );
     const image = container?.querySelector?.("img:not([aria-hidden='true'])");
     const source = media?.dataset?.imageFirstSrc || image?.dataset?.imageFirstSrc || image?.getAttribute?.("src") || "";
-    try {
-        return new URL(source, window.location.href).pathname;
-    } catch {
-        return source;
-    }
+    return resolveRowArticlePictureIdentity(source);
 }
 
 const captionInteractionRoots = new WeakSet();
@@ -174,7 +162,7 @@ export function setRowArticleImageCaption(captionElement, imageRow) {
 
 /**
  * Synchronizes child image descriptions below ordinary article-view images.
- * Exact path matching wins; a lone image may use the sole canonical asset row.
+ * The row showing the same picture wins; a lone image may use the sole canonical asset row.
  */
 export function syncRowArticleInlineImageCaptions(articleContent, imageRows = []) {
     if (!(articleContent instanceof HTMLElement)) return;
@@ -185,9 +173,9 @@ export function syncRowArticleInlineImageCaptions(articleContent, imageRows = []
 
     imageContainers.forEach((container) => {
         container.querySelector(":scope > .row_article_inline_image_caption")?.remove();
-        const inlinePath = resolveInlineImagePath(container);
+        const inlinePicture = resolveInlinePicture(container);
         const matchingRow = canonicalRows.find(
-            (row) => normalizeImagePath(row?.filename) === inlinePath,
+            (row) => resolveRowArticlePictureIdentity(row?.filename) === inlinePicture,
         ) || (imageContainers.length === 1 && canonicalRows.length === 1
             ? canonicalRows[0]
             : null);

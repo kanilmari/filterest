@@ -1,9 +1,9 @@
 // row_article_asset_resolver.js
-// Resolves which child relation the article view's media sections should use.
-// Bridges image-asset status rows and shared asset rows into one deterministic choice.
-// Exists so the article opener can prefer canonical shared assets without embedding more branching logic.
+// Resolves which child relations the article view's media sections use, and which pictures they show.
+// Bridges the related-rows response, which names the gallery and the card picture, and the attachment linking status.
+// Exists so the article and image-first views show the server's choice of pictures instead of making their own.
 
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
+import { composeRowArticleImageRows, resolveRowArticleImageRows } from "./row_article_image_rows.js";
 import { isBridgeRelationTable } from "./row_article_child_tabs_helpers.js";
 
 function readRelationKind(childTableData) {
@@ -45,28 +45,30 @@ export function filterRowArticleNonMediaChildTables(childTables = []) {
     );
 }
 
-export function resolveRowArticleDynamicAssetChildren(childTables = []) {
+/**
+ * Picks the first shared-asset child of a response, the relation whose files the
+ * attachment list shows. The image gallery never uses it: the response names the gallery.
+ */
+export function resolveRowArticleSharedAssetChild(childTables = []) {
     if (!Array.isArray(childTables)) {
-        return { imagesChild: null, assetsChild: null };
+        return null;
     }
 
-    return {
-        imagesChild: childTables.find((childTable) => isImageAssetChildTable(childTable)) || null,
-        assetsChild: childTables.find((childTable) => isSharedAssetChildTable(childTable)) || null,
-    };
+    return childTables.find((childTable) => isSharedAssetChildTable(childTable)) || null;
 }
 
 /**
- * Converts image-role values stored on the parent row into gallery-compatible rows.
- * Parent-row images have no child-row id, so the gallery displays them without
- * exposing child-asset edit, primary, or delete actions.
+ * Converts image-role values stored on the parent row into gallery-compatible rows,
+ * in column order. Parent-row images have no child-row id, so the gallery displays
+ * them without exposing child-asset edit, primary, or delete actions. They stand in
+ * only while no related-rows response could be used.
  */
 export function resolveRowArticleParentImageRows(parentRow = {}, imageColumns = []) {
     if (!parentRow || typeof parentRow !== "object" || !Array.isArray(imageColumns)) {
         return [];
     }
 
-    return imageColumns.flatMap((column, index) => {
+    return imageColumns.flatMap((column) => {
         const filename = typeof parentRow[column] === "string"
             ? parentRow[column].trim()
             : "";
@@ -78,7 +80,6 @@ export function resolveRowArticleParentImageRows(parentRow = {}, imageColumns = 
             asset_kind: "image",
             filename,
             is_parent_row_image: true,
-            is_primary: index === 0,
             parent_image_column: column,
         }];
     });
@@ -107,59 +108,49 @@ export function resolveRowArticleAttachmentListChild(parentTableName, attachment
 }
 
 /**
- * Resolves the child relation used by the article view's image gallery.
- * Bridges image-linking metadata and live child rows so canonical shared assets win when they can actually serve images.
- * Exists to keep shared <parent>_assets rollout logic small, testable, and isolated from the article opener.
+ * Reads the parent's one gallery that a dynamic-children response names
+ * (`gallery_relation`), or null when it names none. The server chooses it with the
+ * same rule as the card picture, so the browser never chooses a gallery itself.
  */
-export function resolveRowArticleImageGalleryChild(parentTableName, tableHasImageRole, imageLinking, imagesChild, assetsChild) {
-    const linkedAssetsTable = imageLinkingPointsToSharedAssets(imageLinking, assetsChild);
-    if (linkedAssetsTable) {
-        return assetsChild || {
-            dataset: imageLinking.child_table,
-            column: resolveStubForeignKeyColumn(parentTableName, assetsChild, imageLinking),
-            rows: [],
-            relation_kind: readLinkingRelationKind(imageLinking) || "shared_asset",
-        };
-    }
-
-    if (hasSharedAssetImages(assetsChild)) {
-        return assetsChild;
-    }
-
-    if (imagesChild) {
-        return imagesChild;
-    }
-
-    if (
-        tableHasImageRole
-        && isSharedAssetChildTable(assetsChild)
-        && canUseSharedAssetsForImageUploads(imageLinking, assetsChild)
-    ) {
-        return assetsChild;
-    }
-
-    return null;
+function readGalleryRelation(dynamicChildren) {
+    const relation = dynamicChildren?.gallery_relation;
+    const dataset = typeof relation?.dataset === "string" ? relation.dataset.trim() : "";
+    const column = typeof relation?.column === "string" ? relation.column.trim() : "";
+    return dataset && column ? { dataset, column } : null;
 }
 
-function imageLinkingPointsToSharedAssets(imageLinking, assetsChild) {
-    const childTableName = String(imageLinking?.child_table || "").trim();
-    const relationKind = readLinkingRelationKind(imageLinking);
-    if (!childTableName) {
-        return false;
+/**
+ * Resolves the article's image gallery from one related-rows response (dynamicChildren):
+ * the child_tables entry with the dataset and column the response names as the parent's
+ * gallery, otherwise null. The server names a gallery only when this viewer may read it,
+ * so a response without a name means no gallery, never one the browser picks instead.
+ */
+export function resolveRowArticleImageGalleryChild(dynamicChildren) {
+    const galleryRelation = readGalleryRelation(dynamicChildren);
+    if (!galleryRelation) {
+        return null;
     }
 
-    if (relationKind === "shared_asset") {
-        return true;
-    }
-    if (relationKind === "image_asset") {
-        return false;
-    }
+    const childTables = Array.isArray(dynamicChildren.child_tables) ? dynamicChildren.child_tables : [];
+    return childTables.find((childTable) =>
+        childTable?.dataset === galleryRelation.dataset
+        && childTable?.column === galleryRelation.column
+    ) || null;
+}
 
-    if (assetsChild?.dataset && childTableName === assetsChild.dataset) {
-        return true;
+/**
+ * Resolves the pictures an article shows. Once a related-rows response (dynamicChildren)
+ * arrived it alone decides: the gallery rows in the server's order with a card-only
+ * picture first, or without a gallery only the picture the server says the card shows
+ * (`card_picture`), and nothing when that is empty or absent. The row's own image fields
+ * (rowImageRows) never join a response, so a picture deleted or withheld since the row
+ * was read cannot return; they stand in only while there is no response (null).
+ */
+export function resolveRowArticleDisplayedImageRows(dynamicChildren, galleryChild, rowImageRows = []) {
+    if (!dynamicChildren) {
+        return resolveRowArticleImageRows(rowImageRows);
     }
-
-    return false;
+    return composeRowArticleImageRows(galleryChild?.rows, dynamicChildren.card_picture);
 }
 
 function attachmentLinkingPointsToSharedAssets(attachmentLinking, assetsChild) {
@@ -184,20 +175,4 @@ function attachmentLinkingPointsToSharedAssets(attachmentLinking, assetsChild) {
     // asset contract, so a configured child table is enough even when the
     // fetchDynamicChildren payload is temporarily empty.
     return true;
-}
-
-function hasSharedAssetImages(assetsChild) {
-    return resolveRowArticleImageRows(assetsChild?.rows || []).length > 0;
-}
-
-function canUseSharedAssetsForImageUploads(imageLinking, assetsChild) {
-    if (!isSharedAssetChildTable(assetsChild)) {
-        return false;
-    }
-
-    if (imageLinkingPointsToSharedAssets(imageLinking, assetsChild)) {
-        return true;
-    }
-
-    return Boolean(imageLinking?.enabled && !String(imageLinking?.child_table || "").trim());
 }

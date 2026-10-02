@@ -17,8 +17,9 @@ import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js"
 import {
     filterRowArticleNonMediaChildTables,
     resolveRowArticleAttachmentListChild,
-    resolveRowArticleDynamicAssetChildren,
+    resolveRowArticleDisplayedImageRows,
     resolveRowArticleImageGalleryChild,
+    resolveRowArticleSharedAssetChild,
 } from "./row_article_asset_resolver.js";
 import { hasDatasetPermission, primeDatasetPermissions } from "../../route_permission_checker.js";
 import {
@@ -27,7 +28,6 @@ import {
     wrapRowArticleRelatedRowsSection,
 } from "./row_article_tool_section_wrapper.js";
 import { disposeRowArticleInlineMedia, syncRowArticleInlineMedia } from "./row_article_inline_media.js";
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
 
 /**
  * Creates one article's hydration and refresh callbacks from its explicit view context.
@@ -42,7 +42,6 @@ export function createRowArticleMediaHydrator({
     selectedCard,
     rowLabel: row_presentation_label,
     parentImageRows: parent_row_image_rows,
-    tableHasImageRole: table_has_image_role,
     currentUserId: current_user_id,
     showRelatedItems: show_related_items_on_big_cards,
     canCommit: isCurrent,
@@ -92,6 +91,9 @@ export function createRowArticleMediaHydrator({
         ancestors.forEach(node => connectionObserver.observe(node, { childList: true }));
     };
     const sectionOpenState = new Map();
+    // The gallery thumbnail the viewer chose in this article. Each refresh rebuilds the
+    // gallery, which keeps this one active while it still lists it.
+    let chosenGalleryRow = null;
     const sectionOptions = (key, selector) => {
         const existing = rowArticleContentElement.querySelector(selector);
         const restore = readRowArticleViewRestoreState(table_name, row_item.id);
@@ -121,45 +123,50 @@ export function createRowArticleMediaHydrator({
         observeArticleConnection();
 
         // Main-image credits belong to the article, independently of the optional
-        // related sections. Keep permitted parent credits if child loading fails.
-        const syncInlineCaptions = (imageChild = null) => {
+        // related sections. Until a fresh response composes the pictures (mediaState),
+        // and whenever none can be used, the row's own image fields keep their permitted
+        // credits. A response decides the image shown, starting on the card's picture.
+        const syncInlineCaptions = (mediaState = null) => {
             if (!canCommit() || !rowArticleElement.isConnected) return;
             syncRowArticleInlineMedia(
                 rowArticleContentElement,
-                resolveRowArticleImageRows(
-                    imageChild?.rows || [],
-                    imageChild ? [] : parent_row_image_rows,
-                ),
-                { rowItem: row_item, tableName: table_name, selectedCard, rowLabel: row_presentation_label, canCommit },
+                mediaState
+                    ? mediaState.imageRows
+                    : resolveRowArticleDisplayedImageRows(null, null, parent_row_image_rows),
+                {
+                    rowItem: row_item, tableName: table_name, selectedCard, rowLabel: row_presentation_label,
+                    canCommit, fromResponse: Boolean(mediaState), cardPicture: mediaState?.cardPicture,
+                },
             );
         };
         syncInlineCaptions();
 
         try {
-            const buildMediaState = async (childTables = []) => {
-                const { imagesChild, assetsChild } = resolveRowArticleDynamicAssetChildren(childTables);
-                const [imageLinking, attachmentLinking] = await Promise.all([
-                    rowArticleLoadSession.fetchImageLinking(),
-                    show_related_items_on_big_cards
-                        ? rowArticleLoadSession.fetchAttachmentLinking()
-                        : Promise.resolve(null),
-                ]);
+            const buildMediaState = async (dynamicChildren) => {
+                const attachmentLinking = show_related_items_on_big_cards
+                    ? await rowArticleLoadSession.fetchAttachmentLinking()
+                    : null;
+                // The response names the gallery and the card picture; the article
+                // chooses neither itself.
+                const imageChildForGallery = resolveRowArticleImageGalleryChild(dynamicChildren);
 
                 return {
                     attachmentChildForList: resolveRowArticleAttachmentListChild(
                         table_name,
                         attachmentLinking,
-                        assetsChild,
+                        resolveRowArticleSharedAssetChild(dynamicChildren.child_tables),
                     ),
                     attachmentLinking,
-                    imageChildForGallery: resolveRowArticleImageGalleryChild(
-                        table_name,
-                        table_has_image_role,
-                        imageLinking,
-                        imagesChild,
-                        assetsChild,
+                    imageChildForGallery,
+                    // The inline main image and the gallery show the same pictures:
+                    // the server's gallery order with a card-only picture first.
+                    imageRows: resolveRowArticleDisplayedImageRows(
+                        dynamicChildren,
+                        imageChildForGallery,
+                        parent_row_image_rows,
                     ),
-                    imageLinking,
+                    // Both open on the picture the card shows, wherever the gallery lists it.
+                    cardPicture: dynamicChildren.card_picture,
                 };
             };
 
@@ -186,7 +193,7 @@ export function createRowArticleMediaHydrator({
                 rowArticleContentElement.insertBefore(nextElement, anchor || null);
             };
 
-            const renderGallery = async (imgChild) => {
+            const renderGallery = async (imgChild, imageRows, cardPicture) => {
                 const imageDataset = imgChild?.dataset || "";
                 if (imageDataset) {
                     void primeDatasetPermissions(imageDataset, [
@@ -213,10 +220,13 @@ export function createRowArticleMediaHydrator({
                     canDelete,
                     canSetPrimary: canUpdate,
                     canEditMetadata: canUpdate,
-                    // Once the related image dataset has resolved, its rows are
-                    // authoritative. Reusing the parent row's cached image here
-                    // would resurrect a just-deleted asset until the next F5.
-                    parentImageRows: imgChild ? [] : parent_row_image_rows,
+                    // What the article shows. Once a response arrived this never
+                    // includes the parent row's cached image, which would resurrect
+                    // a just-deleted asset until the next F5.
+                    imageRows,
+                    cardPicture,
+                    chosenImageRow: chosenGalleryRow,
+                    onChooseImage: (row) => { chosenGalleryRow = row; },
                     imageFirstContext: {
                         rowItem: row_item,
                         tableName: table_name,
@@ -248,11 +258,19 @@ export function createRowArticleMediaHydrator({
                     const fresh = await rowArticleLoadSession.fetchDynamicChildren({
                         forceRefresh: true,
                     });
+                    // A refresh without a usable response keeps the pictures already
+                    // shown instead of returning to the row's own image fields.
+                    if (!canCommit() || !rowArticleElement.isConnected || !Array.isArray(fresh?.child_tables)) {
+                        return;
+                    }
+                    const freshMediaState = await buildMediaState(fresh);
                     if (!canCommit() || !rowArticleElement.isConnected) return;
-                    const freshMediaState = await buildMediaState(fresh?.child_tables || []);
-                    if (!canCommit() || !rowArticleElement.isConnected) return;
-                    syncInlineCaptions(freshMediaState.imageChildForGallery);
-                    const freshGalleryElement = await renderGallery(freshMediaState.imageChildForGallery);
+                    syncInlineCaptions(freshMediaState);
+                    const freshGalleryElement = await renderGallery(
+                        freshMediaState.imageChildForGallery,
+                        freshMediaState.imageRows,
+                        freshMediaState.cardPicture,
+                    );
                     if (!canCommit() || !rowArticleElement.isConnected) return;
                     upsertMediaSection(
                         ".row_article_image_gallery_section",
@@ -276,9 +294,9 @@ export function createRowArticleMediaHydrator({
             if (!canCommit() || !rowArticleElement.isConnected || !Array.isArray(dyn?.child_tables)) {
                 return;
             }
-            const initialMediaState = await buildMediaState(dyn.child_tables);
+            const initialMediaState = await buildMediaState(dyn);
             if (!canCommit() || !rowArticleElement.isConnected) return;
-            syncInlineCaptions(initialMediaState.imageChildForGallery);
+            syncInlineCaptions(initialMediaState);
             if (!show_related_items_on_big_cards) return;
 
             // fetchDynamicChildren keeps the legacy child_tables envelope,
@@ -296,7 +314,11 @@ export function createRowArticleMediaHydrator({
                     ? linkedTaskChildTable.rows.length
                     : 0);
 
-            const galleryElement = await renderGallery(initialMediaState.imageChildForGallery);
+            const galleryElement = await renderGallery(
+                initialMediaState.imageChildForGallery,
+                initialMediaState.imageRows,
+                initialMediaState.cardPicture,
+            );
             if (!canCommit() || !rowArticleElement.isConnected) return;
             if (galleryElement) {
                 rowArticleContentElement.appendChild(

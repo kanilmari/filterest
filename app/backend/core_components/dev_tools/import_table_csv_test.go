@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,9 +45,18 @@ func (c *stubConn) ExecContext(ctx context.Context, query string, args []driver.
 	c.drv.lastArgs = append([]driver.NamedValue(nil), args...)
 	return driver.RowsAffected(1), nil
 }
+
+// QueryContext answers the restore's metadata lookups (which gallery a table belongs
+// to) with no rows: the stub's tables have no pictures.
 func (c *stubConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	return nil, errors.New("not implemented")
+	return &stubEmptyRows{}, nil
 }
+
+type stubEmptyRows struct{}
+
+func (*stubEmptyRows) Columns() []string              { return []string{"table_name"} }
+func (*stubEmptyRows) Close() error                   { return nil }
+func (*stubEmptyRows) Next(dest []driver.Value) error { return io.EOF }
 
 // stubTx implements driver.Tx.
 type stubTx struct {

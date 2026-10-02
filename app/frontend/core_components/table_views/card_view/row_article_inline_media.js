@@ -6,19 +6,26 @@ import { createImageElement } from "./card_avatar_builder.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { resolveImagePath } from "./row_article_content_builder_helpers.js";
-import { resolveRowArticleImageRows } from "./row_article_image_rows.js";
+import {
+    resolveRowArticleImageRows,
+    resolveRowArticleMainImageRow,
+    resolveRowArticlePictureIdentity,
+} from "./row_article_image_rows.js";
 import { syncRowArticleInlineImageCaptions } from "./row_article_image_caption.js";
 import { buildRowArticleImageArrow, buildRowArticleImagePosition } from "./row_article_image_controls.js";
 import { buildRowArticleRowNavigation } from "./row_article_presentation.js";
 import { enable_experimental_row_article_row_navigation } from "../../../ui_config.js";
 
 const controllers = new WeakMap();
-function imagePath(value) {
-    try { return new URL(resolveImagePath(value || ""), window.location.href).pathname; }
-    catch { return ""; }
-}
 
-/** Reuses each inline media surface while authorized child rows hydrate or refresh. */
+/**
+ * Reuses each inline media surface while authorized child rows hydrate or refresh.
+ * The rows are what the article shows, in the server's gallery order with a card-only
+ * picture first. The article's main image is the row showing context.cardPicture, the
+ * picture the server says the card shows, otherwise the first row. context.fromResponse
+ * marks rows from a related-rows response, which decides the image shown; without it
+ * the rows are the row's own image fields standing in until a response arrives.
+ */
 export function syncRowArticleInlineMedia(article, rows = [], context = {}) {
     if (!(article instanceof HTMLElement)) return;
     const images = resolveRowArticleImageRows(rows).filter(row => row?.filename);
@@ -56,12 +63,16 @@ function buildInlineMedia(container, article, initialContext) {
     media.before(frame);
     frame.append(media);
     let context = initialContext, images = [], index = 0, managedImage = false, disposed = false;
+    // viewerChose: the shown image is one the viewer browsed to after a response decided
+    // the start; hadResponse: a related-rows response has decided the shown image once.
+    let viewerChose = false, hadResponse = false;
     const events = new AbortController();
     const canInteract = () => !disposed && article.isConnected && context.canCommit?.() !== false;
-    let currentPath = imagePath(media.dataset.imageFirstSrc || media.querySelector("img")?.getAttribute("src")
-        || media.getAttribute("src"));
-    const previous = buildRowArticleImageArrow("previous", () => { if (canInteract()) select(index - 1); });
-    const next = buildRowArticleImageArrow("next", () => { if (canInteract()) select(index + 1); });
+    // The picture shown, by identity: another host or query is another picture.
+    let currentPicture = resolveRowArticlePictureIdentity(media.dataset.imageFirstSrc
+        || media.querySelector("img")?.getAttribute("src") || media.getAttribute("src"));
+    const previous = buildRowArticleImageArrow("previous", () => { if (canInteract()) browse(index - 1); });
+    const next = buildRowArticleImageArrow("next", () => { if (canInteract()) browse(index + 1); });
     const position = buildRowArticleImagePosition();
     const records = document.createElement("div");
     records.className = "row_article_inline_record_controls";
@@ -113,8 +124,9 @@ function buildInlineMedia(container, article, initialContext) {
         position.hidden = !available;
         refreshRecordNavigation();
     }
+    /** Shows the image at nextIndex; returns false when there is none. */
     function select(nextIndex) {
-        if (nextIndex < 0 || nextIndex >= images.length) return;
+        if (nextIndex < 0 || nextIndex >= images.length) return false;
         index = nextIndex;
         managedImage = true;
         const row = images[index], src = resolveImagePath(row.filename);
@@ -132,16 +144,21 @@ function buildInlineMedia(container, article, initialContext) {
         media.replaceWith(nextMedia);
         media = nextMedia;
         if (restoreMediaFocus) media.focus({ preventScroll: true });
-        currentPath = imagePath(row.filename);
+        currentPicture = resolveRowArticlePictureIdentity(row.filename);
         syncRowArticleInlineImageCaptions(article, images);
         paintControls();
+        return true;
+    }
+    /** Shows the image the viewer browsed to, which later refreshes keep while listed. */
+    function browse(nextIndex) {
+        if (select(nextIndex)) viewerChose = true;
     }
     frame.addEventListener("keydown", event => {
         if (!canInteract()) return;
         if (event.target.closest("a, input, textarea, select") || event.altKey || event.ctrlKey || event.metaKey) return;
         if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
             event.preventDefault(); event.stopPropagation();
-            select(index + (event.key === "ArrowLeft" ? -1 : 1));
+            browse(index + (event.key === "ArrowLeft" ? -1 : 1));
         }
     }, { signal: events.signal });
     let touchStart = null;
@@ -155,7 +172,7 @@ function buildInlineMedia(container, article, initialContext) {
         if (!canInteract() || !start || !end) return;
         const delta = end.clientX - start.clientX;
         if (Math.abs(delta) >= 44 && Math.abs(delta) > Math.abs(end.clientY - start.clientY)) {
-            select(index + (delta > 0 ? -1 : 1));
+            browse(index + (delta > 0 ? -1 : 1));
         }
     }, { passive: true, signal: events.signal });
     return { dispose() {
@@ -167,22 +184,39 @@ function buildInlineMedia(container, article, initialContext) {
         if (disposed) return;
         context = nextContext;
         images = nextImages;
-        index = images.findIndex(row => imagePath(row.filename) === currentPath);
-        // A removed selected image falls back to a remaining permitted image;
-        // initially unrelated inline images are left untouched.
-        if (index < 0 && images.length > 0 && (managedImage || images.length === 1)) select(0);
-        else if (managedImage && images.length === 0) {
+        index = images.findIndex(row => resolveRowArticlePictureIdentity(row.filename) === currentPicture);
+        // A related-rows response decides which image shows. The first one starts on the
+        // main image, the card's picture wherever the rows list it, even when they also
+        // list the row's earlier picture. A later one, after an upload or a save, keeps an
+        // image the viewer browsed to while the rows still list it, and otherwise follows
+        // the main image. Before any response the row's own fields keep the shown image
+        // while they list it.
+        const fromResponse = context.fromResponse === true;
+        const keepViewerChoice = fromResponse && hadResponse && viewerChose && index >= 0;
+        const keepShown = keepViewerChoice || (!fromResponse && index >= 0);
+        if (fromResponse) {
+            hadResponse = true;
+            if (!keepViewerChoice) viewerChose = false;
+        }
+        if (managedImage && images.length === 0) {
             // A formerly selected asset was removed or became unavailable.
             // Remove both its pixels and activation binding rather than retaining stale rows.
             const empty = document.createElement("span");
             empty.className = "row_article_inline_media_empty";
-            media.replaceWith(empty); media = empty; currentPath = "";
-        } else if (index >= 0) {
-            managedImage = true;
-            bindImageFirstViewActivation(media, {
-                imageSrc: resolveImagePath(images[index].filename), imageRows: images, activeImageRow: images[index],
-                rowItem: context.rowItem, tableName: context.tableName, selectedCard: context.selectedCard,
-            });
+            media.replaceWith(empty); media = empty; currentPicture = "";
+        } else if (images.length > 0 && (managedImage || index >= 0 || images.length === 1)) {
+            // Taken over: an image the rows show or one managed before. An inline image no
+            // row shows and that was never managed is left untouched.
+            const target = keepShown ? index : images.indexOf(resolveRowArticleMainImageRow(images, context.cardPicture));
+            if (target !== index) {
+                select(target);
+            } else {
+                managedImage = true;
+                bindImageFirstViewActivation(media, {
+                    imageSrc: resolveImagePath(images[index].filename), imageRows: images, activeImageRow: images[index],
+                    rowItem: context.rowItem, tableName: context.tableName, selectedCard: context.selectedCard,
+                });
+            }
         }
         paintControls();
     } };

@@ -7,9 +7,9 @@ package media_library
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"path"
 	"strings"
+
+	media_utils "easelect/backend/core_components/media_utils"
 )
 
 var ErrUnsupported = errors.New("media_reuse_not_supported_for_permissions")
@@ -56,38 +56,10 @@ type asset struct {
 	SourceID     int64
 }
 
-// ParseStoragePath accepts one canonical media identity; encoded or ambiguous paths are rejected.
-func ParseStoragePath(raw string) (id, variant, filename string, ok bool) {
-	parts := strings.Split(raw, "/")
-	if len(parts) != 4 || parts[0] != "media" {
-		return
-	}
-	parsed, err := uuid.Parse(parts[1])
-	if err != nil || parsed.String() != parts[1] {
-		return
-	}
-	switch parts[2] {
-	case "original", "300", "1000", "2160":
-	default:
-		return
-	}
-	ext := strings.ToLower(path.Ext(parts[3]))
-	if parts[3] != "image"+ext || !supportedExtension(ext) {
-		return
-	}
-	return parts[1], parts[2], parts[3], true
-}
-func supportedExtension(ext string) bool {
-	switch ext {
-	case ".png", ".jpg", ".jpeg", ".webp", ".gif":
-		return true
-	}
-	return false
-}
 func storageURL(a asset) string {
 	return fmt.Sprintf("/storage/media/%s/original/%s", a.ID, a.Filename)
 }
 func parseReference(raw string) (asset, bool) {
-	id, _, file, ok := ParseStoragePath(strings.TrimPrefix(raw, "/storage/"))
+	id, _, file, ok := media_utils.ParseMediaLibraryStoragePath(strings.TrimPrefix(raw, "/storage/"))
 	return asset{ID: id, Filename: file}, ok
 }

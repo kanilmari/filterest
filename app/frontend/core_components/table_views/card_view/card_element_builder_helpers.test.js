@@ -5,6 +5,7 @@ import {
     resolveImagePaths,
     resolveFallbackCardImageValue,
 } from './card_element_builder_helpers.js';
+import { resolveImagePath } from './row_article_content_builder_helpers.js';
 
 // ---------------------------------------------------------------------------
 // buildGoogleMapsEmbedUrl
@@ -126,6 +127,56 @@ describe('resolveImagePaths', () => {
         const result = resolveImagePaths('some-random-file.jpg', '300');
         expect(result.displaySrc).toBe('/storage/some-random-file.jpg');
         expect(result.originalSrc).toBe('/storage/some-random-file.jpg');
+    });
+
+    test('keeps a query or fragment after a flat filename in both the display and the original path', () => {
+        expect(resolveImagePaths('10_2_1.webp?v=1', '300')).toEqual({
+            displaySrc: '/storage/10/2/300/10_2_1.webp?v=1',
+            originalSrc: '/storage/10/2/original/10_2_1.webp?v=1',
+        });
+        expect(resolveImagePaths('10_2_1.webp#zoom', '1000')).toEqual({
+            displaySrc: '/storage/10/2/1000/10_2_1.webp#zoom',
+            originalSrc: '/storage/10/2/original/10_2_1.webp#zoom',
+        });
+        // The full storage address with a query already resolved this way.
+        expect(resolveImagePaths('/storage/10/2/original/10_2_1.webp?v=1', '300')).toEqual({
+            displaySrc: '/storage/10/2/300/10_2_1.webp?v=1',
+            originalSrc: '/storage/10/2/original/10_2_1.webp?v=1',
+        });
+    });
+
+    // The card list and the article load the same file for one stored name.
+    test.each(['10_2_1.webp?v=1', '10_2_1.webp#zoom', '10_2_1.webp'])(
+        'gives %j the same original address as the article',
+        (value) => {
+            expect(resolveImagePaths(value, '300').originalSrc).toBe(resolveImagePath(value));
+        },
+    );
+
+    // Without a ? or #, every value resolves byte for byte as it did before suffixes
+    // were separated from flat filenames.
+    test.each([
+        ['http://example.com/img.jpg', '300', 'http://example.com/img.jpg', 'http://example.com/img.jpg'],
+        ['https://cdn.example.com/photo.png', '300', 'https://cdn.example.com/photo.png', 'https://cdn.example.com/photo.png'],
+        ['./assets/logo.png', '300', './assets/logo.png', './assets/logo.png'],
+        ['/static/img.jpg', '1000', '/static/img.jpg', '/static/img.jpg'],
+        ['/storage/9/1/original/9_1_1.png', '300', '/storage/9/1/300/9_1_1.png', '/storage/9/1/original/9_1_1.png'],
+        ['/storage/104/161/original/logo.svg', '300', '/storage/104/161/300/logo.svg', '/storage/104/161/original/logo.svg'],
+        ['104/133/300/104_133_38.png', '300', '/storage/104/133/300/104_133_38.png', '/storage/104/133/original/104_133_38.png'],
+        ['104/133/original/photo.jpg', '1000', '/storage/104/133/1000/photo.jpg', '/storage/104/133/original/photo.jpg'],
+        ['10/20/1000/file.png', '300', '/storage/10/20/300/file.png', '/storage/10/20/original/file.png'],
+        ['10/20/300/file.png', '1000', '/storage/10/20/1000/file.png', '/storage/10/20/original/file.png'],
+        ['104_133_38.png', '300', '/storage/104/133/300/104_133_38.png', '/storage/104/133/original/104_133_38.png'],
+        ['some-random-file.jpg', '300', '/storage/some-random-file.jpg', '/storage/some-random-file.jpg'],
+        ['1_2_3.PNG', '1000', '/storage/1/2/1000/1_2_3.PNG', '/storage/1/2/original/1_2_3.PNG'],
+        ['1_2_3.png', '2160', '/storage/1/2/2160/1_2_3.png', '/storage/1/2/original/1_2_3.png'],
+        ['1_2_3.png', 'thumb', '/storage/1/2/original/1_2_3.png', '/storage/1/2/original/1_2_3.png'],
+        ['10_20.jpg', '300', '/storage/10_20.jpg', '/storage/10_20.jpg'],
+        ['10_2_1.webp.png', '300', '/storage/10_2_1.webp.png', '/storage/10_2_1.webp.png'],
+        ['a_2_3.png', '300', '/storage/a_2_3.png', '/storage/a_2_3.png'],
+        ['folder/10_2_1.webp', '300', '/storage/folder/10_2_1.webp', '/storage/folder/10_2_1.webp'],
+    ])('resolves %j for folder %j without a query or fragment exactly as before', (rawSrc, folder, displaySrc, originalSrc) => {
+        expect(resolveImagePaths(rawSrc, folder)).toEqual({ displaySrc, originalSrc });
     });
 });
 

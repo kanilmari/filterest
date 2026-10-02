@@ -31,6 +31,7 @@ import { CONFIRM_PROMPT_TRANSLATION_FALLBACKS } from '../../reusable_components/
 import { FOREIGN_KEYS_TRANSLATION_FALLBACKS } from '../admin_tools/foreign_keys_translation_fallbacks.js';
 import { DATASET_HEADER_CONFIG_TRANSLATION_FALLBACKS } from '../admin_tools/dataset_header_config_translation_fallbacks.js';
 import { AUTH_SESSION_NOTICE_TRANSLATION_FALLBACKS } from '../auth/auth_session_notice_copy.js';
+import { MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS } from '../admin_tools/missing_media_check_translation_fallbacks.js';
 
 const LOCAL_TRANSLATION_FALLBACKS = {
     delete_confirm_title: {
@@ -60,6 +61,7 @@ const LOCAL_TRANSLATION_FALLBACKS = {
     ...FOREIGN_KEYS_TRANSLATION_FALLBACKS,
     ...DATASET_HEADER_CONFIG_TRANSLATION_FALLBACKS,
     ...AUTH_SESSION_NOTICE_TRANSLATION_FALLBACKS,
+    ...MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),
     // Existing installations or cached responses may predate this bootstrap
     // key. Reviewed runtime translations still take priority over these labels.

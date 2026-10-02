@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const {
     endpointRouterMock,
@@ -37,7 +37,13 @@ import {
     buildRowArticleImageGallery,
     canUploadImageToChildDataset,
 } from './row_article_image_gallery.js';
-import { resolveRowArticleImageRows } from './row_article_image_rows.js';
+import {
+    composeRowArticleImageRows,
+    resolveRowArticleImageRows,
+    resolveRowArticleMainImageRow,
+    resolveRowArticlePictureIdentity,
+} from './row_article_image_rows.js';
+import { setLanguage } from '../../state_stores/lang_preference_reader.js';
 
 beforeEach(() => {
     endpointRouterMock.mockReset();
@@ -47,6 +53,36 @@ beforeEach(() => {
     openImageFirstViewMock.mockReset();
     showErrorToastMock.mockReset();
     showSuccessToastMock.mockReset();
+});
+
+describe('resolveRowArticlePictureIdentity', () => {
+    const identity = resolveRowArticlePictureIdentity;
+
+    test('treats a bare stored name and its full storage address as the same picture', () => {
+        expect(identity('10_2_1.webp')).toBe(identity('/storage/10/2/original/10_2_1.webp'));
+        expect(identity('hero.png')).toBe(identity('/storage/hero.png'));
+        expect(identity(`${window.location.origin}/storage/hero.png`)).toBe(identity(' hero.png '));
+    });
+
+    test('keeps the host and the query, so the same path elsewhere is another picture', () => {
+        expect(identity('https://old.example/logo.png')).not.toBe(identity('https://new.example/logo.png'));
+        expect(identity('pic.png?v=1')).not.toBe(identity('pic.png?v=2'));
+        expect(identity('https://cdn.example/a.png?v=1')).not.toBe(identity('https://cdn.example/a.png'));
+    });
+
+    test('drops only a #fragment', () => {
+        expect(identity('https://cdn.example/a.png?v=1#zoom')).toBe(identity('https://cdn.example/a.png?v=1'));
+    });
+
+    test('finds the storage folder of a structured stored name written with a query or fragment', () => {
+        expect(identity('10_2_1.webp#zoom')).toBe(identity('10_2_1.webp'));
+        expect(identity('10_2_1.webp?v=1')).toBe(identity('/storage/10/2/original/10_2_1.webp?v=1'));
+        expect(identity('10_2_1.webp?v=1')).not.toBe(identity('10_2_1.webp?v=2'));
+    });
+
+    test.each(['', '   ', null, undefined])('is empty for the empty value %j', (value) => {
+        expect(identity(value)).toBe('');
+    });
 });
 
 describe('resolveRowArticleImageRows', () => {
@@ -68,20 +104,166 @@ describe('resolveRowArticleImageRows', () => {
         expect(resolveRowArticleImageRows(rows).map(row => row.id)).toEqual([1]);
     });
 
-    test('sorts primary image rows before non-primary rows', () => {
+    test('keeps the server gallery order as given instead of sorting by primary, sort order or id', () => {
         const rows = [
             { id: 11, asset_kind: 'image', filename: 'older.png', is_primary: false, sort_order: 1 },
             { id: 12, asset_kind: 'image', filename: 'hero.png', is_primary: true, sort_order: 99 },
+            { id: 3, asset_kind: 'image', filename: 'early.png', sort_order: 0 },
         ];
 
-        expect(resolveRowArticleImageRows(rows).map(row => row.id)).toEqual([12, 11]);
+        expect(resolveRowArticleImageRows(rows).map(row => row.id)).toEqual([11, 12, 3]);
     });
 
-    test('deduplicates a parent-row image already represented by a canonical child row', () => {
-        const canonical = { id: 12, asset_kind: 'image', filename: 'hero.png', is_primary: false };
-        const parentFallback = { asset_kind: 'image', filename: 'hero.png', is_primary: true };
+    test('drops a later row whose picture an earlier row already shows, compared by resolved path', () => {
+        const canonical = { id: 12, asset_kind: 'image', filename: 'hero.png' };
+        const samePicture = { asset_kind: 'image', filename: '/storage/hero.png', is_parent_row_image: true };
 
-        expect(resolveRowArticleImageRows([canonical], [parentFallback])).toEqual([canonical]);
+        expect(resolveRowArticleImageRows([canonical, samePicture])).toEqual([canonical]);
+    });
+
+    test('keeps pictures at the same path on another host or with another query', () => {
+        const rows = [
+            { id: 1, asset_kind: 'image', filename: 'https://old.example/logo.png' },
+            { id: 2, asset_kind: 'image', filename: 'https://new.example/logo.png' },
+            { id: 3, asset_kind: 'image', filename: 'pic.png?v=1' },
+            { id: 4, asset_kind: 'image', filename: 'pic.png?v=2' },
+        ];
+
+        expect(resolveRowArticleImageRows(rows)).toEqual(rows);
+    });
+});
+
+describe('composeRowArticleImageRows', () => {
+    const second = { id: 2, asset_kind: 'image', filename: 'second.png', sort_order: 9 };
+    const first = { id: 1, asset_kind: 'image', filename: 'first.png', is_primary: true };
+
+    test('leads with a card-only tile when no gallery row carries the card picture', () => {
+        expect(composeRowArticleImageRows([second, first], ' https://cdn.example/card.png ')).toEqual([
+            { asset_kind: 'image', filename: 'https://cdn.example/card.png', is_card_only_picture: true },
+            second,
+            first,
+        ]);
+    });
+
+    test('keeps the gallery rows as they are when one carries the card picture, compared by resolved path', () => {
+        const stored = { id: 7, asset_kind: 'image', filename: '10_2_1.webp' };
+
+        expect(composeRowArticleImageRows([second, stored], '/storage/10/2/original/10_2_1.webp'))
+            .toEqual([second, stored]);
+        expect(composeRowArticleImageRows([stored], '10_2_1.webp')).toEqual([stored]);
+    });
+
+    test.each(['', '   ', null, undefined])('adds no card-only tile for the empty card picture %j', (cardPicture) => {
+        expect(composeRowArticleImageRows([second, first], cardPicture)).toEqual([second, first]);
+    });
+
+    test('adds a card-only tile when a gallery row has the card picture\'s path on another host or query', () => {
+        const oldHost = { id: 3, asset_kind: 'image', filename: 'https://old.example/logo.png' };
+        const oldQuery = { id: 4, asset_kind: 'image', filename: 'pic.png?v=1' };
+
+        expect(composeRowArticleImageRows([oldHost], 'https://new.example/logo.png')).toEqual([
+            { asset_kind: 'image', filename: 'https://new.example/logo.png', is_card_only_picture: true },
+            oldHost,
+        ]);
+        expect(composeRowArticleImageRows([oldQuery], 'pic.png?v=2')).toEqual([
+            { asset_kind: 'image', filename: 'pic.png?v=2', is_card_only_picture: true },
+            oldQuery,
+        ]);
+    });
+
+    test('adds no second tile for a gallery file the card picture names with a query or fragment', () => {
+        const stored = { id: 7, asset_kind: 'image', filename: '/storage/10/2/original/10_2_1.webp?v=1' };
+        const plain = { id: 8, asset_kind: 'image', filename: '10_2_1.webp' };
+
+        expect(composeRowArticleImageRows([stored], '10_2_1.webp?v=1')).toEqual([stored]);
+        expect(composeRowArticleImageRows([plain], '10_2_1.webp#zoom')).toEqual([plain]);
+    });
+
+    test('shows only the card picture, or nothing, when the response has no gallery rows', () => {
+        expect(composeRowArticleImageRows([], 'hero.png'))
+            .toEqual([{ asset_kind: 'image', filename: 'hero.png', is_card_only_picture: true }]);
+        expect(composeRowArticleImageRows(undefined, '')).toEqual([]);
+    });
+});
+
+describe('resolveRowArticleMainImageRow', () => {
+    const primary = { id: 1, asset_kind: 'image', filename: 'primary.png', is_primary: true };
+    const logo = { id: 2, asset_kind: 'image', filename: '10_2_2.webp' };
+
+    test('picks the row showing the card picture even when it is not the first, compared by resolved path', () => {
+        expect(resolveRowArticleMainImageRow([primary, logo], '10_2_2.webp')).toBe(logo);
+        expect(resolveRowArticleMainImageRow([primary, logo], '/storage/10/2/original/10_2_2.webp')).toBe(logo);
+    });
+
+    test.each([
+        ['an empty card picture', ''],
+        ['no card picture', undefined],
+        ['a card picture no row shows', 'elsewhere.png'],
+    ])('falls back to the first row for %s', (_label, cardPicture) => {
+        expect(resolveRowArticleMainImageRow([primary, logo], cardPicture)).toBe(primary);
+    });
+
+    test('picks the row with the card picture\'s own host or query among rows at the same path', () => {
+        const oldHost = { id: 3, asset_kind: 'image', filename: 'https://old.example/logo.png' };
+        const newHost = { id: 4, asset_kind: 'image', filename: 'https://new.example/logo.png' };
+        const oldQuery = { id: 5, asset_kind: 'image', filename: 'pic.png?v=1' };
+        const newQuery = { id: 6, asset_kind: 'image', filename: 'pic.png?v=2' };
+
+        expect(resolveRowArticleMainImageRow([oldHost, newHost], 'https://new.example/logo.png')).toBe(newHost);
+        expect(resolveRowArticleMainImageRow([oldQuery, newQuery], 'pic.png?v=2')).toBe(newQuery);
+    });
+
+    test('returns null without rows', () => {
+        expect(resolveRowArticleMainImageRow([], 'primary.png')).toBeNull();
+        expect(resolveRowArticleMainImageRow(null)).toBeNull();
+    });
+});
+
+// The server reports a multilingual card picture whole; the article reads it in the
+// viewer's language, as the card reads its image field.
+describe("the card picture in the viewer's language", () => {
+    const fiRow = { id: 1, asset_kind: 'image', filename: 'fi.png' };
+    const enRow = { id: 2, asset_kind: 'image', filename: 'en.png' };
+    const twoLanguages = JSON.stringify({ fi: 'fi.png', en: 'en.png' });
+
+    afterEach(() => {
+        localStorage.clear();
+    });
+
+    test("picks the viewer's language for the main picture and for the card-only tile", () => {
+        setLanguage('fi');
+        expect(resolveRowArticleMainImageRow([enRow, fiRow], twoLanguages)).toBe(fiRow);
+        expect(composeRowArticleImageRows([enRow], twoLanguages)).toEqual([
+            { asset_kind: 'image', filename: 'fi.png', is_card_only_picture: true },
+            enRow,
+        ]);
+
+        setLanguage('en');
+        expect(resolveRowArticleMainImageRow([fiRow, enRow], twoLanguages)).toBe(enRow);
+        expect(composeRowArticleImageRows([enRow], twoLanguages)).toEqual([enRow]);
+    });
+
+    test("an empty value in the viewer's language is no card picture, so the first gallery row leads", () => {
+        setLanguage('fi');
+        const emptyInFinnish = JSON.stringify({ fi: '', en: 'en.png' });
+
+        expect(composeRowArticleImageRows([enRow, fiRow], emptyInFinnish)).toEqual([enRow, fiRow]);
+        expect(resolveRowArticleMainImageRow([enRow, fiRow], emptyInFinnish)).toBe(enRow);
+    });
+
+    test('reads plain values and JSON that is no language map as they are', () => {
+        setLanguage('fi');
+        const notLanguages = '{"width":"fi.png"}';
+
+        expect(resolveRowArticleMainImageRow([enRow, fiRow], ' fi.png ')).toBe(fiRow);
+        expect(composeRowArticleImageRows([enRow], ' fi.png ')).toEqual([
+            { asset_kind: 'image', filename: 'fi.png', is_card_only_picture: true },
+            enRow,
+        ]);
+        expect(composeRowArticleImageRows([enRow], notLanguages)).toEqual([
+            { asset_kind: 'image', filename: notLanguages, is_card_only_picture: true },
+            enRow,
+        ]);
     });
 });
 
@@ -178,29 +360,154 @@ describe('buildRowArticleImageGallery', () => {
         expect(thumbnail?.querySelector('img')?.getAttribute('src')).toBe('/storage/firefox.svg');
     });
 
-    test.each([true, false])(
-        'renders a lone parent-row image thumbnail whether primary is %s',
-        (isPrimary) => {
-            const gallery = buildRowArticleImageGallery(
-                'tickets',
-                2,
-                null,
-                () => {},
-                {
-                    canUpload: false,
-                    parentImageRows: [{
-                        asset_kind: 'image',
-                        filename: '10_2_1.webp',
-                        is_primary: isPrimary,
-                        is_parent_row_image: true,
-                    }],
-                },
-            );
+    test('renders a lone parent-row image thumbnail without row actions', () => {
+        const gallery = buildRowArticleImageGallery(
+            'tickets',
+            2,
+            null,
+            () => {},
+            {
+                canUpload: false,
+                canDelete: true,
+                canSetPrimary: true,
+                imageRows: [{
+                    asset_kind: 'image',
+                    filename: '10_2_1.webp',
+                    is_parent_row_image: true,
+                }],
+            },
+        );
 
-            expect(gallery.querySelectorAll('img')).toHaveLength(1);
-            expect(gallery.querySelector('img')?.getAttribute('src')).toBe('/storage/10/2/original/10_2_1.webp');
-        },
-    );
+        expect(gallery.querySelectorAll('img')).toHaveLength(1);
+        expect(gallery.querySelector('img')?.getAttribute('src')).toBe('/storage/10/2/original/10_2_1.webp');
+        expect(gallery.querySelector('.big_card_thumbnail_primary, .big_card_thumbnail_delete')).toBeNull();
+    });
+
+    test('loads a structured stored name with a query from its storage folder', () => {
+        const gallery = buildRowArticleImageGallery(
+            'services',
+            1,
+            {
+                dataset: 'services_assets',
+                column: 'services_id',
+                rows: [{ id: 11, asset_kind: 'image', filename: '10_2_1.webp?v=1' }],
+            },
+            () => {},
+            { canUpload: false },
+        );
+
+        expect(gallery.querySelector('[data-testid="big-card-image-thumb-0"] img')?.getAttribute('src'))
+            .toBe('/storage/10/2/original/10_2_1.webp?v=1');
+    });
+
+    test('shows the thumbnails in the order given instead of re-sorting them', () => {
+        const gallery = buildRowArticleImageGallery(
+            'services',
+            1,
+            {
+                dataset: 'services_assets',
+                column: 'services_id',
+                rows: [
+                    { id: 2, asset_kind: 'image', filename: 'second.png', sort_order: 9 },
+                    { id: 1, asset_kind: 'image', filename: 'first.png', is_primary: true, sort_order: 1 },
+                ],
+            },
+            () => {},
+            { canUpload: false },
+        );
+
+        expect(Array.from(gallery.querySelectorAll('[data-testid^="big-card-image-thumb-"] img'))
+            .map((image) => image.getAttribute('src'))).toEqual(['/storage/second.png', '/storage/first.png']);
+    });
+
+    test('keeps the server order but starts on the card picture when a later row shows it', () => {
+        const primary = { id: 1, asset_kind: 'image', filename: 'primary.png', is_primary: true, title: 'Primary' };
+        const logo = { id: 2, asset_kind: 'image', filename: 'logo.png', title: 'Logo' };
+        const gallery = buildRowArticleImageGallery(
+            'services',
+            1,
+            { dataset: 'services_assets', column: 'services_id', relation_kind: 'shared_asset', rows: [primary, logo] },
+            () => {},
+            { canUpload: false, canEditMetadata: true, cardPicture: 'logo.png' },
+        );
+
+        expect(Array.from(gallery.querySelectorAll('[data-testid^="big-card-image-thumb-"] img'))
+            .map((image) => image.getAttribute('src'))).toEqual(['/storage/primary.png', '/storage/logo.png']);
+        expect(gallery.querySelector('[data-testid="big-card-image-thumb-0"]').classList.contains('active_thumb'))
+            .toBe(false);
+        expect(gallery.querySelector('[data-testid="big-card-image-thumb-1"]').classList.contains('active_thumb'))
+            .toBe(true);
+        // The metadata editor edits the picture the gallery starts on.
+        expect(gallery.querySelector('[data-testid="big-card-image-title-input"]').value).toBe('Logo');
+    });
+
+    test('starts on the first thumbnail when no row shows the card picture', () => {
+        const gallery = buildRowArticleImageGallery(
+            'services',
+            1,
+            {
+                dataset: 'services_assets',
+                column: 'services_id',
+                rows: [
+                    { id: 1, asset_kind: 'image', filename: 'primary.png' },
+                    { id: 2, asset_kind: 'image', filename: 'logo.png' },
+                ],
+            },
+            () => {},
+            { canUpload: false, cardPicture: '' },
+        );
+
+        expect(gallery.querySelector('[data-testid="big-card-image-thumb-0"]').classList.contains('active_thumb'))
+            .toBe(true);
+        expect(gallery.querySelector('[data-testid="big-card-image-thumb-1"]').classList.contains('active_thumb'))
+            .toBe(false);
+    });
+
+    test('shows a card-only picture first without primary, delete, menu or metadata actions', () => {
+        const galleryRow = { id: 11, asset_kind: 'image', filename: 'hero.png', title: 'Hero' };
+        const imageRows = composeRowArticleImageRows([galleryRow], 'https://cdn.example/card.png');
+        const rowItem = { id: 1, title: 'Service' };
+        const gallery = buildRowArticleImageGallery(
+            'services',
+            1,
+            {
+                dataset: 'services_assets',
+                column: 'services_id',
+                relation_kind: 'shared_asset',
+                rows: [galleryRow],
+            },
+            () => {},
+            {
+                canUpload: false,
+                canDelete: true,
+                canSetPrimary: true,
+                canEditMetadata: true,
+                imageRows,
+                imageFirstContext: { rowItem, tableName: 'services' },
+            },
+        );
+
+        const cardOnlyItem = gallery.querySelector('[data-testid="big-card-image-item-0"]');
+        expect(cardOnlyItem.querySelector('img')?.getAttribute('src')).toBe('https://cdn.example/card.png');
+        expect(cardOnlyItem.querySelector('.big_card_thumbnail_primary, .big_card_thumbnail_delete')).toBeNull();
+        const menuRequest = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        cardOnlyItem.dispatchEvent(menuRequest);
+        expect(menuRequest.defaultPrevented).toBe(false);
+        expect(gallery.querySelector('.big_card_thumbnail_context_menu').childElementCount).toBe(0);
+        expect(gallery.querySelector('[data-testid="big-card-image-editor-toggle"]').hidden).toBe(true);
+
+        const galleryItem = gallery.querySelector('[data-testid="big-card-image-item-1"]');
+        expect(galleryItem.querySelector('[data-testid="big-card-image-primary-1"]')).not.toBeNull();
+        expect(galleryItem.querySelector('[data-testid="big-card-image-delete-1"]')).not.toBeNull();
+
+        gallery.querySelector('[data-testid="big-card-image-thumb-1"]').click();
+        expect(gallery.querySelector('[data-testid="big-card-image-editor-toggle"]').hidden).toBe(false);
+        expect(openImageFirstViewMock).toHaveBeenCalledWith(expect.objectContaining({
+            imageRows,
+            activeImageRow: galleryRow,
+            rowItem,
+        }));
+    });
 
     test('opens the standalone image-first view when a thumbnail is clicked', () => {
         const rowItem = { id: 1, title: 'Service' };
@@ -328,9 +635,10 @@ describe('buildRowArticleImageGallery', () => {
             {
                 dataset: 'services_assets',
                 column: 'services_id',
+                // Server gallery order: the primary picture first.
                 rows: [
-                    { id: 11, asset_kind: 'image', filename: 'alpha.png', is_primary: false, sort_order: 1 },
                     { id: 12, asset_kind: 'image', filename: 'hero.png', is_primary: true, sort_order: 1 },
+                    { id: 11, asset_kind: 'image', filename: 'alpha.png', is_primary: false, sort_order: 1 },
                 ],
             },
             () => {},
@@ -339,6 +647,7 @@ describe('buildRowArticleImageGallery', () => {
 
         const primaryButtons = gallery.querySelectorAll('[data-testid^="big-card-image-primary-"]');
         expect(primaryButtons.length).toBe(2);
+        expect(primaryButtons[0].textContent).toBe('★');
         expect(primaryButtons[1].textContent).toBe('☆');
     });
 
@@ -424,9 +733,10 @@ describe('buildRowArticleImageGallery', () => {
             {
                 dataset: 'services_assets',
                 column: 'services_id',
+                // Server gallery order: the primary picture first.
                 rows: [
-                    { id: 11, asset_kind: 'image', filename: 'alpha.png', is_primary: false, sort_order: 2 },
                     { id: 12, asset_kind: 'image', filename: 'hero.png', is_primary: true, sort_order: 1 },
+                    { id: 11, asset_kind: 'image', filename: 'alpha.png', is_primary: false, sort_order: 2 },
                 ],
             },
             onRefresh,
