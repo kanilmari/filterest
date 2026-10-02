@@ -60,7 +60,13 @@ release assembly run locally. Do not add `.github/workflows/*`.
 ## How To Work
 
 1. **Orient.** Confirm the branch, and understand the real task rather than the
-   visible symptom.
+   visible symptom. Before designing anything new, search whether the
+   capability already exists in some form — a tree, a picker, a project
+   concept, a settings screen — however many worklines are open, and extend it
+   rather than building a second one. When a new implementation does replace an
+   old one, delete the old code in the same change: disconnecting it is not
+   enough, because another agent may later edit the dead copy and force
+   behaviour there without looking where the feature really lives.
 2. **Plan.** Read the relevant
    [reference implementations](app/docs/reference_implementations/) before
    writing new code, and follow them rather than an arbitrary local pattern.
