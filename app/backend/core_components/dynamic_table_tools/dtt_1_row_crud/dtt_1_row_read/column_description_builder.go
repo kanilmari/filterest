@@ -7,7 +7,8 @@ package dtt_1_row_read
 // buildColumnDescription starts from the complete client-visible column contract
 // and applies the values known by a specific metadata source. Relationship fields
 // remain optional because their absence tells the browser that a column has no
-// foreign-key target.
+// foreign-key target. is_row_owner is false until GetResults marks the column the
+// row-owner resolver proved (markRowOwnerColumnDescription).
 func buildColumnDescription(overrides map[string]interface{}) map[string]interface{} {
 	description := map[string]interface{}{
 		"data_type":                  "",
@@ -20,6 +21,7 @@ func buildColumnDescription(overrides map[string]interface{}) map[string]interfa
 		"hide_false_null_on_sml_crd": false,
 		"hide_false_null_on_big_crd": false,
 		"hide_on_bg_crd_if_not_own":  false,
+		"is_row_owner":               false,
 		"co_number":                  0,
 		"fco_number":                 0,
 		"is_multilingual":            false,

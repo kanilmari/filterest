@@ -231,6 +231,18 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 
+		// The article hides hide_on_bg_crd_if_not_own fields unless the row is
+		// the viewer's own. The browser learns the proven owner column only from
+		// this mark and hides such fields when no column carries it.
+		var rowOwnerColumn string
+		rowOwnerColumn, err = resolveResultsRowOwnerColumn(currentDb, table_name, readPolicy, column_data_types)
+		if err != nil {
+			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching row owner metadata")
+			return
+		}
+		column_data_types = markRowOwnerColumnDescription(column_data_types, rowOwnerColumn)
+
 		geomCols, err = getGeometryColumns(currentDb, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())

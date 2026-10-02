@@ -1,72 +1,154 @@
 // row_policy_owner_resolver.go
-// Resolves dataset ownership metadata and must-be-true fields for row-read policies.
-// Bridges table and column metadata with ReadRowPolicy ownership decisions.
-// Exists to preserve legacy ownership fallbacks while explicit metadata is adopted.
+// Resolves the column that names a row's owner for "must be true unless own" rules.
+// Bridges dataset metadata, the PostgreSQL system catalog, and ReadRowPolicy.
+// Exists so the own-row exception applies only where ownership is proven; any
+// other dataset fails closed instead of guessing an owner from column names.
 package dtt_1_row_read
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"easelect/backend/core_components/dbutils"
 )
 
 const (
 	rowPolicyOwnerColumnMetadataColumn = "row_policy_owner_column"
-	ownerColumnSourceExplicitMetadata  = "explicit_metadata"
-	ownerColumnSourceLegacyFallback    = "legacy_fallback"
+
+	// A row is "own" when its owner column equals the actor's system_users.id,
+	// so that key is the only one an owner column may reference.
+	rowOwnerUsersTableName = "system_users"
+	rowOwnerUsersKeyColumn = "id"
+
+	// rowOwnerColumnDescriptionField marks the resolved owner in the column
+	// descriptions of a results response. buildColumnDescription declares it.
+	rowOwnerColumnDescriptionField = "is_row_owner"
+
+	rowOwnerRefusalNoneNamed = "no owner column is named in system_db_tables.row_policy_owner_column"
 )
 
-type ownerColumnResolution struct {
-	Column                     string
-	Source                     string
-	LegacyFallbackColumn       string
-	MatchesLegacyFallback      bool
-	ComparedWithLegacyFallback bool
+// systemUsersForeignKeyColumnsQuery lists a table's columns that are a
+// validated single-column foreign key to system_users(id). It reads the system
+// catalog, never information_schema: the constraint views there show a foreign
+// key only to the owner of its table, and row policies are read on the guest
+// and basic connections, which own no table.
+const systemUsersForeignKeyColumnsQuery = `
+	SELECT source_column.attname
+	FROM pg_catalog.pg_constraint AS foreign_key
+	JOIN pg_catalog.pg_class AS source_table
+	  ON source_table.oid = foreign_key.conrelid
+	JOIN pg_catalog.pg_namespace AS source_schema
+	  ON source_schema.oid = source_table.relnamespace
+	JOIN pg_catalog.pg_attribute AS source_column
+	  ON source_column.attrelid = foreign_key.conrelid
+	 AND source_column.attnum = foreign_key.conkey[1]
+	JOIN pg_catalog.pg_class AS target_table
+	  ON target_table.oid = foreign_key.confrelid
+	JOIN pg_catalog.pg_namespace AS target_schema
+	  ON target_schema.oid = target_table.relnamespace
+	JOIN pg_catalog.pg_attribute AS target_column
+	  ON target_column.attrelid = foreign_key.confrelid
+	 AND target_column.attnum = foreign_key.confkey[1]
+	WHERE foreign_key.contype = 'f'
+	  AND foreign_key.convalidated
+	  AND cardinality(foreign_key.conkey) = 1
+	  AND source_schema.nspname = 'public'
+	  AND source_table.relname = $1
+	  AND NOT source_column.attisdropped
+	  AND target_schema.nspname = 'public'
+	  AND target_table.relname = $2
+	  AND target_column.attname = $3
+`
+
+// builtInRowOwnerColumn returns an owner that code fixes for a dataset, so no
+// setting can move or copy it. system_users is the only table that may own
+// itself: each of its rows is the user. The app_service_catalog pilot enforces
+// user_id as its owner in its database policies, its create preset, and its
+// write rule (appendMutationRowPolicyForAction). That column is not yet a
+// foreign key, so it is listed here to keep the pilot's current behaviour until
+// it gets one; the pilot's read and write rules never consult this resolver.
+func builtInRowOwnerColumn(tableName string) (string, bool) {
+	switch tableName {
+	case rowOwnerUsersTableName:
+		return rowOwnerUsersKeyColumn, true
+	case rlsPilotTableName:
+		return rlsPilotOwnerColumn, true
+	default:
+		return "", false
+	}
 }
 
-// resolveOwnerColumn resolves the ownership column used by legacy row-visibility policies.
-// It exists as the compatibility wrapper for older call sites that only need the column name.
-func resolveOwnerColumn(db dbutils.Querier, tableName string) (string, error) {
-	resolution, err := resolveOwnerColumnWithSource(db, tableName)
+// selectRowPolicyOwnerColumn applies the ownership rule to metadata that has
+// already been read: a built-in owner, or the named column when it is a
+// validated foreign key to system_users(id). Nothing is inferred from column
+// names. Guessing id once turned the rule into "flag OR row id = my user id",
+// which let a user whose number matched a row read and change it. The second
+// result explains an empty owner. It is pure so the rule is testable without a
+// database.
+func selectRowPolicyOwnerColumn(tableName, explicitOwnerColumn string, userForeignKeyColumns map[string]bool) (string, string) {
+	if ownerColumn, builtIn := builtInRowOwnerColumn(tableName); builtIn {
+		return ownerColumn, ""
+	}
+	explicitOwnerColumn = strings.TrimSpace(explicitOwnerColumn)
+	if explicitOwnerColumn == "" {
+		return "", rowOwnerRefusalNoneNamed
+	}
+	if !userForeignKeyColumns[explicitOwnerColumn] {
+		return "", fmt.Sprintf("owner column %q is not a validated single-column foreign key to system_users(id)", explicitOwnerColumn)
+	}
+	return explicitOwnerColumn, ""
+}
+
+// resolveRowPolicyOwnerColumn returns the column holding the id of the user who
+// owns a row, or "" when the dataset has no proven owner. An empty owner turns
+// the own-row exception off: must_be_true_unless_own fields must then be true
+// for every non-administrator, and an administrator is told why in the server
+// log. Nothing is cached here; GetResults keeps the answer in its schema cache.
+func resolveRowPolicyOwnerColumn(db dbutils.Querier, tableName string) (string, error) {
+	if ownerColumn, builtIn := builtInRowOwnerColumn(tableName); builtIn {
+		return ownerColumn, nil
+	}
+
+	explicitOwnerColumn, err := fetchExplicitRowPolicyOwnerColumn(db, tableName)
 	if err != nil {
 		return "", err
 	}
-	return resolution.Column, nil
+
+	var userForeignKeyColumns map[string]bool
+	if explicitOwnerColumn != "" {
+		userForeignKeyColumns, err = fetchSystemUsersForeignKeyColumns(db, tableName)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	ownerColumn, refusal := selectRowPolicyOwnerColumn(tableName, explicitOwnerColumn, userForeignKeyColumns)
+	if refusal != "" {
+		warnRowPolicyOwnerUnresolved(tableName, explicitOwnerColumn, refusal)
+	}
+	return ownerColumn, nil
 }
 
-// resolveOwnerColumnWithSource prefers explicit row-policy metadata and records when legacy fallback was used.
-// It exists between table metadata and ReadRowPolicy so the migration can move away from inferred ownership safely.
-func resolveOwnerColumnWithSource(db dbutils.Querier, tableName string) (ownerColumnResolution, error) {
-	explicitOwnerColumn, err := fetchExplicitRowPolicyOwnerColumn(db, tableName)
-	if err != nil {
-		return ownerColumnResolution{}, err
-	}
+// reportedRowPolicyOwnerRefusals remembers which refusals have been logged so a
+// busy dataset warns once per configuration instead of on every request.
+var reportedRowPolicyOwnerRefusals sync.Map
 
-	columnNames, err := fetchTableColumnNameSet(db, tableName)
-	if err != nil {
-		return ownerColumnResolution{}, err
+// warnRowPolicyOwnerUnresolved tells an administrator that a dataset's own-row
+// exception is off. Dataset metadata has no administrator-visible warning
+// channel yet, so the server log carries it. A changed setting warns again.
+func warnRowPolicyOwnerUnresolved(tableName, explicitOwnerColumn, refusal string) {
+	reportKey := tableName + "\x00" + explicitOwnerColumn + "\x00" + refusal
+	if _, alreadyReported := reportedRowPolicyOwnerRefusals.LoadOrStore(reportKey, struct{}{}); alreadyReported {
+		return
 	}
-
-	resolution := resolveOwnerColumnWithLegacyShadow(explicitOwnerColumn, columnNames)
-	if strings.TrimSpace(explicitOwnerColumn) != "" && resolution.Source != ownerColumnSourceExplicitMetadata {
-		log.Printf("\033[33mwarning: row policy owner column %q for table %s does not exist; using legacy owner fallback %q\033[0m", explicitOwnerColumn, tableName, resolution.Column)
-	}
-	if resolution.Source == ownerColumnSourceExplicitMetadata &&
-		resolution.ComparedWithLegacyFallback &&
-		!resolution.MatchesLegacyFallback {
-		log.Printf("[row-policy-owner-shadow] table %s uses explicit owner column %q; legacy fallback would use %q",
-			tableName,
-			resolution.Column,
-			resolution.LegacyFallbackColumn,
-		)
-	}
-	return resolution, nil
+	log.Printf("\033[33mwarning: dataset %s has no proven row owner: %s. The own-row exception is off: non-administrators see a row only when every must_be_true_unless_own field is true, and hide_on_bg_crd_if_not_own fields stay hidden. Name a column that is a validated foreign key to system_users(id) to enable it.\033[0m", tableName, refusal)
 }
 
 // fetchExplicitRowPolicyOwnerColumn reads the optional table-level owner-column metadata when the schema supports it.
-// It exists so databases that have not run the migration still use the exact legacy fallback behavior.
+// A database that predates the setting names no owner, so its own-row exception stays off.
 func fetchExplicitRowPolicyOwnerColumn(db dbutils.Querier, tableName string) (string, error) {
 	hasOwnerColumnMetadata, err := columnExistsInTable(db, "system_db_tables", rowPolicyOwnerColumnMetadataColumn)
 	if err != nil {
@@ -95,15 +177,11 @@ func fetchExplicitRowPolicyOwnerColumn(db dbutils.Querier, tableName string) (st
 	return strings.TrimSpace(ownerColumn.String), nil
 }
 
-// fetchTableColumnNameSet returns public column names for owner-column validation.
-// It exists so explicit metadata can only become active when it names a real column on the dataset table.
-func fetchTableColumnNameSet(db dbutils.Querier, tableName string) (map[string]bool, error) {
-	rows, err := db.Query(`
-		SELECT column_name
-		FROM information_schema.columns
-		WHERE table_schema = 'public'
-		  AND table_name = $1
-	`, tableName)
+// fetchSystemUsersForeignKeyColumns returns the columns of a dataset table that
+// are a validated single-column foreign key to system_users(id).
+// It exists so a named owner column becomes active only when the database itself vouches for it.
+func fetchSystemUsersForeignKeyColumns(db dbutils.Querier, tableName string) (map[string]bool, error) {
+	rows, err := db.Query(systemUsersForeignKeyColumnsQuery, tableName, rowOwnerUsersTableName, rowOwnerUsersKeyColumn)
 	if err != nil {
 		return nil, err
 	}
@@ -123,54 +201,9 @@ func fetchTableColumnNameSet(db dbutils.Querier, tableName string) (map[string]b
 	return columnNames, nil
 }
 
-// resolveOwnerColumnFromMetadata chooses the explicit owner column first, then the legacy fallback order.
-// It exists as a pure selection helper so tests can lock down migration behavior without a live database.
-func resolveOwnerColumnFromMetadata(explicitOwnerColumn string, columnNames map[string]bool) ownerColumnResolution {
-	explicitOwnerColumn = strings.TrimSpace(explicitOwnerColumn)
-	if explicitOwnerColumn != "" && columnNames[explicitOwnerColumn] {
-		return ownerColumnResolution{
-			Column: explicitOwnerColumn,
-			Source: ownerColumnSourceExplicitMetadata,
-		}
-	}
-
-	ownerCandidates := []string{"created_by", "user_id", "id"}
-	for _, candidate := range ownerCandidates {
-		if columnNames[candidate] {
-			return ownerColumnResolution{
-				Column: candidate,
-				Source: ownerColumnSourceLegacyFallback,
-			}
-		}
-	}
-	return ownerColumnResolution{}
-}
-
-// resolveOwnerColumnWithLegacyShadow records the old inferred owner column next to the active resolution.
-// It lets all_flags_true_unless_owner compare explicit metadata with legacy behavior without changing SQL predicates.
-func resolveOwnerColumnWithLegacyShadow(explicitOwnerColumn string, columnNames map[string]bool) ownerColumnResolution {
-	resolution := resolveOwnerColumnFromMetadata(explicitOwnerColumn, columnNames)
-	legacyResolution := resolveOwnerColumnFromMetadata("", columnNames)
-
-	resolution.LegacyFallbackColumn = legacyResolution.Column
-	resolution.MatchesLegacyFallback = resolution.Column == legacyResolution.Column
-	resolution.ComparedWithLegacyFallback = resolution.Column != "" || legacyResolution.Column != ""
-	return resolution
-}
-
-// getMustBeTrueColumns returns legacy must_be_true_unless_own columns and the resolved owner column.
-// It exists as a compatibility wrapper for callers that do not need owner metadata provenance.
-func getMustBeTrueColumns(db dbutils.Querier, tableName string) ([]string, string, error) {
-	mustTrueCols, ownerResolution, err := getMustBeTrueColumnsWithOwnerResolution(db, tableName)
-	if err != nil {
-		return nil, "", err
-	}
-	return mustTrueCols, ownerResolution.Column, nil
-}
-
-// getMustBeTrueColumnsWithOwnerResolution returns legacy flag columns plus explicit/fallback owner provenance.
-// It exists so ReadRowPolicy can prefer explicit owner metadata while preserving old table behavior.
-func getMustBeTrueColumnsWithOwnerResolution(db dbutils.Querier, tableName string) ([]string, ownerColumnResolution, error) {
+// getMustBeTrueColumnsWithOwner returns legacy must_be_true_unless_own flag columns and the proven owner column.
+// Datasets without flags skip every owner query; an empty owner means the flags apply to everyone but administrators.
+func getMustBeTrueColumnsWithOwner(db dbutils.Querier, tableName string) ([]string, string, error) {
 	query := `
         SELECT scd.column_name
         FROM system_db_tables sdt
@@ -181,7 +214,7 @@ func getMustBeTrueColumnsWithOwnerResolution(db dbutils.Querier, tableName strin
 	rows, err := db.Query(query, tableName)
 	if err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		return nil, ownerColumnResolution{}, err
+		return nil, "", err
 	}
 	defer rows.Close()
 
@@ -196,18 +229,73 @@ func getMustBeTrueColumnsWithOwnerResolution(db dbutils.Querier, tableName strin
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		return nil, ownerColumnResolution{}, err
+		return nil, "", err
 	}
 
 	if len(mustTrueCols) == 0 {
-		return mustTrueCols, ownerColumnResolution{}, nil
+		return mustTrueCols, "", nil
 	}
 
-	ownerResolution, err := resolveOwnerColumnWithSource(db, tableName)
+	ownerColumn, err := resolveRowPolicyOwnerColumn(db, tableName)
 	if err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		return nil, ownerColumnResolution{}, err
+		return nil, "", err
 	}
 
-	return mustTrueCols, ownerResolution, nil
+	return mustTrueCols, ownerColumn, nil
+}
+
+// resolveResultsRowOwnerColumn returns the owner column a results response
+// marks for the browser. A read policy with flags has already resolved it;
+// any other dataset resolves it only when some field is hidden on the article
+// unless the row is the viewer's own, so ordinary datasets add no queries.
+func resolveResultsRowOwnerColumn(db dbutils.Querier, tableName string, readPolicy ReadRowPolicy, columnDataTypes map[string]interface{}) (string, error) {
+	if readPolicy.hasFlagColumns() {
+		return readPolicy.OwnerColumn, nil
+	}
+	if !columnDescriptionsHideUnlessOwn(columnDataTypes) {
+		return "", nil
+	}
+	return resolveRowPolicyOwnerColumn(db, tableName)
+}
+
+// columnDescriptionsHideUnlessOwn reports whether any delivered column is set to
+// hide on the article unless the row is the viewer's own.
+func columnDescriptionsHideUnlessOwn(columnDataTypes map[string]interface{}) bool {
+	for _, rawDescription := range columnDataTypes {
+		description, ok := rawDescription.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if hideUnlessOwn, _ := description["hide_on_bg_crd_if_not_own"].(bool); hideUnlessOwn {
+			return true
+		}
+	}
+	return false
+}
+
+// markRowOwnerColumnDescription returns the column descriptions with the owner
+// column marked is_row_owner, leaving the input untouched. Without a resolved
+// owner, or when the owner column is not delivered, nothing is marked and the
+// browser treats every row as someone else's. The mark only decides what the
+// article shows: the values are already in the response, so it is
+// presentation, not authorization.
+func markRowOwnerColumnDescription(columnDataTypes map[string]interface{}, ownerColumn string) map[string]interface{} {
+	description, delivered := columnDataTypes[ownerColumn].(map[string]interface{})
+	if ownerColumn == "" || !delivered {
+		return columnDataTypes
+	}
+
+	markedDescription := make(map[string]interface{}, len(description)+1)
+	for fieldName, value := range description {
+		markedDescription[fieldName] = value
+	}
+	markedDescription[rowOwnerColumnDescriptionField] = true
+
+	marked := make(map[string]interface{}, len(columnDataTypes))
+	for columnName, columnDescription := range columnDataTypes {
+		marked[columnName] = columnDescription
+	}
+	marked[ownerColumn] = markedDescription
+	return marked
 }

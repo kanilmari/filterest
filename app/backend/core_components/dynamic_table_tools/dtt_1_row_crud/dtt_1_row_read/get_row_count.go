@@ -114,12 +114,6 @@ func getACLFilteredRowCount(readQuerier dbutils.Querier, metadataDB *sql.DB, tab
 	return getRowCountWithReadPolicy(readQuerier, tableName, userRole, userID, readPolicy)
 }
 
-// getRowCountWithMustTrue laskee rivimäärän valmiiksi haetuilla
-// mustTrueCols + ownerColumn arvoilla.
-func getRowCountWithMustTrue(db dbutils.Querier, tableName, userRole string, userID int, mustTrueCols []string, ownerColumn string) (int, error) {
-	return getRowCountWithReadPolicy(db, tableName, userRole, userID, legacyMustTrueReadPolicy(mustTrueCols, ownerColumn))
-}
-
 // getRowCountWithReadPolicy counts rows after applying the active read-row policy.
 // It exists so count queries share the same policy object as row fetch and intelligent hydration.
 func getRowCountWithReadPolicy(db dbutils.Querier, tableName, userRole string, userID int, readPolicy ReadRowPolicy) (int, error) {

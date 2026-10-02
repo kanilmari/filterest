@@ -59,6 +59,44 @@ function isCardImageCompanionColumn(columnName = "") {
 }
 
 /**
+ * Returns the column the server proved to hold the row owner (`is_row_owner`
+ * in the column metadata), or "" when the dataset has no proven owner.
+ * Nothing is guessed from column names: the old `created_by ?? user_id ?? id`
+ * guess let a viewer whose user id equalled a row id pass as its owner.
+ */
+function resolveRowArticleOwnerColumn(dataTypes = {}) {
+    for (const [columnName, columnMeta] of Object.entries(dataTypes || {})) {
+        if (columnMeta?.is_row_owner === true) {
+            return columnName;
+        }
+    }
+    return "";
+}
+
+/**
+ * Reports whether the signed-in viewer owns the row, failing closed: without a
+ * proven owner column, an owner value in the row, or a signed-in user (the
+ * guest, user 1, owns nothing) the row counts as someone else's.
+ * This only decides what the article shows. The value is already in the
+ * response, so hiding it is presentation, not a security boundary; the
+ * server's row policy is.
+ */
+function isRowArticleOwnRow(rowItem, ownerColumn, currentUserId) {
+    if (!ownerColumn) {
+        return false;
+    }
+    const ownerValue = rowItem?.[ownerColumn];
+    if (ownerValue === null || ownerValue === undefined || String(ownerValue).trim() === "") {
+        return false;
+    }
+    const viewerId = Number(currentUserId);
+    if (!Number.isInteger(viewerId) || viewerId <= 1) {
+        return false;
+    }
+    return String(ownerValue).trim() === String(viewerId);
+}
+
+/**
  * Builds the article-view content block for one expanded row.
  * Bridges row values, card metadata, and formatting helpers into the main overlay body.
  * Exists so callers can move toward row_article naming while legacy big-card callers still work.
@@ -118,6 +156,11 @@ export async function buildRowArticleContent(
 
     const preferred_image_alt_label =
         preferred_image_alt_header || preferred_image_alt_username;
+    const rowIsViewersOwn = isRowArticleOwnRow(
+        row_item,
+        resolveRowArticleOwnerColumn(data_types),
+        current_user_id
+    );
 
     /* -------------------------------------------------- *
      * 4. SARAKKEIDEN LOOPPI
@@ -169,12 +212,9 @@ export async function buildRowArticleContent(
             }
         }
 
-        /* Piilota isolla kortilla jos ei oma rivi */
-        if (data_types[column]?.hide_on_bg_crd_if_not_own === true && current_user_id) {
-            const ownerCol = row_item.created_by ?? row_item.user_id ?? row_item.id;
-            if (ownerCol && String(ownerCol) !== String(current_user_id)) {
-                continue;
-            }
+        /* Piilota isolla kortilla jos ei oma rivi (suljettu oletus, ei tietoturvaraja) */
+        if (data_types[column]?.hide_on_bg_crd_if_not_own === true && !rowIsViewersOwn) {
+            continue;
         }
 
         /* --- Ei roolia → tavallinen avain–arvo --- */

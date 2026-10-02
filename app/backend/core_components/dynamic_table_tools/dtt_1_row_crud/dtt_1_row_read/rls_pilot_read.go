@@ -15,17 +15,20 @@ import (
 )
 
 const rlsPilotTableName = "app_service_catalog"
+
+// rlsPilotOwnerColumn is the pilot's owner, as its database policies and its
+// create and write rules enforce it; the row-owner resolver reports the same.
+const rlsPilotOwnerColumn = "user_id"
+
 const rowPolicyAllFlagsTrueUnlessOwner = "all_flags_true_unless_owner"
 
 // ReadRowPolicy describes one metadata-driven read visibility rule between row fetchers and SQL predicates.
 // It exists so legacy must_be_true_unless_own behavior can migrate toward named row policies without changing reads.
+// OwnerColumn is empty when the dataset has no proven owner; the flags then bind every non-administrator.
 type ReadRowPolicy struct {
-	Name                         string
-	FlagColumns                  []string
-	OwnerColumn                  string
-	OwnerColumnSource            string
-	ShadowLegacyOwnerColumn      string
-	OwnerColumnMatchesLegacyPath bool
+	Name        string
+	FlagColumns []string
+	OwnerColumn string
 }
 
 // hasFlagColumns reports whether a policy has flag columns that can constrain row visibility.
@@ -60,14 +63,6 @@ func getPilotReadQuerier(ctx context.Context, tableName string, fallback *sql.DB
 	return tx, nil
 }
 
-// shouldApplyLegacyReadMustTrueFilter returns whether the old Go-side row-visibility
-// filter should still be layered on top of reads. The first RLS pilot intentionally
-// disables the legacy SQL fragment for app_service_catalog so SELECT visibility comes
-// from the database policy rather than duplicated WHERE clauses.
-func shouldApplyLegacyReadMustTrueFilter(tableName, userRole string, mustTrueCols []string) bool {
-	return shouldApplyReadRowPolicy(tableName, userRole, legacyMustTrueReadPolicy(mustTrueCols, ""))
-}
-
 // shouldApplyReadRowPolicy returns whether a named Go-side read policy should constrain a query.
 // It exists between policy metadata and SQL builders; RLS-pilot tables intentionally rely on database policies.
 func shouldApplyReadRowPolicy(tableName, userRole string, policy ReadRowPolicy) bool {
@@ -75,20 +70,6 @@ func shouldApplyReadRowPolicy(tableName, userRole string, policy ReadRowPolicy) 
 		return false
 	}
 	return tableName != rlsPilotTableName
-}
-
-// buildLegacyReadMustTrueCondition constructs the old must_be_true_unless_own SQL
-// fragment for non-admin reads. argStart is the 1-based placeholder index to use
-// if an owner fallback parameter needs to be appended.
-func buildLegacyReadMustTrueCondition(tableName, userRole string, userID int, mustTrueCols []string, ownerColumn string, argStart int) (string, []interface{}) {
-	return buildLegacyReadPolicyBaseConditionForReference(
-		tableName,
-		tableName,
-		userRole,
-		userID,
-		legacyMustTrueReadPolicy(mustTrueCols, ownerColumn),
-		argStart,
-	)
 }
 
 // buildReadRowPolicyCondition constructs the SQL fragment for the active read-row policy.
@@ -506,28 +487,16 @@ func rowsVisibleForMutation(q *sql.Tx, tableName, userRole string, userID int, r
 	return len(visible) == len(uniqueRowIDs), nil
 }
 
-// getLegacyMustTrueReadFilter returns legacy must_be_true_unless_own metadata only where it still applies.
-func getLegacyMustTrueReadFilter(db *sql.DB, tableName string) ([]string, string, error) {
-	policy, err := getLegacyMustTrueReadPolicy(db, tableName)
-	if err != nil {
-		return nil, "", err
-	}
-	return append([]string(nil), policy.FlagColumns...), policy.OwnerColumn, nil
-}
-
 // getLegacyMustTrueReadPolicy returns the legacy row-visibility metadata as a named read policy.
 // It exists so callers can stop passing raw mustTrue column slices while the database metadata migrates later.
+// The owner comes from resolveRowPolicyOwnerColumn and is empty when unproven, which keeps the rule fail-closed.
 func getLegacyMustTrueReadPolicy(db dbutils.Querier, tableName string) (ReadRowPolicy, error) {
 	if tableName == rlsPilotTableName {
 		return ReadRowPolicy{}, nil
 	}
-	cols, ownerResolution, err := getMustBeTrueColumnsWithOwnerResolution(db, tableName)
+	cols, ownerColumn, err := getMustBeTrueColumnsWithOwner(db, tableName)
 	if err != nil {
 		return ReadRowPolicy{}, err
 	}
-	policy := legacyMustTrueReadPolicy(cols, ownerResolution.Column)
-	policy.OwnerColumnSource = ownerResolution.Source
-	policy.ShadowLegacyOwnerColumn = ownerResolution.LegacyFallbackColumn
-	policy.OwnerColumnMatchesLegacyPath = ownerResolution.MatchesLegacyFallback
-	return policy, nil
+	return legacyMustTrueReadPolicy(cols, ownerColumn), nil
 }

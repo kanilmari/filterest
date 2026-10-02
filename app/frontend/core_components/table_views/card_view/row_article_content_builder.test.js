@@ -620,6 +620,48 @@ describe('row_article_content_builder', () => {
         expect(createRowArticleKeyValueElementMock).not.toHaveBeenCalled();
     });
 
+    describe('fields hidden on the article unless the row is the viewer\'s own', () => {
+        const renderedColumns = () => createRowArticleKeyValueElementMock.mock.calls.map((call) => call[2]);
+        const buildOwnFieldArticle = (rowItem, dataTypes, currentUserId) => buildRowArticleContent(
+            rowItem, 'owner_notes', dataTypes, Object.keys(rowItem), 'seed-1', 'N', false, currentUserId,
+        );
+        const secretMeta = { hide_on_bg_crd_if_not_own: true };
+
+        test('hides the field when the server proved no owner, even if the row id equals the viewer id', async () => {
+            await buildOwnFieldArticle(
+                { id: 42, created_by: 42, user_id: 42, secret: 'draft' },
+                { id: {}, created_by: {}, user_id: {}, secret: secretMeta },
+                42,
+            );
+            expect(renderedColumns()).not.toContain('secret');
+            expect(renderedColumns()).toContain('id');
+        });
+
+        test('shows the field to the owner the server marked', async () => {
+            await buildOwnFieldArticle(
+                { id: 7, user_id: 42, secret: 'draft' },
+                { id: {}, user_id: { is_row_owner: true }, secret: secretMeta },
+                42,
+            );
+            expect(renderedColumns()).toContain('secret');
+        });
+
+        test.each([
+            ['another signed-in user', { id: 7, user_id: 42, secret: 'draft' }, 43],
+            ['a row whose owner value was not delivered', { id: 42, secret: 'draft' }, 42],
+            ['a row without an owner', { id: 7, user_id: null, secret: 'draft' }, 42],
+            ['the guest, even on a row it would match', { id: 7, user_id: 1, secret: 'draft' }, 1],
+            ['a signed-out viewer', { id: 7, user_id: 42, secret: 'draft' }, null],
+        ])('hides the field from %s', async (_label, rowItem, currentUserId) => {
+            await buildOwnFieldArticle(
+                rowItem,
+                { id: {}, user_id: { is_row_owner: true }, secret: secretMeta },
+                currentUserId,
+            );
+            expect(renderedColumns()).not.toContain('secret');
+        });
+    });
+
     test('marks raw details-link fields for external HTTP(S)-only navigation', async () => {
         await buildRowArticleContent(
             { id: 5, website: 'https://example.test' },

@@ -8,36 +8,31 @@ func TestRLSPilotTableNameTargetsAppServiceCatalog(t *testing.T) {
 	}
 }
 
-func TestShouldApplyLegacyReadMustTrueFilter(t *testing.T) {
-	if shouldApplyLegacyReadMustTrueFilter(rlsPilotTableName, "basic", []string{"published"}) {
-		t.Fatalf("pilot table should not use legacy must_true read filter")
+func TestShouldApplyReadRowPolicySkipsPilotAndAdmin(t *testing.T) {
+	policy := legacyMustTrueReadPolicy([]string{"published"}, "")
+	if shouldApplyReadRowPolicy(rlsPilotTableName, "basic", policy) {
+		t.Fatalf("pilot table should rely on its database policy, not the Go-side flag filter")
 	}
-	if !shouldApplyLegacyReadMustTrueFilter("some_other_table", "basic", []string{"published"}) {
-		t.Fatalf("non-pilot table should still use legacy must_true read filter")
+	if !shouldApplyReadRowPolicy("some_other_table", "basic", policy) {
+		t.Fatalf("non-pilot table should still use the Go-side flag filter")
 	}
-	if shouldApplyLegacyReadMustTrueFilter("some_other_table", "admin", []string{"published"}) {
-		t.Fatalf("admin role should not receive legacy must_true read filter")
-	}
-}
-
-func TestBuildLegacyReadMustTrueConditionSkipsPilotTable(t *testing.T) {
-	condition, args := buildLegacyReadMustTrueCondition(rlsPilotTableName, "basic", 42, []string{"published", "enabled"}, "user_id", 1)
-	if condition != "" {
-		t.Fatalf("pilot condition = %q, want empty", condition)
-	}
-	if len(args) != 0 {
-		t.Fatalf("pilot args = %v, want none", args)
+	if shouldApplyReadRowPolicy("some_other_table", "admin", policy) {
+		t.Fatalf("admin role should not receive the Go-side flag filter")
 	}
 }
 
-func TestBuildLegacyReadMustTrueConditionAddsOwnerFallbackForNonPilot(t *testing.T) {
-	condition, args := buildLegacyReadMustTrueCondition("some_other_table", "basic", 42, []string{"published", "enabled"}, "user_id", 3)
-	want := `("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $3) AND ("some_other_table"."enabled" = TRUE OR "some_other_table"."user_id" = $3)`
+// A dataset without a proven owner keeps its flags for everyone but
+// administrators: the own-row branch and its argument disappear entirely.
+func TestBuildReadRowPolicyConditionWithoutOwnerRequiresEveryFlag(t *testing.T) {
+	policy := legacyMustTrueReadPolicy([]string{"admin_approved"}, "")
+
+	condition, args := buildReadRowPolicyCondition("system_about", "basic", 42, policy, 1)
+	want := `("system_about"."admin_approved" = TRUE) AND (public.resolve_effective_row_access($1, "system_about"."id", $2, 'read', (TRUE), FALSE))`
 	if condition != want {
 		t.Fatalf("condition = %q, want %q", condition, want)
 	}
-	if len(args) != 1 || args[0] != 42 {
-		t.Fatalf("args = %v, want [42]", args)
+	if len(args) != 2 || args[0] != "system_about" || args[1] != 42 {
+		t.Fatalf("args = %#v, want only the exact-row resolver arguments", args)
 	}
 }
 
@@ -55,22 +50,6 @@ func TestBuildReadRowPolicyConditionAddsOwnerFallbackForNonPilot(t *testing.T) {
 	}
 	if len(args) != 3 || args[0] != 42 || args[1] != "some_other_table" || args[2] != 42 {
 		t.Fatalf("args = %v, want [42 some_other_table 42]", args)
-	}
-}
-
-func TestBuildReadRowPolicyConditionIgnoresShadowLegacyOwnerColumn(t *testing.T) {
-	policy := ReadRowPolicy{
-		Name:                         rowPolicyAllFlagsTrueUnlessOwner,
-		FlagColumns:                  []string{"published"},
-		OwnerColumn:                  "user_id",
-		ShadowLegacyOwnerColumn:      "created_by",
-		OwnerColumnMatchesLegacyPath: false,
-	}
-
-	condition, _ := buildReadRowPolicyCondition("some_other_table", "basic", 42, policy, 1)
-	want := `(("some_other_table"."published" = TRUE OR "some_other_table"."user_id" = $1)) AND (public.resolve_effective_row_access($2, "some_other_table"."id", $3, 'read', (TRUE), FALSE))`
-	if condition != want {
-		t.Fatalf("condition = %q, want active owner column to stay user_id", condition)
 	}
 }
 
@@ -116,34 +95,27 @@ func TestLegacyMustTrueReadPolicyCopiesColumns(t *testing.T) {
 	}
 }
 
-func TestGetLegacyMustTrueReadFilterSkipsPilotMetadataLookup(t *testing.T) {
-	cols, owner, err := getLegacyMustTrueReadFilter(nil, rlsPilotTableName)
+// A nil querier proves the pilot never reaches the metadata lookup.
+func TestGetLegacyMustTrueReadPolicySkipsPilotMetadataLookup(t *testing.T) {
+	policy, err := getLegacyMustTrueReadPolicy(nil, rlsPilotTableName)
 	if err != nil {
-		t.Fatalf("getLegacyMustTrueReadFilter returned error for pilot table: %v", err)
+		t.Fatalf("getLegacyMustTrueReadPolicy returned error for pilot table: %v", err)
 	}
-	if len(cols) != 0 {
-		t.Fatalf("pilot table cols = %v, want empty", cols)
-	}
-	if owner != "" {
-		t.Fatalf("pilot table owner = %q, want empty", owner)
+	if policy.hasFlagColumns() || policy.OwnerColumn != "" || policy.Name != "" {
+		t.Fatalf("pilot table policy = %#v, want empty", policy)
 	}
 }
 
-func TestBuildLegacyReadMustTrueConditionSkipsGuestOwnerFallback(t *testing.T) {
-	cond, args := buildLegacyReadMustTrueCondition(
-		"some_other_table",
-		"guest",
-		1,
-		[]string{"published"},
-		"user_id",
-		1,
-	)
+// The guest (user 1) never owns a row, even on a dataset with a proven owner.
+func TestBuildReadRowPolicyConditionSkipsGuestOwnerBranch(t *testing.T) {
+	policy := legacyMustTrueReadPolicy([]string{"published"}, "user_id")
 
-	wantCond := "\"some_other_table\".\"published\" = TRUE"
-	if cond != wantCond {
-		t.Fatalf("condition = %q, want %q", cond, wantCond)
+	condition, args := buildReadRowPolicyCondition("some_other_table", "guest", 1, policy, 1)
+	want := `("some_other_table"."published" = TRUE) AND (public.resolve_effective_row_access($1, "some_other_table"."id", $2, 'read', (TRUE), FALSE))`
+	if condition != want {
+		t.Fatalf("condition = %q, want %q", condition, want)
 	}
-	if len(args) != 0 {
-		t.Fatalf("args = %#v, want no owner fallback for guest user", args)
+	if len(args) != 2 || args[0] != "some_other_table" || args[1] != 1 {
+		t.Fatalf("args = %#v, want no owner argument for the guest", args)
 	}
 }

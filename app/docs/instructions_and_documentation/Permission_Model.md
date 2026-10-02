@@ -51,9 +51,9 @@ There are two row-visibility mechanisms today:
 (flag_column = TRUE OR owner_column = current_user_id)
 ```
 
-The owner column now prefers explicit table metadata in `system_db_tables.row_policy_owner_column`. When that metadata is empty or names a missing column, legacy compatibility resolution still uses priority: `created_by`, then `user_id`, then `id`. The resolver records a shadow comparison between the explicit owner interpretation and the legacy fallback interpretation so mismatches can be observed without changing the SQL predicate built for the current request. When multiple flagged columns exist, all of them must pass. This behavior is implemented as Go-side SQL fragments in result queries, row counts, filter options, intelligent/vector row hydration, and related-row reads. Generic update/delete requests evaluate the policy for the complete ID set before side effects. Updates lock the admitted row; deletes repeat the predicate in the DML and roll back their savepoint on an exact-count mismatch.
+The owner column must be proven, never inferred. It is the column named in `system_db_tables.row_policy_owner_column` when the system catalog (`pg_constraint`, not `information_schema`, which hides foreign keys from roles that do not own the table) shows it as a validated single-column foreign key to `system_users(id)`. Two owners are fixed in code instead: `system_users` owns itself through `id`, the only table allowed to, and the `app_service_catalog` pilot keeps `user_id`, which its database policies and write rule enforce although the column has no foreign key yet. Any other dataset has no own-row exception: its flags must be true for every non-admin, and the server log warns once per dataset and setting. The former `created_by`, then `user_id`, then `id` inference was removed because guessing `id` turned the rule into "flag OR row id = my user id". When multiple flagged columns exist, all of them must pass. This behavior is implemented as Go-side SQL fragments in result queries, row counts, filter options, intelligent/vector row hydration, and related-row reads. Generic update/delete requests evaluate the policy for the complete ID set before side effects. Updates lock the admitted row; deletes repeat the predicate in the DML and roll back their savepoint on an exact-count mismatch.
 
-The `id` fallback is a legacy convenience, not a good long-term security contract. Future row policies should require an explicit owner column in metadata, because a row's primary key is not normally the same concept as a user owner.
+Results responses mark the proven owner column with `is_row_owner` in its column description. The article view uses that mark only to hide `hide_on_bg_crd_if_not_own` fields from anyone but the owner, and hides them when no column is marked. That is presentation, not a security boundary: the values are already in the response.
 
 The RLS pilot is intentionally narrow. It applies to `app_service_catalog` and routes selected row reads and writes through a request-scoped transaction that sets:
 
@@ -481,7 +481,7 @@ Create one backend package that receives a request actor and dataset and returns
 Initial inputs:
 
 - existing `must_be_true_unless_own` metadata
-- explicit owner-column metadata via `system_db_tables.row_policy_owner_column`, with the current owner-column resolution as a compatibility fallback
+- explicit owner-column metadata via `system_db_tables.row_policy_owner_column`, accepted only as a validated foreign key to `system_users(id)`; there is no inferred fallback
 - admin bypass
 - guest principal
 

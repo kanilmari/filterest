@@ -41,97 +41,61 @@ func TestNormalizeCardDetailsLayout(t *testing.T) {
 	}
 }
 
-func TestResolveOwnerColumnFromMetadataPrefersExplicitColumn(t *testing.T) {
-	columns := map[string]bool{
-		"created_by": true,
-		"user_id":    true,
-	}
-
-	got := resolveOwnerColumnFromMetadata("user_id", columns)
-	if got.Column != "user_id" {
-		t.Fatalf("owner column = %q, want user_id", got.Column)
-	}
-	if got.Source != ownerColumnSourceExplicitMetadata {
-		t.Fatalf("owner source = %q, want %q", got.Source, ownerColumnSourceExplicitMetadata)
+// The owner rule, applied to metadata already read. The second argument set is
+// the columns the system catalog vouches for as validated foreign keys to
+// system_users(id); everything else is refused with an explanation.
+func TestSelectRowPolicyOwnerColumnAcceptsNamedUserForeignKey(t *testing.T) {
+	owner, refusal := selectRowPolicyOwnerColumn("articles", " created_by ", map[string]bool{"created_by": true})
+	if owner != "created_by" || refusal != "" {
+		t.Fatalf("owner = %q (refusal %q), want the named, validated created_by", owner, refusal)
 	}
 }
 
-func TestResolveOwnerColumnWithLegacyShadowRecordsExplicitDivergence(t *testing.T) {
-	columns := map[string]bool{
-		"created_by": true,
-		"user_id":    true,
-	}
-
-	got := resolveOwnerColumnWithLegacyShadow("user_id", columns)
-	if got.Column != "user_id" {
-		t.Fatalf("owner column = %q, want user_id", got.Column)
-	}
-	if got.LegacyFallbackColumn != "created_by" {
-		t.Fatalf("legacy shadow owner = %q, want created_by", got.LegacyFallbackColumn)
-	}
-	if got.MatchesLegacyFallback {
-		t.Fatalf("expected explicit user_id to diverge from legacy created_by")
-	}
-	if !got.ComparedWithLegacyFallback {
-		t.Fatalf("expected legacy comparison to be marked")
+func TestSelectRowPolicyOwnerColumnRefusesNamedColumnThatIsNotUserForeignKey(t *testing.T) {
+	for _, userForeignKeyColumns := range []map[string]bool{nil, {}, {"editor_id": true}} {
+		owner, refusal := selectRowPolicyOwnerColumn("articles", "user_id", userForeignKeyColumns)
+		if owner != "" {
+			t.Fatalf("owner = %q with foreign keys %v, want no owner", owner, userForeignKeyColumns)
+		}
+		if !strings.Contains(refusal, `"user_id" is not a validated single-column foreign key to system_users(id)`) {
+			t.Fatalf("refusal = %q, want it to name the column and the missing foreign key", refusal)
+		}
 	}
 }
 
-func TestResolveOwnerColumnWithLegacyShadowMatchesFallbackWhenExplicitInvalid(t *testing.T) {
-	columns := map[string]bool{
-		"created_by": true,
-		"user_id":    true,
+// id is never guessed, and neither is any other column: a dataset that names no
+// owner has none, even when created_by and user_id are real user foreign keys.
+func TestSelectRowPolicyOwnerColumnNeverInfersAnOwner(t *testing.T) {
+	everyCandidate := map[string]bool{"created_by": true, "user_id": true, "id": true}
+	owner, refusal := selectRowPolicyOwnerColumn("system_about", "", everyCandidate)
+	if owner != "" || refusal != rowOwnerRefusalNoneNamed {
+		t.Fatalf("owner = %q (refusal %q), want no owner and the none-named refusal", owner, refusal)
 	}
 
-	got := resolveOwnerColumnWithLegacyShadow("missing_owner", columns)
-	if got.Column != "created_by" {
-		t.Fatalf("owner column = %q, want created_by", got.Column)
-	}
-	if got.LegacyFallbackColumn != "created_by" {
-		t.Fatalf("legacy shadow owner = %q, want created_by", got.LegacyFallbackColumn)
-	}
-	if !got.MatchesLegacyFallback {
-		t.Fatalf("expected invalid explicit metadata to match legacy fallback")
+	owner, refusal = selectRowPolicyOwnerColumn("system_about", "id", map[string]bool{"created_by": true})
+	if owner != "" || refusal == "" {
+		t.Fatalf("owner = %q (refusal %q), want a named id refused when id is not a user foreign key", owner, refusal)
 	}
 }
 
-func TestResolveOwnerColumnFromMetadataFallsBackWhenExplicitColumnMissing(t *testing.T) {
-	columns := map[string]bool{
-		"created_by": true,
-		"user_id":    true,
-		"id":         true,
-	}
-
-	got := resolveOwnerColumnFromMetadata("missing_owner", columns)
-	if got.Column != "created_by" {
-		t.Fatalf("owner column = %q, want created_by", got.Column)
-	}
-	if got.Source != ownerColumnSourceLegacyFallback {
-		t.Fatalf("owner source = %q, want %q", got.Source, ownerColumnSourceLegacyFallback)
-	}
-}
-
-func TestResolveOwnerColumnFromMetadataKeepsLegacyFallbackOrder(t *testing.T) {
+// Only system_users owns itself, and the pilot keeps its enforced user_id; both
+// are fixed in code, so no setting can move them or lend them to another table.
+func TestSelectRowPolicyOwnerColumnUsesBuiltInOwnersRegardlessOfSetting(t *testing.T) {
 	tests := []struct {
-		name    string
-		columns map[string]bool
-		want    string
+		tableName string
+		explicit  string
+		want      string
 	}{
-		{name: "created_by first", columns: map[string]bool{"created_by": true, "user_id": true, "id": true}, want: "created_by"},
-		{name: "user_id before id", columns: map[string]bool{"user_id": true, "id": true}, want: "user_id"},
-		{name: "id compatibility", columns: map[string]bool{"id": true}, want: "id"},
+		{tableName: "system_users", explicit: "", want: "id"},
+		{tableName: "system_users", explicit: "created_by", want: "id"},
+		{tableName: rlsPilotTableName, explicit: "user_id", want: rlsPilotOwnerColumn},
+		{tableName: rlsPilotTableName, explicit: "", want: rlsPilotOwnerColumn},
 	}
-
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := resolveOwnerColumnFromMetadata("", tt.columns)
-			if got.Column != tt.want {
-				t.Fatalf("owner column = %q, want %q", got.Column, tt.want)
-			}
-			if got.Source != ownerColumnSourceLegacyFallback {
-				t.Fatalf("owner source = %q, want %q", got.Source, ownerColumnSourceLegacyFallback)
-			}
-		})
+		owner, refusal := selectRowPolicyOwnerColumn(tt.tableName, tt.explicit, nil)
+		if owner != tt.want || refusal != "" {
+			t.Fatalf("%s with setting %q: owner = %q (refusal %q), want %q", tt.tableName, tt.explicit, owner, refusal, tt.want)
+		}
 	}
 }
 

@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **A row counts as your own only when the dataset says who owns it** — A rule such as "must be approved unless the row is your own" guessed a row's owner from its creator column, its user column or, failing both, its row number, so a person whose user number matched a row's number counted as that row's owner. The owner now comes only from a dataset's named owner column, and only when the database confirms it is a real link to the users table; the users table and the service catalog keep their own. A dataset without such a column gives no own-row exception, so its unapproved rows show only to administrators. A field marked to hide on the article card unless the row is one's own now stays hidden whenever the owner cannot be established.
+
 ## [9.3.20] - 2026-10-02
 
 - **A Docker installation starts from a folder whose files were created private** — A folder cloned by someone whose system makes new files readable only by their owner could not start in Docker. The database container runs its first-start scripts as its own user, which could not even list them, so the database never became healthy and Docker said only that; and the application's image copied the same private permissions, so its user could not run the program's start script. The Docker command now makes the two folders the database reads readable to it, only when something in them is not, and says so; the image makes its own copy of the program readable by its user and writable by no one, whatever the folder's permissions were.
