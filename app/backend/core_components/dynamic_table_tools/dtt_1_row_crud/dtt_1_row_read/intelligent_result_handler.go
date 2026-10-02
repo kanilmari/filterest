@@ -20,6 +20,7 @@ import (
 
 	auth "easelect/backend/core_components/auth"
 	dtt_openai "easelect/backend/core_components/dynamic_table_tools/ai_features"
+	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
@@ -119,7 +120,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	if tableName == "" || userQuery == "" {
 		return fmt.Errorf("table or query parameter missing")
 	}
-	numericID, hasNumericID := parseNumericIDSearch(strings.TrimSpace(userQuery))
+	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(strings.TrimSpace(userQuery))
 
 	session, _ := e_sessions.GetOrCreateSession(nil, r)
 	userRole, _ := session.Values["user_role"].(string)
@@ -311,7 +312,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	if tableName == "" || userQuery == "" {
 		return fmt.Errorf("table or query parameter missing")
 	}
-	numericID, hasNumericID := parseNumericIDSearch(userQuery)
+	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(userQuery)
 
 	session, _ := e_sessions.GetOrCreateSession(nil, r)
 	userRole, _ := session.Values["user_role"].(string)

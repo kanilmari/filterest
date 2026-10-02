@@ -102,6 +102,25 @@ func TestLegacyStandardLoggerWarnPrefixIsBridgedToWarn(t *testing.T) {
 	}
 }
 
+// A whole-word rule was tried for #883 and reverted: it turned error codes such
+// as queue_claim_error into ordinary lines. The stage list that caused #883 is
+// now a debug line of its own (pipeline.LogPipeline), so it never reaches here.
+func TestLegacyLevelKeepsErrorCodesAsErrors(t *testing.T) {
+	for message, want := range map[string]slog.Level{
+		"claim failed code=queue_claim_error":      slog.LevelError,
+		"job failed attempt=2 code=provider_error": slog.LevelError,
+		"Error: saving the row failed":             slog.LevelError,
+		"panic: runtime error: index out of range": slog.LevelError,
+		"[WARN] queue pressure":                    slog.LevelWarn,
+		"[DEBUG] cache hit":                        slog.LevelDebug,
+		"server listening on :8082":                slog.LevelInfo,
+	} {
+		if got := inferLegacyLevel(message); got != want {
+			t.Errorf("inferLegacyLevel(%q) = %v, want %v", message, got, want)
+		}
+	}
+}
+
 func TestSetOutput_UsesJSONWhenConfigured(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "json")
 

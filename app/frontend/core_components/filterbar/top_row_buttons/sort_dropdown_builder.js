@@ -45,9 +45,10 @@ export function createSortDropdown(tableName, columns, dataTypes, { allowPersist
 
     const sortableColumns = filterSortableColumns(columns, dataTypes);
     // An API-backed surface advertises the sorts it can actually execute, so its
-    // own list still decides there; ordinary datasets keep every option.
+    // own list still decides there; ordinary datasets keep every option. A surface
+    // whose search ranks the way a dataset's does lists "" to offer search relevance.
     const options = buildSortOptions(sortableColumns, columns)
-        .filter((option) => !allowedSortColumns || (option.value && allowedSortColumns.includes(option.value.split(':')[0])))
+        .filter((option) => !allowedSortColumns || allowedSortColumns.includes(option.value.split(':')[0]))
         .map((option) => {
             const [column, direction] = option.value.split(':');
             return columnLabels[column]

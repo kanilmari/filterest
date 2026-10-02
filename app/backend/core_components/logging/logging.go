@@ -101,6 +101,9 @@ func logAttrs(level slog.Level, message string, attrs ...slog.Attr) {
 func inferLegacyLevel(message string) slog.Level {
 	lower := strings.ToLower(message)
 
+	// A word inside a code still counts: a failed job logs code=provider_error,
+	// and that is an error. A line that only names something error-like, such
+	// as a list of pipeline stages, is written at its own level instead.
 	switch {
 	case strings.Contains(lower, "fatal"),
 		strings.Contains(lower, "panic"),

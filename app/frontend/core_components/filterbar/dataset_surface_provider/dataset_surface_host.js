@@ -8,6 +8,8 @@ import { getParams } from '../../navigation/nav_engine/query_params.js';
 import { getUnifiedTableState, setUnifiedTableState } from '../../state_stores/table_state_store.js';
 import { renderActiveFilters } from '../filter_list/active_filter_tag_printer.js';
 import { setResultsCount } from '../../../reusable_components/results_count/results_count_printer.js';
+import { emitDatasetSortSelection } from '../top_row_buttons/sort_sync_state.js';
+import { formatSortSelection } from '../top_row_buttons/sort_sync_state_helpers.js';
 import { registerDatasetQueryAdapter } from './dataset_query_adapter_registry.js';
 
 /** Mount one data source; stale requests cannot replace a later query or a destroyed view. */
@@ -55,13 +57,24 @@ export function mountDatasetSurface({
     const isActive = () => container.isConnected && !activeContainer.classList.contains('hidden');
     const keyFor = (params) => JSON.stringify(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
 
+    // A surface whose sort options list '' searches the way every dataset does: a
+    // search without a chosen order is ranked by relevance, not listed newest first.
+    const offersRelevance = () => {
+        const spec = typeof metadata === 'function' ? metadata() : metadata;
+        return Boolean(spec?.sort_options?.allowedSortColumns?.includes(''));
+    };
+
     function syncQueryState(params) {
         const filters = Object.fromEntries(Object.entries(params).filter(([key]) =>
             !['search', 'sort_column', 'sort_order', 'offset', 'view'].includes(key)));
-        setUnifiedTableState(datasetName, {
-            filters, offset: 0,
-            sort: { column: params.sort_column || '__newest', direction: params.sort_order || 'DESC' },
-        });
+        const relevance = !params.sort_column && String(params.search || '').trim() !== '' && offersRelevance();
+        const sort = relevance
+            ? { column: null, direction: null }
+            : { column: params.sort_column || '__newest', direction: params.sort_order || 'DESC' };
+        setUnifiedTableState(datasetName, { filters, offset: 0, sort });
+        // The sort control shows the order this query runs with. A search can
+        // reach the surface without a URL change, so the control is told here.
+        emitDatasetSortSelection(datasetName, relevance ? '' : formatSortSelection(sort.column, sort.direction));
     }
 
     function present(value) {

@@ -5,8 +5,12 @@
 package pipeline_test
 
 import (
+	"bytes"
+	"os"
+	"strings"
 	"testing"
 
+	"easelect/backend/core_components/logging"
 	"easelect/backend/pipeline"
 )
 
@@ -344,6 +348,27 @@ func TestApplyDevOverridesInDev(t *testing.T) {
 		if !profile.Skips("auth") {
 			t.Errorf("%s: expected PublicProfile (skips auth) in dev, got %+v", name, profile)
 		}
+	}
+}
+
+// The start log lists every route's stages, and error_handling is one of them;
+// at error level that made each of some 240 ordinary lines look like a failure.
+func TestLogPipelineIsDebugDetailNotAnError(t *testing.T) {
+	ctx := pipeline.RouteContext{HandlerName: "router.ListTablesHandler"}
+	capture := func(level string) string {
+		t.Setenv("LOG_LEVEL", level)
+		var buf bytes.Buffer
+		logging.SetOutput(&buf)
+		t.Cleanup(func() { logging.SetOutput(os.Stderr) })
+		pipeline.LogPipeline(ctx, pipeline.DefaultProfile)
+		return buf.String()
+	}
+
+	if out := capture("debug"); !strings.Contains(out, "level=DEBUG") || !strings.Contains(out, "router.ListTablesHandler") || !strings.Contains(out, "error_handling") {
+		t.Fatalf("with debug logging the stage list should be a debug line: %q", out)
+	}
+	if out := capture(""); out != "" {
+		t.Fatalf("at the default level the stage list should not be written: %q", out)
 	}
 }
 

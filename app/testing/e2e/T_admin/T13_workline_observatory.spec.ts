@@ -187,6 +187,24 @@ test.describe('T13 — Workline observatory', () => {
     await expect.poll(() => confirmationSeen).toBe(true);
   });
 
+  test('a workline number finds that workline first, ordered by search relevance', async ({ page }) => {
+    await page.goto('/admin/workline_observatory', { waitUntil: 'domcontentloaded' });
+    const rows = page.locator('.workline-observatory__workline-row');
+    await expect(rows.first()).toBeVisible();
+    // Look up an older workline by its number, as an owner looked up WL127; the
+    // board searches as every dataset does, so that number puts its row first.
+    const id = await rows.last().getAttribute('data-workline-id');
+    expect(id).toMatch(/^\d+$/);
+
+    await page.goto(`/admin/workline_observatory?search=${id}`, { waitUntil: 'domcontentloaded' });
+    await expect(rows.first()).toHaveAttribute('data-workline-id', id ?? '');
+    // Every sort control on the page (hero and filter bar) names the order the board used.
+    const sortInputs = page.locator('.sort-dropdown-wrapper .vdw-dropdown-input');
+    await expect(sortInputs.first()).toBeAttached();
+    await expect(page.locator('.sort-dropdown-wrapper .vdw-dropdown-input[data-lang-key="search_relevance"]'))
+      .toHaveCount(await sortInputs.count());
+  });
+
   test('compacts the centered action bar when the report content scrolls under it', async ({ page }) => {
     await page.goto('/admin/workline_observatory', { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => {

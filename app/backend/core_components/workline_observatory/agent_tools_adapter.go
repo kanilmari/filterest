@@ -7,11 +7,39 @@ package workline_observatory
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 
 	"github.com/lib/pq"
 )
+
+// boardReader is the database or one transaction over it. The board handler
+// reads the board and its search through one repeatable-read transaction, so a
+// report published between the two reads cannot pair one report's phase with
+// another report's text.
+type boardReader interface {
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+// boardLatestReportJoin is the one definition of a workline's latest final
+// report. The board shows it and the search reads it, so both see the same text.
+const boardLatestReportJoin = `
+LEFT JOIN LATERAL (
+    SELECT r.id, r.title, r.report_type, r.outcome, r.state,
+           r.phase_gate, r.current_phase, r.workline_status_snapshot, r.context_text,
+           r.plain_language_text, r.technical_text, r.next_step_text,
+           r.git_head_commit, r.git_worktree_state, r.git_has_other_changes,
+           r.git_workline_changed_paths, r.created
+    FROM dev_agent_workline_reports AS r
+    WHERE r.workline_id = w.id AND r.state = 'final'
+    ORDER BY r.created DESC, r.id DESC
+    LIMIT 1
+) AS latest ON TRUE`
 
 const boardWorklinesQuery = `
 SELECT w.id, w.title, w.status, w.tags, w.updated, w.priority, w.priority_revision,
@@ -28,24 +56,66 @@ SELECT w.id, w.title, w.status, w.tags, w.updated, w.priority, w.priority_revisi
        COALESCE(latest.git_workline_changed_paths, '{}'::TEXT[]), latest.created,
        COALESCE(tasks.task_ids, '{}'::BIGINT[])
 FROM dev_agent_worklines AS w
-LEFT JOIN system_users AS status_user ON status_user.id = w.status_changed_by
-LEFT JOIN LATERAL (
-    SELECT r.id, r.title, r.report_type, r.outcome, r.state,
-           r.phase_gate, r.current_phase, r.workline_status_snapshot, r.context_text,
-           r.plain_language_text, r.technical_text, r.next_step_text,
-           r.git_head_commit, r.git_worktree_state, r.git_has_other_changes,
-           r.git_workline_changed_paths, r.created
-    FROM dev_agent_workline_reports AS r
-    WHERE r.workline_id = w.id AND r.state = 'final'
-    ORDER BY r.created DESC, r.id DESC
-    LIMIT 1
-) AS latest ON TRUE
+LEFT JOIN system_users AS status_user ON status_user.id = w.status_changed_by` + boardLatestReportJoin + `
 LEFT JOIN LATERAL (
     SELECT array_agg(link.task_id ORDER BY link.task_id) AS task_ids
     FROM dev_agent_workline_tasks AS link
     WHERE link.workline_id = w.id
 ) AS tasks ON TRUE
 ORDER BY w.updated DESC, w.id DESC`
+
+// maxBoardSearchLength bounds the search text a request may send to the database.
+const maxBoardSearchLength = 2000
+
+var errWorklineSearchTooLong = errors.New("workline_search_too_long")
+
+// boardSearchVector is the text the search reads: a workline's title and its
+// latest report's four text fields, split into words exactly as every dataset's
+// search vector is.
+var boardSearchVector = dtt_search_vectors.SearchVectorExpressionForValues([]string{
+	"coalesce(w.title::text,'')",
+	"coalesce(latest.context_text::text,'')",
+	"coalesce(latest.plain_language_text::text,'')",
+	"coalesce(latest.technical_text::text,'')",
+	"coalesce(latest.next_step_text::text,'')",
+})
+
+// loadBoardSearchMatches returns the worklines a search finds, best match first.
+// It is the search every dataset uses (dtt_search_vectors.TextSearchCondition):
+// word beginnings, any of the words, and a plain number that also names the
+// workline with that number, listed first. Without a search it returns nil.
+func loadBoardSearchMatches(ctx context.Context, database boardReader, rawSearch string) ([]int64, error) {
+	rawSearch = strings.TrimSpace(rawSearch)
+	if len(rawSearch) > maxBoardSearchLength {
+		return nil, errWorklineSearchTooLong
+	}
+	search, ok := dtt_search_vectors.TextSearchCondition(rawSearch, boardSearchVector, "w.id", 1)
+	if !ok {
+		return nil, nil
+	}
+
+	query := "SELECT w.id FROM dev_agent_worklines AS w" + boardLatestReportJoin +
+		"\nWHERE " + search.Predicate + search.OrderBy
+	rows, err := database.QueryContext(ctx, query, search.Args...)
+	if err != nil {
+		return nil, fmt.Errorf("search worklines: %w", err)
+	}
+	defer rows.Close()
+
+	// Never nil: a search that finds nothing still filters the board to nothing.
+	matches := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan workline search: %w", err)
+		}
+		matches = append(matches, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workline search: %w", err)
+	}
+	return matches, nil
+}
 
 const boardWorklineReportHistoryQuery = `
 SELECT r.id, r.title, r.report_type, r.outcome, r.state,
@@ -61,7 +131,7 @@ WHERE r.workline_id = $1
 ORDER BY r.created DESC, r.id DESC
 LIMIT 100`
 
-func loadBoardSnapshot(ctx context.Context, database *sql.DB) (BoardSnapshot, error) {
+func loadBoardSnapshot(ctx context.Context, database boardReader) (BoardSnapshot, error) {
 	snapshot := BoardSnapshot{
 		GeneratedAt: time.Now().UTC(), Worklines: []BoardWorkline{},
 		DatasetSurfaceProviderKey:    "workline-observatory",
@@ -177,7 +247,7 @@ func loadBoardWorklineReportHistory(ctx context.Context, database *sql.DB, workl
 	return history, nil
 }
 
-func loadSelectedReleaseGoal(ctx context.Context, database *sql.DB) (*BoardReleaseGoal, error) {
+func loadSelectedReleaseGoal(ctx context.Context, database boardReader) (*BoardReleaseGoal, error) {
 	var goal BoardReleaseGoal
 	err := database.QueryRowContext(ctx, `
         SELECT id, identity_key, version, title, outcome, decision_state

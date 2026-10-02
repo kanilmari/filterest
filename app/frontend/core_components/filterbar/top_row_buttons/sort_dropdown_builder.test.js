@@ -77,6 +77,16 @@ describe("sort_dropdown_builder", () => {
         expect(options.find((option) => option.value === "priority:ASC")).toMatchObject({ label: "Prioriteetti ↑", langKey: undefined });
     });
 
+    test("an API surface whose search ranks like a dataset's can offer search relevance", () => {
+        mocks.getDatasetSortSelection.mockReturnValue("");
+        createSortDropdown("extension", ["priority"], { priority: { data_type: "text", sco_number: 1 } }, {
+            allowPersistentDefault: false, allowedSortColumns: ["", "__newest", "priority"],
+        });
+        const options = mocks.createVanillaDropdown.mock.calls[0][0].options;
+        expect(options.map((option) => option.value)).toEqual(["", "__newest:DESC", "__newest:ASC", "priority:ASC", "priority:DESC"]);
+        expect(options[0]).toMatchObject({ label: "Search relevance", langKey: "search_relevance" });
+    });
+
     test("extension sorting preserves ordinary actions but disables SQL default persistence", async () => {
         mocks.getDatasetSortSelection.mockReturnValue("id:ASC");
         const wrapper = createSortDropdown("extension", ["id"], { id: "integer" }, { allowPersistentDefault: false });

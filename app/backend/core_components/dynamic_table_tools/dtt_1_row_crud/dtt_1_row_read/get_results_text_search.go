@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
+	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 
 	"github.com/lib/pq"
 )
@@ -26,14 +27,13 @@ const datasetSearchQueryKey = "search"
 //
 // A dataset that has a stored search vector uses it, so the existing index
 // serves the condition. Rows whose vector has not been built yet still match
-// through the same on-the-fly expression the search has always used, and a
-// search that is a plain number also matches that row's identifier.
+// through the same on-the-fly expression the search has always used. The
+// condition and its relevance order come from the one search every list shares
+// (dtt_search_vectors.TextSearchCondition): word beginnings, any of the words,
+// and a plain number that also matches that row's identifier and comes first.
 //
-// It also returns how those matches should be ordered by relevance. The caller
-// uses that only when the person has not chosen a sort of their own. Building
-// it here is what keeps the ranking honest: it reuses the very expression and
-// the very placeholder the condition matched with, instead of a second copy
-// that has to be kept in step by hand.
+// The caller uses the relevance order only when the person has not chosen a
+// sort of their own.
 func appendDatasetTextSearchToWhereClause(
 	db dbutils.Querier,
 	queryParams url.Values,
@@ -42,12 +42,7 @@ func appendDatasetTextSearchToWhereClause(
 	queryArgs []interface{},
 ) (string, []interface{}, string, error) {
 	rawSearch := strings.TrimSpace(queryParams.Get(datasetSearchQueryKey))
-	if rawSearch == "" {
-		return whereClause, queryArgs, "", nil
-	}
-
-	tsQuery := buildOrPrefixTsQuery(rawSearch)
-	if tsQuery == "" {
+	if dtt_search_vectors.OrPrefixTsQuery(rawSearch) == "" {
 		return whereClause, queryArgs, "", nil
 	}
 
@@ -56,43 +51,17 @@ func appendDatasetTextSearchToWhereClause(
 		return "", nil, "", err
 	}
 
-	queryPlaceholder := len(queryArgs) + 1
-	predicate := fmt.Sprintf("(%s) @@ to_tsquery('simple', $%d)", searchVectorExpr, queryPlaceholder)
-	queryArgs = append(queryArgs, tsQuery)
-
-	quotedTable := pq.QuoteIdentifier(tableName)
-	quotedID := pq.QuoteIdentifier("id")
-	rankExpr := fmt.Sprintf("ts_rank(%s, to_tsquery('simple', $%d))", searchVectorExpr, queryPlaceholder)
-	idOrderExpr := ""
-
-	if numericID, hasNumericID := parseNumericIDSearch(rawSearch); hasNumericID {
-		idPlaceholder := len(queryArgs) + 1
-		predicate = fmt.Sprintf("(%s OR %s.%s = $%d)",
-			predicate,
-			quotedTable,
-			quotedID,
-			idPlaceholder,
-		)
-		queryArgs = append(queryArgs, numericID)
-		// Searching a number means that row above everything else, which is
-		// how the assisted search has always treated an exact identifier.
-		idOrderExpr = fmt.Sprintf("(%s.%s = $%d) DESC, ", quotedTable, quotedID, idPlaceholder)
-	}
+	idExpr := pq.QuoteIdentifier(tableName) + "." + pq.QuoteIdentifier("id")
+	search, _ := dtt_search_vectors.TextSearchCondition(rawSearch, searchVectorExpr, idExpr, len(queryArgs)+1)
+	queryArgs = append(queryArgs, search.Args...)
 
 	if strings.TrimSpace(whereClause) == "" {
-		whereClause = " WHERE " + predicate
+		whereClause = " WHERE " + search.Predicate
 	} else {
-		whereClause += " AND " + predicate
+		whereClause += " AND " + search.Predicate
 	}
 
-	// The identifier last makes the order total. Without it two rows of equal
-	// rank may come back in either order, and endless scrolling reads the
-	// result in windows: the same row can arrive twice while another is never
-	// seen at all.
-	relevanceOrderBy := fmt.Sprintf(" ORDER BY %s%s DESC, %s.%s DESC",
-		idOrderExpr, rankExpr, quotedTable, quotedID)
-
-	return whereClause, queryArgs, relevanceOrderBy, nil
+	return whereClause, queryArgs, search.OrderBy, nil
 }
 
 // rowsOutsideDatasetTextSearch keeps, in their given order, only the rows the

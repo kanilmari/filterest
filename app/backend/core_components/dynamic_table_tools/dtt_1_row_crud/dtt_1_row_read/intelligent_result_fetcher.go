@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -186,22 +185,8 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorizat
 }
 
 /* ===========================================================
- *  Muuttumattomat apurit (buildOrPrefixTsQuery …)
+ *  Muuttumattomat apurit (hakusanat: dtt_search_vectors.OrPrefixTsQuery)
  * =========================================================*/
-
-// buildOrPrefixTsQuery muuntaa esim.
-//
-//	"kahvila kaninkolo" → "kahvila:* | kaninkolo:*"
-func buildOrPrefixTsQuery(input string) string {
-	words := strings.Fields(strings.ToLower(input))
-	if len(words) == 0 {
-		return ""
-	}
-	for i, w := range words {
-		words[i] = w + ":*"
-	}
-	return strings.Join(words, " | ")
-}
 
 func buildSimpleSearchVectorExpression(tableAlias string, cols []string) string {
 	if len(cols) == 0 {
@@ -223,24 +208,6 @@ func quoteDerivedTableName(baseTable string, suffix string) string {
 	return pq.QuoteIdentifier(baseTable + suffix)
 }
 
-// parseNumericIDSearch detects exact numeric searches between user input and id lookups.
-// It exists so generic text search can include the stable row id without broadening mixed text queries.
-func parseNumericIDSearch(input string) (int, bool) {
-	if input == "" {
-		return 0, false
-	}
-	for _, r := range input {
-		if r < '0' || r > '9' {
-			return 0, false
-		}
-	}
-	id, err := strconv.Atoi(input)
-	if err != nil {
-		return 0, false
-	}
-	return id, true
-}
-
 // fetchFullTextRows hakee 10 parasta täyden tekstin osumaa
 // käyttäen SIMPLE-konfiguraatiota. Jos search_vector_simple puuttuu,
 // vektori lasketaan lennossa ilman taulumuutoksia.
@@ -252,8 +219,8 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string, autho
 		return nil, nil
 	}
 
-	tsQuery := buildOrPrefixTsQuery(trimmed)
-	numericID, hasNumericID := parseNumericIDSearch(trimmed)
+	tsQuery := dtt_search_vectors.OrPrefixTsQuery(trimmed)
+	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(trimmed)
 
 	rowName := "header"
 	if ok, err := tableHasColumn(db, mainTable, "header"); err != nil {

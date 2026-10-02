@@ -121,6 +121,33 @@ describe('shared data surface', () => {
             filters: {}, offset: 0, sort: { column: '__newest', direction: 'DESC' },
         });
     });
+    test('a search without a chosen order is ranked by relevance where the surface offers it', async () => {
+        const emitted = [];
+        const listen = (event) => { if (event.detail?.dataset === 'extension') emitted.push(event.detail.value); };
+        window.addEventListener('dataset-sort-sync-changed', listen);
+        try {
+            const load = vi.fn(async () => ({ worklines: [] }));
+            make({ loadSnapshot: load, metadata: () => ({ sort_options: { allowedSortColumns: ['', '__newest', 'title'] } }) });
+            await host.refresh({ search: '127' });
+            expect(load).toHaveBeenLastCalledWith({ search: '127' });
+            expect(mocks.state).toHaveBeenLastCalledWith('extension', { filters: {}, offset: 0, sort: { column: null, direction: null } });
+            expect(emitted.at(-1)).toBe('');
+            mocks.params = { search: '127', sort_column: '__newest', sort_order: 'DESC' };
+            await host.refresh();
+            expect(mocks.state).toHaveBeenLastCalledWith('extension', { filters: {}, offset: 0, sort: { column: '__newest', direction: 'DESC' } });
+            expect(emitted.at(-1)).toBe('__newest:DESC');
+            mocks.params = {};
+            await host.refresh();
+            expect(emitted.at(-1)).toBe('__newest:DESC');
+        } finally {
+            window.removeEventListener('dataset-sort-sync-changed', listen);
+        }
+    });
+    test('a surface that does not offer relevance keeps newest during a search', async () => {
+        make({ metadata: { sort_options: { allowedSortColumns: ['__newest', 'title'] } } });
+        await host.refresh({ search: 'release' });
+        expect(mocks.state).toHaveBeenLastCalledWith('extension', { filters: {}, offset: 0, sort: { column: '__newest', direction: 'DESC' } });
+    });
     test('destroy unregisters the adapter and prevents delayed renderer writes', async () => {
         let resolve; const render = vi.fn();
         make({ loadSnapshot: () => new Promise((done) => { resolve = done; }), renderSnapshot: render });

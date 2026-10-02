@@ -5,6 +5,8 @@
 package workline_observatory
 
 import (
+	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -32,13 +34,34 @@ func BoardHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithJSON(w, http.StatusOK, history)
 		return
 	}
-	snapshot, err := loadBoardSnapshot(r.Context(), backend.Db)
+	// The board and its search read one moment of the database (see boardReader).
+	tx, err := backend.Db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		log.Printf("workline observatory board failed: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "workline_observatory_unavailable")
 		return
 	}
-	snapshot, err = queryBoardSnapshot(snapshot, r.URL.Query())
+	defer func() { _ = tx.Rollback() }()
+	snapshot, err := loadBoardSnapshot(r.Context(), tx)
+	if err != nil {
+		log.Printf("workline observatory board failed: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "workline_observatory_unavailable")
+		return
+	}
+	searchMatches, err := loadBoardSearchMatches(r.Context(), tx, r.URL.Query().Get("search"))
+	// Every read is done: give the connection back before filtering and before a
+	// slow client receives the answer. The deferred rollback covers early returns.
+	_ = tx.Rollback()
+	if errors.Is(err, errWorklineSearchTooLong) {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		log.Printf("workline observatory search failed: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "workline_observatory_unavailable")
+		return
+	}
+	snapshot, err = queryBoardSnapshot(snapshot, r.URL.Query(), searchMatches)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return

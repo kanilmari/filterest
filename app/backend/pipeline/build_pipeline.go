@@ -5,8 +5,9 @@
 package pipeline
 
 import (
-	"log"
 	"net/http"
+
+	"easelect/backend/core_components/logging"
 )
 
 // BuildHandler constructs the final http.HandlerFunc for a route by wrapping
@@ -72,8 +73,10 @@ func DescribePipeline(ctx RouteContext, profile RouteProfile) []string {
 	return names
 }
 
-// LogPipeline logs the active stages for a route at startup time.
+// LogPipeline logs the active stages for a route at startup time. Every route
+// writes one such line, so they are debug detail: at the default level the start
+// log keeps to what needs attention.
 func LogPipeline(ctx RouteContext, profile RouteProfile) {
 	names := DescribePipeline(ctx, profile)
-	log.Printf("[Pipeline] %s → %v", ctx.HandlerName, names)
+	logging.Debugf("[Pipeline] %s → %v", ctx.HandlerName, names)
 }
