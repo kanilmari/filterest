@@ -1,53 +1,62 @@
-# Filterest 9.3.19
+# Filterest 9.3.20
 
-Signing out now holds, and a sign-in has a last moment it cannot pass.
+Visitors can no longer write to the database, no account can grant itself rights, and
+a Docker installation can now start, update and back up like a native one.
 
-## Signing out stays signed out
+## Visitors only read, and nobody grants themselves rights
 
-Signing out only expired the three cookies in the browser, and the server kept no
-record of it. A request that was already in flight in another tab finished
-afterwards, wrote all three back, and the person held working credentials they
-believed they had given up. The sign-out itself handed one back too: the session
-store signs whatever the session still holds every time it is written, and telling
-the browser to delete a cookie does not stop that, so the reply to a sign-out
-carried a valid, newly signed sign-in.
+The database account the application uses for visitors could add, change and delete
+rows and advance number sequences, although no visitor feature writes anything. The
+accounts of signed-in users could write to the views that edit database privileges and
+run the two functions behind them, which act with the owner's rights, so a signed-in
+account could have granted itself almost any right.
 
-Each sign-in now carries its own unguessable identity inside the signed cookie. A
-sign-out writes that identity into one small table -- no user, no address, no
-browser details -- and every boundary that checks a sign-in refuses it from then
-on. This ends one browser's sign-in, not the account: signing out on a phone
-leaves the same person's desktop alone.
+A startup stage now takes these rights away on every start, after the database updates
+and before the first request, and compares what remains before and after: visitors only
+read, and no ordinary account can use the privilege views or those functions. Every
+other right stays as it was. If the stage cannot finish, the application does not start,
+rather than serving with rights it should not have. Narrowing the signed-in users'
+account to the tables it needs is the next stage.
 
-Signing out is now a POST carrying the token only this application's own pages
-hold, so another site cannot cause one by sending a browser to a link.
+## Docker installations start, update and back up
 
-## A sign-in has a last moment
+- **Update:** `./filterest update` now updates a Docker installation with the same
+  safeguards as a native one. It checks that the release is published, backs up the
+  database and reads the backup back before trusting it, keeps the uploaded files and
+  the protected settings, and reports success only when the new version answers that it
+  is compatible and is this installation. If the new version does not become ready, its
+  application is stopped while the database and the backup are kept, and the README
+  shows how to return to the previous version.
+- **Start:** `./filterest start` in a folder prepared with `./filterest docker setup`
+  starts the Docker stack instead of beginning a native setup beside it, and
+  `./filterest status` shows its containers.
+- **Private folders:** a folder whose files were created readable only by their owner
+  could not start in Docker. The Docker command now makes the folders the database reads
+  readable to it, and the application image makes its own copy of the program readable
+  by its user and writable by no one.
+- **Backups keep access rights:** before an update changes anything, the database
+  backup now keeps who may read what. A site restored from a native installation's
+  backup kept the data but lost what the limited database accounts for visitors, guests
+  and read-only tools are allowed to read.
 
-A sign-in was renewed on every visit, so one used daily never ended. Every sign-in
-is now given, when it begins, the moment it ends: read from the database's own
-clock, carried inside the signed cookie, and never rewritten afterwards. Changing
-the setting governs sign-ins made after the change and never extends one already
-given.
+## Database 9.9.1
 
-How long a sign-in may last is one setting, `absolute_sign_in_limit`, holding
-whether the limit is on, the unit and the amount. The default is thirty days.
+The update moves the database from 9.9.0 to 9.9.1. It adds the texts of the dataset
+form's "Connect two fields" section and of its folder, rights, picture,
+deletion-protection and link controls in Finnish, English, Chinese and Cantonese. A
+translation a site has already changed is never overwritten. The section now explains
+that the link runs from a column of this dataset to a column of the other, which is also
+known as a foreign key, and its information symbol no longer disappears.
 
-## What this means for people using a site
-
-Everyone signed in at the time of the upgrade signs in once more, because a
-sign-in made before this carries neither an identity nor a deadline. After that,
-every sign-in ends at most thirty days after it began.
-
-A tab left open from before the upgrade runs the previous page code and its sign-out
-button will fail until the page is reloaded. Reload open tabs after the upgrade.
-
-## Twenty internal relationships restored
-
-An installed site was born without twenty of the links Filterest declares between
-its own bookkeeping tables, because the install package shipped none of them. They
-are restored, and the install package now ships them.
+The update also clears a stale display setting that sites installed from the public
+package carried, which made the server write a warning on every read of the dataset
+registry, and gives one internal database link the same name on every site.
 
 ## Also
 
-A piece of the session cookie is no longer written to the log, and a long-running
-tool whose sign-in ends can sign in again instead of failing every later call.
+- On a Glowy card, a one-line description is centred against its icon, and keyword chips
+  take their own theme colour in both themes, so they are readable.
+- The start log no longer classes some 240 ordinary lines as errors, so a real error
+  stands out.
+- The workline observatory finds a workline by its number and searches the way every
+  dataset does.
