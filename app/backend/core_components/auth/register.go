@@ -20,7 +20,6 @@ import (
 	e_sessions "easelect/backend/core_components/sessions"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -320,7 +319,7 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("[showRegisterForm] session get failed: %v, resetting", err)
-		session = sessions.NewSession(store, e_sessions.SessionName)
+		session = e_sessions.NewSessionWithCookieOptions()
 	}
 
 	csrfToken, ok := session.Values["csrf_token"].(string)

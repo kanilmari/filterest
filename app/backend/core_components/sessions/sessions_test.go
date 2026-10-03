@@ -6,6 +6,8 @@ package e_sessions
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -320,7 +322,11 @@ func TestGetOrCreateSessionReturnsExistingSessionValues(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
+// requestWithUnreadableSessionCookie returns a request to target carrying a
+// session cookie signed with keys the current store no longer has, the way a
+// browser presents a cookie after the keys or the cookie lifetime changed.
+func requestWithUnreadableSessionCookie(t *testing.T, method, target string) *http.Request {
+	t.Helper()
 	resetSessionTestGlobals()
 	t.Setenv("SESSION_KEY", testSessionKey)
 	t.Setenv("SESSION_SECRET_KEY", testSessionSecretKey)
@@ -352,10 +358,30 @@ func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
 	InitSessionStore()
 	t.Cleanup(resetSessionTestGlobals)
 
-	req := httptest.NewRequest(http.MethodGet, "https://example.com/protected", nil)
+	req := httptest.NewRequest(method, target, nil)
 	for _, cookie := range oldRec.Result().Cookies() {
 		req.AddCookie(cookie)
 	}
+	return req
+}
+
+// sessionCookieFor returns a readable session cookie holding values.
+func sessionCookieFor(t *testing.T, values map[interface{}]interface{}) *http.Cookie {
+	t.Helper()
+	req := newRequestWithSessionCookie(t, func(_ *http.Request, session *sessions.Session) {
+		for key, value := range values {
+			session.Values[key] = value
+		}
+	})
+	cookie, err := req.Cookie(SessionName)
+	if err != nil {
+		t.Fatalf("session cookie missing: %v", err)
+	}
+	return cookie
+}
+
+func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
+	req := requestWithUnreadableSessionCookie(t, http.MethodGet, "https://example.com/protected")
 	rec := httptest.NewRecorder()
 
 	session, err := GetOrCreateSession(rec, req)
@@ -367,6 +393,125 @@ func TestGetOrCreateSessionClearsCorruptedCookie(t *testing.T) {
 	}
 	if !hasSetCookieContaining(rec.Header().Values("Set-Cookie"), SessionName+"=; Path=/; Max-Age=0") {
 		t.Fatalf("Set-Cookie headers %v do not contain a clearing cookie", rec.Header().Values("Set-Cookie"))
+	}
+}
+
+// An unreadable cookie on an API call used to be replaced by a cookie without
+// any options: the browser filed it under /api beside the real one, and the
+// sign-in page and the API read different sessions from then on.
+func TestGetOrCreateSessionWritesTheReplacementWithTheSessionCookieOptions(t *testing.T) {
+	req := requestWithUnreadableSessionCookie(t, http.MethodPost, "https://example.com/api/check-fingerprint")
+	rec := httptest.NewRecorder()
+
+	session, err := GetOrCreateSession(rec, req)
+	if err != nil {
+		t.Fatalf("GetOrCreateSession() returned error: %v", err)
+	}
+	session.Values["fingerprint_hash"] = "replacement"
+	if err := session.Save(req, rec); err != nil {
+		t.Fatalf("session.Save returned error: %v", err)
+	}
+
+	written := ""
+	for _, value := range rec.Header().Values("Set-Cookie") {
+		if strings.HasPrefix(value, SessionName+"=") && !strings.HasPrefix(value, SessionName+"=;") {
+			written = value
+		}
+	}
+	if written == "" {
+		t.Fatalf("no replacement session cookie in %v", rec.Header().Values("Set-Cookie"))
+	}
+	maxAge := "Max-Age=" + strconv.Itoa(int(SignInLifetime.Seconds()))
+	for _, want := range []string{"Path=/;", "HttpOnly", "SameSite=Lax", maxAge} {
+		if !strings.Contains(written, want) {
+			t.Fatalf("replacement cookie %q lacks %q", written, want)
+		}
+	}
+}
+
+// A browser that still holds such a copy sends it before the root cookie on
+// every request below /api; the copies are cleared and the root cookie kept.
+func TestGetOrCreateSessionClearsSessionCookiesFiledBelowTheRoot(t *testing.T) {
+	initSessionTestStore(t)
+	strayCookie := sessionCookieFor(t, map[interface{}]interface{}{"csrf_token": "stray-token"})
+	rootCookie := sessionCookieFor(t, map[interface{}]interface{}{"csrf_token": "page-token"})
+
+	req := httptest.NewRequest(http.MethodPost, "https://example.com/api/login", nil)
+	req.AddCookie(strayCookie)
+	req.AddCookie(rootCookie)
+	rec := httptest.NewRecorder()
+
+	if _, err := GetOrCreateSession(rec, req); err != nil {
+		t.Fatalf("GetOrCreateSession() returned error: %v", err)
+	}
+	headers := rec.Header().Values("Set-Cookie")
+	for _, path := range []string{"/api", "/api/login"} {
+		if !slices.Contains(headers, SessionName+"=; Path="+path+"; Max-Age=0") {
+			t.Fatalf("Set-Cookie headers %v do not clear the copy under %s", headers, path)
+		}
+	}
+	if hasSetCookieContaining(headers, SessionName+"=; Path=/; Max-Age=0") {
+		t.Fatalf("Set-Cookie headers %v clear the root session cookie", headers)
+	}
+}
+
+// An encoded address must never clear the root cookie: "/%3B/x" decodes to
+// "/;/x", and writing "/;" as a cookie path would come out as "/".
+func TestGetOrCreateSessionNeverClearsTheRootCookieForAnEncodedPath(t *testing.T) {
+	initSessionTestStore(t)
+	req := httptest.NewRequest(http.MethodGet, "https://example.com/%3B/x", nil)
+	req.AddCookie(sessionCookieFor(t, map[interface{}]interface{}{"csrf_token": "stray-token"}))
+	req.AddCookie(sessionCookieFor(t, map[interface{}]interface{}{"csrf_token": "page-token"}))
+	rec := httptest.NewRecorder()
+
+	if _, err := GetOrCreateSession(rec, req); err != nil {
+		t.Fatalf("GetOrCreateSession() returned error: %v", err)
+	}
+	headers := rec.Header().Values("Set-Cookie")
+	if hasSetCookieContaining(headers, SessionName+"=; Path=/; Max-Age=0") {
+		t.Fatalf("Set-Cookie headers %v clear the root session cookie", headers)
+	}
+	if !slices.Contains(headers, SessionName+"=; Path=/%3B; Max-Age=0") {
+		t.Fatalf("Set-Cookie headers %v do not clear the copy under the encoded directory", headers)
+	}
+}
+
+func TestGetOrCreateSessionLeavesASingleSessionCookieAlone(t *testing.T) {
+	initSessionTestStore(t)
+	req := httptest.NewRequest(http.MethodPost, "https://example.com/api/login", nil)
+	req.AddCookie(sessionCookieFor(t, map[interface{}]interface{}{"csrf_token": "page-token"}))
+	rec := httptest.NewRecorder()
+
+	if _, err := GetOrCreateSession(rec, req); err != nil {
+		t.Fatalf("GetOrCreateSession() returned error: %v", err)
+	}
+	if headers := rec.Header().Values("Set-Cookie"); len(headers) != 0 {
+		t.Fatalf("a single session cookie produced Set-Cookie headers %v", headers)
+	}
+}
+
+func TestDirectoriesAboveListsTheDirectoriesBelowTheRoot(t *testing.T) {
+	tests := []struct {
+		path string
+		want []string
+	}{
+		{path: "/", want: nil},
+		{path: "/login", want: []string{"/login"}},
+		{path: "/api/login", want: []string{"/api", "/api/login"}},
+		{path: "/api/app/tasks/", want: []string{"/api", "/api/app", "/api/app/tasks", "/api/app/tasks/"}},
+		// Escaped as the browser sent it, the copy's own path is cleared.
+		{path: "/%3B/x", want: []string{"/%3B", "/%3B/x"}},
+		// A literal semicolon would be dropped by the cookie writer, turning "/;"
+		// into "/" -- such directories are never cleared.
+		{path: "/;/x", want: nil},
+	}
+	for _, test := range tests {
+		if got := directoriesAbove(test.path); !slices.Equal(got, test.want) {
+			t.Fatalf("directoriesAbove(%q) = %v, want %v", test.path, got, test.want)
+		}
+	}
+	if got := directoriesAbove(strings.Repeat("/a", 20)); len(got) != maxStrayCookieDirectories {
+		t.Fatalf("directoriesAbove of a deep path returned %d directories, want the bound %d", len(got), maxStrayCookieDirectories)
 	}
 }
 

@@ -3,13 +3,27 @@
 // Between the authentication UI and backend session-binding security checks.
 // Exists to provide a stable non-PII token for fingerprint-based device protection.
 /**
+ * Removes the version numbers from a user-agent string and keeps the browser
+ * family and operating system. A browser update changes only the numbers, so a
+ * sign-in survives the update instead of ending everywhere every few weeks,
+ * while another browser or system still gives another identity. The numbers
+ * protected little: the browser announces them in every request anyway.
+ *
+ * @param {string} userAgent
+ * @returns {string}
+ */
+export function withoutVersionNumbers(userAgent) {
+    return String(userAgent || "").replace(/\d+(?:[._]\d+)*/g, "");
+}
+
+/**
  * Collects stable browser attributes that are safe to expose to client scripts.
  * Bridges the authentication UI and backend session binding by avoiding PII while
  * still producing a consistent input for hashing.
  */
 export function gather_browser_fingerprint_data() {
     return {
-        user_agent: navigator.userAgent,
+        user_agent: withoutVersionNumbers(navigator.userAgent),
         // language: navigator.language,
         platform: navigator.platform,
         cookie_enabled: navigator.cookieEnabled,

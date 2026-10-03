@@ -33,6 +33,9 @@ func CSRFTokenHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// A token is valid only for the session it was read from; a cached answer
+	// would hand back a token for a session the browser no longer has.
+	w.Header().Set("Cache-Control", "no-store")
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{
 		"csrf_token": csrfToken,
 	})

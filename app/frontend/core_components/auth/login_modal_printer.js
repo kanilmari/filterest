@@ -2,9 +2,11 @@
 // Renders and manages the login modal, handling form fetch, user input, and credential submission.
 // Bridges the unauthenticated page state and the session-authenticated state via the login modal UI.
 // Exists to provide a pre-session authentication entry point without duplicating login flow logic elsewhere.
-// PIPELINE_EXCEPTION: Login, OTP, and password-reset fetches run before a full session/pipeline exists.
+// Login, OTP, and password-reset requests run before a full session/pipeline exists;
+// they are sent by pre_auth_request_sender.js, which also recovers a stale CSRF token.
 import { createModal, showModal, hideModal } from "../../reusable_components/modal/modal_builder.js";
 import { gather_browser_fingerprint_hash } from "../../reusable_components/browser_identity_builder.js";
+import { postPreAuthJson } from "./pre_auth_request_sender.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import { endpoint_router } from "../endpoints/endpoint_router.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
@@ -18,6 +20,8 @@ import {
     resolvePostLoginTarget,
     translateError,
     sanitizeOtpCode,
+    buildCredentialsBody,
+    buildOtpBody,
     buildPasswordResetRequestBody,
     buildPasswordResetBody,
     applyLoginLangKey,
@@ -242,15 +246,12 @@ function setupFormInteractions(form) {
 
         const username = form.querySelector("#username")?.value || '';
         const password = form.querySelector("#password")?.value || '';
-        const csrfToken = form.querySelector("#csrf_token")?.value || '';
 
-        // PIPELINE_EXCEPTION: modal credential submit runs before endpoint_router has session context.
-        const resp = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ username, password, fingerprint: cachedFingerprint, csrf_token: csrfToken }),
-        });
+        const resp = await postPreAuthJson(
+            "/api/login",
+            form.querySelector("#csrf_token"),
+            (csrfToken) => buildCredentialsBody(username, password, cachedFingerprint, csrfToken),
+        );
 
         const data = await resp.json();
 
@@ -314,7 +315,6 @@ function setupFormInteractions(form) {
 
     async function handleOTPPhase(form, submitBtn) {
         const otpCode = sanitizeOtpCode(form.querySelector("#otp")?.value);
-        const csrfToken = form.querySelector("#csrf_token")?.value || '';
 
         if (!otpCode) {
             showFormError(form, getTranslationForKey("enter_otp") || "Enter the verification code.");
@@ -322,13 +322,11 @@ function setupFormInteractions(form) {
             return;
         }
 
-        // PIPELINE_EXCEPTION: modal OTP verification is part of the pre-auth login flow.
-        const resp = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ otp_code: otpCode, csrf_token: csrfToken }),
-        });
+        const resp = await postPreAuthJson(
+            "/api/login",
+            form.querySelector("#csrf_token"),
+            (csrfToken) => buildOtpBody(otpCode, csrfToken),
+        );
 
         const data = await resp.json();
 
@@ -349,7 +347,6 @@ function setupFormInteractions(form) {
 
     async function handlePasswordResetRequestPhase(form, submitBtn) {
         const identifier = form.querySelector("#username")?.value?.trim() || '';
-        const csrfToken = form.querySelector("#csrf_token")?.value || '';
 
         if (!identifier) {
             showFormError(form, translateError("identifier_required"));
@@ -357,13 +354,11 @@ function setupFormInteractions(form) {
             return;
         }
 
-        // PIPELINE_EXCEPTION: modal password-reset OTP request is pre-auth and uses the form CSRF token.
-        const resp = await fetch("/api/request-password-reset-otp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(buildPasswordResetRequestBody(identifier, csrfToken)),
-        });
+        const resp = await postPreAuthJson(
+            "/api/request-password-reset-otp",
+            form.querySelector("#csrf_token"),
+            (csrfToken) => buildPasswordResetRequestBody(identifier, csrfToken),
+        );
         const data = await resp.json();
 
         if (!resp.ok) {
@@ -381,7 +376,6 @@ function setupFormInteractions(form) {
     async function handlePasswordResetVerifyPhase(form, submitBtn) {
         const otpCode = sanitizeOtpCode(form.querySelector("#password-reset-otp")?.value);
         const newPassword = form.querySelector("#password-reset-new-password")?.value || '';
-        const csrfToken = form.querySelector("#csrf_token")?.value || '';
 
         if (!otpCode) {
             showFormError(form, getTranslationForKey("enter_otp") || "Enter the verification code.");
@@ -394,13 +388,11 @@ function setupFormInteractions(form) {
             return;
         }
 
-        // PIPELINE_EXCEPTION: modal password reset completes before endpoint_router session bootstrap.
-        const resp = await fetch("/api/reset-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(buildPasswordResetBody(otpCode, newPassword, csrfToken)),
-        });
+        const resp = await postPreAuthJson(
+            "/api/reset-password",
+            form.querySelector("#csrf_token"),
+            (csrfToken) => buildPasswordResetBody(otpCode, newPassword, csrfToken),
+        );
         const data = await resp.json();
 
         if (!resp.ok) {

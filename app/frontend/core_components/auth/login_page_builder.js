@@ -2,10 +2,11 @@
 // Builds and controls the login page UI lifecycle.
 // Bridges localization, fingerprint capture, and pre-auth login/OTP requests.
 // Exists to provide a reliable pre-session authentication flow for the web app.
-// PIPELINE_EXCEPTION: Login page runs before session/CSRF bootstrap; endpoint_router
-// requires a valid session context that does not exist on the pre-auth login page.
-// Login, OTP, and password-reset fetches are pre-auth and cannot flow through runApiPipeline.
+// Login, OTP, and password-reset requests are pre-auth and cannot flow through
+// runApiPipeline; they are sent by pre_auth_request_sender.js, which also
+// recovers a stale CSRF token.
 import { gather_browser_fingerprint_hash } from "../../reusable_components/browser_identity_builder.js";
+import { postPreAuthJson } from "./pre_auth_request_sender.js";
 import { createModal, showModal } from "../../reusable_components/modal/modal_builder.js";
 import { endpoint_router } from "../endpoints/endpoint_router.js";
 import {
@@ -82,15 +83,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const username = document.getElementById("username")?.value || '';
         const password = document.getElementById("password")?.value || '';
-        const csrfToken = document.getElementById("csrf_token")?.value || '';
 
-        // PIPELINE_EXCEPTION: login runs before session exists — no CSRF/fingerprint pipeline stages available
-        const resp = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(buildCredentialsBody(username, password, cachedFingerprint, csrfToken)),
-        });
+        const resp = await postPreAuthJson(
+            "/api/login",
+            document.getElementById("csrf_token"),
+            (csrfToken) => buildCredentialsBody(username, password, cachedFingerprint, csrfToken),
+        );
 
         const data = await resp.json();
 
@@ -123,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function handleOTPPhase(form, submitBtn) {
         const otpCode = sanitizeOtpCode(document.getElementById("otp")?.value);
-        const csrfToken = document.getElementById("csrf_token")?.value || '';
 
         if (!otpCode) {
             showLoginError(
@@ -134,13 +131,11 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // PIPELINE_EXCEPTION: OTP verification is part of login flow — no session/pipeline available yet
-        const resp = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(buildOtpBody(otpCode, csrfToken)),
-        });
+        const resp = await postPreAuthJson(
+            "/api/login",
+            document.getElementById("csrf_token"),
+            (csrfToken) => buildOtpBody(otpCode, csrfToken),
+        );
 
         const data = await resp.json();
 
@@ -165,20 +160,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function handlePasswordResetRequestPhase(form, submitBtn) {
         const identifier = document.getElementById("username")?.value?.trim() || '';
-        const csrfToken = document.getElementById("csrf_token")?.value || '';
         if (!identifier) {
             showLoginError(translateError("identifier_required"));
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
 
-        // PIPELINE_EXCEPTION: password-reset OTP request is part of the pre-auth login page flow.
-        const resp = await fetch("/api/request-password-reset-otp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(buildPasswordResetRequestBody(identifier, csrfToken)),
-        });
+        const resp = await postPreAuthJson(
+            "/api/request-password-reset-otp",
+            document.getElementById("csrf_token"),
+            (csrfToken) => buildPasswordResetRequestBody(identifier, csrfToken),
+        );
         const data = await resp.json();
 
         if (!resp.ok) {
@@ -196,7 +188,6 @@ document.addEventListener("DOMContentLoaded", () => {
     async function handlePasswordResetVerifyPhase(form, submitBtn) {
         const otpCode = sanitizeOtpCode(document.getElementById("password-reset-otp")?.value);
         const newPassword = document.getElementById("password-reset-new-password")?.value || '';
-        const csrfToken = document.getElementById("csrf_token")?.value || '';
 
         if (!otpCode) {
             showLoginError(
@@ -212,13 +203,11 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // PIPELINE_EXCEPTION: password reset completes before the user has a session for endpoint_router.
-        const resp = await fetch("/api/reset-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(buildPasswordResetBody(otpCode, newPassword, csrfToken)),
-        });
+        const resp = await postPreAuthJson(
+            "/api/reset-password",
+            document.getElementById("csrf_token"),
+            (csrfToken) => buildPasswordResetBody(otpCode, newPassword, csrfToken),
+        );
         const data = await resp.json();
 
         if (!resp.ok) {

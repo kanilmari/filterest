@@ -23,7 +23,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/sessions"
 )
 
 const (
@@ -378,7 +377,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("[showFirstRunAdminForm] session get failed: %v, resetting", err)
-		session = sessions.NewSession(store, e_sessions.SessionName)
+		session = e_sessions.NewSessionWithCookieOptions()
 	}
 
 	csrfToken, _ := session.Values["csrf_token"].(string)

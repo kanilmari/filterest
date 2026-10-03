@@ -332,7 +332,7 @@ func Run(options Options) {
 	}
 
 	rate_limiting.InitDevRateLimitingFlag(backend.Db)
-	auth.InitAuth(e_sessions.GetStore(), frontendDirectory)
+	auth.InitAuth(frontendDirectory)
 	router.RegisterRoutes(frontendDirectory, runtimePaths.StorageRoot)
 	for _, extension := range options.FrontendExtensions {
 		if err := router.RegisterFrontendDirectory(

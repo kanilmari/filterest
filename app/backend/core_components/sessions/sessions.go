@@ -124,6 +124,21 @@ func SessionCookieOptions() *sessions.Options {
 	}
 }
 
+// NewSessionWithCookieOptions returns an empty session that will be written
+// with SessionCookieOptions, like every session the store loads. A session made
+// with sessions.NewSession alone has empty options, and its cookie then carries
+// no Path, HttpOnly, SameSite or lifetime: the browser files it under the
+// directory of the request that set it (for an API call, /api) beside the real
+// one, and from then on the sign-in page and the API read different sessions,
+// so the page's CSRF token never matches again. Every handler that replaces an
+// unreadable or missing session uses this instead.
+func NewSessionWithCookieOptions() *sessions.Session {
+	session := sessions.NewSession(GetStore(), SessionName)
+	session.Options = SessionCookieOptions()
+	session.IsNew = true
+	return session
+}
+
 // GetStore palauttaa osoittimen sessiostoreen
 func GetStore() *sessions.CookieStore {
 	return Store

@@ -23,11 +23,9 @@ import (
 	e_sessions "easelect/backend/core_components/sessions"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/sessions"
 )
 
 var (
-	store                    *sessions.CookieStore
 	frontend_dir             string
 	configuredSiteNameReader = backend.ConfiguredSiteName
 	configuredFaviconReader  = backend.ConfiguredFaviconFile
@@ -88,8 +86,9 @@ func normalizeLoginDisplayHost(rawHost string) string {
 	return strings.ToLower(strings.TrimSpace(host))
 }
 
-func InitAuth(session_store *sessions.CookieStore, fe_dir string) {
-	store = session_store
+// InitAuth records where the sign-in templates live. Sessions come from the
+// shared store in e_sessions; this package keeps no copy of it.
+func InitAuth(fe_dir string) {
 	frontend_dir = fe_dir
 }
 
@@ -136,8 +135,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		log.Printf("[showLoginForm] session get failed: %v, resetting", err)
-		session = sessions.NewSession(store, e_sessions.SessionName)
-		session.Options = e_sessions.SessionCookieOptions()
+		session = e_sessions.NewSessionWithCookieOptions()
 	}
 
 	if _, errCookie := r.Cookie(e_sessions.SessionName); errCookie == nil {
@@ -213,6 +211,12 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	}
 
 	log.Println("LoginHandler: Rendering template with CSRF token")
+
+	// The page carries the session's CSRF token, so a copy kept by the browser
+	// goes stale as soon as the session changes. Without this a browser restart
+	// or the back button can show a cached page whose token no longer matches,
+	// and the sign-in is refused.
+	w.Header().Set("Cache-Control", "no-store")
 
 	if err = tmpl.Execute(w, data); err != nil {
 		fmt.Printf("\033[31merror: login template execution failed: %s\033[0m\n", err.Error())

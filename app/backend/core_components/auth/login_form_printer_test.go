@@ -98,7 +98,6 @@ func prepareLoginHandlerSessionStore(t *testing.T) *sessions.CookieStore {
 
 	origStore := e_sessions.Store
 	origSessionName := e_sessions.SessionName
-	origAuthStore := store
 
 	testStore := sessions.NewCookieStore([]byte("01234567890123456789012345678901"))
 	testStore.Options = &sessions.Options{
@@ -110,12 +109,10 @@ func prepareLoginHandlerSessionStore(t *testing.T) *sessions.CookieStore {
 	}
 	e_sessions.Store = testStore
 	e_sessions.SessionName = "session"
-	store = testStore
 
 	t.Cleanup(func() {
 		e_sessions.Store = origStore
 		e_sessions.SessionName = origSessionName
-		store = origAuthStore
 	})
 
 	return testStore
@@ -180,7 +177,7 @@ func setupLoginHandlerFrontend(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	InitAuth(store, frontendDir)
+	InitAuth(frontendDir)
 	t.Cleanup(func() {
 		frontend_dir = origFrontendDir
 	})
@@ -204,6 +201,27 @@ func TestLoginHandlerRendersStandalonePageWhenBrowsingIsOptional(t *testing.T) {
 	}
 	if got := rr.Body.String(); got != "standalone|back|notourshots|localhost" {
 		t.Fatalf("body = %q, want %q", got, "standalone|back|notourshots|localhost")
+	}
+}
+
+// The page carries the session's CSRF token. A copy the browser kept would
+// come back after a restart or the back button with a token the session no
+// longer has, so the page is never stored.
+func TestLoginHandlerForbidsTheBrowserFromStoringThePage(t *testing.T) {
+	prepareLoginHandlerSessionStore(t)
+	setupLoginHandlerMockDB(t, false)
+	setupLoginHandlerFrontend(t)
+
+	for _, target := range []string{"https://localhost/login", "https://localhost/login?fragment=1"} {
+		rr := httptest.NewRecorder()
+		LoginHandler(rr, httptest.NewRequest(http.MethodGet, target, nil))
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, want %d", target, rr.Code, http.StatusOK)
+		}
+		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("%s: Cache-Control = %q, want no-store", target, got)
+		}
 	}
 }
 

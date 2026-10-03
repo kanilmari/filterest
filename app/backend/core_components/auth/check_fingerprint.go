@@ -6,6 +6,7 @@ package auth
 
 import (
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
 	"log"
@@ -78,7 +79,13 @@ func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`{"ok":true}`))
 			return
 		}
-		httpresponse.RespondWithError(w, http.StatusUnauthorized, "fingerprint mismatch")
+		// A signed-in session whose browser no longer matches is ended here, not
+		// only refused. Refusing alone left the identity in the session: the
+		// browser was sent to the login page, the login page sent the apparently
+		// signed-in visitor back to the application, and the application refused
+		// again, until the browser's own reset happened to win the race. Clearing
+		// and saving the identity before the answer makes it one clean sign-out.
+		session_expiry.RespondSignInNoLongerValid(w, r, session, "fingerprint mismatch")
 		return
 	}
 

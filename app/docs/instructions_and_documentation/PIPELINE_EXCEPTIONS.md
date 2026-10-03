@@ -1,6 +1,6 @@
 # Pipeline Exceptions Registry
 
-_Last updated: 2026-05-09_
+_Last updated: 2026-10-03_
 
 This registry lists frontend files that intentionally bypass the API pipeline (`endpoint_router` -> `runApiPipeline`). The rule is: **all API calls go through the pipeline**. Any direct `fetch()`/`XMLHttpRequest`, or streaming API mechanism such as `EventSource`, must be explicitly documented here.
 
@@ -20,8 +20,7 @@ Add this header comment to every intentional exception file so it is grep-able:
 |---|------|-------------|--------|-------|
 | 1 | `app/frontend/core_components/error_and_status_handling/dev_error_forwarder_to_backend.js` | `fetch('/api/csrf-token')`, `fetch('/api/log-client-error')` | Infrastructure error logger. Must not depend on higher-level abstractions to avoid circular dependencies and infinite logging loops. | 2026-02-24 |
 | 2 | `app/frontend/core_components/auth/translation_prefetcher.js` | `fetch('/api/translations?lang=en')`, `fetch('/api/translations?lang={browser_lang}')` | IIFE that runs before the module system loads. Pipeline utilities are unavailable; prefetch overlaps with HTML parsing for faster perceived login. | 2026-02-24 |
-| 3 | `app/frontend/core_components/auth/login_page_builder.js` | `fetch('/api/login')` x2, `fetch('/api/request-password-reset-otp')`, `fetch('/api/reset-password')` | Login page runs before session exists — no CSRF/fingerprint pipeline stages available. CSRF token is sourced from server-rendered hidden field instead. | 2026-03-01 |
-| 4 | `app/frontend/core_components/auth/login_modal_printer.js` | `fetch('/api/login')` x2, `fetch('/api/request-password-reset-otp')`, `fetch('/api/reset-password')` | Login modal runs before session exists — same pre-auth constraint as login page. | 2026-03-04 |
+| 3 | `app/frontend/core_components/auth/pre_auth_request_sender.js` | `fetch(url)` for `/api/login` (credentials and verification code), `/api/request-password-reset-otp` and `/api/reset-password`, sent for both the login page (`login_page_builder.js`) and the login modal (`login_modal_printer.js`) | Sign-in runs before a session exists, so no pipeline stage can attach the token; the token comes from the form's server-rendered hidden field. When the service refuses that token, it reuses the pipeline's `ensureCsrfToken` and `isCsrfFailureResponse`, writes the session's token into the field and retries once, so a page restored from the browser's cache signs in without a reload. Replaced the separate page and modal entries. | 2026-10-03 |
 | 5 | `app/frontend/core_components/admin_tools/main/oid_updater.js` | `fetch('/api/update-oids', { method: 'POST' })` | Best-effort admin maintenance refresh. Uses a local `AbortController` timeout so a slow OID/catalog sync cannot keep reloads open for tens of seconds. It is a POST because it rewrites catalog metadata, and it reuses the pipeline's CSRF token cache instead of keeping its own. | 2026-09-20 |
 | 6 | `app/frontend/core_components/admin_tools/admin_button_builder.js` | `new EventSource(get_endpoint_url('openaiEmbedStream'))` | Embedding refresh progress is a server-sent event stream. `endpoint_router` handles finite request/response calls, not long-lived SSE transport. | 2026-05-04 |
 | 7 | `app/frontend/core_components/endpoints/sse_subscriber.js` | `new EventSource('/api/sse/subscribe?...')` | Realtime row-change notifications are a shared long-lived SSE subscription with explicit reconnect lifecycle. | 2026-05-04 |
