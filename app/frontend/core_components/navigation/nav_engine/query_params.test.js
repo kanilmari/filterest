@@ -157,6 +157,33 @@ describe('updateURL', () => {
   });
 });
 
+describe('forgetCachedView', () => {
+  test('drops only the view another dataset cached and leaves the current dataset as it is', () => {
+    localStorage.clear();
+    mod.setParams('demo', { view: 'card' });
+    const cached = JSON.parse(localStorage.getItem('dataset_query_params'));
+    cached.travel_deals = { view: 'article_view', search: 'ferry' };
+    localStorage.setItem('dataset_query_params', JSON.stringify(cached));
+
+    mod.forgetCachedView('travel_deals');
+
+    const stored = JSON.parse(localStorage.getItem('dataset_query_params'));
+    expect(stored.travel_deals).toEqual({ search: 'ferry' });
+    expect(stored.demo).toEqual({ view: 'card' });
+    expect(mod.getParams()).toEqual({ view: 'card' });
+  });
+
+  test('writes nothing for a dataset without a cached view', () => {
+    localStorage.clear();
+    localStorage.setItem('dataset_query_params', JSON.stringify({ travel_info: { search: 'harbour' } }));
+
+    mod.forgetCachedView('travel_info');
+    mod.forgetCachedView('missing');
+
+    expect(JSON.parse(localStorage.getItem('dataset_query_params'))).toEqual({ travel_info: { search: 'harbour' } });
+  });
+});
+
 describe('parseTableQueryString ↔ buildTableQueryString roundtrip', () => {
   test('parse then build reproduces equivalent query', () => {
     const original = '?sort_column=age&sort_order=DESC&offset=50&city=Helsinki';

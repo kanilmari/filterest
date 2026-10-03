@@ -239,37 +239,18 @@ function resolvePermittedView(viewKey, globalDefault) {
 }
 
 /**
- * Resolves the saved view while migrating dedicated cloud datasets to their DB default.
+ * Resolves the view to draw: the one chosen earlier in this visit, otherwise
+ * the dataset's default. A fresh page has no chosen view, because page load
+ * forgets the views of earlier visits (load_tables in table_loader_handler.js),
+ * so the dataset default always wins there -- including a cloud-management
+ * default, which once needed its own migration here.
  *
  * @param {string} datasetName - Dataset currently being rendered.
- * @param {Object<string, object>} tableSpecs - Navigation metadata keyed by dataset.
- * @param {string} globalDefault - Global fallback view key.
+ * @param {string} datasetDefault - The dataset's renderable default view.
  * @returns {string}
  */
-function resolveStoredViewForDatasetDefault(datasetName, tableSpecs, globalDefault) {
-    const defaultViewName = tableSpecs[datasetName]?.default_view_name;
-    const viewStorageKey = `${datasetName}_view`;
-    const defaultSeenStorageKey = `${datasetName}_default_view_seen`;
-    const storedView = localStorage.getItem(viewStorageKey);
-    const seenDefaultView = localStorage.getItem(defaultSeenStorageKey);
-
-    if (defaultViewName === "cloud_management" && seenDefaultView !== defaultViewName) {
-        localStorage.setItem(viewStorageKey, defaultViewName);
-        localStorage.setItem(defaultSeenStorageKey, defaultViewName);
-        return defaultViewName;
-    }
-
-    if (defaultViewName && !seenDefaultView) {
-        localStorage.setItem(defaultSeenStorageKey, defaultViewName);
-    }
-
-    if (storedView) {
-        return storedView;
-    }
-
-    const resolvedView = defaultViewName || globalDefault;
-    localStorage.setItem(viewStorageKey, resolvedView);
-    return resolvedView;
+function resolveStoredViewForDatasetDefault(datasetName, datasetDefault) {
+    return localStorage.getItem(`${datasetName}_view`) || datasetDefault;
 }
 
 function resolveRenderableView(datasetName, currentView, columns, data, dataTypes, hasGeo, tableSpecs, globalDefault) {
@@ -352,11 +333,7 @@ export async function generate_table(
         const defaultView = resolveRenderableView(
             datasetName, datasetDefault, columns, data, data_types, hasGeo, tableSpecs, globalDefault
         );
-        let current_view = resolveStoredViewForDatasetDefault(
-            datasetName,
-            tableSpecs,
-            defaultView
-        );
+        let current_view = resolveStoredViewForDatasetDefault(datasetName, defaultView);
         current_view = resolvePermittedView(current_view, defaultView);
         current_view = resolveRenderableView(
             datasetName,

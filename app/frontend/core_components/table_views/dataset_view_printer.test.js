@@ -478,8 +478,10 @@ describe('generate_table', () => {
         expect(localStorage.getItem('demo_dataset_view')).toBe('card');
     });
 
-    test('migrates cloud-management datasets from stale generic views to their DB default once', async () => {
-        localStorage.setItem('app_cloud_services_view', 'card');
+    // Page load forgets earlier visits' views (load_tables), so a cloud-management
+    // default needs no migration of its own: it applies whenever nothing was
+    // chosen in this visit.
+    test('opens a cloud-management dataset in its default when nothing was chosen this visit', async () => {
         getAllSpecsMock.mockReturnValueOnce({
             app_cloud_services: {
                 table_uid: 3148,
@@ -505,7 +507,7 @@ describe('generate_table', () => {
             { id: 'INTEGER', service_key: 'TEXT' }
         );
         expect(localStorage.getItem('app_cloud_services_view')).toBe('cloud_management');
-        expect(localStorage.getItem('app_cloud_services_default_view_seen')).toBe('cloud_management');
+        expect(localStorage.getItem('app_cloud_services_default_view_seen')).toBeNull();
         expect(activeContainer.id).toBe('app_cloud_services_cloud_management_view_container');
     });
     test("only an explicitly retained card host survives classic article generation", async () => {

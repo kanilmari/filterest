@@ -73,3 +73,32 @@ export function setUnifiedTableState(tableName, partialState) {
     localStorage.setItem(storageKey, JSON.stringify(newState));
     return newState;
 }
+
+/**
+ * Forgets which row a dataset had open and keeps its sorting, filters and
+ * paging. A fresh page opens a row only when its address names one; a row
+ * left open on an earlier visit would otherwise reopen its article every time.
+ */
+export function forgetOpenRow(tableName) {
+    const storageKey = `${tableName}_sorting_and_filtering_specs`;
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) {
+        return;
+    }
+    let state;
+    try {
+        state = JSON.parse(raw);
+    } catch {
+        // An unreadable state already reads as the defaults.
+        localStorage.removeItem(storageKey);
+        return;
+    }
+    state.articleView = { collapsed: false, expandedId: null };
+    state.cardView = { ...(state.cardView || {}), collapsed: false, expandedId: null };
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch {
+        // A full or blocked storage keeps the stored sorting, filters and
+        // paging as they were; only the open row could not be forgotten.
+    }
+}

@@ -115,6 +115,22 @@ export function setParams(dataset, params = {}) {
 }
 
 /**
+ * Drops the view a dataset's cached address parameters remember from an
+ * earlier visit; the next address is then written from the view actually
+ * drawn. Unlike setParams it leaves the current dataset as it is.
+ */
+export function forgetCachedView(dataset) {
+    loadFromStorage();
+    if (!datasetParams[dataset] || !Object.hasOwn(datasetParams[dataset], 'view')) {
+        return;
+    }
+    const remaining = { ...datasetParams[dataset] };
+    delete remaining.view;
+    datasetParams[dataset] = remaining;
+    saveToStorage();
+}
+
+/**
  * Writes one dataset address with the parameters the caller supplies.
  *
  * The serialisation itself belongs to the dataset address owner

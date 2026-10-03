@@ -13,17 +13,51 @@ import {
 import { openNavTab } from '../../navigation/main_tabs/main_tab_printer.js';
 import { count_this_function } from '../../dev_tools/function_counter.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
-import { DATASET_PREFIX, normalizePath } from '../../navigation/nav_engine/query_params.js';
+import { DATASET_PREFIX, normalizePath, forgetCachedView } from '../../navigation/nav_engine/query_params.js';
 import { primeDatasetAccessRegistry, beginDatasetAccessRefresh, isCurrentDatasetAccessRefresh } from '../../navigation/nav_engine/dataset_access_registry.js';
 import { setUnifiedTableState } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
+import { forgetOpenRow } from '../../state_stores/table_state_store.js';
 import {
     setRedirectNotice,
     clearDatasetSelectionState,
     setSelectedDataset,
     getSelectedDataset,
-    setInitialQueryParams,
 } from '../../state_stores/dataset_selection_saver.js';
 import { parseDeepLink, resolveTableName } from './table_loader_handler_helpers.js';
+
+// The page's first load forgets earlier visits; later loads in the same page --
+// the one after signing in -- must keep what this visit has chosen.
+let earlierVisitsForgotten = false;
+
+/**
+ * A fresh page shows what its address asks for -- a row or a view -- and
+ * otherwise each dataset's own default view. Nothing carries over from an
+ * earlier visit: the stored view also recorded that an article had been left
+ * open, so such an article reopened on every later visit whatever the
+ * dataset's default said. Within a visit the stored view still carries the
+ * person's current choice from one render to the next, and the address keeps
+ * it across a reload. The current dataset's cached address parameters came
+ * from the address itself, so they are kept.
+ */
+function forgetViewsFromEarlierVisits(datasetNames, currentDataset) {
+    if (earlierVisitsForgotten) {
+        return;
+    }
+    earlierVisitsForgotten = true;
+    for (const datasetName of datasetNames) {
+        localStorage.removeItem(`${datasetName}_view`);
+        // Written by earlier versions to migrate cloud views; nothing reads it.
+        localStorage.removeItem(`${datasetName}_default_view_seen`);
+        forgetOpenRow(datasetName);
+        if (datasetName !== currentDataset) {
+            forgetCachedView(datasetName);
+        }
+    }
+}
+
+export function resetEarlierVisitForgettingForTests() {
+    earlierVisitsForgotten = false;
+}
 
 /**
  * Lataa taululistan, luo navigointipainikkeet ja avaa oikean näkymän.
@@ -107,6 +141,8 @@ export async function load_tables(options = {}) {
             clearDatasetSelectionState();
         }
 
+        forgetViewsFromEarlierVisits(set_of_every_table_and_view_name, resolved_table_name);
+
         /* ----------------------------------------------------------
            Lopuksi avataan oikea välilehti
         ---------------------------------------------------------- */
@@ -137,7 +173,6 @@ export async function load_tables(options = {}) {
                 localStorage.setItem(`${resolved_table_name}_view`, backingView);
                 initialParams.set("view", backingView);
             }
-            setInitialQueryParams(opensImageFirst ? "?" + initialParams : window.location.search || "");
             const navigation = await openNavTab(resolved_table_name, {
                 skipUrlUpdate: isLandingOnFrontpage || Boolean(deepLinkedRowId),
                 forceReload,

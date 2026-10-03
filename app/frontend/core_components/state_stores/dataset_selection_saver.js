@@ -36,16 +36,8 @@ export function clearSelectedDataset() {
 }
 
 // ---------- initial_query_params ----------
-
-export function setInitialQueryParams(paramsString) {
-    if (paramsString == null) return;
-    safeSetItem(sessionStorage, STORAGE_KEYS.initialQueryParams, paramsString);
-    safeRemoveItem(localStorage, STORAGE_KEYS.initialQueryParams);
-}
-
-export function getInitialQueryParams() {
-    return migrateToSession(sessionStorage, localStorage, STORAGE_KEYS.initialQueryParams);
-}
+// Earlier versions stored the landing address here, and nothing ever read it.
+// Only the clearing remains, so the stale value leaves browsers that have it.
 
 export function clearInitialQueryParams() {
     safeRemoveItem(sessionStorage, STORAGE_KEYS.initialQueryParams);

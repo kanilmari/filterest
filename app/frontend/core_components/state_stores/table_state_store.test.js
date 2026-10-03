@@ -2,8 +2,8 @@
 // Verifies independent persisted presentation state and legacy article aliases.
 // Bridges localStorage state reads and partial updates for card and article views.
 // Prevents one presentation from overwriting the preferences of another.
-import { describe, test, expect, beforeEach } from 'vitest';
-import { getUnifiedTableState, setUnifiedTableState } from './table_state_store.js';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { forgetOpenRow, getUnifiedTableState, setUnifiedTableState } from './table_state_store.js';
 
 describe('table_state_store', () => {
   beforeEach(() => {
@@ -78,6 +78,61 @@ test("article settings never modify the card state", () => {
     setUnifiedTableState("demo", { articleView: { collapsed: true } });
     expect(getUnifiedTableState("demo").cardView).toEqual({ collapsed: false, expandedId: 1, returnView: "table" });
     expect(getUnifiedTableState("demo").articleView).toEqual({ collapsed: true, expandedId: 2, returnView: "calendar" });
+});
+
+// A row left open on an earlier visit must not reopen its article on the next
+// one; the person's sorting, filters and paging are theirs and stay.
+describe('forgetOpenRow', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  test('forgets the open article and card row and keeps sorting, filters and paging', () => {
+    localStorage.setItem('travel_deals_sorting_and_filtering_specs', JSON.stringify({
+      sort: { column: 'name', direction: 'ASC' },
+      filters: { country: 'FI' },
+      offset: 40,
+      articleView: { collapsed: true, expandedId: '5', returnView: 'card' },
+      cardView: { collapsed: true, expandedId: '5', returnView: 'table' },
+    }));
+
+    forgetOpenRow('travel_deals');
+
+    const state = getUnifiedTableState('travel_deals');
+    expect(state.sort).toEqual({ column: 'name', direction: 'ASC' });
+    expect(state.filters).toEqual({ country: 'FI' });
+    expect(state.offset).toBe(40);
+    expect(state.articleView).toEqual({ collapsed: false, expandedId: null });
+    expect(state.cardView).toEqual({ collapsed: false, expandedId: null, returnView: 'table' });
+  });
+
+  test('writes nothing for a dataset with no stored state', () => {
+    forgetOpenRow('travel_deals');
+    expect(localStorage.getItem('travel_deals_sorting_and_filtering_specs')).toBeNull();
+  });
+
+  test('keeps the stored preferences when the storage refuses the write', () => {
+    const stored = JSON.stringify({
+      sort: { column: 'name', direction: 'ASC' },
+      articleView: { collapsed: true, expandedId: '5' },
+    });
+    localStorage.setItem('travel_deals_sorting_and_filtering_specs', stored);
+    const refuse = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    try {
+      forgetOpenRow('travel_deals');
+    } finally {
+      refuse.mockRestore();
+    }
+    expect(localStorage.getItem('travel_deals_sorting_and_filtering_specs')).toBe(stored);
+  });
+
+  test('drops an unreadable state, which already reads as the defaults', () => {
+    localStorage.setItem('travel_deals_sorting_and_filtering_specs', '{broken');
+    forgetOpenRow('travel_deals');
+    expect(localStorage.getItem('travel_deals_sorting_and_filtering_specs')).toBeNull();
+  });
 });
 
 test.each(["article", "big_card", "row_article"])("preserves old %s bookmarks and their detail selection", (view) => {
