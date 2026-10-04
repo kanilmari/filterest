@@ -24,6 +24,23 @@ const (
 	existingRelationManyToMany = "many_to_many"
 )
 
+// The refusals of a reference to a row the actor may not read: the same text whether the first check finds the row
+// hidden or the check repeated after the insert does (recheckReferencesAfterInsert).
+const (
+	foreignRowUnreadable  = "foreign row cannot be read by this actor"
+	relatedRowsUnreadable = "one or more related rows are unavailable for read"
+)
+
+// checkedReference is one existing row a new row refers to through a foreign key, as validateMainForeignKeyReads
+// found it readable.
+type checkedReference struct {
+	tableName string
+	rowID     int64
+}
+
+// recheckRowsVisibleAfterInsert repeats a reference check under the insert's foreign-key lock; unit tests replace it.
+var recheckRowsVisibleAfterInsert = dtt_1_row_read.RecheckRowsVisibleAfterInsert
+
 type resolvedExistingLink struct {
 	Kind                  string
 	RelationID            int64
@@ -235,7 +252,44 @@ func authorizeExistingLink(
 		return err
 	}
 	if !visible {
-		return &forbiddenError{msg: "one or more related rows are unavailable for read"}
+		return &forbiddenError{msg: relatedRowsUnreadable}
+	}
+	return nil
+}
+
+// recheckReferencesAfterInsert repeats, once the new row and its many-to-many links are inserted, the read check of
+// every existing row they refer to, for the rows RowsVisibleForRead checked without a lock: those of the account and
+// rights tables since WL124 stage 2a (dtt_1_row_read.RecheckRowsVisibleAfterInsert). Those INSERTs' foreign-key checks
+// now hold the rows, so a row an administrator hid after the first check is refused with the first check's own
+// refusal, and the request's transaction rolls back with the new row. One-to-many links are not read again: their
+// related rows are updated, and LockRowsVisibleForMutation locked them FOR UPDATE.
+func recheckReferencesAfterInsert(
+	tx *sql.Tx,
+	references []checkedReference,
+	links []resolvedExistingLink,
+	userID int,
+	userRole string,
+) error {
+	for _, reference := range references {
+		visible, err := recheckRowsVisibleAfterInsert(tx, reference.tableName, userRole, userID, []int64{reference.rowID})
+		if err != nil {
+			return err
+		}
+		if !visible {
+			return &forbiddenError{msg: foreignRowUnreadable}
+		}
+	}
+	for _, relation := range links {
+		if relation.Kind != existingRelationManyToMany {
+			continue
+		}
+		visible, err := recheckRowsVisibleAfterInsert(tx, relation.RelatedTableName, userRole, userID, relation.RowIDs)
+		if err != nil {
+			return err
+		}
+		if !visible {
+			return &forbiddenError{msg: relatedRowsUnreadable}
+		}
 	}
 	return nil
 }
@@ -468,13 +522,16 @@ func normalizeMainForeignKeyValues(columns []dtt_models.AddRowColumnInfo, row ma
 	return nil
 }
 
+// validateMainForeignKeyReads checks every existing row the new row refers to and returns them, so the add-row path
+// can repeat the check after the insert where the first one took no lock (recheckReferencesAfterInsert).
 func validateMainForeignKeyReads(
 	tx *sql.Tx,
 	columns []dtt_models.AddRowColumnInfo,
 	row map[string]interface{},
 	userID int,
 	userRole string,
-) error {
+) ([]checkedReference, error) {
+	var checked []checkedReference
 	for _, column := range columns {
 		value, supplied := row[column.ColumnName]
 		if !supplied || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
@@ -485,7 +542,7 @@ func validateMainForeignKeyReads(
 		}
 		foreignUID, err := getTableUID(column.ForeignTableName, tx)
 		if err != nil {
-			return fmt.Errorf("resolve foreign dataset: %w", err)
+			return nil, fmt.Errorf("resolve foreign dataset: %w", err)
 		}
 		allowed, err := hasStrictTableRoutePermission(
 			tx,
@@ -495,10 +552,10 @@ func validateMainForeignKeyReads(
 			foreignUID,
 		)
 		if err != nil {
-			return fmt.Errorf("check foreign-row read permission: %w", err)
+			return nil, fmt.Errorf("check foreign-row read permission: %w", err)
 		}
 		if !allowed {
-			return &forbiddenError{msg: "foreign row cannot be read by this actor"}
+			return nil, &forbiddenError{msg: foreignRowUnreadable}
 		}
 		query := fmt.Sprintf(
 			"SELECT %s FROM %s WHERE %s = $1",
@@ -509,9 +566,9 @@ func validateMainForeignKeyReads(
 		var rowID int64
 		if err := tx.QueryRow(query, value).Scan(&rowID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return errors.New("foreign row does not exist")
+				return nil, errors.New("foreign row does not exist")
 			}
-			return fmt.Errorf("resolve foreign row: %w", err)
+			return nil, fmt.Errorf("resolve foreign row: %w", err)
 		}
 		visible, err := dtt_1_row_read.RowsVisibleForRead(
 			tx,
@@ -521,11 +578,12 @@ func validateMainForeignKeyReads(
 			[]int64{rowID},
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !visible {
-			return &forbiddenError{msg: "foreign row cannot be read by this actor"}
+			return nil, &forbiddenError{msg: foreignRowUnreadable}
 		}
+		checked = append(checked, checkedReference{tableName: column.ForeignTableName, rowID: rowID})
 	}
-	return nil
+	return checked, nil
 }

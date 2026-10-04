@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
@@ -64,6 +65,20 @@ func CreateTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("error decoding data: %v", err)
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid data")
+		return
+	}
+
+	// An automation writes on the caller's own database connection without a route
+	// check on its destination, so it may never write the account and rights tables
+	// (WL124 stage 2a). The start-up step refuses one stored by any other path.
+	accountTarget, err := backend.AccountTableWriteTarget(tx, trigger.TargetTable)
+	if err != nil {
+		log.Printf("error checking trigger target: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking trigger target")
+		return
+	}
+	if accountTarget {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "automation_target_account_table_not_allowed")
 		return
 	}
 

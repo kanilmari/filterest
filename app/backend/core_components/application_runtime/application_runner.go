@@ -304,6 +304,11 @@ func Run(options Options) {
 	if err := backend.EnsureGuestAndPrivilegeViewWriteRevocations(backend.Db); err != nil {
 		log.Fatalf("[RUNTIME ROLE WRITE REVOCATIONS] startup reconcile failed: %v", err)
 	}
+	// Then no runtime role may write the account and rights tables, and the
+	// confidential role writes nothing in public, before any request arrives.
+	if err := backend.EnsureAccountTableWriteRevocations(backend.Db); err != nil {
+		log.Fatalf("[ACCOUNT TABLE WRITE REVOCATIONS] startup reconcile failed: %v", err)
+	}
 
 	if err := startup.ReconcileReservedTestUsers(backend.Db, backend.DbConfidential, environmentType); err != nil {
 		log.Fatalf("Reserved test user reconcile failed: %v", err)

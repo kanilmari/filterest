@@ -43,6 +43,19 @@ func logOptionalPostmarkWarnings() {
 	}
 }
 
+// validateCredentialRoleSeparation refuses a confidential database role that is also the signed-in users' or the
+// visitors' role. Start-up grants the confidential role the credential tables before anything else checks the
+// roles (EnsureConfidentialRolePermissions), so a shared role must be refused here, before any connection opens.
+func validateCredentialRoleSeparation() error {
+	confidentialRole := strings.TrimSpace(os.Getenv("DB_CONFIDENTIAL_USER"))
+	for _, key := range []string{"DB_BASIC_USER", "DB_GUEST_USER"} {
+		if confidentialRole != "" && confidentialRole == strings.TrimSpace(os.Getenv(key)) {
+			return fmt.Errorf("DB_CONFIDENTIAL_USER must differ from %s: the confidential role holds the credential tables", key)
+		}
+	}
+	return nil
+}
+
 // ValidateConfig checks that all critical environment variables are set.
 // Returns an error listing all missing variables if any are absent.
 // Also logs warnings for optional-but-recommended variables.
@@ -80,6 +93,9 @@ func ValidateConfig() error {
 	if missing != nil {
 		return fmt.Errorf("missing required environment variables:\n  %s",
 			strings.Join(missing, "\n  "))
+	}
+	if err := validateCredentialRoleSeparation(); err != nil {
+		return err
 	}
 	if err := e_sessions.ValidateAuthCookieEnvironment(); err != nil {
 		return fmt.Errorf("invalid authentication-cookie configuration: %w", err)

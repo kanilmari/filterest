@@ -222,13 +222,14 @@ func insertDataAccordingToPayload(
 		}
 	}
 	applyCurrentActorOwnership(filteredRow, columnsInfo, currentUserID, currentUsername)
-	if err := validateMainForeignKeyReads(
+	checkedReferences, err := validateMainForeignKeyReads(
 		tx,
 		columnsInfo,
 		filteredRow,
 		currentUserID,
 		userRole,
-	); err != nil {
+	)
+	if err != nil {
 		var forbidden *forbiddenError
 		if errors.As(err, &forbidden) {
 			httpresponse.RespondWithError(w, http.StatusForbidden, forbidden.msg)
@@ -440,6 +441,17 @@ func insertDataAccordingToPayload(
 	if err := applyExistingLinks(tx, mainRowID, resolvedExistingLinks); err != nil {
 		fmt.Printf("\033[31m[add_row_db.go] [applyExistingLinks] error: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error linking existing rows")
+		return 0, nil, err
+	}
+	// Rows of the account and rights tables were checked without a lock; the INSERTs above now hold the ones referred
+	// to, so the check is repeated: a row hidden meanwhile refuses the request as before, and it rolls back.
+	if err := recheckReferencesAfterInsert(tx, checkedReferences, resolvedExistingLinks, currentUserID, userRole); err != nil {
+		var forbidden *forbiddenError
+		if errors.As(err, &forbidden) {
+			httpresponse.RespondWithError(w, http.StatusForbidden, forbidden.msg)
+		} else {
+			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		}
 		return 0, nil, err
 	}
 	// A new row of a dataset with a gallery: a first card picture the request supplied

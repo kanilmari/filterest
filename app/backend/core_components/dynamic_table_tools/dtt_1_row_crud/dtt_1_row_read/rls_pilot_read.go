@@ -22,6 +22,21 @@ const rlsPilotOwnerColumn = "user_id"
 
 const rowPolicyAllFlagsTrueUnlessOwner = "all_flags_true_unless_owner"
 
+// unlockedReferenceTables are the five account and rights tables. Since WL124 stage 2a no runtime database role may
+// write them, and a row lock (FOR KEY SHARE included) needs UPDATE on the locked table, so RowsVisibleForRead checks
+// their rows without one. Every reference to them that reaches that check is a catalogue foreign key
+// (validateMainForeignKeyReads reads the references from pg_constraint; many-to-many relations are synced from it),
+// and the foreign-key check of the insert itself key-locks the referenced row, as the table owner: a row deleted
+// after the visibility check makes the insert fail instead of leaving a dangling reference, and a row hidden after it
+// is refused when the add-row path repeats the check under that lock (RecheckRowsVisibleAfterInsert).
+var unlockedReferenceTables = map[string]bool{
+	"system_users":                   true,
+	"system_user_groups":             true,
+	"system_user_group_memberships":  true,
+	"system_group_table_func_rights": true,
+	"system_functions":               true,
+}
+
 // ReadRowPolicy describes one metadata-driven read visibility rule between row fetchers and SQL predicates.
 // It exists so legacy must_be_true_unless_own behavior can migrate toward named row policies without changing reads.
 // OwnerColumn is empty when the dataset has no proven owner; the flags then bind every non-administrator.
@@ -339,7 +354,10 @@ func RowsVisibleForDelete(q *sql.Tx, tableName, userRole string, userID int, row
 
 // RowsVisibleForRead verifies and key-locks an exact set of relation targets.
 // Add-row linking uses it so a guessed hidden row identifier cannot be joined
-// merely because the physical row exists.
+// merely because the physical row exists. Rows of the account and rights tables
+// are verified the same way but not locked (unlockedReferenceTables): the
+// insert's own foreign-key check holds the reference instead, and the caller
+// repeats the check once it does (RecheckRowsVisibleAfterInsert).
 func RowsVisibleForRead(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64) (bool, error) {
 	uniqueRowIDs := make([]int64, 0, len(rowIDs))
 	requested := make(map[int64]struct{}, len(rowIDs))
@@ -379,14 +397,19 @@ func RowsVisibleForRead(q *sql.Tx, tableName, userRole string, userID int, rowID
 		whereClause,
 		args,
 	)
+	lockClause := " FOR KEY SHARE"
+	if unlockedReferenceTables[tableName] {
+		lockClause = ""
+	}
 	query := fmt.Sprintf(
-		"SELECT %s.%s FROM %s%s ORDER BY %s.%s FOR KEY SHARE",
+		"SELECT %s.%s FROM %s%s ORDER BY %s.%s%s",
 		quotedTable,
 		pq.QuoteIdentifier("id"),
 		quotedTable,
 		whereClause,
 		quotedTable,
 		pq.QuoteIdentifier("id"),
+		lockClause,
 	)
 	rows, err := q.Query(query, args...)
 	if err != nil {
@@ -408,6 +431,22 @@ func RowsVisibleForRead(q *sql.Tx, tableName, userRole string, userID int, rowID
 		return false, fmt.Errorf("iterate readable relation rows for %s: %w", tableName, err)
 	}
 	return len(visible) == len(uniqueRowIDs), nil
+}
+
+// RecheckRowsVisibleAfterInsert repeats RowsVisibleForRead for rows its first check did not lock: those of the
+// account and rights tables (unlockedReferenceTables). Without the lock, an administrator could hide such a row after
+// the first check and before the insert that refers to it; the foreign key accepts any existing row. The caller runs
+// this after that INSERT and before its transaction ends. The INSERT's foreign-key check then holds the referenced
+// rows with a key-share lock, taken with the table owner's rights, so an editor's FOR UPDATE waits until this
+// transaction ends; and this check, a new statement at READ COMMITTED, sees every change committed before the lock
+// was granted. A row hidden in between is therefore refused here, as the first check would have refused it. The
+// foreign keys to these tables are immediate (none is deferrable), so the lock is held when this runs. Rows of other
+// tables stay locked from the first check on and are not read again.
+func RecheckRowsVisibleAfterInsert(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64) (bool, error) {
+	if !unlockedReferenceTables[tableName] {
+		return true, nil
+	}
+	return RowsVisibleForRead(q, tableName, userRole, userID, rowIDs)
 }
 
 func rowsVisibleForMutation(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64, lockRows bool) (bool, error) {

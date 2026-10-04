@@ -25,6 +25,35 @@ func setRequiredConfigEnv(t *testing.T) {
 	for _, key := range required {
 		t.Setenv(key, "test-value")
 	}
+	// Each runtime role is its own database account, as every installation template names them.
+	t.Setenv("DB_ADMIN_USER", "test_admin_role")
+	t.Setenv("DB_READONLY_USER", "test_readonly_role")
+	t.Setenv("DB_CONFIDENTIAL_USER", "test_confidential_role")
+	t.Setenv("DB_BASIC_USER", "test_basic_role")
+	t.Setenv("DB_GUEST_USER", "test_guest_role")
+}
+
+func TestValidateConfigRefusesSharedConfidentialRole(t *testing.T) {
+	for _, sharedKey := range []string{"DB_BASIC_USER", "DB_GUEST_USER"} {
+		t.Run(sharedKey, func(t *testing.T) {
+			setRequiredConfigEnv(t)
+			t.Setenv(sharedKey, " test_confidential_role ")
+
+			err := ValidateConfig()
+			if err == nil || !strings.Contains(err.Error(), "DB_CONFIDENTIAL_USER must differ from "+sharedKey) {
+				t.Fatalf("ValidateConfig() error = %v, want the shared confidential role refused", err)
+			}
+		})
+	}
+}
+
+func TestValidateConfigAllowsReadOnlyRoleSharedWithGuest(t *testing.T) {
+	setRequiredConfigEnv(t)
+	t.Setenv("DB_READONLY_USER", "test_guest_role")
+
+	if err := ValidateConfig(); err != nil {
+		t.Fatalf("ValidateConfig() refused a read-only role shared with the guest: %v", err)
+	}
 }
 
 func TestValidateConfigAcceptsExactTrustedProxyPeerIPs(t *testing.T) {
