@@ -294,6 +294,11 @@ collection selector's ownership and inheritance keys are maintained in
 Their upgrade migration fills missing values while preserving nonempty
 site-authored translations. Finnish and English are recorded as reviewed;
 legacy Chinese/Cantonese fallbacks do not constitute approval of new locales.
+During development, new copy is written in Finnish and English only (owner
+decision K175, 2026-10-04): Chinese (`ch`) and Cantonese (`yue`) values are
+optional until the owner restores them, so a missing value there is not an
+error. Existing translations in those languages stay, and the application keeps
+serving both languages.
 A seed migration can instead be run by the bootstrap itself: list it in
 `language_seed_migrations` in `generate_bootstrap.py`, in the order an upgrade
 runs the files, so the copy is written once. A seed left off that list still
