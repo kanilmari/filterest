@@ -185,20 +185,30 @@ func handoverMembershipHash(items []validatedHandoverItem) string {
 	return hex.EncodeToString(digest[:])
 }
 
+var handoverWorklineStatusLabels = map[string]string{
+	"paused": "tauolla", "closed": "suljettu", "archived": "arkistoitu",
+}
+
+// renderHandoverMarkdown follows the chat status format: each workline is a level-two
+// heading "<title> — WL<id> — <exact phase>", and nothing else uses a heading that large.
 func renderHandoverMarkdown(handover AgentHandoverReport) string {
 	var builder strings.Builder
-	builder.WriteString("# ")
+	builder.WriteString("**")
 	builder.WriteString(handover.Title)
-	builder.WriteString("\n\n")
+	builder.WriteString("**\n\n")
 	builder.WriteString("Tämä on viimeisimmän chatin kanoninen jatkokonteksti. Jatka alla kuvatuista tiloista.\n")
 	for _, item := range handover.Items {
-		builder.WriteString("\n## ")
-		builder.WriteString(item.Report.WorklineTitle)
-		builder.WriteString(" — ")
-		builder.WriteString(strings.ToUpper(item.Report.WorklineStatusSnapshot))
-		builder.WriteString(" / PHASE ")
-		builder.WriteString(fmt.Sprintf("%d", item.Report.CurrentPhase))
-		builder.WriteString("\n\n")
+		builder.WriteString(fmt.Sprintf("\n## %s — WL%d — %d\n\n",
+			item.Report.WorklineTitle, item.Report.WorklineID, item.Report.CurrentPhase))
+		if status := item.Report.WorklineStatusSnapshot; status != "active" {
+			label, known := handoverWorklineStatusLabels[status]
+			if !known {
+				label = status
+			}
+			builder.WriteString("_Työlinjan tila: ")
+			builder.WriteString(label)
+			builder.WriteString("._\n\n")
+		}
 		if item.Report.State != "final" {
 			builder.WriteString("_Raportin nykytila: ")
 			builder.WriteString(item.Report.State)

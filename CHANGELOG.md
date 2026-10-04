@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Handovers follow the reporting format** — A handover printed by `db_report handover latest` opened with a heading larger than its worklines, and a workline's heading showed its status and phase but not its number. Each workline is now a second-level heading with its title, workline number and exact phase, such as `## Reporting — WL141 — 4`; the handover's title is bold text above them, and a paused, closed or archived line names its state under its heading. Stored handovers are unchanged and print in the new form.
+
 ## [9.3.21] - 2026-10-04
 
 - **Database 9.9.2** — Version 9.3.21 pairs with database 9.9.2, which the update reaches from 9.9.1. 9.9.2 changes no table: it adds the second version of the missing-media check's setting and its texts, below.

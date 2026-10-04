@@ -56,6 +56,7 @@ func TestRenderHandoverMarkdownRepeatsEachFullWorklineReport(t *testing.T) {
 		Title: "Latest development handover",
 		Items: []AgentHandoverReportItem{
 			{Report: AgentWorklineReport{
+				WorklineID:             141,
 				WorklineTitle:          "Reporting",
 				WorklineStatusSnapshot: "active",
 				PhaseGate:              "3-4",
@@ -63,12 +64,35 @@ func TestRenderHandoverMarkdownRepeatsEachFullWorklineReport(t *testing.T) {
 				State:                  "final",
 				Content:                "**Konteksti:** Reports preserve context.\n\n**Selkokielellä:** Ready.",
 			}},
+			{Report: AgentWorklineReport{
+				WorklineID:             70,
+				WorklineTitle:          "Site projects",
+				WorklineStatusSnapshot: "paused",
+				PhaseGate:              "2",
+				CurrentPhase:           2,
+				State:                  "final",
+				Content:                "**Konteksti:** Waiting.",
+			}},
 		},
 	}
 	markdown := renderHandoverMarkdown(handover)
-	for _, expected := range []string{"# Latest development handover", "## Reporting", "**Konteksti:**", "**Selkokielellä:**"} {
+	for _, expected := range []string{
+		"**Latest development handover**\n\n",
+		"\n## Reporting — WL141 — 4\n\n**Konteksti:**",
+		"**Selkokielellä:**",
+		"\n## Site projects — WL70 — 2\n\n_Työlinjan tila: tauolla._\n\n**Konteksti:** Waiting.",
+	} {
 		if !strings.Contains(markdown, expected) {
 			t.Fatalf("Markdown missing %q: %s", expected, markdown)
 		}
+	}
+	// The workline headings are the largest: no level-one heading, and an active line carries no status note.
+	for _, line := range strings.Split(markdown, "\n") {
+		if strings.HasPrefix(line, "# ") {
+			t.Fatalf("Markdown has a heading larger than the workline headings: %q", line)
+		}
+	}
+	if strings.Count(markdown, "_Työlinjan tila:") != 1 {
+		t.Fatalf("status note expected only for the paused line: %s", markdown)
 	}
 }
