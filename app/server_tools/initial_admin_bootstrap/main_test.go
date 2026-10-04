@@ -1,17 +1,168 @@
 // main_test.go
-// Verifies the initial Filterest admin bootstrap helper's pure safety logic.
-// Bridges site-slug normalization, handoff-file permissions, and generated credential text.
+// Verifies the initial Filterest admin bootstrap helper's safety logic and its existing-admin check.
+// Bridges site-slug normalization, handoff-file permissions, generated credential text, and a fake database.
 // Exists so the public setup path keeps deterministic username and secret-file behavior.
 package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"easelect/backend/core_components/auth/credentials"
 )
+
+var bootstrapDriverCounter int64
+
+// bootstrapDatabaseState is a fake installation. Both accounts are enabled admins-group members
+// allowed administrator access; the automation account is also API-only.
+type bootstrapDatabaseState struct {
+	humanAdministrator bool
+	automationAccount  bool
+
+	began           bool
+	committed       bool
+	userInserted    bool
+	membershipMade  bool
+	credentialsMade bool
+	firstRunClosed  bool
+}
+
+type bootstrapDriver struct{ state *bootstrapDatabaseState }
+type bootstrapConn struct{ state *bootstrapDatabaseState }
+type bootstrapTx struct{ state *bootstrapDatabaseState }
+type bootstrapRows struct {
+	columns []string
+	values  [][]driver.Value
+	index   int
+}
+
+func (d *bootstrapDriver) Open(string) (driver.Conn, error) {
+	return &bootstrapConn{state: d.state}, nil
+}
+
+func (c *bootstrapConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("prepare is not supported")
+}
+func (c *bootstrapConn) Close() error { return nil }
+func (c *bootstrapConn) Begin() (driver.Tx, error) {
+	c.state.began = true
+	return &bootstrapTx{state: c.state}, nil
+}
+func (tx *bootstrapTx) Commit() error {
+	tx.state.committed = true
+	return nil
+}
+func (tx *bootstrapTx) Rollback() error { return nil }
+
+func (r *bootstrapRows) Columns() []string { return r.columns }
+func (r *bootstrapRows) Close() error      { return nil }
+func (r *bootstrapRows) Next(destination []driver.Value) error {
+	if r.index >= len(r.values) {
+		return io.EOF
+	}
+	copy(destination, r.values[r.index])
+	r.index++
+	return nil
+}
+
+func (c *bootstrapConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	switch {
+	case strings.Contains(query, "WHERE u.username = $1"):
+		return &bootstrapRows{columns: []string{"username", "enabled", "admin_access_allowed", "admins_member", "restricted"}}, nil
+	case strings.Contains(query, "SELECT id FROM system_user_groups WHERE name = 'admins'"):
+		return &bootstrapRows{columns: []string{"id"}, values: [][]driver.Value{{int64(1)}}}, nil
+	case strings.Contains(query, "INSERT INTO system_users"):
+		c.state.userInserted = true
+		return &bootstrapRows{columns: []string{"id"}, values: [][]driver.Value{{int64(42)}}}, nil
+	case strings.Contains(query, "FROM system_users u"):
+		// The existing-admin check must ask the shared login-ready question. The answer then follows
+		// PostgreSQL: the automation account counts only when the query fails to exclude API-only accounts.
+		if !strings.Contains(query, credentials.LoginReadyAdministratorSource) {
+			return nil, fmt.Errorf("existing-admin check does not read the shared login-ready definition: %s", query)
+		}
+		rows := &bootstrapRows{columns: []string{"username"}}
+		if c.state.humanAdministrator {
+			rows.values = append(rows.values, []driver.Value{"owner_admin"})
+		}
+		if c.state.automationAccount && !strings.Contains(query, "AND ur.api_only IS NOT TRUE") {
+			rows.values = append(rows.values, []driver.Value{"filterest_agent"})
+		}
+		return rows, nil
+	default:
+		return nil, fmt.Errorf("unexpected query: %s", query)
+	}
+}
+
+func (c *bootstrapConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	switch {
+	case strings.Contains(query, "INSERT INTO system_user_group_memberships"):
+		c.state.membershipMade = true
+	case strings.Contains(query, "INSERT INTO restricted.users_restricted"):
+		c.state.credentialsMade = true
+	case strings.Contains(query, "UPDATE system_config") && strings.Contains(query, "'first_run'"):
+		c.state.firstRunClosed = true
+	default:
+		return nil, fmt.Errorf("unexpected exec: %s", query)
+	}
+	return driver.RowsAffected(1), nil
+}
+
+func openBootstrapDB(t *testing.T, state *bootstrapDatabaseState) *sql.DB {
+	t.Helper()
+	name := fmt.Sprintf("initial_admin_bootstrap_%d", atomic.AddInt64(&bootstrapDriverCounter, 1))
+	sql.Register(name, &bootstrapDriver{state: state})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// TestEnsureInitialAdminIgnoresTheAutomationAccount proves an API-only automation account alone never
+// makes setup skip the first administrator, while a real login-ready administrator still does.
+func TestEnsureInitialAdminIgnoresTheAutomationAccount(t *testing.T) {
+	t.Setenv("LOGIN_OTP_CODE", "246810")
+	cfg := initialAdminConfig{siteSlug: "filterest", email: "admin@example.test"}
+
+	automationOnly := &bootstrapDatabaseState{automationAccount: true}
+	result, err := ensureInitialAdmin(context.Background(), openBootstrapDB(t, automationOnly), cfg)
+	if err != nil {
+		t.Fatalf("ensureInitialAdmin() beside the automation account error = %v", err)
+	}
+	if result.status != "created" || result.username != "admin_filterest" || result.password == "" {
+		t.Fatalf("result status=%q username=%q password-present=%t, want a generated first administrator",
+			result.status, result.username, result.password != "")
+	}
+	if !automationOnly.userInserted || !automationOnly.membershipMade || !automationOnly.credentialsMade ||
+		!automationOnly.firstRunClosed || !automationOnly.committed {
+		t.Fatalf("database state = %+v, want the first administrator committed", automationOnly)
+	}
+
+	humanPresent := &bootstrapDatabaseState{humanAdministrator: true, automationAccount: true}
+	result, err = ensureInitialAdmin(context.Background(), openBootstrapDB(t, humanPresent), cfg)
+	if err != nil {
+		t.Fatalf("ensureInitialAdmin() with a login-ready administrator error = %v", err)
+	}
+	if result.status != "exists" || result.username != "owner_admin" || result.password != "" {
+		t.Fatalf("result status=%q username=%q, want the existing administrator and no generated password",
+			result.status, result.username)
+	}
+	if humanPresent.began || humanPresent.userInserted || humanPresent.credentialsMade {
+		t.Fatalf("database state = %+v, want nothing written", humanPresent)
+	}
+}
 
 func TestSanitizeSiteSlugDefaultsToFilterest(t *testing.T) {
 	tests := map[string]string{

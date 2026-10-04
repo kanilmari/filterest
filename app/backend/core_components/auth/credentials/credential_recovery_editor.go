@@ -19,11 +19,13 @@ import (
 type VerificationMethod string
 
 const (
-	VerificationNone               VerificationMethod = "none"
-	VerificationFixedPIN           VerificationMethod = "fixed_pin"
-	VerificationTOTP               VerificationMethod = "totp"
-	VerificationEmail              VerificationMethod = "email"
-	MinimumRecoveryDatabaseVersion                    = "9.6.2"
+	VerificationNone     VerificationMethod = "none"
+	VerificationFixedPIN VerificationMethod = "fixed_pin"
+	VerificationTOTP     VerificationMethod = "totp"
+	VerificationEmail    VerificationMethod = "email"
+	// MinimumRecoveryDatabaseVersion is the first database whose restricted credentials carry the
+	// API-only automation marker that LoginReadyAdministratorSource reads (users_restricted.api_only).
+	MinimumRecoveryDatabaseVersion = "9.7.15"
 
 	minimumPasswordLength = 12
 	maximumPasswordLength = 128
@@ -59,14 +61,17 @@ type Administrator struct {
 	AuthenticationGeneration int64
 }
 
-// eligibleAdministratorSource is the one definition of a login-ready administrator account:
-// an enabled account with administrator access that belongs to the canonical 'admins' group and
-// holds restricted credentials. Listing, locking and counting all read this same definition.
-const eligibleAdministratorSource = `
+// LoginReadyAdministratorSource is the one definition of a login-ready administrator account:
+// an enabled account with administrator access that belongs to the canonical 'admins' group,
+// holds restricted credentials and is not an API-only automation account, which no person can
+// sign in with. Recovery listing, locking and counting, the first-run check and the initial-admin
+// bootstrap all read this same FROM ... WHERE fragment over system_users u and restricted.users_restricted ur.
+const LoginReadyAdministratorSource = `
 		FROM system_users u
 		JOIN restricted.users_restricted ur ON ur.id = u.id
 		WHERE u.enabled IS TRUE
 		  AND u.admin_access_allowed IS TRUE
+		  AND ur.api_only IS NOT TRUE
 		  AND EXISTS (
 		      SELECT 1
 		      FROM system_user_group_memberships membership
@@ -146,7 +151,7 @@ func (editor *RecoveryEditor) ReadInstanceIdentity(ctx context.Context) (Instanc
 	return identity, nil
 }
 
-// ListEligibleAdministrators returns only enabled administrators with restricted credentials.
+// ListEligibleAdministrators returns only login-ready administrators, never an API-only automation account.
 // No password hash, PIN hash, TOTP secret, or other secret material crosses this boundary.
 func (editor *RecoveryEditor) ListEligibleAdministrators(ctx context.Context) ([]Administrator, error) {
 	if editor == nil || editor.db == nil {
@@ -159,7 +164,7 @@ func (editor *RecoveryEditor) ListEligibleAdministrators(ctx context.Context) ([
 		       ur.login_verification_method,
 		       ur.email,
 		       ur.authentication_generation`+
-		eligibleAdministratorSource+`
+		LoginReadyAdministratorSource+`
 		ORDER BY LOWER(u.username), u.id
 	`)
 	if err != nil {
@@ -369,7 +374,7 @@ func lockEligibleAdministrator(ctx context.Context, tx *sql.Tx, userID int64) (A
 		       ur.login_verification_method,
 		       ur.email,
 		       ur.authentication_generation`+
-		eligibleAdministratorSource+`
+		LoginReadyAdministratorSource+`
 		  AND u.id = $1
 		FOR UPDATE OF u, ur
 	`, userID).Scan(

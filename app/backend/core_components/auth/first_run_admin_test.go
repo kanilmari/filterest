@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/auth/credentials"
 	"errors"
 	"fmt"
 	"html/template"
@@ -30,6 +31,11 @@ type firstRunTransactionState struct {
 	siteNameMade    bool
 	configClosed    bool
 	failCredential  bool
+
+	// The first_run flag stays TRUE in this fake. Both accounts below are enabled admins-group
+	// members allowed administrator access; the automation account is also API-only.
+	humanAdministrator bool
+	automationAccount  bool
 }
 
 type firstRunTransactionDriver struct{ state *firstRunTransactionState }
@@ -70,13 +76,29 @@ func (r *firstRunTransactionRows) Next(destination []driver.Value) error {
 	return nil
 }
 
-func (c *firstRunTransactionConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *firstRunTransactionConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
 	case isSignInLimitQuery(query):
 		return answerSignInLimit(), nil
 	case strings.Contains(query, "FOR UPDATE"):
 		return &firstRunTransactionRows{values: []driver.Value{true}}, nil
 	case strings.Contains(query, "JOIN restricted.users_restricted"):
+		// Both first-run checks must ask the shared login-ready question. The answer then follows
+		// PostgreSQL: the automation account counts only when the query fails to exclude API-only accounts.
+		if !strings.Contains(query, credentials.LoginReadyAdministratorSource) {
+			return nil, fmt.Errorf("administrator check does not read the shared login-ready definition: %s", query)
+		}
+		administratorExists := c.state.humanAdministrator ||
+			(c.state.automationAccount && !strings.Contains(query, "AND ur.api_only IS NOT TRUE"))
+		if strings.Contains(query, "AND NOT EXISTS") {
+			if len(args) != 1 || args[0].Value != firstRunConfigKey {
+				return nil, fmt.Errorf("first-run pending check is missing its configuration key: %#v", args)
+			}
+			return &firstRunTransactionRows{values: []driver.Value{!administratorExists}}, nil
+		}
+		if administratorExists {
+			return &firstRunTransactionRows{values: []driver.Value{int64(1)}}, nil
+		}
 		return &firstRunTransactionRows{}, nil
 	case strings.Contains(query, "lower(username)"):
 		return &firstRunTransactionRows{}, nil
@@ -346,6 +368,55 @@ func TestCreateFirstRunAdminRollsBackBeforeFlagClosureOnCredentialFailure(t *tes
 	}
 	if state.committed || state.configClosed || !state.rolledBack {
 		t.Fatalf("transaction state = %+v, want rollback without flag closure", state)
+	}
+}
+
+// TestIsFirstRunAdminSetupPendingIgnoresTheAutomationAccount keeps the form open for a person while the
+// only administrator-shaped account is the API-only automation account, and closes it for a human one.
+func TestIsFirstRunAdminSetupPendingIgnoresTheAutomationAccount(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		state firstRunTransactionState
+		want  bool
+	}{
+		{name: "no administrator", want: true},
+		{name: "automation account only", state: firstRunTransactionState{automationAccount: true}, want: true},
+		{name: "human administrator", state: firstRunTransactionState{humanAdministrator: true, automationAccount: true}, want: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			state := testCase.state
+			pending, err := IsFirstRunAdminSetupPending(context.Background(), openFirstRunTransactionDB(t, &state))
+			if err != nil {
+				t.Fatalf("IsFirstRunAdminSetupPending() error = %v", err)
+			}
+			if pending != testCase.want {
+				t.Fatalf("pending = %t, want %t", pending, testCase.want)
+			}
+		})
+	}
+}
+
+func TestCreateFirstRunAdminIgnoresTheAutomationAccount(t *testing.T) {
+	input := firstRunAdminInput{
+		SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
+		Environment: "dev", VerificationMethod: "none",
+	}
+
+	automationOnly := &firstRunTransactionState{automationAccount: true}
+	if err := createFirstRunAdmin(context.Background(), openFirstRunTransactionDB(t, automationOnly), input); err != nil {
+		t.Fatalf("createFirstRunAdmin() beside the automation account error = %v", err)
+	}
+	if !automationOnly.credentialMade || !automationOnly.configClosed || !automationOnly.committed {
+		t.Fatalf("transaction state = %+v, want the first administrator created and the form closed", automationOnly)
+	}
+
+	humanPresent := &firstRunTransactionState{humanAdministrator: true}
+	if err := createFirstRunAdmin(context.Background(), openFirstRunTransactionDB(t, humanPresent), input); !errors.Is(err, errFirstRunClosed) {
+		t.Fatalf("createFirstRunAdmin() beside a human administrator error = %v, want errFirstRunClosed", err)
+	}
+	if humanPresent.credentialMade || humanPresent.environmentMade || humanPresent.siteNameMade ||
+		humanPresent.configClosed || humanPresent.committed || !humanPresent.rolledBack {
+		t.Fatalf("transaction state = %+v, want nothing written and a rollback", humanPresent)
 	}
 }
 

@@ -34,6 +34,10 @@ type recoveryDriverState struct {
 	cleanupQuery  string
 	auditArgs     []driver.NamedValue
 	newGeneration int64
+
+	// automationAdministrator is an enabled API-only automation account in the admins group with
+	// administrator access, so only the shared definition's API-only exclusion keeps it out of answers.
+	automationAdministrator Administrator
 }
 
 type recoveryDriver struct{ state *recoveryDriverState }
@@ -112,17 +116,38 @@ func (connection *recoveryConnection) QueryContext(
 				identity.InstanceRole,
 			}},
 		}, nil
+	case strings.Contains(query, "FROM system_users u") && !strings.Contains(query, LoginReadyAdministratorSource):
+		return nil, fmt.Errorf("administrator query does not read the shared login-ready definition: %s", query)
 	case strings.Contains(query, "FOR UPDATE OF u, ur"):
-		if len(args) != 1 || args[0].Value != connection.state.administrator.ID {
-			return &recoveryRows{columns: []string{"id", "username", "method", "email", "authentication_generation"}}, nil
+		for _, administrator := range connection.state.loginReadyAdministrators(query) {
+			if len(args) == 1 && args[0].Value == administrator.ID {
+				return administratorRows(administrator), nil
+			}
 		}
-		administrator := connection.state.administrator
-		return administratorRows(administrator), nil
+		return administratorRows(), nil
+	case strings.Contains(query, "SELECT COUNT(*)"):
+		return &recoveryRows{
+			columns: []string{"count"},
+			values:  [][]driver.Value{{int64(len(connection.state.loginReadyAdministrators(query)))}},
+		}, nil
 	case strings.Contains(query, "FROM system_users u"):
-		return administratorRows(connection.state.administrator), nil
+		return administratorRows(connection.state.loginReadyAdministrators(query)...), nil
 	default:
 		return nil, fmt.Errorf("unexpected query: %s", query)
 	}
+}
+
+// loginReadyAdministrators answers an administrator query the way PostgreSQL would: the automation
+// account is returned too unless the query excludes API-only accounts.
+func (state *recoveryDriverState) loginReadyAdministrators(query string) []Administrator {
+	administrators := make([]Administrator, 0, 2)
+	if state.administrator.ID != 0 {
+		administrators = append(administrators, state.administrator)
+	}
+	if state.automationAdministrator.ID != 0 && !strings.Contains(query, "AND ur.api_only IS NOT TRUE") {
+		administrators = append(administrators, state.automationAdministrator)
+	}
+	return administrators
 }
 
 func (connection *recoveryConnection) ExecContext(
@@ -160,20 +185,21 @@ func (connection *recoveryConnection) ExecContext(
 	return driver.RowsAffected(1), nil
 }
 
-func administratorRows(administrator Administrator) driver.Rows {
-	if administrator.ID == 0 {
-		return &recoveryRows{columns: []string{"id", "username", "method", "email", "authentication_generation"}}
-	}
-	return &recoveryRows{
-		columns: []string{"id", "username", "method", "email", "authentication_generation"},
-		values: [][]driver.Value{{
+func administratorRows(administrators ...Administrator) driver.Rows {
+	rows := &recoveryRows{columns: []string{"id", "username", "method", "email", "authentication_generation"}}
+	for _, administrator := range administrators {
+		if administrator.ID == 0 {
+			continue
+		}
+		rows.values = append(rows.values, []driver.Value{
 			administrator.ID,
 			administrator.Username,
 			string(administrator.VerificationMethod),
 			administrator.Email,
 			administrator.AuthenticationGeneration,
-		}},
+		})
 	}
+	return rows
 }
 
 func openRecoveryTestDatabase(t *testing.T, state *recoveryDriverState) *sql.DB {
@@ -198,10 +224,21 @@ func testRecoveryAdministrator(method VerificationMethod) Administrator {
 	}
 }
 
+// testAutomationAdministrator mirrors the provisioned API automation account's non-secret state.
+func testAutomationAdministrator() Administrator {
+	return Administrator{
+		ID:                       77,
+		Username:                 "filterest_agent",
+		VerificationMethod:       VerificationNone,
+		Email:                    "filterest_agent@automation.invalid",
+		AuthenticationGeneration: 3,
+	}
+}
+
 func testRecoveryIdentity() InstanceIdentity {
 	return InstanceIdentity{
 		DatabaseName:    "filterest",
-		DatabaseVersion: "9.6.2",
+		DatabaseVersion: "9.7.15",
 		SiteName:        "filterest.com",
 		CurrentProject:  "Filterest",
 		InstanceKind:    "filterest_domain",
@@ -283,6 +320,126 @@ func TestReadIdentityAndListEligibleAdministratorsReturnNoSecrets(t *testing.T) 
 	}
 	if len(administrators) != 1 || administrators[0] != state.administrator {
 		t.Fatalf("administrators = %+v, want only %+v", administrators, state.administrator)
+	}
+}
+
+func TestListEligibleAdministratorsLeavesOutTheAutomationAccount(t *testing.T) {
+	state := &recoveryDriverState{
+		administrator:           testRecoveryAdministrator(VerificationFixedPIN),
+		automationAdministrator: testAutomationAdministrator(),
+	}
+	editor := NewRecoveryEditor(openRecoveryTestDatabase(t, state))
+
+	administrators, err := editor.ListEligibleAdministrators(context.Background())
+	if err != nil {
+		t.Fatalf("ListEligibleAdministrators() error = %v", err)
+	}
+	if len(administrators) != 1 || administrators[0] != state.administrator {
+		t.Fatalf("administrators = %+v, want only the human administrator %+v", administrators, state.administrator)
+	}
+}
+
+// TestRecoverAdministratorRefusesTheAutomationAccountWithoutWriting proves the locked recheck uses the
+// same definition as the listing: the automation account is not found, while the human beside it is.
+func TestRecoverAdministratorRefusesTheAutomationAccountWithoutWriting(t *testing.T) {
+	state := &recoveryDriverState{
+		administrator:           testRecoveryAdministrator(VerificationFixedPIN),
+		automationAdministrator: testAutomationAdministrator(),
+	}
+	editor := NewRecoveryEditor(openRecoveryTestDatabase(t, state))
+	input := testRecoveryInput(state.automationAdministrator)
+	input.PreserveCurrentVerification = true
+	input.AllowPasswordOnly = true
+
+	_, err := editor.RecoverAdministrator(context.Background(), input)
+	if !errors.Is(err, ErrAdministratorNotFound) {
+		t.Fatalf("RecoverAdministrator(automation account) error = %v, want ErrAdministratorNotFound", err)
+	}
+	if len(state.updateArgs) != 0 || len(state.cleanupArgs) != 0 || len(state.auditArgs) != 0 {
+		t.Fatalf("refused recovery touched state: update=%#v cleanup=%#v audit=%#v", state.updateArgs, state.cleanupArgs, state.auditArgs)
+	}
+	if state.committed || !state.rolledBack {
+		t.Fatalf("transaction committed=%t rolledBack=%t, want false/true", state.committed, state.rolledBack)
+	}
+
+	humanState := &recoveryDriverState{
+		administrator:           testRecoveryAdministrator(VerificationFixedPIN),
+		automationAdministrator: testAutomationAdministrator(),
+	}
+	humanInput := testRecoveryInput(humanState.administrator)
+	humanInput.PreserveCurrentVerification = true
+	result, err := NewRecoveryEditor(openRecoveryTestDatabase(t, humanState)).RecoverAdministrator(context.Background(), humanInput)
+	if err != nil {
+		t.Fatalf("RecoverAdministrator(human administrator) error = %v", err)
+	}
+	if result.UserID != humanState.administrator.ID || !humanState.committed {
+		t.Fatalf("human recovery result=%+v committed=%t, want the human administrator committed", result, humanState.committed)
+	}
+}
+
+func TestCountEligibleAdministratorsLeavesOutTheAutomationAccount(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		state *recoveryDriverState
+		want  int
+	}{
+		{
+			name:  "automation account only",
+			state: &recoveryDriverState{automationAdministrator: testAutomationAdministrator()},
+			want:  0,
+		},
+		{
+			name: "human administrator beside it",
+			state: &recoveryDriverState{
+				administrator:           testRecoveryAdministrator(VerificationFixedPIN),
+				automationAdministrator: testAutomationAdministrator(),
+			},
+			want: 1,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			tx, err := openRecoveryTestDatabase(t, testCase.state).BeginTx(context.Background(), nil)
+			if err != nil {
+				t.Fatalf("BeginTx() error = %v", err)
+			}
+			defer func() { _ = tx.Rollback() }()
+
+			count, err := countEligibleAdministrators(context.Background(), tx)
+			if err != nil {
+				t.Fatalf("countEligibleAdministrators() error = %v", err)
+			}
+			if count != testCase.want {
+				t.Fatalf("eligible administrator count = %d, want %d", count, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCreateAdministratorConfirmationGateCountsOnlyLoginReadyAdministrators proves the creation gate
+// counts what the operator was shown: one human administrator, never the automation account beside it.
+// Counting the automation account would turn the reviewed count of one into a count-changed refusal.
+func TestCreateAdministratorConfirmationGateCountsOnlyLoginReadyAdministrators(t *testing.T) {
+	state := &recoveryDriverState{
+		administrator:           testRecoveryAdministrator(VerificationFixedPIN),
+		automationAdministrator: testAutomationAdministrator(),
+	}
+	editor := NewRecoveryEditor(openRecoveryTestDatabase(t, state))
+
+	_, err := editor.CreateAdministrator(context.Background(), AdministratorCreationInput{
+		Username:                   "second_operator_admin",
+		Email:                      "second.operator@example.com",
+		NewPassword:                "correct horse battery staple",
+		VerificationMethod:         VerificationFixedPIN,
+		FixedPIN:                   "246810",
+		ObservedAdministratorCount: 1,
+		OperatorReference:          "test_owner@fake-driver (pid 1)",
+		TargetIdentity:             testRecoveryIdentity(),
+	})
+	if !errors.Is(err, ErrExistingAdministratorConfirmationRequired) {
+		t.Fatalf("CreateAdministrator() error = %v, want ErrExistingAdministratorConfirmationRequired", err)
+	}
+	if state.committed || !state.rolledBack || len(state.auditArgs) != 0 {
+		t.Fatalf("refused creation committed=%t rolledBack=%t audit=%#v, want nothing written", state.committed, state.rolledBack, state.auditArgs)
 	}
 }
 

@@ -195,7 +195,7 @@ func validateAdministratorCreationFactor(input AdministratorCreationInput) (Veri
 // Counting inside the transaction is what makes the reviewed snapshot binding.
 func countEligibleAdministrators(ctx context.Context, tx *sql.Tx) (int, error) {
 	var existingAdministrators int
-	err := tx.QueryRowContext(ctx, `SELECT COUNT(*)`+eligibleAdministratorSource).Scan(&existingAdministrators)
+	err := tx.QueryRowContext(ctx, `SELECT COUNT(*)`+LoginReadyAdministratorSource).Scan(&existingAdministrators)
 	if err != nil {
 		return 0, fmt.Errorf("count eligible administrators: %w", err)
 	}

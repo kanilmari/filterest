@@ -35,7 +35,12 @@ type adminAuthenticationMockState struct {
 
 	listRows             [][]driver.Value
 	missingUser          bool
+	apiOnlyTarget        bool
 	failRestrictedUpdate bool
+
+	// targetLockedInTx records that the locked target read, which carries the
+	// API-only marker, ran inside the same transaction as the provisioning writes.
+	targetLockedInTx bool
 
 	beginCount             int
 	commitCount            int
@@ -133,12 +138,16 @@ func (connection *adminAuthenticationMockConn) QueryContext(
 			rows:    connection.state.listRows,
 		}, nil
 	case strings.Contains(normalized, "FOR UPDATE OF u, ur"):
+		if !strings.Contains(normalized, "SELECT u.username, ur.api_only") {
+			return nil, fmt.Errorf("locked target read does not carry the API-only marker: %s", normalized)
+		}
+		connection.state.targetLockedInTx = connection.inTx
 		if connection.state.missingUser {
-			return &adminAuthenticationMockRows{columns: []string{"username"}}, nil
+			return &adminAuthenticationMockRows{columns: []string{"username", "api_only"}}, nil
 		}
 		return &adminAuthenticationMockRows{
-			columns: []string{"username"},
-			rows:    [][]driver.Value{{"ai_admin_7768"}},
+			columns: []string{"username", "api_only"},
+			rows:    [][]driver.Value{{"ai_admin_7768", connection.state.apiOnlyTarget}},
 		}, nil
 	case strings.Contains(normalized, "SELECT id FROM system_user_groups WHERE name = 'admins'"):
 		return &adminAuthenticationMockRows{
@@ -325,6 +334,9 @@ func TestAdminUserAuthenticationPostProvisioningIsAtomicAndHashesPIN(t *testing.
 	if state.mutationOutsideTxCount != 0 {
 		t.Fatalf("mutations outside transaction = %d", state.mutationOutsideTxCount)
 	}
+	if !state.targetLockedInTx {
+		t.Fatal("the target and its API-only marker must be locked inside the provisioning transaction")
+	}
 	if state.storedMethod != "fixed_pin" || state.storedPINHash == "" || state.storedPINHash == "1234" {
 		t.Fatalf("stored factor = method:%q hash-present:%t", state.storedMethod, state.storedPINHash != "")
 	}
@@ -411,6 +423,39 @@ func TestAdminUserAuthenticationPostRejectsMissingUser(t *testing.T) {
 	}
 	if state.userUpdateCount != 0 || state.membershipInsertCount != 0 || state.restrictedUpdateCount != 0 {
 		t.Fatal("missing user must not start provisioning mutations")
+	}
+}
+
+// TestAdminUserAuthenticationPostRefusesTheAutomationAccount proves the tool cannot re-enable or
+// promote the API-only automation account: the refusal comes from the locked read, before any write.
+func TestAdminUserAuthenticationPostRefusesTheAutomationAccount(t *testing.T) {
+	state := &adminAuthenticationMockState{apiOnlyTarget: true}
+	db := openAdminAuthenticationMockDB(t, state)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/admin/user-authentication",
+		bytes.NewBufferString(`{"user_id":42,"verification_method":"none"}`),
+	)
+	recorder := serveAdminAuthenticationWithTransaction(t, db, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "automation_account_not_allowed") {
+		t.Fatalf("body = %s, want automation_account_not_allowed", recorder.Body.String())
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if !state.targetLockedInTx {
+		t.Fatal("the API-only marker must be read inside the provisioning transaction")
+	}
+	if state.beginCount != 1 || state.commitCount != 0 || state.rollbackCount != 1 {
+		t.Fatalf("transaction counts = begin:%d commit:%d rollback:%d", state.beginCount, state.commitCount, state.rollbackCount)
+	}
+	if state.userUpdateCount != 0 || state.membershipInsertCount != 0 || state.restrictedUpdateCount != 0 ||
+		state.mutationOutsideTxCount != 0 {
+		t.Fatalf("refused automation target was written: user:%d membership:%d restricted:%d outside:%d",
+			state.userUpdateCount, state.membershipInsertCount, state.restrictedUpdateCount, state.mutationOutsideTxCount)
 	}
 }
 

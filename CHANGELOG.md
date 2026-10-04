@@ -23,6 +23,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 ## [Unreleased]
 
 - **Handovers follow the reporting format** — A handover printed by `db_report handover latest` opened with a heading larger than its worklines, and a workline's heading showed its status and phase but not its number. Each workline is now a second-level heading with its title, workline number and exact phase, such as `## Reporting — WL141 — 4`; the handover's title is bold text above them, and a paused, closed or archived line names its state under its heading. Stored handovers are unchanged and print in the new form.
+- **The automation account never counts as an administrator** — The API-only automation account, which no person can sign in with, counted as a login-ready administrator: the first-run setup form could close because of it, the setup tool could skip creating the first administrator's password, and administrator recovery and creation counted it among the administrators. The user authentication screen could also re-enable a revoked automation account. Now one definition of a login-ready administrator leaves automation accounts out; administrator recovery, administrator creation, the first-run form and the setup tool read it, and the user authentication screen refuses an automation account before changing anything. The administrator recovery tool therefore needs database 9.7.15 or newer, the first that marks the automation account.
 
 ## [9.3.21] - 2026-10-04
 

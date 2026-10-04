@@ -19,6 +19,10 @@ import (
 
 var errAdminAuthenticationUserNotFound = errors.New("user authentication record not found")
 
+// errAdminAuthenticationAutomationAccount refuses the API-only automation account, which is
+// provisioned and revoked only through its own system-manager boundary, never promoted here.
+var errAdminAuthenticationAutomationAccount = errors.New("the API-only automation account cannot be provisioned as an administrator")
+
 type adminUserAuthenticationRecord struct {
 	UserID             int64  `json:"user_id"`
 	Username           string `json:"username"`
@@ -134,6 +138,10 @@ func provisionAdminUserAuthentication(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusNotFound, "user_not_found")
 		return
 	}
+	if errors.Is(err, errAdminAuthenticationAutomationAccount) {
+		httpresponse.RespondWithError(w, http.StatusConflict, "automation_account_not_allowed")
+		return
+	}
 	if err != nil {
 		logging.Errorf("[AdminUserAuthenticationHandler] provisioning failed for user %d: %v", request.UserID, err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "user_authentication_update_failed")
@@ -182,6 +190,8 @@ func decodeAdminUserAuthenticationRequest(r *http.Request) (adminUserAuthenticat
 
 // applyAdminUserAuthenticationProvisioning mutates public access and restricted
 // factor state through one transaction so partial administrator grants roll back.
+// The API-only automation marker is read under the same row lock as the writes and
+// refused before any of them, so a revoked automation account is never re-enabled here.
 func applyAdminUserAuthenticationProvisioning(
 	tx *sql.Tx,
 	userID int64,
@@ -192,17 +202,21 @@ func applyAdminUserAuthenticationProvisioning(
 	record.UserID = userID
 	record.VerificationMethod = string(method)
 
+	var apiOnly bool
 	if err := tx.QueryRow(`
-		SELECT u.username
+		SELECT u.username, ur.api_only
 		FROM system_users u
 		JOIN restricted.users_restricted ur ON ur.id = u.id
 		WHERE u.id = $1
 		FOR UPDATE OF u, ur
-	`, userID).Scan(&record.Username); err != nil {
+	`, userID).Scan(&record.Username, &apiOnly); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return record, errAdminAuthenticationUserNotFound
 		}
 		return record, err
+	}
+	if apiOnly {
+		return record, errAdminAuthenticationAutomationAccount
 	}
 
 	var adminGroupID int64

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"easelect/backend/core_components/auth/credentials"
+
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -331,17 +333,12 @@ func ensureInitialAdmin(ctx context.Context, db *sql.DB, cfg initialAdminConfig)
 }
 
 // findAnyLoginReadyAdmin detects whether setup should skip password generation.
-// It exists so one-time credentials are never reprinted after a usable admin exists.
+// It exists so one-time credentials are never reprinted after a usable admin exists. "Usable" is the
+// shared login-ready definition, so an API-only automation account never makes setup skip the first admin.
 func findAnyLoginReadyAdmin(ctx context.Context, db *sql.DB) (existingAdminState, bool, error) {
 	var state existingAdminState
 	err := db.QueryRowContext(ctx, `
-		SELECT u.username
-		FROM system_users u
-		JOIN system_user_group_memberships ug ON ug.user_id = u.id
-		JOIN system_user_groups g ON g.id = ug.group_id AND g.name = 'admins'
-		JOIN restricted.users_restricted ur ON ur.id = u.id
-		WHERE u.enabled IS TRUE
-		  AND u.admin_access_allowed IS TRUE
+		SELECT u.username`+credentials.LoginReadyAdministratorSource+`
 		ORDER BY u.id
 		LIMIT 1
 	`).Scan(&state.username)

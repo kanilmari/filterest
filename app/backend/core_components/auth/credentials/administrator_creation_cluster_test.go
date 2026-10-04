@@ -119,6 +119,39 @@ func countAdministratorAccounts(t *testing.T, db *sql.DB) int {
 	return accounts
 }
 
+// insertAutomationAccount writes the API automation account the way the system-manager provisioner
+// does: enabled, in the admins group, allowed administrator access, and marked API-only.
+func insertAutomationAccount(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	var automationID int64
+	if err := db.QueryRow(`
+		INSERT INTO system_users (
+			username, full_name, created, updated, enabled, privileged,
+			main_group_id, creation_spec, admin_access_allowed
+		)
+		SELECT 'filterest_agent', 'Filterest API Automation Agent', NOW(), NOW(), TRUE, FALSE,
+		       id, 'System manager API automation account', TRUE
+		FROM system_user_groups WHERE name = 'admins'
+		RETURNING id
+	`).Scan(&automationID); err != nil {
+		t.Fatalf("insert the automation account: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO system_user_group_memberships (user_id, group_id, created, updated, creation_spec)
+		SELECT $1, id, NOW(), NOW(), 'System manager API automation account'
+		FROM system_user_groups WHERE name = 'admins'
+	`, automationID); err != nil {
+		t.Fatalf("add the automation account to the admins group: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO restricted.users_restricted (id, password, email, login_verification_method, api_only)
+		VALUES ($1, 'automation-password-hash', 'filterest_agent@automation.invalid', 'none', TRUE)
+	`, automationID); err != nil {
+		t.Fatalf("insert the automation account's credentials: %v", err)
+	}
+	return automationID
+}
+
 func TestCreateAdministratorWritesTheSameAccountShapeAsFirstRunPostgres(t *testing.T) {
 	db := administratorCreationCluster(t)
 	editor := NewRecoveryEditor(db)
@@ -432,5 +465,64 @@ func TestCreateAdministratorRequiresConfirmationWhileAnAdministratorExistsPostgr
 		if strings.Contains(details, secret) {
 			t.Fatalf("audit details recorded the secret %q", secret)
 		}
+	}
+}
+
+// TestAutomationAccountIsNeverALoginReadyAdministratorPostgres proves against the real schema that the
+// API-only automation account is neither listed, restored nor counted, while a person's account is.
+func TestAutomationAccountIsNeverALoginReadyAdministratorPostgres(t *testing.T) {
+	db := administratorCreationCluster(t)
+	editor := NewRecoveryEditor(db)
+	automationID := insertAutomationAccount(t, db)
+
+	administrators, err := editor.ListEligibleAdministrators(context.Background())
+	if err != nil {
+		t.Fatalf("ListEligibleAdministrators() error = %v", err)
+	}
+	if len(administrators) != 0 {
+		t.Fatalf("eligible administrators = %+v, want none while only the automation account exists", administrators)
+	}
+
+	identity, err := editor.ReadInstanceIdentity(context.Background())
+	if err != nil {
+		t.Fatalf("ReadInstanceIdentity() error = %v", err)
+	}
+	if _, err = editor.RecoverAdministrator(context.Background(), RecoveryInput{
+		UserID:                           automationID,
+		NewPassword:                      "an entirely different long password",
+		PreserveCurrentVerification:      true,
+		AllowPasswordOnly:                true,
+		ExpectedAuthenticationGeneration: 1,
+		ExpectedVerificationMethod:       VerificationNone,
+		TargetIdentity:                   identity,
+	}); err != ErrAdministratorNotFound {
+		t.Fatalf("RecoverAdministrator(automation account) error = %v, want ErrAdministratorNotFound", err)
+	}
+	var automationPassword string
+	if err = db.QueryRow(
+		`SELECT password FROM restricted.users_restricted WHERE id = $1`, automationID,
+	).Scan(&automationPassword); err != nil {
+		t.Fatalf("read the automation account's credentials: %v", err)
+	}
+	if automationPassword != "automation-password-hash" {
+		t.Fatal("a refused restore changed the automation account's password")
+	}
+
+	created, err := editor.CreateAdministrator(
+		context.Background(),
+		newAdministratorCreationInput(t, editor, createdAdministratorName, createdAdministratorMail),
+	)
+	if err != nil {
+		t.Fatalf("CreateAdministrator() beside the automation account error = %v", err)
+	}
+	if created.ExistingAdministrators != 0 {
+		t.Fatalf("existing administrators = %d, want the automation account left uncounted", created.ExistingAdministrators)
+	}
+	administrators, err = editor.ListEligibleAdministrators(context.Background())
+	if err != nil {
+		t.Fatalf("ListEligibleAdministrators() after creation error = %v", err)
+	}
+	if len(administrators) != 1 || administrators[0].ID != created.UserID {
+		t.Fatalf("eligible administrators = %+v, want only the created person's account", administrators)
 	}
 }

@@ -220,7 +220,9 @@ func isValidFirstRunSiteName(siteName string) bool {
 	return true
 }
 
-// isFirstRunAdminSetupPending fails closed unless both required conditions hold.
+// IsFirstRunAdminSetupPending fails closed unless both required conditions hold.
+// "No login-ready admin" is the credentials package's shared definition, so an API-only
+// automation account cannot close the form before a person has an administrator to sign in with.
 func IsFirstRunAdminSetupPending(ctx context.Context, db *sql.DB) (bool, error) {
 	if db == nil {
 		return false, errors.New("database is not initialized")
@@ -229,13 +231,7 @@ func IsFirstRunAdminSetupPending(ctx context.Context, db *sql.DB) (bool, error) 
 	err := db.QueryRowContext(ctx, `
 		SELECT COALESCE(boolean_value, FALSE)
 		       AND NOT EXISTS (
-				SELECT 1
-				FROM system_users u
-				JOIN system_user_group_memberships ug ON ug.user_id = u.id
-				JOIN system_user_groups g ON g.id = ug.group_id AND g.name = 'admins'
-				JOIN restricted.users_restricted ur ON ur.id = u.id
-				WHERE u.enabled IS TRUE
-				  AND u.admin_access_allowed IS TRUE
+				SELECT 1`+credentials.LoginReadyAdministratorSource+`
 			)
 		FROM system_config
 		WHERE key = $1
@@ -249,7 +245,8 @@ func IsFirstRunAdminSetupPending(ctx context.Context, db *sql.DB) (bool, error) 
 // createFirstRunAdmin serializes concurrent attempts by locking the first-run row.
 // Every account, credential, permission, and flag change shares one transaction.
 // The account itself is written by the shared administrator definition in the credentials
-// package, so the browser form and the operator recovery command create the same thing.
+// package, so the browser form and the operator recovery command create the same thing, and an
+// existing login-ready administrator is recognized by that package's definition as well.
 func createFirstRunAdmin(ctx context.Context, db *sql.DB, input firstRunAdminInput) error {
 	method, err := parseLoginVerificationMethod(input.VerificationMethod)
 	if err != nil {
@@ -283,16 +280,7 @@ func createFirstRunAdmin(ctx context.Context, db *sql.DB, input firstRunAdminInp
 	}
 
 	var existing int
-	err = tx.QueryRowContext(ctx, `
-		SELECT 1
-		FROM system_users u
-		JOIN system_user_group_memberships ug ON ug.user_id = u.id
-		JOIN system_user_groups g ON g.id = ug.group_id AND g.name = 'admins'
-		JOIN restricted.users_restricted ur ON ur.id = u.id
-		WHERE u.enabled IS TRUE
-		  AND u.admin_access_allowed IS TRUE
-		LIMIT 1
-	`).Scan(&existing)
+	err = tx.QueryRowContext(ctx, `SELECT 1`+credentials.LoginReadyAdministratorSource+` LIMIT 1`).Scan(&existing)
 	if err == nil {
 		return errFirstRunClosed
 	}

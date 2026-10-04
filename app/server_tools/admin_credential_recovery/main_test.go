@@ -75,7 +75,7 @@ func testWorkflowOperations(method credentials.VerificationMethod) *fakeRecovery
 	return &fakeRecoveryOperations{
 		identity: credentials.InstanceIdentity{
 			DatabaseName:    "filterest",
-			DatabaseVersion: "9.6.2",
+			DatabaseVersion: "9.7.15",
 			SiteName:        "Filterest",
 			CurrentProject:  "filterest",
 			InstanceKind:    "filterest_domain",
@@ -113,7 +113,7 @@ func TestDryRunPrintsIdentityAndEligibleAdministratorsWithoutSecretPrompts(t *te
 	for _, expected := range []string{
 		"Site domain: filterest.com",
 		"Database: filterest",
-		"Database version: 9.6.2",
+		"Database version: 9.7.15",
 		"Site: Filterest",
 		"Current project: filterest",
 		"admin_filterest (current verification: fixed_pin, authentication generation: 6)",
@@ -125,9 +125,10 @@ func TestDryRunPrintsIdentityAndEligibleAdministratorsWithoutSecretPrompts(t *te
 	}
 }
 
-func TestWorkflowRefusesDatabaseBeforeAuthenticationGenerationRelease(t *testing.T) {
+// The last database without the automation marker the login-ready definition reads is refused.
+func TestWorkflowRefusesDatabaseBeforeTheSupportedRelease(t *testing.T) {
 	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
-	operations.identity.DatabaseVersion = "9.6.1"
+	operations.identity.DatabaseVersion = "9.7.14"
 	terminal := &fakeOperatorTerminal{}
 
 	err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", true, false)

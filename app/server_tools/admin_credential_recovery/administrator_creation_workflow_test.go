@@ -343,7 +343,7 @@ func TestCreationStopsWhenTheFinalTargetConfirmationDoesNotMatch(t *testing.T) {
 
 func TestCreationRefusesADatabaseBeforeTheSupportedRelease(t *testing.T) {
 	operations := testCreationOperations()
-	operations.identity.DatabaseVersion = "9.6.1"
+	operations.identity.DatabaseVersion = "9.7.14"
 	terminal := &fakeOperatorTerminal{}
 
 	err := executeAdministratorCreationWorkflow(
