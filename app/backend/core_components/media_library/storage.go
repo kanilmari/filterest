@@ -51,11 +51,20 @@ func legacyLocation(rel relation, src source) (string, string, error) {
 	}
 	return tableID + "/" + rowID, filename, nil
 }
+
+// containedFile opens one file below the storage root without following a link anywhere
+// below it. The configured root itself may be a link, because a native installation can reach
+// its storage through one, as the storage route also allows (openContainedStorageFile): only
+// that root is resolved, once, and every component below it is opened with O_NOFOLLOW.
 func containedFile(root, relative string) (*os.File, error) {
 	if relative != path.Clean(relative) || path.IsAbs(relative) {
 		return nil, ErrDenied
 	}
-	fd, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
+	fd, err := unix.Open(resolvedRoot, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}

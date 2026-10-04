@@ -265,16 +265,22 @@ viewer's language, as the card's image does (`extractLangValue`).
 
 The server reports no picture when the value names a media-library file the viewer may not
 open, alone or inside a language map. This covers values written as `/storage/media/…` or
-as a relative `media/…` that the browser reads under `/storage/`. For the check, the query
-and fragment are set aside and `./` and `../` segments resolved, as the browser and the
-storage route treat them; the value itself is reported as written. The check does not
-decode percent-encoding: a disguised prefix such as `/stor%61ge/media/…` and a full address
-of the site itself are not recognised, while an encoded file name under `media/` is
-recognised and refused. The storage route still refuses the file to a viewer who may not
-open it. The shared row filter, which every row response uses, checks only the
-`cached_image` and `filename` fields, and only a value that starts with `/storage/media/`
-literally. It hides such a value followed by a query or fragment even from a viewer who may
-open it.
+as a relative `media/…` that the browser reads under `/storage/`. For the check, the value is
+read as the browser reads it: tabs and line breaks are dropped, a backslash is a slash, the
+query and fragment are set aside and `./` and `../` segments resolved, as the browser and the
+storage route treat them; the value itself is reported as written. Where the reading depends
+on what the server cannot know, the value is read every way it could be: a full or `//host`
+address by its path as this site's, a `./` address from the site root and as a stored name, and
+percent-escapes decoded both before and after the dot segments are resolved, again until
+nothing changes. When any reading reaches `/storage/media`, the value names a library picture
+only when every reading is that same file; otherwise, as for `/stor%61ge/media/…`,
+`media%2F…` or `…/..%2f../..`, it is reported as no picture. The storage route still refuses
+the file to a viewer who may not open it. The shared row filter,
+which every row response uses (card lists, related rows and searches), reads the
+`cached_image` and `filename` fields the same way: a picture the viewer may open stays as
+written, query included, and a refused one is removed, a `cached_image` together with its
+derived `cached_image_*` fields. It reads no other field, so a library address in a dataset's
+own image field stays in row responses and only the storage route refuses its file.
 
 These differences remain:
 - For an empty image-role field that the card does not hide, the card shows a letter avatar,

@@ -80,6 +80,79 @@ func TestCopyRejectsSymlinkAndForeignParent(t *testing.T) {
 		t.Fatal("accepted remote")
 	}
 }
+
+// linkedStorageRoot returns a storage root that is a link to a real folder holding the seeded
+// image, as a native installation can reach its storage, and that real folder.
+func linkedStorageRoot(t *testing.T) (string, string) {
+	t.Helper()
+	realRoot := t.TempDir()
+	seedImage(t, realRoot)
+	root := filepath.Join(t.TempDir(), "storage")
+	if e := os.Symlink(realRoot, root); e != nil {
+		t.Fatal(e)
+	}
+	return root, realRoot
+}
+
+// Copying a picture into the library works when the configured storage root is a link.
+func TestCopyWorksThroughALinkedStorageRoot(t *testing.T) {
+	root, realRoot := linkedStorageRoot(t)
+	rel := relation{ID: 17, ParentUID: 101}
+	src := source{ID: 9, ParentID: 1, Reference: "101_1_9.png"}
+	copied, e := copyAsset(root, rel, src, testAssetID)
+	if e != nil {
+		t.Fatalf("copy through a linked storage root: %v", e)
+	}
+	got, e := os.ReadFile(filepath.Join(realRoot, "media", testAssetID, "original", "image.png"))
+	if e != nil || string(got) != "test image contents" {
+		t.Fatalf("library copy = %q, %v", got, e)
+	}
+	copied.Cleanup()
+	if _, e = os.Stat(filepath.Join(realRoot, "101/1/original/101_1_9.png")); e != nil {
+		t.Fatal("original removed")
+	}
+}
+
+// Only the configured root is resolved. A link to a file or a folder anywhere below it is
+// still refused, and a path that climbs with .., is absolute or is not clean opens nothing,
+// although every target here exists.
+func TestContainedFileFollowsNoLinkBelowTheRoot(t *testing.T) {
+	root, realRoot := linkedStorageRoot(t)
+	outside := t.TempDir()
+	private := filepath.Join(outside, "2", "original", "101_2_3.png")
+	if e := os.MkdirAll(filepath.Dir(private), 0750); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(private, []byte("private"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Symlink(private, filepath.Join(realRoot, "101/1/original/linked.png")); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Symlink(filepath.Join(outside, "2"), filepath.Join(realRoot, "101/2")); e != nil {
+		t.Fatal(e)
+	}
+	file, e := containedFile(root, "101/1/original/101_1_9.png")
+	if e != nil {
+		t.Fatalf("a plain file below a linked root: %v", e)
+	}
+	file.Close()
+	for _, relative := range []string{
+		"101/1/original/linked.png",
+		"101/2/original/101_2_3.png",
+		"../" + filepath.Base(outside) + "/2/original/101_2_3.png",
+		"101/../../" + filepath.Base(outside) + "/2/original/101_2_3.png",
+		private,
+		"./101/1/original/101_1_9.png",
+		"101//1/original/101_1_9.png",
+		"",
+	} {
+		if file, e := containedFile(root, relative); e == nil {
+			file.Close()
+			t.Errorf("opened %q", relative)
+		}
+	}
+}
 func TestSelectionsAreRemovedBeforeOrdinaryRowInsert(t *testing.T) {
 	payload := map[string]interface{}{"title": "Keep", "_existingImages": []map[string]interface{}{{"relation_id": 17, "source_row_id": 9}}}
 	got, e := TakeSelections(payload)
