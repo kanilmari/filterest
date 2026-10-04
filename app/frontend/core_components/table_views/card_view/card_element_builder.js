@@ -20,6 +20,7 @@ import { buildGoogleMapsEmbedUrl, resolveImagePaths } from "./card_element_build
 import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
 import { removeBlankLinesFromCardDescription } from "./card_description_blank_line_remover.js";
+import { removeHeadingsFromCardDescription } from "./card_description_heading_remover.js";
 
 /* ----------------------------------------------------------- */
 /** Palauttaa Google Maps -Embed-iframe-src-osoitteen. */
@@ -248,12 +249,13 @@ function addDescriptionSection(
         outerDiv.classList.add("single_description_item", descObj.columnClass); // ★
         setFieldHideAttribute(outerDiv);
 
-        // A card shows only the first couple of lines of this text, so a blank
-        // line would spend one of them on nothing. It is left out of the card's
-        // own short view only: the stored value below still travels with the
-        // element, and the article view and the edit form show the text whole.
-        // A language key names a translation rather than carrying the text, so
-        // it is passed through untouched.
+        // A card shows only the first couple of lines of this text, so its
+        // blank lines, and its own subheadings (<h1>…</h1> to <h6>…</h6>),
+        // would spend them on nothing and on a title. Both are left out of the
+        // card's own short view only: the stored value below still travels with
+        // the element, and the article view and the edit form show the text
+        // whole. A language key names a translation rather than carrying the
+        // text, so it is passed through untouched.
         const shortDescriptionText = descObj.hasLangKey
             ? descObj.rawValue
             : removeBlankLinesFromCardDescription(descObj.rawValue);
@@ -276,6 +278,11 @@ function addDescriptionSection(
             `[data-column="${descObj.column}"]`
         );
         if (valueDiv) {
+            if (!descObj.hasLangKey) {
+                // Headings are taken out of what the card rendered, so the
+                // browser's own reading of the text decides what one is.
+                removeHeadingsFromCardDescription(valueDiv, shortDescriptionText);
+            }
             valueDiv.style.whiteSpace = "pre-wrap";
             // Estetään klikkauksen kupliminen, jotta tekstin valinta toimii
             valueDiv.addEventListener("click", (e) => e.stopPropagation());
