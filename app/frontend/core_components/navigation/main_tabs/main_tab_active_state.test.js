@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
     buildTabOutlinePresentation,
 } from "./tab_presentation_builder.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 vi.mock("../../../ui_config.js", () => ({
     NAVBAR_WIDTH_THRESHOLD: 1850,
@@ -21,6 +22,7 @@ describe("applyMainTabActiveState", () => {
     beforeEach(() => {
         vi.resetModules();
         localStorage.clear();
+        sessionStorage.clear();
         frameCallbacks = [];
         originalMatchMedia = window.matchMedia;
         window.matchMedia = vi.fn(() => ({ matches: false }));
@@ -78,7 +80,7 @@ describe("applyMainTabActiveState", () => {
     }
 
     test("keeps the visible path at the previous outline until the morph frame advances", async () => {
-        localStorage.setItem("app_service_catalog_view", "table");
+        setChosenDatasetView("app_service_catalog", "table");
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
         const outlinePath = document.querySelector(".svg-container path");
         const roundedPath = outlinePath.getAttribute("d");
@@ -111,7 +113,7 @@ describe("applyMainTabActiveState", () => {
     });
 
     test("keeps the tab shell layout stable while only the outline path morphs", async () => {
-        localStorage.setItem("app_service_catalog_view", "table");
+        setChosenDatasetView("app_service_catalog", "table");
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
         const navTabs = document.querySelector(".navtabs");
         const tabButton = document.querySelector(".navtablinks");
@@ -134,7 +136,7 @@ describe("applyMainTabActiveState", () => {
     });
 
     test("forces a rectangular card tab when authoritative dataset metadata reports media", async () => {
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         const tabButton = document.querySelector(".navtablinks");
         tabButton.dataset.hasPresentationMedia = "true";
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");

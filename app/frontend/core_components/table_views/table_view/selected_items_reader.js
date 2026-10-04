@@ -1,9 +1,10 @@
 // selected_items_reader.js
 // Reads the currently selected row IDs and data objects from the active table or card view.
-// Bridges localStorage view state with DOM-based selection markers.
+// Bridges this tab's chosen dataset view with DOM-based selection markers.
 // Exists to provide a unified selection API for delete, bulk, and detail actions.
 import { computeIdCellIndex, parseIdFromText, parseRowObject } from './selected_items_reader_helpers.js';
 import { getDatasetRowSelection } from '../dataset_row_selection_store.js';
+import { getChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 
 export function get_selected_items(table_name) {
     const datasetName = table_name;
@@ -11,7 +12,7 @@ export function get_selected_items(table_name) {
     if (storedSelection.ids.length > 0) {
         return storedSelection;
     }
-    const current_view = localStorage.getItem(`${datasetName}_view`) || 'table';
+    const current_view = getChosenDatasetView(datasetName) || 'table';
     const ids = [];
     const rows = [];
 

@@ -12,6 +12,7 @@ import {
 } from "../../../reusable_components/dom_container_builder.js";
 import { appendConfiguredCardDetailIcon } from "./card_detail_single_line_helpers.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
 import { updateDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
 import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
@@ -303,7 +304,7 @@ export function closeRowArticle(
                 );
                 if (wrapper.dataset.viewKey === "article_view") {
                     const returnView = getUnifiedTableState(table_name)?.articleView?.returnView || "card";
-                    localStorage.setItem(`${table_name}_view`, returnView);
+                    setChosenDatasetView(table_name, returnView);
                     void import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js")
                         .then(({ refreshTableUnified }) => refreshTableUnified(table_name, { skipUrlParams: true }));
                 }

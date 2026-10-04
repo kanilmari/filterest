@@ -174,6 +174,7 @@ import { renderModernCardDetails } from './card_detail_tile_builder.js';
 import { normalizeClientCardDetailsLayout } from './card_detail_layout_options.js';
 import { openRowArticleView } from './row_article_opener.js';
 import { create_seeded_avatar } from './card_avatar_builder.js';
+import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 
 describe('card language refresh', () => {
     beforeEach(() => {
@@ -184,6 +185,7 @@ describe('card language refresh', () => {
         delete document.documentElement.dataset.cardDetailColumns;
         vi.mocked(normalizeClientCardDetailsLayout).mockReturnValue('default');
         localStorage.clear();
+        sessionStorage.clear();
         getUnifiedTableStateMock.mockReturnValue({});
         hasDatasetPermissionMock.mockReset();
         hasDatasetPermissionMock.mockResolvedValue(false);
@@ -397,7 +399,7 @@ describe('card language refresh', () => {
         ['card', 'article_view', false],
     ])('appends to %s using its own collapsed state despite a different saved view', async (viewKey, savedView, compact) => {
         const tableName = 'append_fixture';
-        localStorage.setItem(tableName + '_view', savedView);
+        setChosenDatasetView(tableName, savedView);
         getUnifiedTableStateMock.mockReturnValue({
             cardView: { collapsed: false },
             articleView: { collapsed: true },
@@ -421,7 +423,7 @@ describe('card language refresh', () => {
         };
         const oldMetadata = { type_of_operation: { ...metadata.type_of_operation, is_multilingual: false } };
         localStorage.setItem(tableName + '_dataTypes', JSON.stringify(oldMetadata));
-        localStorage.setItem(tableName + '_view', 'card');
+        setChosenDatasetView(tableName, 'card');
         getUnifiedTableStateMock.mockReturnValue({
             cardView: { collapsed: false },
             articleView: { collapsed: true },

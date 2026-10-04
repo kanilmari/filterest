@@ -60,6 +60,8 @@ describe('open_column_management_modal: schema edits', () => {
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith('demo_table', { skipUrlParams: true });
         expect(reloadSpy).not.toHaveBeenCalled();
 
+        // The open row is each tab's own, so the shared object keeps only the
+        // sorting, filters and paging.
         expect(JSON.parse(localStorage.getItem('demo_table_sorting_and_filtering_specs'))).toEqual({
             sort: { column: 'modern_col', direction: 'ASC' },
             filters: {
@@ -69,8 +71,6 @@ describe('open_column_management_modal: schema edits', () => {
                 untouched: 'keep-me',
             },
             offset: 0,
-            cardView: { collapsed: false, expandedId: null },
-            articleView: { collapsed: false, expandedId: null },
         });
         expect(JSON.parse(localStorage.getItem('demo_table_hide_columns'))).toEqual({
             modern_col: true,

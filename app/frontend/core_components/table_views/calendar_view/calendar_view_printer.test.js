@@ -139,6 +139,7 @@ describe("create_calendar_view", () => {
         document.documentElement.lang = "en";
         document.body.innerHTML = "";
         localStorage.clear();
+        sessionStorage.clear();
         openRowArticleViewMock.mockReset();
         refreshTableUnifiedMock.mockReset();
         refreshTableUnifiedMock.mockResolvedValue(undefined);
@@ -173,7 +174,7 @@ describe("create_calendar_view", () => {
         eventButton?.click();
 
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
-        expect(localStorage.getItem("events_view")).toBe("article_view");
+        expect(sessionStorage.getItem("events_view")).toBe("article_view");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", {
             articleView: {
                 collapsed: true,

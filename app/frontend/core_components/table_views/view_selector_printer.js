@@ -14,6 +14,7 @@ import { applyPermission, hasRoutePermission } from "../route_permission_checker
 import { resolveDatasetDefaultView } from "./dataset_default_view.js";
 import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { getParams, setParams, updateURL } from "../navigation/nav_engine/query_params.js";
 import { updateBrowserTabTitle } from "../navigation/nav_engine/browser_tab_title_writer.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
@@ -213,7 +214,7 @@ export function selectDatasetView(tableName, viewKey, currentView = null) {
     if (!viewKey) return;
     const defaultView = resolveDatasetDefaultView(tableName);
     const datasetName = tableName;
-    const previousViewKey = localStorage.getItem(`${datasetName}_view`) || currentView || defaultView;
+    const previousViewKey = getChosenDatasetView(datasetName) || currentView || defaultView;
     const route = getDatasetViewPermissionRoute(viewKey);
     let nextViewKey = resolveDatasetViewSelectionTarget(viewKey);
     if (!isDatasetViewSelectorAlias(viewKey) && viewKey !== defaultView && route && !hasRoutePermission(route)) {
@@ -226,7 +227,7 @@ export function selectDatasetView(tableName, viewKey, currentView = null) {
     if (nextViewKey !== ARTICLE_VIEW_KEY) {
         closeRowArticleBeforeViewSwitch(tableName);
     }
-    localStorage.setItem(`${datasetName}_view`, nextViewKey);
+    setChosenDatasetView(datasetName, nextViewKey);
     syncActiveViewButtons(tableName, nextViewKey);
     applyViewStyling(tableName);
     if (nextViewKey === ARTICLE_VIEW_KEY) {
@@ -269,7 +270,7 @@ function syncActiveViewButtons(tableName, activeViewKey) {
 document.addEventListener("row-article-toggle", (event) => {
     const tableName = event.detail?.tableName;
     if (!tableName) return;
-    const storedViewKey = localStorage.getItem(`${tableName}_view`) || "card";
+    const storedViewKey = getChosenDatasetView(tableName) || "card";
     syncActiveViewButtons(tableName, storedViewKey);
 });
 
@@ -297,7 +298,7 @@ export function applyViewStyling(table_name) {
     }
 
     const datasetName = table_name;
-    const storedViewKey = localStorage.getItem(`${datasetName}_view`);
+    const storedViewKey = getChosenDatasetView(datasetName);
     syncActiveViewButtons(table_name, storedViewKey);
 
     /* --- PIILOTA / NÄYTÄ sarakkeiden checkboxit ------------------- */

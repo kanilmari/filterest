@@ -20,6 +20,7 @@ import {
 } from '../../../reusable_components/notifications/toast_notification_printer.js';
 import { buildConfirmationMessage } from '../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helpers.js';
 import { setUnifiedTableState } from '../../state_stores/table_state_store.js';
+import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 import { handle_all_navigation } from '../../navigation/nav_engine/navigation_handler.js';
 import { custom_views } from '../../navigation/admin_and_user_tools/custom_view_reader.js';
 import { closeRowArticle } from './row_article_ui_handler.js';
@@ -601,7 +602,7 @@ async function openRelatedRecord({
 
     closeCurrentBigCard(parentDataset, parentRowId, relatedTabsContainer);
 
-    localStorage.setItem(`${relatedDataset}_view`, "article_view");
+    setChosenDatasetView(relatedDataset, "article_view");
     setUnifiedTableState(relatedDataset, {
         articleView: { collapsed: true, expandedId: relatedId, returnView: "card" },
     });

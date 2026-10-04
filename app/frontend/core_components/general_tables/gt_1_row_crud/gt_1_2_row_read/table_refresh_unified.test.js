@@ -5,6 +5,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { setChosenDatasetView } from "../../../state_stores/dataset_view_choice_saver.js";
 
 let retainedToken = null;
 const fetchDatasetDataMock = vi.fn();
@@ -150,7 +151,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     });
 
     test("seeds the next offset before rendering so initial card scroll cannot append duplicates", async () => {
-        localStorage.setItem("dev_agent_tasks_view", "card");
+        setChosenDatasetView("dev_agent_tasks", "card");
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
             data: [{ id: 828, title: "Extract agent_network as git subtree / separate repo" }],
@@ -202,7 +203,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     });
 
     test("requests map support geometry only for map view", async () => {
-        localStorage.setItem("app_service_locations_view", "map");
+        setChosenDatasetView("app_service_locations", "map");
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
             data: [{ id: 188, title: "Espoo" }],
@@ -225,7 +226,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     test("a view switch during a search browses the searched listing and keeps endless scrolling", async () => {
         // The search for "api" matches 251 rows; the view shows its first page
         // of 20 and must keep paging from there, exactly as when browsing.
-        localStorage.setItem("system_functions_view", "card");
+        setChosenDatasetView("system_functions", "card");
         getParamsMock.mockReturnValue({ search: "api" });
         getUnifiedTableStateMock.mockReturnValue({
             offset: 0,
@@ -300,7 +301,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     });
 
     test("a search without matches shows the searched listing's empty answer", async () => {
-        localStorage.setItem("app_service_catalog_view", "table");
+        setChosenDatasetView("app_service_catalog", "table");
         getParamsMock.mockReturnValue({ search: "no-match" });
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
@@ -334,7 +335,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     });
 
     test("a rebuild yields to a newer run of the same search started while it waited", async () => {
-        localStorage.setItem("system_functions_view", "table");
+        setChosenDatasetView("system_functions", "table");
         getParamsMock.mockReturnValue({ search: "api" });
         let searchStillCurrent = true;
         const searchGroups = { isCurrent: () => searchStillCurrent, place: vi.fn(async () => true) };
@@ -357,7 +358,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     });
 
     test("opens the first rendered row when article view was requested without a cached search", async () => {
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         let storedState = {
             offset: 0,
             sort: { column: "id", direction: "ASC" },
@@ -412,7 +413,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
     });
 
     test("refetches with card support when rendering falls back from unsupported map view", async () => {
-        localStorage.setItem("app_service_catalog_view", "map");
+        setChosenDatasetView("app_service_catalog", "map");
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
             data: [{ id: 133, title: "Brave" }],
@@ -422,7 +423,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         });
         generateTableMock
             .mockImplementationOnce(() => {
-                localStorage.setItem("app_service_catalog_view", "card");
+                setChosenDatasetView("app_service_catalog", "card");
                 return document.createElement("div");
             })
             .mockImplementation(() => document.createElement("div"));
@@ -444,7 +445,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         expect(applyColumnVisibilityMock).toHaveBeenCalledTimes(1);
     });
     test("an article waiting for the first search match opens the searched listing's first row", async () => {
-        localStorage.setItem("tasks_view", "article_view");
+        setChosenDatasetView("tasks", "article_view");
         getParamsMock.mockReturnValue({ search: "waiting" });
         getUnifiedTableStateMock.mockReturnValue({
             sort: { column: "id", direction: "ASC" }, filters: {}, offset: 0,
@@ -500,12 +501,12 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         document.body.innerHTML = '<div id="events_' + view + '_view_container"></div>';
         const state = { offset: 4, filters: {}, sort: { column: "id", direction: "ASC" }, articleView: { collapsed: true, expandedId: 3 } };
         getUnifiedTableStateMock.mockReturnValue(state);
-        localStorage.setItem("events_view", view);
+        setChosenDatasetView("events", view);
         const host = document.querySelector("div");
         loaded.rememberLoadedDatasetRows(host, "events", { data: [{ id: 1 }, { id: 2 }], columns: ["id"], types: {}, row_count: 9 }, view);
         loaded.appendLoadedDatasetRows(host, "events", [{ id: 3 }, { id: 4 }], 4);
         const token = loaded.captureLoadedDatasetRows("events");
-        localStorage.setItem("events_view", "article_view");
+        setChosenDatasetView("events", "article_view");
         await mod.refreshTableUnified("events", { skipUrlParams: true, loadedRows: token });
         expect(fetchDatasetDataMock).not.toHaveBeenCalled();
         expect(resetOffsetMock).not.toHaveBeenCalled();
@@ -523,10 +524,10 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         const access = await import("../../../navigation/nav_engine/dataset_access_registry.js");
         document.body.innerHTML = '<div id="events_card_view_container"></div>';
         getUnifiedTableStateMock.mockReturnValue({ offset: 1, filters: {}, sort: {} });
-        localStorage.setItem("events_view", "card");
+        setChosenDatasetView("events", "card");
         loaded.rememberLoadedDatasetRows(document.querySelector("div"), "events", { data: [{ id: 1 }] }, "card");
         const token = loaded.captureLoadedDatasetRows("events");
-        localStorage.setItem("events_view", "article_view");
+        setChosenDatasetView("events", "article_view");
         primeDatasetPermissionsMock.mockImplementationOnce(() => { access.clearDatasetAccessRegistry(); return Promise.resolve({}); });
         await mod.refreshTableUnified("events", { skipUrlParams: true, loadedRows: token });
         expect(generateTableMock).not.toHaveBeenCalled();
@@ -543,7 +544,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         loaded.rememberLoadedDatasetRows(document.querySelector("div"), "events", {
             data: [{ id: 1 }, { id: 2 }, { id: 3 }], columns: ["id"], types: {}, row_count: 10,
         }, "card");
-        localStorage.setItem("events_view", "article_view");
+        setChosenDatasetView("events", "article_view");
         getUnifiedTableStateMock.mockReturnValue({ offset: 0, filters: {}, sort: { column: "id", direction: "ASC" } });
         // The signature at render and return must match; URL parsing may reset
         // the offset, but cannot change the already-committed source prefix.

@@ -3,14 +3,50 @@
 // Bridges table_state_store.articleView with related-tab, related-rows, and content-scroll restore.
 // Exists so refresh of the same article_view URL keeps the open child tab and scroll position.
 
-import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import {
+    ARTICLE_READING_POSITION_FIELDS,
+    getUnifiedTableState,
+    isSameOpenRow as sameRowArticleId,
+    setUnifiedTableState,
+} from "../../state_stores/table_state_store.js";
 
 const HEIGHT_STABLE_FRAMES = 2;
 const LAYOUT_UNKNOWN_SETTLE_FRAMES = 2;
 const MAX_RESTORE_MS = 1200;
 
-function sameRowArticleId(left, right) {
-    return left != null && right != null && String(left) === String(right);
+function cleanRelatedTabKey(value) {
+    const relatedTabKey = typeof value === "string" ? value.trim() : "";
+    return relatedTabKey || null;
+}
+
+/**
+ * How each reading-position field is cleaned when this tab's stored value is
+ * read back, and when a change to it is written. Which fields make up the
+ * reading position is decided once, in table_state_store.js
+ * (ARTICLE_READING_POSITION_FIELDS); a field listed there without a cleaner
+ * here fails the first read of the same row, so the tests catch it.
+ */
+const READING_POSITION_FIELD_CLEANERS = Object.freeze({
+    relatedTabKey: { read: cleanRelatedTabKey, write: cleanRelatedTabKey },
+    relatedRowsOpen: {
+        read: (value) => (typeof value === "boolean" ? value : null),
+        write: (value) => (value == null ? null : Boolean(value)),
+    },
+    scrollTop: {
+        read: (value) => {
+            const scrollTop = Number(value);
+            return Number.isFinite(scrollTop) && scrollTop > 0 ? scrollTop : null;
+        },
+        write: (value) => {
+            const scrollTop = Number(value);
+            return Number.isFinite(scrollTop) && scrollTop > 0 ? Math.round(scrollTop) : 0;
+        },
+    },
+});
+
+/** The reading position of a row that has none here: every field empty. */
+function emptyReadingPosition() {
+    return Object.fromEntries(ARTICLE_READING_POSITION_FIELDS.map((field) => [field, null]));
 }
 
 function readArticleView(tableName) {
@@ -48,29 +84,17 @@ export function articleViewRestoreFieldsForRowChange(tableName, nextRowId) {
     if (sameRowArticleId(readArticleView(tableName).expandedId, nextRowId)) {
         return {};
     }
-    return {
-        relatedTabKey: null,
-        relatedRowsOpen: null,
-        scrollTop: null,
-    };
+    return emptyReadingPosition();
 }
 
 export function readRowArticleViewRestoreState(tableName, rowId) {
     const articleView = readArticleView(tableName);
     if (!sameRowArticleId(articleView.expandedId, rowId)) {
-        return { relatedTabKey: null, relatedRowsOpen: null, scrollTop: null };
+        return emptyReadingPosition();
     }
-    const relatedTabKey = typeof articleView.relatedTabKey === "string"
-        ? articleView.relatedTabKey.trim()
-        : "";
-    const scrollTop = Number(articleView.scrollTop);
-    return {
-        relatedTabKey: relatedTabKey || null,
-        relatedRowsOpen: typeof articleView.relatedRowsOpen === "boolean"
-            ? articleView.relatedRowsOpen
-            : null,
-        scrollTop: Number.isFinite(scrollTop) && scrollTop > 0 ? scrollTop : null,
-    };
+    return Object.fromEntries(ARTICLE_READING_POSITION_FIELDS.map(
+        (field) => [field, READING_POSITION_FIELD_CLEANERS[field].read(articleView[field])],
+    ));
 }
 
 export function persistRowArticleViewRestoreState(tableName, rowId, patch = {}) {
@@ -78,22 +102,10 @@ export function persistRowArticleViewRestoreState(tableName, rowId, patch = {}) 
         return;
     }
     const next = {};
-    if (Object.prototype.hasOwnProperty.call(patch, "relatedTabKey")) {
-        const relatedTabKey = typeof patch.relatedTabKey === "string"
-            ? patch.relatedTabKey.trim()
-            : "";
-        next.relatedTabKey = relatedTabKey || null;
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "relatedRowsOpen")) {
-        next.relatedRowsOpen = patch.relatedRowsOpen == null
-            ? null
-            : Boolean(patch.relatedRowsOpen);
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "scrollTop")) {
-        const scrollTop = Number(patch.scrollTop);
-        next.scrollTop = Number.isFinite(scrollTop) && scrollTop > 0
-            ? Math.round(scrollTop)
-            : 0;
+    for (const field of ARTICLE_READING_POSITION_FIELDS) {
+        if (Object.hasOwn(patch, field)) {
+            next[field] = READING_POSITION_FIELD_CLEANERS[field].write(patch[field]);
+        }
     }
     if (Object.keys(next).length === 0) {
         return;

@@ -6,6 +6,7 @@
 import { openRowArticleView } from "../card_view/row_article_opener.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { resolveProductCardFields } from "./product_card_view_field_resolver.js";
 import {
     bindDatasetLanguageRenderer,
@@ -288,7 +289,7 @@ async function openProductRowArticle(rowItem, tableName, card) {
         return;
     }
 
-    localStorage.setItem(`${tableName}_view`, "article_view");
+    setChosenDatasetView(tableName, "article_view");
     setUnifiedTableState(tableName, {
         articleView: {
             collapsed: true,

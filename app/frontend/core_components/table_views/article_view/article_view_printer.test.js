@@ -8,7 +8,7 @@ const render = vi.hoisted(() => vi.fn());
 vi.mock("../card_view/card_view_printer.js", () => ({ create_card_view: render }));
 import { create_article_view } from "./article_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
-beforeEach(() => { localStorage.clear(); render.mockReset(); render.mockResolvedValue(document.createElement("div")); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); render.mockReset(); render.mockResolvedValue(document.createElement("div")); });
 test("builds a distinct article shell with its own state contract", async () => {
     setUnifiedTableState("demo", { cardView: { expandedId: 99, collapsed: false } });
     const rows = [{ id: 1, title: "Article" }];

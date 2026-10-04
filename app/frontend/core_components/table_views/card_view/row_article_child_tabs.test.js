@@ -60,10 +60,17 @@ vi.mock("../../route_permission_checker.js", () => ({
     primeMultipleDatasetPermissions: mocks.primeMultipleDatasetPermissions,
 }));
 
-vi.mock("../../state_stores/table_state_store.js", () => ({
-    getUnifiedTableState: mocks.getUnifiedTableState,
-    setUnifiedTableState: mocks.setUnifiedTableState,
-}));
+vi.mock("../../state_stores/table_state_store.js", async (importOriginal) => {
+    // The article's restore state compares rows, and names its reading-position
+    // fields, the store's own way.
+    const store = await importOriginal();
+    return {
+        ARTICLE_READING_POSITION_FIELDS: store.ARTICLE_READING_POSITION_FIELDS,
+        isSameOpenRow: store.isSameOpenRow,
+        getUnifiedTableState: mocks.getUnifiedTableState,
+        setUnifiedTableState: mocks.setUnifiedTableState,
+    };
+});
 
 vi.mock("../../../reusable_components/modal/confirm_modal_builder.js", () => ({
     showConfirmModal: vi.fn(),

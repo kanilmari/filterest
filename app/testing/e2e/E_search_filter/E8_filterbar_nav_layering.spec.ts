@@ -10,6 +10,7 @@ import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { clickFirstVisibleByTestId, navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
 
 const DATASET = 'app_service_catalog';
+const DATASET_ADDRESS = '/service_catalog';
 const NARROW_WIDTHS = [375, 480, 768, 1024, 1099];
 
 type LayerState = {
@@ -25,9 +26,10 @@ async function prepareHiddenNarrowDrawers(page: Page, width: number): Promise<vo
   await page.evaluate((datasetName) => {
     localStorage.setItem('navVisibleNarrow', 'false');
     localStorage.setItem(`${datasetName}_filterbar_visible_narrow`, 'false');
-    localStorage.setItem(`${datasetName}_view`, 'table');
   }, DATASET);
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  // A fresh page shows the view its address names and forgets a view seeded
+  // before the load (owner decision K139), so the table view comes from the address.
+  await page.goto(`${DATASET_ADDRESS}?view=table`, { waitUntil: 'domcontentloaded' });
   await navigateToDataset(page, DATASET);
   await waitForDataLoaded(page, DATASET);
 }

@@ -6,6 +6,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import {
     appendDataToCardViewMock,
     appendDataToTableMock,
@@ -151,7 +152,7 @@ describe("dataset search groups", () => {
             if (viewKey === 'article_view') {
                 document.getElementById(tableName + '_card_view_container').id = tableName + '_article_view_container';
             }
-            localStorage.setItem(tableName + '_view', viewKey);
+            setChosenDatasetView(tableName, viewKey);
         };
         getUnifiedTableStateMock.mockReturnValue({
             cardView: { collapsed: false }, articleView: { collapsed: false },
@@ -237,7 +238,7 @@ describe("dataset search groups", () => {
 
     test("a view with no place for a separate group never mixes AI rows into the dataset's own list", async () => {
         document.body.innerHTML = '<div id="dev_agent_tasks_normal_view_container"></div>';
-        localStorage.setItem("dev_agent_tasks_view", "normal");
+        setChosenDatasetView("dev_agent_tasks", "normal");
         reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
             data: [{ id: 14 }], row_count: 1, columns: ["id"],
         }));

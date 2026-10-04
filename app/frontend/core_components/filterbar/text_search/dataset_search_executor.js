@@ -13,6 +13,7 @@ import { reloadDatasetRowsFromListing } from "../../infinite_scroll/infinite_scr
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { createSupplementalDatasetSearch } from "./supplemental_dataset_search.js";
 import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
@@ -220,7 +221,7 @@ export function insertNotice(tableName, langKey, fallbackText) {
  * Returns the <table> element, or null if not in table view.
  */
 function createSecondSearchTable(tableName) {
-    const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+    const currentView = getChosenDatasetView(tableName) || "table";
     if (currentView !== "table") return null;
 
     const container = document.getElementById(

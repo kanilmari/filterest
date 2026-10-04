@@ -136,6 +136,26 @@ describe("performSpaLogoutReset", () => {
         expect(sessionStorage.getItem("selected_dataset")).toBeNull();
     });
 
+    // (d) of the WL137 review: on a public site a sign-out in another tab resets
+    // this page in place (auth_broadcast_sync.js runs applyLoggedOutShellReset).
+    // The page's own copy of each dataset's address parameters, the view kept
+    // only in its memory included, must not outlive that session: after an
+    // in-page sign-in, the next navigation sees only the new session's values.
+    test("a sign-out forgets the page's own dataset parameters, so the next navigation starts clean", async () => {
+        const mod = await loadModule();
+        const query = await import("../navigation/nav_engine/query_params.js");
+        query.setParams("app_service_catalog", { search: "restricted search", view: "article_view" });
+        expect(query.getParams("app_service_catalog")).toEqual({ search: "restricted search", view: "article_view" });
+
+        await mod.applyLoggedOutShellReset({ postLogoutPath: "/" });
+
+        localStorage.setItem("dataset_query_params", JSON.stringify({
+            app_service_catalog: { search: "new session" },
+        }));
+        query.useStorageParams(); // a navigation reads the shared parameters again
+        expect(query.getParams("app_service_catalog")).toEqual({ search: "new session" });
+    });
+
     test("navigates to the resolved post-logout path through an injectable location object", async () => {
         const mod = await loadModule();
         const locationObject = { assign: vi.fn() };

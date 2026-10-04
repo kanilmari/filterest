@@ -7,6 +7,8 @@ import { endpoint_router } from "../endpoints/endpoint_router.js";
 import { ensureCsrfToken } from "../pipeline/api_pipeline.js";
 import { clearPermissionCache } from "../route_permission_checker.js";
 import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
+import { forgetPageDatasetParams } from "../navigation/nav_engine/query_params.js";
+import { forgetTabSessionFallback } from "../state_stores/tab_session_storage.js";
 import { destroy_chat } from "../ai_features/table_chat/table_chat_printer.js";
 import { publishAuthLogout } from "./auth_broadcast.js";
 import { stopAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
@@ -76,6 +78,12 @@ function teardownRenderedShell() {
 
 export async function clearClientAuthArtifacts() {
     stopAdminUpdateNoticeSubscriber();
+    // What this page holds in memory belongs to the signed-out session as well:
+    // each dataset's address parameters, the view kept only in memory included,
+    // and the views and open rows kept there because the browser refused session
+    // storage. They go first, because a refusing storage can stop the steps below.
+    forgetPageDatasetParams();
+    forgetTabSessionFallback();
     const logoutSafePreferences = new Map();
     for (const storageKey of LOGOUT_SAFE_LOCAL_STORAGE_KEYS) {
         const storedValue = localStorage.getItem(storageKey);

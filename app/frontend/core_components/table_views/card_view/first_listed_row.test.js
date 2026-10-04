@@ -9,6 +9,7 @@ import { claimFirstListedRow, getArticleStateKey } from "./first_listed_row.js";
 
 beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
 });
 
 test.each([

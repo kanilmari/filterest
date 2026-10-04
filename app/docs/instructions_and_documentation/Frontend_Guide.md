@@ -21,6 +21,13 @@ This section outlines the workflow for displaying search results and summarizes 
 -   **Tree View**: Organizes results hierarchically. Helps explore nested relationships. For ordinary datasets it uses row-level `id` + `parent_*` data; for the database catalog datasets (`system_table_folders`, `system_db_tables`) it reuses `/api/tree_data` so folders include their table leaves. Implemented in `filterest/app/frontend/core_components/table_views/tree_view/tree_view_printer.js`.
 -   **Other Views**: Register view keys, labels, container suffixes, selector groups, and UI permission routes in `filterest/app/frontend/core_components/table_views/dataset_view_registry.js`; keep concrete renderer imports in `filterest/app/frontend/core_components/table_views/dataset_view_printer.js`.
 
+### Where a Dataset's View State Lives
+Each browser tab keeps its own view and open row, so one tab never changes or erases another's (owner decision K143, 3.10.2026):
+-   **This tab only** (`sessionStorage`): the view a dataset shows, read and written only through `filterest/app/frontend/core_components/state_stores/dataset_view_choice_saver.js`, and the row the article or card view holds open, the `articleView` and `cardView` parts of `getUnifiedTableState`/`setUnifiedTableState` in `filterest/app/frontend/core_components/state_stores/table_state_store.js`. The view in a dataset's cached address parameters stays in the page's memory (`query_params.js`).
+-   **A browser that refuses session storage** keeps that view and open row in the page's memory instead (`filterest/app/frontend/core_components/state_stores/tab_session_storage.js`), so a deep link still opens its article and a chosen view still reaches the redraw. Sign-out forgets this memory together with the cached address parameters (`clearClientAuthArtifacts` in `logout_shell_reset.js`).
+-   **Every tab** (`localStorage`): sorting, filters and paging, through the same table state store.
+-   A fresh page shows the view and row its address names, otherwise the dataset's default: page load forgets the earlier visit's views and open rows in its own tab only (`table_loader_handler.js`). Reloading an open article's own address keeps its related tab and scroll position. A duplicated browser tab copies the session storage, so on the same row's address it keeps that position too; this is intended, and afterwards each tab's changes stay its own.
+
 ## 2. UI Configuration
 
 `filterest/app/frontend/ui_config.js` collects flags that control the UI structure.

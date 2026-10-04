@@ -79,10 +79,17 @@ vi.mock("../../dev_tools/function_counter.js", () => ({
     count_this_function: vi.fn(),
 }));
 
-vi.mock("../../state_stores/table_state_store.js", () => ({
-    getUnifiedTableState: vi.fn(() => ({ articleView: { expandedId: null } })),
-    setUnifiedTableState: vi.fn(),
-}));
+vi.mock("../../state_stores/table_state_store.js", async (importOriginal) => {
+    // The article's restore state compares rows, and names its reading-position
+    // fields, the store's own way.
+    const store = await importOriginal();
+    return {
+        ARTICLE_READING_POSITION_FIELDS: store.ARTICLE_READING_POSITION_FIELDS,
+        isSameOpenRow: store.isSameOpenRow,
+        getUnifiedTableState: vi.fn(() => ({ articleView: { expandedId: null } })),
+        setUnifiedTableState: vi.fn(),
+    };
+});
 
 vi.mock("../../navigation/nav_engine/query_params.js", () => ({
     DATASET_PREFIX: "",
@@ -192,6 +199,7 @@ import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
 import { buildSlug } from "./row_article_opener_helpers.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 function createDefaultRowArticleContent() {
     const rowArticleContentElement = document.createElement("div");
@@ -207,12 +215,13 @@ describe("openRowArticleView", () => {
         document.body.innerHTML = "";
         window.history.replaceState({}, "", "/");
         localStorage.clear();
+        sessionStorage.clear();
         articleUiSettings.showRelatedItems = true;
         vi.mocked(loadRowArticleSectionDefaults).mockReset();
         vi.mocked(loadRowArticleSectionDefaults).mockResolvedValue({});
         vi.mocked(primeDatasetPermissions).mockClear();
         vi.mocked(hasDatasetPermission).mockClear();
-        ["events", "services", "service_catalog", "tickets", "app_service_catalog"].forEach((table) => localStorage.setItem(`${table}_view`, "article_view"));
+        ["events", "services", "service_catalog", "tickets", "app_service_catalog"].forEach((table) => setChosenDatasetView(table, "article_view"));
         vi.mocked(createArticleLanguageEditor).mockReset();
         vi.mocked(createArticleLanguageEditor).mockReturnValue(null);
         closeRowArticleMock.mockClear();
@@ -809,7 +818,7 @@ describe("openRowArticleView", () => {
     });
 
     test.each(["app_service_catalog", "ordinary_dataset"])("keeps %s inline image and gallery thumbnails visible", async (tableName) => {
-        localStorage.setItem(`${tableName}_view`, "article_view");
+        setChosenDatasetView(tableName, "article_view");
         document.body.innerHTML = `
             <div id="${tableName}_article_view_container">
                 <div class="card_view_wrapper">
@@ -982,18 +991,18 @@ describe("openRowArticleView", () => {
         const rowsToken = {};
         const { captureLoadedDatasetRows } = await import("../dataset_loaded_rows.js");
         captureLoadedDatasetRows.mockImplementationOnce((dataset) => {
-            expect(localStorage.getItem(dataset + "_view")).toBe("card");
+            expect(sessionStorage.getItem(dataset + "_view")).toBe("card");
             return rowsToken;
         });
         captureCardArticleReturn.mockImplementationOnce((dataset, adapter) => {
-            expect(localStorage.getItem(dataset + "_view")).toBe("card");
+            expect(sessionStorage.getItem(dataset + "_view")).toBe("card");
             expect(adapter.listPath).toBe("/service_catalog");
             return token;
         });
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         await openRowArticleView({ id: 42 }, "app_service_catalog");
         expect(refreshTableUnified).toHaveBeenCalledWith("app_service_catalog", { skipUrlParams: true, preserveCardReturn: token, loadedRows: rowsToken });
-        expect(localStorage.getItem("app_service_catalog_view")).toBe("article_view");
+        expect(sessionStorage.getItem("app_service_catalog_view")).toBe("article_view");
     });
 
 });

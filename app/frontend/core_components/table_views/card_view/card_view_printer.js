@@ -32,6 +32,7 @@ import { makeColumnClass } from "../../filterbar/filter_list/column_visibility_h
 import { renderKeyValuePairs } from "../../../reusable_components/key_value_container/kv_container_printer.js";
 import { kvDefaultOptions } from "../../../reusable_components/key_value_container/kv_config.js";
 import { getUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
+import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 import { hasDatasetPermission } from "../../route_permission_checker.js";
 import {
@@ -352,7 +353,7 @@ export async function appendDataToCardView(
     // appends inherit the owning wrapper before consulting the active view.
     const renderView = viewKey
         ?? card_container.closest('.card_view_wrapper')?.dataset.viewKey
-        ?? localStorage.getItem(`${table_name}_view`);
+        ?? getChosenDatasetView(table_name);
     const stateKey = renderView === 'article_view' ? 'articleView' : 'cardView';
     const collapsed = getUnifiedTableState(table_name)?.[stateKey]?.collapsed;
     const renderContext = await resolveCardRenderContext(

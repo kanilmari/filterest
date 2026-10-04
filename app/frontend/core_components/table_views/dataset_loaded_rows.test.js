@@ -6,6 +6,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 vi.mock("../navigation/nav_engine/query_params.js", () => ({ getParams: () => JSON.parse(localStorage.getItem("test_params") || "{}") }));
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
+import { setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from "../navigation/nav_engine/dataset_access_registry.js";
 import { getDatasetViewContainerId } from "./dataset_view_registry.js";
 import {
@@ -15,7 +16,7 @@ import {
 
 function prepare(view = "card") {
     primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] });
-    localStorage.setItem("events_view", view);
+    setChosenDatasetView("events", view);
     setUnifiedTableState("events", { offset: 4, filters: { category: "travel" }, sort: { column: "id", direction: "ASC" } });
     const host = document.createElement("div");
     host.id = getDatasetViewContainerId(view, "events");
@@ -29,6 +30,7 @@ function prepare(view = "card") {
 }
 beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     document.body.replaceChildren();
     document.documentElement.lang = "fi";
     clearDatasetAccessRegistry();
@@ -39,7 +41,7 @@ test.each(["card", "table", "normal"])("reuses the entire committed %s prefix an
     expect(filterLoadedDatasetDuplicates(host, "events", [{ id: "3" }, { id: 4 }, { id: 4 }])).toEqual([{ id: 4 }]);
     const token = captureLoadedDatasetRows("events");
     expect(token).not.toBeNull();
-    localStorage.setItem("events_view", "article_view");
+    setChosenDatasetView("events", "article_view");
     const entry = resolveLoadedDatasetRows("events", token);
     expect(entry).toMatchObject({ projectionView: view, offset: 4, result: {
         data: [{ id: 1 }, { id: 2 }, { id: 3 }], columns: ["id"], row_count: 8,
@@ -52,7 +54,7 @@ test.each(["card", "table", "normal"])("reuses the entire committed %s prefix an
 test.each(["filter", "sort", "language", "search", "access"])("rejects a captured prefix after %s changes", (change) => {
     prepare();
     const token = captureLoadedDatasetRows("events");
-    localStorage.setItem("events_view", "article_view");
+    setChosenDatasetView("events", "article_view");
     if (change === "filter") setUnifiedTableState("events", { filters: { category: "news" } });
     if (change === "sort") setUnifiedTableState("events", { sort: { column: "id", direction: "DESC" } });
     if (change === "language") document.documentElement.lang = "en";
@@ -79,7 +81,7 @@ test("a searched list is handed over like any other, and only under the same sea
     prepare();
     const token = captureLoadedDatasetRows("events");
     expect(token).not.toBeNull();
-    localStorage.setItem("events_view", "article_view");
+    setChosenDatasetView("events", "article_view");
     expect(resolveLoadedDatasetRows("events", token)?.result.data).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     localStorage.setItem("test_params", JSON.stringify({ search: "other" }));
     expect(resolveLoadedDatasetRows("events", token)).toBeNull();
@@ -89,7 +91,7 @@ test.each([true, false])("initial pending access keeps a fresh rendered prefix o
     vi.resetModules();
     const access = await import("../navigation/nav_engine/dataset_access_registry.js");
     const loaded = await import("./dataset_loaded_rows.js");
-    localStorage.setItem("events_view", "card");
+    setChosenDatasetView("events", "card");
     setUnifiedTableState("events", { offset: 1 });
     document.body.innerHTML = '<div id="events_card_view_container"></div>';
     loaded.rememberLoadedDatasetRows(document.querySelector("div"), "events", { data: [{ id: 1 }] }, "card");
@@ -98,12 +100,12 @@ test.each([true, false])("initial pending access keeps a fresh rendered prefix o
     const token = loaded.captureLoadedDatasetRows("events");
     if (!allowed) { expect(token).toBeNull(); return; }
     expect(token).not.toBeNull();
-    localStorage.setItem("events_view", "article_view");
+    setChosenDatasetView("events", "article_view");
     expect(loaded.resolveLoadedDatasetRows("events", token)?.result.data).toEqual([{ id: 1 }]);
     access.clearDatasetAccessRegistry();
     access.primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] });
     expect(loaded.resolveLoadedDatasetRows("events", token)).toBeNull();
-    localStorage.setItem("events_view", "card");
+    setChosenDatasetView("events", "card");
     expect(loaded.captureLoadedDatasetRows("events")).toBeNull();
 });
 
@@ -112,7 +114,7 @@ test("a completed access refresh keeps only newly rendered rows, never its old t
     const access = await import("../navigation/nav_engine/dataset_access_registry.js");
     const loaded = await import("./dataset_loaded_rows.js");
     access.primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] });
-    localStorage.setItem("events_view", "card");
+    setChosenDatasetView("events", "card");
     setUnifiedTableState("events", { offset: 1 });
     document.body.innerHTML = '<div id="events_card_view_container"></div>';
     const host = document.querySelector("div");
@@ -124,7 +126,7 @@ test("a completed access refresh keeps only newly rendered rows, never its old t
     access.primeDatasetAccessRegistry({ datasets: [{ dataset_name: "events" }] }, generation);
     const freshToken = loaded.captureLoadedDatasetRows("events");
     expect(freshToken).not.toBeNull();
-    localStorage.setItem("events_view", "article_view");
+    setChosenDatasetView("events", "article_view");
     expect(loaded.resolveLoadedDatasetRows("events", oldToken)).toBeNull();
     expect(loaded.resolveLoadedDatasetRows("events", freshToken)?.result.data).toEqual([{ id: 2 }]);
 });

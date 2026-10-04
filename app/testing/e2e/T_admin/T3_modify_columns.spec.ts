@@ -11,7 +11,7 @@ import {
   buildTempDatasetName,
   createTempDataset,
   dropTempDataset,
-  openTempDataset,
+  openTempDatasetRowArticle,
 } from '../helpers/temp-dataset';
 
 type E2EPage = import('@playwright/test').Page;
@@ -172,19 +172,8 @@ test.describe('T3 — Modify Columns', () => {
         `Admin could not assign the late link field's presentation role: ${saveVisibilityResponse.body}`,
       ).toBe(true);
 
-      await page.evaluate((targetDatasetName) => {
-        localStorage.setItem(`${targetDatasetName}_sorting_and_filtering_specs`, JSON.stringify({
-          sort: { column: null, direction: null },
-          filters: {},
-          offset: 0,
-          cardView: {
-            collapsed: true,
-            expandedId: 1,
-          },
-        }));
-      }, datasetName);
-
-      await openTempDataset(page, datasetName, 'card');
+      // Open the row's article from its card, as a person does.
+      await openTempDatasetRowArticle(page, datasetName, 1);
       await expect(page.locator('[data-testid="big-card-container"]').first()).toBeVisible({ timeout: 10000 });
 
       await page.locator('[data-testid="big-card-edit-button"]').first().click();

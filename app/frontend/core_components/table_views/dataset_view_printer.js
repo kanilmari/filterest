@@ -36,6 +36,7 @@ import { getDefaultViewSync } from "../config_fetcher.js";
 import { resolveDatasetDefaultView } from "./dataset_default_view.js";
 import { show_search_and_filter_button } from "../../ui_config.js";
 import { getAllSpecs } from "../state_stores/table_specs_reader.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import {
     getDatasetViewContainerId,
     getDatasetViewDefinition,
@@ -239,18 +240,19 @@ function resolvePermittedView(viewKey, globalDefault) {
 }
 
 /**
- * Resolves the view to draw: the one chosen earlier in this visit, otherwise
- * the dataset's default. A fresh page has no chosen view, because page load
- * forgets the views of earlier visits (load_tables in table_loader_handler.js),
- * so the dataset default always wins there -- including a cloud-management
- * default, which once needed its own migration here.
+ * Resolves the view to draw: the one this tab chose earlier in this visit,
+ * otherwise the dataset's default. A fresh page has no chosen view, because
+ * page load forgets the views of earlier visits (load_tables in
+ * table_loader_handler.js), so the dataset default always wins there --
+ * including a cloud-management default, which once needed its own migration
+ * here. Another tab's choice is never read: each tab keeps its own.
  *
  * @param {string} datasetName - Dataset currently being rendered.
  * @param {string} datasetDefault - The dataset's renderable default view.
  * @returns {string}
  */
 function resolveStoredViewForDatasetDefault(datasetName, datasetDefault) {
-    return localStorage.getItem(`${datasetName}_view`) || datasetDefault;
+    return getChosenDatasetView(datasetName) || datasetDefault;
 }
 
 function resolveRenderableView(datasetName, currentView, columns, data, dataTypes, hasGeo, tableSpecs, globalDefault) {
@@ -346,7 +348,7 @@ export async function generate_table(
             defaultView
         );
         current_view = resolvePermittedView(current_view, defaultView);
-        localStorage.setItem(`${datasetName}_view`, current_view);
+        setChosenDatasetView(datasetName, current_view);
 
         applyViewStyling(dataset_name);
 

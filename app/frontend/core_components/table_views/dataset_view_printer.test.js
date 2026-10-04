@@ -5,6 +5,7 @@
 // Exists to keep filterbar rendering from regressing behind slow async view builders.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { setChosenDatasetView } from '../state_stores/dataset_view_choice_saver.js';
 
 const createTableElementMock = vi.fn(() => document.createElement('div'));
 const saveColumnWidthsMock = vi.fn();
@@ -121,6 +122,7 @@ describe('generate_table', () => {
         vi.clearAllMocks();
         document.body.innerHTML = '<div id="tabs_container"></div>';
         localStorage.clear();
+        sessionStorage.clear();
         createCardViewMock.mockImplementation(() => document.createElement('div'));
         createMapViewMock.mockImplementation(() => document.createElement('div'));
         createPriceChartViewMock.mockImplementation(() => document.createElement('div'));
@@ -132,7 +134,7 @@ describe('generate_table', () => {
     });
 
 	test('uses presentation media returned with dataset results without admin tree metadata', async () => {
-		localStorage.setItem('demo_dataset_view', 'card');
+		setChosenDatasetView('demo_dataset', 'card');
 		getAllSpecsMock.mockReturnValue({});
 
 		const { generate_table } = await import('./dataset_view_printer.js');
@@ -158,7 +160,7 @@ describe('generate_table', () => {
 	});
 
     test.each([null, {card_style_variant: null}, {card_style_variant: 'standard'}])('retains style inheritance or an explicit override from metadata %j', async tableMeta => {
-        localStorage.setItem('demo_dataset_view', 'card');
+        setChosenDatasetView('demo_dataset', 'card');
         const { generate_table } = await import('./dataset_view_printer.js');
         await generate_table('demo_dataset', ['id'], [{id: 1}], {id: 'INTEGER'}, 1, false, tableMeta);
         expect(JSON.parse(localStorage.getItem('demo_dataset_tableMeta')).card_style_variant)
@@ -186,7 +188,7 @@ describe('generate_table', () => {
             return document.createElement('div');
         });
 
-        localStorage.setItem('demo_dataset_view', 'card');
+        setChosenDatasetView('demo_dataset', 'card');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const renderPromise = generate_table(
@@ -220,7 +222,7 @@ describe('generate_table', () => {
         setResultsCountMock.mockImplementationOnce(() => {
             events.push('fill-count');
         });
-        localStorage.setItem('demo_dataset_view', 'card');
+        setChosenDatasetView('demo_dataset', 'card');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         await generate_table(
@@ -238,7 +240,7 @@ describe('generate_table', () => {
     });
 
     test('renders first-page row-group metadata in the controls shared by all views', async () => {
-        localStorage.setItem('demo_dataset_view', 'table');
+        setChosenDatasetView('demo_dataset', 'table');
         const facets = [
             { id: 4, slug: 'security', title: { en: 'Security' }, row_count: 3 },
         ];
@@ -264,7 +266,7 @@ describe('generate_table', () => {
 
     test('falls back from map view when the dataset has no map-capable fields', async () => {
         datasetSupportsMapViewMock.mockReturnValueOnce(false);
-        localStorage.setItem('demo_dataset_view', 'map');
+        setChosenDatasetView('demo_dataset', 'map');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const activeContainer = await generate_table(
@@ -283,13 +285,13 @@ describe('generate_table', () => {
             [{ id: 1, title: 'Brave' }],
             'demo_dataset'
         );
-        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
 
     test('keeps map view when the dataset has geospatial support', async () => {
         datasetSupportsMapViewMock.mockReturnValueOnce(true);
-        localStorage.setItem('demo_dataset_view', 'map');
+        setChosenDatasetView('demo_dataset', 'map');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const activeContainer = await generate_table(
@@ -309,12 +311,12 @@ describe('generate_table', () => {
             { id: 'INTEGER', position: { data_type: 'geometry' } }
         );
         expect(createCardViewMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('demo_dataset_view')).toBe('map');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('map');
         expect(activeContainer.id).toBe('demo_dataset_map_view_container');
     });
 
     test('passes multilingual column metadata to the tree view', async () => {
-        localStorage.setItem('demo_dataset_view', 'tree');
+        setChosenDatasetView('demo_dataset', 'tree');
         const rows = [{ id: 1, parent_id: null, name: '{"en":"English","fi":"Suomi"}' }];
         const dataTypes = {
             id: { data_type: 'integer' },
@@ -346,7 +348,7 @@ describe('generate_table', () => {
     });
 
     test('falls back from tree view when the dataset has no verified hierarchy', async () => {
-        localStorage.setItem('demo_dataset_view', 'tree');
+        setChosenDatasetView('demo_dataset', 'tree');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const activeContainer = await generate_table(
@@ -365,12 +367,12 @@ describe('generate_table', () => {
 
         expect(createTreeViewMock).not.toHaveBeenCalled();
         expect(createCardViewMock).toHaveBeenCalled();
-        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
 
     test('renders price chart view when selected', async () => {
-        localStorage.setItem('demo_dataset_view', 'price_chart');
+        setChosenDatasetView('demo_dataset', 'price_chart');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const activeContainer = await generate_table(
@@ -393,7 +395,7 @@ describe('generate_table', () => {
     });
 
     test('normalizes selector aliases to renderable view keys', async () => {
-        localStorage.setItem('demo_dataset_view', 'article');
+        setChosenDatasetView('demo_dataset', 'article');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const activeContainer = await generate_table(
@@ -412,12 +414,12 @@ describe('generate_table', () => {
             'demo_dataset',
             { viewKey: 'article_view', stateKey: 'articleView' }
         );
-        expect(localStorage.getItem('demo_dataset_view')).toBe('article_view');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('article_view');
         expect(activeContainer.id).toBe('demo_dataset_article_view_container');
     });
 
     test('falls back from stale non-renderable view keys', async () => {
-        localStorage.setItem('demo_dataset_view', 'legacy_magic_view');
+        setChosenDatasetView('demo_dataset', 'legacy_magic_view');
 
         const { generate_table } = await import('./dataset_view_printer.js');
         const activeContainer = await generate_table(
@@ -435,7 +437,7 @@ describe('generate_table', () => {
             [{ id: 1, title: 'Brave' }],
             'demo_dataset'
         );
-        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
 
@@ -447,11 +449,11 @@ describe('generate_table', () => {
         ['empty dataset default uses site default', { default_view_name: 'article_view' }, null, null, 'card'],
     ])('%s', async (_name, spec, stored, defaultView, expected) => {
         getAllSpecsMock.mockReturnValue({ demo_dataset: spec });
-        if (stored) localStorage.setItem('demo_dataset_view', stored);
+        if (stored) setChosenDatasetView('demo_dataset', stored);
         const { generate_table } = await import('./dataset_view_printer.js');
         const active = await generate_table('demo_dataset', ['id'], [{ id: 1 }],
             { id: 'INTEGER' }, 1, false, { default_view_name: defaultView });
-        expect(localStorage.getItem('demo_dataset_view')).toBe(expected);
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe(expected);
         expect(active.id).toBe(expected === 'article_view'
             ? 'demo_dataset_article_view_container' : `demo_dataset_${expected}_view_container`);
     });
@@ -459,12 +461,12 @@ describe('generate_table', () => {
     test.each([null, 'article_view', 'card'])('uses the reader default with no extra route grants (stored=%s)', async stored => {
         hasRoutePermissionMock.mockReturnValue(false);
         getAllSpecsMock.mockReturnValue({});
-        if (stored) localStorage.setItem('demo_dataset_view', stored);
+        if (stored) setChosenDatasetView('demo_dataset', stored);
         const { generate_table } = await import('./dataset_view_printer.js');
         const active = await generate_table('demo_dataset', ['id'], [{ id: 1 }],
             { id: 'INTEGER' }, 1, false, { default_view_name: 'table' });
         expect(active.id).toBe('demo_dataset_table_view_container');
-        expect(localStorage.getItem('demo_dataset_view')).toBe('table');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('table');
     });
 
     test('does not restore an unsupported default after permission fallback', async () => {
@@ -475,12 +477,13 @@ describe('generate_table', () => {
             { id: 'INTEGER' }, 1, false, { default_view_name: 'map' });
         expect(active.id).toBe('demo_dataset_card_view_container');
         expect(createMapViewMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('demo_dataset_view')).toBe('card');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
     });
 
     // Page load forgets earlier visits' views (load_tables), so a cloud-management
     // default needs no migration of its own: it applies whenever nothing was
-    // chosen in this visit.
+    // chosen in this visit. The drawn view is this tab's own (K143), so it never
+    // reaches the storage every tab shares.
     test('opens a cloud-management dataset in its default when nothing was chosen this visit', async () => {
         getAllSpecsMock.mockReturnValueOnce({
             app_cloud_services: {
@@ -506,12 +509,33 @@ describe('generate_table', () => {
             [{ id: 1, service_key: 'easelect_com' }],
             { id: 'INTEGER', service_key: 'TEXT' }
         );
-        expect(localStorage.getItem('app_cloud_services_view')).toBe('cloud_management');
-        expect(localStorage.getItem('app_cloud_services_default_view_seen')).toBeNull();
+        expect(sessionStorage.getItem('app_cloud_services_view')).toBe('cloud_management');
+        expect(localStorage.getItem('app_cloud_services_view')).toBeNull();
         expect(activeContainer.id).toBe('app_cloud_services_cloud_management_view_container');
     });
+
+    // A browser that refuses session storage keeps this page's chosen view in
+    // memory (tab_session_storage.js): a chosen view is drawn, otherwise the
+    // dataset's default, and nothing throws.
+    test.each([[null, 'table'], ['card', 'card']])('draws the chosen view (%s), else the default, in a browser that refuses session storage', async (chosen, expected) => {
+        const refuse = () => { throw new DOMException('The operation is insecure.', 'SecurityError'); };
+        vi.stubGlobal('sessionStorage', { getItem: refuse, setItem: refuse, removeItem: refuse, clear: refuse, key: refuse, length: 0 });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const { generate_table } = await import('./dataset_view_printer.js');
+            const { setChosenDatasetView } = await import('../state_stores/dataset_view_choice_saver.js');
+            if (chosen) setChosenDatasetView('demo_dataset', chosen);
+            const active = await generate_table('demo_dataset', ['id'], [{ id: 1 }],
+                { id: 'INTEGER' }, 1, false, { default_view_name: 'table' });
+            expect(active?.id).toBe(`demo_dataset_${expected}_view_container`);
+        } finally {
+            warn.mockRestore();
+            vi.unstubAllGlobals();
+        }
+    });
+
     test("only an explicitly retained card host survives classic article generation", async () => {
-        localStorage.setItem("events_view", "card");
+        setChosenDatasetView("events", "card");
         createCardViewMock.mockImplementation(() => {
             const card = document.createElement("div");
             card.className = "card_view_wrapper";
@@ -526,7 +550,7 @@ describe('generate_table', () => {
         const token = {};
         shouldPreserveCardReturnHost.mockImplementation((dataset, providedToken, candidate) =>
             dataset === "events" && providedToken === token && candidate === host);
-        localStorage.setItem("events_view", "article_view");
+        setChosenDatasetView("events", "article_view");
         await generate_table("events", ["id", "description"], [{ id: 3 }], { description: "TEXT" }, 100, false, null, null, null, { preserveCardReturn: token });
         expect(host.contains(original)).toBe(true);
         expect(host.style.display).toBe("none");
@@ -536,7 +560,7 @@ describe('generate_table', () => {
     });
 
     test.each(['card', 'table'])('records the initial %s rows for a later article transfer', async view => {
-        localStorage.setItem('events_view', view);
+        setChosenDatasetView('events', view);
         const { generate_table } = await import('./dataset_view_printer.js');
         const { setUnifiedTableState } = await import('../state_stores/table_state_store.js');
         const loaded = await import('./dataset_loaded_rows.js');
@@ -546,7 +570,7 @@ describe('generate_table', () => {
         await generate_table('events', ['id'], [{ id: 1 }, { id: 2 }], { id: 'INTEGER' }, 8, false, { default_view_name: view });
         const token = loaded.captureLoadedDatasetRows('events');
         expect(token).not.toBeNull();
-        localStorage.setItem('events_view', 'article_view');
+        setChosenDatasetView('events', 'article_view');
         expect(loaded.resolveLoadedDatasetRows('events', token)).toMatchObject({
             projectionView: view, offset: 2, result: { data: [{ id: 1 }, { id: 2 }] },
         });

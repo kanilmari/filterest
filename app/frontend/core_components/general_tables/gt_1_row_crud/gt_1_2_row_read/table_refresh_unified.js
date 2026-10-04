@@ -18,6 +18,7 @@ import { redirectToRootInSpa } from '../../../navigation/root_redirect_handler.j
 import { getParams, parseTableQueryString } from '../../../navigation/nav_engine/query_params.js';
 import { updateDatasetAddress } from '../../../navigation/nav_engine/dataset_address_writer.js';
 import { getUnifiedTableState, setUnifiedTableState } from '../../../state_stores/table_state_store.js';
+import { getChosenDatasetView } from '../../../state_stores/dataset_view_choice_saver.js';
 import { primeDatasetPermissions } from '../../../route_permission_checker.js';
 import { getDefaultDatasetSortSync } from '../../../config_fetcher.js';
 import {
@@ -93,7 +94,8 @@ export async function refreshTableUnified(tableName, options = {}) {
         && (!loadedRows || resolveLoadedDatasetRows(tableName, loadedRowsToken) === loadedRows);
     // console.log('refreshTableUnified tableName and options: ', tableName, options);
     try {
-        // 1) Haetaan ensin localStoragen nykyinen unified-tila
+        // 1) Haetaan ensin nykyinen unified-tila: jaettu osa localStoragesta,
+        //    tämän välilehden avoin rivi sessionStoragesta (K143)
         let currentState = getUnifiedTableState(tableName);
 
         // 2) Haetaanko myös URL-parametrit? (Jos skipUrlParams = false, niin sekoitetaan ne sisään.)
@@ -112,7 +114,7 @@ export async function refreshTableUnified(tableName, options = {}) {
         // 3) Ylikirjoita localStoragen tilaa, jos kutsuja laittoi explicit overrideja
         currentState = mergeStateWithOptions(currentState, options);
 
-        // 4) Tallennetaan localStorageen
+        // 4) Tallennetaan: jaettu osa localStorageen, avoin rivi sessionStorageen
         // console.log('refresh_table_unified.js: refreshTableUnified kutsuu funktiota setUnifiedTableState arvoilla:', tableName, currentState);
         setUnifiedTableState(tableName, currentState);
 
@@ -126,7 +128,7 @@ export async function refreshTableUnified(tableName, options = {}) {
 
         // 6) Haetaan localStoragesta tuore offset uudelleen
         currentState = getUnifiedTableState(tableName);
-        const currentView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || "table");
+        const currentView = resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || "table");
         const stateKey = getArticleStateKey(currentView);
 
         // Start the common dataset permission batch before data/render work so
@@ -190,7 +192,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             ...((preserveCardReturn || loadedRows) ? [{ preserveCardReturn, loadedRows }] : [])
         );
         if (!isRenderCurrent()) return;
-        const renderedView = resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || currentView);
+        const renderedView = resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || currentView);
         if (renderedView !== currentView) {
             await refreshTableUnified(tableName, { skipUrlParams: true });
             return;
@@ -236,7 +238,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             if (rowItem && isRenderCurrent()) {
                 articleOpenStarted = true;
                 openRowArticleView(rowItem, tableName, cardElem || null, {
-                    isCurrent: () => isRenderCurrent() && resolveDatasetViewSelectionTarget(localStorage.getItem(tableName + "_view") || currentView) === currentView,
+                    isCurrent: () => isRenderCurrent() && resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || currentView) === currentView,
                 });
             }
         }

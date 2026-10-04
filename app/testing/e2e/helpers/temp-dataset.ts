@@ -566,7 +566,7 @@ export async function openTempDataset(
   const requiredRoute = getRequiredViewRoute(viewMode);
   const hasRequiredRoute = await page.evaluate(
     ({ datasetName, viewMode, requiredRoute }) => {
-      localStorage.setItem(`${datasetName}_view`, viewMode);
+      sessionStorage.setItem(`${datasetName}_view`, viewMode);
       if (!requiredRoute) {
         return true;
       }
@@ -622,4 +622,39 @@ export async function openTempDataset(
   });
   await waitForDatasetViewReady(page, datasetName, viewMode);
   await waitForDataLoaded(page, datasetName);
+}
+
+/**
+ * Opens one row's article the way a person does: the dataset opens in its card
+ * view and the row's card is clicked, which is the same path from a card to its
+ * article that a seeded open row once took. A row cannot be seeded as open
+ * before `openTempDataset` loads the page: a fresh page opens only the row its
+ * address names (owner decision K139), and the open row is each tab's own (K143).
+ * Specs on data they do not own open whichever card is first with openBigCard
+ * (view-switch.ts), which explains why the two differ.
+ */
+export async function openTempDatasetRowArticle(
+  page: Page,
+  datasetName: string,
+  rowId: number,
+): Promise<void> {
+  await openTempDataset(page, datasetName, 'card');
+  // A card opens its article from its header when a field has the header role,
+  // and from its "Show more" button otherwise; both open the same article.
+  const card = `#${datasetName}_card_view_container .card[data-id="${rowId}"]`;
+  const articleOpener = page
+    .locator(
+      `${card} [data-testid="card-item-header"]:visible, ${card} button[data-lang-key="show_more"]:visible`,
+    )
+    .first();
+  await expect(articleOpener).toBeVisible({ timeout: TEMP_DATASET_LOAD_TIMEOUT_MS });
+  // A pointer click, so the test also proves a person can reach the card: an
+  // overlay covering it would fail here instead of being clicked through.
+  await articleOpener.click();
+  await expect(page.locator('[data-testid="big-card-container"]:visible').first())
+    .toBeVisible({ timeout: TEMP_DATASET_LOAD_TIMEOUT_MS });
+  // The article writes its own row address, so the open article is this row.
+  await expect(page).toHaveURL(new RegExp(`/${datasetName}/${rowId}(?:[-?#]|$)`), {
+    timeout: TEMP_DATASET_LOAD_TIMEOUT_MS,
+  });
 }

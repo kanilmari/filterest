@@ -13,6 +13,7 @@ import {
   createTempDataset,
   dropTempDataset,
   openTempDataset,
+  openTempDatasetRowArticle,
 } from '../helpers/temp-dataset';
 
 type JsonResponse = {
@@ -132,28 +133,6 @@ async function configureArticleFieldRoles(page: Page, datasetName: string): Prom
     updateResponse.ok,
     `Failed to configure C10 article field roles: ${updateResponse.body}`,
   ).toBe(true);
-}
-
-async function setExpandedCardState(
-  page: Page,
-  datasetName: string,
-  expanded: boolean,
-  expandedRowId = 1,
-): Promise<void> {
-  await page.evaluate(
-    ({ datasetName, expanded, expandedRowId }) => {
-      localStorage.setItem(`${datasetName}_sorting_and_filtering_specs`, JSON.stringify({
-        sort: { column: null, direction: null },
-        filters: {},
-        offset: 0,
-        cardView: {
-          collapsed: expanded,
-          expandedId: expanded ? expandedRowId : null,
-        },
-      }));
-    },
-    { datasetName, expanded, expandedRowId },
-  );
 }
 
 async function closeArticleToCardView(page: Page): Promise<void> {
@@ -325,10 +304,10 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(enableImageResponse.status, enableImageResponse.body).toBe(201);
 
       await configureArticleFieldRoles(page, datasetName);
-      // Open the one seeded row once so the real gallery upload path can add
-      // its single image. This remains the unchanged ordinary article.
-      await setExpandedCardState(page, datasetName, true);
-      await openTempDataset(page, datasetName, 'card');
+      // Open the first seeded row once, from its card, so the real gallery
+      // upload path can add its single image. This remains the unchanged
+      // ordinary article.
+      await openTempDatasetRowArticle(page, datasetName, 1);
       await expect(page.locator('[data-testid="big-card-container"]')).toBeVisible({
         timeout: 15_000,
       });
@@ -379,8 +358,7 @@ test.describe('C10 — Standalone Image-first View', () => {
       await closeArticleToCardView(page);
       // Give the neighboring record its own image so row-to-row navigation can
       // prove the in-place outgoing/incoming handoff in the same modal.
-      await setExpandedCardState(page, datasetName, true, 2);
-      await openTempDataset(page, datasetName, 'card');
+      await openTempDatasetRowArticle(page, datasetName, 2);
       await expect(page.locator('[data-testid="big-card-container"]')).toBeVisible({
         timeout: 15_000,
       });
@@ -399,7 +377,8 @@ test.describe('C10 — Standalone Image-first View', () => {
         timeout: 15_000,
       });
       await closeArticleToCardView(page);
-      await setExpandedCardState(page, datasetName, false);
+      // A fresh page opens no row unless its address names one (K139), so the
+      // dataset opens as plain cards.
       await openTempDataset(page, datasetName, 'card');
 
       const cardImageActivator = page

@@ -31,6 +31,7 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 
 import { closeRowArticle } from "../../table_views/card_view/row_article_ui_handler.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getParams, setParams, updateURL, useUrlParams } from "./query_params.js";
 import { updateDatasetAddress, resetDatasetAddressOwnershipForTests } from "./dataset_address_writer.js";
 
@@ -97,6 +98,7 @@ async function settle() {
 describe("dataset address ownership", () => {
     beforeEach(() => {
         localStorage.clear();
+        sessionStorage.clear();
         document.body.innerHTML = "";
         refreshTableUnifiedMock.mockReset();
         resetDatasetAddressOwnershipForTests();
@@ -115,7 +117,7 @@ describe("dataset address ownership", () => {
         async (returnView) => {
             landOn(`${ROW_PATH}?view=article_view&search=lapland&country=FI`);
             expect(getParams(DATASET).view).toBe("article_view");
-            localStorage.setItem(`${DATASET}_view`, "article_view");
+            setChosenDatasetView(DATASET, "article_view");
             setUnifiedTableState(DATASET, {
                 articleView: { collapsed: true, expandedId: 12, returnView },
             });
@@ -124,7 +126,7 @@ describe("dataset address ownership", () => {
             closeRowArticle(wrapper, cardContainer, article, null, DATASET);
             await settle();
 
-            expect(localStorage.getItem(`${DATASET}_view`)).toBe(returnView);
+            expect(sessionStorage.getItem(`${DATASET}_view`)).toBe(returnView);
             expect(window.location.pathname).toBe(`/${DATASET}`);
             expect(readAddressParams()).toEqual({
                 view: returnView,
@@ -163,7 +165,7 @@ describe("dataset address ownership", () => {
         });
         // What the renderer records when a permission or capability check picks
         // another view: the corrected view, written back before it draws.
-        localStorage.setItem(`${DATASET}_view`, "table");
+        setChosenDatasetView(DATASET, "table");
 
         await updateDatasetAddress({ dataset: DATASET });
 
@@ -176,7 +178,7 @@ describe("dataset address ownership", () => {
 
     test("an article view with no open row keeps article_view and drops only the row", async () => {
         landOn(`${ROW_PATH}?view=article_view&search=lapland`);
-        localStorage.setItem(`${DATASET}_view`, "article_view");
+        setChosenDatasetView(DATASET, "article_view");
         setUnifiedTableState(DATASET, {
             articleView: { collapsed: false, expandedId: null },
         });
@@ -189,7 +191,7 @@ describe("dataset address ownership", () => {
 
     test("an open article keeps its own readable row address and its hash", async () => {
         landOn(`${ROW_PATH}?view=article_view&search=lapland#section-2`);
-        localStorage.setItem(`${DATASET}_view`, "article_view");
+        setChosenDatasetView(DATASET, "article_view");
         setUnifiedTableState(DATASET, {
             articleView: { collapsed: true, expandedId: 12, returnView: "card" },
         });
@@ -202,7 +204,7 @@ describe("dataset address ownership", () => {
 
     test("reconciliation replaces the current entry instead of adding a step back", async () => {
         landOn(`/${DATASET}?view=article_view&search=lapland`);
-        localStorage.setItem(`${DATASET}_view`, "card");
+        setChosenDatasetView(DATASET, "card");
         const lengthBefore = window.history.length;
 
         await updateDatasetAddress({ dataset: DATASET });
@@ -213,7 +215,7 @@ describe("dataset address ownership", () => {
 
     test("the image-first article keeps its own address", async () => {
         landOn(`${ROW_PATH}?view=image_first_view&search=lapland#image=3`);
-        localStorage.setItem(`${DATASET}_view`, "card");
+        setChosenDatasetView(DATASET, "card");
 
         await updateDatasetAddress({ dataset: DATASET });
 
@@ -222,7 +224,7 @@ describe("dataset address ownership", () => {
 
     test("a late answer about a dataset the person already left writes nothing", async () => {
         landOn(`/${DATASET}?view=article_view`);
-        localStorage.setItem(`${DATASET}_view`, "card");
+        setChosenDatasetView(DATASET, "card");
 
         const pending = updateDatasetAddress({ dataset: DATASET });
         landOn("/other_dataset?view=table");
@@ -233,7 +235,7 @@ describe("dataset address ownership", () => {
 
     test("a superseded navigation does not write its address", async () => {
         landOn(`/${DATASET}?view=article_view`);
-        localStorage.setItem(`${DATASET}_view`, "card");
+        setChosenDatasetView(DATASET, "card");
 
         await updateDatasetAddress({ dataset: DATASET, isCurrent: () => false });
 
@@ -242,7 +244,7 @@ describe("dataset address ownership", () => {
 
     test("only the newest request writes when one transition settles twice", async () => {
         landOn(`/${DATASET}?view=article_view`);
-        localStorage.setItem(`${DATASET}_view`, "card");
+        setChosenDatasetView(DATASET, "card");
 
         const [firstWrote, secondWrote] = await Promise.all([
             updateDatasetAddress({ dataset: DATASET }),

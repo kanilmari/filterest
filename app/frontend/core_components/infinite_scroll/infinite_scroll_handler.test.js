@@ -6,6 +6,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 
 const {
     appendDataToCardViewMock,
@@ -71,7 +72,7 @@ function createWideTableView(tableName, widths) {
             </table>
         </div>
     `;
-    localStorage.setItem(`${tableName}_view`, "table");
+    setChosenDatasetView(tableName, "table");
 
     const container = document.getElementById(`${tableName}_table_view_container`);
     const table = container.querySelector("table");
@@ -98,7 +99,7 @@ function createCardView(tableName, { collapsed = false } = {}) {
             </div>
         </div>
     `;
-    localStorage.setItem(`${tableName}_view`, "card");
+    setChosenDatasetView(tableName, "card");
     getUnifiedTableStateMock.mockReturnValue({
         offset: 0,
         filters: {},
@@ -117,6 +118,7 @@ describe("initializeInfiniteScroll", () => {
         vi.clearAllMocks();
         vi.useFakeTimers();
         localStorage.clear();
+        sessionStorage.clear();
         document.body.innerHTML = "";
         intersectionObservers.length = 0;
         globalThis.IntersectionObserver = MockIntersectionObserver;
@@ -236,7 +238,7 @@ describe("initializeInfiniteScroll", () => {
 
     test("article result navigation uses its independent container and state", async () => {
         document.body.innerHTML = `<div id="articles_article_view_container"><div class="article_view_wrapper card_view_wrapper"><div class="card_container"></div></div></div>`;
-        localStorage.setItem("articles_view", "article_view");
+        setChosenDatasetView("articles", "article_view");
         localStorage.setItem("articles_columns", JSON.stringify(["title"]));
         getUnifiedTableStateMock.mockReturnValue({ offset: 0, filters: {}, articleView: { collapsed: true }, cardView: { collapsed: false } });
         const { appendDataToView, initializeInfiniteScroll, disconnectInfiniteScroll } = await import("./infinite_scroll_handler.js");
@@ -257,7 +259,7 @@ describe("initializeInfiniteScroll", () => {
         intersectionObservers[0].callback([{ isIntersecting: true }]);
         expect(fetchDatasetDataMock).toHaveBeenCalledOnce();
         scroll.disconnectInfiniteScroll("return_cards");
-        localStorage.setItem("return_cards_view", "article_view");
+        setChosenDatasetView("return_cards", "article_view");
         resolveOld({ data: [{ id: 9 }], row_count: 999 });
         await Promise.resolve(); await Promise.resolve();
         expect(appendDataToCardViewMock).not.toHaveBeenCalled();
@@ -289,7 +291,7 @@ describe("initializeInfiniteScroll", () => {
 
     test("continues paging the open article's actual small-card scroll host", async () => {
         document.body.innerHTML = '<div id="paged_article_view_container"><div class="card_view_wrapper big-card-open"><div class="card_container"><div class="card small-card active_card" data-id="3"></div></div></div></div>';
-        localStorage.setItem("paged_view", "article_view");
+        setChosenDatasetView("paged", "article_view");
         localStorage.setItem("paged_columns", '["id","title"]');
         getUnifiedTableStateMock.mockReturnValue({
             offset: 40, filters: { category: "one" }, sort: { column: "id", direction: "ASC" },

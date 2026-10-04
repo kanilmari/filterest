@@ -43,6 +43,7 @@ import {
 } from "./top_row_buttons/top_row_builder.js";
 import { createSortDropdown } from "./top_row_buttons/sort_dropdown_builder.js";
 import { getAllSpecs } from "../state_stores/table_specs_reader.js";
+import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 import { createDatasetHeadingTitle } from "./dataset_heading_title_writer.js";
@@ -1280,7 +1281,7 @@ export function create_filter_bar(
         const navbarVisible = isNavbarVisible();
         const filterbarVisible = !isHidden();
         const activeView =
-            localStorage.getItem(`${tableName}_view`) || currentView || CARD_VIEW_KEY;
+            getChosenDatasetView(tableName) || currentView || CARD_VIEW_KEY;
         // The selected view is the authoritative answer to "is the article view
         // showing". An article-open event cannot answer it, because an article
         // view with no matching rows never opens a row and never emits one.

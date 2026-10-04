@@ -204,6 +204,16 @@ export async function switchToView(
 /**
  * Opens a big card view by clicking on the first card in the card view.
  * Returns true if the big card was opened, false if no cards are available.
+ *
+ * This is for specs that run on data they do not own (C2, C3, E10, E11): they
+ * take whichever card comes first. C2 and C3 skip when it returns false; E10
+ * and E11 require it to open. A spec that
+ * creates its own dataset opens a known row instead, with
+ * openTempDatasetRowArticle (temp-dataset.ts): a person-like pointer click
+ * that also proves nothing covers the card, and that opens a card without a
+ * header field from its "Show more" button. This helper's script click proves
+ * neither. Moving these specs to the pointer click would change what they
+ * test, so it is left as a decision of its own rather than done in passing.
  */
 export async function openBigCard(page: Page): Promise<boolean> {
   const bigCard = page.locator('[data-testid="big-card-container"]').first();

@@ -7,6 +7,7 @@ import { ensureHistoryEntryId, HISTORY_ENTRY_ID, writeHistoryEntry } from "./his
 import { captureDatasetScrollState, restoreDatasetScrollState } from "./dataset_scroll_retention.js";
 import { subscribeDatasetAccessRegistry } from "./dataset_access_registry.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 let retained = null;
 const metadataKeys = ["columns", "dataTypes", "tableMeta"];
@@ -68,7 +69,7 @@ function prepareCardReturnOrigin(listPath) {
 }
 
 export function captureCardArticleReturn(datasetName, adapter) {
-    if ((localStorage.getItem(`${datasetName}_view`) || "card") !== "card") return null;
+    if ((getChosenDatasetView(datasetName) || "card") !== "card") return null;
     const root = document.getElementById(`${datasetName}_container`);
     const host = document.getElementById(`${datasetName}_card_view_container`);
     const cardRoot = host?.querySelector(".card_view_wrapper");
@@ -121,7 +122,7 @@ export function getCardArticleReturnToken(datasetName) {
 /** Forward leaves an already-restored card list at its latest scroll/page. */
 export function refreshCardArticleReturnViewport(datasetName) {
     const record = validRecord(datasetName);
-    if (!record || localStorage.getItem(datasetName + "_view") !== "card"
+    if (!record || getChosenDatasetView(datasetName) !== "card"
         || record.host.style.display === "none") return;
     const pagination = { ...record.adapter.readPagination(), isLoading: false };
     captureDatasetScrollState(record.root);
@@ -145,7 +146,7 @@ export function restoreCardArticleReturn(datasetName) {
     if (!canRestoreCardArticleReturn(datasetName)) return false;
     const record = retained;
     record.adapter.disconnectPagination();
-    localStorage.setItem(`${datasetName}_view`, "card");
+    setChosenDatasetView(datasetName, "card");
     for (const [key, value] of record.metadata) {
         if (value === null) localStorage.removeItem(`${datasetName}_${key}`);
         else localStorage.setItem(`${datasetName}_${key}`, value);

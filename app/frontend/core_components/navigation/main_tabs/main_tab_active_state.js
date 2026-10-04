@@ -11,6 +11,7 @@ import {
     buildNavTabsRightOffset,
     buildTabOutlinePresentation,
 } from "./tab_presentation_builder.js";
+import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 const NAVTAB_OUTLINE_MORPH_ATTRIBUTE = "d";
 const NAVTAB_PRESENTATION_DURATION_PROPERTY = "--navtab-presentation-transition-duration";
@@ -253,7 +254,7 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
     const isNarrow = window.innerWidth <= NAVTAB_BUTTON_BREAKPOINT_PX;
     const isNavbarOverlay = isNavbarUsingOverlayLayout();
     const viewKey = viewDatasetName
-        ? localStorage.getItem(`${viewDatasetName}_view`) || ""
+        ? getChosenDatasetView(viewDatasetName) || ""
         : "";
     const navTabs = document.querySelector(".navtabs");
     const allTabButtons = Array.from(document.querySelectorAll(".navtablinks"));

@@ -20,6 +20,7 @@ import {
     getUnifiedTableState,
     setUnifiedTableState,
 } from "../state_stores/table_state_store.js";
+import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 
 // Per-table scroll state: Map<tableName, { isLoading, observer, sentinel, lastRowCount }>
 const scrollState = new Map();
@@ -62,7 +63,7 @@ function syncTableInfiniteScrollSentinelWidth(tableName) {
         return;
     }
 
-    const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+    const currentView = getChosenDatasetView(tableName) || "table";
     if (currentView !== "table") {
         state.sentinel.style.width = "100%";
         state.sentinel.style.minWidth = "";
@@ -92,7 +93,7 @@ function ensureArticleToggleListener() {
             return;
         }
 
-        const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+        const currentView = getChosenDatasetView(tableName) || "table";
         if (["card", "article_view"].includes(currentView)) {
             initializeInfiniteScroll(tableName, getScrollState(tableName).orientation || "vertical");
         }
@@ -168,7 +169,7 @@ export function seedInfiniteScrollRowCount(tableName, rowCount) {
 export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     ensureArticleToggleListener();
     const datasetName = tableName;
-    const currentView = localStorage.getItem(`${datasetName}_view`) || "table";
+    const currentView = getChosenDatasetView(datasetName) || "table";
     const containerId = `${tableName}_${currentView === "article_view" ? "article" : currentView}_view_container`;
     const container = document.getElementById(containerId);
 
@@ -286,7 +287,7 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent } = {}
     resetOffset(tableName);
     const result = await fetchMoreData(tableName, { replace: true, isCurrent });
     if (isCurrent && !isCurrent()) return result;
-    const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+    const currentView = getChosenDatasetView(tableName) || "table";
     initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(currentView));
     return result;
 }
@@ -307,10 +308,10 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
 
     try {
         const tableState = getUnifiedTableState(tableName);
-        const currentView = localStorage.getItem(`${tableName}_view`) || "table";
+        const currentView = getChosenDatasetView(tableName) || "table";
         const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
         const isCurrent = () => scrollSt.generation === generation
-            && (localStorage.getItem(tableName + "_view") || "table") === currentView
+            && (getChosenDatasetView(tableName) || "table") === currentView
             && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
             && container?.isConnected
             && (!callerIsCurrent || callerIsCurrent());
@@ -382,7 +383,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
 
 export function appendDataToView(tableName, data, append = true, { isCurrent, dataTypes } = {}) {
     const datasetName = tableName;
-    const currentView = localStorage.getItem(`${datasetName}_view`) || "table";
+    const currentView = getChosenDatasetView(datasetName) || "table";
 
     if (currentView === "table") {
         const table = document.querySelector(

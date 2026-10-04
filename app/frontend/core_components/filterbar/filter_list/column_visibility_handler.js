@@ -8,13 +8,16 @@ import {
     parseHiddenColumns,
     isColumnVisible,
 } from './column_visibility_handler_helpers.js';
+import { getChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 
 // Re-export pure helpers so existing importers keep working
 export { _makeColumnClass as makeColumnClass };
 
 // ---------- 1) localStorage-aput ----------------------------------------------
+// The hidden columns are shared by every tab; which view they belong to is
+// this tab's own choice unless the caller names the view.
 function resolveVisibilityViewKey(tableName, viewKey) {
-    const candidate = String(viewKey || localStorage.getItem(`${tableName}_view`) || "table")
+    const candidate = String(viewKey || getChosenDatasetView(tableName) || "table")
         .trim()
         .toLowerCase();
     return /^[a-z][a-z0-9_]{0,63}$/.test(candidate) ? candidate : "table";

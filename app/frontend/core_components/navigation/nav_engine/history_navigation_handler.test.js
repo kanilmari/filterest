@@ -5,6 +5,7 @@
 // Exists to keep article-close history from losing the originating dataset view.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 const {
     closeRowArticleMock,
@@ -137,6 +138,7 @@ describe("history_navigation_handler", () => {
         tableStates.clear();
         datasetParamsStore.clear();
         localStorage.clear();
+        sessionStorage.clear();
         document.body.innerHTML = "";
         window.__bigCardClosing = false;
         window.history.replaceState({}, "", "/events");
@@ -162,7 +164,7 @@ describe("history_navigation_handler", () => {
                 returnView: "calendar",
             },
         });
-        localStorage.setItem("events_view", "card");
+        setChosenDatasetView("events", "card");
         document.body.innerHTML = `
             <div class="card_view_wrapper big-card-open" data-table-name="events">
                 <div class="card_container"></div>
@@ -191,7 +193,7 @@ describe("history_navigation_handler", () => {
             "events",
             true
         );
-        expect(localStorage.getItem("events_view")).toBe("calendar");
+        expect(sessionStorage.getItem("events_view")).toBe("calendar");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", {
             articleView: {
                 collapsed: false,
@@ -209,7 +211,7 @@ describe("history_navigation_handler", () => {
             search: "firefox",
             view: "table",
         });
-        localStorage.setItem("events_view", "card");
+        setChosenDatasetView("events", "card");
         document.body.innerHTML = `
             <div class="card_view_wrapper big-card-open" data-table-name="events">
                 <div class="card_container"></div>
@@ -232,7 +234,7 @@ describe("history_navigation_handler", () => {
             search: "firefox",
             view: "table",
         });
-        expect(localStorage.getItem("events_view")).toBe("table");
+        expect(sessionStorage.getItem("events_view")).toBe("table");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("events", {
             articleView: {
                 collapsed: false,
@@ -263,7 +265,7 @@ describe("history_navigation_handler", () => {
         history.replaceState({ __filterestEntryId: "old-return", unrelated: "keep" }, "", "/events?view=article_view&search=harbour");
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
-        expect(localStorage.getItem("events_view")).toBe(returnView);
+        expect(sessionStorage.getItem("events_view")).toBe(returnView);
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
         expect(new URL(location.href).searchParams.get("view")).toBe(returnView);
         expect(new URL(location.href).searchParams.get("search")).toBe("harbour");
@@ -277,7 +279,7 @@ describe("history_navigation_handler", () => {
         document.body.innerHTML = '<div class="card_view_wrapper big-card-open" data-table-name="events"><div class="card_container"></div><article class="active_row_article"></article></div>';
         history.replaceState({}, "", "/events?view=article_view&search=harbour");
         handleAllNavigationMock.mockImplementationOnce(async () => {
-            localStorage.setItem("events_view", "card");
+            setChosenDatasetView("events", "card");
             return {};
         });
         window.dispatchEvent(new PopStateEvent("popstate"));
@@ -291,7 +293,7 @@ describe("history_navigation_handler", () => {
         parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0, view: "article_view", search: "harbour" });
         history.replaceState({ __filterestEntryId: "deep-row" }, "", "/events/7-title?view=article_view&search=harbour");
         handleAllNavigationMock.mockImplementationOnce(async () => {
-            localStorage.setItem("events_view", "table");
+            setChosenDatasetView("events", "table");
             return {};
         });
         window.dispatchEvent(new PopStateEvent("popstate"));
@@ -307,7 +309,7 @@ describe("history_navigation_handler", () => {
         history.replaceState({}, "", "/events?view=article_view");
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
-        expect(localStorage.getItem("events_view")).toBe("article_view");
+        expect(sessionStorage.getItem("events_view")).toBe("article_view");
         expect(location.search).toBe("?view=article_view");
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
     });
@@ -344,11 +346,11 @@ describe("history_navigation_handler", () => {
     test.each(["card", "table"])("Back to a no-view %s entry restores its own renderer and says so in the address", async view => {
         parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0 });
         document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="calendar"></div></div>';
-        localStorage.setItem("events_view", "calendar");
+        setChosenDatasetView("events", "calendar");
         history.replaceState({ __filterestEntryId: "origin", __filterestDatasetView: { dataset: "events", path: "/events", view } }, "", "/events");
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
-        expect(localStorage.getItem("events_view")).toBe(view);
+        expect(sessionStorage.getItem("events_view")).toBe(view);
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
         // The entry remembered its renderer in history state alone, so a reload
         // of the same address lost it. The address owner now writes the restored
@@ -362,18 +364,18 @@ describe("history_navigation_handler", () => {
         history.replaceState({ __filterestDatasetView: { dataset: "events", path: "/events", view: "table" } }, "", "/events?view=calendar");
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
-        expect(localStorage.getItem("events_view")).toBe("calendar");
+        expect(sessionStorage.getItem("events_view")).toBe("calendar");
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
     });
 
     test.each(["other dataset", "other path", "same renderer"])("%s entry metadata does not force an unrelated reload or card default", async reason => {
         parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0 });
         document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="table"></div></div>';
-        localStorage.setItem("events_view", "table");
+        setChosenDatasetView("events", "table");
         history.replaceState({ __filterestDatasetView: { dataset: reason === "other dataset" ? "other" : "events", path: reason === "other path" ? "/admin/events" : "/events", view: "table" } }, "", "/events");
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
-        expect(localStorage.getItem("events_view")).toBe("table");
+        expect(sessionStorage.getItem("events_view")).toBe("table");
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(false);
     });
 

@@ -13,6 +13,7 @@ import { getParams, setParams, normalizePath, DATASET_PREFIX } from "./query_par
 import { getPrefixFromPathname, parseDeepLink } from "./history_navigation_handler_helpers.js";
 import { isImageFirstViewURL } from "./image_first_view_history.js";
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import {
     isArticleDatasetView,
     resolveDatasetViewSelectionTarget,
@@ -86,15 +87,15 @@ export function writeDatasetAddress(dataset, params = {}, prefix = DATASET_PREFI
 }
 
 /**
- * Reads the view that is actually showing for a dataset.
+ * Reads the view that is actually showing for a dataset in this tab.
  *
  * The remembered per-dataset choice is the settled answer rather than a request:
  * `generate_table` writes the permission- and capability-corrected view back to
- * that same key before it renders, so a fallback is already reflected here.
- * An unwritten key means nothing has rendered yet, and the address is left alone.
+ * that same choice before it renders, so a fallback is already reflected here.
+ * An unwritten choice means nothing has rendered yet, and the address is left alone.
  */
 function readEffectiveDatasetView(dataset) {
-    const storedView = localStorage.getItem(`${dataset}_view`);
+    const storedView = getChosenDatasetView(dataset);
     return storedView ? resolveDatasetViewSelectionTarget(storedView) : "";
 }
 

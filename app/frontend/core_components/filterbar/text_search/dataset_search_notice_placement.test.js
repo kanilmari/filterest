@@ -5,6 +5,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 const {
     appendDataToCardViewMock,
@@ -80,6 +81,7 @@ describe("search stage notice placement", () => {
         vi.resetModules();
         vi.clearAllMocks();
         localStorage.clear();
+        sessionStorage.clear();
         document.body.replaceChildren();
     });
 
@@ -87,7 +89,7 @@ describe("search stage notice placement", () => {
         "divides the dataset's own %s results from the AI group in its real host",
         async (view) => {
             const tableName = "app_service_catalog";
-            localStorage.setItem(tableName + "_view", view);
+            setChosenDatasetView(tableName, view);
             const primaryCount = document.createElement("div");
             primaryCount.id = tableName + "_results_count";
             primaryCount.textContent = "2 results";

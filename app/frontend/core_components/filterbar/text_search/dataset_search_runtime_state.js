@@ -5,6 +5,7 @@
 
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
 import { setResultsCount, setSearchAiResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
 import { ROW_GROUP_FILTER_KEY } from "../filter_list/row_group_facet_printer.js";
@@ -37,7 +38,7 @@ export function getSearchFilterContext(tableName) {
 }
 
 export function getCurrentSearchView(tableName) {
-    return resolveDatasetViewSelectionTarget(localStorage.getItem(`${tableName}_view`) || "table");
+    return resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || "table");
 }
 
 export function getSearchViewContainer(

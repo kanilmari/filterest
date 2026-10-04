@@ -10,6 +10,7 @@ import { showConfirmModal } from '../../../../reusable_components/modal/confirm_
 import { findHeaderColumn, buildConfirmationMessage, buildDeletePayload } from './row_remover_helpers.js';
 import { getLanguageWithBrowserFallback } from '../../../state_stores/lang_preference_reader.js';
 import { clearDatasetRowSelection } from '../../../table_views/dataset_row_selection_store.js';
+import { getChosenDatasetView } from '../../../state_stores/dataset_view_choice_saver.js';
 
 function getHeaderColumnName(table_name) {
     const dataTypes = JSON.parse(localStorage.getItem(`${table_name}_dataTypes`) || '{}');
@@ -51,7 +52,7 @@ export async function delete_selected_items(table_name) {
     }
 
     const count = selected_ids.length || selected_rows.length;
-    const current_view = localStorage.getItem(`${table_name}_view`) || 'table';
+    const current_view = getChosenDatasetView(table_name) || 'table';
     const headerCol = getHeaderColumnName(table_name);
 
     let itemNames = null;

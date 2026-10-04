@@ -5,6 +5,7 @@
 // Every suite imports the executor inside its tests, after these mocks exist.
 
 import { vi } from "vitest";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 const {
     appendDataToCardViewMock,
@@ -127,7 +128,7 @@ export function createTableViewDom(tableName) {
             </table>
         </div>
     `;
-    localStorage.setItem(`${tableName}_view`, "table");
+    setChosenDatasetView(tableName, "table");
 }
 
 export function createCardViewDom(tableName, viewKey = "card") {
@@ -140,7 +141,7 @@ export function createCardViewDom(tableName, viewKey = "card") {
             </div>
         </div>
     `;
-    localStorage.setItem(`${tableName}_view`, viewKey);
+    setChosenDatasetView(tableName, viewKey);
 }
 
 /** Start each test from an empty table view with no search, filter or answer. */
@@ -148,6 +149,7 @@ export function resetDatasetSearchTest() {
     vi.resetModules();
     vi.clearAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
     document.body.innerHTML = "";
     document.documentElement.lang = "fi";
     getActiveFiltersSnapshotMock.mockReturnValue({});

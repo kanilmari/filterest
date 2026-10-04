@@ -43,6 +43,7 @@ import { createRowArticleMediaHydrator } from "./row_article_media_hydrator.js";
 
 beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     document.body.replaceChildren();
     vi.clearAllMocks();
 });

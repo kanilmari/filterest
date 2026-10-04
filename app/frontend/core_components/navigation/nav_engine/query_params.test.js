@@ -1,6 +1,10 @@
+// query_params.test.js
+// Verifies dataset query-parameter parsing, address writing and the cached parameters' storage.
+// Bridges the URLSearchParams helpers, the dataset address writer and localStorage under jsdom.
+// Exists to keep the shared search, filter and sort parameters apart from this page's own view.
 import { describe, test, expect, vi } from 'vitest';
+import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 // query_params.js has import-time side effects (window.location, localStorage, popstate).
-// Only the pure parse/build helpers are safe to unit test.
 // We import the module dynamically after ensuring jsdom globals are ready.
 
 let parseDatasetParamsFromSearch, parseTableQueryString, buildTableQueryString, normalizePath, updateURL;
@@ -157,30 +161,84 @@ describe('updateURL', () => {
   });
 });
 
-describe('forgetCachedView', () => {
-  test('drops only the view another dataset cached and leaves the current dataset as it is', () => {
+// Owner decision K143 (3.10.2026): the view in a dataset's cached address
+// parameters is this page's own. It never enters the storage every tab shares,
+// a view another tab or an earlier version left there is not this page's, and
+// the shared search, filter and sort parameters still reach every tab.
+describe('the cached view parameter belongs to this page', () => {
+  test('keeps the view in this page and shares only the other parameters', () => {
     localStorage.clear();
-    mod.setParams('demo', { view: 'card' });
-    const cached = JSON.parse(localStorage.getItem('dataset_query_params'));
-    cached.travel_deals = { view: 'article_view', search: 'ferry' };
-    localStorage.setItem('dataset_query_params', JSON.stringify(cached));
+    mod.setParams('travel_deals', { search: 'ferry', view: 'article_view' });
 
-    mod.forgetCachedView('travel_deals');
-
-    const stored = JSON.parse(localStorage.getItem('dataset_query_params'));
-    expect(stored.travel_deals).toEqual({ search: 'ferry' });
-    expect(stored.demo).toEqual({ view: 'card' });
-    expect(mod.getParams()).toEqual({ view: 'card' });
+    expect(mod.getParams('travel_deals')).toEqual({ search: 'ferry', view: 'article_view' });
+    expect(JSON.parse(localStorage.getItem('dataset_query_params')).travel_deals).toEqual({ search: 'ferry' });
   });
 
-  test('writes nothing for a dataset without a cached view', () => {
+  test("another tab's search reaches this page, its view does not", () => {
     localStorage.clear();
-    localStorage.setItem('dataset_query_params', JSON.stringify({ travel_info: { search: 'harbour' } }));
+    mod.setParams('travel_deals', { view: 'card' });
+    // Another tab writes its parameters for the same datasets, with a view
+    // among them as earlier versions wrote it.
+    localStorage.setItem('dataset_query_params', JSON.stringify({
+      travel_deals: { search: 'harbour', view: 'article_view' },
+      travel_info: { view: 'table', sort_column: 'name' },
+    }));
 
-    mod.forgetCachedView('travel_info');
-    mod.forgetCachedView('missing');
+    mod.useStorageParams();
 
-    expect(JSON.parse(localStorage.getItem('dataset_query_params'))).toEqual({ travel_info: { search: 'harbour' } });
+    expect(mod.getParams('travel_deals')).toEqual({ search: 'harbour', view: 'card' });
+    expect(mod.getParams('travel_info')).toEqual({ sort_column: 'name' });
+  });
+
+  // A navigation reloads the shared parameters and writes the address again
+  // (navigation_handler.js, navigation_pipeline.js). The page's own order must
+  // survive that reload, or the same address comes back as a different string
+  // and Back first returns to the very same page.
+  test.each([
+    ['the view first', '/demo?view=card&search=ferry'],
+    ['the view in the middle', '/demo?search=ferry&view=card&status=open'],
+  ])('with %s, a navigation writes the same address and adds no history entry', (_label, address) => {
+    localStorage.clear();
+    history.replaceState({}, '', address);
+    mod.useUrlParams(); // the page reads its own address, as on load
+    mod.useStorageParams(); // a navigation reads the shared parameters again
+    const historyLength = history.length;
+    const push = vi.spyOn(history, 'pushState');
+    try {
+      mod.updateURL('demo', mod.getParams('demo'));
+      expect(push).not.toHaveBeenCalled();
+    } finally {
+      push.mockRestore();
+    }
+    expect(history.length).toBe(historyLength);
+    expect(window.location.pathname + window.location.search).toBe(address);
+  });
+
+  test("keeps the page's order when another tab changes a shared value, and adds new ones after it", () => {
+    localStorage.clear();
+    history.replaceState({}, '', '/demo?search=ferry&view=card&status=open');
+    mod.useUrlParams();
+    localStorage.setItem('dataset_query_params', JSON.stringify({
+      demo: { status: 'closed', search: 'harbour', sort_column: 'name' },
+    }));
+
+    mod.useStorageParams();
+
+    const params = mod.getParams('demo');
+    expect(Object.keys(params)).toEqual(['search', 'view', 'status', 'sort_column']);
+    expect(params).toEqual({ search: 'harbour', view: 'card', status: 'closed', sort_column: 'name' });
+  });
+
+  test('the next write leaves out a view an earlier version shared', () => {
+    localStorage.clear();
+    localStorage.setItem('dataset_query_params', JSON.stringify({ travel_info: { view: 'table', search: 'harbour' } }));
+
+    mod.setParams('demo', { search: 'x' });
+
+    const stored = JSON.parse(localStorage.getItem('dataset_query_params'));
+    expect(stored.travel_info).toEqual({ search: 'harbour' });
+    expect(stored.demo).toEqual({ search: 'x' });
+    expect(Object.values(stored).some((params) => Object.hasOwn(params, 'view'))).toBe(false);
   });
 });
 
@@ -197,10 +255,11 @@ describe('parseTableQueryString ↔ buildTableQueryString roundtrip', () => {
 
 test.each(["card", "table"])("records the actual no-view %s origin before a selector changes URL", view => {
   localStorage.clear();
+  sessionStorage.clear();
   history.replaceState({ __filterestEntryId: "origin", otherOwner: 4 }, "", "/service_catalog?sort_column=__newest");
   document.body.innerHTML = `<div id="app_service_catalog_container"><div class="tab_parts_container" data-view="${view}"><div class="scrollable_content" style="display:block"><p>Rows</p></div></div></div>`;
   // The selector already changed the preference; only the rendered origin is reliable.
-  localStorage.setItem("app_service_catalog_view", "calendar");
+  setChosenDatasetView("app_service_catalog", "calendar");
   let origin;
   const originalPush = history.pushState.bind(history);
   const push = vi.spyOn(history, "pushState").mockImplementation((...args) => { origin = structuredClone(history.state); originalPush(...args); });

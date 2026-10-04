@@ -15,6 +15,7 @@ import {
     setUnifiedTableState,
 } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { closeRowArticle } from '../../table_views/card_view/row_article_ui_handler.js';
+import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 import {
     ARTICLE_VIEW_KEY,
     resolveDatasetViewSelectionTarget,
@@ -45,7 +46,7 @@ function applyParsedUrlState(datasetName, parsed) {
     setParams(datasetName, params);
 
     const targetView = getTargetView(datasetName, parsed);
-    if (targetView) localStorage.setItem(`${datasetName}_view`, targetView);
+    if (targetView) setChosenDatasetView(datasetName, targetView);
 
     return params;
 }
@@ -79,7 +80,7 @@ async function restoreDatasetBasePathState(datasetName, isCurrentNavigation) {
         // literal article view (its first row replaces this same entry).
         const returnView = getArticleReturnView(datasetName);
         const nextView = returnView || ARTICLE_VIEW_KEY;
-        localStorage.setItem(`${datasetName}_view`, nextView);
+        setChosenDatasetView(datasetName, nextView);
         setParams(datasetName, { ...buildParamsFromParsed(parsed), view: nextView });
         clearClosedArticleState(datasetName);
         // Permission and capability checks may still select a fallback below.
@@ -117,7 +118,7 @@ async function restoreArticleReturnView(datasetName, isCurrentNavigation) {
         return false;
     }
 
-    localStorage.setItem(`${datasetName}_view`, returnView);
+    setChosenDatasetView(datasetName, returnView);
     setUnifiedTableState(datasetName, {
         articleView: {
             collapsed: false,
@@ -227,7 +228,7 @@ async function restoreHistoryEntryState() {
     const preserveCardReturn = deepLinkedRowId ? getCardArticleReturnToken(name) : null;
     // Pre-set cardView state to auto-open big card after data loads
     if (deepLinkedRowId) {
-        localStorage.setItem(`${name}_view`, ARTICLE_VIEW_KEY);
+        setChosenDatasetView(name, ARTICLE_VIEW_KEY);
         setUnifiedTableState(name, {
             articleView: { collapsed: true, expandedId: deepLinkedRowId, ...(preserveCardReturn ? { returnView: "card" } : {}) }
         });

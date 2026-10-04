@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { flushObserverFrame } from './filter_bar_test_environment_builder.js';
+import { setChosenDatasetView } from '../state_stores/dataset_view_choice_saver.js';
 import {
     cleanupFilterBarBuilderTestDom,
     resetFilterBarBuilderTestDom,
@@ -46,7 +47,7 @@ function mountDatasetWithBothSidebarsVisible(visibleViewContainerId) {
 }
 
 async function buildFilterBarForView(viewKey, { rowCount = 0 } = {}) {
-    localStorage.setItem('demo_view', viewKey);
+    setChosenDatasetView('demo', viewKey);
     await useRealSharedTopBarRules();
     const { create_filter_bar } = await import('./filter_bar_builder.js');
     create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, rowCount, false, viewKey);
@@ -65,6 +66,7 @@ describe('shared dataset top bar follows the selected view', () => {
     beforeEach(() => {
         resetFilterBarBuilderTestDom();
         localStorage.clear();
+        sessionStorage.clear();
         document.head.innerHTML = '<meta property="og:site_name" content="filt">';
     });
 

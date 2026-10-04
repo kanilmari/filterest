@@ -11,7 +11,7 @@ import {
   buildTempDatasetName,
   createTempDataset,
   dropTempDataset,
-  openTempDataset,
+  openTempDatasetRowArticle,
 } from '../helpers/temp-dataset';
 
 type E2EPage = import('@playwright/test').Page;
@@ -121,19 +121,8 @@ test.describe('C6 — Big Card Attachments', () => {
       });
       expect(enableAttachmentResponse.status, enableAttachmentResponse.body).toBe(201);
 
-      await page.evaluate((targetDatasetName) => {
-        localStorage.setItem(`${targetDatasetName}_sorting_and_filtering_specs`, JSON.stringify({
-          sort: { column: null, direction: null },
-          filters: {},
-          offset: 0,
-          cardView: {
-            collapsed: true,
-            expandedId: 1,
-          },
-        }));
-      }, datasetName);
-
-      await openTempDataset(page, datasetName, 'card');
+      // Open the seeded row's big card from its card, as a person does.
+      await openTempDatasetRowArticle(page, datasetName, 1);
       await expect(page.locator('[data-testid="big-card-container"]').first()).toBeVisible({ timeout: 10000 });
 
       const galleryInput = page.locator('.big_card_image_gallery input[type="file"]').first();
@@ -145,7 +134,8 @@ test.describe('C6 — Big Card Attachments', () => {
           'base64',
         ),
       });
-      await expect(page.locator('[data-testid="big-card-image-thumb-0"]').first()).toHaveAttribute('src', /\/storage\//, { timeout: 15000 });
+      // The thumbnail is a presentation wrapper; its picture carries the stored source.
+      await expect(page.locator('[data-testid="big-card-image-thumb-0"] img').first()).toHaveAttribute('src', /\/storage\//, { timeout: 15000 });
 
       const section = page.locator('[data-testid="big-card-attachments"]').first();
       await expect(section).toBeVisible({ timeout: 10000 });

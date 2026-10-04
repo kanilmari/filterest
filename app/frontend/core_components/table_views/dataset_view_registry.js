@@ -289,7 +289,7 @@ export const DATASET_VIEW_PERMISSION_ROUTES = Object.freeze(
 
 /**
  * Returns the registered metadata for one dataset view key.
- * Operates between raw localStorage/UI view keys and the canonical registry.
+ * Operates between raw stored/UI view keys and the canonical registry.
  * Exists so callers do not duplicate object lookups or fallback behavior.
  */
 export function getDatasetViewDefinition(viewKey) {

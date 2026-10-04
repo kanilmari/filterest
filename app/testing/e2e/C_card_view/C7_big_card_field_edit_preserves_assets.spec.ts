@@ -11,7 +11,7 @@ import {
   buildTempDatasetName,
   createTempDataset,
   dropTempDataset,
-  openTempDataset,
+  openTempDatasetRowArticle,
 } from '../helpers/temp-dataset';
 
 type E2EPage = import('@playwright/test').Page;
@@ -115,19 +115,8 @@ test.describe('C7 — Big Card Field Edit Preserves Assets', () => {
       });
       expect(enableAttachmentResponse.status, enableAttachmentResponse.body).toBe(201);
 
-      await page.evaluate((targetDatasetName) => {
-        localStorage.setItem(`${targetDatasetName}_sorting_and_filtering_specs`, JSON.stringify({
-          sort: { column: null, direction: null },
-          filters: {},
-          offset: 0,
-          cardView: {
-            collapsed: true,
-            expandedId: 1,
-          },
-        }));
-      }, datasetName);
-
-      await openTempDataset(page, datasetName, 'card');
+      // Open the seeded row's big card from its card, as a person does.
+      await openTempDatasetRowArticle(page, datasetName, 1);
       await expect(page.locator('[data-testid="big-card-container"]').first()).toBeVisible({ timeout: 10000 });
 
       await page.locator('.big_card_image_gallery input[type="file"]').first().setInputFiles({
@@ -138,7 +127,8 @@ test.describe('C7 — Big Card Field Edit Preserves Assets', () => {
           'base64',
         ),
       });
-      await expect(page.locator('[data-testid="big-card-image-thumb-0"]').first()).toHaveAttribute('src', /\/storage\//, { timeout: 15000 });
+      // The thumbnail is a presentation wrapper; its picture carries the stored source.
+      await expect(page.locator('[data-testid="big-card-image-thumb-0"] img').first()).toHaveAttribute('src', /\/storage\//, { timeout: 15000 });
 
       await page.locator('[data-testid="big-card-attachments-input"]').first().setInputFiles({
         name: 'specification.pdf',
@@ -148,14 +138,16 @@ test.describe('C7 — Big Card Field Edit Preserves Assets', () => {
       await expect(page.locator('[data-testid="big-card-attachment-item-0"]').first()).toContainText('specification.pdf', { timeout: 15000 });
 
       await page.locator('[data-testid="big-card-edit-button"]').first().click();
-      const titleField = page.locator('[data-column="title"]').first();
+      // The article's own field: the result cards listed beside it carry the
+      // same data-column attribute and come first in the document.
+      const titleField = page.locator('[data-testid="big-card-container"] [data-column="title"]').first();
       const titleInput = titleField.locator('input, textarea').first();
       await expect(titleInput).toBeVisible({ timeout: 5000 });
       await titleInput.fill('Updated asset row');
       await page.locator('[data-testid="big-card-edit-button"]').first().click();
 
       await expect(titleField).toContainText('Updated asset row', { timeout: 15000 });
-      await expect(page.locator('[data-testid="big-card-image-thumb-0"]').first()).toHaveAttribute('src', /\/storage\//, { timeout: 15000 });
+      await expect(page.locator('[data-testid="big-card-image-thumb-0"] img').first()).toHaveAttribute('src', /\/storage\//, { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-attachment-item-0"]').first()).toContainText('specification.pdf', { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-attachments-count"]').first()).toHaveText('1', { timeout: 15000 });
       await expect(page.locator('[data-testid="big-card-attachment-preview-0"]').first()).toBeVisible({ timeout: 15000 });

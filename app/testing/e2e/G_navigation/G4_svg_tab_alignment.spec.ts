@@ -89,7 +89,7 @@ async function readTabMetrics(page: Page, testId: string): Promise<TabMetrics> {
 async function showTabPresentationForView(page: Page, datasetName: string, viewMode: 'table' | 'normal' | 'transposed' | 'card'): Promise<void> {
   await switchToView(page, viewMode, { allowMissing: true });
   await page.evaluate(async ({ datasetName: evaluatedDatasetName, viewMode: evaluatedViewMode }) => {
-    localStorage.setItem(`${evaluatedDatasetName}_view`, evaluatedViewMode);
+    sessionStorage.setItem(`${evaluatedDatasetName}_view`, evaluatedViewMode);
     const modulePath = '/frontend/core_components/navigation/main_tabs/main_tab_printer.js';
     const { updateTabPathsForView } = await import(modulePath);
     await updateTabPathsForView(evaluatedDatasetName);

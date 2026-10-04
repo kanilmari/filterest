@@ -45,6 +45,7 @@ describe("product_card_view_printer", () => {
         getLanguageWithBrowserFallbackMock.mockReset();
         getLanguageWithBrowserFallbackMock.mockReturnValue("en");
         localStorage.clear();
+        sessionStorage.clear();
         openRowArticleViewMock.mockReset();
         refreshTableUnifiedMock.mockReset();
         refreshTableUnifiedMock.mockResolvedValue(undefined);
@@ -183,7 +184,7 @@ describe("product_card_view_printer", () => {
         card.click();
 
         await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalled());
-        expect(localStorage.getItem("products_view")).toBe("article_view");
+        expect(sessionStorage.getItem("products_view")).toBe("article_view");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("products", {
             articleView: {
                 collapsed: true,

@@ -19,6 +19,7 @@ import {
     primeMultipleDatasetPermissions,
 } from "../../route_permission_checker.js";
 import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 // The retitle boundary is verified in main_tab_printer_browser_tab_title.test.js.
 vi.mock("../nav_engine/browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: vi.fn() }));
@@ -127,7 +128,7 @@ function setViewportWidth(width) {
 describe("initTabs", () => {
     beforeEach(() => {
         setViewportWidth(1024);
-        localStorage.clear();
+        localStorage.clear(); sessionStorage.clear();
         document.body.innerHTML = `
             <div id="navbarAuthActions" class="navbar-auth-actions"></div>
             <div id="navbar" style="--navtab-presentation-transition-duration: 0ms;"></div>
@@ -427,7 +428,7 @@ describe("initTabs", () => {
 
     test("uses button tabs on wide grid-like views even with physical navbar space", async () => {
         setViewportWidth(1920);
-        localStorage.setItem("app_service_catalog_view", "table");
+        setChosenDatasetView("app_service_catalog", "table");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -455,7 +456,7 @@ describe("initTabs", () => {
 
     test("uses right-opening tabs for card view when the desktop navbar has physical space", async () => {
         setViewportWidth(1920);
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -475,7 +476,7 @@ describe("initTabs", () => {
 
     test("uses rectangular tabs for every dataset when the active dataset has cover or background media", async () => {
         setViewportWidth(1920);
-        localStorage.setItem("media_dataset_view", "card");
+        setChosenDatasetView("media_dataset", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
         await initTabs({
             preloadedContentTablesResponse: {
@@ -510,7 +511,7 @@ describe("initTabs", () => {
 
     test("uses button tabs for card view when the navbar is in overlay layout", async () => {
         setViewportWidth(1024);
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -532,7 +533,7 @@ describe("initTabs", () => {
     test("recalculates tab shape when a hidden desktop navbar becomes visible", async () => {
         setViewportWidth(1920);
         document.getElementById("tabs_container")?.classList.add("navbar_hidden");
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -557,7 +558,7 @@ describe("initTabs", () => {
 
     test("uses full-width button tabs on narrow screens", async () => {
         setViewportWidth(640);
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -662,7 +663,7 @@ describe("initTabs", () => {
     });
     test("resets a former rounded overlap when tabs rebuild around a preloaded admin view", async () => {
         Object.defineProperty(window, "innerWidth", { configurable: true, value: 1920 });
-        localStorage.setItem("app_service_catalog_view", "card");
+        setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
         await initTabs();
         await openNavTab("app_service_catalog");

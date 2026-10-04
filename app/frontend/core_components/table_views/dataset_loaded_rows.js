@@ -3,6 +3,7 @@
 // Bridges a visible paginated result list and the article navigation list.
 // Exists to transfer already loaded rows without replaying their page requests.
 import { getUnifiedTableState } from "../state_stores/table_state_store.js";
+import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { getDatasetListingFilters } from "../infinite_scroll/dataset_listing_filters.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "../navigation/nav_engine/dataset_access_registry.js";
 import { getDatasetViewContainerId } from "./dataset_view_registry.js";
@@ -84,7 +85,7 @@ export function appendLoadedDatasetRows(container, tableName, rows, nextOffset) 
 
 /** Only the currently visible, committed prefix may cross views. */
 export function captureLoadedDatasetRows(tableName, { retainedCardReturn = false } = {}) {
-    const activeView = localStorage.getItem(tableName + "_view");
+    const activeView = getChosenDatasetView(tableName);
     if (retainedCardReturn && activeView !== "article_view") return null;
     const view = retainedCardReturn ? "card" : activeView;
     const container = document.getElementById(getDatasetViewContainerId(view, tableName));
@@ -104,6 +105,6 @@ export function resolveLoadedDatasetRows(tableName, token) {
     const entry = token && transfers.get(token);
     if (canReadDatasetFromRegistry(tableName) !== true
         || !entry || entry.tableName !== tableName || entry.signature !== signature(tableName)
-        || localStorage.getItem(tableName + "_view") !== "article_view") return null;
+        || getChosenDatasetView(tableName) !== "article_view") return null;
     return entry;
 }

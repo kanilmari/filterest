@@ -25,6 +25,7 @@ import {
 import { resolveRowArticleParentImageRows } from "./row_article_asset_resolver.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { articleViewRestoreFieldsForRowChange } from "./row_article_view_restore_state.js";
 import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
 import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
@@ -84,12 +85,12 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
     articleOpenGenerations.set(table_name, generation);
     const canCommit = () => isCurrent()
         && articleOpenGenerations.get(table_name) === generation
-        && localStorage.getItem(`${table_name}_view`) === "article_view";
+        && getChosenDatasetView(table_name) === "article_view";
     // Keep the legacy counter key stable until analytics naming is migrated separately.
     count_this_function("open_big_card_view"); // 🔢
 
     try {
-        const activeView = localStorage.getItem(`${table_name}_view`) || "card";
+        const activeView = getChosenDatasetView(table_name) || "card";
         if (activeView !== "article_view") {
             // Load adapters only after application initialization, at the user
             // action boundary. The retained-state module must not import the
@@ -100,7 +101,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 import("../../../reusable_components/results_count/results_count_printer.js"),
             ]);
             if (!isCurrent() || articleOpenGenerations.get(table_name) !== generation
-                || (localStorage.getItem(table_name + "_view") || "card") !== activeView) return;
+                || (getChosenDatasetView(table_name) || "card") !== activeView) return;
             const loadedRows = captureLoadedDatasetRows(table_name);
             const preserveCardReturn = captureCardArticleReturn(table_name, {
                 listPath: buildDatasetPath(table_name, DATASET_PREFIX || "/"),
@@ -122,7 +123,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                     ...articleViewRestoreFieldsForRowChange(table_name, row_item?.id ?? null),
                 },
             });
-            localStorage.setItem(`${table_name}_view`, "article_view");
+            setChosenDatasetView(table_name, "article_view");
             const { refreshTableUnified } = await import(
                 "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
             );

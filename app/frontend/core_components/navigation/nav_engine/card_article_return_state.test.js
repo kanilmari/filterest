@@ -13,6 +13,7 @@ vi.mock("./dataset_access_registry.js", () => ({
 }));
 import * as retained from "./card_article_return_state.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { HISTORY_ENTRY_ID, writeHistoryEntry } from "./history_entry_state.js";
 
 const adapter = {
@@ -33,7 +34,7 @@ function fixture(search = "") {
         <div id="catalog_card_top_controls"></div><div class="card_view_wrapper"><div class="card_container"><div class="card" data-id="3">Harbour</div></div></div>
       </div></div><div id="catalog_article_view_container" class="scrollable_content" style="display:none"></div>
     </div></div>`;
-    localStorage.setItem("catalog_view", "card");
+    setChosenDatasetView("catalog", "card");
     localStorage.setItem("catalog_columns", '["title"]');
     localStorage.setItem("catalog_dataTypes", '{"title":{"is_multilingual":true}}');
     localStorage.setItem("catalog_tableMeta", '{"fieldset":"card"}');
@@ -49,7 +50,7 @@ function openArticle(host) {
     writeHistoryEntry("/catalog/3?" + articleParams.toString(), {
         bigCard: true, articleOriginEntry: originState[HISTORY_ENTRY_ID],
     });
-    localStorage.setItem("catalog_view", "article_view");
+    setChosenDatasetView("catalog", "article_view");
     host.style.display = "none"; host.scrollTop = 0;
     localStorage.setItem("catalog_columns", '["article_only"]');
     localStorage.setItem("catalog_dataTypes", '{"article_only":{}}');
@@ -58,7 +59,7 @@ function openArticle(host) {
     return originState;
 }
 beforeEach(() => {
-    retained.invalidateCardArticleReturn(); localStorage.clear(); vi.clearAllMocks();
+    retained.invalidateCardArticleReturn(); localStorage.clear(); sessionStorage.clear(); vi.clearAllMocks();
     for (const key of Object.keys(mocks.cache)) delete mocks.cache[key];
     mocks.pagination.isLoading = false;
 });
@@ -87,7 +88,7 @@ test("Back restores the same card nodes, metadata, filters, offset and inner vie
     retained.refreshCardArticleReturnViewport("catalog");
     expect(retained.getCardArticleReturnToken("catalog")).toBe(token);
     host.scrollTop = 0;
-    localStorage.setItem("catalog_view", "article_view");
+    setChosenDatasetView("catalog", "article_view");
     history.replaceState(original, "", "/catalog?view=card");
     expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
     expect(host.scrollTop).toBe(5200);
@@ -217,7 +218,7 @@ test("Forward during the next page retains the latest committed offset and viewp
     retained.refreshCardArticleReturnViewport("catalog");
     expect(retained.getCardArticleReturnToken("catalog")).toBe(token);
     host.style.display = "none"; host.scrollTop = 0;
-    localStorage.setItem("catalog_view", "article_view");
+    setChosenDatasetView("catalog", "article_view");
     history.replaceState(origin, "", "/catalog?view=card");
     expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
     expect(host.scrollTop).toBe(5300);

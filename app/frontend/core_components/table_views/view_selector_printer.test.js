@@ -1,10 +1,12 @@
 // view_selector_printer.test.js
 // Verifies immediate active-button syncing for dataset view switches in jsdom.
-// Bridges localStorage-backed view changes, styling updates, and refresh calls through the shared selector helper.
+// Bridges this tab's stored view changes, styling updates, and refresh calls through the shared selector helper.
 // Exists to keep the filterbar/admin view highlight aligned with the actual active dataset view.
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
+import { setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 
 const refreshTableUnifiedMock = vi.fn();
 const updateTabPathsForViewMock = vi.fn();
@@ -63,6 +65,7 @@ describe("view_selector_printer", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
+        sessionStorage.clear();
         document.body.innerHTML = `
             <div class="body_wrapper">
                 <div class="body_content"></div>
@@ -83,8 +86,52 @@ describe("view_selector_printer", () => {
 
         selectDatasetView("demo_table", "article_view", "card");
 
-        expect(localStorage.getItem("demo_table_view")).toBe("article_view");
+        expect(sessionStorage.getItem("demo_table_view")).toBe("article_view");
         expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: "demo_table" });
+    });
+
+    // (a) Owner decision K143: the chosen view is this tab's own. Choosing one
+    // writes it to the tab's session storage and never to the storage that
+    // every tab of the site shares.
+    test("choosing a view keeps it in this tab and never writes it to localStorage", async () => {
+        const { selectDatasetView } = await loadModule();
+        const writes = vi.spyOn(Storage.prototype, "setItem");
+        try {
+            selectDatasetView("demo_table", "table", "card");
+            selectDatasetView("demo_table", "article_view", "table");
+        } finally {
+            writes.mockRestore();
+        }
+
+        expect(sessionStorage.getItem("demo_table_view")).toBe("article_view");
+        expect(localStorage.getItem("demo_table_view")).toBeNull();
+        const sharedWrites = writes.mock.calls
+            .filter((_call, index) => writes.mock.contexts[index] === localStorage)
+            .map(([key]) => key);
+        expect(sharedWrites).toEqual([]);
+    });
+
+    // A browser that refuses session storage keeps the choice in this page's
+    // memory (tab_session_storage.js): choosing still updates the address and
+    // redraws, nothing throws, and the redraw reads the choice.
+    test("choosing a view in a browser that refuses session storage keeps it in page memory, updates the address and redraws", async () => {
+        const { selectDatasetView } = await loadModule();
+        const { getChosenDatasetView } = await import("../state_stores/dataset_view_choice_saver.js");
+        const refuse = () => { throw new DOMException("The operation is insecure.", "SecurityError"); };
+        vi.stubGlobal("sessionStorage", { getItem: refuse, setItem: refuse, removeItem: refuse, clear: refuse, key: refuse, length: 0 });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            expect(() => selectDatasetView("demo_table", "table", "card")).not.toThrow();
+            expect(getChosenDatasetView("demo_table")).toBe("table");
+            expect(() => selectDatasetView("demo_table", "article_view", "table")).not.toThrow();
+            expect(getChosenDatasetView("demo_table")).toBe("article_view");
+            expect(updateURLMock).toHaveBeenCalledWith("demo_table", { view: "table" });
+            expect(setParamsMock).toHaveBeenCalledWith("demo_table", { view: "article_view" });
+            expect(refreshTableUnifiedMock).toHaveBeenCalledTimes(2);
+        } finally {
+            warn.mockRestore();
+            vi.unstubAllGlobals();
+        }
     });
 
     test("the dataset default button is available without granting other views", async () => {
@@ -100,13 +147,13 @@ describe("view_selector_printer", () => {
         expect(applyPermissionMock.mock.calls.some(([button]) => button === table)).toBe(false);
         expect(applyPermissionMock).toHaveBeenCalledTimes(2);
         table.click();
-        expect(localStorage.getItem("demo_table_view")).toBe("table");
+        expect(sessionStorage.getItem("demo_table_view")).toBe("table");
         expect(updateURLMock).toHaveBeenLastCalledWith("demo_table", { view: "table" });
         for (const blocked of ["card", "article_view"]) {
             updateURLMock.mockClear();
             refreshTableUnifiedMock.mockClear();
             selectDatasetView("demo_table", blocked, "table");
-            expect(localStorage.getItem("demo_table_view")).toBe("table");
+            expect(sessionStorage.getItem("demo_table_view")).toBe("table");
             expect(updateURLMock).toHaveBeenLastCalledWith("demo_table", { view: "table" });
             expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
         }
@@ -114,10 +161,10 @@ describe("view_selector_printer", () => {
 
     test("More-menu transitions preserve the query and commit the URL before rendering", async () => {
         const { selectDatasetView } = await loadModule();
-        localStorage.setItem("demo_table_view", "article_view");
+        setChosenDatasetView("demo_table", "article_view");
         getParamsMock.mockReturnValue({ search: "retained query", sort_order: "DESC", view: "article_view" });
         selectDatasetView("demo_table", "tree", "article_view");
-        expect(localStorage.getItem("demo_table_view")).toBe("tree");
+        expect(sessionStorage.getItem("demo_table_view")).toBe("tree");
         expect(updateURLMock).toHaveBeenCalledWith("demo_table", {
             search: "retained query", sort_order: "DESC", view: "tree",
         });
@@ -158,20 +205,17 @@ describe("view_selector_printer", () => {
             "demo_table",
             true
         );
-        expect(localStorage.getItem("demo_table_view")).toBe(viewKey);
+        expect(sessionStorage.getItem("demo_table_view")).toBe(viewKey);
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
     });
 
     test("clears stale article state when returning to cards without mounted article DOM", async () => {
-        localStorage.setItem(
-            "demo_table_sorting_and_filtering_specs",
-            JSON.stringify({
-                sort: { column: null, direction: null },
-                filters: {},
-                offset: 0,
-                articleView: { collapsed: true, expandedId: 7 },
-            })
-        );
+        setUnifiedTableState("demo_table", {
+            sort: { column: null, direction: null },
+            filters: {},
+            offset: 0,
+            articleView: { collapsed: true, expandedId: 7 },
+        });
         const articleToggleSpy = vi.fn();
         document.addEventListener("big-card-toggle", articleToggleSpy, { once: true });
         const { createGenericViewSelector } = await loadModule();
@@ -182,9 +226,7 @@ describe("view_selector_printer", () => {
 
         selector.querySelector('[data-testid="view-btn-card"]').click();
 
-        const storedState = JSON.parse(
-            localStorage.getItem("demo_table_sorting_and_filtering_specs")
-        );
+        const storedState = getUnifiedTableState("demo_table");
         expect(storedState.articleView).toEqual(expect.objectContaining({
             collapsed: false,
             expandedId: null,
@@ -217,7 +259,7 @@ describe("view_selector_printer", () => {
 
         tableButton.click();
 
-        expect(localStorage.getItem("demo_table_view")).toBe("table");
+        expect(sessionStorage.getItem("demo_table_view")).toBe("table");
         expect(tableButton.classList.contains("active")).toBe(true);
         expect(tableButton.getAttribute("aria-pressed")).toBe("true");
         expect(cardButton.classList.contains("active")).toBe(false);
@@ -233,7 +275,7 @@ describe("view_selector_printer", () => {
             { label: "Kortti", viewKey: "card" },
         ]);
         document.body.appendChild(selector);
-        localStorage.setItem("demo_table_view", "table");
+        setChosenDatasetView("demo_table", "table");
 
         applyViewStyling("demo_table");
 
@@ -261,7 +303,7 @@ describe("view_selector_printer", () => {
             </div>
             `
         );
-        localStorage.setItem("demo_table_view", "card");
+        setChosenDatasetView("demo_table", "card");
 
         document.dispatchEvent(new CustomEvent("row-article-toggle", {
             detail: { tableName: "demo_table", isOpen: true },
@@ -278,15 +320,12 @@ describe("view_selector_printer", () => {
         // The view selector never picks a row: whatever draws the searched
         // listing opens its first row, so an AI suggestion is never chosen.
         getParamsMock.mockReturnValue({ search: "firefox" });
-        localStorage.setItem(
-            "demo_table_sorting_and_filtering_specs",
-            JSON.stringify({
-                sort: { column: null, direction: null },
-                filters: {},
-                offset: 0,
-                articleView: { collapsed: true, expandedId: 133 },
-            })
-        );
+        setUnifiedTableState("demo_table", {
+            sort: { column: null, direction: null },
+            filters: {},
+            offset: 0,
+            articleView: { collapsed: true, expandedId: 133 },
+        });
         const { createGenericViewSelector } = await loadModule();
         const selector = createGenericViewSelector("demo_table", "table", [
             { label: "Artikkeli", viewKey: "article_view" },
@@ -298,9 +337,7 @@ describe("view_selector_printer", () => {
 
         // The rebuild starts at once; there is nothing to wait for.
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
-        const storedState = JSON.parse(
-            localStorage.getItem("demo_table_sorting_and_filtering_specs")
-        );
+        const storedState = getUnifiedTableState("demo_table");
         expect(setParamsMock).toHaveBeenCalledWith("demo_table", {
             search: "firefox",
             view: "article_view",
@@ -320,7 +357,7 @@ describe("view_selector_printer", () => {
 
 
     test("reselecting the open article is inert and preserves its row/history", async () => {
-        localStorage.setItem("demo_table_view", "article_view");
+        setChosenDatasetView("demo_table", "article_view");
         document.body.innerHTML = '<div id="demo_table_article_view_container"><div class="card_view_wrapper big-card-open"><article class="active_row_article"></article></div></div>';
         const original = document.querySelector("article");
         const { createGenericViewSelector } = await loadModule();
@@ -346,9 +383,7 @@ describe("view_selector_printer", () => {
         await vi.waitFor(() => {
             expect(refreshTableUnifiedMock).toHaveBeenCalledWith("demo_table");
         });
-        const storedState = JSON.parse(
-            localStorage.getItem("demo_table_sorting_and_filtering_specs")
-        );
+        const storedState = getUnifiedTableState("demo_table");
         expect(setParamsMock).toHaveBeenCalledWith("demo_table", {
             view: "article_view",
         });

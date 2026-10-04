@@ -15,6 +15,7 @@ import {
 
 beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
 });
 
 afterEach(() => {

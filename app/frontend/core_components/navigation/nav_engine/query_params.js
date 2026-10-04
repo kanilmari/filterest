@@ -1,5 +1,6 @@
 // query_params.js
-// Manages per-dataset URL query parameters using URLSearchParams and localStorage.
+// Manages per-dataset URL query parameters: the search, filter and sort parameters in
+// localStorage, shared by every browser tab, and the view parameter in this page's memory only.
 // Bridges the URL bar and filter/sort state across navigation and popstate events.
 // Exists to centralise param read/write logic so every navigation path shares a consistent state model.
 
@@ -13,20 +14,73 @@ const AUTH_SHELL_QUERY_KEYS = new Set([
     'register-entry',
     'redirect',
 ]);
+/**
+ * The address's view parameter names the view this page shows, which is the
+ * page's own choice (owner decision K143). It is cached only in this page's
+ * memory, so another tab's view never reaches this one's addresses, and a newly
+ * loaded page starts from the view its own address names. A view that earlier
+ * versions stored with the shared parameters is ignored and left out of the
+ * next write.
+ */
+const PAGE_OWN_PARAM_KEY = 'view';
 let datasetParams = {};
 let currentDataset = null;
 
+function withoutPageOwnParams(params) {
+    if (!params || typeof params !== 'object' || !Object.hasOwn(params, PAGE_OWN_PARAM_KEY)) {
+        return params;
+    }
+    const { [PAGE_OWN_PARAM_KEY]: _pageOwnView, ...sharedParams } = params;
+    return sharedParams;
+}
+
+/**
+ * One dataset's parameters after the shared ones were read again: the shared
+ * values in the order this page already had them, the page's own view where it
+ * was, and any parameter another tab added after them. The address the page
+ * writes from them therefore stays the same string, so the browser history
+ * entry is replaced rather than a second one added.
+ */
+function keepPageParamOrder(pageParams, sharedParams) {
+    const merged = {};
+    for (const key of Object.keys(pageParams)) {
+        if (key === PAGE_OWN_PARAM_KEY) {
+            merged[key] = pageParams[key];
+        } else if (Object.hasOwn(sharedParams, key)) {
+            merged[key] = sharedParams[key];
+        }
+    }
+    for (const [key, value] of Object.entries(sharedParams)) {
+        if (!Object.hasOwn(merged, key)) merged[key] = value;
+    }
+    return merged;
+}
+
 function loadFromStorage() {
+    const pageParams = datasetParams;
+    let storedParams;
     try {
-        datasetParams = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        storedParams = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
     } catch {
-        datasetParams = {};
+        storedParams = {};
+    }
+    datasetParams = {};
+    for (const [dataset, params] of Object.entries(storedParams)) {
+        datasetParams[dataset] = withoutPageOwnParams(params);
+    }
+    for (const [dataset, params] of Object.entries(pageParams)) {
+        if (params && Object.hasOwn(params, PAGE_OWN_PARAM_KEY)) {
+            datasetParams[dataset] = keepPageParamOrder(params, datasetParams[dataset] || {});
+        }
     }
 }
 
 function saveToStorage() {
+    const sharedParams = Object.fromEntries(
+        Object.entries(datasetParams).map(([dataset, params]) => [dataset, withoutPageOwnParams(params)])
+    );
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(datasetParams));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sharedParams));
     } catch {
         /* ignore quota errors */
     }
@@ -115,19 +169,12 @@ export function setParams(dataset, params = {}) {
 }
 
 /**
- * Drops the view a dataset's cached address parameters remember from an
- * earlier visit; the next address is then written from the view actually
- * drawn. Unlike setParams it leaves the current dataset as it is.
+ * Forgets the parameters this page holds in memory for every dataset, its own
+ * views included. Sign-out clears the stored ones; without this, a view kept
+ * only in the page's memory would outlive the signed-out session.
  */
-export function forgetCachedView(dataset) {
-    loadFromStorage();
-    if (!datasetParams[dataset] || !Object.hasOwn(datasetParams[dataset], 'view')) {
-        return;
-    }
-    const remaining = { ...datasetParams[dataset] };
-    delete remaining.view;
-    datasetParams[dataset] = remaining;
-    saveToStorage();
+export function forgetPageDatasetParams() {
+    datasetParams = {};
 }
 
 /**

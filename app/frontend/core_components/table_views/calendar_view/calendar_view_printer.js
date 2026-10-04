@@ -22,6 +22,7 @@ import {
 import { openRowArticleView } from "../card_view/row_article_opener.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import {
     bindDatasetLanguageRenderer,
     refreshLocalizedDatasetValues,
@@ -522,8 +523,8 @@ async function openCalendarEventArticle(event, state, button) {
         return;
     }
 
-    const returnView = localStorage.getItem(`${state.tableName}_view`) || "calendar";
-    localStorage.setItem(`${state.tableName}_view`, "article_view");
+    const returnView = getChosenDatasetView(state.tableName) || "calendar";
+    setChosenDatasetView(state.tableName, "article_view");
     setUnifiedTableState(state.tableName, {
         articleView: {
             collapsed: true,

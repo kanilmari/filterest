@@ -13,10 +13,15 @@ import {
 import { openNavTab } from '../../navigation/main_tabs/main_tab_printer.js';
 import { count_this_function } from '../../dev_tools/function_counter.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
-import { DATASET_PREFIX, normalizePath, forgetCachedView } from '../../navigation/nav_engine/query_params.js';
+import { DATASET_PREFIX, normalizePath } from '../../navigation/nav_engine/query_params.js';
 import { primeDatasetAccessRegistry, beginDatasetAccessRefresh, isCurrentDatasetAccessRefresh } from '../../navigation/nav_engine/dataset_access_registry.js';
 import { setUnifiedTableState } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { forgetOpenRow } from '../../state_stores/table_state_store.js';
+import {
+    forgetChosenDatasetView,
+    getChosenDatasetView,
+    setChosenDatasetView,
+} from '../../state_stores/dataset_view_choice_saver.js';
 import {
     setRedirectNotice,
     clearDatasetSelectionState,
@@ -32,26 +37,34 @@ let earlierVisitsForgotten = false;
 /**
  * A fresh page shows what its address asks for -- a row or a view -- and
  * otherwise each dataset's own default view. Nothing carries over from an
- * earlier visit: the stored view also recorded that an article had been left
- * open, so such an article reopened on every later visit whatever the
- * dataset's default said. Within a visit the stored view still carries the
+ * earlier visit in this tab: the stored view also recorded that an article had
+ * been left open, so such an article reopened on every later visit whatever
+ * the dataset's default said. Within a visit the stored view still carries the
  * person's current choice from one render to the next, and the address keeps
- * it across a reload. The current dataset's cached address parameters came
- * from the address itself, so they are kept.
+ * it across a reload.
+ *
+ * Only this tab's own memory is forgotten (owner decision K143). The chosen
+ * views and open rows live in the tab's session storage, so a tab opened beside
+ * another never erases what that tab shows, and the sorting, filters and paging
+ * that every tab shares stay as they are. The view in the cached address
+ * parameters needs no forgetting: it lives only in the page's memory
+ * (query_params.js), so a new page starts with none.
+ *
+ * A reload of an open article's own address is that reading continuing: when
+ * `reloadedArticle` names the row this tab had open, the article's related tab
+ * and scroll position are kept (forgetOpenRow in table_state_store.js).
+ *
+ * @param {Iterable<string>} datasetNames
+ * @param {{datasetName: string, rowId: string}|null} [reloadedArticle]
  */
-function forgetViewsFromEarlierVisits(datasetNames, currentDataset) {
+function forgetViewsFromEarlierVisits(datasetNames, reloadedArticle = null) {
     if (earlierVisitsForgotten) {
         return;
     }
     earlierVisitsForgotten = true;
     for (const datasetName of datasetNames) {
-        localStorage.removeItem(`${datasetName}_view`);
-        // Written by earlier versions to migrate cloud views; nothing reads it.
-        localStorage.removeItem(`${datasetName}_default_view_seen`);
-        forgetOpenRow(datasetName);
-        if (datasetName !== currentDataset) {
-            forgetCachedView(datasetName);
-        }
+        forgetChosenDatasetView(datasetName);
+        forgetOpenRow(datasetName, datasetName === reloadedArticle?.datasetName ? reloadedArticle.rowId : null);
     }
 }
 
@@ -141,7 +154,13 @@ export async function load_tables(options = {}) {
             clearDatasetSelectionState();
         }
 
-        forgetViewsFromEarlierVisits(set_of_every_table_and_view_name, resolved_table_name);
+        // The image-first route owns its row and never restored the ordinary
+        // article's reading position, so only an ordinary article row counts.
+        const opensImageFirst = Boolean(deepLinkedRowId) && isImageFirstViewURL();
+        const reloadedArticle = resolved_table_name && deepLinkedRowId && !opensImageFirst
+            ? { datasetName: resolved_table_name, rowId: deepLinkedRowId }
+            : null;
+        forgetViewsFromEarlierVisits(set_of_every_table_and_view_name, reloadedArticle);
 
         /* ----------------------------------------------------------
            Lopuksi avataan oikea välilehti
@@ -149,9 +168,8 @@ export async function load_tables(options = {}) {
         if (resolved_table_name) {
             // If a deep-linked row ID is present, pre-set cardView state
             // so table_refresh_unified auto-opens the big card after data loads
-            const opensImageFirst = Boolean(deepLinkedRowId) && isImageFirstViewURL();
             if (deepLinkedRowId && !opensImageFirst) {
-                localStorage.setItem(`${resolved_table_name}_view`, "article_view");
+                setChosenDatasetView(resolved_table_name, "article_view");
                 setUnifiedTableState(resolved_table_name, {
                     articleView: { collapsed: true, expandedId: deepLinkedRowId, returnView: "card" }
                 });
@@ -164,13 +182,13 @@ export async function load_tables(options = {}) {
                 const requestedView = initialParams.get("view");
                 const explicitView = resolveDatasetViewSelectionTarget(requestedView);
                 if (requestedView && isRenderableDatasetView(explicitView)
-                    && localStorage.getItem(`${resolved_table_name}_view`) !== explicitView) {
-                    localStorage.setItem(`${resolved_table_name}_view`, explicitView);
+                    && getChosenDatasetView(resolved_table_name) !== explicitView) {
+                    setChosenDatasetView(resolved_table_name, explicitView);
                 }
             }
             if (opensImageFirst) {
                 const backingView = getImageFirstViewBackingView();
-                localStorage.setItem(`${resolved_table_name}_view`, backingView);
+                setChosenDatasetView(resolved_table_name, backingView);
                 initialParams.set("view", backingView);
             }
             const navigation = await openNavTab(resolved_table_name, {
