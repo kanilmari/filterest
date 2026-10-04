@@ -431,6 +431,30 @@ version before starting; it never downloads a package during a run.
 `WORKER_CODEX_VERSION` can select another deliberately installed exact version.
 A missing executable or version mismatch stops the run.
 
+A worker run bills the client's signed-in subscription unless it passes `--api`.
+Before starting, the worker requires `codex login status` to report a ChatGPT
+sign-in, or `claude auth status` a claude.ai sign-in, and it starts the client
+without `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`,
+`CLAUDE_CODE_USE_VERTEX`, `OPENAI_API_KEY` and `CODEX_API_KEY`. A client signed
+in any other way stops the run; it never falls back to an API key. `--api`
+keeps the environment and is refused when the backend has no key.
+`run_status.txt` and the worker log record the billing mode.
+
+A `--background` run leads its own process group, so it needs `setsid`; without
+it the worker refuses `--background` and the foreground still works. The worker
+reports success once the run's `worker.pid` names a running process or the run
+has already finished successfully, and failure when the run recorded a failure
+or ended without a result. If neither happens within 15 seconds, it reports the
+start as unconfirmed and exits non-zero without sending any signal: the run may
+still start, so check it with `--status` and stop it with `--stop`.
+
+`--stop` ends the run's process group: TERM, then KILL after a grace, then a
+check that the group is gone. Before every signal it confirms that the group is
+still the run's: a process holding the leader's pid must have the start time
+recorded at launch, otherwise nothing more is sent. A process that leaves the
+group by starting its own session is outside this guarantee, and a run started
+before process groups were recorded is stopped by its recorded pid only.
+
 Reusable product routines live beside the worker implementation under
 `app/server_tools/agent_tools/worker_agent/routines/`. A downstream composition
 may set `FILTEREST_WORKER_ROUTINES_DIR` to add installation-specific routines;

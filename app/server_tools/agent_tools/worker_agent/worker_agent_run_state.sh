@@ -212,6 +212,9 @@ check_status() {
     printf "  Done sentinel: %s\n" "$(status_yes_no "$RUN_SNAPSHOT_DONE_PRESENT")"
     printf "  PID: %s\n" "$RUN_SNAPSHOT_PID_STATE"
     printf "  Run state: %s\n" "$RUN_SNAPSHOT_RUN_STATE"
+    local recorded_billing=""
+    recorded_billing=$(read_run_status_value "$RUN_SNAPSHOT_RUN_STATUS_FILE" "billing_mode")
+    printf "  Billing: %s\n" "${recorded_billing:-not recorded}"
 
     if [[ "$RUN_SNAPSHOT_DONE_PRESENT" == "1" ]]; then
         if [[ -f "$summary_file" ]]; then
@@ -225,6 +228,112 @@ check_status() {
         cat "$summary_file"
     fi
     exit 0
+}
+
+# The process group this command itself runs in, which is never a target.
+own_process_group() {
+    local own_stat="" state="" parent_pid="" process_group=""
+    own_stat=$(cat "/proc/$$/stat" 2>/dev/null) || own_stat=""
+    read -r state parent_pid process_group _ <<< "${own_stat##*) }"
+    printf '%s' "$process_group"
+}
+
+# process_start_time prints a process's start time (clock ticks after boot,
+# field 22 of /proc/<pid>/stat), or nothing when no process has that pid.
+process_start_time() {
+    local stat=""
+    local -a fields=()
+    stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
+    read -r -a fields <<< "${stat##*) }"
+    printf '%s' "${fields[19]:-}"
+}
+
+# group_still_ours decides, before each signal, whether a recorded process group
+# may still be signalled. A process whose pid is the group's id must be the
+# leader recorded at launch, with the same start time. If no process has that
+# pid, the number cannot have been handed out again while the group still has
+# members, so the group's survivors are still the run's. Without /proc nothing
+# can be confirmed, and nothing is signalled.
+group_still_ours() {
+    local process_group="$1"
+    local recorded_start="$2"
+    local current_start=""
+    [[ -r /proc/self/stat ]] || return 1
+    current_start=$(process_start_time "$process_group")
+    [[ -z "$current_start" || "$current_start" == "$recorded_start" ]]
+}
+
+# stop_process_group ends a run's process group as a whole: one TERM reaches
+# every member at once, KILL follows after the grace, and the group is then
+# re-checked until it is gone (a bounded wait, since a member that has died but
+# is not yet reaped still counts). The group's identity is confirmed again
+# before every signal and every re-check, so a group number handed out anew is
+# never signalled. A process that left the group by starting its own session is
+# outside this guarantee. Returns 0 once the group is gone, 1 if it is still
+# there after KILL, and 2 when it can no longer be confirmed as the run's (and
+# nothing more is sent).
+stop_process_group() {
+    local process_group="$1"
+    local recorded_start="$2"
+    local grace_polls="${3:-10}"
+    local polls=0
+    if [[ ! "$process_group" =~ ^[0-9]+$ ]] || (( process_group <= 1 )) \
+        || [[ "$process_group" == "$(own_process_group)" ]]; then
+        return 2
+    fi
+    group_still_ours "$process_group" "$recorded_start" || return 2
+    kill -0 -- "-$process_group" 2>/dev/null || return 0
+    group_still_ours "$process_group" "$recorded_start" || return 2
+    kill -TERM -- "-$process_group" 2>/dev/null || true
+    for (( polls = 0; polls < grace_polls; polls++ )); do
+        sleep 0.2
+        group_still_ours "$process_group" "$recorded_start" || return 2
+        kill -0 -- "-$process_group" 2>/dev/null || return 0
+    done
+    group_still_ours "$process_group" "$recorded_start" || return 2
+    kill -KILL -- "-$process_group" 2>/dev/null || true
+    for (( polls = 0; polls < 10; polls++ )); do
+        sleep 0.2
+        group_still_ours "$process_group" "$recorded_start" || return 2
+        kill -0 -- "-$process_group" 2>/dev/null || return 0
+    done
+    return 1
+}
+
+# Runs launched with process-group tracking are stopped as a whole group: one
+# signal reaches the wrapper and the backend alike, so the backend does not keep
+# working (or billing) after the wrapper has gone.
+stop_task_process_group() {
+    local task_id="$1"
+    local found_dir="$2"
+    local process_group="$3"
+    local recorded_start="$4"
+    local done_file="$found_dir/.worker_done_${task_id}"
+    local mismatch="Process group $process_group can no longer be confirmed as this run's: a process with its leader's pid has another start time than the one recorded at launch. Nothing was signalled."
+
+    if ! group_still_ours "$process_group" "$recorded_start"; then
+        err "$mismatch"
+        exit 1
+    fi
+    if ! kill -0 -- "-$process_group" 2>/dev/null; then
+        warn "Task [$task_id] has no live process group $process_group; marking run as failed."
+        mark_interrupted_run_failed "$task_id" "$found_dir" "stop requested after process group $process_group had already ended"
+        check_status "$task_id"
+    fi
+
+    info "Stopping task [$task_id] (process group $process_group)..."
+    local stop_result=0
+    stop_process_group "$process_group" "$recorded_start" $(( STOP_GRACE_SECONDS * 5 )) || stop_result=$?
+    if (( stop_result == 2 )); then
+        err "${mismatch/Nothing was signalled/No further signal was sent}"
+        exit 1
+    elif (( stop_result == 1 )); then
+        warn "Process group $process_group still has members after KILL."
+    fi
+    if [[ ! -f "$done_file" ]]; then
+        mark_interrupted_run_failed "$task_id" "$found_dir" "stop requested by operator"
+    fi
+    check_status "$task_id"
 }
 
 stop_task() {
@@ -243,6 +352,14 @@ stop_task() {
         info "Task [$task_id] is already ${RUN_SNAPSHOT_CLASSIFICATION}; nothing to stop."
         check_status "$task_id"
     fi
+
+    local process_group="" recorded_start=""
+    process_group=$(read_run_status_value "$RUN_SNAPSHOT_RUN_STATUS_FILE" "process_group")
+    recorded_start=$(read_run_status_value "$RUN_SNAPSHOT_RUN_STATUS_FILE" "process_group_leader_start")
+    if [[ "$process_group" =~ ^[0-9]+$ && "$recorded_start" =~ ^[0-9]+$ ]]; then
+        stop_task_process_group "$task_id" "$found_dir" "$process_group" "$recorded_start"
+    fi
+    warn "Task [$task_id] was started before process-group tracking: only its recorded pid is signalled, so a backend it started may keep running."
 
     local done_file="$found_dir/.worker_done_${task_id}"
     local worker_pid=""
@@ -443,7 +560,12 @@ detect_stale_run() {
             local now
             now=$(date +%s)
             local idle_seconds=$(( now - log_mtime ))
-            if (( log_lines <= 1 )) && (( idle_seconds >= 60 )); then
+            # An unconfirmed launch adds its own line to the launch log.
+            local launch_lines=1
+            if [[ -n "$(read_run_status_value "$run_status_file" "launch_unconfirmed")" ]]; then
+                launch_lines=2
+            fi
+            if (( log_lines <= launch_lines )) && (( idle_seconds >= 60 )); then
                 echo "run has no worker pid file and log has been stalled at launch for ${idle_seconds}s"
                 return 0
             fi
@@ -513,6 +635,12 @@ record_failed_run_state() {
     existing_research=$(read_run_status_value "$run_status_file" "research_mode")
     [[ -n "$existing_backend" ]] && recorded_backend="$existing_backend"
     [[ -n "$existing_research" ]] && recorded_research="$existing_research"
+    # Only the run's own record knows its billing and process group; this
+    # command's defaults do not.
+    local recorded_billing="" recorded_group="" recorded_group_start=""
+    recorded_billing=$(read_run_status_value "$run_status_file" "billing_mode")
+    recorded_group=$(read_run_status_value "$run_status_file" "process_group")
+    recorded_group_start=$(read_run_status_value "$run_status_file" "process_group_leader_start")
 
     if [[ -f "$log_file" ]]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${log_prefix}: $reason" >> "$log_file"
@@ -531,6 +659,11 @@ record_failed_run_state() {
         printf 'status=failed\n'
         printf 'backend=%s\n' "$recorded_backend"
         printf 'research_mode=%s\n' "$recorded_research"
+        printf 'billing_mode=%s\n' "${recorded_billing:-unknown}"
+        if [[ -n "$recorded_group" ]]; then
+            printf 'process_group=%s\n' "$recorded_group"
+            printf 'process_group_leader_start=%s\n' "$recorded_group_start"
+        fi
         printf 'exit_code=%s\n' "$exit_code"
         printf 'elapsed_seconds=0\n'
         printf 'summary_file=%s\n' "$(basename "$summary_file")"

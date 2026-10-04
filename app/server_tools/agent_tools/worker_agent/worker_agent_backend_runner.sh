@@ -3,8 +3,8 @@
 #
 # Shared helpers between worker_agent_core.sh dispatch logic and the external
 # Codex / Claude CLIs that actually run the worker prompt.
-# Keeps backend execution, summary recovery, and background launch details out
-# of the main CLI parsing flow.
+# Keeps backend execution, billing checks, summary recovery, and background
+# launch details out of the main CLI parsing flow.
 # ==============================================================================
 
 find_claude_bin() {
@@ -58,6 +58,34 @@ describe_write_access() {
     fi
 }
 
+# describe_billing names who pays for a run, in the same words for the progress
+# file, the log and the terminal. Like describe_write_access it reads every
+# value with a default; a missing mode reads as the subscription, which is also
+# what billing_env enforces when the mode is missing.
+describe_billing() {
+    local checked="${BILLING_ACCOUNT:-not checked yet}"
+    if [[ "${BILLING_MODE:-subscription}" == api ]]; then
+        printf 'api (explicit --api; environment kept; %s)' "$checked"
+    else
+        printf 'subscription (%s; API key variables removed)' "$checked"
+    fi
+}
+
+# billing_env runs a backend command with the environment its billing allows
+# (owner decision K174). A subscription run drops every variable through which
+# the Codex or Claude CLI would bill an API account or a cloud provider instead
+# of the signed-in subscription; an --api run keeps the caller's environment as
+# it is. Only names are handled here: no value is read or printed.
+billing_env() {
+    if [[ "${BILLING_MODE:-subscription}" == api ]]; then
+        "$@"
+        return
+    fi
+    env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN \
+        -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX \
+        -u OPENAI_API_KEY -u CODEX_API_KEY "$@"
+}
+
 write_run_status() {
     local status="$1"
     local exit_code="${2:-}"
@@ -71,6 +99,14 @@ write_run_status() {
         # What this run was allowed to change, so a later reader does not have
         # to reconstruct it from the flags someone typed.
         printf 'write_access=%s\n' "$(describe_write_access)"
+        # Who pays for the run: the signed-in subscription or an API key.
+        printf 'billing_mode=%s\n' "${BILLING_MODE:-subscription}"
+        # A detached run's own process group, which --stop signals as a whole,
+        # and its leader's start time, which identifies the group.
+        if [[ -n "${WORKER_PROCESS_GROUP:-}" ]]; then
+            printf 'process_group=%s\n' "$WORKER_PROCESS_GROUP"
+            printf 'process_group_leader_start=%s\n' "${WORKER_PROCESS_GROUP_START:-}"
+        fi
         if [[ -n "${CODEX_ACTUAL_VERSION:-}" ]]; then
             printf 'codex_executable=%s\n' "$CODEX_BIN"
             printf 'codex_version=%s\n' "$CODEX_ACTUAL_VERSION"
@@ -106,6 +142,7 @@ write_progress_snapshot() {
         printf -- '- Backend: %s\n' "$BACKEND"
         printf -- '- Research mode: %s\n' "$RESEARCH_MODE"
         printf -- '- Write access: %s\n' "$(describe_write_access)"
+        printf -- '- Billing: %s\n' "$(describe_billing)"
         if [[ -n "$exit_code" ]]; then
             printf -- '- Exit code: %s\n' "$exit_code"
         fi
@@ -186,6 +223,104 @@ prepare_codex_backend() {
     write_run_status "running"
 }
 
+# A subscription run is checked under the same reduced environment it will run
+# with, so the answer describes the account the run will really use. Both
+# status commands are local account checks, never model requests.
+verify_codex_subscription() {
+    local login_output="" login_exit=0
+    # `codex login status` answers on stderr; both streams are read, neither printed.
+    login_output=$(billing_env timeout 20 "$CODEX_BIN" login status 2>&1 < /dev/null) || login_exit=$?
+    if (( login_exit == 0 )) && grep -qxE 'Logged in using ChatGPT[[:space:]]*' <<< "$login_output"; then
+        BILLING_ACCOUNT="Codex signed in using ChatGPT"
+        return 0
+    fi
+    if (( login_exit == 124 )); then
+        err "Codex did not report its sign-in within 20 s (codex login status)."
+    elif grep -qi 'api key' <<< "$login_output"; then
+        err "Codex is signed in with an API key, not with a ChatGPT subscription."
+    else
+        err "Codex is not signed in with a ChatGPT subscription."
+    fi
+    err "Sign in with 'codex login' (ChatGPT), or pass --api to bill an API key deliberately. No worker was started."
+    return 1
+}
+
+verify_claude_subscription() {
+    CLAUDE_BIN=$(find_claude_bin) || {
+        err "Claude CLI not found on PATH or in a Claude Code VS Code extension. No worker was started."
+        return 127
+    }
+    local status_json="" status_exit=0 sign_in=""
+    status_json=$(billing_env env -u CLAUDECODE timeout 20 "$CLAUDE_BIN" auth status --json \
+        2>/dev/null < /dev/null) || status_exit=$?
+    # Only the sign-in method and provider are read; e-mail and organisation are not.
+    sign_in=$(python3 -c '
+import json, re, sys
+try:
+    status = json.loads(sys.stdin.read())
+except ValueError:
+    status = {}
+if not isinstance(status, dict) or status.get("loggedIn") is not True:
+    print("none")
+    raise SystemExit
+def name(value):
+    return re.sub(r"[^A-Za-z0-9._-]", "", str(value))[:40] or "unknown"
+method = name(status.get("authMethod") or "")
+provider = name(status.get("apiProvider") or "firstParty")
+print(method if provider == "firstParty" else method + " via " + provider)
+' <<< "$status_json") || sign_in="unreadable"
+    if (( status_exit == 0 )) && [[ "$sign_in" == "claude.ai" ]]; then
+        BILLING_ACCOUNT="Claude signed in with claude.ai"
+        return 0
+    fi
+    if (( status_exit == 124 )); then
+        err "Claude CLI did not report its sign-in within 20 s ($CLAUDE_BIN auth status)."
+    else
+        err "Claude CLI is not signed in with a claude.ai subscription (sign-in: $sign_in)."
+    fi
+    err "Sign in with '$CLAUDE_BIN auth login --claudeai', or pass --api to bill an API key deliberately. No worker was started."
+    return 1
+}
+
+# An --api run must find a key for its backend: without one the CLI would
+# quietly bill its signed-in subscription while the run's record said API.
+# Only variable names are checked and printed, never values.
+verify_api_key_present() {
+    local backend_name="$1"
+    local -a key_variables=()
+    case "$backend_name" in
+        codex)  key_variables=(OPENAI_API_KEY CODEX_API_KEY) ;;
+        claude) key_variables=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX) ;;
+    esac
+    local name="" expected="" present=""
+    for name in "${key_variables[@]}"; do
+        expected+="${expected:+, }$name"
+        if [[ -n "${!name:-}" ]]; then
+            present+="${present:+, }$name"
+        fi
+    done
+    if [[ -z "$present" ]]; then
+        err "--api needs one of $expected for $backend_name, and none is set. Set one, or leave out --api to bill the signed-in subscription. No worker was started."
+        return 1
+    fi
+    BILLING_ACCOUNT="$present set"
+}
+
+# verify_billing refuses a run whose billing is not the one it asked for before
+# anything is launched. Neither mode ever falls back to the other.
+verify_billing() {
+    local backend_name="$1"
+    BILLING_ACCOUNT=""
+    if [[ "${BILLING_MODE:-subscription}" == api ]]; then
+        verify_api_key_present "$backend_name"
+        return
+    fi
+    case "$backend_name" in
+        codex)  verify_codex_subscription ;;
+        claude) verify_claude_subscription ;;
+    esac
+}
+
 run_codex_exec() {
     # Research mode forbids writing through the prompt and keeps the worker out
     # of the database and network through the sandbox. It is not yet a hard
@@ -218,17 +353,19 @@ run_codex_exec() {
         printf 'Worker Codex version: %s\n' "$CODEX_ACTUAL_VERSION"
         printf 'Worker Codex model requested: %s\n' "${CODEX_MODEL:-Codex config default}"
         printf 'Worker Codex reasoning effort requested: %s\n' "${CODEX_REASONING_EFFORT:-Codex config default}"
+        printf 'Worker billing: %s\n' "$(describe_billing)"
     } >> "$LOG_FILE"
     # stdin preserves multiline/large prompts and cannot turn prompt text into flags;
     # the engine's argument list already ends with "-".
-    "$CODEX_BIN" "${codex_args[@]}" < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
+    billing_env "$CODEX_BIN" "${codex_args[@]}" < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
     return $?
 }
 
 run_claude_exec() {
     CLAUDE_BIN=$(find_claude_bin) || return 127
+    printf 'Worker billing: %s\n' "$(describe_billing)" >> "$LOG_FILE"
     # Ignore inherited CLAUDECODE overrides so worker_agent controls the binary path explicitly.
-    env -u CLAUDECODE "$CLAUDE_BIN" \
+    billing_env env -u CLAUDECODE "$CLAUDE_BIN" \
         --print \
         --model "$CLAUDE_MODEL" \
         --permission-mode bypassPermissions \
@@ -238,7 +375,11 @@ run_claude_exec() {
 }
 
 check_quota_error() {
-    grep -qiE "quota exceeded|rate.limit|insufficient_quota|billing" "$LOG_FILE" 2>/dev/null
+    # The launcher's own "Worker billing:" line names billing in every log; only
+    # the backend's output may count as a quota or billing failure.
+    awk '/^Worker billing: / { next }
+        tolower($0) ~ /quota exceeded|rate.limit|insufficient_quota|billing/ { found = 1; exit }
+        END { exit !found }' "$LOG_FILE" 2>/dev/null
 }
 
 print_summary() {
@@ -327,8 +468,40 @@ run_foreground() {
 
 background_child_main() {
     local run_fn="$1"
-    trap 'finalize_run' EXIT INT TERM HUP
-    echo "$BASHPID" > "$PID_FILE"
+    # A signal ends the run once its failure is recorded. Finalizing alone let
+    # the script carry on, so a run stopped at the wrong moment could still
+    # start its backend afterwards.
+    trap 'finalize_run' EXIT
+    trap 'finalize_run; exit 1' INT TERM HUP
+    # The run must lead its own session and process group: that group is what
+    # --stop signals as a whole, and its id is this pid. Fields after the
+    # command name: 0 state, 1 parent, 2 group, 3 session, 19 start time.
+    local own_pid="$BASHPID" own_stat=""
+    local -a own_fields=()
+    own_stat=$(cat "/proc/$own_pid/stat" 2>/dev/null) || own_stat=""
+    read -r -a own_fields <<< "${own_stat##*) }"
+    if [[ "${own_fields[2]:-}" != "$own_pid" || "${own_fields[3]:-}" != "$own_pid" || -z "${own_fields[19]:-}" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] worker_agent run does not lead its own process group; the run did not start" >> "$LOG_FILE"
+        exit 1
+    fi
+    # A run whose result is already recorded (a stale check or --stop gave up on
+    # an unconfirmed launch) must not start its backend afterwards.
+    if [[ -e "$DONE_FILE" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] worker_agent run already has a recorded result; the run did not start" >> "$LOG_FILE"
+        exit 1
+    fi
+    WORKER_PROCESS_GROUP="$own_pid"
+    # --stop confirms the group by this start time before every signal.
+    WORKER_PROCESS_GROUP_START="${own_fields[19]}"
+    # Recorded before worker.pid appears, so --stop finds the group from the
+    # moment the launch is confirmed.
+    write_run_status "running"
+    # The launcher confirms the start through worker.pid, so a run that cannot
+    # publish it must not start at all.
+    if ! { echo "$own_pid" > "$PID_FILE"; } 2>/dev/null; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] worker_agent could not write worker.pid; the run did not start" >> "$LOG_FILE"
+        exit 1
+    fi
 
     local worker_exit=0
     "$run_fn" && worker_exit=0 || worker_exit=$?
@@ -336,18 +509,74 @@ background_child_main() {
     write_sentinel "$worker_exit" "0"
 }
 
+# read_done_exit_code prints the run's recorded exit code once its done sentinel
+# holds a complete line, and nothing before that.
+read_done_exit_code() {
+    local exit_code="" rest=""
+    if [[ -f "$DONE_FILE" ]] && IFS=$'\t' read -r exit_code rest < "$DONE_FILE" 2>/dev/null \
+        && [[ "$exit_code" =~ ^[0-9]+$ ]]; then
+        printf '%s' "$exit_code"
+    fi
+    return 0
+}
+
+# wait_for_background_start confirms that a detached run really began before the
+# launcher says so (WL33). A run's first act is to write worker.pid, so a start
+# counts once that file names a live process, or once the run's done sentinel
+# records a success. A recorded failure, or a run that died without a result,
+# is a failed launch. With neither within the wait, the start is unconfirmed:
+# the run may still start, so nothing is signalled and no result is recorded.
+wait_for_background_start() {
+    local wait_seconds="${LAUNCH_WAIT_SECONDS:-15}"
+    [[ "$wait_seconds" =~ ^[0-9]+$ ]] || wait_seconds=15
+    local polls_left=$(( wait_seconds * 5 ))
+    local pid_state="" done_exit=""
+    BACKGROUND_WORKER_PID=""
+    BACKGROUND_START_PROBLEM=""
+    BACKGROUND_START_EXIT=1
+    BACKGROUND_ALREADY_SUCCEEDED=false
+    BACKGROUND_START_UNCONFIRMED=false
+    while true; do
+        pid_state=$(status_pid_state "$PID_FILE")
+        BACKGROUND_WORKER_PID=$(read_worker_pid_from_file "$PID_FILE" || true)
+        # Read after the pid's state: the sentinel is written before the run's
+        # process ends, so a finished run never looks as if it died silently.
+        done_exit=$(read_done_exit_code)
+        if [[ "$done_exit" == 0 ]]; then
+            BACKGROUND_ALREADY_SUCCEEDED=true
+            return 0
+        elif [[ -n "$done_exit" ]]; then
+            BACKGROUND_START_EXIT="$done_exit"
+            BACKGROUND_START_PROBLEM="Worker run failed (exit $done_exit) before its launch was confirmed"
+            return 1
+        elif [[ "$pid_state" == alive ]]; then
+            return 0
+        elif [[ "$pid_state" == dead ]]; then
+            BACKGROUND_START_PROBLEM="Worker did not start: worker process $BACKGROUND_WORKER_PID exited without recording a result"
+            return 1
+        elif (( polls_left == 0 )); then
+            BACKGROUND_START_UNCONFIRMED=true
+            BACKGROUND_START_PROBLEM="Start not confirmed within ${wait_seconds} s — the run may still start; check ./worker_agent --status $TASK_ID, stop it with ./worker_agent --stop $TASK_ID"
+            return 1
+        fi
+        polls_left=$(( polls_left - 1 ))
+        sleep 0.2
+    done
+}
+
 run_background() {
     local run_fn="$1"
-    local launcher_pid=""
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] worker_agent background launch — running: $run_fn" > "$LOG_FILE"
 
     export WORKSPACE_ROOT SCRIPT_DIR TASK_ID OUTPUT_DIR SUMMARY_FILE LOG_FILE DONE_FILE RUN_STATUS_FILE
-    export PROGRESS_FILE PID_FILE PROMPT_SAVE_FILE FULL_ACCESS RESEARCH_MODE BACKEND
-    export CLAUDE_MODEL FINALIZER_WRITE_SENTINEL
+    export PROGRESS_FILE PID_FILE PROMPT_SAVE_FILE FULL_ACCESS RESEARCH_MODE BACKEND TICKET_FILE
+    export CLAUDE_MODEL FINALIZER_WRITE_SENTINEL BILLING_MODE BILLING_ACCOUNT
     export CODEX_BIN CODEX_ACTUAL_VERSION CODEX_MODEL CODEX_REASONING_EFFORT CODEX_ENGINE_MODULE
     export RUN_FN="$run_fn"
     export -f \
         describe_write_access \
+        describe_billing \
+        billing_env \
         find_claude_bin \
         run_codex_exec \
         run_claude_exec \
@@ -359,21 +588,35 @@ run_background() {
         finalize_run \
         background_child_main
 
-    if command -v setsid >/dev/null 2>&1; then
-        # Preserve the caller's resolved PATH. A login shell can replace it and
-        # hide a selected local Codex/Claude executable after dispatch.
-        nohup setsid bash -c 'background_child_main "$RUN_FN"' >/dev/null 2>&1 < /dev/null &
-        launcher_pid=$!
-    else
-        (
-            background_child_main "$run_fn"
-        ) </dev/null &>/dev/null &
-        launcher_pid=$!
-    fi
+    # setsid makes the run the leader of its own session and process group (the
+    # core refuses --background without it), which --stop signals as a whole.
+    # Preserve the caller's resolved PATH. A login shell can replace it and
+    # hide a selected local Codex/Claude executable after dispatch.
+    nohup setsid bash -c 'background_child_main "$RUN_FN"' >/dev/null 2>&1 < /dev/null &
 
     FINALIZER_WRITE_SENTINEL=false
     disown || true
-    ok "Worker launched in background (PID: $launcher_pid)"
+    if ! wait_for_background_start; then
+        if [[ "$BACKGROUND_START_UNCONFIRMED" == true ]]; then
+            # The run may still start, so nothing is signalled and no result is
+            # recorded. The marker is appended, never rewritten: a run starting at
+            # this moment may just have recorded its process group in this file.
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] worker_agent launch_unconfirmed: $BACKGROUND_START_PROBLEM" >> "$LOG_FILE"
+            echo "launch_unconfirmed=no worker.pid within ${LAUNCH_WAIT_SECONDS:-15} s" >> "$RUN_STATUS_FILE"
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] worker_agent background launch failed: $BACKGROUND_START_PROBLEM" >> "$LOG_FILE"
+            # A run that recorded no result of its own is recorded as failed here.
+            FINALIZER_WRITE_SENTINEL=true
+        fi
+        err "$BACKGROUND_START_PROBLEM."
+        err "Log file: $LOG_FILE"
+        return "$BACKGROUND_START_EXIT"
+    fi
+    if [[ "$BACKGROUND_ALREADY_SUCCEEDED" == true ]]; then
+        ok "Worker ran in background and has already finished successfully${BACKGROUND_WORKER_PID:+ (PID: $BACKGROUND_WORKER_PID)}"
+    else
+        ok "Worker launched in background (PID: $BACKGROUND_WORKER_PID)"
+    fi
     ok "Log file: $LOG_FILE"
     info "Check status: ./worker_agent --status $TASK_ID"
     info "Wait for it:  ./worker_agent --wait $TASK_ID"
@@ -405,6 +648,7 @@ show_backend_info() {
             info "Codex reasoning effort requested: ${CODEX_REASONING_EFFORT:-Codex config default}"
             ;;
     esac
+    info "Billing: $(describe_billing)"
 }
 
 execute_with_backend() {
@@ -423,6 +667,9 @@ execute_with_backend() {
             ;;
     esac
 
+    verify_billing "$backend_name" || return $?
+    # The progress file now names the verified account instead of "not checked yet".
+    write_progress_snapshot "running"
     show_backend_info "$backend_name"
     if [[ "$BACKGROUND" == true ]]; then
         run_background "$run_fn"

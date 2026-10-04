@@ -5,7 +5,8 @@
 # Model-agnostic task runner. Supports Codex CLI and Claude Code CLI as backends.
 # Solves the bash-escaping problem by always passing prompts via file, never
 # as shell arguments. Supports multiple input modes and auto-generates
-# timestamped output folders.
+# timestamped output folders. A run bills the CLI's signed-in subscription
+# unless it passes --api.
 #
 # Usage (via root wrapper ./worker_agent):
 #   ./worker_agent "do something"                       # inline prompt
@@ -66,6 +67,8 @@ PROGRESS_MINUTE_SECONDS="${WORKER_AGENT_PROGRESS_MINUTE_SECONDS:-60}"
 STATUS_QUIET_SECONDS="${WORKER_AGENT_STATUS_QUIET_SECONDS:-60}"
 STATUS_STUCK_SECONDS="${WORKER_AGENT_STATUS_STUCK_SECONDS:-180}"
 STOP_GRACE_SECONDS="${WORKER_AGENT_STOP_GRACE_SECONDS:-5}"
+# How long --background waits for the run to confirm its start in worker.pid.
+LAUNCH_WAIT_SECONDS="${WORKER_AGENT_LAUNCH_WAIT_SECONDS:-15}"
 
 # ---------------------------------------------------------------------------- #
 # Colors & helpers
@@ -292,7 +295,7 @@ USAGE:
   echo "prompt" | ./worker_agent -                  Read prompt from stdin
   ./worker_agent --list                             List recent runs
   ./worker_agent --status <task_id>                 Check task status
-  ./worker_agent --stop <task_id>                   Stop a running task
+  ./worker_agent --stop <task_id>                   Stop a running task's process group
   ./worker_agent --wait [task_id]                   Block until task completes, print summary
   ./worker_agent --help                             Show this help
 
@@ -307,9 +310,33 @@ BACKEND SELECTION (family=):
   Use family=auto for the Claude → Codex fallback chain.
   Env var WORKER_AGENT_BACKEND overrides the default; family= overrides both.
 
+BILLING (--subscription is the default):
+  ./worker_agent "..."                              Bill the CLI's signed-in subscription
+  ./worker_agent --api "..."                        Bill an API key instead (explicit opt-in)
+
+  A subscription run first checks the sign-in ('codex login status' must say
+  ChatGPT; 'claude auth status' must say claude.ai) and starts the CLI without
+  ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, CLAUDE_CODE_USE_BEDROCK,
+  CLAUDE_CODE_USE_VERTEX, OPENAI_API_KEY and CODEX_API_KEY. A CLI that is not
+  signed in that way stops the run; it never falls back to an API key.
+  --api keeps the environment and needs a key for the backend: OPENAI_API_KEY
+  or CODEX_API_KEY (Codex); ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN,
+  CLAUDE_CODE_USE_BEDROCK or CLAUDE_CODE_USE_VERTEX (Claude).
+  run_status.txt (billing_mode=), the progress file and the log record it.
+
 OPTIONS:
   --task-id <id>            Override auto-generated task ID
-  --background              Run in background (default: foreground with progress)
+  --background              Run in background (default: foreground with progress).
+                            Needs setsid: the run leads its own process group.
+                            Reports success once the run's worker.pid names a
+                            live process or the run has already succeeded, and
+                            failure if the run recorded a failure or died
+                            without a result. If neither happens within 15 s,
+                            the start is reported as unconfirmed (exit 1) and
+                            nothing is signalled: the run may still start, so
+                            check --status and stop it with --stop.
+  --subscription            Bill the CLI's signed-in subscription (default); see BILLING.
+  --api                     Bill an API key from the environment; see BILLING.
   --research                Read-only: the worker runs in a sandbox that cannot
                             write, so the restriction does not rely on the prompt
   --full-access             Full system access for Codex (danger-full-access sandbox).
@@ -379,6 +406,13 @@ STDIN_MODE=false
 # read-only can quietly win over the default but never over an explicit ask.
 FULL_ACCESS=false
 FULL_ACCESS_REQUESTED=false
+# A run bills the CLI's signed-in subscription unless it passes --api (owner
+# decision K174). There is deliberately no environment default for this: an
+# exported variable would make API billing silent again.
+SUBSCRIPTION_REQUESTED=false
+API_REQUESTED=false
+BILLING_MODE=subscription
+BILLING_ACCOUNT=""
 FINALIZER_WRITE_SENTINEL=true
 WAIT_AFTER=false
 WAIT_TASK_ID_ARG=""
@@ -440,6 +474,12 @@ while [[ $# -gt 0 ]]; do
         --no-full-access)
             FULL_ACCESS=false
             ;;
+        --subscription)
+            SUBSCRIPTION_REQUESTED=true
+            ;;
+        --api)
+            API_REQUESTED=true
+            ;;
         --codex-model)
             shift
             CODEX_MODEL="${1:?--codex-model requires a model ID}"
@@ -480,6 +520,12 @@ if [[ "$BACKGROUND" == true && "$WAIT_AFTER" == true ]]; then
     err "Error: --background and --wait cannot be used together. Use --background first, then --wait <task_id>."
     exit 1
 fi
+# A detached run must lead its own process group, so that --stop can end all
+# of it with one signal. Without setsid it is refused.
+if [[ "$BACKGROUND" == true ]] && ! command -v setsid >/dev/null 2>&1; then
+    err "--background needs setsid (util-linux) to give the run its own process group. Install it, or run in the foreground."
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------- #
 # Resolve backend from family= parameter
@@ -509,6 +555,13 @@ if [[ "$RESEARCH_MODE" == true && "$FULL_ACCESS_REQUESTED" == true ]]; then
 fi
 if [[ "$RESEARCH_MODE" == true ]]; then
     FULL_ACCESS=false
+fi
+if [[ "$SUBSCRIPTION_REQUESTED" == true && "$API_REQUESTED" == true ]]; then
+    err "--subscription and --api contradict each other: a run bills either the signed-in subscription or an API key"
+    exit 1
+fi
+if [[ "$API_REQUESTED" == true ]]; then
+    BILLING_MODE=api
 fi
 
 case "$CODEX_REASONING_EFFORT" in
@@ -638,6 +691,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
     info "Task ID: $TASK_ID"
     info "Output dir: $OUTPUT_DIR_NAME/"
     info "Backend: $BACKEND"
+    info "Billing: $BILLING_MODE (sign-in and keys not checked in dry-run)"
     if [[ "$BACKEND" != claude ]]; then
         info "Codex executable: $CODEX_BIN (required version: $CODEX_REQUIRED_VERSION; not checked in dry-run)"
         info "Codex model requested: ${CODEX_MODEL:-Codex config default}"

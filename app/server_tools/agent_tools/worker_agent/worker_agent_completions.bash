@@ -35,7 +35,7 @@ _worker_agent_completions() {
     # Top-level flags (before --routine is seen)
     local top_flags="--help --list --status --wait --prompt-file --ticket
         --task-id --background --research --dry-run --no-summary-instr
-        --full-access --no-full-access --claude-model --codex-model
+        --full-access --no-full-access --subscription --api --claude-model --codex-model
         --codex-reasoning-effort --routine"
 
     # Routine sub-flags (after --routine <name>)
