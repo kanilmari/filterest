@@ -261,8 +261,8 @@ func assertDisclosesNothing(t *testing.T, body string) {
 
 // The consequence the first repair left behind. On a site that requires a
 // sign-in, a request holding nothing but a session cookie used to be handed the
-// page itself, and the page carries the dataset's description and, for a row
-// address, that row's own title. Nothing in the pipeline refused it first: this
+// page itself, and the page carries the dataset's description (until WL140 a row
+// address added that row's own title too). Nothing in the pipeline refused it first: this
 // route is public, so it runs neither binding stage on any kind of site.
 func TestSignInOnlySiteDisclosesNothingToASessionWithoutItsBinding(t *testing.T) {
 	setupSiteWithReadableContent(t, true)
@@ -318,9 +318,11 @@ func TestSignedInVisitorWithItsBindingIsServedAndRenewed(t *testing.T) {
 					if !strings.Contains(recorder.Body.String(), "root-shell") {
 						t.Fatalf("expected the root shell, got %q", recorder.Body.String())
 					}
-					if address == "/service_catalog/125-the-newest-service" &&
-						!strings.Contains(recorder.Body.String(), disclosableRowTitle) {
-						t.Fatalf("the person who signed in was not given the row they asked for: %q", recorder.Body.String())
+					// The page is composed before any rights check, so it never carries a
+					// row's own title, not even for a person who signed in (WL140); the
+					// application shows the row after its own authorised read.
+					if strings.Contains(recorder.Body.String(), disclosableRowTitle) {
+						t.Fatalf("the page carried a row's own title before any rights check: %q", recorder.Body.String())
 					}
 					for _, renewed := range []struct{ name, had string }{
 						{e_sessions.DeviceIDCookieName(), "the-signed-in-device"},

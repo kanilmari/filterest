@@ -31,7 +31,9 @@ let languageChangeObserver = null;
 /**
  * Joins the parts of a tab title in the server's order and drops empty parts.
  * Produces "Article — Application tab — Site", "Application tab — Site" or the bare
- * site name, exactly as `seo_meta_builder.go` does for the initial HTML.
+ * site name by the same rule as `seo_meta_builder.go`. The server writes only the
+ * last two for the initial HTML: it never reads a row before authorisation (WL140),
+ * so the article form appears once this module has read the row.
  *
  * The site part is left out when the application tab's own label already opens with
  * the site name, so a title such as "Serlog.com – Service catalog" names the site

@@ -582,9 +582,10 @@ The comparison runs on **both** kinds of site, and the first repair of this hole
 ran it only where public browsing is allowed. That left a sign-in-only site — what
 a production installation is — answering a stolen session cookie with the page
 itself. The page is not empty: `router/seo_meta_builder.go` composes the dataset's
-title and description into it, and at a row address the row's own title, before
-any protected request has refused anything. Account access stayed closed, but the
-content did not.
+title and description into it before any protected request has refused anything.
+Account access stayed closed, but the content did not. (At a row address it used to
+add the row's own title as well, read with no rights check at all; since WL140 it
+keeps the dataset's title there.)
 
 `app/backend/core_components/router/root_browser_binding.go` holds the guest
 side of that decision and `e_sessions.RequestCarriesSessionBinding` the

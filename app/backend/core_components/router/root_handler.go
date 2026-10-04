@@ -136,8 +136,8 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	// stage on any kind of site, because it is on the public route profile
 	// (app/backend/pipeline/route_profiles.go), so it has to make the comparison
 	// itself. Without it, a request that owns nothing but a stolen session cookie
-	// is answered with the page — and the page carries the dataset's description
-	// and, at a row address, that row's own title, composed by resolvePageMeta.
+	// is answered with the page — and the page carries the dataset's description,
+	// composed by resolvePageMeta (since WL140 it no longer adds a row's own title).
 	// The comparison therefore runs on every kind of site, and a sign-in that
 	// does not match its own browser is answered the way an ended sign-in is
 	// answered everywhere else in the application.

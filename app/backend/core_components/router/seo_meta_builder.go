@@ -28,7 +28,7 @@ type pageMeta struct {
 	CanonicalURL    string // <link rel="canonical">
 	OGTitle         string // og:title
 	OGDescription   string // og:description
-	OGType          string // og:type  (website | article)
+	OGType          string // og:type  (website)
 	OGURL           string // og:url
 	OGImage         string // og:image (absolute URL)
 	SiteName        string // og:site_name and title suffix
@@ -135,20 +135,11 @@ func resolvePageMeta(r *http.Request) pageMeta {
 	meta.OGDescription = description
 	meta.OGType = "website"
 
-	// If a row ID is present (e.g. /{dataset}/{id} or /{dataset}/{id}-{slug}), enrich with per-row data
-	if len(segments) >= 2 && segments[1] != "" {
-		rowID := segments[1]
-		// Strip optional SEO slug: "125-some-title" → "125"
-		if idx := strings.IndexByte(rowID, '-'); idx > 0 {
-			rowID = rowID[:idx]
-		}
-		rowTitle := fetchRowTitle(datasetName, rowID, lang)
-		if rowTitle != "" {
-			meta.PageTitle = composeBrowserTabTitle(rowTitle, title, siteName)
-			meta.OGTitle = rowTitle
-			meta.OGType = "article"
-		}
-	}
+	// A row address (/{dataset}/{id}-{slug}) keeps the dataset's own title. This page
+	// is composed before any request is authorised, so it must not read a row: an
+	// earlier version printed the row's header column here with no rights or row rule,
+	// for any dataset not marked hidden (WL140). A row's title may return here only
+	// when it is read through the normal read authorisation.
 
 	return meta
 }
@@ -222,7 +213,10 @@ func humanizeDatasetNameForTitle(datasetName string) string {
 
 // composeBrowserTabTitle joins the first-load browser tab title in the order the
 // application keeps after it takes the title over: the open article, then the
-// application tab's own label, then the site name. Empty parts are dropped.
+// application tab's own label, then the site name. Empty parts are dropped. The
+// server itself always passes an empty article title, because it never reads a row
+// before authorisation (WL140); the parameter keeps the twin and the shared
+// examples in step.
 // Its frontend twin is composeBrowserTabTitle in
 // app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js.
 func composeBrowserTabTitle(articleTitle string, tabTitle string, siteName string) string {
@@ -508,84 +502,6 @@ func fetchDatasetDescription(tableName string) string {
 		return strings.TrimSpace(desc.String)
 	}
 	return ""
-}
-
-// fetchRowTitle retrieves a human-readable title for a specific row.
-// It looks at system_column_details for the dataset's "header" card_element
-// and fetches the corresponding column value from the row.
-func fetchRowTitle(tableName string, rowID string, lang string) string {
-	if backend.Db == nil {
-		return ""
-	}
-
-	// Find the column that is the card header for this dataset
-	var headerCol sql.NullString
-	err := backend.Db.QueryRow(`
-		SELECT scd.column_name
-		FROM system_column_details scd
-		JOIN system_db_tables sdt ON scd.table_uid = sdt.id
-		WHERE sdt.table_name = $1
-		  AND scd.card_element LIKE '%header%'
-		ORDER BY scd.column_name
-		LIMIT 1
-	`, tableName).Scan(&headerCol)
-	if err != nil || !headerCol.Valid || headerCol.String == "" {
-		return ""
-	}
-
-	// Fetch the header value from the actual row
-	// We use a safe approach: only allow alphanumeric + underscore column names
-	col := headerCol.String
-	for _, c := range col {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
-			return "" // invalid column name, bail out
-		}
-	}
-
-	query := fmt.Sprintf(`SELECT %s FROM %s WHERE id = $1 LIMIT 1`,
-		col, tableName)
-	var value sql.NullString
-	err = backend.Db.QueryRow(query, rowID).Scan(&value)
-	if err != nil || !value.Valid {
-		return ""
-	}
-
-	rawTitle := strings.TrimSpace(value.String)
-
-	// The value may be a JSON lang object like {"fi":"Otsikko","en":"Title"}
-	// Try to extract the language-specific value
-	if strings.HasPrefix(rawTitle, "{") {
-		extracted := extractLangFromJSON(rawTitle, lang)
-		if extracted != "" {
-			return extracted
-		}
-	}
-
-	return rawTitle
-}
-
-// extractLangFromJSON tries to pull a language value from a simple JSON
-// object like {"fi":"Suomi","en":"English"}. Returns empty string on failure.
-func extractLangFromJSON(jsonStr string, lang string) string {
-	// Simple key extraction without importing encoding/json for performance
-	// Look for "lang":"value" pattern
-	searchKey := `"` + lang + `"`
-	idx := strings.Index(jsonStr, searchKey)
-	if idx < 0 {
-		return ""
-	}
-	rest := jsonStr[idx+len(searchKey):]
-	// Skip colon and whitespace
-	rest = strings.TrimLeft(rest, ": \t\n")
-	if len(rest) == 0 || rest[0] != '"' {
-		return ""
-	}
-	rest = rest[1:] // skip opening quote
-	endIdx := strings.Index(rest, `"`)
-	if endIdx < 0 {
-		return ""
-	}
-	return rest[:endIdx]
 }
 
 // =====================================================

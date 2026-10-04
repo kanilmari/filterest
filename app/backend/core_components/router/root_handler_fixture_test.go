@@ -53,9 +53,9 @@ const (
 // whether it lets a visitor browse without signing in, which role it runs in,
 // whether it is still waiting for its first administrator, and what its one
 // dataset and that dataset's row are called. The last two exist because the root
-// page writes a dataset's description and a row's title into the page it returns,
-// so a test that asks whether those reached the wrong browser needs them to have
-// been worth reading in the first place.
+// page writes a dataset's description into the page it returns, and once wrote a
+// row's title there too (removed in WL140), so a test that asks whether those
+// reached a browser needs them to have been worth reading in the first place.
 type rootHandlerMockConfig struct {
 	loginToBrowse      bool
 	instanceRole       string
@@ -166,8 +166,10 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 			vals:  []driver.Value{c.config.datasetDescription},
 			empty: c.config.datasetDescription == "",
 		}, nil
-	// The two steps that turn a row address into the row's own title: first which
-	// column of the dataset is the card header, then that column's value in the row.
+	// The two steps that once turned a row address into the row's own title: first
+	// which column of the dataset is the card header, then that column's value in the
+	// row. The page no longer asks (WL140). They stay answerable so that a page which
+	// started asking again would put the title into its body and fail the tests.
 	case strings.Contains(query, "FROM system_column_details"):
 		return &rootHandlerMockRows{
 			cols:  []string{"column_name"},
