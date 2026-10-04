@@ -9,7 +9,9 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -173,6 +175,43 @@ describe('vite project layout resolution', () => {
       viteCacheDir: resolve(publicRoot, 'node_modules', '.vite'),
       buildOutDir: resolve(publicRoot, 'frontend', 'dist'),
     });
+  });
+
+  test('judges a checkout reached through an Easelect link where it really lies', () => {
+    const workspace = realpathSync(temporaryRoot());
+    const easelectRoot = resolve(workspace, 'easelect');
+    const installationRoot = resolve(workspace, 'filterest');
+    mkdirSync(resolve(easelectRoot, '.git'), { recursive: true });
+    writeFileSync(resolve(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    markNestedApplication(resolve(installationRoot, 'app'));
+    symlinkSync('../filterest', resolve(easelectRoot, 'filterest'));
+    const linkedApplication = resolve(easelectRoot, 'filterest', 'app');
+
+    const standalone = resolveViteProjectLayout(linkedApplication, {});
+    expect(standalone.projectRoot).toBe(installationRoot);
+    expect(standalone.privateEaselect).toBe(false);
+    expect(standalone.nestedStandalone).toBe(true);
+    expect(standalone.backendPort).toBe(8100);
+
+    const composed = resolveViteProjectLayout(linkedApplication, {
+      FILTEREST_PROJECT_ROOT_OVERRIDE: easelectRoot,
+    });
+    expect(composed.projectRoot).toBe(easelectRoot);
+    expect(composed.privateEaselect).toBe(true);
+    expect(composed.backendPort).toBe(8082);
+  });
+
+  test('does not take a VERSION_EASELECT directory for a private workspace', () => {
+    const easelectRoot = resolve(temporaryRoot(), 'easelect');
+    const installationRoot = resolve(easelectRoot, 'filterest');
+    mkdirSync(resolve(easelectRoot, '.git'), { recursive: true });
+    mkdirSync(resolve(easelectRoot, 'VERSION_EASELECT'));
+    markNestedApplication(resolve(installationRoot, 'app'));
+
+    const layout = resolveViteProjectLayout(resolve(installationRoot, 'app'), {});
+    expect(layout.projectRoot).toBe(installationRoot);
+    expect(layout.privateEaselect).toBe(false);
+    expect(layout.backendPort).toBe(8100);
   });
 
   test('honors an explicit public installation boundary inside Easelect source', () => {

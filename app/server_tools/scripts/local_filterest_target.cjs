@@ -3,11 +3,14 @@
 // Reads the native development ports from ../lib/native_development_ports.env, which
 // the Python and shell tools read too, and owns the JavaScript side of that rule.
 // Exists as CommonJS because Playwright loads its TypeScript configuration synchronously.
+/* global __dirname */
 
 const fs = require("node:fs");
 const path = require("node:path");
 const process = require("node:process");
 const { URL } = require("node:url");
+// Standalone or private Easelect is decided by the one shared project-folder rule.
+const { isEmbeddedEaselectApplication } = require("../lib/filterest_project_boundary.cjs");
 
 const localHostnames = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const nativeDevelopmentPortsFile = path.join(__dirname, "..", "lib", "native_development_ports.env");
@@ -49,29 +52,6 @@ function nativeDevelopmentPort(privateEaselect) {
 // Recognizes only loopback hostnames accepted by guarded local browser tools.
 function isLocalFilterestHostname(hostname) {
     return localHostnames.has(hostname);
-}
-
-function hasEaselectSourceMarkers(possibleEaselectRoot) {
-    const gitMarker = path.join(possibleEaselectRoot, ".git");
-    const versionMarker = path.join(possibleEaselectRoot, "VERSION_EASELECT");
-    return fs.existsSync(gitMarker)
-        && fs.existsSync(versionMarker)
-        && fs.statSync(versionMarker).isFile();
-}
-
-// Detects the private composition only from both durable outer source markers,
-// at the project root a wrapper names explicitly (as easelect_private_paths.mjs
-// honours it) or else around this application root.
-function isEmbeddedEaselectApplication(applicationRoot, environment = process.env) {
-    const explicitRoot = String(environment.FILTEREST_PROJECT_ROOT_OVERRIDE || "").trim();
-    if (explicitRoot) {
-        return hasEaselectSourceMarkers(path.resolve(explicitRoot));
-    }
-    const resolvedApplicationRoot = path.resolve(applicationRoot || ".");
-    const productRoot = path.basename(resolvedApplicationRoot) === "app"
-        ? path.dirname(resolvedApplicationRoot)
-        : resolvedApplicationRoot;
-    return hasEaselectSourceMarkers(path.dirname(productRoot));
 }
 
 // Selects the product-owned local origin before any explicit test override.

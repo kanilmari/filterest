@@ -131,37 +131,6 @@ func validateLangKeySourceRoot(sourceRoot string, requireApplicationMarkers bool
 	return nil
 }
 
-func codebaseSourceRoots(paths runtimepaths.Paths) ([]string, error) {
-	installationRoot := strings.TrimSpace(paths.InstallationRoot)
-	applicationRoot := strings.TrimSpace(paths.ApplicationRoot)
-	if installationRoot == "" || !filepath.IsAbs(installationRoot) {
-		return nil, fmt.Errorf("configured Filterest installation root is unresolved")
-	}
-	if applicationRoot == "" || !filepath.IsAbs(applicationRoot) {
-		return nil, fmt.Errorf("configured Filterest application root is unresolved")
-	}
-	installationRoot = filepath.Clean(installationRoot)
-	applicationRoot = filepath.Clean(applicationRoot)
-	if !pathIsInsideRoot(installationRoot, applicationRoot) {
-		return nil, fmt.Errorf("configured Filterest application root %q is outside installation root %q", applicationRoot, installationRoot)
-	}
-	if err := validateLangKeySourceRoot(applicationRoot, true); err != nil {
-		return nil, err
-	}
-
-	sourceRoots := []string{applicationRoot}
-	for _, sourceRoot := range configuredAdditionalLangKeySourceRoots() {
-		if !pathIsInsideRoot(installationRoot, sourceRoot) {
-			return nil, fmt.Errorf("additional language-key source root %q is outside installation root %q", sourceRoot, installationRoot)
-		}
-		if err := validateLangKeySourceRoot(sourceRoot, false); err != nil {
-			return nil, err
-		}
-		sourceRoots = append(sourceRoots, sourceRoot)
-	}
-	return sourceRoots, nil
-}
-
 // sourceEntry — yksi avain-lähde -pari koodiskannauksesta
 type sourceEntry struct {
 	langKey  string
@@ -180,43 +149,43 @@ func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 		return nil, err
 	}
 
-	var scanDirs []string
-	for _, sourceRoot := range sourceRoots {
-		scanDirs = append(
-			scanDirs,
-			filepath.Join(sourceRoot, "frontend"),
-			filepath.Join(sourceRoot, "backend"),
-		)
+	scanDirs, err := langKeyScanDirectories(sourceRoots)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, dir := range scanDirs {
+	for _, scanDir := range scanDirs {
+		dir := scanDir.realPath
 		walkErr := walkLangKeySourceTree(dir, func(path string, info os.FileInfo, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if info.IsDir() {
-				if path != dir && (info.Name() == "dist" || info.Name() == "node_modules") {
+			if path != dir && (info.Name() == "dist" || info.Name() == "node_modules") {
+				if info.IsDir() {
 					return filepath.SkipDir
 				}
 				return nil
+			}
+			if info.IsDir() {
+				return nil
+			}
+			readPath, linkErr := scanDir.fileToRead(path, info)
+			if linkErr != nil || readPath == "" {
+				return linkErr
 			}
 			ext := filepath.Ext(path)
 			if !scanExtensions[ext] {
 				return nil
 			}
-			data, readErr := os.ReadFile(path)
+			data, readErr := os.ReadFile(readPath)
 			if readErr != nil {
 				return readErr
 			}
 			content := string(data)
-			relPath, relErr := filepath.Rel(paths.InstallationRoot, path)
-			if relErr != nil || !pathIsInsideRoot(paths.InstallationRoot, path) {
-				if relErr != nil {
-					return relErr
-				}
-				return fmt.Errorf("language-key source file %q is outside installation root %q", path, paths.InstallationRoot)
+			relPath, relErr := scanDir.recordedPath(path)
+			if relErr != nil {
+				return relErr
 			}
-			relPath = filepath.ToSlash(relPath)
 
 			// Kerätään kustakin tiedostosta löytyneet avaimet (deduplikoitu per tiedosto)
 			foundInFile := make(map[string]bool)
@@ -251,7 +220,7 @@ func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 			return nil
 		})
 		if walkErr != nil {
-			return nil, fmt.Errorf("scan language-key source directory %q: %w", dir, walkErr)
+			return nil, fmt.Errorf("scan language-key source directory %q: %w", scanDir.path, walkErr)
 		}
 	}
 

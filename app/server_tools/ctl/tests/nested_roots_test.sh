@@ -7,7 +7,6 @@ set -euo pipefail
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 SOURCE_ROOT="$(cd "$TEST_DIR/../../.." && pwd -P)"
 INSTALLATION_ROOT="$(cd "$SOURCE_ROOT/.." && pwd -P)"
-REPOSITORY_ROOT="$(cd "$INSTALLATION_ROOT/.." && pwd -P)"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
@@ -89,30 +88,44 @@ if "$marker_sandbox/filterest" --help > /dev/null 2>&1; then
     fail "root filterest launcher accepted an app without go.mod"
 fi
 
+# Both layouts are fixtures, so the result does not depend on where this
+# checkout lives or on whether an Easelect workspace happens to surround it.
+standalone_root="$TEST_ROOT/standalone-installation"
+composition_root="$TEST_ROOT/easelect-composition"
+composed_source_root="$TEST_ROOT/sibling-filterest/app"
+mkdir -p "$standalone_root/app" "$composition_root/.git" "$composed_source_root"
+for fixture_application_root in "$standalone_root/app" "$composed_source_root"; do
+    : > "$fixture_application_root/go.mod"
+    : > "$fixture_application_root/VERSION_APP"
+done
+: > "$composition_root/VERSION_EASELECT"
+
 (
-    PROJECT_ROOT="$INSTALLATION_ROOT"
-    FILTEREST_SOURCE_ROOT="$SOURCE_ROOT"
-    FILTEREST_RUNTIME_ROOT="$INSTALLATION_ROOT/data/runtime"
-    FILTEREST_LOG_FILE_OVERRIDE="$INSTALLATION_ROOT/data/runtime/logs/server_output.log"
+    PROJECT_ROOT="$standalone_root"
+    FILTEREST_SOURCE_ROOT="$standalone_root/app"
+    FILTEREST_RUNTIME_ROOT="$standalone_root/data/runtime"
+    FILTEREST_LOG_FILE_OVERRIDE="$standalone_root/data/runtime/logs/server_output.log"
     # shellcheck source=../lib/common.sh
     source "$SOURCE_ROOT/server_tools/ctl/lib/common.sh"
 
-    assert_equal "$INSTALLATION_ROOT/data/runtime/bin" "$LOCAL_BINARY_DIR" "nested binary directory"
-    assert_equal "$INSTALLATION_ROOT/data/runtime/logs/server_output.log" "$LOG_FILE" "nested log path"
+    assert_equal "$standalone_root/data/runtime/bin" "$LOCAL_BINARY_DIR" "nested binary directory"
+    assert_equal "$standalone_root/data/runtime/logs/server_output.log" "$LOG_FILE" "nested log path"
     filterest_is_standalone_public_install || fail "nested public installation was not recognized"
     assert_equal "filterest" "$(project_default_db_name)" "standalone database default"
 )
 
 (
-    PROJECT_ROOT="$REPOSITORY_ROOT"
-    FILTEREST_SOURCE_ROOT="$SOURCE_ROOT"
-    FILTEREST_RUNTIME_ROOT="$REPOSITORY_ROOT/runtime"
-    FILTEREST_LOG_FILE_OVERRIDE="$REPOSITORY_ROOT/server_output.log"
+    # Easelect's launcher names its own workspace as the project root while the
+    # immutable source is a Filterest checkout beside it.
+    PROJECT_ROOT="$composition_root"
+    FILTEREST_SOURCE_ROOT="$composed_source_root"
+    FILTEREST_RUNTIME_ROOT="$composition_root/runtime"
+    FILTEREST_LOG_FILE_OVERRIDE="$composition_root/server_output.log"
     # shellcheck source=../lib/common.sh
     source "$SOURCE_ROOT/server_tools/ctl/lib/common.sh"
 
-    assert_equal "$REPOSITORY_ROOT/runtime/bin" "$LOCAL_BINARY_DIR" "Easelect binary directory"
-    assert_equal "$REPOSITORY_ROOT/server_output.log" "$LOG_FILE" "Easelect log path"
+    assert_equal "$composition_root/runtime/bin" "$LOCAL_BINARY_DIR" "Easelect binary directory"
+    assert_equal "$composition_root/server_output.log" "$LOG_FILE" "Easelect log path"
     if filterest_is_standalone_public_install; then
         fail "Easelect source composition was recognized as standalone Filterest"
     fi

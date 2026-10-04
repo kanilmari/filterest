@@ -165,6 +165,43 @@ describe('protected browser-test runtime contract', () => {
     });
   });
 
+  test('a checkout reached through an Easelect link keeps its own protected keys', () => {
+    const workspace = fs.realpathSync(temporaryRoot());
+    const easelectRoot = path.join(workspace, 'easelect');
+    const installationRoot = path.join(workspace, 'filterest');
+    fs.mkdirSync(path.join(easelectRoot, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
+    fs.writeFileSync(path.join(easelectRoot, 'filterest.source-roots'),
+      'filterest\nfilterest_private\n', { mode: 0o644 });
+    fs.writeFileSync(
+      path.join(easelectRoot, 'dev_env_test_creds.txt'),
+      'TEST_ADMIN_USER=easelect-admin\nTEST_ADMIN_PASS=easelect-password\n',
+      { mode: 0o600 },
+    );
+    markApplication(path.join(installationRoot, 'app'));
+    fs.symlinkSync(path.join('..', 'filterest'), path.join(easelectRoot, 'filterest'));
+    const linkedApplication = path.join(easelectRoot, 'filterest', 'app');
+    const protectedRoot = path.join(installationRoot, 'keys', 'filterest_runtime');
+    fs.mkdirSync(protectedRoot, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(
+      path.join(protectedRoot, 'development_environment.env'),
+      'LOGIN_OTP_CODE=standalone-otp\n',
+      { mode: 0o600 },
+    );
+
+    expect(resolveBrowserTestCredentialFilePath({
+      applicationRoot: linkedApplication,
+      environment: {},
+    })).toBe(path.join(protectedRoot, 'dev_env_test_creds.txt'));
+    expect(resolveBrowserTestOtpCode({ applicationRoot: linkedApplication, environment: {} }))
+      .toBe('standalone-otp');
+    // Easelect's wrappers bind the composition explicitly.
+    expect(resolveBrowserTestCredentialFilePath({
+      applicationRoot: linkedApplication,
+      environment: { FILTEREST_PROJECT_ROOT_OVERRIDE: easelectRoot },
+    })).toBe(path.join(easelectRoot, 'dev_env_test_creds.txt'));
+  });
+
   test('an explicit wrapper boundary keeps an embedded public invocation standalone', () => {
     const easelectRoot = path.join(temporaryRoot(), 'easelect');
     const installationRoot = path.join(easelectRoot, 'filterest');

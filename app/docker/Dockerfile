@@ -11,6 +11,8 @@ RUN npm ci
 
 COPY frontend/ ./frontend/
 COPY server_tools/lib/easelect_private_paths.mjs ./server_tools/lib/easelect_private_paths.mjs
+# Both modules the Vite configuration imports take the project-folder rule from here.
+COPY server_tools/lib/filterest_project_boundary.cjs ./server_tools/lib/filterest_project_boundary.cjs
 # The Vite configuration takes its development port from the shared port rule.
 COPY server_tools/lib/native_development_ports.env ./server_tools/lib/native_development_ports.env
 COPY server_tools/scripts/local_filterest_target.cjs ./server_tools/scripts/local_filterest_target.cjs

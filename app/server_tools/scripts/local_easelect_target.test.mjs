@@ -22,6 +22,13 @@ const filterestRoot = "/repo/filterest/app";
 const authDirectory = "/repo/filterest/data/testing/e2e/.auth";
 const nativeAuthState = path.join(authDirectory, "user.json");
 
+// A real Filterest application carries both markers; the shared rule needs them.
+function markApplication(applicationRoot) {
+    fs.mkdirSync(applicationRoot, { recursive: true });
+    fs.writeFileSync(path.join(applicationRoot, "go.mod"), "module filterest\n");
+    fs.writeFileSync(path.join(applicationRoot, "VERSION_APP"), "9.0.0\n");
+}
+
 test("isLocalEaselectUrl accepts local Easelect-like targets on any local port", () => {
     assert.equal(isLocalEaselectUrl("https://localhost:8082/service_catalog"), true);
     assert.equal(isLocalEaselectUrl("https://localhost:8095/app_cloud_services"), true);
@@ -41,10 +48,9 @@ test("structural local target defaults separate standalone Filterest from embedd
         const markerOnlyApp = path.join(markerOnlyRoot, "filterest", "app");
         const invalidMarkerRoot = path.join(fixtureRoot, "invalid-marker");
         const invalidMarkerApp = path.join(invalidMarkerRoot, "filterest", "app");
-        fs.mkdirSync(standaloneApp, { recursive: true });
-        fs.mkdirSync(embeddedApp, { recursive: true });
-        fs.mkdirSync(markerOnlyApp, { recursive: true });
-        fs.mkdirSync(invalidMarkerApp, { recursive: true });
+        for (const applicationRoot of [standaloneApp, embeddedApp, markerOnlyApp, invalidMarkerApp]) {
+            markApplication(applicationRoot);
+        }
         fs.mkdirSync(path.join(embeddedRoot, ".git"));
         fs.writeFileSync(path.join(embeddedRoot, "VERSION_EASELECT"), "9.0.0\n");
         fs.writeFileSync(path.join(markerOnlyRoot, "VERSION_EASELECT"), "9.0.0\n");
@@ -61,6 +67,26 @@ test("structural local target defaults separate standalone Filterest from embedd
         );
         assert.equal(
             resolveLocalFilterestBaseUrl({ applicationRoot: embeddedApp, environment: {} }),
+            "https://localhost:8082",
+        );
+    } finally {
+        fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+test("a checkout reached through an Easelect link targets its own port unless a wrapper binds it", () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "filterest-linked-target-"));
+    try {
+        const easelectRoot = path.join(fixtureRoot, "easelect");
+        markApplication(path.join(fixtureRoot, "filterest", "app"));
+        fs.mkdirSync(path.join(easelectRoot, ".git"), { recursive: true });
+        fs.writeFileSync(path.join(easelectRoot, "VERSION_EASELECT"), "9.0.0\n");
+        fs.symlinkSync(path.join("..", "filterest"), path.join(easelectRoot, "filterest"));
+        const linkedApp = path.join(easelectRoot, "filterest", "app");
+
+        assert.equal(defaultLocalFilterestBaseUrl(linkedApp, {}), "https://localhost:8100");
+        assert.equal(
+            defaultLocalFilterestBaseUrl(linkedApp, { FILTEREST_PROJECT_ROOT_OVERRIDE: easelectRoot }),
             "https://localhost:8082",
         );
     } finally {
@@ -89,7 +115,7 @@ test("Filterest target overrides ambient state and legacy target applies only to
     const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "easelect-local-target-"));
     try {
         const embeddedApp = path.join(fixtureRoot, "easelect", "filterest", "app");
-        fs.mkdirSync(embeddedApp, { recursive: true });
+        markApplication(embeddedApp);
         fs.mkdirSync(path.join(fixtureRoot, "easelect", ".git"));
         fs.writeFileSync(
             path.join(fixtureRoot, "easelect", "VERSION_EASELECT"),

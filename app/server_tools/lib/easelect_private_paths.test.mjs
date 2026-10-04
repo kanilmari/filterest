@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe('resolveFilterestProjectBoundary', () => {
-  test('maps app to its installation unless a true Easelect source parent exists', () => {
+  test('maps a real app to its installation, and that to a true Easelect parent', () => {
     const root = temporaryRoot();
     const easelectRoot = path.join(root, 'easelect');
     const installationRoot = path.join(easelectRoot, 'filterest');
@@ -50,16 +50,18 @@ describe('resolveFilterestProjectBoundary', () => {
     fs.writeFileSync(path.join(easelectRoot, 'VERSION_EASELECT'), 'test\n');
     writeSourceRoots(easelectRoot);
 
+    // Without go.mod and VERSION_APP the directory is not an application, so it
+    // is its own boundary, as Python's resolve_embedded_project_root decides.
     expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(
-      installationRoot,
+      applicationRoot,
     );
 
-    fs.mkdirSync(path.join(easelectRoot, '.git'));
+    fs.writeFileSync(path.join(applicationRoot, 'go.mod'), 'module filterest\n');
+    fs.writeFileSync(path.join(applicationRoot, 'VERSION_APP'), 'test\n');
     expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(
       installationRoot,
     );
-    fs.writeFileSync(path.join(applicationRoot, 'go.mod'), 'module filterest\n');
-    fs.writeFileSync(path.join(applicationRoot, 'VERSION_APP'), 'test\n');
+    fs.mkdirSync(path.join(easelectRoot, '.git'));
     expect(resolveFilterestProjectBoundary(applicationRoot, {})).toBe(easelectRoot);
 
     const explicitRoot = path.join(root, 'explicit-boundary');

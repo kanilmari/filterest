@@ -6,49 +6,19 @@
 import fs from 'fs';
 import path from 'path';
 
-export function isPrivateEaselectSourceCheckout(projectRoot) {
-  return (
-    fs.existsSync(path.join(projectRoot, '.git'))
-    && fs.existsSync(path.join(projectRoot, 'VERSION_EASELECT'))
-  );
-}
+// The project-folder rule lives once, in CommonJS, so that the synchronous
+// browser-target module shares it; its names stay importable from here.
+import {
+  isNestedFilterestInstallation,
+  isPrivateEaselectSourceCheckout,
+  resolveFilterestProjectBoundary,
+} from './filterest_project_boundary.cjs';
 
-export function isNestedFilterestInstallation(projectRoot) {
-  const appRoot = path.join(projectRoot, 'app');
-  return (
-    fs.existsSync(path.join(appRoot, 'go.mod'))
-    && fs.existsSync(path.join(appRoot, 'VERSION_APP'))
-  );
-}
-
-/**
- * Resolves the mutable project boundary for tools whose source lives under app/.
- * An explicit wrapper override wins; otherwise app maps to its installation root,
- * and only a parent carrying both Easelect source markers maps to the outer workspace.
- */
-export function resolveFilterestProjectBoundary(
-  applicationRoot,
-  environment = process.env,
-) {
-  const explicitRoot = String(
-    environment.FILTEREST_PROJECT_ROOT_OVERRIDE || '',
-  ).trim();
-  if (explicitRoot) {
-    return path.resolve(explicitRoot);
-  }
-
-  const normalizedSourceRoot = fs.realpathSync.native(path.resolve(applicationRoot));
-  const installationRoot = path.basename(normalizedSourceRoot) === 'app'
-    ? path.dirname(normalizedSourceRoot)
-    : normalizedSourceRoot;
-  const possibleEaselectRoot = path.dirname(installationRoot);
-  return (
-    isNestedFilterestInstallation(installationRoot)
-    && isPrivateEaselectSourceCheckout(possibleEaselectRoot)
-  )
-    ? fs.realpathSync.native(possibleEaselectRoot)
-    : installationRoot;
-}
+export {
+  isNestedFilterestInstallation,
+  isPrivateEaselectSourceCheckout,
+  resolveFilterestProjectBoundary,
+};
 
 const SUPPORTED_PATH_KEYS = new Set([
   'schema_version',

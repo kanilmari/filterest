@@ -249,6 +249,8 @@ def test_the_image_build_carries_every_file_the_vite_configuration_reads() -> No
     vite_inputs = sorted(set(re.findall(r"from '\.\./(server_tools/[^']+)'", vite_config)))
     # Read by local_filterest_target.cjs itself, not imported.
     vite_inputs.append("server_tools/lib/native_development_ports.env")
+    # Loaded by both imported modules, not by the configuration itself.
+    vite_inputs.append("server_tools/lib/filterest_project_boundary.cjs")
     dockerfile = (SOURCE_ROOT / "docker/Dockerfile").read_text(encoding="utf-8")
     frontend_stage = dockerfile.split("\nFROM ", 2)[1]
 

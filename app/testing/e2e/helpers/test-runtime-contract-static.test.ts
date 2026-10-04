@@ -100,8 +100,11 @@ describe('immutable app test-output contract', () => {
 
   test('public QA and browser tools resolve the standalone or embedded local origin structurally', () => {
     const targetSource = source('server_tools/scripts/local_filterest_target.cjs');
-    expect(targetSource).toContain('.git');
-    expect(targetSource).toContain('VERSION_EASELECT');
+    // The checkout markers are read by the one shared project-folder rule.
+    expect(targetSource).toContain('require("../lib/filterest_project_boundary.cjs")');
+    const boundarySource = source('server_tools/lib/filterest_project_boundary.cjs');
+    expect(boundarySource).toContain('.git');
+    expect(boundarySource).toContain('VERSION_EASELECT');
     // The ports come from the one file every language reads; the numbers are
     // named here on purpose, so a wrong value in that file cannot pass.
     expect(targetSource).toContain('native_development_ports.env');

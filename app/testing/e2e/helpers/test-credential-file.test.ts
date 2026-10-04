@@ -15,6 +15,16 @@ import {
 
 const temporaryRoots: string[] = [];
 
+// A standalone app is recognised by its markers (go.mod and VERSION_APP, as
+// filterest_project_boundary.cjs requires); an unmarked folder is its own boundary.
+function createStandaloneApplication(installationRoot: string): string {
+  const applicationRoot = path.join(installationRoot, 'app');
+  fs.mkdirSync(applicationRoot);
+  fs.writeFileSync(path.join(applicationRoot, 'go.mod'), 'module easelect\n');
+  fs.writeFileSync(path.join(applicationRoot, 'VERSION_APP'), '0.0.0\n');
+  return applicationRoot;
+}
+
 afterEach(() => {
   for (const temporaryRoot of temporaryRoots.splice(0)) {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
@@ -27,8 +37,8 @@ describe('protected browser-test credential file', () => {
       path.join(os.tmpdir(), 'filterest-test-installation-'),
     );
     temporaryRoots.push(installationRoot);
-    fs.mkdirSync(path.join(installationRoot, 'app'));
-    expect(resolveTestCredentialFilePath({}, path.join(installationRoot, 'app'))).toBe(
+    const applicationRoot = createStandaloneApplication(installationRoot);
+    expect(resolveTestCredentialFilePath({}, applicationRoot)).toBe(
       path.join(
         installationRoot,
         'keys',
@@ -73,8 +83,7 @@ describe('protected browser-test credential file', () => {
       path.join(os.tmpdir(), 'filterest-test-new-scope-'),
     );
     temporaryRoots.push(installationRoot);
-    const applicationRoot = path.join(installationRoot, 'app');
-    fs.mkdirSync(applicationRoot);
+    const applicationRoot = createStandaloneApplication(installationRoot);
 
     const credentialPath = writeTestCredentialsFile(
       'TEST_ADMIN_USER=test_admin\n',
