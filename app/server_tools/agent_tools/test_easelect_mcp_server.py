@@ -184,10 +184,10 @@ class EaselectMCPServerTest(unittest.TestCase):
                 "name": "create_dataset",
                 "arguments": {
                     "dataset_name": "app_demo",
-                    "columns": {
-                        "id": "SERIAL",
-                        "title": "TEXT",
-                    },
+                    "column_list": [
+                        {"name": "id", "data_type": "SERIAL"},
+                        {"name": "title", "data_type": "TEXT", "card_role": "header"},
+                    ],
                     "grant_users_read": True,
                 },
             },
@@ -195,8 +195,34 @@ class EaselectMCPServerTest(unittest.TestCase):
 
         self.assertFalse(response["result"]["isError"])
         self.assertEqual(factory.clients[0].calls[0][0], "create_dataset")
-        self.assertEqual(factory.clients[0].calls[0][1]["dataset_name"], "app_demo")
-        self.assertTrue(factory.clients[0].calls[0][1]["grant_users_read"])
+        payload = factory.clients[0].calls[0][1]
+        self.assertEqual(payload["dataset_name"], "app_demo")
+        self.assertEqual(payload["column_list"], [
+            {"name": "id", "data_type": "SERIAL"},
+            {"name": "title", "data_type": "TEXT", "card_role": "header"},
+        ])
+        self.assertNotIn("columns", payload)
+        self.assertTrue(payload["grant_users_read"])
+
+    def test_create_dataset_tool_requires_a_column_list(self):
+        for arguments in (
+            {"dataset_name": "app_demo", "columns": {"id": "SERIAL"}},
+            {"dataset_name": "app_demo", "column_list": []},
+            {"dataset_name": "app_demo", "column_list": ["id SERIAL"]},
+        ):
+            factory = FakeClientFactory()
+            response = easelect_mcp_server.handle_request({
+                "jsonrpc": "2.0",
+                "id": 23,
+                "method": "tools/call",
+                "params": {"name": "create_dataset", "arguments": arguments},
+            }, client_factory=factory)
+
+            self.assertTrue(response["result"]["isError"])
+            self.assertIn("column_list", response["result"]["content"][0]["text"])
+            self.assertFalse(any(
+                call[0] == "create_dataset" for client in factory.clients for call in client.calls
+            ))
 
     def test_modify_columns_requires_explicit_removal_flag(self):
         response = easelect_mcp_server.handle_request({

@@ -42,8 +42,11 @@ describe('create request', () => {
             tableName: 'sample_table',
             requestData: {
                 dataset_name: 'sample_table',
-                columns: { id: 'SERIAL', title: 'VARCHAR(40)', price: 'NUMERIC(12,4)' },
-                column_card_roles: { id: 'details', title: 'details', price: 'description' },
+                column_list: [
+                    { name: 'id', data_type: 'SERIAL', card_role: 'details' },
+                    { name: 'title', data_type: 'VARCHAR(40)', card_role: 'details' },
+                    { name: 'price', data_type: 'NUMERIC(12,4)', card_role: 'description' },
+                ],
                 foreign_keys: [{ referencing_column: 'owner_id', referenced_dataset: 'users', referenced_column: 'id' }],
                 grant_users_read: true,
                 grant_guests_read: false,
@@ -55,6 +58,21 @@ describe('create request', () => {
         // The pictures and the symbol are set up once the dataset exists.
         expect(result.requestData).not.toHaveProperty('enable_images');
         expect(result.requestData).not.toHaveProperty('icon_key');
+        // The server refuses the retired maps, so they are never sent.
+        expect(result.requestData).not.toHaveProperty('columns');
+        expect(result.requestData).not.toHaveProperty('column_card_roles');
+    });
+
+    test('the columns travel in the order the person wrote them, not sorted', () => {
+        const { requestData } = buildDatasetCreateRequest(draft({
+            columns: [
+                { name: 'id', dataType: 'SERIAL' },
+                { name: 'zeta', dataType: 'TEXT', role: 'header' },
+                { name: 'alpha', dataType: 'BOOLEAN' },
+                { name: 'mid', dataType: 'INTEGER' },
+            ],
+        }));
+        expect(requestData.column_list.map(({ name }) => name)).toEqual(['id', 'zeta', 'alpha', 'mid']);
     });
 
     test.each([

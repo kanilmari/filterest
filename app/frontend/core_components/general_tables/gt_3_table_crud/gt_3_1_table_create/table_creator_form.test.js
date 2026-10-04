@@ -121,7 +121,13 @@ describe('dataset creation card roles', () => {
         await vi.waitFor(() => expect(endpoint_router).toHaveBeenCalledWith('createDataset', expect.objectContaining({
             method: 'POST',
             body_data: expect.objectContaining({
-                column_card_roles: {id:'details',created:'details',updated:'details',title:'header'},
+                // One ordered list: the automatic columns first, then the person's, each with its role.
+                column_list: [
+                    { name: 'id', data_type: 'SERIAL', card_role: 'details' },
+                    { name: 'created', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', card_role: 'details' },
+                    { name: 'updated', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', card_role: 'details' },
+                    { name: 'title', data_type: 'TEXT', card_role: 'header' },
+                ],
             }),
         })));
         expect(endpoint_router.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
@@ -158,7 +164,7 @@ describe('dataset creation card roles', () => {
         form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await vi.waitFor(() => expect(endpoint_router).toHaveBeenCalledWith('createDataset', expect.objectContaining({
             body_data: expect.objectContaining({
-                columns: expect.objectContaining({ price: 'NUMERIC(12,4)' }),
+                column_list: expect.arrayContaining([expect.objectContaining({ name: 'price', data_type: 'NUMERIC(12,4)' })]),
             }),
         })));
     });

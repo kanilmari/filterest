@@ -1,6 +1,7 @@
 // Verifies the actual create handler rolls schema and metadata back if assigning
-// a valid role fails late in its transaction. The driver records transaction
-// boundaries without connecting to or mutating any application database.
+// a valid role or saving a column setting fails late in its transaction. The
+// driver records transaction boundaries without connecting to or mutating any
+// application database.
 package dtt_crud_workflows
 
 import (
@@ -21,24 +22,34 @@ type roleTxState struct {
 	schemaPending bool
 	columnInserts int
 	roleAttempts  int
-	commits       int
-	rollbacks     int
+	// failSettings lets the role assignment succeed and fails the column
+	// settings write that follows it instead.
+	failSettings     bool
+	settingsAttempts int
+	commits          int
+	rollbacks        int
 }
 type roleTxDriver struct{ state *roleTxState }
 type roleTxConn struct{ state *roleTxState }
 type roleTx struct{ state *roleTxState }
 
-func TestCreateHandlerRollsBackSchemaAndMetadataAfterRoleAssignmentFailure(t *testing.T) {
-	state := &roleTxState{}
+func openRoleTxDB(t *testing.T, state *roleTxState) *sql.DB {
+	t.Helper()
 	name := fmt.Sprintf("role-rollback-%d", time.Now().UnixNano())
 	sql.Register(name, &roleTxDriver{state})
 	db, err := sql.Open(name, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func TestCreateHandlerRollsBackSchemaAndMetadataAfterRoleAssignmentFailure(t *testing.T) {
+	state := &roleTxState{}
+	db := openRoleTxDB(t, state)
 	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(
-		`{"dataset_name":"sample","columns":{"id":"SERIAL","title":"TEXT"},"folder_id":1,"column_card_roles":{"title":"header"}}`))
+		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL"},{"name":"title","data_type":"TEXT","card_role":"header"}],"folder_id":1}`))
 	rec := httptest.NewRecorder()
 	CreateTableHandler(rec, withWorkflowTx(req, db))
 	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "card role assignment failed") {
@@ -46,6 +57,26 @@ func TestCreateHandlerRollsBackSchemaAndMetadataAfterRoleAssignmentFailure(t *te
 	}
 	if !state.created || state.columnInserts != 2 || state.roleAttempts != 1 {
 		t.Fatalf("failure must follow physical creation and metadata inserts: %+v", state)
+	}
+	if state.commits != 0 || state.rollbacks != 1 || state.schemaPending {
+		t.Fatalf("creation was not fully rolled back: %+v", state)
+	}
+}
+
+// A column setting that cannot be saved undoes the whole creation, exactly as
+// a failed card role does: the table, its metadata and its roles go together.
+func TestCreateHandlerRollsBackEverythingAfterColumnSettingsFailure(t *testing.T) {
+	state := &roleTxState{failSettings: true}
+	db := openRoleTxDB(t, state)
+	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(
+		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL"},{"name":"title","data_type":"TEXT","card_role":"header","sortable":true}],"folder_id":1}`))
+	rec := httptest.NewRecorder()
+	CreateTableHandler(rec, withWorkflowTx(req, db))
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "column settings failed") {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body)
+	}
+	if !state.created || state.roleAttempts != 1 || state.settingsAttempts != 1 {
+		t.Fatalf("failure must follow creation and role assignment: %+v", state)
 	}
 	if state.commits != 0 || state.rollbacks != 1 || state.schemaPending {
 		t.Fatalf("creation was not fully rolled back: %+v", state)
@@ -72,7 +103,13 @@ func (c *roleTxConn) ExecContext(_ context.Context, query string, _ []driver.Nam
 	}
 	if strings.Contains(compact, "SET card_element = $1") {
 		c.state.roleAttempts++
-		return nil, errors.New("injected role-assignment failure")
+		if !c.state.failSettings {
+			return nil, errors.New("injected role-assignment failure")
+		}
+	}
+	if strings.Contains(compact, "SET must_be_true_unless_own") {
+		c.state.settingsAttempts++
+		return nil, errors.New("injected column-settings failure")
 	}
 	return &workflowQueueResult{rowsAffected: 1}, nil
 }

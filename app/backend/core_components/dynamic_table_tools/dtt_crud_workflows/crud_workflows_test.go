@@ -156,7 +156,7 @@ func TestCreateTableHandlerRejectsDatasetRouteConflictBeforeFolderResolution(t *
 
 	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(`{
 		"dataset_name":"service_catalog",
-		"columns":{"id":"SERIAL"}
+		"column_list":[{"name":"id","data_type":"SERIAL"}]
 	}`))
 	req = withWorkflowTx(req, db)
 	rec := httptest.NewRecorder()

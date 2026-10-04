@@ -21,9 +21,10 @@ function positiveIntegerOrNull(value) {
 
 const failure = (warningKey, field = "") => ({ ok: false, warningKey, ...(field ? { field } : {}) });
 
+// The columns travel as one ordered list, each with its card role, so the new
+// dataset keeps the order in which the person wrote them.
 function buildCreateColumns(columns = []) {
-    const definitions = {};
-    const roles = {};
+    const list = [];
     const names = new Set();
     for (const column of columns) {
         const name = trimToEmpty(column?.name);
@@ -35,11 +36,14 @@ function buildCreateColumns(columns = []) {
         names.add(name.toLowerCase());
         const role = trimToEmpty(column?.role) || "details";
         if (!isValidCardRole(role) || role.length > 255) return failure("invalid_card_role", "columns");
-        roles[name] = role;
-        definitions[name] = composeColumnTypeDefinition(dataType, { length: column?.length });
+        list.push({
+            name,
+            data_type: composeColumnTypeDefinition(dataType, { length: column?.length }),
+            card_role: role,
+        });
     }
-    if (Object.keys(definitions).length === 0) return failure("add_at_least_one_column", "columns");
-    return { ok: true, definitions, roles };
+    if (list.length === 0) return failure("add_at_least_one_column", "columns");
+    return { ok: true, list };
 }
 
 /**
@@ -78,8 +82,7 @@ export function buildDatasetCreateRequest(draft = {}) {
         tableName,
         requestData: {
             dataset_name: tableName,
-            columns: columns.definitions,
-            column_card_roles: columns.roles,
+            column_list: columns.list,
             foreign_keys: foreignKeys,
             grant_users_read: draft.readers?.users === true,
             grant_guests_read: draft.readers?.guests === true,

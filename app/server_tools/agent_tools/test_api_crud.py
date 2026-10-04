@@ -128,15 +128,49 @@ class API_CRUDTest(unittest.TestCase):
             "id=SERIAL",
             "--column",
             "title=TEXT",
+            "--column",
+            "amount=INTEGER",
             "--grant-users-read",
         ])
 
         self.assertEqual(exit_code, 0)
         payload = self.client.calls[0][1]
         self.assertEqual(payload["dataset_name"], "app_demo")
-        self.assertEqual(payload["columns"], {"id": "SERIAL", "title": "TEXT"})
+        # One ordered list in flag order; the server refuses the retired columns map.
+        self.assertEqual(payload["column_list"], [
+            {"name": "id", "data_type": "SERIAL"},
+            {"name": "title", "data_type": "TEXT"},
+            {"name": "amount", "data_type": "INTEGER"},
+        ])
+        self.assertNotIn("columns", payload)
         self.assertTrue(payload["grant_users_read"])
         self.assertEqual(json.loads(output), {"text": "created"})
+
+    def test_create_dataset_takes_a_column_list_json_with_settings(self):
+        column_list = [
+            {"name": "id", "data_type": "SERIAL"},
+            {"name": "published", "data_type": "BOOLEAN NOT NULL DEFAULT FALSE", "visibility_gate": True},
+        ]
+        exit_code, _ = self.run_main([
+            "create-dataset",
+            "app_demo",
+            "--column-list-json",
+            json.dumps(column_list),
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(self.client.calls[0][1]["column_list"], column_list)
+
+    def test_create_dataset_refuses_a_column_map(self):
+        exit_code, _ = self.run_main([
+            "create-dataset",
+            "app_demo",
+            "--column-list-json",
+            '{"id": "SERIAL"}',
+        ])
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(self.client.calls, [])
 
     def test_modify_columns_requires_removal_confirmation(self):
         exit_code, _ = self.run_main([

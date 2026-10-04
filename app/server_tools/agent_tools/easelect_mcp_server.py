@@ -143,10 +143,22 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "dataset_name": {"type": "string"},
-                "columns": {
-                    "type": "object",
-                    "description": "Column-name to SQL type map, for example {\"id\":\"SERIAL\",\"title\":\"TEXT\"}.",
-                    "additionalProperties": {"type": "string"},
+                "column_list": {
+                    "type": "array",
+                    "description": (
+                        "Columns in creation order, for example "
+                        "[{\"name\":\"id\",\"data_type\":\"SERIAL\"},{\"name\":\"title\",\"data_type\":\"TEXT\"}]. "
+                        "A column may also set card_role, is_multilingual, visibility_gate, sortable "
+                        "and hide_in_filter_panel."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "data_type": {"type": "string"},
+                        },
+                        "required": ["name", "data_type"],
+                    },
                 },
                 "foreign_keys": {"type": "array", "items": {"type": "object"}},
                 "grant_users_read": {"type": "boolean"},
@@ -160,7 +172,7 @@ TOOL_DEFINITIONS = [
                 },
                 "base_url": {"type": "string"},
             },
-            "required": ["dataset_name", "columns"],
+            "required": ["dataset_name", "column_list"],
         },
     },
     {
@@ -391,6 +403,17 @@ def require_object(arguments, name):
     return value
 
 
+def require_column_list(arguments):
+    """Validate the ordered column list between MCP arguments and the create-dataset API body."""
+    column_list = arguments.get("column_list")
+    if not isinstance(column_list, list) or not column_list:
+        raise ValueError("column_list must be a non-empty array")
+    for index, column in enumerate(column_list):
+        if not isinstance(column, dict):
+            raise ValueError(f"column_list[{index}] must be an object")
+    return column_list
+
+
 def require_ids(arguments):
     """Validate row ids between MCP delete arguments and the delete API payload."""
     ids = arguments.get("ids")
@@ -405,10 +428,10 @@ def build_create_dataset_payload(arguments):
     if isinstance(raw_request, dict):
         return raw_request
     dataset_name = require_string(arguments, "dataset_name")
-    columns = require_object(arguments, "columns")
+    column_list = require_column_list(arguments)
     payload = {
         "dataset_name": dataset_name,
-        "columns": columns,
+        "column_list": column_list,
         "foreign_keys": arguments.get("foreign_keys") or [],
         "grant_users_read": bool(arguments.get("grant_users_read", False)),
         "grant_guests_read": bool(arguments.get("grant_guests_read", False)),

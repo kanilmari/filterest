@@ -163,20 +163,29 @@ func openCreateTableDB(t *testing.T, queries []queuedCreateQuery, execs []queued
 	return db, state
 }
 
+// columnList builds an ordered column list from NAME, TYPE pairs.
+func columnList(pairs ...string) []ColumnDefinition {
+	columns := make([]ColumnDefinition, 0, len(pairs)/2)
+	for index := 0; index+1 < len(pairs); index += 2 {
+		columns = append(columns, ColumnDefinition{Name: pairs[index], DataType: pairs[index+1]})
+	}
+	return columns
+}
+
 func TestCreateTableInDatabaseRejectsInvalidIdentifiersAndMissingPrimaryKey(t *testing.T) {
 	db, _ := openCreateTableDB(t, nil, nil)
 
-	err := CreateTableInDatabase(db, "bad-name", map[string]string{"id": "serial"}, nil)
+	err := CreateTableInDatabase(db, "bad-name", columnList("id", "serial"), nil)
 	if err == nil || err.Error() != "invalid identifier: bad-name" {
 		t.Fatalf("err = %v, want invalid table identifier", err)
 	}
 
-	err = CreateTableInDatabase(db, "users", map[string]string{"bad-name": "text"}, nil)
+	err = CreateTableInDatabase(db, "users", columnList("bad-name", "text"), nil)
 	if err == nil || err.Error() != "invalid identifier: bad-name" {
 		t.Fatalf("err = %v, want invalid column identifier", err)
 	}
 
-	err = CreateTableInDatabase(db, "users", map[string]string{"title": "text"}, nil)
+	err = CreateTableInDatabase(db, "users", columnList("title", "text"), nil)
 	var missingPK *ErrMissingPrimaryKey
 	if !errors.As(err, &missingPK) {
 		t.Fatalf("err = %v, want ErrMissingPrimaryKey", err)
@@ -189,11 +198,11 @@ func TestCreateTableInDatabaseRejectsInvalidIdentifiersAndMissingPrimaryKey(t *t
 func TestCreateTableInDatabaseBuildsCreateTableAndUpdatedTriggerQueries(t *testing.T) {
 	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}, {}, {}})
 
-	err := CreateTableInDatabase(db, "users", map[string]string{
-		"id":      "serial",
-		"title":   "text",
-		"updated": "timestamp",
-	}, []ForeignKeyDefinition{
+	err := CreateTableInDatabase(db, "users", columnList(
+		"id", "serial",
+		"title", "text",
+		"updated", "timestamp",
+	), []ForeignKeyDefinition{
 		{
 			ReferencingColumn: "title",
 			ReferencedTable:   "other_table",
@@ -237,10 +246,10 @@ func TestCreateTableInDatabaseBuildsCreateTableAndUpdatedTriggerQueries(t *testi
 func TestCreateTableInDatabaseAddsCascadeOnlyWhenExplicitlyRequested(t *testing.T) {
 	db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}})
 
-	err := CreateTableInDatabase(db, "article_assets", map[string]string{
-		"id":         "serial",
-		"article_id": "integer",
-	}, []ForeignKeyDefinition{
+	err := CreateTableInDatabase(db, "article_assets", columnList(
+		"id", "serial",
+		"article_id", "integer",
+	), []ForeignKeyDefinition{
 		{
 			ReferencingColumn: "article_id",
 			ReferencedTable:   "articles",
@@ -261,11 +270,47 @@ func TestCreateTableInDatabaseAddsCascadeOnlyWhenExplicitlyRequested(t *testing.
 	}
 }
 
+// The columns used to arrive as a map and came out in Go's random map order.
+// Both wrappers now write them exactly as listed, so PostgreSQL numbers them
+// (attnum) in the caller's order; only IF NOT EXISTS tells the two apart.
+func TestCreateTableInDatabaseWritesColumnsInListOrder(t *testing.T) {
+	listed := columnList(
+		"id", "serial",
+		"updated", "timestamptz not null default now()",
+		"zeta", "text",
+		"alpha", "integer",
+		"Mid_Case", "boolean not null default false",
+	)
+	for _, testCase := range []struct {
+		name   string
+		create func(*sql.DB) error
+		prefix string
+	}{
+		{"managed child", func(db *sql.DB) error { return CreateTableInDatabase(db, "ordered", listed, nil) }, "CREATE TABLE IF NOT EXISTS ordered ("},
+		{"new dataset", func(db *sql.DB) error { return CreateNewTableInDatabase(db, "ordered", listed, nil) }, "CREATE TABLE ordered ("},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			db, state := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}, {}, {}})
+			if err := testCase.create(db); err != nil {
+				t.Fatal(err)
+			}
+			want := testCase.prefix + "id SERIAL PRIMARY KEY, updated TIMESTAMPTZ NOT NULL DEFAULT NOW(), " +
+				"zeta TEXT, alpha INTEGER, Mid_Case BOOLEAN NOT NULL DEFAULT FALSE);"
+			if state.execCalls[0] != want {
+				t.Fatalf("create query =\n%s\nwant\n%s", state.execCalls[0], want)
+			}
+			if !strings.Contains(state.execCalls[2], "CREATE TRIGGER update_ordered_timestamp") {
+				t.Fatalf("the updated column lost its trigger: %q", state.execCalls[2])
+			}
+		})
+	}
+}
+
 func TestCreateTableInDatabasePropagatesExecErrors(t *testing.T) {
 	t.Run("create table exec", func(t *testing.T) {
 		db, _ := openCreateTableDB(t, nil, []queuedCreateExec{{err: errors.New("create boom")}})
 
-		err := CreateTableInDatabase(db, "users", map[string]string{"id": "serial"}, nil)
+		err := CreateTableInDatabase(db, "users", columnList("id", "serial"), nil)
 		if err == nil || err.Error() != "error creating table: create boom" {
 			t.Fatalf("err = %v, want wrapped create-table error", err)
 		}
@@ -274,7 +319,7 @@ func TestCreateTableInDatabasePropagatesExecErrors(t *testing.T) {
 	t.Run("trigger function exec", func(t *testing.T) {
 		db, _ := openCreateTableDB(t, nil, []queuedCreateExec{{}, {err: errors.New("function boom")}})
 
-		err := CreateTableInDatabase(db, "users", map[string]string{"id": "serial", "updated": "timestamp"}, nil)
+		err := CreateTableInDatabase(db, "users", columnList("id", "serial", "updated", "timestamp"), nil)
 		if err == nil || err.Error() != "error creating trigger function: function boom" {
 			t.Fatalf("err = %v, want wrapped trigger function error", err)
 		}
@@ -283,7 +328,7 @@ func TestCreateTableInDatabasePropagatesExecErrors(t *testing.T) {
 	t.Run("trigger statement exec", func(t *testing.T) {
 		db, _ := openCreateTableDB(t, nil, []queuedCreateExec{{}, {}, {err: errors.New("trigger boom")}})
 
-		err := CreateTableInDatabase(db, "users", map[string]string{"id": "serial", "updated": "timestamp"}, nil)
+		err := CreateTableInDatabase(db, "users", columnList("id", "serial", "updated", "timestamp"), nil)
 		if err == nil || err.Error() != "error creating trigger: trigger boom" {
 			t.Fatalf("err = %v, want wrapped trigger statement error", err)
 		}

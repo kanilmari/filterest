@@ -1,6 +1,8 @@
 // create_table_card_roles.go
-// Validates optional card roles before dataset creation and assigns metadata in
-// the same transaction. Existing callers retain the metadata default, details.
+// Validates the card roles a dataset change carries and assigns them in the
+// same transaction. Creation checks its roles with its ordered column list
+// (create_table_column_list.go). A column without a role keeps the metadata
+// default, details.
 package dtt_crud_workflows
 
 import (
@@ -17,18 +19,6 @@ func validateCardRoleValues(roles map[string]string) error {
 	for column, role := range roles {
 		if strings.TrimSpace(column) == "" {
 			return fmt.Errorf("card role refers to an unnamed column")
-		}
-		if len(role) > 255 || !card_roles.IsValid(role) {
-			return fmt.Errorf("unsupported card role for column %q", column)
-		}
-	}
-	return nil
-}
-
-func validateCreationCardRoles(roles, columns map[string]string) error {
-	for column, role := range roles {
-		if _, exists := columns[column]; !exists {
-			return fmt.Errorf("card role refers to unknown column %q", column)
 		}
 		if len(role) > 255 || !card_roles.IsValid(role) {
 			return fmt.Errorf("unsupported card role for column %q", column)

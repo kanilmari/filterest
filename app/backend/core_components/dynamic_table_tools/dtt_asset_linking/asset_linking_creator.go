@@ -40,21 +40,23 @@ func EnsureSharedAssetRelation(
 		childTable,
 	).Scan(&childTableUID)
 	if err != nil {
-		columns := map[string]string{
-			"id":            "SERIAL",
-			fkColumnName:    "INTEGER",
-			"asset_kind":    "TEXT",
-			"filename":      "TEXT",
-			"original_name": "TEXT",
-			"mime_type":     "TEXT",
-			"size_bytes":    "BIGINT",
-			"title":         "TEXT",
-			"description":   "TEXT",
-			"sort_order":    "INTEGER DEFAULT 0",
-			"is_primary":    "BOOLEAN DEFAULT FALSE",
-			"metadata_json": "JSONB",
-			"created":       "TIMESTAMPTZ DEFAULT NOW()",
-			"updated":       "TIMESTAMPTZ DEFAULT NOW()",
+		// The child table's columns in creation order: its identity, the link
+		// to the parent row, the file's details and the timestamps.
+		columns := []dtt_3_table_create.ColumnDefinition{
+			{Name: "id", DataType: "SERIAL"},
+			{Name: fkColumnName, DataType: "INTEGER"},
+			{Name: "asset_kind", DataType: "TEXT"},
+			{Name: "filename", DataType: "TEXT"},
+			{Name: "original_name", DataType: "TEXT"},
+			{Name: "mime_type", DataType: "TEXT"},
+			{Name: "size_bytes", DataType: "BIGINT"},
+			{Name: "title", DataType: "TEXT"},
+			{Name: "description", DataType: "TEXT"},
+			{Name: "sort_order", DataType: "INTEGER DEFAULT 0"},
+			{Name: "is_primary", DataType: "BOOLEAN DEFAULT FALSE"},
+			{Name: "metadata_json", DataType: "JSONB"},
+			{Name: "created", DataType: "TIMESTAMPTZ DEFAULT NOW()"},
+			{Name: "updated", DataType: "TIMESTAMPTZ DEFAULT NOW()"},
 		}
 		foreignKeys := []dtt_3_table_create.ForeignKeyDefinition{
 			{

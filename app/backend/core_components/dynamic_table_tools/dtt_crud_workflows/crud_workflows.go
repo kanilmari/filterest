@@ -28,9 +28,11 @@ import (
 )
 
 type CreateTableRequest struct {
-	TableName       string            `json:"dataset_name"`
-	Columns         map[string]string `json:"columns"`
-	ColumnCardRoles map[string]string `json:"column_card_roles,omitempty"`
+	TableName string `json:"dataset_name"`
+	// ColumnList is the new dataset's columns in the order they are written,
+	// each with its card role and settings. It is the request's only column
+	// shape: the columns and column_card_roles maps it replaced are refused.
+	ColumnList      []CreateColumnDef `json:"column_list"`
 	ForeignKeys     []ForeignKeyDef   `json:"foreign_keys"`
 	GrantUsersRead  bool              `json:"grant_users_read"`
 	GrantGuestsRead bool              `json:"grant_guests_read"`
@@ -199,8 +201,8 @@ func isSimpleNumericLiteral(expr string) bool {
 
 func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 
-	var req CreateTableRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := decodeCreateTableRequest(r.Body)
+	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Errorf("invalid input: %w", err).Error())
 		return
 	}
@@ -211,26 +213,10 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Columns) == 0 {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "at least one column is required")
-		return
-	}
-
-	sanitizedColumns := make(map[string]string)
-	for colName, colType := range req.Columns {
-		sColName, err := security.SanitizeIdentifier(colName)
-		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("invalid column name: %s", colName))
-			return
-		}
-		if !isAllowedDataType(colType) {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("column '%s' uses a forbidden data type '%s'", colName, colType))
-			return
-		}
-		sanitizedColumns[sColName] = colType
-	}
-
-	if err := validateCreationCardRoles(req.ColumnCardRoles, sanitizedColumns); err != nil {
+	// The request becomes one checked, ordered column list here, and every
+	// step below works from that list.
+	columnList, err := validateCreateColumnList(req.ColumnList)
+	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -282,7 +268,7 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = dtt_3_table_create.CreateNewTableInDatabase(tx, tableName, sanitizedColumns, sanitizedForeignKeys)
+	err = dtt_3_table_create.CreateNewTableInDatabase(tx, tableName, tableColumnsOf(columnList), sanitizedForeignKeys)
 	if err != nil {
 		_ = tx.Rollback()
 		if writeCreateTableLangKeyError(w, err) {
@@ -307,18 +293,18 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := applyColumnCardRoles(tx, tableName, req.ColumnCardRoles); err != nil {
+	if err := applyColumnCardRoles(tx, tableName, cardRolesOf(columnList)); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "card role assignment failed")
 		return
 	}
 
-	// The dataset's text-language default belongs to its definition, so the
-	// creation form owns it too. A request that stays silent about languages
-	// leaves the metadata default untouched.
-	if req.NewColumnsMultilingual != nil {
+	// The dataset's text-language default and each column's own choice belong
+	// to its definition, so the creation form owns them too. A request that
+	// stays silent about languages leaves the metadata defaults untouched.
+	if choosesColumnLanguages(req, columnList) {
 		if err := configureNewColumnDefaults(
-			tx, tableName, createdColumnsForLanguageDefaults(sanitizedColumns), req.NewColumnsMultilingual,
+			tx, tableName, createdColumnsForLanguageDefaults(columnList), req.NewColumnsMultilingual,
 		); err != nil {
 			_ = tx.Rollback()
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
@@ -326,14 +312,17 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := applyCreateColumnSettings(tx, tableName, columnList); err != nil {
+		_ = tx.Rollback()
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("column settings failed: %v", err))
+		return
+	}
+
 	if _, err := tx.Exec("UPDATE system_db_tables SET folder_id = $1 WHERE table_name = $2", targetFolderID, tableName); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but folder assignment failed: %v", err))
 		return
 	}
-
-	dtt_1_row_read.InvalidateSchemaCache(tableName)
-	dtt_1_row_read.InvalidateDatasetExistsCache(tableName)
 
 	// --- Update is_removable flag ---
 	if req.PreventDeletion {
@@ -360,6 +349,9 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but its placement could not be read: %v", err))
 		return
 	}
+
+	// Readers must not refill a cache from the state before this commit.
+	scheduleCreatedDatasetCacheInvalidation(r.Context(), tableName, invalidateDatasetReadCaches)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

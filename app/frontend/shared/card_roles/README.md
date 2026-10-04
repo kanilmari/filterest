@@ -14,10 +14,11 @@ remain authoritative.
 
 Each dataset column keeps its chosen assignment in
 system_column_details.card_element (varchar(255), default details). Dataset
-creation accepts an optional column_card_roles map, validates every key/value
-before opening its transaction, and writes assignments in the same transaction
-as the new dataset. Older callers keep the existing default. This adds no table,
-migration, automatic role assignment, AI inference or translation-writing call.
+creation carries each column's optional card_role in its ordered column_list,
+validates every role before opening its transaction, and writes assignments in
+the same transaction as the new dataset. A column without a role keeps the
+existing default. This adds no table, migration, automatic role assignment, AI
+inference or translation-writing call.
 
 Existing numbered description/details/details_link/hidden roles, comma-separated
 combinations and +lang_key / +lang-key modifiers remain valid. The basic creation

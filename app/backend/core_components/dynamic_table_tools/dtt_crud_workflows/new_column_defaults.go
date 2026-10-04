@@ -8,7 +8,6 @@ import (
 	"easelect/backend/core_components/dbutils"
 	columns "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -27,17 +26,15 @@ func validateNewColumnLanguages(added []columns.ModifiedCol) error {
 }
 
 // createdColumnsForLanguageDefaults lists a brand-new dataset's columns in the
-// shape the language default understands. The order is fixed so one creation
-// always writes its metadata the same way.
-func createdColumnsForLanguageDefaults(created map[string]string) []columns.ModifiedCol {
-	names := make([]string, 0, len(created))
-	for name := range created {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	listed := make([]columns.ModifiedCol, 0, len(names))
-	for _, name := range names {
-		listed = append(listed, columns.ModifiedCol{NewName: name, DataType: created[name]})
+// shape the language default understands, in the creation request's order and
+// with each column's own language choice, so one creation always writes its
+// metadata the same way.
+func createdColumnsForLanguageDefaults(created []CreateColumnDef) []columns.ModifiedCol {
+	listed := make([]columns.ModifiedCol, 0, len(created))
+	for _, column := range created {
+		listed = append(listed, columns.ModifiedCol{
+			NewName: column.Name, DataType: column.DataType, IsMultilingual: column.IsMultilingual,
+		})
 	}
 	return listed
 }

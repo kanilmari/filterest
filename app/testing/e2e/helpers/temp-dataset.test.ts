@@ -112,6 +112,27 @@ beforeEach(() => {
   hydrateAuthenticatedTreeDataCache.mockResolvedValue(undefined);
 });
 
+describe('createTempDataset request', () => {
+  it('sends the columns as one ordered list, in the order the test wrote them', async () => {
+    const page = createFakePage();
+
+    await createTempDataset(page, {
+      datasetName: 'e2e_column_order',
+      columns: { id: 'SERIAL', zeta: 'TEXT', alpha: 'BOOLEAN' },
+    });
+
+    const createCall = vi.mocked(page.evaluate).mock.calls.find(([, argument]) =>
+      (argument as { url?: string } | undefined)?.url === '/api/create_dataset');
+    const payload = (createCall?.[1] as { payload?: Record<string, unknown> } | undefined)?.payload;
+    expect(payload?.column_list).toEqual([
+      { name: 'id', data_type: 'SERIAL' },
+      { name: 'zeta', data_type: 'TEXT' },
+      { name: 'alpha', data_type: 'BOOLEAN' },
+    ]);
+    expect(payload).not.toHaveProperty('columns');
+  });
+});
+
 describe('createTempDataset compensation', () => {
   it('confirms a successful create and cleans it when seeding fails', async () => {
     const page = createFakePage({ seedStatus: 500 });

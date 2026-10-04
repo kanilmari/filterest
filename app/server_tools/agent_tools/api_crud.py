@@ -58,13 +58,13 @@ def parse_jsonish_value(raw_value):
         return raw_value
 
 
-def parse_column_map(entries):
-    """Convert repeated NAME=TYPE pairs between CLI flags and create-dataset columns."""
-    columns = {}
+def parse_column_list(entries):
+    """Convert repeated NAME=TYPE pairs between CLI flags and the ordered create-dataset column list."""
+    column_list = []
     for entry in entries or []:
         name, data_type = parse_assignment(entry, "--column")
-        columns[name] = data_type
-    return columns
+        column_list.append({"name": name, "data_type": data_type})
+    return column_list
 
 
 def parse_added_columns(entries):
@@ -178,15 +178,17 @@ def build_create_dataset_payload(args):
             raise ValueError("--raw-json must be an object")
         return raw_payload
 
-    columns = load_json_argument(args.columns_json, "--columns-json")
-    if columns is None:
-        columns = parse_column_map(args.column)
-    if not isinstance(columns, dict) or not columns:
-        raise ValueError("provide --column NAME=TYPE or --columns-json")
+    # The columns travel as one ordered list, so the dataset keeps the order
+    # in which they were given.
+    column_list = load_json_argument(args.column_list_json, "--column-list-json")
+    if column_list is None:
+        column_list = parse_column_list(args.column)
+    if not isinstance(column_list, list) or not column_list:
+        raise ValueError("provide --column NAME=TYPE or --column-list-json")
 
     payload = {
         "dataset_name": args.dataset_name,
-        "columns": columns,
+        "column_list": column_list,
         "foreign_keys": load_json_argument(args.foreign_keys_json, "--foreign-keys-json") or [],
         "grant_users_read": bool(args.grant_users_read),
         "grant_guests_read": bool(args.grant_guests_read),
@@ -520,8 +522,11 @@ def build_parser():
 
     create_parser = subparsers.add_parser("create-dataset", help="Create a dataset")
     create_parser.add_argument("dataset_name")
-    create_parser.add_argument("--column", action="append", default=[], help="Column NAME=TYPE")
-    create_parser.add_argument("--columns-json", help="JSON object or @path with columns")
+    create_parser.add_argument("--column", action="append", default=[], help="Column NAME=TYPE, repeated in column order")
+    create_parser.add_argument(
+        "--column-list-json",
+        help="JSON array or @path of column objects in order, e.g. [{\"name\":\"id\",\"data_type\":\"SERIAL\"}]",
+    )
     create_parser.add_argument("--foreign-keys-json", help="JSON array or @path with FK definitions")
     create_parser.add_argument("--grant-users-read", action="store_true")
     create_parser.add_argument("--grant-guests-read", action="store_true")

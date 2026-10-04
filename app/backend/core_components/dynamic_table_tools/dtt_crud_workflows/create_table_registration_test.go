@@ -140,7 +140,9 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 			return err
 		}
 		defer tx.Rollback()
-		if err := dtt_3_table_create.CreateNewTableInDatabase(tx, name, map[string]string{"id": "SERIAL", "title": "TEXT"}, nil); err != nil {
+		if err := dtt_3_table_create.CreateNewTableInDatabase(tx, name, []dtt_3_table_create.ColumnDefinition{
+			{Name: "id", DataType: "SERIAL"}, {Name: "title", DataType: "TEXT"},
+		}, nil); err != nil {
 			return err
 		}
 		if _, err := tx.Exec("INSERT INTO system_db_tables VALUES($1,$2,'public')", uid, name); err != nil {

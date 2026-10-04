@@ -111,24 +111,30 @@ func TestModifyColumnsCarriesTheDeletionSwitchOnlyWhenItIsSent(t *testing.T) {
 	}
 }
 
-func TestCreationCarriesTheDatasetLanguageDefaultInAFixedOrder(t *testing.T) {
+func TestCreationCarriesTheDatasetLanguageDefaultInTheListOrder(t *testing.T) {
 	var request CreateTableRequest
-	if err := json.Unmarshal([]byte(`{"dataset_name":"demo","columns":{"id":"SERIAL"},"new_columns_multilingual":true}`), &request); err != nil {
+	if err := json.Unmarshal([]byte(`{"dataset_name":"demo","column_list":[{"name":"id","data_type":"SERIAL"}],"new_columns_multilingual":true}`), &request); err != nil {
 		t.Fatal(err)
 	}
 	if request.NewColumnsMultilingual == nil || !*request.NewColumnsMultilingual {
 		t.Fatalf("language default = %v, want true", request.NewColumnsMultilingual)
 	}
 
-	listed := createdColumnsForLanguageDefaults(map[string]string{"title": "TEXT", "id": "SERIAL", "code": "VARCHAR(30)"})
+	no := false
+	listed := createdColumnsForLanguageDefaults([]CreateColumnDef{
+		{Name: "title", DataType: "TEXT"}, {Name: "id", DataType: "SERIAL"}, {Name: "code", DataType: "VARCHAR(30)", IsMultilingual: &no},
+	})
 	names := make([]string, 0, len(listed))
 	for _, column := range listed {
 		names = append(names, column.NewName)
 	}
-	if !reflect.DeepEqual(names, []string{"code", "id", "title"}) {
-		t.Fatalf("columns = %v, want a fixed alphabetical order", names)
+	if !reflect.DeepEqual(names, []string{"title", "id", "code"}) {
+		t.Fatalf("columns = %v, want the creation request's own order", names)
 	}
-	if listed[2].DataType != "TEXT" {
-		t.Fatalf("type = %q, want the created column's own type", listed[2].DataType)
+	if listed[0].DataType != "TEXT" || listed[0].IsMultilingual != nil {
+		t.Fatalf("column = %+v, want its own type and no choice of its own", listed[0])
+	}
+	if listed[2].IsMultilingual != &no {
+		t.Fatal("a column's own language choice must reach the language default")
 	}
 }

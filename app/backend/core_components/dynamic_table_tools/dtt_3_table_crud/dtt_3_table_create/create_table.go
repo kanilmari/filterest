@@ -1,5 +1,6 @@
 // create_table.go
-// Creates validated physical tables and registers their dataset metadata.
+// Creates validated physical tables, columns in the order the caller lists
+// them, and registers their dataset metadata.
 // Connects dataset creation workflows and managed children to PostgreSQL DDL.
 // Separates strict new-dataset creation from existing managed-child behavior.
 package dtt_3_table_create
@@ -36,30 +37,39 @@ type ForeignKeyDefinition struct {
 	CascadeDelete bool `json:"cascadeDelete,omitempty"`
 }
 
+// ColumnDefinition is one physical column of a table being created: its name
+// and its SQL type, inline constraints included (for example TEXT NOT NULL).
+// Creation takes an ordered list of them because a map has no order: the
+// table's columns are created, and numbered by PostgreSQL, as the list runs.
+type ColumnDefinition struct {
+	Name     string
+	DataType string
+}
+
 // CreateTableInDatabase preserves idempotent physical creation for managed child tables.
-func CreateTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition) error {
+func CreateTableInDatabase(db dbutils.Querier, table_name string, columns []ColumnDefinition, foreign_keys []ForeignKeyDefinition) error {
 	return createTableInDatabase(db, table_name, columns, foreign_keys, true)
 }
 
 // CreateNewTableInDatabase atomically rejects existing relations before dataset
 // creation workflows register metadata or grant requested runtime read access.
-func CreateNewTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition) error {
+func CreateNewTableInDatabase(db dbutils.Querier, table_name string, columns []ColumnDefinition, foreign_keys []ForeignKeyDefinition) error {
 	return createTableInDatabase(db, table_name, columns, foreign_keys, false)
 }
 
-func createTableInDatabase(db dbutils.Querier, table_name string, columns map[string]string, foreign_keys []ForeignKeyDefinition, allowExisting bool) error {
+func createTableInDatabase(db dbutils.Querier, table_name string, columns []ColumnDefinition, foreign_keys []ForeignKeyDefinition, allowExisting bool) error {
 	sanitizedTableName, err := security.SanitizeIdentifier(table_name)
 	if err != nil {
 		return err
 	}
 
-	sanitizedColumns := make(map[string]string, len(columns))
-	for colName, colType := range columns {
-		sColName, err := security.SanitizeIdentifier(colName)
+	sanitizedColumns := make([]ColumnDefinition, 0, len(columns))
+	for _, column := range columns {
+		sColName, err := security.SanitizeIdentifier(column.Name)
 		if err != nil {
 			return err
 		}
-		sanitizedColumns[sColName] = colType
+		sanitizedColumns = append(sanitizedColumns, ColumnDefinition{Name: sColName, DataType: column.DataType})
 	}
 
 	sanitizedFKs := make([]ForeignKeyDefinition, len(foreign_keys))
@@ -88,8 +98,8 @@ func createTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 	// Nykyinen logiikka asettaa PRIMARY KEY:n automaattisesti sarakkeelle,
 	// joka on nimeltään "id" ja jonka tyyppi alkaa "SERIAL".
 	hasPrimaryKey := false
-	for colName, colType := range sanitizedColumns {
-		if strings.EqualFold(colName, "id") && strings.HasPrefix(strings.ToUpper(colType), "SERIAL") {
+	for _, column := range sanitizedColumns {
+		if strings.EqualFold(column.Name, "id") && strings.HasPrefix(strings.ToUpper(column.DataType), "SERIAL") {
 			hasPrimaryKey = true
 			break
 		}
@@ -112,7 +122,10 @@ func createTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 	columns_count := 0
 	updated_found := false
 
-	for col_name, col_type := range sanitizedColumns {
+	// The columns are written in list order, which PostgreSQL keeps as their
+	// attribute numbers and the metadata sync copies to co_number.
+	for _, column := range sanitizedColumns {
+		col_name, col_type := column.Name, column.DataType
 		col_type_upper := strings.ToUpper(col_type)
 
 		// Tarkistetaan, onko sarake nimeltään 'updated'
@@ -187,8 +200,8 @@ func createTableInDatabase(db dbutils.Querier, table_name string, columns map[st
 	}
 
 	columnNames := make([]string, 0, len(sanitizedColumns))
-	for columnName := range sanitizedColumns {
-		columnNames = append(columnNames, columnName)
+	for _, column := range sanitizedColumns {
+		columnNames = append(columnNames, column.Name)
 	}
 	sort.Strings(columnNames)
 	if err := lang.EnsureDatasetInterfaceLabels(db, sanitizedTableName, columnNames); err != nil {

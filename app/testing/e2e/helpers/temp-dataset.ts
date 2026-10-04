@@ -278,7 +278,10 @@ export async function createTempDataset(
       createAttempted = true;
       response = await postJsonWithCsrf(page, '/api/create_dataset', {
         dataset_name: config.datasetName,
-        columns: config.columns,
+        // The server takes the columns as one ordered list, so the dataset
+        // keeps the order in which the test wrote them.
+        column_list: Object.entries(config.columns)
+          .map(([name, data_type]) => ({ name, data_type })),
         foreign_keys: config.foreignKeys ?? [],
         grant_users_read: false,
         grant_guests_read: false,

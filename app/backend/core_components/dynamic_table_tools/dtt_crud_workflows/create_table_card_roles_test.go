@@ -12,9 +12,9 @@ import (
 
 func TestCreationCardRolesValidateBeforeAnyTransaction(t *testing.T) {
 	for _, payload := range []string{
-		`{"dataset_name":"sample","columns":{"id":"SERIAL"},"column_card_roles":{"id":"unsupported"}}`,
-		`{"dataset_name":"sample","columns":{"id":"SERIAL"},"column_card_roles":{"missing":"header"}}`,
-		`{"dataset_name":"sample","columns":{"id":"SERIAL"},"column_card_roles":{"id":42}}`,
+		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL","card_role":"unsupported"}]}`,
+		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL","card_role":42}]}`,
+		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL","card_role":"` + strings.Repeat("details,", 40) + `details"}]}`,
 	} {
 		// No transaction context exists: validation must reject before schema work.
 		req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(payload))
@@ -27,18 +27,22 @@ func TestCreationCardRolesValidateBeforeAnyTransaction(t *testing.T) {
 }
 
 func TestCreationCardRolesKeepLegacyDefaultsAndAcceptExistingVariants(t *testing.T) {
-	columns := map[string]string{"id": "SERIAL", "title": "TEXT"}
-	for _, roles := range []map[string]string{nil, {}, {"title": ""},
-		{"title": "header+lang_key"}, {"title": "description2,details_link10"}} {
-		if err := validateCreationCardRoles(roles, columns); err != nil {
+	for _, role := range []string{"", "header+lang_key", "description2,details_link10"} {
+		list := []CreateColumnDef{{Name: "id", DataType: "SERIAL"}, {Name: "title", DataType: "TEXT", CardRole: role}}
+		validated, err := validateCreateColumnList(list)
+		if err != nil {
 			t.Fatal(err)
+		}
+		if roles := cardRolesOf(validated); role == "" && len(roles) != 0 {
+			t.Fatalf("a column without a role must keep the default, got %v", roles)
 		}
 	}
 	q := &roleRecorder{}
-	if err := applyColumnCardRoles(q, "sample", nil); err != nil || len(q.args) != 0 {
+	if err := applyColumnCardRoles(q, "sample", cardRolesOf([]CreateColumnDef{{Name: "title", DataType: "TEXT"}})); err != nil || len(q.args) != 0 {
 		t.Fatal("omitted roles should not change metadata defaults")
 	}
-	if err := validateCreationCardRoles(map[string]string{"title": strings.Repeat("details,", 40) + "details"}, columns); err == nil {
+	oversize := []CreateColumnDef{{Name: "title", DataType: "TEXT", CardRole: strings.Repeat("details,", 40) + "details"}}
+	if _, err := validateCreateColumnList(oversize); err == nil {
 		t.Fatal("oversize role must fail before the transaction")
 	}
 }
