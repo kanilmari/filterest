@@ -1,62 +1,91 @@
-# Filterest 9.3.20
+# Filterest 9.3.21
 
-Visitors can no longer write to the database, no account can grant itself rights, and
-a Docker installation can now start, update and back up like a native one.
+Signing in survives a browser update, each browser tab keeps its own view and open
+article, a card's picture is no longer lost or switched by itself, and a row's title
+no longer reaches the page before the row is read with the person's rights. The update
+signs everyone out once.
 
-## Visitors only read, and nobody grants themselves rights
+## Signing in survives a browser update
 
-The database account the application uses for visitors could add, change and delete
-rows and advance number sequences, although no visitor feature writes anything. The
-accounts of signed-in users could write to the views that edit database privileges and
-run the two functions behind them, which act with the owner's rights, so a signed-in
-account could have granted itself almost any right.
+After a browser updated itself, signing in could stop at "Invalid CSRF token. Reload the
+page." on every site, and every site had signed the person out. A session that replaced
+one the server could not read was saved without the session cookie's settings, so the
+browser kept a second session cookie under a folder such as `/api` beside the site-wide
+one; the browser could also show a stored copy of the sign-in page whose token had gone
+stale; and the browser's fingerprint contained its version number, so an update looked
+like another browser.
 
-A startup stage now takes these rights away on every start, after the database updates
-and before the first request, and compares what remains before and after: visitors only
-read, and no ordinary account can use the privilege views or those functions. Every
-other right stays as it was. If the stage cannot finish, the application does not start,
-rather than serving with rights it should not have. Narrowing the signed-in users'
-account to the tables it needs is the next stage.
+A replacement session now gets the same cookie settings as every other session, and a
+second session cookie under such a folder is cleared while the site-wide one is kept.
+The sign-in page and the response that hands out its token now tell the browser not to
+store them. A sign-in,
+verification-code or password-reset request that meets a stale token fetches the
+session's current token and tries once more, keeping what the person typed. The
+fingerprint leaves version numbers out, and a signed-in session whose browser no longer
+matches ends in one clean sign-out instead of passing the person back and forth between
+the sign-in page and the application. Because the fingerprint changes, **the update
+signs everyone out once**.
 
-## Docker installations start, update and back up
+## A row's title stays out of the page until the row is read with rights
 
-- **Update:** `./filterest update` now updates a Docker installation with the same
-  safeguards as a native one. It checks that the release is published, backs up the
-  database and reads the backup back before trusting it, keeps the uploaded files and
-  the protected settings, and reports success only when the new version answers that it
-  is compatible and is this installation. If the new version does not become ready, its
-  application is stopped while the database and the backup are kept, and the README
-  shows how to return to the previous version.
-- **Start:** `./filterest start` in a folder prepared with `./filterest docker setup`
-  starts the Docker stack instead of beginning a native setup beside it, and
-  `./filterest status` shows its containers.
-- **Private folders:** a folder whose files were created readable only by their owner
-  could not start in Docker. The Docker command now makes the folders the database reads
-  readable to it, and the application image makes its own copy of the program readable
-  by its user and writable by no one.
-- **Backups keep access rights:** before an update changes anything, the database
-  backup now keeps who may read what. A site restored from a native installation's
-  backup kept the data but lost what the limited database accounts for visitors, guests
-  and read-only tools are allowed to read.
+The server writes the browser tab title and the link-preview title into a page before
+anything is authorised. At a row's address those titles could include the row's own
+title without checking whether the person may read that row. A row's address now
+carries the dataset's own title; the application still shows the row's title once it
+has read the row with the person's rights. On a site that requires signing in, a
+visitor who has not signed in is sent to the sign-in page first.
 
-## Database 9.9.1
+## Views and open articles
 
-The update moves the database from 9.9.0 to 9.9.1. It adds the texts of the dataset
-form's "Connect two fields" section and of its folder, rights, picture,
-deletion-protection and link controls in Finnish, English, Chinese and Cantonese. A
-translation a site has already changed is never overwritten. The section now explains
-that the link runs from a column of this dataset to a column of the other, which is also
-known as a foreign key, and its information symbol no longer disappears.
+- **Each browser tab keeps its own view and open article.** With the same site open in
+  two tabs, opening a new tab or choosing a view in one could close the article that was
+  open in the other, or change its view. Each tab now remembers its own view and the row
+  it has open; sorting, filters and paging stay shared by all of the site's tabs.
+  Reloading an article's page brings back its related-rows tab, whether the related rows
+  were open, and the scroll position. A link straight to an article opens even when the
+  browser refuses a tab memory of its own.
+- **A dataset opens in the view its address names, otherwise in its default.** A dataset
+  whose default view was the card view sometimes opened as articles, because the browser
+  remembered the view and the open article from an earlier visit. A newly loaded page now
+  shows the view its address names, otherwise the dataset's default, and forgets the
+  articles left open on earlier visits, while sorting stays.
 
-The update also clears a stale display setting that sites installed from the public
-package carried, which made the server write a warning on every read of the dataset
-registry, and gives one internal database link the same name on every site.
+## A card's picture follows one rule and is no longer lost
+
+A card's picture could be the only reference to a picture file still on disk: uploading a
+new picture overwrote that reference, and deleting the new picture then emptied it, so
+the card lost its picture for good. An upload also made itself the card picture, while
+the next gallery change chose again by another rule, so a card's picture could switch
+back by itself.
+
+Now one rule chooses the card picture everywhere: the picture marked as the main one,
+otherwise the gallery's first. A new picture goes to the end of the gallery, so it
+becomes the card picture only on a row that has none, and a card picture the gallery does
+not hold is kept rather than lost. The article opens on the picture the card shows.
+After the update, the application brings cards whose picture the old rule chose to the
+new rule when it starts, and finishes any it could not reach at later starts. Two
+changes to one gallery at once wait for each other, a CSV restore never writes over a
+picture the rule keeps, and deleting a gallery item no longer moves into deleted storage
+a file that the same row's other pictures or its card picture still use.
 
 ## Also
 
-- On a Glowy card, a one-line description is centred against its icon, and keyword chips
-  take their own theme colour in both themes, so they are readable.
-- The start log no longer classes some 240 ordinary lines as errors, so a real error
-  stands out.
-- The workline observatory finds a workline by its number and searches the way every
-  dataset does.
+- **A row counts as your own only when the dataset says who owns it.** An own-row
+  exception, such as "must be approved unless the row is your own", could identify the
+  wrong owner. A dataset now gives that exception only through a named owner column that
+  the database confirms links to the users table; the users table and the service
+  catalog keep their existing rules.
+- **Storage cleanup never touches the shared picture library.** The administrator routes
+  that archive and prune unknown storage folders now consider only folders named by a
+  dataset number, so they can no longer move the whole media library into deleted storage.
+- **The missing-media check samples a whole dataset.** By default it runs once after each
+  application or database update instead of at every start, and a check that was
+  switched off stays off. It samples a large dataset evenly by default, reads card
+  pictures and picture fields too, and its texts are language keys. Its report shows the
+  adjustable limits, notices when a limit cut a run short and per-dataset results, and it
+  lists a file as unused only after every gallery and picture field was read in full.
+
+## Database 9.9.2
+
+The update moves the database from 9.9.1 to 9.9.2. 9.9.2 changes no table: it adds the
+second version of the missing-media check's setting and its texts.
