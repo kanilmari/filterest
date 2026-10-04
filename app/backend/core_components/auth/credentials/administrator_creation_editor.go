@@ -232,7 +232,6 @@ func writeAdministratorCreationAudit(
 ) error {
 	details, err := json.Marshal(map[string]interface{}{
 		"created_user_id":              result.UserID,
-		"created_username":             result.Username,
 		"created_email":                result.Email,
 		"new_verification_method":      result.VerificationMethod,
 		"new_generation":               result.AuthenticationGeneration,

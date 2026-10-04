@@ -30,7 +30,7 @@ func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	})
 
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
-	if err := setAuthenticatedSessionIdentity(session, 42, "alice"); err != nil {
+	if err := setAuthenticatedSessionIdentity(session, 42); err != nil {
 		t.Fatalf("setAuthenticatedSessionIdentity() returned error: %v", err)
 	}
 
@@ -40,8 +40,9 @@ func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	if got := session.Values["user_id"]; got != 42 {
 		t.Fatalf("user_id = %#v, want 42", got)
 	}
-	if got := session.Values["username"]; got != "alice" {
-		t.Fatalf("username = %#v, want alice", got)
+	// The session names nobody: names are read by id where they are shown (WL132).
+	if got, named := session.Values["username"]; named {
+		t.Fatalf("the session carries a name: %#v", got)
 	}
 	if got := session.Values["user_role"]; got != "admin" {
 		t.Fatalf("user_role = %#v, want admin", got)
@@ -58,7 +59,7 @@ func TestSetAuthenticatedSessionIdentityStoresResolvedUserRole(t *testing.T) {
 	}
 
 	secondSession := &sessions.Session{Values: map[interface{}]interface{}{}}
-	if err := setAuthenticatedSessionIdentity(secondSession, 42, "alice"); err != nil {
+	if err := setAuthenticatedSessionIdentity(secondSession, 42); err != nil {
 		t.Fatalf("second sign-in returned error: %v", err)
 	}
 	secondSignInID, _ := sign_in_revocation.SessionValue(secondSession)
@@ -118,7 +119,7 @@ func TestAFailedSignInLeavesTheSessionExactlyAsItWas(t *testing.T) {
 		session.Values[key] = value
 	}
 
-	if err := setAuthenticatedSessionIdentity(session, 42, "alice"); err == nil {
+	if err := setAuthenticatedSessionIdentity(session, 42); err == nil {
 		t.Fatal("signing in succeeded although the sign-in limit could not be read")
 	}
 
@@ -137,7 +138,7 @@ func TestAFailedSignInLeavesTheSessionExactlyAsItWas(t *testing.T) {
 func TestLocalLoginFactorAttemptsAreEnvironmentIndependent(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
-	setPendingLoginState(session, 42, "alice", "fingerprint", 1)
+	setPendingLoginState(session, 42, "fingerprint", 1)
 
 	for expected := 4; expected >= 0; expected-- {
 		if got := localLoginFactorAttemptsRemaining(session, false); got != expected {

@@ -68,7 +68,7 @@ func echoHandler(seen *string) http.HandlerFunc {
 func issueGuardDelegation(t *testing.T) (*site_assistant.Store, *site_assistant.Delegation) {
 	t.Helper()
 	store := site_assistant.NewStore()
-	_, delegation, err := store.Issue(40861, "test_admin_12", "job-guard", "localhost", 10*time.Minute)
+	_, delegation, err := store.Issue(40861, "job-guard", "localhost", 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}

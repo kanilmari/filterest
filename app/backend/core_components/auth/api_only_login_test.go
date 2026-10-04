@@ -110,7 +110,7 @@ func TestAPIOnlyPendingFactorCannotSwitchToBrowserChannel(t *testing.T) {
 	st := prepareLoginHandlerSessionStore(t)
 	r := httptest.NewRequest("POST", "/api/login", nil)
 	s, _ := st.New(r, "session")
-	setPendingLoginState(s, 42, "renamed", "fixture", 4)
+	setPendingLoginState(s, 42, "fixture", 4)
 	w := httptest.NewRecorder()
 	handleLoginOTPVerify(w, r, s, loginJSONRequest{OTPCode: "1234"})
 	if w.Code != 403 || s.Values["authenticated"] == true {

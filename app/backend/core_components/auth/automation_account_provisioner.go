@@ -422,7 +422,6 @@ func replaceAutomationCredentials(ctx context.Context, tx *sql.Tx, userID int64,
 func writeAutomationAccountAudit(ctx context.Context, tx *sql.Tx, userID int64, action string, generation int64) error {
 	details, err := json.Marshal(map[string]interface{}{
 		"target_user_id":            userID,
-		"target_username":           AutomationAccountUsername,
 		"credential_action":         action,
 		"authentication_generation": generation,
 		"verification_method":       credentials.VerificationNone,

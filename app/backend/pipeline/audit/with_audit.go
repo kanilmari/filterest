@@ -9,6 +9,7 @@ package audit
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
@@ -104,12 +105,43 @@ func batchInserter() {
 	}
 }
 
+// auditNameLookupTimeout bounds all of one batch's name reads together. Tests
+// shorten it.
+var auditNameLookupTimeout = backend.DisplayNameLookupTimeout
+
+// nameAuditActors gives each event of a signed-in actor that actor's current
+// display name: the session carries no name, so it is read here, off the
+// request path, once per account in the batch. The reads share their own
+// deadline, so a slow user table leaves names empty and never takes the time
+// the insert needs; no event is lost over a name.
+func nameAuditActors(db *sql.DB, batch []AuditEvent) {
+	ctx, cancel := context.WithTimeout(context.Background(), auditNameLookupTimeout)
+	defer cancel()
+	displayNames := map[int]string{}
+	for i := range batch {
+		if batch[i].UserID == nil || batch[i].Username != "" {
+			continue
+		}
+		userID := *batch[i].UserID
+		if _, known := displayNames[userID]; !known {
+			displayNames[userID] = backend.UserDisplayNameOr(ctx, db, userID, "")
+		}
+		batch[i].Username = displayNames[userID]
+	}
+}
+
 // flushBatch performs a single multi-row INSERT for all events in the batch.
 func flushBatch(batch []AuditEvent) {
 	db := backend.Db
 	if db == nil {
 		return
 	}
+
+	nameAuditActors(db, batch)
+
+	// The insert gets its own full deadline, whatever the names cost.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Build multi-value INSERT
 	// Each row has 11 columns ($1..$11 per row)
@@ -165,9 +197,6 @@ func flushBatch(batch []AuditEvent) {
 		(created_at, user_id, username, handler_name, http_method, url_path,
 		 table_name, operation_type, success, ip_address, duration_ms)
 		VALUES ` + strings.Join(valueStrings, ",")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	if _, err := db.ExecContext(ctx, query, args...); err != nil {
 		logging.ErrorAttrs(
@@ -387,24 +416,19 @@ func WithAudit(handlerName string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Extract user info from session (best-effort, no error = anonymous)
+		// Extract the user from the session (best-effort, no error = anonymous). The
+		// name is read by id when the batch is written; the session carries none.
 		var userID *int
-		var username string
 		session, err := e_sessions.GetOrCreateSession(w, r)
 		if err == nil && session != nil {
 			if uid, ok := session.Values["user_id"].(int); ok {
 				userID = &uid
-				// Best-effort username lookup (single cached row)
-				if uname, ok2 := session.Values["username"].(string); ok2 {
-					username = uname
-				}
 			}
 		}
 
 		ev := AuditEvent{
 			CreatedAt:     start,
 			UserID:        userID,
-			Username:      username,
 			HandlerName:   handlerName,
 			HTTPMethod:    r.Method,
 			URLPath:       r.URL.Path,

@@ -147,8 +147,8 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logging.Infof("received registration data: username=%s, email=%s, full_name=%s",
-		username, email, fullName)
+	// The submitted name, address and full name stay out of the log.
+	logging.Infof("received registration data")
 
 	var existing int
 	err = backend.Db.QueryRow(`
@@ -326,8 +326,7 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 	if !ok || csrfToken == "" {
 		csrfToken = uuid.NewString()
 		session.Values["csrf_token"] = csrfToken
-		if err = saveSession(w, r, session); err != nil {
-			logging.Errorf("error: session save failed after csrf token creation: %s", err.Error())
+		if err = e_sessions.Save(w, r, session); err != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}

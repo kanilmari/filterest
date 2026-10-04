@@ -490,7 +490,9 @@ func TestRecoverAdministratorChangesPasswordAndFixedPINAtomically(t *testing.T) 
 	if err = json.Unmarshal([]byte(state.auditArgs[0].Value.(string)), &auditDetails); err != nil {
 		t.Fatalf("decode audit details: %v", err)
 	}
-	if auditDetails["target_username"] != state.administrator.Username ||
+	// The audit names the account by id only (WL132): no name is written.
+	if _, named := auditDetails["target_username"]; named ||
+		auditDetails["target_user_id"] != float64(state.administrator.ID) ||
 		auditDetails["previous_verification_method"] != string(VerificationEmail) ||
 		auditDetails["new_verification_method"] != string(VerificationFixedPIN) ||
 		auditDetails["source"] != "interactive_cli" ||

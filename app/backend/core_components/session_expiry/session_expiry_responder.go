@@ -14,6 +14,7 @@ import (
 
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/httpresponse"
+	e_sessions "easelect/backend/core_components/sessions"
 
 	"github.com/gorilla/sessions"
 )
@@ -112,14 +113,14 @@ func RespondSignInNoLongerValid(
 		returnPath := returnPathForRequest(r)
 		if session != nil {
 			session.Values["redirect_after_login"] = returnPath
-			saveClearedSession(w, r, session)
+			_ = e_sessions.Save(w, r, session)
 		}
 		http.Redirect(w, r, LoginPathWithSessionEndedNotice(returnPath), http.StatusSeeOther)
 		return
 	}
 
 	if session != nil {
-		saveClearedSession(w, r, session)
+		_ = e_sessions.Save(w, r, session)
 	}
 	httpresponse.RespondWithAuthFailure(w, SessionNoLongerValidMessage)
 }
@@ -135,10 +136,4 @@ func returnPathForRequest(r *http.Request) string {
 		return "/"
 	}
 	return returnPath
-}
-
-func saveClearedSession(w http.ResponseWriter, r *http.Request, session *sessions.Session) {
-	if err := session.Save(r, w); err != nil {
-		log.Printf("\033[31m[session_expiry] clearing the ended sign-in failed: %v\033[0m", err)
-	}
 }

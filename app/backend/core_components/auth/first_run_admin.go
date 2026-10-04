@@ -148,8 +148,7 @@ func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	delete(session.Values, "first_run_totp_secret")
-	if err = saveSession(w, r, session); err != nil {
-		logging.Errorf("[FirstRunAdminHandler] failed to clear enrollment secret from session: %v", err)
+	if err = e_sessions.Save(w, r, session); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 		return
 	}
@@ -386,7 +385,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		sessionChanged = true
 	}
 	if sessionChanged {
-		if err = saveSession(w, r, session); err != nil {
+		if err = e_sessions.Save(w, r, session); err != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}

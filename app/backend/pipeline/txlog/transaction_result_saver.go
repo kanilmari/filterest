@@ -5,6 +5,7 @@
 package txlog
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"net/http"
@@ -35,14 +36,10 @@ func LogTransactionResult(r *http.Request, success bool, txErr error) {
 	}
 
 	userID, _ := e_sessions.GetUserIDFromSession(r)
-	var username string
-	if session, err := e_sessions.GetOrCreateSession(nil, r); err == nil {
-		if val, ok := session.Values["username"]; ok {
-			if s, ok2 := val.(string); ok2 {
-				username = s
-			}
-		}
-	}
+	// The session carries no name; the signed-in user's current one is read by id,
+	// within backend.DisplayNameLookupTimeout. The outcome is written even when the
+	// client has gone, so the read does not follow the request's context.
+	username := backend.UserDisplayNameOr(context.Background(), backend.Db, userID, "")
 
 	var errMsg sql.NullString
 	if txErr != nil {

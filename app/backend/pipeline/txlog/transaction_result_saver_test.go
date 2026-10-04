@@ -36,6 +36,9 @@ type txlogMockConfig struct {
 	queryRows [][]driver.Value
 	queryErr  error
 	execErr   error
+	// displayNames answers the display-name lookup by user id; an id not listed
+	// has no row. That lookup does not count as the last query.
+	displayNames map[int64]string
 }
 
 type txlogMockState struct {
@@ -94,6 +97,24 @@ func (c *txlogMockConn) Query(query string, args []driver.Value) (driver.Rows, e
 }
 
 func (c *txlogMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "FROM system_users") {
+		c.state.mu.Lock()
+		cfg := c.state.cfg
+		c.state.mu.Unlock()
+		if cfg.queryErr != nil {
+			return nil, cfg.queryErr
+		}
+		var userID int64
+		if len(args) == 1 {
+			userID, _ = args[0].Value.(int64)
+		}
+		rows := &txlogMockRows{cols: []string{"username"}}
+		if name, known := cfg.displayNames[userID]; known {
+			rows.rows = [][]driver.Value{{name}}
+		}
+		return rows, nil
+	}
+
 	c.state.mu.Lock()
 	c.state.lastQuery = query
 	c.state.queryArgs = append([]driver.NamedValue(nil), args...)
@@ -248,14 +269,16 @@ func TestShouldLogTransactionResult(t *testing.T) {
 func TestLogTransactionResult_InsertsResolvedContext(t *testing.T) {
 	initTxlogSessionStore(t)
 	db, state := openTxlogMockDB(t, txlogMockConfig{
-		queryRows: [][]driver.Value{{int64(17)}},
+		queryRows:    [][]driver.Value{{int64(17)}},
+		displayNames: map[int64]string{42: "alice"},
 	})
 	withTxlogDB(t, db)
 	logBuf := captureTxlogOutput(t)
 
+	// The name comes from the account by id, never from a copy a cookie still carries.
 	req := newTxlogRequestWithSession(t, http.MethodPost, "/api/widgets", func(session *sessions.Session) {
 		session.Values["user_id"] = 42
-		session.Values["username"] = "alice"
+		session.Values["username"] = "stale-copy"
 	})
 
 	LogTransactionResult(req, true, nil)

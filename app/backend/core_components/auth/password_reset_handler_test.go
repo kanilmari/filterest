@@ -135,8 +135,8 @@ func seedSessionCookie(t *testing.T, values map[interface{}]interface{}) *http.C
 	for key, value := range values {
 		session.Values[key] = value
 	}
-	if err := saveSession(rr, req, session); err != nil {
-		t.Fatalf("saveSession: %v", err)
+	if err := e_sessions.Save(rr, req, session); err != nil {
+		t.Fatalf("e_sessions.Save: %v", err)
 	}
 	result := rr.Result()
 	if len(result.Cookies()) == 0 {

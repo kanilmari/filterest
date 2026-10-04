@@ -65,7 +65,7 @@ func TestAdminOnlyLoginRechecksPendingFactorAndClearsChallenge(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			setPendingLoginState(session, 42, "synthetic-user", "synthetic-fingerprint", 1)
+			setPendingLoginState(session, 42, "synthetic-fingerprint", 1)
 			rr := httptest.NewRecorder()
 			handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "123456"})
 			if rr.Code != http.StatusForbidden {
@@ -81,7 +81,7 @@ func TestAdminOnlyLoginRechecksPendingFactorAndClearsChallenge(t *testing.T) {
 func TestSessionIdentityFinalizerCannotBypassCurrentAdmission(t *testing.T) {
 	setupAdmissionFixture(t, credentialMockConfig{adminOnly: true, adminAllowed: true, adminGroupMember: false})
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
-	if err := setAuthenticatedSessionIdentityAtGeneration(session, 42, "synthetic-user", 1); !errors.Is(err, backend.ErrLoginNotAllowed) {
+	if err := setAuthenticatedSessionIdentityAtGeneration(session, 42, 1); !errors.Is(err, backend.ErrLoginNotAllowed) {
 		t.Fatalf("finalizer did not deny non-admin: %v", err)
 	}
 	if len(session.Values) != 0 {
@@ -92,7 +92,7 @@ func TestSessionIdentityFinalizerCannotBypassCurrentAdmission(t *testing.T) {
 func TestCurrentAdminCanCompleteHiddenEntryLogin(t *testing.T) {
 	setupAdmissionFixture(t, credentialMockConfig{adminOnly: true, adminAllowed: true, adminGroupMember: true})
 	session := &sessions.Session{Values: map[interface{}]interface{}{}}
-	if err := setAuthenticatedSessionIdentityAtGeneration(session, 42, "synthetic-admin", 1); err != nil {
+	if err := setAuthenticatedSessionIdentityAtGeneration(session, 42, 1); err != nil {
 		t.Fatal(err)
 	}
 	if session.Values["authenticated"] != true || session.Values["user_role"] != "admin" {
@@ -108,7 +108,7 @@ func TestPolicyReadFailureClosesPendingLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setPendingLoginState(session, 42, "synthetic-user", "synthetic-fingerprint", 1)
+	setPendingLoginState(session, 42, "synthetic-fingerprint", 1)
 	rr := httptest.NewRecorder()
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "123456"})
 	if rr.Code != http.StatusServiceUnavailable {

@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -22,21 +23,28 @@ func setupExchangeTest(t *testing.T) (*site_assistant.Store, *gorilla.CookieStor
 	t.Helper()
 	originalStore, originalName := e_sessions.Store, e_sessions.SessionName
 	originalDelegations, originalIdentity := siteAssistantDelegationStore, siteAssistantIdentitySetter
+	originalDisplayName := siteAssistantDisplayName
 
 	sessionStore := gorilla.NewCookieStore([]byte("exchange-test-secret-key-32byte!"))
 	sessionStore.Options = &gorilla.Options{Path: "/", MaxAge: 3600, HttpOnly: true}
 	e_sessions.Store = sessionStore
 	e_sessions.SessionName = "session"
 	siteAssistantDelegationStore = site_assistant.NewStore()
-	siteAssistantIdentitySetter = func(session *gorilla.Session, userID int, username string) error {
+	siteAssistantIdentitySetter = func(session *gorilla.Session, userID int) error {
 		session.Values["authenticated"] = true
 		session.Values["user_id"] = userID
-		session.Values["username"] = username
 		return nil
+	}
+	siteAssistantDisplayName = func(_ context.Context, userID int) string {
+		if userID == 40861 {
+			return "test_admin_12"
+		}
+		return ""
 	}
 	t.Cleanup(func() {
 		e_sessions.Store, e_sessions.SessionName = originalStore, originalName
 		siteAssistantDelegationStore, siteAssistantIdentitySetter = originalDelegations, originalIdentity
+		siteAssistantDisplayName = originalDisplayName
 	})
 	return siteAssistantDelegationStore, sessionStore
 }
@@ -51,7 +59,7 @@ func exchange(t *testing.T, body string) *httptest.ResponseRecorder {
 
 func TestExchangeGivesTheAskingAdministratorsSessionOnce(t *testing.T) {
 	store, sessionStore := setupExchangeTest(t)
-	code, delegation, err := store.Issue(40861, "test_admin_12", "job-exchange", "localhost", 10*time.Minute)
+	code, delegation, err := store.Issue(40861, "job-exchange", "localhost", 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -94,7 +102,7 @@ func TestExchangeGivesTheAskingAdministratorsSessionOnce(t *testing.T) {
 
 func TestExchangeRefusesBadRequests(t *testing.T) {
 	store, _ := setupExchangeTest(t)
-	code, _, err := store.Issue(40861, "test_admin_12", "job-bad", "localhost", 10*time.Minute)
+	code, _, err := store.Issue(40861, "job-bad", "localhost", 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -117,8 +125,8 @@ func TestExchangeRefusesBadRequests(t *testing.T) {
 
 func TestExchangeRefusesAnIdentityThatCannotLogIn(t *testing.T) {
 	store, _ := setupExchangeTest(t)
-	siteAssistantIdentitySetter = func(*gorilla.Session, int, string) error { return errLoginNotAllowedForTest }
-	code, delegation, err := store.Issue(40861, "test_admin_12", "job-denied", "localhost", 10*time.Minute)
+	siteAssistantIdentitySetter = func(*gorilla.Session, int) error { return errLoginNotAllowedForTest }
+	code, delegation, err := store.Issue(40861, "job-denied", "localhost", 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}

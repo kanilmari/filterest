@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/site_assistant"
 
@@ -26,9 +28,16 @@ type siteAssistantExchangeRequest struct {
 	Code string `json:"code"`
 }
 
-// siteAssistantDelegationStore and siteAssistantIdentitySetter are replaced in tests.
+// siteAssistantDelegationStore, siteAssistantIdentitySetter and
+// siteAssistantDisplayName are replaced in tests.
 var siteAssistantDelegationStore = site_assistant.DefaultStore
 var siteAssistantIdentitySetter = setAuthenticatedSessionIdentity
+
+// siteAssistantDisplayName names the administrator a job acts as, read by id:
+// neither the delegation nor the session carries a name.
+var siteAssistantDisplayName = func(ctx context.Context, userID int) string {
+	return backend.UserDisplayNameOr(ctx, backend.Db, userID, "")
+}
 
 // SiteAssistantDelegationExchangeHandler turns a job's one-time code into a
 // session that acts as the administrator who asked for the job. The session
@@ -74,7 +83,7 @@ func SiteAssistantDelegationExchangeHandler(w http.ResponseWriter, r *http.Reque
 		SameSite: http.SameSiteLaxMode,
 	}
 
-	if err := siteAssistantIdentitySetter(session, delegation.UserID, delegation.Username); err != nil {
+	if err := siteAssistantIdentitySetter(session, delegation.UserID); err != nil {
 		siteAssistantDelegationStore.Revoke(delegation.ID)
 		log.Printf("\033[31m[site-assistant-exchange] identity setup failed for user %d: %v\033[0m", delegation.UserID, err)
 		respondJSON(w, http.StatusForbidden, map[string]interface{}{"error": "delegation_not_valid"})
@@ -91,19 +100,19 @@ func SiteAssistantDelegationExchangeHandler(w http.ResponseWriter, r *http.Reque
 	e_sessions.SetDeviceIDCookie(w, deviceID)
 	e_sessions.SetFingerprintCookie(w, fingerprint)
 
-	if err := saveSession(w, r, session); err != nil {
+	if err := e_sessions.Save(w, r, session); err != nil {
 		siteAssistantDelegationStore.Revoke(delegation.ID)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return
 	}
 
-	log.Printf("[site-assistant-exchange] job %s acts as '%s' (id=%d) until %s",
-		delegation.JobID, delegation.Username, delegation.UserID, delegation.ExpiresAt.UTC().Format(time.RFC3339))
+	log.Printf("[site-assistant-exchange] job %s acts as user id=%d until %s",
+		delegation.JobID, delegation.UserID, delegation.ExpiresAt.UTC().Format(time.RFC3339))
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"authenticated":     true,
 		"delegation_id":     delegation.ID,
 		"job_id":            delegation.JobID,
-		"username":          delegation.Username,
+		"username":          siteAssistantDisplayName(r.Context(), delegation.UserID),
 		"expires_at":        delegation.ExpiresAt.UTC().Format(time.RFC3339),
 		"write_calls_need":  "approval",
 		"api_catalog_route": "/api/admin/site-assistant/api-catalog",

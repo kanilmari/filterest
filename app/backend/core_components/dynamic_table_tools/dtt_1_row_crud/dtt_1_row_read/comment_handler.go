@@ -207,8 +207,7 @@ func CommentDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 // isAdminUser checks if the session user has admin role.
 func isAdminUser(r *http.Request) bool {
-	store := e_sessions.GetStore()
-	session, err := store.Get(r, e_sessions.SessionName)
+	session, err := e_sessions.Load(r)
 	if err != nil {
 		return false
 	}

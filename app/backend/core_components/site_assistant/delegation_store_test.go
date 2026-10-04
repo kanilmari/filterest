@@ -22,7 +22,7 @@ func newTestStore(t *testing.T) (*Store, func(time.Duration)) {
 
 func issueTestDelegation(t *testing.T, store *Store) (string, *Delegation) {
 	t.Helper()
-	code, delegation, err := store.Issue(40861, "test_admin_12", "job-1", "localhost", 10*time.Minute)
+	code, delegation, err := store.Issue(40861, "job-1", "localhost", 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestExchangeWorksOnceAndHidesTheCode(t *testing.T) {
 	}
 
 	exchanged, err := store.Exchange(code)
-	if err != nil || exchanged.ID != issued.ID || exchanged.Username != "test_admin_12" {
+	if err != nil || exchanged.ID != issued.ID || exchanged.UserID != 40861 {
 		t.Fatalf("first exchange = %+v, %v", exchanged, err)
 	}
 	if _, err := store.Exchange(code); !errors.Is(err, ErrUnknownDelegation) {
@@ -74,7 +74,7 @@ func TestDelegationExpiresAndCanBeRevoked(t *testing.T) {
 
 func TestLifetimeNeverExceedsTheMaximum(t *testing.T) {
 	store, _ := newTestStore(t)
-	_, delegation, err := store.Issue(40861, "test_admin_12", "job-2", "localhost", 24*time.Hour)
+	_, delegation, err := store.Issue(40861, "job-2", "localhost", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -86,16 +86,15 @@ func TestLifetimeNeverExceedsTheMaximum(t *testing.T) {
 func TestIssueRequiresAnAuthenticatedAdministratorAndJob(t *testing.T) {
 	store, _ := newTestStore(t)
 	for _, testCase := range []struct {
-		name     string
-		userID   int
-		username string
-		jobID    string
+		name   string
+		userID int
+		jobID  string
 	}{
-		{"guest", 1, "guest", "job"},
-		{"missing username", 40861, "  ", "job"},
-		{"missing job", 40861, "test_admin_12", " "},
+		{"guest", 1, "job"},
+		{"no user", 0, "job"},
+		{"missing job", 40861, " "},
 	} {
-		if _, _, err := store.Issue(testCase.userID, testCase.username, testCase.jobID, "localhost", time.Minute); err == nil {
+		if _, _, err := store.Issue(testCase.userID, testCase.jobID, "localhost", time.Minute); err == nil {
 			t.Fatalf("%s must be refused", testCase.name)
 		}
 	}

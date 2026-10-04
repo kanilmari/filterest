@@ -456,10 +456,14 @@ func TestCreateAdministratorRequiresConfirmationWhileAnAdministratorExistsPostgr
 	if auditEntries != 2 {
 		t.Fatalf("creation audit entries = %d, want one per committed account", auditEntries)
 	}
-	for _, expected := range []string{"created_username", "operator_reference", "existing_administrator_count", testSiteName} {
+	for _, expected := range []string{"created_user_id", "operator_reference", "existing_administrator_count", testSiteName} {
 		if !strings.Contains(details, expected) {
 			t.Fatalf("audit details missing %q: %s", expected, details)
 		}
+	}
+	// The audit names the created account by id only (WL132): no name is written.
+	if strings.Contains(details, "created_username") {
+		t.Fatalf("audit details still name the created account: %s", details)
 	}
 	for _, secret := range []string{createdAdministratorWord, createdAdministratorPIN} {
 		if strings.Contains(details, secret) {

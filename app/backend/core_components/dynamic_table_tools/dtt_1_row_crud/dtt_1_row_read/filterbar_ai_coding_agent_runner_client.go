@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"easelect/backend/core_components/httpresponse"
-	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/site_assistant"
 )
 
@@ -182,7 +181,7 @@ func dispatchCodingAgentJob(w http.ResponseWriter, r *http.Request, actor int, d
 	delegationID := ""
 	if payload.Mode == codingAgentModeSiteAssistant {
 		// Only the site assistant acts on the site, so only it receives site access.
-		access, issuedID, accessErr := issueCodingAgentSiteAccess(r, actor, payload.RequestID)
+		access, issuedID, accessErr := issueCodingAgentSiteAccess(actor, payload.RequestID)
 		if accessErr != nil {
 			httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "Site access for this job could not be prepared")
 			return
@@ -249,18 +248,15 @@ const codingAgentSiteAccessLifetime = 30 * time.Minute
 
 // issueCodingAgentSiteAccess gives one job a one-time code for acting as this
 // administrator on this site. The code never reaches the browser; only the
-// runner receives it over the private socket.
-func issueCodingAgentSiteAccess(r *http.Request, actor int, jobID string) (*codingAgentSiteAccess, string, error) {
+// runner receives it over the private socket. The delegation names the
+// administrator by id only.
+func issueCodingAgentSiteAccess(actor int, jobID string) (*codingAgentSiteAccess, string, error) {
 	baseURL, err := codingAgentSiteBaseURL()
 	if err != nil {
 		return nil, "", err
 	}
-	username := codingAgentSessionUsername(r)
-	if username == "" {
-		return nil, "", errors.New("the administrator's username is unavailable")
-	}
 	code, delegation, err := site_assistant.DefaultStore.Issue(
-		actor, username, jobID, strings.TrimSpace(os.Getenv("FILTEREST_CODING_AGENT_SITE_ID")), codingAgentSiteAccessLifetime)
+		actor, jobID, strings.TrimSpace(os.Getenv("FILTEREST_CODING_AGENT_SITE_ID")), codingAgentSiteAccessLifetime)
 	if err != nil {
 		return nil, "", err
 	}
@@ -287,19 +283,4 @@ func codingAgentSiteBaseURL() (string, error) {
 		return "", errors.New("site assistant base URL is not configured")
 	}
 	return "http://127.0.0.1:" + port, nil
-}
-
-// codingAgentSessionUsername reads the requesting administrator's username from
-// the authenticated session, not from the request body.
-func codingAgentSessionUsername(r *http.Request) string {
-	store := e_sessions.GetStore()
-	if store == nil {
-		return ""
-	}
-	session, err := store.Get(r, e_sessions.SessionName)
-	if err != nil {
-		return ""
-	}
-	username, _ := session.Values["username"].(string)
-	return strings.TrimSpace(username)
 }

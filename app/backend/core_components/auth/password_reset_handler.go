@@ -102,7 +102,7 @@ func RequestPasswordResetOTPHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err = saveSession(w, r, session); err != nil {
+	if err = e_sessions.Save(w, r, session); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 		return
 	}
@@ -140,7 +140,7 @@ func ResetPasswordWithOTPHandler(w http.ResponseWriter, r *http.Request) {
 	expectedGeneration, generationOK := session.Values["password_reset_pending_authentication_generation"].(int64)
 	if !generationOK || expectedGeneration < 1 {
 		clearPendingPasswordResetState(session)
-		_ = saveSession(w, r, session)
+		_ = e_sessions.Save(w, r, session)
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
 		return
 	}
@@ -164,7 +164,7 @@ func ResetPasswordWithOTPHandler(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("[ResetPasswordWithOTPHandler] password update failed: %v", err)
 		if errors.Is(err, credentials.ErrCredentialStateChanged) {
 			clearPendingPasswordResetState(session)
-			_ = saveSession(w, r, session)
+			_ = e_sessions.Save(w, r, session)
 			httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
 			return
 		}
@@ -177,7 +177,7 @@ func ResetPasswordWithOTPHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clearPendingPasswordResetState(session)
-	if err = saveSession(w, r, session); err != nil {
+	if err = e_sessions.Save(w, r, session); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 		return
 	}

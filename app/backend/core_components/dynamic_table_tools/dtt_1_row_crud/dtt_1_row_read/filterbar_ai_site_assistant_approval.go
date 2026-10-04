@@ -84,7 +84,7 @@ func SiteAssistantApprovalHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, delegationID, accessErr := issueCodingAgentSiteAccess(r, actor.UserID, request.JobID)
+	access, delegationID, accessErr := issueCodingAgentSiteAccess(actor.UserID, request.JobID)
 	if accessErr != nil {
 		httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "Site access for this approval could not be prepared")
 		return

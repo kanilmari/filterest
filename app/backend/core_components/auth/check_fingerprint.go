@@ -51,9 +51,7 @@ func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
 		hmacVal := HMACFingerprint(req.Fingerprint)
 		session.Values["fingerprint_hash"] = hmacVal
 		setFingerprintCookie(w, hmacVal)
-		if saveErr := session.Save(r, w); saveErr != nil {
-			log.Printf("[CheckFingerprintHandler] session save failed: %v", saveErr)
-		}
+		_ = e_sessions.Save(w, r, session)
 		log.Printf("[CheckFingerprintHandler] new fingerprint saved to session ✅")
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true}`))
@@ -71,9 +69,7 @@ func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
 			hmacVal := HMACFingerprint(req.Fingerprint)
 			session.Values["fingerprint_hash"] = hmacVal
 			setFingerprintCookie(w, hmacVal)
-			if saveErr := session.Save(r, w); saveErr != nil {
-				log.Printf("[CheckFingerprintHandler] session save failed: %v", saveErr)
-			}
+			_ = e_sessions.Save(w, r, session)
 			log.Printf("[CheckFingerprintHandler] guest fingerprint re-registered ✅")
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"ok":true}`))

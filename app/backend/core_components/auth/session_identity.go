@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/sessions"
 )
 
-func setAuthenticatedSessionIdentity(session *sessions.Session, userID int, username string) error {
+func setAuthenticatedSessionIdentity(session *sessions.Session, userID int) error {
 	if session == nil {
 		return fmt.Errorf("session is nil")
 	}
@@ -25,7 +25,7 @@ func setAuthenticatedSessionIdentity(session *sessions.Session, userID int, user
 	if err != nil {
 		return fmt.Errorf("resolve authentication generation: %w", err)
 	}
-	return setAuthenticatedSessionIdentityAtGeneration(session, userID, username, authenticationGeneration)
+	return setAuthenticatedSessionIdentityAtGeneration(session, userID, authenticationGeneration)
 }
 
 // currentEnabledAuthenticationGeneration reads the cross-schema session revocation state
@@ -35,7 +35,11 @@ func currentEnabledAuthenticationGeneration(ctx context.Context, userID int) (in
 	return auth_generation.Current(ctx, backend.DbConfidential, userID)
 }
 
-func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, userID int, username string, authenticationGeneration int64) error {
+// setAuthenticatedSessionIdentityAtGeneration writes who is signed in, never their
+// name: whoever needs a name reads the current one by the id
+// (backend.UserDisplayName), so a rename shows in every browser at once and no
+// name ever travels in a cookie.
+func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, userID int, authenticationGeneration int64) error {
 	if session == nil {
 		return fmt.Errorf("session is nil")
 	}
@@ -70,7 +74,6 @@ func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, user
 
 	session.Values["authenticated"] = true
 	session.Values["user_id"] = userID
-	session.Values["username"] = username
 	session.Values["user_role"] = userRole
 	// This one sign-in gets its own identity, so signing out here can be refused
 	// afterwards without touching the same person's other browsers. Both it and the

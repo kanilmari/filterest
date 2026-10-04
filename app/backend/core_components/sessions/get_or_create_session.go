@@ -29,7 +29,6 @@ const maxStrayCookieDirectories = 8
 // the replacement is written with the same cookie options as every other
 // session. If w is nil, cookie clearing is skipped.
 func GetOrCreateSession(w http.ResponseWriter, r *http.Request) (*sessions.Session, error) {
-	store := GetStore()
 
 	if w != nil {
 		clearStraySessionCookies(w, r)
@@ -47,7 +46,7 @@ func GetOrCreateSession(w http.ResponseWriter, r *http.Request) (*sessions.Sessi
 		}
 	}
 
-	session, err := store.Get(r, SessionName)
+	session, err := Load(r)
 	if err != nil {
 		if strings.Contains(err.Error(), "securecookie") {
 			if sessionLog {

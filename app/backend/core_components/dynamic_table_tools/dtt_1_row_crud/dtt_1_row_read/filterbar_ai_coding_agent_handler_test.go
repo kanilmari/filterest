@@ -207,7 +207,7 @@ func TestCodingAgentSiteAssistantDispatchAndOwnerStatus(t *testing.T) {
 		t.Fatal("the job's site access must not reach the browser")
 	}
 	delegation, err := site_assistant.DefaultStore.ByJob("00000000-0000-0000-0000-000000000001")
-	if err != nil || delegation.UserID != 42 || delegation.Username != "test_admin_12" {
+	if err != nil || delegation.UserID != 42 {
 		t.Fatalf("the job's delegation = %+v, %v", delegation, err)
 	}
 	t.Cleanup(func() { site_assistant.DefaultStore.Revoke(delegation.ID) })

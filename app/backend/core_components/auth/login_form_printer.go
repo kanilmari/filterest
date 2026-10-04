@@ -152,8 +152,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 		log.Println("new csrf token created 🔐")
 
 		log.Println("attempting to save session (csrf-token)...")
-		if err = saveSession(w, r, session); err != nil {
-			fmt.Printf("\033[31merror: session save failed after csrf token creation: %s\033[0m\n", err.Error())
+		if err = e_sessions.Save(w, r, session); err != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}

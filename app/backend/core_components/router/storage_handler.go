@@ -140,8 +140,7 @@ func storageRequestActor(w http.ResponseWriter, r *http.Request) (dbutils.Reques
 			return storageActorFromSession(session, userID), storageAuthorizationAllowed
 		}
 		auth_generation.ClearIdentity(session)
-		if saveErr := session.Save(r, w); saveErr != nil {
-			log.Printf("\033[31m[ServeStorage] stale session clear failed: %v\033[0m", saveErr)
+		if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 			return dbutils.RequestActorContext{}, storageAuthorizationInternalError
 		}
 	}
@@ -211,9 +210,7 @@ func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *
 	e_sessions.SetFingerprintCookie(w, fingerprint)
 
 	if changed {
-		if err := session.Save(r, w); err != nil {
-			log.Printf("\033[31m[ServeStorage] guest session save failed: %v\033[0m", err)
-		}
+		_ = e_sessions.Save(w, r, session)
 	}
 }
 

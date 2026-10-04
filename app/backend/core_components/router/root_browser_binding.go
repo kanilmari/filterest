@@ -9,7 +9,6 @@
 package router
 
 import (
-	"log"
 	"net/http"
 
 	e_sessions "easelect/backend/core_components/sessions"
@@ -76,8 +75,6 @@ func establishGuestBrowserBinding(w http.ResponseWriter, r *http.Request, sessio
 	}
 	if changed {
 		e_sessions.SetFingerprintCookie(w, fingerprint)
-		if errSave := session.Save(r, w); errSave != nil {
-			log.Printf("\033[31merror: session save failed: %s\033[0m\n", errSave.Error())
-		}
+		_ = e_sessions.Save(w, r, session)
 	}
 }

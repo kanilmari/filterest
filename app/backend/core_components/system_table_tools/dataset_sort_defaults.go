@@ -70,7 +70,7 @@ func GetDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				if !matches {
 					auth_generation.ClearIdentity(session)
-					if saveErr := session.Save(r, w); saveErr != nil {
+					if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 						httpresponse.RespondWithError(w, http.StatusInternalServerError, "session save failed")
 						return
 					}

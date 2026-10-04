@@ -45,8 +45,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 				}
 				if !generationMatches {
 					auth_generation.ClearIdentity(session)
-					if saveErr := session.Save(r, w); saveErr != nil {
-						log.Printf("\033[31m[EnsureLoggedIn] stale session clear failed: %v\033[0m", saveErr)
+					if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 						httpresponse.RespondWithError(w, http.StatusInternalServerError, "session save failed")
 						return
 					}
@@ -72,9 +71,7 @@ func EnsureLoggedIn(original_handler http.HandlerFunc) http.HandlerFunc {
 			// This mirrors the access-control guest fallback and avoids a cookie/session race
 			// where concurrent auth bootstrap requests can observe a missing user_id.
 			session.Values["user_id"] = 1
-			if saveErr := session.Save(r, w); saveErr != nil {
-				log.Printf("\033[31m[EnsureLoggedIn] guest session save failed: %v\033[0m", saveErr)
-			}
+			_ = e_sessions.Save(w, r, session)
 			log.Printf("[EnsureLoggedIn] login_to_browse=false → guest session (user_id=1)")
 			original_handler(w, r)
 			return

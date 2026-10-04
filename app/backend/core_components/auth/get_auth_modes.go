@@ -86,8 +86,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 			return
 		} else if !userExists {
 			clearAuthSessionValues(session)
-			if saveErr := session.Save(request, response_writer); saveErr != nil {
-				log.Printf("\033[31mvirhe: %s\033[0m\n", saveErr.Error())
+			if saveErr := e_sessions.Save(response_writer, request, session); saveErr != nil {
 				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "session save failed")
 				return
 			}
@@ -119,8 +118,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 			return
 		}
 		clearAuthSessionValues(session)
-		if saveErr := session.Save(request, response_writer); saveErr != nil {
-			log.Printf("\033[31mvirhe: %s\033[0m\n", saveErr.Error())
+		if saveErr := e_sessions.Save(response_writer, request, session); saveErr != nil {
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "session save failed")
 			return
 		}
@@ -161,8 +159,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 	}
 	session.Values["user_role"] = userRole
 
-	if err := session.Save(request, response_writer); err != nil {
-		log.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
+	if err := e_sessions.Save(response_writer, request, session); err != nil {
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "session save failed")
 		return
 	}

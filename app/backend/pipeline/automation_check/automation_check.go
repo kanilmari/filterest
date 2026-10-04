@@ -22,7 +22,7 @@ func WithAutomationCheck(registeredPattern string, next http.HandlerFunc) http.H
 			next(w, r)
 			return
 		}
-		session, err := e_sessions.Store.Get(r, e_sessions.SessionName)
+		session, err := e_sessions.Load(r)
 		if err != nil {
 			// Existing auth handles invalid signatures; there is no trusted identity.
 			next(w, r)
@@ -36,7 +36,7 @@ func WithAutomationCheck(registeredPattern string, next http.HandlerFunc) http.H
 		state, err := auth_generation.LoadAPIAccessState(r.Context(), backend.DbConfidential, userID)
 		if errors.Is(err, sql.ErrNoRows) {
 			auth_generation.ClearIdentity(session)
-			_ = session.Save(r, w)
+			_ = e_sessions.Save(w, r, session)
 			httpresponse.RespondWithError(w, http.StatusUnauthorized, "authentication_expired")
 			return
 		}
@@ -51,7 +51,7 @@ func WithAutomationCheck(registeredPattern string, next http.HandlerFunc) http.H
 		w.Header().Set("Cache-Control", "no-store")
 		if !state.MatchesAutomationSession(session) {
 			auth_generation.ClearIdentity(session)
-			_ = session.Save(r, w)
+			_ = e_sessions.Save(w, r, session)
 			httpresponse.RespondWithError(w, http.StatusUnauthorized, "automation_session_expired")
 			return
 		}

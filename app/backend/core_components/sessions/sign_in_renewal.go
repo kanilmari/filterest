@@ -9,7 +9,6 @@
 package e_sessions
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/sessions"
@@ -79,8 +78,6 @@ func RenewUsedSignIn(w http.ResponseWriter, r *http.Request, session *sessions.S
 	fingerprint, _ := session.Values["fingerprint_hash"].(string)
 	SetDeviceIDCookie(w, deviceID)
 	SetFingerprintCookie(w, fingerprint)
-	if err := session.Save(r, w); err != nil {
-		log.Printf("\033[31m[sessions] renewing a used sign-in could not write the session: %v\033[0m", err)
-	}
+	_ = Save(w, r, session)
 	return true
 }

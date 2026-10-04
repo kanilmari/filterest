@@ -6,6 +6,7 @@ package auth
 
 import (
 	backend "easelect/backend/core_components"
+	e_sessions "easelect/backend/core_components/sessions"
 	"github.com/gorilla/sessions"
 	"net/http"
 )
@@ -19,7 +20,7 @@ func enforceLoginAccess(w http.ResponseWriter, r *http.Request, session *session
 		return true
 	}
 	clearPendingLoginState(session)
-	if saveErr := saveSession(w, r, session); saveErr != nil {
+	if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return false
 	}

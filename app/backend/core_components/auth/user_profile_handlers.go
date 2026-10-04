@@ -126,8 +126,7 @@ func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch current username for comparison
-	var currentUsername string
-	err = backend.Db.QueryRow(`SELECT username FROM system_users WHERE id = $1`, userID).Scan(&currentUsername)
+	currentUsername, err := backend.UserDisplayName(r.Context(), backend.Db, userID)
 	if err != nil {
 		logging.Errorf("[UserProfileUpdateHandler] failed to fetch current username for user %d: %v", userID, err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
@@ -160,10 +159,8 @@ func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		session.Values["username"] = req.Username
-		if saveErr := saveSession(w, r, session); saveErr != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to save session after username update: %v", saveErr)
-		}
+		// The session holds no name, so there is nothing to update in it: the new name
+		// is read by id wherever it is shown or logged, in this browser and every other.
 		logging.Infof("[UserProfileUpdateHandler] username updated for user %d", userID)
 	}
 
@@ -231,7 +228,7 @@ func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 				httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 				return
 			}
-			if saveErr := saveSession(w, r, session); saveErr != nil {
+			if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 				httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 				return
 			}
@@ -298,7 +295,7 @@ func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 			return
 		}
-		if saveErr := saveSession(w, r, session); saveErr != nil {
+		if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
 			return
 		}

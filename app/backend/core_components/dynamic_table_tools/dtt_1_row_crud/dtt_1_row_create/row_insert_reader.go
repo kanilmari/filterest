@@ -5,12 +5,14 @@
 package dtt_1_row_create
 
 import (
-	"strconv"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
+	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
@@ -156,26 +158,36 @@ func getCurrentUserID(r *http.Request) (int, error) {
 	return userID, nil
 }
 
-// getCurrentUsername hakee sessiosta "username"-arvon (string) tai virheen
-// Between: insertDataAccordingToPayload -> Session
-// Why: Retrieves the current user's username from the session.
+// currentUserDisplayName reads a signed-in user's display name by id, waiting no
+// longer than backend.DisplayNameLookupTimeout. Tests replace it so they can run
+// without a database.
+var currentUserDisplayName = func(ctx context.Context, userID int) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, backend.DisplayNameLookupTimeout)
+	defer cancel()
+	return backend.UserDisplayName(ctx, backend.Db, userID)
+}
+
+// getCurrentUsername returns the signed-in user's current display name for the
+// new row's provenance (cached_username and the language-key sources), read by
+// the session's user id: the session carries no name. A request without a
+// signed-in user, such as the guest account's, has no name and is refused, as it
+// was when the name came from the session.
+// Between: insertDataAccordingToPayload -> Session -> system_users
 func getCurrentUsername(r *http.Request) (string, error) {
-	session, err := e_sessions.GetOrCreateSession(nil, r)
+	userID, err := getCurrentUserID(r)
 	if err != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		return "", fmt.Errorf("session get error: %v", err)
+		return "", err
 	}
-	rawUsername, ok := session.Values["username"]
-	if !ok {
-		fmt.Printf("\033[31merror: username missing from session\033[0m\n")
-		return "", fmt.Errorf("username missing from session")
+	if userID <= 1 {
+		fmt.Printf("\033[31merror: no signed-in user to name\033[0m\n")
+		return "", fmt.Errorf("no signed-in user to name")
 	}
-	username, ok := rawUsername.(string)
-	if !ok {
-		fmt.Printf("\033[31merror: username invalid type in session\033[0m\n")
-		return "", fmt.Errorf("username invalid type in session")
+	displayName, err := currentUserDisplayName(r.Context(), userID)
+	if err != nil {
+		fmt.Printf("\033[31merror: display name lookup failed for user %d: %s\033[0m\n", userID, err.Error())
+		return "", fmt.Errorf("display name lookup failed for user %d: %w", userID, err)
 	}
-	return username, nil
+	return displayName, nil
 }
 
 // mustJSON marshals an interface to JSON bytes, ignoring errors (for internal use).

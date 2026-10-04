@@ -149,15 +149,15 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 		respondJSON(w, http.StatusForbidden, map[string]interface{}{"error": "automation_api_channel_required"})
 		return
 	}
-	log.Printf("[login-json] credentials OK for user %s (id=%d) 🔑", req.Username, userID)
+	log.Printf("[login-json] credentials OK for user id=%d 🔑", userID)
 
 	switch verification.Method {
 	case verificationNone:
-		completeLoginJSON(w, r, session, userID, req.Username, req.Fingerprint, verification.AuthenticationGeneration, verification.APIOnly)
+		completeLoginJSON(w, r, session, userID, req.Fingerprint, verification.AuthenticationGeneration, verification.APIOnly)
 		return
 	case verificationFixedPIN, verificationTOTP:
-		setPendingLoginState(session, userID, req.Username, req.Fingerprint, verification.AuthenticationGeneration)
-		if err = saveSession(w, r, session); err != nil {
+		setPendingLoginState(session, userID, req.Fingerprint, verification.AuthenticationGeneration)
+		if err = e_sessions.Save(w, r, session); err != nil {
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 			return
 		}
@@ -212,8 +212,8 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 		return
 	}
 
-	setPendingLoginState(session, userID, req.Username, req.Fingerprint, verification.AuthenticationGeneration)
-	if err = saveSession(w, r, session); err != nil {
+	setPendingLoginState(session, userID, req.Fingerprint, verification.AuthenticationGeneration)
+	if err = e_sessions.Save(w, r, session); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return
 	}
@@ -235,7 +235,6 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 	if !enforceLoginAccess(w, r, session, userID) {
 		return
 	}
-	username, _ := session.Values["otp_pending_username"].(string)
 	fingerprint, _ := session.Values["otp_pending_fingerprint"].(string)
 
 	verificationRecord, err := loadLoginVerificationRecord(userID)
@@ -251,7 +250,7 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 	pendingGeneration, generationOK := session.Values["otp_pending_authentication_generation"].(int64)
 	if !generationOK || pendingGeneration != verificationRecord.AuthenticationGeneration {
 		clearPendingLoginState(session)
-		if saveErr := saveSession(w, r, session); saveErr != nil {
+		if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 			return
 		}
@@ -304,7 +303,7 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 			clearPendingLoginState(session)
 		}
 		if verificationRecord.Method != verificationEmail {
-			if saveErr := saveSession(w, r, session); saveErr != nil {
+			if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 				return
 			}
@@ -319,18 +318,16 @@ func handleLoginOTPVerify(w http.ResponseWriter, r *http.Request, session *sessi
 	// Clean up pending values
 	clearPendingLoginState(session)
 
-	completeLoginJSON(w, r, session, userID, username, fingerprint, pendingGeneration, verificationRecord.APIOnly)
+	completeLoginJSON(w, r, session, userID, fingerprint, pendingGeneration, verificationRecord.APIOnly)
 }
 
 // completeLoginJSON regenerates and persists an authenticated session after all configured checks pass.
-func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, username, fingerprint string, authenticationGeneration int64, apiOnly bool) {
+func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions.Session, userID int, fingerprint string, authenticationGeneration int64, apiOnly bool) {
 	if !enforceLoginAccess(w, r, session, userID) {
 		return
 	}
 	session.Options.MaxAge = -1
-	if err := session.Save(r, w); err != nil {
-		log.Printf("session invalidation warning: %s", err.Error())
-	}
+	_ = e_sessions.Save(w, r, session)
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
@@ -338,7 +335,7 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 	}
 	session.Options = e_sessions.SessionCookieOptions()
 
-	if err = setAuthenticatedSessionIdentityAtGeneration(session, userID, username, authenticationGeneration); err != nil {
+	if err = setAuthenticatedSessionIdentityAtGeneration(session, userID, authenticationGeneration); err != nil {
 		logging.Errorf("[login-json] session identity setup failed for user %d: %v", userID, err)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return
@@ -375,22 +372,21 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 	e_sessions.SetDeviceIDCookie(w, deviceID)
 
 	// Save session
-	if err = saveSession(w, r, session); err != nil {
+	if err = e_sessions.Save(w, r, session); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "session_error"})
 		return
 	}
 
 	clearLoginFailures(getClientIP(r))
-	log.Printf("[login-json] user '%s' (id=%d) authenticated successfully 🎉", username, userID)
+	log.Printf("[login-json] user id=%d authenticated successfully 🎉", userID)
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"authenticated": true,
 		"redirect":      "/",
 	})
 }
 
-func setPendingLoginState(session *sessions.Session, userID int, username, fingerprint string, authenticationGeneration int64) {
+func setPendingLoginState(session *sessions.Session, userID int, fingerprint string, authenticationGeneration int64) {
 	session.Values["otp_pending_user_id"] = userID
-	session.Values["otp_pending_username"] = username
 	session.Values["otp_pending_fingerprint"] = fingerprint
 	session.Values["otp_pending_attempts"] = 0
 	session.Values["otp_pending_authentication_generation"] = authenticationGeneration
@@ -398,7 +394,6 @@ func setPendingLoginState(session *sessions.Session, userID int, username, finge
 
 func clearPendingLoginState(session *sessions.Session) {
 	delete(session.Values, "otp_pending_user_id")
-	delete(session.Values, "otp_pending_username")
 	delete(session.Values, "otp_pending_fingerprint")
 	delete(session.Values, "otp_pending_attempts")
 	delete(session.Values, "otp_pending_authentication_generation")

@@ -90,8 +90,7 @@ func validateTaskTodoText(text string) string {
 
 // currentAgentToolUserID reads the already-authenticated session user for todo authorship fields.
 func currentAgentToolUserID(r *http.Request) int {
-	store := e_sessions.GetStore()
-	session, err := store.Get(r, e_sessions.SessionName)
+	session, err := e_sessions.Load(r)
 	if err != nil {
 		return 0
 	}

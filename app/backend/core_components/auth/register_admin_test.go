@@ -150,7 +150,7 @@ func withRegistrationFormBody(req *http.Request, body string) *http.Request {
 func validRegistrationAdminSession() map[interface{}]interface{} {
 	// The shared boundary refuses a sign-in that carries no identity of its own, so
 	// a fixture standing in for a signed-in administrator has to carry one.
-	return map[interface{}]interface{}{"user_id": 42, "authenticated": true, "user_role": "admin", "username": "original_admin", "authentication_generation": int64(7), "csrf_token": "test-csrf", sign_in_revocation.SessionKey: "this-browsers-sign-in", sign_in_deadline.SessionKey: time.Now().Add(30 * 24 * time.Hour).Unix()}
+	return map[interface{}]interface{}{"user_id": 42, "authenticated": true, "user_role": "admin", "authentication_generation": int64(7), "csrf_token": "test-csrf", sign_in_revocation.SessionKey: "this-browsers-sign-in", sign_in_deadline.SessionKey: time.Now().Add(30 * 24 * time.Hour).Unix()}
 }
 func TestClosedRegistrationAllowsCurrentAdminWithoutReplacingSession(t *testing.T) {
 	state := setupRegisterAdmin(t)

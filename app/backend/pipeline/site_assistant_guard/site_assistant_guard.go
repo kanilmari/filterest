@@ -39,7 +39,7 @@ func WithSiteAssistantGuardStore(store *site_assistant.Store, next http.HandlerF
 			next(w, r)
 			return
 		}
-		session, err := e_sessions.Store.Get(r, e_sessions.SessionName)
+		session, err := e_sessions.Load(r)
 		if err != nil {
 			// An unreadable cookie carries no assistant identity; ordinary auth handles it.
 			next(w, r)
@@ -115,7 +115,5 @@ func WithSiteAssistantGuardStore(store *site_assistant.Store, next http.HandlerF
 // endAssistantSession drops an assistant session whose delegation no longer exists.
 func endAssistantSession(w http.ResponseWriter, r *http.Request, session *gorilla.Session) {
 	session.Options.MaxAge = -1
-	if err := session.Save(r, w); err != nil {
-		log.Printf("[site_assistant_guard] clearing the expired assistant session failed: %v", err)
-	}
+	_ = e_sessions.Save(w, r, session)
 }

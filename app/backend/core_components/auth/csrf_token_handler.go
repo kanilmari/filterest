@@ -27,7 +27,7 @@ func CSRFTokenHandler(w http.ResponseWriter, r *http.Request) {
 	if csrfToken == "" {
 		csrfToken = uuid.NewString()
 		session.Values["csrf_token"] = csrfToken
-		if err := saveSession(w, r, session); err != nil {
+		if err := e_sessions.Save(w, r, session); err != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_save_error")
 			return
 		}

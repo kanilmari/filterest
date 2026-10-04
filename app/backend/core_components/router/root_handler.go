@@ -81,8 +81,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if !generationMatches {
 				auth_generation.ClearIdentity(session)
-				if saveErr := session.Save(r, w); saveErr != nil {
-					log.Printf("[rootHandler] stale session clear failed: %v", saveErr)
+				if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
 					httpresponse.RespondWithError(w, http.StatusInternalServerError, "session save failed")
 					return
 				}

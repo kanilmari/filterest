@@ -423,7 +423,7 @@ func TestHandleLoginOTPVerify_MalformedStoredPINHashDoesNotConsumeFailure(t *tes
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
+	setPendingLoginState(session, 42, "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1357"})
@@ -509,7 +509,7 @@ func TestHandleLoginOTPVerify_WrongFixedPINRecordsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
+	setPendingLoginState(session, 42, "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "1357"})
@@ -546,7 +546,7 @@ func TestHandleLoginOTPVerify_WrongTOTPRecordsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
+	setPendingLoginState(session, 42, "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "not-a-code"})
@@ -593,7 +593,7 @@ func TestHandleLoginOTPVerify_CorrectFixedPINClearsFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test session: %v", err)
 	}
-	setPendingLoginState(session, 42, "alice", "test-fingerprint", 1)
+	setPendingLoginState(session, 42, "test-fingerprint", 1)
 	rr := httptest.NewRecorder()
 
 	handleLoginOTPVerify(rr, req, session, loginJSONRequest{OTPCode: "2468"})

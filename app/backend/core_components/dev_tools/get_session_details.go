@@ -28,9 +28,7 @@ func SessionHandler(w http.ResponseWriter, r *http.Request) {
 	if !ok || csrfToken == "" {
 		csrfToken = uuid.NewString()
 		session.Values["csrf_token"] = csrfToken
-		if errSave := session.Save(r, w); errSave != nil {
-			fmt.Printf("\033[31merror: %s\033[0m\n", errSave.Error())
-		}
+		_ = e_sessions.Save(w, r, session)
 	}
 
 	// Muutetaan session.Values (map[interface{}]interface{}) -> map[string]interface{}

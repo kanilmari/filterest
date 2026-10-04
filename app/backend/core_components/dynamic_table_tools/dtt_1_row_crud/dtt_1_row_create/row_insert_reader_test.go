@@ -4,8 +4,10 @@
 package dtt_1_row_create
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -328,8 +330,18 @@ func TestGetCurrentUserID(t *testing.T) {
 // ── getCurrentUsername ──────────────────────────────────────────────────────
 
 func TestGetCurrentUsername(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"username": "alice"})
+	original := currentUserDisplayName
+	t.Cleanup(func() { currentUserDisplayName = original })
+	currentUserDisplayName = func(_ context.Context, userID int) (string, error) {
+		if userID == 42 {
+			return "alice", nil
+		}
+		return "", errors.New("no such account")
+	}
+
+	t.Run("reads the current display name by the session's user id", func(t *testing.T) {
+		// A cookie from before the change still carries a name; it is not used.
+		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 42, "username": "stale-copy"})
 		username, err := getCurrentUsername(req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -339,19 +351,24 @@ func TestGetCurrentUsername(t *testing.T) {
 		}
 	})
 
-	t.Run("missing username returns error", func(t *testing.T) {
-		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 42})
-		_, err := getCurrentUsername(req)
-		if err == nil {
-			t.Fatal("expected error for missing username")
+	t.Run("the guest account has no name", func(t *testing.T) {
+		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 1})
+		if _, err := getCurrentUsername(req); err == nil {
+			t.Fatal("expected error for the guest account")
 		}
 	})
 
-	t.Run("wrong username type returns error", func(t *testing.T) {
-		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"username": 42})
-		_, err := getCurrentUsername(req)
-		if err == nil {
-			t.Fatal("expected error for wrong username type")
+	t.Run("missing user_id returns error", func(t *testing.T) {
+		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"username": "alice"})
+		if _, err := getCurrentUsername(req); err == nil {
+			t.Fatal("expected error without a signed-in user")
+		}
+	})
+
+	t.Run("an unreadable name returns error", func(t *testing.T) {
+		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 7})
+		if _, err := getCurrentUsername(req); err == nil {
+			t.Fatal("expected error when the name cannot be read")
 		}
 	})
 }

@@ -504,9 +504,7 @@ func ensureGuestSession(w http.ResponseWriter, r *http.Request, session *session
 	e_sessions.SetFingerprintCookie(w, fingerprint)
 
 	if changed {
-		if err := session.Save(r, w); err != nil {
-			log.Printf("\033[31m[WithAccessControl] guest session save failed: %v\033[0m", err)
-		}
+		_ = e_sessions.Save(w, r, session)
 	}
 }
 

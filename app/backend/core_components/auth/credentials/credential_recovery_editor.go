@@ -317,7 +317,6 @@ func writeRecoveryAudit(
 ) error {
 	details, err := json.Marshal(map[string]interface{}{
 		"target_user_id":               administrator.ID,
-		"target_username":              administrator.Username,
 		"previous_verification_method": administrator.VerificationMethod,
 		"new_verification_method":      newVerificationMethod,
 		"old_generation":               administrator.AuthenticationGeneration,

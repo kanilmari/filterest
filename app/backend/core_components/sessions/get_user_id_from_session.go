@@ -11,8 +11,7 @@ import (
 
 // getUserIDFromSession lukee user_id:n Gorilla-sessiosta.
 func GetUserIDFromSession(r *http.Request) (int, error) {
-	store := GetStore()
-	session, err := store.Get(r, SessionName)
+	session, err := Load(r)
 	if err != nil {
 		return 0, fmt.Errorf("session get failed: %w", err)
 	}

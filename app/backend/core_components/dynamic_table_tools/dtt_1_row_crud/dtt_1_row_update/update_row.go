@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
 	dbutils "easelect/backend/core_components/dbutils"
 	ai_features "easelect/backend/core_components/dynamic_table_tools/ai_features"
@@ -543,28 +544,15 @@ func getColumnDataType(tableName, columnName string, q queryer) (string, error) 
 	return dataType, nil
 }
 
+// getSessionUsernameOrUnknown names the signed-in user for the row's provenance
+// writes: the current display name, read by the session's user id (the session
+// carries no name), or "unknown".
 func getSessionUsernameOrUnknown(request *http.Request) string {
-	session, err := e_sessions.GetOrCreateSession(nil, request)
-	if err != nil || session == nil {
+	userID, err := e_sessions.GetUserIDFromSession(request)
+	if err != nil {
 		return "unknown"
 	}
-
-	rawUsername, ok := session.Values["username"]
-	if !ok {
-		return "unknown"
-	}
-
-	username, ok := rawUsername.(string)
-	if !ok {
-		return "unknown"
-	}
-
-	trimmedUsername := strings.TrimSpace(username)
-	if trimmedUsername == "" {
-		return "unknown"
-	}
-
-	return trimmedUsername
+	return backend.UserDisplayNameOr(request.Context(), backend.Db, userID, "unknown")
 }
 
 // convertValue muuntaa pyynnön arvon sarakkeen data_type:n perusteella

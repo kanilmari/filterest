@@ -80,11 +80,17 @@ test.describe('L1 — Login', () => {
       })),
     );
 
-    const resetStatus = await page.evaluate(async () => {
-      const response = await fetch('/api/reset-session', { method: 'POST' });
-      return response.status;
+    // Leave the app before the reset: the app's own requests keep writing the
+    // sign-in (every protected request renews all three cookies, and the
+    // auth-modes request writes the session), so one still in flight could write
+    // them back after the reset expired them. The reset then goes through the
+    // context's own request client, which shares and updates its cookies.
+    const origin = new URL(page.url()).origin;
+    await page.goto('about:blank');
+    const resetResponse = await page.context().request.post(`${origin}/api/reset-session`, {
+      headers: { Origin: origin },
     });
-    expect(resetStatus).toBe(200);
+    expect(resetResponse.status()).toBe(200);
 
     const namesAfterReset = (await page.context().cookies()).map((cookie) => cookie.name);
     for (const currentName of currentAuthCookieNames) {

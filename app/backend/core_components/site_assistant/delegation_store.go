@@ -51,13 +51,13 @@ type ApprovedCall struct {
 	used     bool
 }
 
-// Delegation is one job's authority to act as one user until it expires.
+// Delegation is one job's authority to act as one user until it expires. It holds
+// the user's id and no name: whoever needs the name reads the current one by id.
 type Delegation struct {
 	ID        string
 	JobID     string
 	SiteID    string
 	UserID    int
-	Username  string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 
@@ -91,8 +91,8 @@ func (store *Store) SetClock(clock func() time.Time) {
 
 // Issue creates a delegation for one job and returns its one-time exchange code.
 // The code is returned once; the store keeps only its hash.
-func (store *Store) Issue(userID int, username string, jobID string, siteID string, lifetime time.Duration) (string, *Delegation, error) {
-	if userID <= 1 || strings.TrimSpace(username) == "" {
+func (store *Store) Issue(userID int, jobID string, siteID string, lifetime time.Duration) (string, *Delegation, error) {
+	if userID <= 1 {
 		return "", nil, errors.New("site assistant delegation needs an authenticated administrator")
 	}
 	if strings.TrimSpace(jobID) == "" {
@@ -121,7 +121,6 @@ func (store *Store) Issue(userID int, username string, jobID string, siteID stri
 		JobID:     strings.TrimSpace(jobID),
 		SiteID:    strings.TrimSpace(siteID),
 		UserID:    userID,
-		Username:  strings.TrimSpace(username),
 		IssuedAt:  issued,
 		ExpiresAt: issued.Add(lifetime),
 		codeHash:  sha256.Sum256([]byte(code)),
