@@ -21,6 +21,20 @@ bootstrap during upgrades, so migrations added after their own baseline still
 run normally. The manifest binds this filename list to the exact migration-file
 hashes and the bootstrap audit rejects drift.
 
+The seed's last statement is one acceptance block, so an import is accepted whole
+or not at all. It requires the completion marker of every included file that
+declares one (`-- COMPLETION_MARKER: <name>`, a `completed` row in
+`system_data_repair_records`), runs every declared final check
+(`-- FINAL_CHECK: <schema>.<function>()`, each returned row is a contradiction),
+and only then writes the migration ledger and the version row. Every import path
+runs both files with `ON_ERROR_STOP`, so a failed statement or check leaves no
+ledger and no version behind. The generator refuses to publish when a public
+migration numbered after 20260929000006 (the record of DB 9.9.2) is in no
+bootstrap list, when a schema-phase or data file lacks a completion marker, or
+when a final check names a function the bootstrap does not create; the previous
+artifacts then stay as they were. Release records (`*_record_database_release_*`)
+are not run here: the block writes the version row of the version it is built for.
+
 The three reviewed walkthrough images and the user-approved service, risk, and
 ticket starter images remain immutable fixture inputs under `source/fixtures/`.
 The runtime-media manifest declares a monotonic materialization revision. On

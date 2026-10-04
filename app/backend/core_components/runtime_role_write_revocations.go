@@ -103,9 +103,15 @@ write_privileges (privilege_name) AS (
 
 // runtimeWriteRevocationPreconditionSQL names every role setup in which the
 // revocations could not keep their promise: a missing or superuser role, a
-// guest with elevated attributes or its own relations, rights inherited through
-// membership, which a REVOKE on the role itself cannot remove, or a runtime role
-// that owns what it must stop using. An empty result means it is safe to go on.
+// runtime role that bypasses row security, a guest with elevated attributes or
+// its own relations, rights inherited through membership, which a REVOKE on the
+// role itself cannot remove, or a runtime role that owns what it must stop
+// using. An empty result means it is safe to go on.
+//
+// Row security is what keeps the data repair record (system_data_repair_records)
+// to its owner role whatever rights the installation gave, so no runtime role may
+// bypass it. The start does not take the attribute away: changing it needs a
+// superuser and is a deliberate act, so the message names the command.
 const runtimeWriteRevocationPreconditionSQL = runtimeWriteRevocationScope + `
 SELECT concat_ws('; ',
 	(SELECT 'role not found: ' || string_agg(label, ', ' ORDER BY label)
@@ -114,10 +120,16 @@ SELECT concat_ws('; ',
 	 FROM runtime_roles AS runtime
 	 JOIN pg_roles AS role_row ON role_row.oid = runtime.role_oid
 	 WHERE role_row.rolsuper HAVING count(*) > 0),
-	(SELECT 'the guest role may create roles or databases, replicate or bypass row security'
+	(SELECT 'role bypasses row security: '
+	        || string_agg(format('%s (%s)', runtime.label, role_row.rolname), ', ' ORDER BY runtime.label)
+	        || '; remove it with ALTER ROLE <role> NOBYPASSRLS'
+	 FROM runtime_roles AS runtime
+	 JOIN pg_roles AS role_row ON role_row.oid = runtime.role_oid
+	 WHERE role_row.rolbypassrls HAVING count(*) > 0),
+	(SELECT 'the guest role may create roles or databases or replicate'
 	 FROM guest_role AS guest
 	 JOIN pg_roles AS role_row ON role_row.oid = guest.role_oid
-	 WHERE role_row.rolcreaterole OR role_row.rolcreatedb OR role_row.rolreplication OR role_row.rolbypassrls),
+	 WHERE role_row.rolcreaterole OR role_row.rolcreatedb OR role_row.rolreplication),
 	(SELECT 'role inherits rights as a member of another role: ' || string_agg(DISTINCT runtime.label, ', ')
 	 FROM runtime_roles AS runtime
 	 JOIN pg_auth_members AS membership ON membership.member = runtime.role_oid

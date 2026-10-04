@@ -67,12 +67,30 @@ repair_schema_migrations = (
     "20260922000002_create_missing_deletion_log.sql",
     "20260926000001_restore_system_foreign_keys.sql",
     "20260926000003_create_revoked_sign_in_store.sql",
+    "20261005000001_add_row_actor_support.sql",
 )
 # Runs after every table exists, as the importing application role, so a new
 # installation withholds table creation from PUBLIC exactly as an upgrade does.
 schema_privilege_migrations = (
     "20260921000001_withdraw_public_table_creation.sql",
 )
+# A release's data step is run for a new installation by the same file, after every
+# seed: it needs the groups, folders, users and registry rows the seeds create. Each
+# is one DO block that writes its own completion marker.
+release_data_migrations: tuple[str, ...] = ()
+# The record of each database release is not run by the bootstrap: the acceptance
+# block below writes the version row of the version this bootstrap is built for.
+release_record_migrations = (
+    "20261005000099_record_database_release_9_10_0.sql",
+)
+# Every public migration whose sequence number comes after this one belongs to
+# exactly one list above, so no file is marked as run while missing from the
+# bootstrap. Older files predate the rule; 20260929000006 recorded DB 9.9.2.
+classified_after_sequence = "20260929000006"
+schema_phase_lists = (developer_workflow_schema_migrations, repair_schema_migrations, schema_privilege_migrations)
+marker_required_lists = schema_phase_lists + (release_data_migrations,)
+completion_marker_pattern = re.compile(r"^-- COMPLETION_MARKER:\s*(\S+)\s*$", re.MULTILINE)
+final_check_pattern = re.compile(r"^-- FINAL_CHECK:\s*(\S+)\s*$", re.MULTILINE)
 
 def reviewed_source(name: str) -> str:
     path = public_bootstrap_sources / name
@@ -93,11 +111,62 @@ schema_sql = (
     + "".join(reviewed_public_migration(name) for name in schema_privilege_migrations)
 )
 seed_sql = (
-    "".join(reviewed_source(name).replace("__FILTEREST_DB_VERSION__", db_version) for name in seed_sources)
+    "".join(reviewed_source(name) for name in seed_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
+    + "".join(reviewed_public_migration(name) for name in release_data_migrations)
 )
+if "__FILTEREST_DB_VERSION__" in schema_sql + seed_sql:
+    parser.error("The version row belongs to the acceptance block, not to a source")
+
+# Every file the bootstrap marks as run is in it, and every file that must prove it
+# ran to the end says how: schema-phase and data files name a completion marker, and
+# a file may name a final check, which the acceptance block runs after the import.
+included_migrations = [
+    name
+    for names in (developer_workflow_schema_migrations, repair_schema_migrations, schema_privilege_migrations,
+                  developer_workflow_seed_migrations, language_seed_migrations, setting_seed_migrations,
+                  release_data_migrations)
+    for name in names
+]
+classified = included_migrations + list(release_record_migrations)
+for name in sorted({name for name in classified if classified.count(name) > 1}):
+    parser.error(f"Migration listed in more than one bootstrap class: {name}")
+for name in release_record_migrations:
+    if "_record_database_release_" not in name:
+        parser.error(f"Only release records may stay out of the bootstrap: {name}")
+for path in sorted(public_migrations.glob("*.sql")):
+    if "'" in path.name or "/" in path.name:
+        parser.error(f"public migration filename is not safe for the bootstrap ledger: {path.name}")
+    if path.name[:14] > classified_after_sequence and path.name not in classified:
+        parser.error(f"Migration is in no bootstrap class: {path.name}")
+completion_markers: list[str] = []
+final_checks: list[str] = []
+for name in included_migrations:
+    text = reviewed_public_migration(name)
+    markers = completion_marker_pattern.findall(text)
+    checks = final_check_pattern.findall(text)
+    if len(markers) > 1 or len(checks) > 1:
+        parser.error(f"Migration declares more than one completion marker or final check: {name}")
+    if not markers and name[:14] > classified_after_sequence and any(name in names for names in marker_required_lists):
+        parser.error(f"Schema-phase or data migration declares no completion marker: {name}")
+    for marker in markers:
+        if re.fullmatch(r"[a-z0-9_]+", marker) is None or marker in completion_markers:
+            parser.error(f"Completion marker is malformed or not unique: {marker} ({name})")
+        completion_markers.append(marker)
+    for check in checks:
+        function = re.fullmatch(r"([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\(\)", check)
+        if function is None:
+            parser.error(f"Final check must name a schema-qualified function without arguments: {check} ({name})")
+        created = re.compile(
+            rf"\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+{function.group(1)}\.{function.group(2)}\s*\(",
+            re.IGNORECASE,
+        )
+        if created.search(schema_sql + seed_sql) is None:
+            parser.error(f"Final check {check} is not created by this bootstrap ({name})")
+        if check not in final_checks:
+            final_checks.append(check)
 
 # Enforce the same explicit content boundary used by the public release audit.
 sys.path.insert(0, str(public_root / "app/server_tools/public_slice_export"))
@@ -155,6 +224,11 @@ def split_sql_statements(sql: str) -> list[str]:
     in_single_quote = False
     index = 0
     while index < len(sql):
+        # A line comment is not SQL: an apostrophe in it must not open a string.
+        if not in_single_quote and sql.startswith("--", index):
+            newline = sql.find("\n", index)
+            index = len(sql) if newline == -1 else newline
+            continue
         char = sql[index]
         current.append(char)
         if char == "'":
@@ -196,16 +270,59 @@ if not migration_ledger_baseline:
     raise SystemExit("public migration ledger baseline cannot be empty")
 if any("'" in filename or "/" in filename for filename in migration_ledger_baseline):
     raise SystemExit("public migration filename is not safe for the bootstrap ledger")
+def sql_text_array(values: list[str]) -> str:
+    return "ARRAY[" + ", ".join(f"'{value}'" for value in values) + "]::text[]"
+
+
+# The acceptance block is the seed's last statement and one statement, so the import
+# is accepted whole or not at all: every included file's completion marker must be
+# present and every declared final check must come back empty before the migration
+# ledger and the version row are written. Every import path stops at the first
+# error, so a failed check leaves no ledger and no version behind.
+acceptance_lines = [
+    "",
+    "-- Generated migration-ledger baseline and version row, written by this acceptance block only after",
+    "-- every completion marker is present and every final check comes back empty. These migrations are",
+    "-- already embodied by this bootstrap.",
+    "DO $filterest_acceptance$",
+    "DECLARE",
+    "    missing_markers text;",
+    "    findings text;",
+    "BEGIN",
+]
+if completion_markers:
+    acceptance_lines += [
+        "    SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers",
+        f"      FROM unnest({sql_text_array(completion_markers)}) AS marker",
+        "     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record",
+        "                        WHERE record.migration = marker AND record.action = 'completed');",
+        "    IF missing_markers IS NOT NULL THEN",
+        "        RAISE EXCEPTION 'bootstrap import is incomplete; missing completion markers: %', missing_markers;",
+        "    END IF;",
+    ]
+if final_checks:
+    acceptance_lines += [
+        "    SELECT string_agg(finding, '; ') INTO findings FROM (",
+        "\n        UNION ALL\n".join(
+            f"        SELECT '{check}: ' || result FROM {check} AS result" for check in final_checks
+        ),
+        "    ) AS checks (finding);",
+        "    IF findings IS NOT NULL THEN",
+        "        RAISE EXCEPTION 'bootstrap import failed its final checks: %', findings;",
+        "    END IF;",
+    ]
+acceptance_lines += [
+    "    INSERT INTO public.system_schema_migrations (filename) VALUES",
+    ",\n".join(f"      ('{filename}')" for filename in migration_ledger_baseline),
+    "    ON CONFLICT (filename) DO NOTHING;",
+    "    INSERT INTO public.system_db_version (version, description)",
+    f"    VALUES ('{db_version}', 'Filterest generated public bootstrap');",
+    "END",
+    "$filterest_acceptance$;",
+    "",
+]
 with seed_file.open("a", encoding="utf-8") as seed_handle:
-    seed_handle.write(
-        "\n-- Generated migration-ledger baseline. These migrations are already "
-        "embodied by this bootstrap.\n"
-        "INSERT INTO public.system_schema_migrations (filename) VALUES\n"
-    )
-    seed_handle.write(
-        ",\n".join(f"  ('{filename}')" for filename in migration_ledger_baseline)
-    )
-    seed_handle.write("\nON CONFLICT (filename) DO NOTHING;\n")
+    seed_handle.write("\n".join(acceptance_lines))
 schema_sql = schema_file.read_text(encoding="utf-8", errors="replace")
 seed_sql = seed_file.read_text(encoding="utf-8", errors="replace")
 

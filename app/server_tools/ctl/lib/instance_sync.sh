@@ -114,7 +114,7 @@ init_instance_from_bootstrap_seed_profile() {
         exit 1
     fi
 
-    echo -e "${BLUE}[2/4] Importing ${seed_profile} bootstrap schema...${NC}"
+    echo -e "${BLUE}[2/4] Importing ${seed_profile} bootstrap schema and data...${NC}"
     schema_apply_file="$bootstrap_schema_file"
     target_postgis_schema="$(detect_instance_postgis_schema "$instance" "$db_admin" "$db_name")"
     if [[ -n "$target_postgis_schema" && "$target_postgis_schema" != "postgis" ]]; then
@@ -123,35 +123,16 @@ init_instance_from_bootstrap_seed_profile() {
         echo "   Adjusted PostGIS schema references for target extension schema '${target_postgis_schema}'."
     fi
 
-    docker cp "$schema_apply_file" "easelect-${instance}-db:/tmp/bootstrap_schema.sql"
-    docker exec "easelect-${instance}-db" \
-        psql -U "$db_admin" -d "$db_name" -f /tmp/bootstrap_schema.sql >/tmp/easelect_bootstrap_schema_${instance}.log 2>&1 || true
-
-    core_table_count=$(docker exec "easelect-${instance}-db" \
-        psql -U "$db_admin" -d "$db_name" -tAc \
-        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'system_db_version';" \
-        2>/dev/null | tr -d '[:space:]')
-    core_table_count="${core_table_count:-0}"
-    if [[ "$core_table_count" == "0" ]]; then
-        echo -e "${RED}❌ Bootstrap schema import failed.${NC}"
-        grep -E "^(ERROR|psql:)" "/tmp/easelect_bootstrap_schema_${instance}.log" | head -10 | sed 's/^/   /' || true
+    # The schema used to be imported with its errors ignored and judged by one table
+    # existing; now the first failed statement of either file stops the whole init.
+    if ! import_bootstrap_package "$schema_apply_file" "$bootstrap_seed_file" 1 \
+        docker exec -i "easelect-${instance}-db" psql -U "$db_admin" -d "$db_name"; then
+        echo -e "${RED}❌ Bootstrap import failed; the application was not started.${NC}"
         rm -rf "$bootstrap_tmp_dir"
-        docker exec "easelect-${instance}-db" rm -f /tmp/bootstrap_schema.sql 2>/dev/null || true
         exit 1
     fi
-    rm -f "/tmp/easelect_bootstrap_schema_${instance}.log"
 
-    echo -e "${BLUE}[3/4] Importing ${seed_profile} bootstrap data...${NC}"
-    docker cp "$bootstrap_seed_file" "easelect-${instance}-db:/tmp/bootstrap_seed_data.sql"
-    if ! docker exec "easelect-${instance}-db" \
-        psql -v ON_ERROR_STOP=1 -U "$db_admin" -d "$db_name" -f /tmp/bootstrap_seed_data.sql >/tmp/easelect_bootstrap_seed_${instance}.log 2>&1; then
-        echo -e "${RED}❌ Bootstrap seed import failed.${NC}"
-        grep -E "^(ERROR|psql:)" "/tmp/easelect_bootstrap_seed_${instance}.log" | head -10 | sed 's/^/   /' || true
-        rm -rf "$bootstrap_tmp_dir"
-        docker exec "easelect-${instance}-db" rm -f /tmp/bootstrap_schema.sql /tmp/bootstrap_seed_data.sql 2>/dev/null || true
-        exit 1
-    fi
-    rm -f "/tmp/easelect_bootstrap_seed_${instance}.log"
+    echo -e "${BLUE}[3/4] Verifying the ${seed_profile} instance role...${NC}"
 
     role_value=$(docker exec "easelect-${instance}-db" \
         psql -U "$db_admin" -d "$db_name" -tAc \
@@ -160,14 +141,12 @@ init_instance_from_bootstrap_seed_profile() {
     if [[ "$role_value" != "$seed_profile" ]]; then
         echo -e "${RED}❌ Bootstrap role verification failed: expected ${seed_profile}, got ${role_value:-empty}.${NC}"
         rm -rf "$bootstrap_tmp_dir"
-        docker exec "easelect-${instance}-db" rm -f /tmp/bootstrap_schema.sql /tmp/bootstrap_seed_data.sql 2>/dev/null || true
         exit 1
     fi
     echo -e "   ${GREEN}✓ easelect_instance_role=${role_value}${NC}"
 
     echo -e "${BLUE}[4/4] Restarting application...${NC}"
     $(compose_cmd "$instance") up -d app 2>&1 | tail -5
-    docker exec "easelect-${instance}-db" rm -f /tmp/bootstrap_schema.sql /tmp/bootstrap_seed_data.sql 2>/dev/null || true
     rm -rf "$bootstrap_tmp_dir"
 
     if wait_for_instance_app "$instance" "${APP_PORT:-8090}" 30; then

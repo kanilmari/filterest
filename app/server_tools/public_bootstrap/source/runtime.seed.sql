@@ -400,8 +400,8 @@ WHERE f.name = 'system_table_tools.AdminDatasetUIVisibilityHandler'
  )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO public.system_db_version (version, description)
-VALUES ('__FILTEREST_DB_VERSION__', 'Filterest generated public bootstrap');
+-- The version row is written last, by the acceptance block the generator appends,
+-- and only after every completion marker and final check of the import has passed.
 
 -- Administrator coding agents require an explicit production opt-in.
 INSERT INTO public.system_config (key, value_type, boolean_value, text_value, json_value)

@@ -812,24 +812,26 @@ if [[ "${SKIP_IMPORT:-no}" != "yes" ]]; then
 
         if [[ "$POSTGIS_OK" == "1" ]]; then
             echo "  PostGIS available — importing bootstrap schema + seed"
-            run_local_db_psql_stdin "Bootstrap schema import" < <(stream_bootstrap_schema_sql "$BOOTSTRAP_SCHEMA_FILE" "1")
-            run_local_db_psql_stdin "Bootstrap seed import" < <(sed '/^\\restrict/d;/^\\unrestrict/d' "$BOOTSTRAP_SEED_FILE")
         else
             echo -e "${YELLOW}  WARNING: PostGIS not available — using geometry fallback for bootstrap schema${NC}"
-            run_local_db_psql_stdin "Bootstrap schema import" < <(stream_bootstrap_schema_sql "$BOOTSTRAP_SCHEMA_FILE" "0")
-            run_local_db_psql_stdin "Bootstrap seed import" < <(sed '/^\\restrict/d;/^\\unrestrict/d' "$BOOTSTRAP_SEED_FILE")
+        fi
+        if ! import_bootstrap_package "$BOOTSTRAP_SCHEMA_FILE" "$BOOTSTRAP_SEED_FILE" "$POSTGIS_OK" \
+            env PGPASSWORD="$DB_ADMIN_PASSWORD" psql -h localhost -p "$PG16_PORT" -U "$DB_ADMIN_USER" -d "$DB_NAME"; then
+            echo -e "${RED}❌ Bootstrap import failed.${NC}"
+            exit 1
         fi
     elif [[ "$DUMP_SOURCE_KIND" == "public_plain_seed" ]]; then
         PUBLIC_BOOTSTRAP_SCHEMA_FILE="$FILTEREST_SOURCE_ROOT/server_tools/public_bootstrap/schema.sql"
         PUBLIC_BOOTSTRAP_SEED_FILE="$FILTEREST_SOURCE_ROOT/server_tools/public_bootstrap/seed_data.sql"
         if [[ "$POSTGIS_OK" == "1" ]]; then
             echo "  PostGIS available — importing public schema + synthetic seed"
-            run_local_db_psql_stdin "Public schema import" < <(stream_bootstrap_schema_sql "$PUBLIC_BOOTSTRAP_SCHEMA_FILE" "1")
-            run_local_db_psql_stdin "Public seed import" < <(sed '/^\\restrict/d;/^\\unrestrict/d' "$PUBLIC_BOOTSTRAP_SEED_FILE")
         else
             echo -e "${YELLOW}  WARNING: PostGIS not available — using geometry fallback for public schema${NC}"
-            run_local_db_psql_stdin "Public schema import" < <(stream_bootstrap_schema_sql "$PUBLIC_BOOTSTRAP_SCHEMA_FILE" "0")
-            run_local_db_psql_stdin "Public seed import" < <(sed '/^\\restrict/d;/^\\unrestrict/d' "$PUBLIC_BOOTSTRAP_SEED_FILE")
+        fi
+        if ! import_bootstrap_package "$PUBLIC_BOOTSTRAP_SCHEMA_FILE" "$PUBLIC_BOOTSTRAP_SEED_FILE" "$POSTGIS_OK" \
+            env PGPASSWORD="$DB_ADMIN_PASSWORD" psql -h localhost -p "$PG16_PORT" -U "$DB_ADMIN_USER" -d "$DB_NAME"; then
+            echo -e "${RED}❌ Public bootstrap import failed.${NC}"
+            exit 1
         fi
     elif [[ "$POSTGIS_OK" == "1" ]]; then
         echo "  PostGIS available — importing dump directly"

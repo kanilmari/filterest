@@ -171,7 +171,6 @@ start_docker() {
         local bootstrap_zip=""
         local bootstrap_password=""
         local bootstrap_tmp_dir=""
-        local bootstrap_schema_stream=""
         local config_count=""
         local existing_public_tables=""
         dump_file=$(ls -t data/db_backups/easelect_full_dump_*.sql data/db_backups/easelect_full_dump.sql easelect_full_dump_*.sql easelect_full_dump.sql 2>/dev/null | head -1 || true)
@@ -219,10 +218,11 @@ start_docker() {
                 [[ -f "${bootstrap_tmp_dir}/schema.sql" ]] || { echo -e "${RED}❌ bootstrap zip missing schema.sql${NC}"; exit 1; }
                 [[ -f "${bootstrap_tmp_dir}/seed_data.sql" ]] || { echo -e "${RED}❌ bootstrap zip missing seed_data.sql${NC}"; exit 1; }
 
-                bootstrap_schema_stream="${bootstrap_tmp_dir}/schema.rendered.sql"
-                stream_bootstrap_schema_sql "${bootstrap_tmp_dir}/schema.sql" "1" > "${bootstrap_schema_stream}"
-                docker_import_sql_file "Docker bootstrap schema restore" "${bootstrap_schema_stream}"
-                docker_import_sql_file "Docker bootstrap seed restore" "${bootstrap_tmp_dir}/seed_data.sql"
+                if ! import_bootstrap_package "${bootstrap_tmp_dir}/schema.sql" "${bootstrap_tmp_dir}/seed_data.sql" 1 \
+                    docker exec -i easelect-db-dev psql -U admin_user -d easelect; then
+                    echo -e "${RED}❌ Docker bootstrap restore failed; the application was not started.${NC}"
+                    exit 1
+                fi
                 config_count="$(docker exec easelect-db-dev psql -U admin_user -d easelect -tAc "SELECT COUNT(*) FROM system_config;" 2>/dev/null | tr -d '[:space:]')"
                 if [[ -z "$config_count" || "$config_count" == "0" ]]; then
                     echo -e "${RED}❌ Restore verification failed: system_config has no rows after bootstrap import.${NC}"

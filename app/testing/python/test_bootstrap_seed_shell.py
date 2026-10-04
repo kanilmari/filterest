@@ -98,8 +98,96 @@ class BootstrapSeedShellTests(unittest.TestCase):
             PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertEqual(setup_script.count('stream_bootstrap_schema_sql "$'), 5)
+        # Both package branches import through the shared stop-at-first-error import,
+        # which streams the schema through the shared filter; the full-dump fallback
+        # still streams its dump through the filter directly.
+        self.assertEqual(setup_script.count('import_bootstrap_package "$'), 2)
+        self.assertEqual(setup_script.count('"$POSTGIS_OK" \\'), 2)
+        self.assertEqual(setup_script.count('stream_bootstrap_schema_sql "$'), 1)
         self.assertNotIn("sed 's/postgis\\.geometry(Point,4326)/text/g'", setup_script)
+
+    def test_every_package_import_path_uses_the_shared_import(self) -> None:
+        """No import path may skip a schema error: the management instance init used to."""
+        instance_sync = (PUBLIC_SOURCE_ROOT / "server_tools/ctl/lib/instance_sync.sh").read_text(encoding="utf-8")
+        docker = (PUBLIC_SOURCE_ROOT / "server_tools/ctl/lib/docker.sh").read_text(encoding="utf-8")
+
+        self.assertIn('import_bootstrap_package "$schema_apply_file" "$bootstrap_seed_file" 1', instance_sync)
+        self.assertNotIn("bootstrap_schema.sql >/tmp/easelect_bootstrap_schema_", instance_sync)
+        self.assertNotIn("|| true\n\n    core_table_count", instance_sync)
+        self.assertIn(
+            'import_bootstrap_package "${bootstrap_tmp_dir}/schema.sql" "${bootstrap_tmp_dir}/seed_data.sql" 1',
+            docker,
+        )
+
+    def _import_with_fake_psql(self, schema: str, seed: str) -> tuple[subprocess.CompletedProcess, Path]:
+        """Run the shared import against a stand-in psql that fails on a FAIL line.
+
+        The stand-in records every stream it is given, so a test can see whether the
+        seed was ever sent after the schema failed.
+        """
+        temp_dir = Path(tempfile.mkdtemp())
+        (temp_dir / "schema.sql").write_text(schema, encoding="utf-8")
+        (temp_dir / "seed_data.sql").write_text(seed, encoding="utf-8")
+        fake = temp_dir / "fake_psql"
+        fake.write_text(
+            "#!/bin/bash\n"
+            'printf "%s\\n" "$*" >> "$RECORD_DIR/args"\n'
+            'input="$(cat)"\n'
+            'printf "%s\\n---\\n" "$input" >> "$RECORD_DIR/streams"\n'
+            'if grep -q "FAIL" <<<"$input"; then echo "ERROR:  syntax error at or near \\"FAIL\\""; exit 3; fi\n',
+            encoding="utf-8",
+        )
+        fake.chmod(0o755)
+        env = os.environ.copy()
+        env.update({"PUBLIC_SOURCE_ROOT": str(PUBLIC_SOURCE_ROOT), "RECORD_DIR": str(temp_dir),
+                    "SCHEMA_FILE": str(temp_dir / "schema.sql"), "SEED_FILE": str(temp_dir / "seed_data.sql"),
+                    "FAKE_PSQL": str(fake)})
+        result = subprocess.run(
+            ["/bin/bash", "-c",
+             'source "$PUBLIC_SOURCE_ROOT/server_tools/lib/public_bootstrap.sh"; '
+             'import_bootstrap_package "$SCHEMA_FILE" "$SEED_FILE" 1 "$FAKE_PSQL" -d target'],
+            capture_output=True, text=True, env=env,
+        )
+        return result, temp_dir
+
+    def test_shared_import_runs_schema_then_seed_with_on_error_stop(self) -> None:
+        result, records = self._import_with_fake_psql(
+            "\\restrict key\nCREATE SCHEMA postgis;\nCREATE TABLE a (id int);\n\\unrestrict key\n",
+            "\\restrict key\nINSERT INTO a VALUES (1);\n\\unrestrict key\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = (records / "args").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(args, ["-d target -v ON_ERROR_STOP=1", "-d target -v ON_ERROR_STOP=1"])
+        streams = (records / "streams").read_text(encoding="utf-8")
+        self.assertIn("CREATE SCHEMA IF NOT EXISTS postgis;", streams)
+        self.assertLess(streams.index("CREATE TABLE a"), streams.index("INSERT INTO a"))
+        self.assertNotIn("\\restrict", streams)
+
+    def test_shared_import_stops_before_the_seed_when_the_schema_fails(self) -> None:
+        result, records = self._import_with_fake_psql("CREATE TABLE a (id int);\nFAIL;\n", "INSERT INTO a VALUES (1);\n")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Bootstrap schema import failed", result.stderr)
+        self.assertIn('syntax error at or near "FAIL"', result.stderr)
+        self.assertNotIn("INSERT INTO a", (records / "streams").read_text(encoding="utf-8"))
+
+    def test_shared_import_reports_a_failed_seed(self) -> None:
+        result, _ = self._import_with_fake_psql("CREATE TABLE a (id int);\n", "INSERT INTO a VALUES (1);\nFAIL;\n")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Bootstrap seed import failed", result.stderr)
+
+    def test_shared_import_refuses_a_missing_file(self) -> None:
+        result, records = self._import_with_fake_psql("CREATE TABLE a (id int);\n", "")
+        (records / "seed_data.sql").unlink()
+        env = os.environ.copy()
+        env.update({"PUBLIC_SOURCE_ROOT": str(PUBLIC_SOURCE_ROOT), "RECORD_DIR": str(records)})
+        missing = subprocess.run(
+            ["/bin/bash", "-c",
+             'source "$PUBLIC_SOURCE_ROOT/server_tools/lib/public_bootstrap.sh"; '
+             f'import_bootstrap_package "{records}/schema.sql" "{records}/seed_data.sql" 1 true'],
+            capture_output=True, text=True, env=env,
+        )
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("seed_data.sql is missing", missing.stderr)
 
     def test_setup_grants_public_schema_create_to_configured_admin(self) -> None:
         setup_script = (

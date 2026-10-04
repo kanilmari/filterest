@@ -416,6 +416,21 @@ func TestGuestAndPrivilegeViewWriteRevocationsChangeNothingWhenUnsafePostgres(t 
 			undo:      `ALTER ROLE guest_role NOSUPERUSER`,
 			wantError: "role is a superuser: guest",
 		},
+		{
+			// Row security alone keeps the data repair record to its owner role.
+			name:      "the confidential role bypasses row security",
+			database:  "bypassing_confidential",
+			setup:     `ALTER ROLE confidential_role BYPASSRLS`,
+			undo:      `ALTER ROLE confidential_role NOBYPASSRLS`,
+			wantError: "role bypasses row security: confidential (confidential_role); remove it with ALTER ROLE <role> NOBYPASSRLS",
+		},
+		{
+			name:      "the guest bypasses row security",
+			database:  "bypassing_guest",
+			setup:     `ALTER ROLE guest_role BYPASSRLS`,
+			undo:      `ALTER ROLE guest_role NOBYPASSRLS`,
+			wantError: "role bypasses row security: guest (guest_role)",
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			owner := cluster.newDatabase(testCase.database)
@@ -434,5 +449,24 @@ func TestGuestAndPrivilegeViewWriteRevocationsChangeNothingWhenUnsafePostgres(t 
 				t.Fatalf("a refused start changed rights: lost %v, gained %v", lost, gained)
 			}
 		})
+	}
+}
+
+// The counterpart of the bypass refusal: the same role without the attribute
+// starts normally, so the refusal is about the attribute and nothing else.
+func TestGuestAndPrivilegeViewWriteRevocationsAcceptARoleOnceItNoLongerBypassesPostgres(t *testing.T) {
+	cluster := startWriteRevocationCluster(t)
+	administrator := cluster.open("test_owner", "postgres")
+	owner := cluster.newDatabase("bypass_removed")
+	cluster.exec(owner, `ALTER ROLE confidential_role BYPASSRLS`)
+	t.Cleanup(func() { _, _ = administrator.Exec(`ALTER ROLE confidential_role NOBYPASSRLS`) })
+
+	if err := EnsureGuestAndPrivilegeViewWriteRevocations(owner); err == nil ||
+		!strings.Contains(err.Error(), "role bypasses row security: confidential") {
+		t.Fatalf("error = %v, want the bypass refusal", err)
+	}
+	cluster.exec(owner, `ALTER ROLE confidential_role NOBYPASSRLS`)
+	if err := EnsureGuestAndPrivilegeViewWriteRevocations(owner); err != nil {
+		t.Fatalf("start refused once the role no longer bypasses row security: %v", err)
 	}
 }

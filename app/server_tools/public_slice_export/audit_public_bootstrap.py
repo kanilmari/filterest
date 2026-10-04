@@ -67,6 +67,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_media_assets",
     "public.system_media_asset_usages",
     "public.system_dataset_sort_defaults",
+    "public.system_data_repair_records",
     "public.system_embedding_refresh_jobs",
     "public.system_foreign_key_relations_1_m",
     "public.system_foreign_key_relations_m_m",
@@ -83,6 +84,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_revoked_sign_ins",
     "public.system_row_access_rule_events",
     "public.system_row_access_rules",
+    "public.system_row_actor_columns",
     "public.system_table_folders",
     "public.system_table_row_view_counts",
     "public.system_table_views",
@@ -368,6 +370,11 @@ def split_sql_statements(sql: str) -> list[str]:
     in_single_quote = False
     index = 0
     while index < len(sql):
+        # A line comment is not SQL: an apostrophe in it must not open a string.
+        if not in_single_quote and sql.startswith("--", index):
+            newline = sql.find("\n", index)
+            index = len(sql) if newline == -1 else newline
+            continue
         char = sql[index]
         current.append(char)
         if char == "'":
