@@ -111,7 +111,19 @@ Separate the running narration from the closing summary. When a turn ends with
 a summary of results, state, decisions or next steps, start that summary after
 a horizontal rule on its own line: an empty line, then `---`. Without the empty
 line, `---` directly under a sentence turns that sentence into a heading. The
-person then sees at a glance where the working notes end and the summary begins.
+rule divides the turn in two: above it the work as it went (commands, what each
+step showed, interim notes), below it everything the person needs, so that
+nothing above the rule has to be read. Answers to the person's questions, the
+decisions waiting for them and the state of every topic therefore go below the
+rule, never above it, and the part above it uses no headings.
+
+Inside the summary, give every separate topic its own Markdown heading, a line
+that starts with `## `: each work item, decision or finding the summary reports,
+and the shared closing details such as repository state, versions and checks.
+Labels inside a topic stay in bold type, and nothing else in the message uses a
+heading of that size or larger. A topic title set only in bold, or in a heading
+barely larger than bold, looks like one of its own labels, and the person can no
+longer see where one topic ends and the next begins.
 
 ## Relationship To The Maintenance Shell
 
