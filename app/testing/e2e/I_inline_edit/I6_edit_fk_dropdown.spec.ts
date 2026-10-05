@@ -2,6 +2,8 @@
  * I6_edit_fk_dropdown.spec.ts
  *
  * Tests inline editing behavior for foreign-key dropdown cells.
+ * Bridges the shared single-choice picker with API persistence and restored selection.
+ * Exists to prove related-row choices survive reopening a dataset.
  */
 
 import { test, expect, type APIRequestContext } from '@playwright/test';
@@ -115,7 +117,7 @@ test.describe('I6 — Edit FK Dropdown', () => {
 
       const dropdown = fkCell.locator('[data-testid="inline-fk-dropdown"]');
       const searchInput = dropdown.locator('[data-testid="inline-fk-search-input"]');
-      const options = dropdown.locator('[data-testid="inline-fk-option"]');
+      const options = dropdown.getByRole('option');
       await expect(dropdown).toBeVisible({ timeout: 5000 });
       await expect(searchInput).toBeVisible();
       await expect(options).toHaveCount(2);
@@ -123,8 +125,8 @@ test.describe('I6 — Edit FK Dropdown', () => {
       await searchInput.fill('Reference B');
       await expect(options).toHaveCount(1);
       const targetOption = options.first();
-      await expect(targetOption).toHaveAttribute('data-display', 'Reference B');
-      const targetForeignKeyValue = await targetOption.getAttribute('data-value');
+      await expect(targetOption).toHaveText('Reference B');
+      const targetForeignKeyValue = await targetOption.getAttribute('data-option-value');
       expect(targetForeignKeyValue, 'Reference B must expose its persisted foreign-key value')
         .toMatch(/^\d+$/);
 
@@ -165,11 +167,11 @@ test.describe('I6 — Edit FK Dropdown', () => {
       const reopenedDropdown = persistedFkCell.locator('[data-testid="inline-fk-dropdown"]');
       await expect(reopenedDropdown).toBeVisible({ timeout: 5000 });
       const persistedSelection = reopenedDropdown.locator(
-        '[data-testid="inline-fk-option"].selected',
+        '[role="option"][aria-selected="true"]',
       );
       await expect(persistedSelection).toHaveCount(1);
-      await expect(persistedSelection).toHaveAttribute('data-value', targetForeignKeyValue!);
-      await expect(persistedSelection).toHaveAttribute('data-display', 'Reference B');
+      await expect(persistedSelection).toHaveAttribute('data-option-value', targetForeignKeyValue!);
+      await expect(persistedSelection).toHaveText('Reference B');
       await reopenedDropdown.locator('[data-testid="inline-fk-search-input"]').press('Escape');
       await expect(reopenedDropdown).toBeHidden();
     } catch (error) {

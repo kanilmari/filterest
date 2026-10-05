@@ -1,8 +1,40 @@
 // filter_column_builder_helpers.js
-// Pure helper functions extracted from filter_column_builder.js for testability.
-// Zero DOM access — all functions are pure input→output.
+// Resolves filter kinds and foreign-key option values for filters and inline editors.
+// Bridges column metadata and the policy-aware option endpoint with both consumers.
+// Exists to keep value-column fallback rules in one place.
 
 import { resolveNumberInputStep } from "../../general_tables/gt_1_row_crud/number_input_step_resolver.js";
+import { fetchFilterOptions } from "../../endpoints/endpoint_data_fetcher.js";
+
+/**
+ * Load the referenced values shared by filters and inline editors. Preserve the
+ * filter bar's id/slug compatibility flow and let primary load failures escape.
+ * Search and limit are supplied only by callers that need bounded remote search.
+ * Keep raw value types here; each consumer owns its display mapping.
+ */
+export async function loadForeignFilterOptions(columnName, colType, searchOptions = {}) {
+    const foreignValueColumn = colType.foreign_column || "id";
+    const params = { dataset_name: colType.foreign_table, ...searchOptions };
+    const data = Array.isArray(colType.filter_options)
+        ? colType.filter_options
+        : await fetchFilterOptions({ ...params, value_column: foreignValueColumn });
+    let options = Array.isArray(data) ? data : [];
+
+    if (shouldRetryForeignFilterOptionsWithSlug(columnName, colType, options, foreignValueColumn)) {
+        try {
+            const slugData = await fetchFilterOptions({ ...params, value_column: 'slug' });
+            const slugOptions = Array.isArray(slugData) ? slugData : [];
+            if (!areForeignFilterOptionValuesNumeric(slugOptions)) {
+                options = slugOptions;
+            }
+        } catch (err) {
+            if (document.querySelector('meta[name="app-env"]')?.content === 'dev') {
+                console.warn("Failed to fetch slug fallback filter options:", err);
+            }
+        }
+    }
+    return options;
+}
 
 const DATE_FILTER_TYPES = [
     "date",

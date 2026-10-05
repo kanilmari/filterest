@@ -607,9 +607,9 @@ export class TableComponent {
 
         return Boolean(
             target.matches(
-                '.table-editor-input, .table-editor-select, .dropdown-search-input'
+                '.table-editor-input, .table-editor-select'
             )
-            || target.closest?.('.custom-dropdown-container')
+            || target.closest?.('.inline-fk-dropdown')
             || target.closest?.('.cell.editing')
         );
     }

@@ -218,7 +218,6 @@ export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
         'getColumns',
         'getOneToMany',
         'getManyToMany',
-        'referencedData',
         'datasetColumns',
         'checkTableRight',
         'checkTableRights',

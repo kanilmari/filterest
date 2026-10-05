@@ -60,8 +60,3 @@
     max-width: min(32rem, calc(100vw - 2rem));
     z-index: calc(var(--z-filterbar, 100004) + 3);
 }
-
-.table_from_db td.table_data_cell--inline-fk-editing .dropdown-options-list {
-    max-height: min(18rem, 60vh);
-    box-shadow: 0 10px 24px rgb(0 0 0 / 24%);
-}

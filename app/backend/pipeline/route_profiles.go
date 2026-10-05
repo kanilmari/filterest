@@ -311,7 +311,6 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_1_row_create.GetAddRowMetadataHandlerWrapper":     DefaultProfile,
 	"dtt_1_row_create.GetAddRowColumnsHandlerWrapper":      DefaultProfile,
 	"dtt_1_row_create.GetManyToManyTablesHandlerWrapper":   DefaultProfile,
-	"dtt_1_row_create.GetReferencedTableData":              DefaultProfile,
 
 	// Row delete
 	"dtt_1_row_delete.DeleteRowsHandlerWrapper": DefaultProfile,

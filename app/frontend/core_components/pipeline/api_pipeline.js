@@ -115,7 +115,6 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     getColumns: 'dtt_1_row_create.GetAddRowColumnsHandlerWrapper',
     getOneToMany: 'dtt_1_row_create.GetOneToManyRelationsHandlerWrapper',
     getManyToMany: 'dtt_1_row_create.GetManyToManyTablesHandlerWrapper',
-    referencedData: 'dtt_1_row_create.GetReferencedTableData',
     datasetColumns: 'dtt_2_column_crud.GetTableColumnsHandler',
     translations: 'lang.GetTranslationsHandler',
     getRowCount: 'dtt_1_row_read.GetRowCountHandlerWrapper',

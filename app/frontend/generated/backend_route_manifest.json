@@ -4475,36 +4475,6 @@
       ]
     },
     {
-      "path_pattern": "/api/referenced-data",
-      "match_type": "exact",
-      "handler_name": "dtt_1_row_create.GetReferencedTableData",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "method_source": "route_registration",
-      "scenarios": [
-        {
-          "name": "production",
-          "profile_name": "default",
-          "skip_stages": [],
-          "admin_only": false
-        },
-        {
-          "name": "development",
-          "profile_name": "default",
-          "skip_stages": [],
-          "admin_only": false
-        },
-        {
-          "name": "api_language",
-          "profile_name": "default",
-          "skip_stages": [],
-          "admin_only": false
-        }
-      ]
-    },
-    {
       "path_pattern": "/api/refresh-lang-embeddings",
       "match_type": "exact",
       "handler_name": "ai_features.RefreshLangEmbeddingsHandler",

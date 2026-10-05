@@ -60,28 +60,6 @@ export async function fetchManyToManyInfos(table_uid) {
     }
 }
 
-export async function fetchReferencedData(datasetName) {
-    try {
-        const data = await endpoint_router('referencedData', {
-            url_params: `?dataset=${datasetName}`,
-        });
-        if (!Array.isArray(data)) {
-            console.warn(
-                `fetchReferencedData: odotettiin taulukkoa, mutta saatiin:`,
-                data
-            );
-            return [];
-        }
-        return data;
-    } catch (error) {
-        console.warn(
-            `virhe haettaessa dataa taulusta ${datasetName}:`,
-            error
-        );
-        return [];
-    }
-}
-
 // Add-row relation pickers share the same permission- and row-policy-aware
 // option endpoint as FK filters. This prevents a relation control from listing
 // rows that the current actor cannot otherwise read.

@@ -12,8 +12,8 @@ vi.mock('../../../table_views/table_view/table_cell_handler.js', () => ({
     selectCell: selectCellMock,
 }));
 
-vi.mock('../gt_1_1_row_create/row_api_fetcher.js', () => ({
-    fetchReferencedData: vi.fn(),
+vi.mock('../../../endpoints/endpoint_data_fetcher.js', () => ({
+    fetchFilterOptions: vi.fn(),
 }));
 
 vi.mock('../../../endpoints/endpoint_router.js', () => ({
@@ -150,10 +150,10 @@ describe('cell_editor', () => {
 
     test('opens foreign-key name editing as an overlay instead of clipped cell content', async () => {
         const { editCell } = await import('./cell_editor.js');
-        const { fetchReferencedData } = await import('../gt_1_1_row_create/row_api_fetcher.js');
-        fetchReferencedData.mockResolvedValue([
-            { id: 'in_progress', display: 'In Progress' },
-            { id: 'done', display: 'Done' },
+        const { fetchFilterOptions } = await import('../../../endpoints/endpoint_data_fetcher.js');
+        fetchFilterOptions.mockResolvedValue([
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'done', label: 'Done' },
         ]);
         const row = document.createElement('tr');
         const cell = document.createElement('td');
@@ -189,17 +189,17 @@ describe('cell_editor', () => {
         expect(dropdown).not.toBeNull();
         expect(dropdown.classList.contains('inline-fk-dropdown')).toBe(true);
         expect(cell.classList.contains('table_data_cell--inline-fk-editing')).toBe(true);
-        expect(dropdown.querySelectorAll('[data-testid="inline-fk-option"]')).toHaveLength(2);
+        await vi.waitFor(() => expect(dropdown.querySelectorAll('.msd-option')).toHaveLength(3));
     });
 
-    test('localizes inline foreign-key labels while submitting the unchanged option id', async () => {
+    test('localizes inline foreign-key labels while submitting the unchanged option value', async () => {
         localStorage.setItem('chosen_language', 'fi');
         const { editCell } = await import('./cell_editor.js');
-        const { fetchReferencedData } = await import('../gt_1_1_row_create/row_api_fetcher.js');
-        fetchReferencedData.mockResolvedValue([
+        const { fetchFilterOptions } = await import('../../../endpoints/endpoint_data_fetcher.js');
+        fetchFilterOptions.mockResolvedValue([
             {
-                id: 12,
-                display: JSON.stringify({ en: 'Customer portal', fi: 'Asiakasportaali' }),
+                value: 12,
+                label: JSON.stringify({ en: 'Customer portal', fi: 'Asiakasportaali' }),
             },
         ]);
         const cell = document.createElement('td');
@@ -221,9 +221,10 @@ describe('cell_editor', () => {
             'tickets'
         );
 
-        const option = cell.querySelector('[data-testid="inline-fk-option"]');
+        await vi.waitFor(() => expect(cell.querySelector('.msd-option[data-option-value="12"]')).not.toBeNull());
+        const option = cell.querySelector('.msd-option[data-option-value="12"]');
         expect(option.textContent).toBe('Asiakasportaali');
-        expect(option.dataset.value).toBe('12');
+        expect(option.dataset.optionValue).toBe('12');
         option.click();
 
         await vi.waitFor(() => expect(endpointRouterMock).toHaveBeenCalledTimes(1));

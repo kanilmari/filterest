@@ -15,7 +15,6 @@ import {
 } from "../text_search/create_text_search_panel.js";
 import { renderActiveFilters } from "./active_filter_tag_printer.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
-import { fetchFilterOptions } from "../../endpoints/endpoint_data_fetcher.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { resolveDatasetDisplayValue } from "../../table_views/dataset_value_localizer.js";
 import {
@@ -24,8 +23,7 @@ import {
     categorizeColumns,
     orderFilterColumns,
     resolveFilterElementKind,
-    areForeignFilterOptionValuesNumeric,
-    shouldRetryForeignFilterOptionsWithSlug,
+    loadForeignFilterOptions,
     shouldHideRedundantGeneratedForeignDisplayColumn,
 } from "./filter_column_builder_helpers.js";
 import { applyNumberInputStep } from "../../general_tables/gt_1_row_crud/number_input_step_resolver.js";
@@ -653,8 +651,6 @@ function createFilterElement(tableName, column, colType) {
                 });
 
                 mountedDropdown = dropdown;
-                const foreignTable = colType.foreign_table;
-                const foreignValueColumn = colType.foreign_column || "id";
                 let optionsLoaded = false;
                 let optionsPromise = null;
 
@@ -668,30 +664,8 @@ function createFilterElement(tableName, column, colType) {
                     }
 
                     optionsPromise = (async () => {
-                        const data = filterElementKind === "choice"
-                            ? colType.filter_options
-                            : await fetchFilterOptions({
-                                dataset_name: foreignTable,
-                                value_column: foreignValueColumn,
-                            });
-                        let dropdownOptions = mapForeignFilterOptions(data);
-
-                        if (shouldRetryForeignFilterOptionsWithSlug(column, colType, dropdownOptions, foreignValueColumn)) {
-                            try {
-                                const slugData = await fetchFilterOptions({
-                                    dataset_name: foreignTable,
-                                    value_column: 'slug',
-                                });
-                                const slugOptions = mapForeignFilterOptions(slugData);
-                                if (!areForeignFilterOptionValuesNumeric(slugOptions)) {
-                                    dropdownOptions = slugOptions;
-                                }
-                            } catch (err) {
-                                if (IS_DEV_MODE) {
-                                    console.warn("Failed to fetch slug fallback filter options:", err);
-                                }
-                            }
-                        }
+                        const data = await loadForeignFilterOptions(column, colType);
+                        const dropdownOptions = mapForeignFilterOptions(data);
 
                         if (destroyed) return;
                         dropdown.setOptions(dropdownOptions);

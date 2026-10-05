@@ -1,10 +1,11 @@
 // cell_editor.js
 // Handles inline editing of a single table cell, including input rendering and patch submission.
-// Bridges cell selection, referenced-data fetching, and the endpoint router into one in-place edit interaction.
+// Bridges cell selection, policy-aware option fetching, and the endpoint router into one in-place edit interaction.
 // Exists to isolate cell-level update logic from row-level and table-level concerns.
 
 import { selectCell } from '../../../table_views/table_view/table_cell_handler.js';
-import { fetchReferencedData } from '../gt_1_1_row_create/row_api_fetcher.js';
+import { loadForeignFilterOptions } from '../../../filterbar/filter_list/filter_column_builder_helpers.js';
+import { createMultiselectDropdown } from '../../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js';
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
 import { showWarningToast } from '../../../../reusable_components/notifications/toast_notification_printer.js';
 import { getTranslationForKey } from '../../../lang/translation_handler.js';
@@ -96,210 +97,198 @@ export async function editCell(cell, columns, data, dataTypes, table_name) {
     }
 }
 
+// Single-choice editing shares option reads and value-column resolution with
+// filters, while the dropdown owns keyboard navigation and search debounce.
 async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent) {
-    cell.textContent = '';
-    cell.classList.add('editing', 'table_data_cell--inline-fk-editing');
-
     const rowIndex = parseInt(cell.dataset.rowIndex, 10);
     const rowData = data[rowIndex];
     if (!rowData) {
-        cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
-        cell.textContent = originalContent;
         selectCell(cell);
         return;
     }
 
+    cell.textContent = '';
+    cell.classList.add('editing', 'table_data_cell--inline-fk-editing');
     const dropdownContainer = document.createElement('div');
-    dropdownContainer.classList.add('custom-dropdown-container', 'inline-fk-dropdown');
+    dropdownContainer.classList.add('inline-fk-dropdown');
     dropdownContainer.dataset.testid = 'inline-fk-dropdown';
+    cell.appendChild(dropdownContainer);
 
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.placeholder = 'Hae...';
-    searchInput.classList.add('dropdown-search-input');
+    const currentValue = rowData[foreignKeyColumnName];
+    const hasCurrentValue = currentValue !== null && currentValue !== undefined && currentValue !== '';
+    const currentLabel = resolveDatasetDisplayValue(
+        rowData[foreignKeyColumnName + '_name'] || (isNameColumn ? originalContent : cell.title),
+        null,
+        getLanguageWithBrowserFallback()
+    ) || String(currentValue ?? '');
+    const currentOption = { value: currentValue, label: currentLabel };
+    let availableOptions = hasCurrentValue ? [currentOption] : [];
+    let searchRequest = 0;
+    let ended = false;
+    let foreignKeyUpdateInFlight = false;
+    let pendingOption = null;
+    const listeners = new AbortController();
+    const noResultsLabel = getTranslationForKey('no_results');
+    const loadError = document.createElement('div');
+    loadError.setAttribute('role', 'alert');
+    loadError.dataset.langKey = 'failed_to_load';
+    loadError.hidden = true;
+
+    const dropdown = createMultiselectDropdown({
+        containerElement: dropdownContainer,
+        // Keeping the fixed-position popup in the editor's ownership lets blur
+        // distinguish option navigation from leaving the cell, even in a modal.
+        portalElement: dropdownContainer,
+        options: availableOptions,
+        initialState: { includeValues: hasCurrentValue ? [currentValue] : [] },
+        maxSelections: 1,
+        allowExclude: false,
+        placeholder: getTranslationForKey('choose_from_existing'),
+        searchPlaceholder: getTranslationForKey('search_by_name_or_id'),
+        noResultsLabel,
+        clearLabel: getTranslationForKey('cancel'),
+        onSearch: async (search) => {
+            const request = ++searchRequest;
+            try {
+                const options = await loadForeignFilterOptions(
+                    foreignKeyColumnName, dataTypes[foreignKeyColumnName], { search, limit: 100 }
+                );
+                if (ended || !dropdownContainer.isConnected || request !== searchRequest) return availableOptions;
+                const language = getLanguageWithBrowserFallback();
+                availableOptions = options.map((option) => ({
+                    value: option.value,
+                    label: resolveDatasetDisplayValue(option.label, null, language) || String(option.value),
+                }));
+                // Option reads omit unlabelled rows and are bounded. Neither may
+                // erase a value already held by this row (or a retryable draft).
+                for (const retained of [hasCurrentValue ? currentOption : null, pendingOption]) {
+                    if (retained && !availableOptions.some((option) => String(option.value) === String(retained.value))) {
+                        availableOptions.unshift(retained);
+                    }
+                }
+                loadError.hidden = true;
+                dropdown.setLabels({ noResultsLabel });
+                return availableOptions;
+            } catch {
+                if (ended || !dropdownContainer.isConnected || request !== searchRequest) return availableOptions;
+                loadError.textContent = getTranslationForKey('failed_to_load');
+                loadError.hidden = false;
+                dropdown.setLabels({ noResultsLabel: loadError.textContent });
+                return availableOptions;
+            }
+        },
+        onChange: ({ includeValues }) => {
+            if (ended) return;
+            if (foreignKeyUpdateInFlight) {
+                dropdown.setValue({ includeValues: [pendingOption.value] });
+                return;
+            }
+            // Toggling the retained draft again retries a maintenance refusal.
+            // Clearing a selection cancels; this editor has never written NULL.
+            const option = includeValues.length
+                ? availableOptions.find((item) => String(item.value) === includeValues[0])
+                : pendingOption;
+            if (option) void selectOption(option);
+            else finishEditing();
+        },
+    });
+    const popup = dropdownContainer.querySelector('.msd-dropdown-list');
+    popup.prepend(loadError);
+    const searchInput = dropdownContainer.querySelector('.msd-dropdown-search-input');
     searchInput.dataset.testid = 'inline-fk-search-input';
 
-    const optionsList = document.createElement('ul');
-    optionsList.classList.add('dropdown-options-list');
-
-    const foreignTableName = dataTypes[foreignKeyColumnName].foreign_table;
-    const options = await fetchReferencedData(foreignTableName);
-
-    function renderOptions(filterText = '') {
-        optionsList.replaceChildren();
-        const chosenLanguage = getLanguageWithBrowserFallback();
-        const localizedOptions = options.map((option) => ({
-            option,
-            displayValue: resolveDatasetDisplayValue(
-                option['display'],
-                null,
-                chosenLanguage
-            ),
-        }));
-
-        const filteredOptions = localizedOptions.filter(({ displayValue }) => {
-            return displayValue.toLowerCase().includes(filterText.toLowerCase());
-        });
-
-        filteredOptions.forEach(({ option, displayValue }) => {
-            const optionItem = document.createElement('li');
-            optionItem.classList.add('dropdown-option-item');
-            optionItem.dataset.testid = 'inline-fk-option';
-
-            const idValue = option['id'];
-
-            optionItem.dataset.value = idValue;
-            optionItem.dataset.display = displayValue;
-
-            if (isNameColumn) {
-                optionItem.textContent = displayValue;
-            } else {
-                optionItem.textContent = `${idValue} (${displayValue})`;
-            }
-
-            const foreignKeyValue = rowData[foreignKeyColumnName];
-
-            if (idValue == foreignKeyValue) {
-                optionItem.classList.add('selected');
-            }
-
-            optionItem.addEventListener('click', () => {
-                selectOption(idValue, displayValue);
-            });
-
-            optionsList.appendChild(optionItem);
-        });
+    function finishEditing(displayValue = originalContent) {
+        if (ended) return;
+        ended = true;
+        searchRequest += 1;
+        listeners.abort();
+        dropdown.destroy();
+        cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
+        delete cell.dataset.inlineSaveState;
+        setCellDisplayText(cell, displayValue);
+        selectCell(cell);
     }
 
-    let foreignKeyUpdateInFlight = false;
-    async function selectOption(newValue, displayValue) {
-        if (foreignKeyUpdateInFlight) return;
-        const foreignKeyValue = rowData[foreignKeyColumnName];
-        if (newValue == foreignKeyValue) {
-            document.removeEventListener('click', handleDocumentClick);
-            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
-            setCellDisplayText(cell, originalContent);
-            selectCell(cell);
+    async function selectOption(option) {
+        if (ended || foreignKeyUpdateInFlight) return;
+        const { value: newValue, label: displayValue } = option;
+        if (String(newValue) === String(currentValue)) {
+            finishEditing();
             return;
         }
-        const updateData = {
-            id: rowData['id'],
-            column: foreignKeyColumnName,
-            value: newValue
-        };
-        foreignKeyUpdateInFlight = true;
+        pendingOption = option;
+        dropdown.setValue({ includeValues: [newValue] });
         dropdownContainer.dataset.pendingValue = String(newValue);
-        searchInput.value = displayValue;
+        foreignKeyUpdateInFlight = true;
         cell.dataset.inlineSaveState = 'saving';
         try {
-            await sendUpdateRequest(table_name, updateData);
+            await sendUpdateRequest(table_name, {
+                id: rowData['id'], column: foreignKeyColumnName, value: newValue,
+            });
             data[rowIndex][foreignKeyColumnName] = newValue;
             data[rowIndex][foreignKeyColumnName + '_name'] = displayValue;
             data[rowIndex][columnName] = isNameColumn ? displayValue : newValue;
             const rowCells = cell.parentElement?.cells;
             if (rowCells) {
                 for (let i = 0; i < columns.length; i++) {
-                    const col = columns[i];
-                    if (col === foreignKeyColumnName) {
-                        const fkCell = rowCells[i + 2]; // offset for numbering and checkbox columns
-                        fkCell.textContent = data[rowIndex][foreignKeyColumnName];
-                        fkCell.title = data[rowIndex][foreignKeyColumnName + '_name'];
-                    } else if (col === foreignKeyColumnName + '_name') {
-                        const nameCell = rowCells[i + 2]; // offset for numbering and checkbox columns
-                        nameCell.textContent = data[rowIndex][foreignKeyColumnName + '_name'];
+                    const siblingCell = rowCells[i + 2]; // numbering and checkbox columns
+                    if (!siblingCell || siblingCell === cell) continue;
+                    if (columns[i] === foreignKeyColumnName) {
+                        siblingCell.textContent = newValue;
+                        siblingCell.title = displayValue;
+                    } else if (columns[i] === foreignKeyColumnName + '_name') {
+                        siblingCell.textContent = displayValue;
                     }
                 }
             }
-            document.removeEventListener('click', handleDocumentClick);
-            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
-            setCellDisplayText(cell, isNameColumn ? displayValue : newValue);
+            finishEditing(isNameColumn ? displayValue : newValue);
             if (!isNameColumn) cell.title = displayValue;
-            delete cell.dataset.inlineSaveState;
-            selectCell(cell);
         } catch (error) {
             if (isServiceUnavailableError(error)) {
                 cell.dataset.inlineSaveState = 'retry';
-                return;
+                dropdown.setValue({ includeValues: [newValue] });
+            } else {
+                finishEditing();
             }
-            document.removeEventListener('click', handleDocumentClick);
-            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
-            setCellDisplayText(cell, originalContent);
-            delete cell.dataset.inlineSaveState;
-            selectCell(cell);
         } finally {
             foreignKeyUpdateInFlight = false;
         }
     }
 
-    searchInput.addEventListener('input', () => {
-        const filterText = searchInput.value;
-        renderOptions(filterText);
-    });
-    function handleBlur(event) {
-        if (foreignKeyUpdateInFlight) return;
-        if (!dropdownContainer.contains(event.relatedTarget)) {
-            document.removeEventListener('click', handleDocumentClick);
-            cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
-            setCellDisplayText(cell, originalContent);
-            selectCell(cell);
-        }
-    }
-    function handleDocumentClick(event) {
-        if (foreignKeyUpdateInFlight) return;
-        if (!dropdownContainer.contains(event.target)) {
-            handleBlur({ relatedTarget: null });
-        }
-    }
-    dropdownContainer.appendChild(searchInput);
-    dropdownContainer.appendChild(optionsList);
-    cell.appendChild(dropdownContainer);
-    searchInput.focus();
-    renderOptions();
-    searchInput.addEventListener('blur', handleBlur);
-    optionsList.addEventListener('blur', handleBlur);
-    document.addEventListener('click', handleDocumentClick);
+    const eventOptions = { capture: true, signal: listeners.signal };
+    dropdownContainer.addEventListener('input', () => {
+        // Invalidate errors as soon as text changes, before the dropdown debounce.
+        searchRequest += 1;
+    }, eventOptions);
+    dropdownContainer.addEventListener('blur', (event) => {
+        if (!foreignKeyUpdateInFlight && !dropdownContainer.contains(event.relatedTarget)) finishEditing();
+    }, eventOptions);
     dropdownContainer.addEventListener('mousedown', (event) => {
-        event.preventDefault();
-    });
-    searchInput.addEventListener('keydown', (event) => {
-        const items = optionsList.querySelectorAll('.dropdown-option-item');
-        const selectedItem = optionsList.querySelector('.dropdown-option-item.highlighted');
-        let currentIndex = Array.from(items).indexOf(selectedItem);
-
-        if (event.key === 'ArrowDown') {
+        if (event.target.closest('.msd-option')) event.preventDefault();
+    }, eventOptions);
+    dropdownContainer.addEventListener('click', (event) => {
+        if (event.target.closest('.msd-clear-btn')) {
             event.preventDefault();
-            if (currentIndex < items.length - 1) {
-                currentIndex++;
-            } else {
-                currentIndex = 0;
-            }
-            highlightItem(items, currentIndex);
-        } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            if (currentIndex > 0) {
-                currentIndex--;
-            } else {
-                currentIndex = items.length - 1;
-            }
-            highlightItem(items, currentIndex);
-        } else if (event.key === 'Enter') {
-            event.preventDefault();
-            if (selectedItem) {
-                selectedItem.click();
-            }
-        } else if (event.key === 'Escape') {
-            handleBlur({ relatedTarget: null });
+            event.stopPropagation();
+            if (!foreignKeyUpdateInFlight) finishEditing();
         }
-    });
-
-    function highlightItem(items, index) {
-        items.forEach(item => item.classList.remove('highlighted'));
-        const item = items[index];
-        if (item) {
-            item.classList.add('highlighted');
-            item.scrollIntoView({ block: 'nearest' });
+    }, eventOptions);
+    dropdownContainer.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!foreignKeyUpdateInFlight) finishEditing();
+        } else if (event.key === 'Enter' && cell.dataset.inlineSaveState === 'retry'
+            && !event.target.closest('.msd-option')) {
+            event.preventDefault();
+            event.stopPropagation();
+            void selectOption(pendingOption);
         }
-    }
+    }, eventOptions);
+    document.addEventListener('click', (event) => {
+        if (!foreignKeyUpdateInFlight && !dropdownContainer.contains(event.target)) finishEditing();
+    }, { signal: listeners.signal });
+    dropdown.open();
 }
 
 async function handleRegularEditing(cell, columns, data, dataTypes, table_name, columnName, originalContent) {

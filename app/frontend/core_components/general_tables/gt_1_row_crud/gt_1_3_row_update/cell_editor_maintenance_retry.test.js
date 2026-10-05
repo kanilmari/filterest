@@ -8,19 +8,19 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const {
     endpointRouterMock,
-    fetchReferencedDataMock,
+    fetchFilterOptionsMock,
     selectCellMock,
 } = vi.hoisted(() => ({
     endpointRouterMock: vi.fn(),
-    fetchReferencedDataMock: vi.fn(),
+    fetchFilterOptionsMock: vi.fn(),
     selectCellMock: vi.fn(),
 }));
 
 vi.mock('../../../table_views/table_view/table_cell_handler.js', () => ({
     selectCell: selectCellMock,
 }));
-vi.mock('../gt_1_1_row_create/row_api_fetcher.js', () => ({
-    fetchReferencedData: fetchReferencedDataMock,
+vi.mock('../../../endpoints/endpoint_data_fetcher.js', () => ({
+    fetchFilterOptions: fetchFilterOptionsMock,
 }));
 vi.mock('../../../endpoints/endpoint_router.js', () => ({
     endpoint_router: endpointRouterMock,
@@ -52,7 +52,7 @@ describe('cell editor maintenance retry', () => {
         document.body.replaceChildren();
         localStorage.clear();
         endpointRouterMock.mockReset();
-        fetchReferencedDataMock.mockReset();
+        fetchFilterOptionsMock.mockReset();
         selectCellMock.mockReset();
         rejectOnceForMaintenanceThenSucceed();
     });
@@ -122,7 +122,7 @@ describe('cell editor maintenance retry', () => {
     });
 
     test('keeps a foreign-key choice visible and retries it by selecting again', async () => {
-        fetchReferencedDataMock.mockResolvedValue([{ id: 12, display: 'Customer portal' }]);
+        fetchFilterOptionsMock.mockResolvedValue([{ value: 12, label: 'Customer portal' }]);
         const cell = document.createElement('td');
         cell.classList.add('table_data_cell');
         cell.dataset.rowIndex = '0';
@@ -141,15 +141,16 @@ describe('cell editor maintenance retry', () => {
             },
             'tickets'
         );
-        const option = cell.querySelector('[data-testid="inline-fk-option"]');
+        await vi.waitFor(() => expect(cell.querySelector('.msd-option[data-option-value="12"]')).not.toBeNull());
+        const option = cell.querySelector('.msd-option[data-option-value="12"]');
         option.click();
 
         await vi.waitFor(() => expect(cell.dataset.inlineSaveState).toBe('retry'));
         expect(cell.querySelector('[data-testid="inline-fk-dropdown"]')).not.toBeNull();
-        expect(cell.querySelector('[data-testid="inline-fk-search-input"]').value).toBe('Customer portal');
+        expect(cell.querySelector('.msd-dropdown-input').value).toBe('Customer portal');
         expect(data[0].service_id).toBe(4);
 
-        option.click();
+        cell.querySelector('.msd-option[data-option-value="12"]').click();
         await vi.waitFor(() => expect(data[0].service_id).toBe(12));
         expect(cell.querySelector('[data-testid="inline-fk-dropdown"]')).toBeNull();
         expect(endpointRouterMock).toHaveBeenCalledTimes(2);
@@ -161,7 +162,7 @@ describe('cell editor maintenance retry', () => {
         endpointRouterMock.mockImplementationOnce(() => new Promise((resolve, reject) => {
             rejectPendingSave = reject;
         }));
-        fetchReferencedDataMock.mockResolvedValue([{ id: 12, display: 'Customer portal' }]);
+        fetchFilterOptionsMock.mockResolvedValue([{ value: 12, label: 'Customer portal' }]);
         const cell = document.createElement('td');
         cell.classList.add('table_data_cell');
         cell.dataset.rowIndex = '0';
@@ -182,11 +183,12 @@ describe('cell editor maintenance retry', () => {
         );
         const dropdown = cell.querySelector('[data-testid="inline-fk-dropdown"]');
         const searchInput = cell.querySelector('[data-testid="inline-fk-search-input"]');
-        cell.querySelector('[data-testid="inline-fk-option"]').click();
+        await vi.waitFor(() => expect(cell.querySelector('.msd-option[data-option-value="12"]')).not.toBeNull());
+        cell.querySelector('.msd-option[data-option-value="12"]').click();
         searchInput.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
 
         expect(cell.querySelector('[data-testid="inline-fk-dropdown"]')).toBe(dropdown);
-        expect(searchInput.value).toBe('Customer portal');
+        expect(cell.querySelector('.msd-dropdown-input').value).toBe('Customer portal');
         rejectPendingSave(Object.assign(new Error('maintenance'), {
             status: 503,
             isServiceUnavailable: true,
@@ -194,7 +196,7 @@ describe('cell editor maintenance retry', () => {
 
         await vi.waitFor(() => expect(cell.dataset.inlineSaveState).toBe('retry'));
         expect(cell.querySelector('[data-testid="inline-fk-dropdown"]')).toBe(dropdown);
-        expect(searchInput.value).toBe('Customer portal');
+        expect(cell.querySelector('.msd-dropdown-input').value).toBe('Customer portal');
         expect(data[0].service_id).toBe(4);
     });
 });

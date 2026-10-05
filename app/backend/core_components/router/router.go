@@ -285,7 +285,6 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/get-add-row-metadata", dtt_1_row_create.GetAddRowMetadataHandlerWrapper, "dtt_1_row_create.GetAddRowMetadataHandlerWrapper", http.MethodGet)
 	functionRegisterHandler("/api/get-columns", dtt_1_row_create.GetAddRowColumnsHandlerWrapper, "dtt_1_row_create.GetAddRowColumnsHandlerWrapper", http.MethodGet)
 	functionRegisterHandler("/api/get-many-to-many", dtt_1_row_create.GetManyToManyTablesHandlerWrapper, "dtt_1_row_create.GetManyToManyTablesHandlerWrapper", http.MethodGet)
-	functionRegisterHandler("/api/referenced-data", dtt_1_row_create.GetReferencedTableData, "dtt_1_row_create.GetReferencedTableData", http.MethodGet)
 
 	// dtt_1_row_delete
 	functionRegisterHandler("/api/delete-rows", dtt_1_row_delete.DeleteRowsHandlerWrapper, "dtt_1_row_delete.DeleteRowsHandlerWrapper", http.MethodPost)
