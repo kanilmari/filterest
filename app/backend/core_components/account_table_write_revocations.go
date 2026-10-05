@@ -404,7 +404,7 @@ SELECT EXISTS (
 
 // accountTableWriteRestoreSQL writes, for each grant and default privilege this step would remove, the psql line
 // that gives it back exactly, grant option included. The application never runs it: the pre-update dry run saves its
-// output as each site's recovery script (data/migration_inventory/2026-10-04/wl124-stage2/), run with psql, and the
+// output as each site's recovery script, kept outside the repository and run with psql, and the
 // round-trip test runs such a script with psql after the step and finds every entry back. Role names appear only as
 // psql variables, so a saved script names no role: :"basic_role" and the like for the configured roles ($5 and $6
 // are the administrator and main role names, used only to label grantors and default-privilege owners), and
