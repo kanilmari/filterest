@@ -135,6 +135,7 @@
     "20260929000005_seed_missing_media_check_language_keys.sql",
     "20260929000006_record_database_release_9_9_2.sql",
     "20261005000001_add_row_actor_support.sql",
+    "20261005000002_key_row_actor_marks_by_table_uid.sql",
     "20261005000099_record_database_release_9_10_0.sql"
   ],
   "allowed_schema_tables": [
@@ -287,7 +288,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 129,
+    "public.system_schema_migrations": 130,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -299,10 +300,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "cb21062226be1eadfb8ec0b9a3c94b9c26a728c7c6627f25bf9edd1a82f8b107"
+      "sha256": "750018bbe768082d0aa3a16fa0bdff808b83c171fadfa2f4e639fc4fdab688df"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "b17570a4ff81520a35c43c016722a2ecfd4da13fc746c92c81cacbfb3bee8964"
+      "sha256": "88be9aac22ce440b076633cadaa320d6af963ee807adba86b9837e3baaafe87c"
     }
   },
   "source_files": {
@@ -319,7 +320,7 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "c157560a34eeba34463d77c654d58d38add39189b85306e93a4b250ec9cb0054"
+      "sha256": "42d30c23756d5031caec8e62ae2fc6aaec20e2e6df85714b95d456679ee41c01"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "7fb067fed8cdbf3a0a175b0a85211f55dbaded5ace120ea2079eceb373b61761"
@@ -761,6 +762,9 @@
     },
     "filterest/app/server_tools/migrations/20261005000001_add_row_actor_support.sql": {
       "sha256": "ac00d47d149e76bbe0c30451dad6649779ce67b22ecfc6ffc801867095545de8"
+    },
+    "filterest/app/server_tools/migrations/20261005000002_key_row_actor_marks_by_table_uid.sql": {
+      "sha256": "d391ca7427dd094a76da8cb2559498aa36875edfd75b03d06f1edd1d1f5ea33c"
     },
     "filterest/app/server_tools/migrations/20261005000099_record_database_release_9_10_0.sql": {
       "sha256": "b812cd1e192296d2fae2252112fc97889ecb76aa3177b56d2b89b8a2dd227324"

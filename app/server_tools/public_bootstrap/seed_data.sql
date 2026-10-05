@@ -5921,11 +5921,17 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
         RAISE EXCEPTION 'bootstrap import is incomplete; missing completion markers: %', missing_markers;
+    END IF;
+    SELECT string_agg(finding, '; ') INTO findings FROM (
+        SELECT 'public.app_check_row_actor_marks(): ' || result FROM public.app_check_row_actor_marks() AS result
+    ) AS checks (finding);
+    IF findings IS NOT NULL THEN
+        RAISE EXCEPTION 'bootstrap import failed its final checks: %', findings;
     END IF;
     INSERT INTO public.system_schema_migrations (filename) VALUES
       ('20260307_create_system_comments.sql'),
@@ -6056,6 +6062,7 @@ BEGIN
       ('20260929000005_seed_missing_media_check_language_keys.sql'),
       ('20260929000006_record_database_release_9_9_2.sql'),
       ('20261005000001_add_row_actor_support.sql'),
+      ('20261005000002_key_row_actor_marks_by_table_uid.sql'),
       ('20261005000099_record_database_release_9_10_0.sql')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

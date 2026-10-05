@@ -2,7 +2,8 @@
 
 Connects 20261005000001 (actor marks, repair record, the functions that add, constrain,
 register, read and check creator and owner columns, and the history guards' exception)
-with the public bootstrap generator's acceptance block and its class and header rules.
+and 20261005000002 (the marks keyed by the registry table_uid instead of its id) with
+the public bootstrap generator's acceptance block and its class and header rules.
 Protects the promises WL58 stage 2 rests on: only the owner role writes the two internal
 tables, whatever rights other roles hold; only that role sees the repair record; a
 registry deletion still takes its marks; the owner setting cannot leave the mark; a
@@ -25,6 +26,7 @@ import pytest
 APP = Path(__file__).resolve().parents[2]
 MIGRATIONS = APP / "server_tools/migrations"
 SUPPORT = MIGRATIONS / "20261005000001_add_row_actor_support.sql"
+CONVERSION = MIGRATIONS / "20261005000002_key_row_actor_marks_by_table_uid.sql"
 RELEASE_RECORD = MIGRATIONS / "20261005000099_record_database_release_9_10_0.sql"
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 GENERATOR = BOOTSTRAP / "generate_bootstrap.py"
@@ -48,13 +50,36 @@ def test_the_support_file_is_schema_only_and_declares_its_release_and_marker():
     assert (APP / "VERSION_DB").read_text(encoding="utf-8").strip() == "9.10.0"
 
 
+def test_the_conversion_is_schema_only_and_leaves_no_registry_id_form_behind():
+    sql = CONVERSION.read_text(encoding="utf-8")
+    assert "-- VERSION_DB: 9.10.0" in sql
+    assert "-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql" in sql
+    assert "-- COMPLETION_MARKER: wl58_row_actor_marks_by_table_uid" in sql
+    assert "-- FINAL_CHECK: public.app_check_row_actor_marks()" in sql
+    assert "DROP FUNCTION IF EXISTS public.app_register_row_actor_columns(bigint, text);" in sql
+    assert "app_register_row_actor_columns(registry_table_uid integer, owner_column text)" in sql
+    # Outside the conversion block, nothing joins or keys the marks by the registry id.
+    after_block = sql[sql.index("END $convert$;"):]
+    assert "table_id" not in after_block.replace("attname = 'table_id'", "").replace("(table_id)", "")
+    assert not re.search(r"registry\.id\b|\bOLD\.id\b|WHERE id = ", after_block)
+    assert re.findall(r"INSERT INTO public\.(\w+)", sql) == [
+        "system_column_details", "system_row_actor_columns", "system_row_actor_columns",
+        "system_foreign_key_relations_1_m", "system_data_repair_records",
+    ]
+    assert sql.rstrip().endswith("AND action = 'completed'\n);".rstrip())
+    assert not re.search(r"^\s*BEGIN\s*;", sql, re.M)
+
+
 def test_the_bootstrap_runs_the_support_and_leaves_the_release_record_to_its_acceptance_block():
     source = GENERATOR.read_text(encoding="utf-8")
-    assert '"20261005000001_add_row_actor_support.sql",\n)' in source
+    assert ('"20261005000001_add_row_actor_support.sql",\n'
+            '    "20261005000002_key_row_actor_marks_by_table_uid.sql",\n)') in source
     assert '"20261005000099_record_database_release_9_10_0.sql",\n)' in source
     seed = (BOOTSTRAP / "seed_data.sql").read_text(encoding="utf-8")
     block = seed[seed.index("DO $filterest_acceptance$"):]
-    assert "ARRAY['wl58_row_actor_support']::text[]" in block
+    assert "ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid']::text[]" in block
+    assert ("SELECT 'public.app_check_row_actor_marks(): ' || result "
+            "FROM public.app_check_row_actor_marks() AS result") in block
     assert block.index("missing completion markers") < block.index("INSERT INTO public.system_schema_migrations")
     assert block.index("INSERT INTO public.system_schema_migrations") < block.index("INSERT INTO public.system_db_version")
     assert block.rstrip().endswith("$filterest_acceptance$;")
@@ -120,12 +145,20 @@ def test_the_imported_bootstrap_is_accepted_whole(installed):
     assert value(installed, "SELECT version FROM system_db_version") == "9.10.0"
     ledger = int(value(installed, "SELECT count(*) FROM system_schema_migrations"))
     assert ledger == len(list(MIGRATIONS.glob("*.sql")))
-    assert value(installed, "SELECT migration || ':' || action FROM system_data_repair_records") == \
-        "wl58_row_actor_support:completed"
+    assert value(installed, "SELECT string_agg(migration || ':' || action, ' ' ORDER BY id) "
+                            "FROM system_data_repair_records") == \
+        "wl58_row_actor_support:completed wl58_row_actor_marks_by_table_uid:completed"
     assert value(installed, "SELECT count(*) FROM app_check_row_actor_marks()") == "0"
-    # Running the file again on an installed database changes nothing.
-    installed(SUPPORT.read_text(encoding="utf-8"))
-    assert value(installed, "SELECT count(*) FROM system_data_repair_records") == "1"
+    # A new installation has the marks keyed by table_uid only.
+    assert value(installed, "SELECT string_agg(attname, ',' ORDER BY attnum) FROM pg_attribute WHERE attrelid = "
+                            "'public.system_row_actor_columns'::regclass AND attnum > 0 AND NOT attisdropped") == \
+        "actor_role,column_name,marked_at,table_uid"
+    assert value(installed, "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = "
+                            "'public.system_row_actor_columns'::regclass AND contype = 'f'") == \
+        "FOREIGN KEY (table_uid) REFERENCES system_db_tables(table_uid) ON DELETE CASCADE"
+    # Running the conversion again on an installed database changes nothing.
+    installed(CONVERSION.read_text(encoding="utf-8"))
+    assert value(installed, "SELECT count(*) FROM system_data_repair_records") == "2"
 
 
 def test_a_missing_marker_refuses_the_import_and_writes_neither_ledger_nor_version(cluster):
@@ -174,8 +207,8 @@ def roles(installed):
         GRANT SELECT, DELETE ON public.system_db_tables TO outsider;
         GRANT SELECT ON public.system_users, public.system_db_tables TO site_owner, owner_member;
         INSERT INTO public.system_db_tables (table_name, schema_name, table_uid) VALUES ('roles_demo', 'public', 99101);
-        INSERT INTO public.system_row_actor_columns (table_id, actor_role, column_name)
-        SELECT id, role, column_name FROM public.system_db_tables,
+        INSERT INTO public.system_row_actor_columns (table_uid, actor_role, column_name)
+        SELECT table_uid, role, column_name FROM public.system_db_tables,
                (VALUES ('creator', 'created_by'), ('owner', 'owner_id')) AS marks (role, column_name)
          WHERE table_name = 'roles_demo';
     """)
@@ -186,8 +219,7 @@ def roles(installed):
 def test_the_owner_role_its_member_and_a_superuser_write_the_marks(roles, role):
     roles(f"""
         SET ROLE {role};
-        UPDATE public.system_row_actor_columns SET marked_at = now()
-         WHERE table_id = (SELECT id FROM public.system_db_tables WHERE table_name = 'roles_demo');
+        UPDATE public.system_row_actor_columns SET marked_at = now() WHERE table_uid = 99101;
         INSERT INTO public.system_data_repair_records (migration, action) VALUES ('test', 'by_{role}');
     """)
     assert value(roles, f"SELECT count(*) FROM system_data_repair_records WHERE action = 'by_{role}'") == "1"
@@ -195,8 +227,8 @@ def test_the_owner_role_its_member_and_a_superuser_write_the_marks(roles, role):
 
 def test_an_outsider_with_every_right_is_refused_by_the_guard(roles):
     for statement in (
-        "INSERT INTO public.system_row_actor_columns (table_id, actor_role, column_name) "
-        "SELECT id, 'owner', 'x' FROM public.system_db_tables WHERE table_name = 'system_about'",
+        "INSERT INTO public.system_row_actor_columns (table_uid, actor_role, column_name) "
+        "SELECT table_uid, 'owner', 'x' FROM public.system_db_tables WHERE table_name = 'system_about'",
         "UPDATE public.system_row_actor_columns SET column_name = 'user_id'",
         "DELETE FROM public.system_row_actor_columns",
         "TRUNCATE public.system_row_actor_columns",
@@ -212,12 +244,13 @@ def test_the_repair_record_is_invisible_to_an_outsider_and_untouchable(roles):
     # Row security filters before the trigger, so these hit no row rather than fail.
     roles("SET ROLE outsider; UPDATE public.system_data_repair_records SET action = 'x'; "
           "DELETE FROM public.system_data_repair_records")
-    assert value(roles, "SELECT count(*) FROM system_data_repair_records") == "1"
-    assert value(roles, "SET ROLE owner_member; SELECT count(*) FROM public.system_data_repair_records") == "1"
+    # The two completion markers of 000001 and 000002 stay.
+    assert value(roles, "SELECT count(*) FROM system_data_repair_records") == "2"
+    assert value(roles, "SET ROLE owner_member; SELECT count(*) FROM public.system_data_repair_records") == "2"
     # A role that bypasses row security sees every row: why the start-up refuses such a runtime role.
     roles("CREATE ROLE bypassing BYPASSRLS NOLOGIN; GRANT USAGE ON SCHEMA public TO bypassing; "
           "GRANT SELECT ON public.system_data_repair_records TO bypassing")
-    assert value(roles, "SET ROLE bypassing; SELECT count(*) FROM public.system_data_repair_records") == "1"
+    assert value(roles, "SET ROLE bypassing; SELECT count(*) FROM public.system_data_repair_records") == "2"
 
 
 def test_a_registry_deletion_takes_its_marks_though_the_registry_has_another_owner(roles):
@@ -245,7 +278,7 @@ def create_marked_dataset(run, name, uid):
         INSERT INTO public.system_db_tables (table_name, schema_name, table_uid) VALUES ('{name}', 'public', {uid});
         SELECT app_ensure_row_actor_columns('public.{name}', 'owner_id');
         SELECT app_ensure_row_actor_constraints('public.{name}', 'owner_id');
-        SELECT app_register_row_actor_columns((SELECT id FROM system_db_tables WHERE table_name = '{name}'), 'owner_id');
+        SELECT app_register_row_actor_columns({uid}, 'owner_id');
     """)
 
 
@@ -266,8 +299,7 @@ def test_registration_marks_hides_and_relates_the_columns_and_reruns_change_noth
         "created_by:false owner_id:false"
     for call in ("app_ensure_row_actor_columns('public.notes_demo', 'owner_id')",
                  "app_ensure_row_actor_constraints('public.notes_demo', 'owner_id')",
-                 "app_register_row_actor_columns((SELECT id FROM system_db_tables WHERE table_name = 'notes_demo'), "
-                 "'owner_id')"):
+                 "app_register_row_actor_columns(99201, 'owner_id')"):
         assert value(installed, f"SELECT {call}") == "[]"
     assert value(installed, "SELECT count(*) FROM app_check_row_actor_marks()") == "0"
 
@@ -280,7 +312,7 @@ def test_an_existing_metadata_row_keeps_the_administrators_role(installed):
         VALUES (99301, 'created_by', 'integer', 2, 'details', TRUE);
         SELECT app_ensure_row_actor_columns('public.kept_demo', 'owner_id');
         SELECT app_ensure_row_actor_constraints('public.kept_demo', 'owner_id');
-        SELECT app_register_row_actor_columns((SELECT id FROM system_db_tables WHERE table_name = 'kept_demo'), 'owner_id');
+        SELECT app_register_row_actor_columns(99301, 'owner_id');
     """)
     assert value(installed, "SELECT card_element || ':' || insertable || ':' || editable_in_ui FROM system_column_details "
                             "WHERE table_uid = 99301 AND column_name = 'created_by'") == "details:false:false"
@@ -367,6 +399,7 @@ def test_the_final_check_names_each_contradiction(installed):
         ALTER TABLE public.system_db_tables DISABLE TRIGGER protect_row_owner_setting;
         UPDATE public.system_db_tables SET row_policy_owner_column = 'created_by' WHERE table_name = 'checked_demo';
         ALTER TABLE public.system_data_repair_records DISABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.system_row_actor_columns DROP CONSTRAINT system_row_actor_columns_table_uid_fkey;
     """)
     findings = value(installed, "SELECT string_agg(f, ' | ') FROM app_check_row_actor_marks() AS f")
     for expected in ("checked_demo: the creator guard trigger is missing or not firing on ordinary writes",
@@ -374,8 +407,94 @@ def test_the_final_check_names_each_contradiction(installed):
                      "checked_demo: registry owner setting created_by differs from the owner mark owner_id",
                      "public.system_db_tables: guard trigger protect_row_owner_setting is missing, not firing on "
                      "ordinary writes or not running public.protect_row_owner_setting()",
-                     "public.system_data_repair_records: row security is off"):
+                     "public.system_data_repair_records: row security is off",
+                     "public.system_row_actor_columns: no validated ON DELETE CASCADE foreign key from table_uid to "
+                     "system_db_tables(table_uid)"):
         assert expected in findings, findings
+
+
+def schema_before_and_from_the_conversion():
+    schema = (BOOTSTRAP / "schema.sql").read_text(encoding="utf-8")
+    split = schema.index("-- 20261005000002_key_row_actor_marks_by_table_uid.sql")
+    return schema[:split], schema[split:]
+
+
+def test_the_conversion_keeps_old_marks_when_registry_id_and_table_uid_cross(cluster):
+    """On a long-lived database id and table_uid differ, and one row's uid is another's id."""
+    before, conversion = schema_before_and_from_the_conversion()
+    cluster("CREATE DATABASE upgraded")
+    cluster(before, "upgraded")
+    # Two real marked datasets in 000001's shape: columns, keys, guards, the setting, marks by registry id.
+    cluster("""
+        CREATE TABLE public.cross_a (id serial PRIMARY KEY, title text);
+        CREATE TABLE public.cross_b (id serial PRIMARY KEY, title text, user_id bigint);
+        INSERT INTO public.system_db_tables (id, table_name, schema_name, table_uid, row_policy_owner_column)
+        VALUES (99701, 'cross_a', 'public', 99702, 'owner_id'), (99702, 'cross_b', 'public', 99703, 'user_id');
+        SELECT app_ensure_row_actor_columns('public.cross_a', 'owner_id');
+        SELECT app_ensure_row_actor_constraints('public.cross_a', 'owner_id');
+        SELECT app_ensure_row_actor_columns('public.cross_b', 'user_id');
+        SELECT app_ensure_row_actor_constraints('public.cross_b', 'user_id');
+        INSERT INTO public.system_row_actor_columns (table_id, actor_role, column_name)
+        VALUES (99701, 'creator', 'created_by'), (99701, 'owner', 'owner_id'),
+               (99702, 'creator', 'created_by'), (99702, 'owner', 'user_id');
+    """, "upgraded")
+    cluster(conversion, "upgraded")
+    assert cluster("SELECT count(*) FROM app_check_row_actor_marks()", "upgraded").stdout.strip() == "0"
+    marks = ("SELECT string_agg(registry.table_name || ':' || mark.actor_role || '=' || mark.column_name, ' ' "
+             "ORDER BY registry.table_name, mark.actor_role) FROM system_row_actor_columns AS mark "
+             "JOIN system_db_tables AS registry ON registry.table_uid = mark.table_uid")
+    expected = "cross_a:creator=created_by cross_a:owner=owner_id cross_b:creator=created_by cross_b:owner=user_id"
+    assert cluster(marks, "upgraded").stdout.strip() == expected
+    assert cluster("SELECT string_agg(table_uid::text, ',' ORDER BY table_uid) FROM system_row_actor_columns "
+                   "WHERE actor_role = 'owner'", "upgraded").stdout.strip() == "99702,99703"
+    # The registry-id form of registration is gone; the table_uid form remains.
+    assert cluster("SELECT string_agg(pg_get_function_identity_arguments(oid), ' | ') FROM pg_proc "
+                   "WHERE proname = 'app_register_row_actor_columns'", "upgraded").stdout.strip() == \
+        "registry_table_uid integer, owner_column text"
+    # Running the conversion again changes nothing, and deleting a registry row still takes its marks.
+    cluster(CONVERSION.read_text(encoding="utf-8"), "upgraded")
+    assert cluster(marks, "upgraded").stdout.strip() == expected
+    cluster("DELETE FROM public.system_db_tables WHERE table_name = 'cross_a'", "upgraded")
+    assert cluster("SELECT count(*) FROM system_row_actor_columns", "upgraded").stdout.strip() == "2"
+
+
+def test_a_mark_whose_registry_row_has_no_table_uid_stops_the_conversion_and_changes_nothing(cluster):
+    before, conversion = schema_before_and_from_the_conversion()
+    cluster("CREATE DATABASE stopped")
+    cluster(before, "stopped")
+    cluster("""
+        INSERT INTO public.system_db_tables (id, table_name, schema_name, table_uid) VALUES (99801, 'no_uid', 'public', NULL);
+        INSERT INTO public.system_row_actor_columns (table_id, actor_role, column_name)
+        VALUES (99801, 'creator', 'created_by'), (99801, 'owner', 'owner_id');
+    """, "stopped")
+    result = cluster(conversion, "stopped", check=False)
+    assert result.returncode != 0
+    assert "an actor mark points to a registry row without table_uid" in result.stderr
+    assert cluster("SELECT string_agg(attname, ',' ORDER BY attnum) FROM pg_attribute WHERE attrelid = "
+                   "'public.system_row_actor_columns'::regclass AND attnum > 0 AND NOT attisdropped",
+                   "stopped").stdout.strip() == "table_id,actor_role,column_name,marked_at"
+
+
+def test_a_missing_conversion_marker_refuses_the_import(cluster):
+    cluster("CREATE DATABASE unconverted")
+    schema = (BOOTSTRAP / "schema.sql").read_text(encoding="utf-8")
+    cluster(schema.replace("SELECT 'wl58_row_actor_marks_by_table_uid', 'completed',",
+                           "SELECT 'wl58_row_actor_marks_by_table_uid_lost', 'completed',"), "unconverted")
+    result = cluster((BOOTSTRAP / "seed_data.sql").read_text(encoding="utf-8"), "unconverted", check=False)
+    assert result.returncode != 0
+    assert "missing completion markers: wl58_row_actor_marks_by_table_uid" in result.stderr
+    assert cluster("SELECT count(*) FROM system_db_version", "unconverted").stdout.strip() == "0"
+
+
+def test_a_final_check_finding_refuses_the_import(cluster):
+    cluster("CREATE DATABASE unsound")
+    cluster((BOOTSTRAP / "schema.sql").read_text(encoding="utf-8"), "unsound")
+    cluster("ALTER TABLE public.system_data_repair_records DISABLE ROW LEVEL SECURITY", "unsound")
+    result = cluster((BOOTSTRAP / "seed_data.sql").read_text(encoding="utf-8"), "unsound", check=False)
+    assert result.returncode != 0
+    assert "public.system_data_repair_records: row security is off" in result.stderr
+    assert cluster("SELECT count(*) FROM system_schema_migrations", "unsound").stdout.strip() == "0"
+    assert cluster("SELECT count(*) FROM system_db_version", "unsound").stdout.strip() == "0"
 
 
 def test_a_guard_that_fires_only_in_replica_mode_does_not_count(installed):
@@ -458,33 +577,39 @@ def published_bytes(root):
             for name in ("schema.sql", "seed_data.sql", "manifest.json")}
 
 
+LAST_REPAIR_ENTRY = '"20261005000002_key_row_actor_marks_by_table_uid.sql",\n)'
+
+
+def add_repair_migration(generator, name):
+    """Lists one more schema-phase file after the last repair entry of the generator copy."""
+    source = generator.read_text()
+    assert LAST_REPAIR_ENTRY in source
+    generator.write_text(source.replace(LAST_REPAIR_ENTRY, LAST_REPAIR_ENTRY[:-2] + f'\n    "{name}",\n)'))
+
+
 def test_a_new_migration_outside_every_class_stops_the_generation(generator_copy):
     before = published_bytes(generator_copy)
-    (generator_copy / "app/server_tools/migrations/20261005000002_unlisted.sql").write_text("SELECT 1;\n")
+    (generator_copy / "app/server_tools/migrations/20261005000008_unlisted.sql").write_text("SELECT 1;\n")
     result = generate(generator_copy)
     assert result.returncode != 0
-    assert "Migration is in no bootstrap class: 20261005000002_unlisted.sql" in result.stderr
+    assert "Migration is in no bootstrap class: 20261005000008_unlisted.sql" in result.stderr
     assert published_bytes(generator_copy) == before
 
 
 def test_a_schema_phase_migration_without_a_completion_marker_stops_the_generation(generator_copy):
     generator = generator_copy / "app/server_tools/public_bootstrap/generate_bootstrap.py"
-    (generator_copy / "app/server_tools/migrations/20261005000002_unmarked.sql").write_text("SELECT 1;\n")
-    generator.write_text(generator.read_text().replace(
-        '"20261005000001_add_row_actor_support.sql",\n)',
-        '"20261005000001_add_row_actor_support.sql",\n    "20261005000002_unmarked.sql",\n)'))
+    (generator_copy / "app/server_tools/migrations/20261005000008_unmarked.sql").write_text("SELECT 1;\n")
+    add_repair_migration(generator, "20261005000008_unmarked.sql")
     result = generate(generator_copy)
     assert result.returncode != 0
-    assert "declares no completion marker: 20261005000002_unmarked.sql" in result.stderr
+    assert "declares no completion marker: 20261005000008_unmarked.sql" in result.stderr
 
 
 def test_a_final_check_this_bootstrap_does_not_create_stops_the_generation(generator_copy):
     generator = generator_copy / "app/server_tools/public_bootstrap/generate_bootstrap.py"
-    (generator_copy / "app/server_tools/migrations/20261005000002_checked.sql").write_text(
+    (generator_copy / "app/server_tools/migrations/20261005000008_checked.sql").write_text(
         "-- COMPLETION_MARKER: test_checked\n-- FINAL_CHECK: public.app_check_nothing()\nSELECT 1;\n")
-    generator.write_text(generator.read_text().replace(
-        '"20261005000001_add_row_actor_support.sql",\n)',
-        '"20261005000001_add_row_actor_support.sql",\n    "20261005000002_checked.sql",\n)'))
+    add_repair_migration(generator, "20261005000008_checked.sql")
     result = generate(generator_copy)
     assert result.returncode != 0
     assert "Final check public.app_check_nothing() is not created by this bootstrap" in result.stderr
@@ -492,13 +617,12 @@ def test_a_final_check_this_bootstrap_does_not_create_stops_the_generation(gener
 
 def test_a_marked_and_checked_migration_joins_the_acceptance_block(generator_copy):
     generator = generator_copy / "app/server_tools/public_bootstrap/generate_bootstrap.py"
-    (generator_copy / "app/server_tools/migrations/20261005000002_checked.sql").write_text(
+    (generator_copy / "app/server_tools/migrations/20261005000008_checked.sql").write_text(
         "-- COMPLETION_MARKER: test_checked\n-- FINAL_CHECK: public.app_check_row_actor_marks()\nSELECT 1;\n")
-    generator.write_text(generator.read_text().replace(
-        '"20261005000001_add_row_actor_support.sql",\n)',
-        '"20261005000001_add_row_actor_support.sql",\n    "20261005000002_checked.sql",\n)'))
+    add_repair_migration(generator, "20261005000008_checked.sql")
     result = generate(generator_copy)
     assert result.returncode == 0, result.stderr
     seed = (generator_copy / "app/server_tools/public_bootstrap/seed_data.sql").read_text()
-    assert "ARRAY['wl58_row_actor_support', 'test_checked']::text[]" in seed
-    assert "SELECT 'public.app_check_row_actor_marks(): ' || result FROM public.app_check_row_actor_marks() AS result" in seed
+    assert "ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'test_checked']::text[]" in seed
+    assert seed.count("SELECT 'public.app_check_row_actor_marks(): ' || result "
+                      "FROM public.app_check_row_actor_marks() AS result") == 1
