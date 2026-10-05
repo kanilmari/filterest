@@ -54,7 +54,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
-	if _, err := normalizeRowGroupFilterSlug(request.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
+	if _, err := parseRowGroupSelection(request.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
 		return
 	}

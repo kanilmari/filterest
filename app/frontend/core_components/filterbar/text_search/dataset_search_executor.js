@@ -19,7 +19,7 @@ import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import {
-    clearRowGroupFacets,
+    renderRowGroupFacets,
 } from "../filter_list/row_group_facet_printer.js";
 import { initSearchCache } from "./dataset_search_executor_helpers.js";
 import { claimFirstListedRow, getArticleStateKey } from "../../table_views/card_view/first_listed_row.js";
@@ -392,6 +392,7 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
     }
     if (!isCurrent() || !result) return false;
 
+    renderRowGroupFacets(tableName, result.row_group_facets);
     const rows = Array.isArray(result?.data) ? result.data : [];
     if (Array.isArray(result?.columns) && result.columns.length) cache.columns = result.columns;
     cache.types = { ...(cache.types || {}), ...(result?.types || {}) };
@@ -519,7 +520,6 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     if (adapter) return adapter.refresh({ search: userQuery.trim() });
     const query = userQuery.trim();
     if (!query) return;
-    clearRowGroupFacets(tableName);
     const context = getSearchFilterContext(tableName);
     const executionSignature = `${context.signature}\n${JSON.stringify(opts)}`;
     const runningCache = _ongoingSearchResults[tableName];

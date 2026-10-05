@@ -73,7 +73,7 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid search filters")
 		return
 	}
-	if _, err := normalizeRowGroupFilterSlug(r.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
+	if _, err := parseRowGroupSelection(r.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -135,6 +135,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	}
 	authorization, err := resolveIntelligentSearchAuthorization(
 		currentDb,
+		readQuerier,
 		tableName,
 		userRole,
 		userID,
@@ -327,6 +328,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	}
 	authorization, err := resolveIntelligentSearchAuthorization(
 		currentDb,
+		readQuerier,
 		tableName,
 		userRole,
 		userID,

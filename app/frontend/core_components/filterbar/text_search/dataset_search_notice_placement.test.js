@@ -68,6 +68,7 @@ vi.mock("./dataset_search_state_reader.js", () => ({
 
 vi.mock("../filter_list/row_group_facet_printer.js", () => ({
     clearRowGroupFacets: clearRowGroupFacetsMock,
+    renderRowGroupFacets: vi.fn(),
     ROW_GROUP_FILTER_KEY: "row_group",
 }));
 

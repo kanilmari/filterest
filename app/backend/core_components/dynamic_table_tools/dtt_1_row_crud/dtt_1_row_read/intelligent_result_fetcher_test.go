@@ -1,3 +1,7 @@
+// intelligent_result_fetcher_test.go
+// Verifies intelligent-search candidates, ranking and parameterized authorization.
+// Bridges database query doubles with the full-text, semantic and hydration fetchers.
+// Exists to keep read-policy and category restrictions ahead of result limits.
 package dtt_1_row_read
 
 import (
@@ -198,8 +202,8 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 			FlagColumns: []string{"published"},
 			OwnerColumn: "user_id",
 		},
-		tableUID:     104,
-		rowGroupSlug: "security",
+		tableUID:          104,
+		rowGroupSelection: []string{"security"},
 	}
 	if _, err := fetchFullTextRows(db, "travel_info", "Firefox", authorization); err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
@@ -208,16 +212,16 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 	for _, fragment := range []string{
 		`("src"."published" = TRUE OR "src"."user_id" = $2)`,
 		`public.resolve_effective_row_access($3, "src"."id", $4, 'read'`,
-		`search_row_group_membership.table_uid = $5`,
-		`search_row_group_membership.row_id = "src"."id"`,
-		`search_row_group.slug = $6`,
-		`search_row_group.enabled = TRUE`,
+		`row_group_membership.table_uid = $5`,
+		`row_group_membership.row_id = "src"."id"`,
+		`row_group.slug = ANY($6::text[])`,
+		`row_group.enabled = TRUE`,
 	} {
 		if !strings.Contains(state.finalQuery, fragment) {
 			t.Fatalf("candidate query lacks %q: %s", fragment, state.finalQuery)
 		}
 	}
-	if strings.Index(state.finalQuery, "search_row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
+	if strings.Index(state.finalQuery, "row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
 		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
 	}
 	if len(state.finalArgs) != 6 ||
@@ -226,7 +230,7 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 		state.finalArgs[2].Value != "travel_info" ||
 		fmt.Sprint(state.finalArgs[3].Value) != "8" ||
 		fmt.Sprint(state.finalArgs[4].Value) != "104" ||
-		state.finalArgs[5].Value != "security" {
+		state.finalArgs[5].Value != `{"security"}` {
 		t.Fatalf("unexpected authorized candidate args: %#v", state.finalArgs)
 	}
 }
@@ -246,8 +250,8 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 			Name:        rowPolicyAllFlagsTrueUnlessOwner,
 			FlagColumns: []string{"published"},
 		},
-		tableUID:     104,
-		rowGroupSlug: "security",
+		tableUID:          104,
+		rowGroupSelection: []string{"security"},
 	}
 	if _, err := fetchSimilarRows(db, "travel_info", "", pgvector.NewVector([]float32{0.1}), authorization, semanticSources{General: true}, semanticResultLimit); err != nil {
 		t.Fatalf("fetchSimilarRows returned error: %v", err)
@@ -256,18 +260,18 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 	for _, fragment := range []string{
 		`"travel_info"."published" = TRUE`,
 		`public.resolve_effective_row_access($2, "travel_info"."id", $3, 'read'`,
-		`search_row_group_membership.table_uid = $4`,
-		`search_row_group_membership.row_id = "travel_info"."id"`,
-		`search_row_group.slug = $5`,
+		`row_group_membership.table_uid = $4`,
+		`row_group_membership.row_id = "travel_info"."id"`,
+		`row_group.slug = ANY($5::text[])`,
 	} {
 		if !strings.Contains(state.finalQuery, fragment) {
 			t.Fatalf("vector candidate query lacks %q: %s", fragment, state.finalQuery)
 		}
 	}
-	if strings.Index(state.finalQuery, "search_row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
+	if strings.Index(state.finalQuery, "row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
 		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
 	}
-	if len(state.finalArgs) != 5 || state.finalArgs[1].Value != "travel_info" || fmt.Sprint(state.finalArgs[2].Value) != "1" || fmt.Sprint(state.finalArgs[3].Value) != "104" || state.finalArgs[4].Value != "security" {
+	if len(state.finalArgs) != 5 || state.finalArgs[1].Value != "travel_info" || fmt.Sprint(state.finalArgs[2].Value) != "1" || fmt.Sprint(state.finalArgs[3].Value) != "104" || state.finalArgs[4].Value != `{"security"}` {
 		t.Fatalf("unexpected vector candidate args: %#v", state.finalArgs)
 	}
 }

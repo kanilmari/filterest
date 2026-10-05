@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
     appendDataToViewMock,
     clearRowGroupFacetsMock,
+    renderRowGroupFacetsMock,
     disconnectInfiniteScrollMock,
     endpointRouterMock,
     getActiveFiltersSnapshotMock,
@@ -47,7 +48,7 @@ describe("do_intelligent_search browses the dataset", () => {
         const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
         await do_intelligent_search("dev_agent_tasks", "cloud");
 
-        expect(clearRowGroupFacetsMock).toHaveBeenCalledWith("dev_agent_tasks");
+        expect(clearRowGroupFacetsMock).not.toHaveBeenCalled();
         expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledWith(
             "dev_agent_tasks",
             expect.objectContaining({ isCurrent: expect.any(Function) })
@@ -144,7 +145,7 @@ describe("do_intelligent_search browses the dataset", () => {
     });
 
     test("sends row-group metadata to the backend without filtering streamed row objects", async () => {
-        getActiveFiltersSnapshotMock.mockReturnValue({ row_group: "security" });
+        getActiveFiltersSnapshotMock.mockReturnValue({ row_group: "boat,security" });
         reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
             data: [{ header: "Authorized group result", id: 14 }], row_count: 1, columns: ["header", "id"],
         }));
@@ -155,7 +156,7 @@ describe("do_intelligent_search browses the dataset", () => {
         expect(endpointRouterMock).toHaveBeenCalledWith(
             "getIntelligentResultsStream",
             expect.objectContaining({
-                url_params: expect.stringContaining("row_group=security"),
+                url_params: expect.stringContaining("row_group=boat%2Csecurity"),
             })
         );
         expect(ongoingSearchResults.dev_agent_tasks.filters).toEqual({});
@@ -263,4 +264,13 @@ describe("do_intelligent_search browses the dataset", () => {
         expect(setResultsCountMock).toHaveBeenCalledWith("dev_agent_tasks", 251);
         expect(document.querySelector('[data-lang-key="text_search_no_results"]')).toBeNull();
     });
+    test.each([[], [{ id: 1 }]])("publishes searched listing facets even with no rows: %j", async (data) => {
+        const facets = [{ id: 1, slug: "boat", row_count: 0, selected: true }];
+        reloadDatasetRowsFromListingMock.mockResolvedValue({ ...listingAnswer({ data }), row_group_facets: facets });
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "boat");
+        expect(clearRowGroupFacetsMock).not.toHaveBeenCalled();
+        expect(renderRowGroupFacetsMock).toHaveBeenCalledExactlyOnceWith("dev_agent_tasks", facets);
+    });
+
 });

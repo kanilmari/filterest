@@ -200,9 +200,10 @@ describe("initializeInfiniteScroll", () => {
             "afterbegin",
             `<div id="grouped_orders_row_group_facets">Security 8</div>`
         );
+        const facetHost = document.getElementById("grouped_orders_row_group_facets");
         getUnifiedTableStateMock.mockReturnValue({
             offset: 20,
-            filters: { row_group: "security" },
+            filters: { row_group: "boat,security" },
             sort: { column: "created", direction: "DESC" },
         });
         fetchDatasetDataMock.mockResolvedValue({
@@ -227,9 +228,10 @@ describe("initializeInfiniteScroll", () => {
         expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
             dataset_name: "grouped_orders",
             offset: 20,
-            filters: { row_group: "security" },
+            filters: { row_group: "boat,security" },
             row_count: 31,
         }));
+        expect(document.getElementById("grouped_orders_row_group_facets")).toBe(facetHost);
         expect(document.getElementById("grouped_orders_row_group_facets")?.textContent)
             .toBe("Security 8");
 

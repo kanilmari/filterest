@@ -18,16 +18,17 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    min-height: 2.25rem;
+    min-height: 44px;
+    min-width: 44px;
     padding: 0.35rem 0.65rem 0.35rem 0.8rem;
     border: 1px solid var(--button_active_border_color);
     border-radius: 999px;
     background: color-mix(in srgb, var(--button_bg_color) 88%, transparent);
     color: var(--button_text_color);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--text_color) 12%, transparent);
     font: inherit;
     cursor: pointer;
-    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .row-group-facet-chip:hover,
@@ -43,6 +44,13 @@
 
 .row-group-facet-chip--active {
     border-color: var(--primary_color);
+    background: var(--primary_color);
+    color: var(--primary_text_color);
+}
+
+/* Keep selected text and background paired during hover in both themes. */
+.row-group-facet-chip--active:hover,
+.row-group-facet-chip--active:focus-visible {
     background: var(--primary_color);
     color: var(--primary_text_color);
 }
@@ -70,4 +78,9 @@
 .row-group-facets[aria-busy="true"] .row-group-facet-chip {
     pointer-events: none;
     opacity: 0.65;
+}
+
+.active-filter-item[data-row-group-table] .remove-active-filter {
+    min-width: 44px;
+    min-height: 44px;
 }

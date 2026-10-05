@@ -12,6 +12,7 @@ const {
     appendDataToTableMock,
     appendDataToViewMock,
     clearRowGroupFacetsMock,
+    renderRowGroupFacetsMock,
     disconnectInfiniteScrollMock,
     endpointRouterMock,
     getActiveFiltersSnapshotMock,
@@ -26,6 +27,7 @@ const {
     appendDataToTableMock: vi.fn(),
     appendDataToViewMock: vi.fn(),
     clearRowGroupFacetsMock: vi.fn(),
+    renderRowGroupFacetsMock: vi.fn(),
     disconnectInfiniteScrollMock: vi.fn(),
     endpointRouterMock: vi.fn(),
     getActiveFiltersSnapshotMock: vi.fn(() => ({})),
@@ -71,6 +73,7 @@ vi.mock("./dataset_search_state_reader.js", () => ({
 
 vi.mock("../filter_list/row_group_facet_printer.js", () => ({
     clearRowGroupFacets: clearRowGroupFacetsMock,
+    renderRowGroupFacets: renderRowGroupFacetsMock,
     ROW_GROUP_FILTER_KEY: "row_group",
 }));
 
@@ -88,6 +91,7 @@ export {
     appendDataToTableMock,
     appendDataToViewMock,
     clearRowGroupFacetsMock,
+    renderRowGroupFacetsMock,
     disconnectInfiniteScrollMock,
     endpointRouterMock,
     getActiveFiltersSnapshotMock,

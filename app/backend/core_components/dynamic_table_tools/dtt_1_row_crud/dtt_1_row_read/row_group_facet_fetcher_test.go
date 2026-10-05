@@ -18,30 +18,48 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lib/pq"
+
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
 
-func TestNormalizeRowGroupFilterSlug(t *testing.T) {
+func TestParseRowGroupSelection(t *testing.T) {
 	t.Parallel()
-
-	validCases := map[string]string{
-		"":                 "",
-		"  travel_safety ": "travel_safety",
-		"news-2026":        "news-2026",
-	}
-	for raw, want := range validCases {
-		got, err := normalizeRowGroupFilterSlug(raw)
-		if err != nil {
-			t.Fatalf("normalizeRowGroupFilterSlug(%q): %v", raw, err)
-		}
-		if got != want {
-			t.Fatalf("normalizeRowGroupFilterSlug(%q) = %q, want %q", raw, got, want)
+	for raw, want := range map[string][]string{
+		"": nil, "  ": nil, " travel_safety ": {"travel_safety"},
+		"news-2026": {"news-2026"}, "train,boat": {"boat", "train"},
+		"train, boat,train": {"boat", "train"},
+	} {
+		got, err := parseRowGroupSelection(raw)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("parseRowGroupSelection(%q) = %v, %v; want %v", raw, got, err, want)
 		}
 	}
+	values := make([]string, 21)
+	for i := range values {
+		values[i] = fmt.Sprintf("group_%02d", i)
+	}
+	if got, err := parseRowGroupSelection(strings.Join(values[:20], ",")); err != nil || len(got) != 20 {
+		t.Fatalf("20 values = %v, %v", got, err)
+	}
+	for _, raw := range []string{"Safety", "two words", "../admin", "group!", strings.Repeat("a", 65), "boat,", ",boat", "boat,,train", strings.Join(values, ",")} {
+		if _, err := parseRowGroupSelection(raw); err == nil {
+			t.Fatalf("parseRowGroupSelection(%q) unexpectedly succeeded", raw)
+		}
+	}
+}
 
-	for _, raw := range []string{"Safety", "two words", "../admin", "group!", strings.Repeat("a", 65)} {
-		if _, err := normalizeRowGroupFilterSlug(raw); err == nil {
-			t.Fatalf("normalizeRowGroupFilterSlug(%q) unexpectedly succeeded", raw)
+func TestRowGroupEndpointsRejectTooManyValuesBeforeDatabaseAccess(t *testing.T) {
+	values := make([]string, 21)
+	for i := range values {
+		values[i] = fmt.Sprintf("group_%d", i)
+	}
+	for _, handler := range []http.HandlerFunc{GetResults, GetResultsVector, GetIntelligentResultsHandlerWrapper} {
+		request := httptest.NewRequest(http.MethodGet, "/api/test?dataset=tasks&row_group="+url.QueryEscape(strings.Join(values, ",")), nil)
+		response := httptest.NewRecorder()
+		handler(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", response.Code)
 		}
 	}
 }
@@ -113,7 +131,7 @@ func TestAppendRowGroupFilterUsesParameterizedEnabledMembershipPredicate(t *test
 	t.Parallel()
 
 	whereClause, args, err := appendRowGroupFilterToWhereClause(
-		url.Values{rowGroupFilterQueryKey: {"security"}},
+		[]string{"security", "travel"},
 		"travel_info",
 		104,
 		testColumnsByName(),
@@ -128,13 +146,13 @@ func TestAppendRowGroupFilterUsesParameterizedEnabledMembershipPredicate(t *test
 		"row_group.enabled = TRUE",
 		"row_group_membership.table_uid = $2",
 		`row_group_membership.row_id = "travel_info"."id"`,
-		"row_group.slug = $3",
+		"row_group.slug = ANY($3::text[])",
 	} {
 		if !strings.Contains(whereClause, fragment) {
 			t.Fatalf("where clause lacks %q: %s", fragment, whereClause)
 		}
 	}
-	if !reflect.DeepEqual(args, []interface{}{true, int64(104), "security"}) {
+	if !reflect.DeepEqual(args, []interface{}{true, int64(104), pq.Array([]string{"security", "travel"})}) {
 		t.Fatalf("unexpected filter args: %#v", args)
 	}
 }
@@ -148,6 +166,7 @@ func TestBuildRowGroupFacetQueryReusesFilteredUniverseAndDistinctRows(t *testing
 		` LEFT JOIN "authors" AS "author_join" ON TRUE`,
 		` WHERE "travel_info"."published" = $1 AND "travel_info"."owner_id" = $2`,
 		[]interface{}{true, int64(8)},
+		[]string{"security"},
 	)
 
 	for _, fragment := range []string{
@@ -157,7 +176,10 @@ func TestBuildRowGroupFacetQueryReusesFilteredUniverseAndDistinctRows(t *testing
 		`row_group_membership.row_id = "travel_info"."id"`,
 		`row_group.enabled = TRUE`,
 		`WHERE "travel_info"."published" = $1 AND "travel_info"."owner_id" = $2`,
-		"LIMIT 12",
+		"LIMIT 200",
+		"row_group.slug = ANY($4::text[]) AS selected",
+		"ORDER BY selected DESC, row_group.sort_order ASC, row_group.slug ASC",
+		"ORDER BY sort_order ASC, slug ASC",
 	} {
 		if !strings.Contains(query, fragment) {
 			t.Fatalf("facet query lacks %q: %s", fragment, query)
@@ -166,14 +188,15 @@ func TestBuildRowGroupFacetQueryReusesFilteredUniverseAndDistinctRows(t *testing
 	if strings.Contains(query, " OFFSET ") {
 		t.Fatalf("facet query unexpectedly paginates the result universe: %s", query)
 	}
-	if !reflect.DeepEqual(args, []interface{}{true, int64(8), int64(104)}) {
+	if !reflect.DeepEqual(args, []interface{}{true, int64(8), int64(104), pq.Array([]string{"security"})}) {
 		t.Fatalf("unexpected facet args: %#v", args)
 	}
 }
 
 type rowGroupFacetMockState struct {
-	query string
-	args  []driver.NamedValue
+	selectionRows [][]driver.Value
+	query         string
+	args          []driver.NamedValue
 }
 
 type rowGroupFacetMockDriver struct {
@@ -205,10 +228,15 @@ func (c *rowGroupFacetMockConn) QueryContext(
 ) (driver.Rows, error) {
 	c.state.query = query
 	c.state.args = append([]driver.NamedValue{}, args...)
+	if strings.Contains(query, "SELECT DISTINCT row_group.slug") {
+		return &buildJoinsMockRows{cols: []string{"slug"}, rows: c.state.selectionRows}, nil
+	}
 	return &buildJoinsMockRows{
-		cols: []string{"id", "slug", "title", "row_count"},
+		cols: []string{"id", "slug", "title", "row_count", "selected"},
 		rows: [][]driver.Value{
-			{int64(4), "security", `{"fi":"Turvallisuus","en":"Security"}`, int64(3)},
+			{int64(4), "security", `{"fi":"Turvallisuus","en":"Security"}`, int64(3), false},
+			{int64(5), "selected_empty", `{"en":"Empty"}`, int64(0), true},
+			{int64(6), "unselected_empty", `{}`, int64(0), false},
 		},
 	}, nil
 }
@@ -232,12 +260,16 @@ func TestFetchRowGroupFacetsDecodesMultilingualMetadata(t *testing.T) {
 		"",
 		` WHERE "travel_info"."published" = $1`,
 		[]interface{}{true},
+		[]string{"selected_empty"},
 	)
 	if err != nil {
 		t.Fatalf("fetchRowGroupFacets returned error: %v", err)
 	}
-	if len(facets) != 1 {
-		t.Fatalf("facet count = %d, want 1", len(facets))
+	if len(facets) != 2 {
+		t.Fatalf("facet count = %d, want 2", len(facets))
+	}
+	if !facets[1].Selected || facets[1].RowCount != 0 {
+		t.Fatalf("selected zero count lost: %#v", facets)
 	}
 	if facets[0].ID != 4 || facets[0].Slug != "security" || facets[0].RowCount != 3 {
 		t.Fatalf("unexpected facet: %#v", facets[0])
@@ -248,7 +280,7 @@ func TestFetchRowGroupFacetsDecodesMultilingualMetadata(t *testing.T) {
 	if !strings.Contains(state.query, `COUNT(DISTINCT "travel_info"."id")`) {
 		t.Fatalf("executed query lacks distinct row count: %s", state.query)
 	}
-	if len(state.args) != 2 || state.args[0].Value != true || state.args[1].Value != int64(104) {
+	if len(state.args) != 3 || state.args[0].Value != true || state.args[1].Value != int64(104) {
 		t.Fatalf("unexpected executed args: %#v", state.args)
 	}
 }
@@ -262,5 +294,62 @@ func TestDecodeRowGroupFacetTitleIgnoresMalformedTranslations(t *testing.T) {
 	}
 	if title := decodeRowGroupFacetTitle(`not-json`); len(title) != 0 {
 		t.Fatalf("malformed JSON title = %#v, want fail-soft empty map", title)
+	}
+}
+
+func TestResolveRowGroupSelectionUsesReadableDatasetUniverse(t *testing.T) {
+	state := &rowGroupFacetMockState{selectionRows: [][]driver.Value{{"boat"}}}
+	name := fmt.Sprintf("row_group_selection_%d", time.Now().UnixNano())
+	sql.Register(name, &rowGroupFacetMockDriver{state: state})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	policy := legacyMustTrueReadPolicy([]string{"published"}, "created_by")
+	got, err := resolveRowGroupSelection(db, "travel_info", 104, []string{"boat", "hidden", "unknown"}, "basic", 8, policy)
+	if err != nil || !reflect.DeepEqual(got, []string{"boat"}) {
+		t.Fatalf("resolved=%v err=%v", got, err)
+	}
+	for _, fragment := range []string{
+		`FROM "travel_info"`, `row_group_membership.table_uid = $1`,
+		`row_group_membership.row_id = "travel_info"."id"`, `row_group.enabled = TRUE`,
+		`row_group.slug = ANY($2::text[])`, `"travel_info"."created_by" = $3`,
+		`public.resolve_effective_row_access($4, "travel_info"."id", $5, 'read'`,
+	} {
+		if !strings.Contains(state.query, fragment) {
+			t.Fatalf("resolver lacks %s: %s", fragment, state.query)
+		}
+	}
+	values := []interface{}{}
+	for _, arg := range state.args {
+		values = append(values, arg.Value)
+	}
+	if want := []interface{}{int64(104), `{"boat","hidden","unknown"}`, int64(8), "travel_info", int64(8)}; !reflect.DeepEqual(values, want) {
+		t.Fatalf("resolver args=%#v want=%#v", values, want)
+	}
+	if got, err := resolveRowGroupSelection(nil, "anything", 0, nil, "guest", 1, ReadRowPolicy{}); err != nil || len(got) != 0 {
+		t.Fatalf("empty selection must not query: %v %v", got, err)
+	}
+}
+
+func TestRowGroupSelectionConditionQuotesReferenceAndKeepsEmptySelectionUnrestricted(t *testing.T) {
+	prefix := []interface{}{"vector", "fi"}
+	condition, args, err := rowGroupSelectionCondition(`odd"alias`, 104, []string{"boat", "train"}, prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(condition, `row_group_membership.row_id = "odd""alias"."id"`) || !strings.Contains(condition, `table_uid = $3`) || !strings.Contains(condition, `ANY($4::text[])`) {
+		t.Fatalf("condition=%s", condition)
+	}
+	if want := []interface{}{"vector", "fi", int64(104), pq.Array([]string{"boat", "train"})}; !reflect.DeepEqual(args, want) {
+		t.Fatalf("args=%#v", args)
+	}
+	condition, args, err = rowGroupSelectionCondition("rows", 0, nil, prefix)
+	if err != nil || condition != "" || !reflect.DeepEqual(args, prefix) {
+		t.Fatalf("empty selection restricted rows: %q %#v %v", condition, args, err)
+	}
+	if _, _, err := rowGroupSelectionCondition("rows", 0, []string{"boat"}, nil); err == nil {
+		t.Fatal("unregistered dataset accepted")
 	}
 }

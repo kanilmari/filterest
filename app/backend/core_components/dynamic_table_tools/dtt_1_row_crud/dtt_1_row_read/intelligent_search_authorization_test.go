@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/lib/pq"
 )
 
 func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlaceholders(t *testing.T) {
@@ -19,8 +21,8 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlacehold
 			FlagColumns: []string{"published"},
 			OwnerColumn: "user_id",
 		},
-		tableUID:     104,
-		rowGroupSlug: "security",
+		tableUID:          104,
+		rowGroupSelection: []string{"security"},
 	}
 	condition, args, err := appendIntelligentSearchAuthorizationCondition(
 		"travel_info",
@@ -34,15 +36,15 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlacehold
 	for _, fragment := range []string{
 		`("candidate"."published" = TRUE OR "candidate"."user_id" = $2)`,
 		`public.resolve_effective_row_access($3, "candidate"."id", $4, 'read'`,
-		`search_row_group_membership.table_uid = $5`,
-		`search_row_group_membership.row_id = "candidate"."id"`,
-		`search_row_group.slug = $6`,
+		`row_group_membership.table_uid = $5`,
+		`row_group_membership.row_id = "candidate"."id"`,
+		`row_group.slug = ANY($6::text[])`,
 	} {
 		if !strings.Contains(condition, fragment) {
 			t.Fatalf("authorization condition lacks %q: %s", fragment, condition)
 		}
 	}
-	wantArgs := []interface{}{"existing", 8, "travel_info", 8, int64(104), "security"}
+	wantArgs := []interface{}{"existing", 8, "travel_info", 8, int64(104), pq.Array([]string{"security"})}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}
@@ -57,8 +59,8 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 			FlagColumns: []string{"approved"},
 			OwnerColumn: "user_id",
 		},
-		tableUID:     42,
-		rowGroupSlug: "security",
+		tableUID:          42,
+		rowGroupSelection: []string{"security"},
 	}
 	condition, args, err := appendIntelligentSearchAuthorizationCondition(
 		rlsPilotTableName,
@@ -69,10 +71,10 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 	if err != nil {
 		t.Fatalf("appendIntelligentSearchAuthorizationCondition returned error: %v", err)
 	}
-	if strings.Contains(condition, "approved") || !strings.Contains(condition, "search_row_group_membership") {
+	if strings.Contains(condition, "approved") || !strings.Contains(condition, "row_group_membership") {
 		t.Fatalf("pilot condition mixed Go row policy with RLS or lost group filter: %s", condition)
 	}
-	wantArgs := []interface{}{rlsPilotTableName, 8, int64(42), "security"}
+	wantArgs := []interface{}{rlsPilotTableName, 8, int64(42), pq.Array([]string{"security"})}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}
@@ -80,8 +82,8 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 
 func TestAppendIntelligentSearchAuthorizationConditionContinuesLanguageVectorArguments(t *testing.T) {
 	authorization := intelligentSearchAuthorization{
-		tableUID:     104,
-		rowGroupSlug: "security",
+		tableUID:          104,
+		rowGroupSelection: []string{"security"},
 	}
 	condition, args, err := appendIntelligentSearchAuthorizationCondition(
 		"travel_info",
@@ -94,14 +96,14 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesLanguageVectorArg
 	}
 	for _, fragment := range []string{
 		`public.resolve_effective_row_access($3, "travel_info"."id", $4, 'read'`,
-		`search_row_group_membership.table_uid = $5`,
-		`search_row_group.slug = $6`,
+		`row_group_membership.table_uid = $5`,
+		`row_group.slug = ANY($6::text[])`,
 	} {
 		if !strings.Contains(condition, fragment) {
 			t.Fatalf("language-vector authorization lacks %q: %s", fragment, condition)
 		}
 	}
-	wantArgs := []interface{}{"vector", "fi", "travel_info", 1, int64(104), "security"}
+	wantArgs := []interface{}{"vector", "fi", "travel_info", 1, int64(104), pq.Array([]string{"security"})}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}

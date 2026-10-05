@@ -12,28 +12,28 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
-	"github.com/lib/pq"
 )
 
 type intelligentSearchAuthorization struct {
-	userRole      string
-	userID        int
-	readPolicy    ReadRowPolicy
-	tableUID      int64
-	rowGroupSlug  string
-	userFilters   url.Values
-	filterColumns map[string]dtt_models.ColumnInfo
-	filterTypes   map[string]interface{}
+	userRole          string
+	userID            int
+	readPolicy        ReadRowPolicy
+	tableUID          int64
+	rowGroupSelection []string
+	userFilters       url.Values
+	filterColumns     map[string]dtt_models.ColumnInfo
+	filterTypes       map[string]interface{}
 }
 
 func resolveIntelligentSearchAuthorization(
 	metadataDB dbutils.Querier,
+	readDB dbutils.Querier,
 	tableName string,
 	userRole string,
 	userID int,
 	rawRowGroupSlug string,
 ) (intelligentSearchAuthorization, error) {
-	slug, err := normalizeRowGroupFilterSlug(rawRowGroupSlug)
+	selection, err := parseRowGroupSelection(rawRowGroupSlug)
 	if err != nil {
 		return intelligentSearchAuthorization{}, err
 	}
@@ -44,12 +44,11 @@ func resolveIntelligentSearchAuthorization(
 	}
 
 	authorization := intelligentSearchAuthorization{
-		userRole:     userRole,
-		userID:       userID,
-		readPolicy:   readPolicy,
-		rowGroupSlug: slug,
+		userRole:   userRole,
+		userID:     userID,
+		readPolicy: readPolicy,
 	}
-	if slug == "" {
+	if len(selection) == 0 {
 		return authorization, nil
 	}
 
@@ -62,6 +61,10 @@ func resolveIntelligentSearchAuthorization(
 		return intelligentSearchAuthorization{}, fmt.Errorf("invalid registered dataset identity %q", tableUIDText)
 	}
 	authorization.tableUID = tableUID
+	authorization.rowGroupSelection, err = resolveRowGroupSelection(readDB, tableName, tableUID, selection, userRole, userID, readPolicy)
+	if err != nil {
+		return intelligentSearchAuthorization{}, err
+	}
 	return authorization, nil
 }
 
@@ -89,28 +92,13 @@ func appendIntelligentSearchAuthorizationCondition(
 		queryArgs = append(queryArgs, readPolicyArgs...)
 	}
 
-	if authorization.rowGroupSlug != "" {
-		if authorization.tableUID <= 0 {
-			return "", nil, fmt.Errorf("row_group search filter requires a registered dataset")
-		}
-		tableUIDPlaceholder := len(queryArgs) + 1
-		slugPlaceholder := tableUIDPlaceholder + 1
-		conditions = append(conditions, fmt.Sprintf(`EXISTS (
-			SELECT 1
-			FROM public.system_row_group_memberships AS search_row_group_membership
-			JOIN public.system_row_groups AS search_row_group
-			  ON search_row_group.id = search_row_group_membership.group_id
-			 AND search_row_group.enabled = TRUE
-			WHERE search_row_group_membership.table_uid = $%d
-			  AND search_row_group_membership.row_id = %s.%s
-			  AND search_row_group.slug = $%d
-		)`,
-			tableUIDPlaceholder,
-			pq.QuoteIdentifier(tableReference),
-			pq.QuoteIdentifier("id"),
-			slugPlaceholder,
-		))
-		queryArgs = append(queryArgs, authorization.tableUID, authorization.rowGroupSlug)
+	selectionCondition, args, err := rowGroupSelectionCondition(tableReference, authorization.tableUID, authorization.rowGroupSelection, queryArgs)
+	if err != nil {
+		return "", nil, err
+	}
+	if selectionCondition != "" {
+		conditions = append(conditions, selectionCondition)
+		queryArgs = args
 	}
 
 	if len(authorization.userFilters) > 0 {

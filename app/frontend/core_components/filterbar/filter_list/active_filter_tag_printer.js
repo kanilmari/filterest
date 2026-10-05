@@ -12,7 +12,7 @@ import {
 } from "../text_search/create_text_search_panel.js";
 import { clearCommittedDatasetSearch } from "../text_search/dataset_search_clearer.js";
 import { highlightActiveFilterSetChange } from "./active_filter_change_highlighter.js";
-import { ROW_GROUP_FILTER_KEY } from "./row_group_facet_printer.js";
+import { ROW_GROUP_FILTER_KEY, renderRowGroupFilterTags } from "./row_group_facet_printer.js";
 import {
     groupFilters,
     buildFilterLabel,
@@ -175,6 +175,10 @@ export function renderActiveFilters(tableName) {
     const grouped = groupFilters(filters);
 
     Object.entries(grouped).forEach(([base, data]) => {
+        if (base === ROW_GROUP_FILTER_KEY) {
+            renderRowGroupFilterTags(tableName, container).forEach(slug => seenLabels.add(`${ROW_GROUP_FILTER_KEY}::${slug}`));
+            return;
+        }
         // Duplikaattiesto: sama näyttönimi + arvo ohitetaan
         const labelBase = buildFilterLabel(data.baseKey || base, tableName);
         const displayValue = data.type === 'range'

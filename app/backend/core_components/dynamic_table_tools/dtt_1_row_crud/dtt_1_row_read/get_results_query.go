@@ -562,13 +562,23 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	if err != nil {
 		return "", nil, 0, nil, fmt.Errorf("error building text search: %w", err)
 	}
+	// Resolve against readable rows before the column/text-filtered universe.
+	selection, err := parseRowGroupSelection(ctx.QueryParams.Get(rowGroupFilterQueryKey))
+	if err != nil {
+		return "", nil, 0, nil, err
+	}
+	selection, err = resolveRowGroupSelection(ctx.DB, ctx.TableName, tableUID, selection, ctx.UserRole, ctx.UserID, ctx.ReadPolicy)
+	if err != nil {
+		return "", nil, 0, nil, err
+	}
+	where_clause, query_args = appendReadPolicyToWhereClause(
+		ctx.TableName, ctx.UserRole, ctx.UserID, ctx.ReadPolicy, where_clause, query_args,
+	)
+	// Facets omit their own heading's selection; S1 has exactly one heading.
+	facetWhereClause := where_clause
+	facetArgs := append([]interface{}{}, query_args...)
 	where_clause, query_args, err = appendRowGroupFilterToWhereClause(
-		ctx.QueryParams,
-		ctx.TableName,
-		tableUID,
-		columnsByName,
-		where_clause,
-		query_args,
+		selection, ctx.TableName, tableUID, columnsByName, where_clause, query_args,
 	)
 	if err != nil {
 		return "", nil, 0, nil, err
@@ -592,16 +602,6 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		order_by_clause = relevance_order_by
 	}
 
-	// 4. Handle row visibility policy columns.
-	where_clause, query_args = appendReadPolicyToWhereClause(
-		ctx.TableName,
-		ctx.UserRole,
-		ctx.UserID,
-		ctx.ReadPolicy,
-		where_clause,
-		query_args,
-	)
-
 	// 5. Count total rows (skip if client provides a cached count)
 	var rowCount int
 	if ctx.ClientRowCount >= 0 {
@@ -621,8 +621,9 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 			ctx.TableName,
 			tableUID,
 			joinClauses,
-			where_clause,
-			query_args,
+			facetWhereClause,
+			facetArgs,
+			selection,
 		)
 		if err != nil {
 			return "", nil, 0, nil, err

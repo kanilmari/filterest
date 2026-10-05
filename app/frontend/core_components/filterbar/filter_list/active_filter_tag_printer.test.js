@@ -34,6 +34,17 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
     refreshTableUnified: refreshTableUnifiedMock,
 }));
 
+vi.mock("../../state_stores/table_state_store.js", () => ({
+    getUnifiedTableState: getUnifiedTableStateMock,
+    setUnifiedTableState: setUnifiedTableStateMock,
+}));
+vi.mock("../text_search/dataset_search_executor.js", () => ({ do_intelligent_search: doIntelligentSearchMock }));
+vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => key }));
+vi.mock("../../table_views/dataset_value_localizer.js", () => ({
+    bindDatasetLanguageRenderer: (_element, render) => render("fi"),
+    resolveDatasetDisplayValue: (value, _metadata, language) => value?.[language] || "",
+}));
+
 vi.mock("../../navigation/nav_engine/query_params.js", () => ({
     getParams: getParamsMock,
     setParams: setParamsMock,
@@ -76,6 +87,7 @@ describe("renderActiveFilters", () => {
         document.body.innerHTML = "";
         vi.clearAllMocks();
         clearCommittedDatasetSearchMock.mockReturnValue(true);
+        setUnifiedTableStateMock.mockImplementation((_table, state) => getUnifiedTableStateMock.mockReturnValue(state));
         Object.keys(ongoingSearchResultsMock).forEach((key) => delete ongoingSearchResultsMock[key]);
         groupFiltersMock.mockImplementation(() => ({
             status: {
@@ -165,7 +177,7 @@ describe("renderActiveFilters", () => {
             expect(doIntelligentSearchMock).toHaveBeenCalledWith("tasks", "urgent");
         });
         expect(rerenderCachedSearchResultsMock).not.toHaveBeenCalled();
-        expect(setUnifiedTableStateMock).toHaveBeenCalledWith("tasks", { filters: {} });
+        expect(setUnifiedTableStateMock).toHaveBeenCalledWith("tasks", { filters: {}, offset: 0 });
     });
 
     test("search chip uses the same narrow committed-search clear command as the field X", async () => {
@@ -181,4 +193,29 @@ describe("renderActiveFilters", () => {
         expect(clearCommittedDatasetSearchMock).toHaveBeenCalledWith("tasks");
         expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
     });
+    test("renders one tag per value and relabels them after each facet payload", async () => {
+        document.body.innerHTML = '<div id="tasks_card_top_controls"></div>';
+        getParamsMock.mockReturnValue({ row_group: "boat,train" });
+        getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: "boat,train" } });
+        groupFiltersMock.mockReturnValue({ row_group: { baseKey: "row_group", keys: ["row_group"], value: "boat,train", type: "single" } });
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        renderActiveFilters("tasks");
+        expect(document.querySelectorAll('.active-filter-item')).toHaveLength(2);
+        const tags = [...document.querySelectorAll('.row-group-filter-label')];
+        expect(tags.map(tag => tag.textContent)).toEqual(["filters: boat", "filters: train"]);
+        renderRowGroupFacets("tasks", [
+            { id: 1, slug: "boat", title: { fi: "Laiva" }, row_count: 2, selected: true },
+            { id: 2, slug: "train", title: { fi: "Juna" }, row_count: 0, selected: true },
+        ]);
+        expect(tags.map(tag => tag.textContent)).toEqual(["filters: Laiva", "filters: Juna"]);
+        renderRowGroupFacets("tasks", [{ id: 1, slug: "boat", title: { fi: "Laivamatka" }, row_count: 1, selected: true }]);
+        expect(tags.map(tag => tag.textContent)).toEqual(["filters: Laivamatka", "filters: train"]);
+        tags[0].parentElement.querySelector("button").click();
+        await vi.waitFor(() => expect(setUnifiedTableStateMock).toHaveBeenCalledWith("tasks", { filters: { row_group: "train" }, offset: 0 }));
+        expect(updateURLMock).toHaveBeenCalledWith("tasks", { row_group: "train" });
+        await vi.waitFor(() => expect(document.querySelectorAll('.active-filter-item')).toHaveLength(1));
+        expect(document.querySelector('.active-filter-item').dataset.rowGroupSlug).toBe("train");
+    });
+
 });

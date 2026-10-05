@@ -61,6 +61,7 @@ async function loadModule() {
     vi.doMock("../../../navigation/root_redirect_handler.js", () => ({
         redirectToRootInSpa: redirectToRootInSpaMock,
     }));
+    vi.doMock("../../../navigation/nav_engine/dataset_address_writer.js", () => ({ updateDatasetAddress: vi.fn() }));
     vi.doMock("../../../navigation/nav_engine/query_params.js", () => ({
         getParams: getParamsMock,
         parseTableQueryString: parseTableQueryStringMock,
@@ -276,7 +277,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 			{
 				background_image_path: "/storage/104/dataset_media/background/original/background.webp",
 			},
-            null
+            [{ id: 4, slug: "security", title: { en: "Security" }, row_count: 17 }]
         );
         // The next page starts after the first one, and endless scrolling is
         // left connected: the only disconnect is the one before the request.
@@ -329,7 +330,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             false,
 			undefined,
 			undefined,
-            null
+            []
         );
         expect(updateOffsetMock).toHaveBeenCalledWith("app_service_catalog", 0);
     });

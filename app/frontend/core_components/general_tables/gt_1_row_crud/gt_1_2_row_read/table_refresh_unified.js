@@ -187,8 +187,8 @@ export async function refreshTableUnified(tableName, options = {}) {
             result.has_geo,
 			result.table_meta,
 			result.dataset_presentation,
-            // A search keeps the row-group facets withdrawn, as it did when it started.
-            query ? null : result.row_group_facets,
+            // Counts belong to this listing, including its committed text search.
+            result.row_group_facets,
             ...((preserveCardReturn || loadedRows) ? [{ preserveCardReturn, loadedRows }] : [])
         );
         if (!isRenderCurrent()) return;
