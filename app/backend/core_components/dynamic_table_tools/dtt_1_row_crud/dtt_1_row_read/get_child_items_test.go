@@ -555,7 +555,7 @@ func TestBuildRelatedSelectColumnsWithFKLabelsAddsJoinAndDisplayAlias(t *testing
 				ReferencedColumn: "id",
 				NameColumn:       "title",
 			},
-		},
+		}, nil,
 	)
 
 	if !strings.Contains(selectColumns, `"dev_agent_task_group_relations"."group_id" AS "group_id"`) {

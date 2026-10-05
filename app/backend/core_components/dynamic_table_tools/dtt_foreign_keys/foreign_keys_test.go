@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils"
 )
 
 type foreignKeyQueryResponse struct {
@@ -51,13 +52,18 @@ type foreignKeyMockState struct {
 	queries []foreignKeyQueryResponse
 	execs   []foreignKeyExecResponse
 
-	queryCalls []foreignKeyQueryCall
-	execCalls  []foreignKeyExecCall
+	actorRows         [][]driver.Value
+	constraintColumns string
+	queryCalls        []foreignKeyQueryCall
+	execCalls         []foreignKeyExecCall
 }
 
 type foreignKeyMockDriver struct{ state *foreignKeyMockState }
-type foreignKeyMockConn struct{ state *foreignKeyMockState }
-type foreignKeyMockTx struct{}
+type foreignKeyMockConn struct {
+	state *foreignKeyMockState
+	inTx  bool
+}
+type foreignKeyMockTx struct{ conn *foreignKeyMockConn }
 
 type foreignKeyMockRows struct {
 	cols []string
@@ -78,15 +84,17 @@ func (c *foreignKeyMockConn) Prepare(string) (driver.Stmt, error) {
 func (c *foreignKeyMockConn) Close() error { return nil }
 
 func (c *foreignKeyMockConn) Begin() (driver.Tx, error) {
-	return &foreignKeyMockTx{}, nil
+	c.inTx = true
+	return &foreignKeyMockTx{conn: c}, nil
 }
 
 func (c *foreignKeyMockConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
-	return &foreignKeyMockTx{}, nil
+	c.inTx = true
+	return &foreignKeyMockTx{conn: c}, nil
 }
 
-func (*foreignKeyMockTx) Commit() error   { return nil }
-func (*foreignKeyMockTx) Rollback() error { return nil }
+func (tx *foreignKeyMockTx) Commit() error   { tx.conn.inTx = false; return nil }
+func (tx *foreignKeyMockTx) Rollback() error { tx.conn.inTx = false; return nil }
 
 func (r *foreignKeyMockRows) Columns() []string { return append([]string(nil), r.cols...) }
 func (r *foreignKeyMockRows) Close() error      { return nil }
@@ -117,6 +125,22 @@ func (c *foreignKeyMockConn) QueryContext(_ context.Context, query string, args 
 		args:  append([]driver.NamedValue(nil), args...),
 	})
 
+	if strings.Contains(query, "AS roles(actor_role)") {
+		if !c.inTx {
+			return nil, fmt.Errorf("actor read escaped request transaction")
+		}
+		return &foreignKeyMockRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
+	}
+	if strings.Contains(query, "constraint_info.conname = $2") {
+		if !c.inTx {
+			return nil, fmt.Errorf("constraint read escaped request transaction")
+		}
+		columns := c.state.constraintColumns
+		if columns == "" {
+			columns = "{author_id}"
+		}
+		return &foreignKeyMockRows{cols: []string{"columns"}, rows: [][]driver.Value{{columns}}}, nil
+	}
 	if len(c.state.queries) == 0 {
 		return nil, fmt.Errorf("unexpected query: %s", query)
 	}
@@ -152,6 +176,9 @@ func (c *foreignKeyMockConn) ExecContext(_ context.Context, query string, args [
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
+	if strings.HasPrefix(query, "ALTER TABLE ") && !c.inTx {
+		return nil, fmt.Errorf("DDL escaped request transaction")
+	}
 	c.state.execCalls = append(c.state.execCalls, foreignKeyExecCall{
 		query: query,
 		args:  append([]driver.NamedValue(nil), args...),
@@ -254,14 +281,14 @@ func decodeForeignKeyJSONArray(t *testing.T, rec *httptest.ResponseRecorder) []s
 func TestAddForeignKeyHandlerRejectsInvalidJSONAndMissingFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/add-foreign-key", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	AddForeignKeyHandler(rec, req)
+	AddForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/add-foreign-key", strings.NewReader(`{"referencing_dataset":"posts"}`))
 	rec = httptest.NewRecorder()
-	AddForeignKeyHandler(rec, req)
+	AddForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing-fields status = %d, want 400", rec.Code)
 	}
@@ -286,7 +313,7 @@ func TestAddForeignKeyHandlerHandlesTableColumnAndSuccessBranches(t *testing.T) 
 			"referenced_column":"id"
 		}`))
 		rec := httptest.NewRecorder()
-		AddForeignKeyHandler(rec, req)
+		AddForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -326,7 +353,7 @@ func TestAddForeignKeyHandlerHandlesTableColumnAndSuccessBranches(t *testing.T) 
 			"referenced_column":"id"
 		}`))
 		rec := httptest.NewRecorder()
-		AddForeignKeyHandler(rec, req)
+		AddForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -379,7 +406,7 @@ func TestAddForeignKeyHandlerHandlesTableColumnAndSuccessBranches(t *testing.T) 
 			"referenced_column":"id"
 		}`))
 		rec := httptest.NewRecorder()
-		AddForeignKeyHandler(rec, req)
+		AddForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -590,14 +617,14 @@ func TestGetForeignKeysHandlesQueryErrorAndDatasetFilterSuccess(t *testing.T) {
 func TestDeleteForeignKeyHandlerRejectsInvalidJSONAndHandlesExecBranches(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/delete-foreign-key", strings.NewReader("{"))
 	rec := httptest.NewRecorder()
-	DeleteForeignKeyHandler(rec, req)
+	DeleteForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid-json status = %d, want 400", rec.Code)
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/delete-foreign-key", strings.NewReader(`{"constraint_name":"fk_posts_author_id"}`))
 	rec = httptest.NewRecorder()
-	DeleteForeignKeyHandler(rec, req)
+	DeleteForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing-fields status = %d, want 400", rec.Code)
 	}
@@ -616,7 +643,7 @@ func TestDeleteForeignKeyHandlerRejectsInvalidJSONAndHandlesExecBranches(t *test
 			"referencing_dataset":"posts"
 		}`))
 		rec := httptest.NewRecorder()
-		DeleteForeignKeyHandler(rec, req)
+		DeleteForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want 500", rec.Code)
@@ -637,7 +664,7 @@ func TestDeleteForeignKeyHandlerRejectsInvalidJSONAndHandlesExecBranches(t *test
 			"referencing_dataset":"posts"
 		}`))
 		rec := httptest.NewRecorder()
-		DeleteForeignKeyHandler(rec, req)
+		DeleteForeignKeyHandler(rec, withForeignKeyRequestTx(t, req))
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -656,4 +683,38 @@ func TestDeleteForeignKeyHandlerRejectsInvalidJSONAndHandlesExecBranches(t *test
 			}
 		}
 	})
+}
+
+func TestActorForeignKeyHandlersRefuseWithoutDDL(t *testing.T) {
+	for _, column := range []string{"created_by", "user_id"} {
+		queries := make([]foreignKeyQueryResponse, 4)
+		for i := range queries {
+			queries[i] = foreignKeyQueryResponse{cols: []string{"exists"}, rows: [][]driver.Value{{true}}}
+		}
+		db, state := openForeignKeyMockDB(t, queries, nil)
+		old := backend.Db
+		backend.Db = db
+		state.actorRows = [][]driver.Value{{"created_by", "creator"}, {"user_id", "owner"}}
+		rec := httptest.NewRecorder()
+		AddForeignKeyHandler(rec, withForeignKeyRequestTx(t, httptest.NewRequest("POST", "/", strings.NewReader(fmt.Sprintf(`{"referencing_dataset":"notes","referencing_column":%q,"referenced_dataset":"system_users","referenced_column":"id"}`, column)))))
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_owner_column_protected") || len(state.execCalls) != 0 {
+			t.Fatalf("add %s: %d %s writes=%v", column, rec.Code, rec.Body, state.execCalls)
+		}
+		state.constraintColumns = "{title," + column + "}"
+		rec = httptest.NewRecorder()
+		DeleteForeignKeyHandler(rec, withForeignKeyRequestTx(t, httptest.NewRequest("POST", "/", strings.NewReader(`{"referencing_dataset":"notes","constraint_name":"composite_actor_fk"}`))))
+		backend.Db = old
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_owner_column_protected") || len(state.execCalls) != 0 {
+			t.Fatalf("drop: %d %s writes=%v", rec.Code, rec.Body, state.execCalls)
+		}
+	}
+}
+
+// Use the same lazy request transaction as the route pipeline. The driver rejects
+// actor checks and DDL that escape onto a separate pool connection.
+func withForeignKeyRequestTx(t *testing.T, req *http.Request) *http.Request {
+	t.Helper()
+	tx := dbutils.NewLazyTx(backend.Db)
+	t.Cleanup(func() { _ = tx.Rollback() })
+	return req.WithContext(dbutils.SetLazyTx(req.Context(), tx))
 }

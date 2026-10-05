@@ -75,7 +75,7 @@ func TestCreatedDatasetKeepsItsColumnListOrderPostgres(t *testing.T) {
 	}
 
 	// Neither alphabetical nor any order a map could fall into reliably.
-	order := []string{"id", "created", "updated", "name", "description", "website", "keywords", "category_id", "published"}
+	order := []string{"id", "created", "updated", "name", "description", "website", "keywords", "category_id", "published", "created_by", "owner_id"}
 	rec := postCreateDataset(t, db, `{
 		"dataset_name": "wl135_services", "folder_id": 4, "new_columns_multilingual": false,
 		"column_list": [
@@ -142,6 +142,8 @@ func TestCreatedDatasetKeepsItsColumnListOrderPostgres(t *testing.T) {
 		"keywords":    {Role: "keywords", HideInFilterPanel: true},
 		"category_id": {Role: "details", SortNumber: second},
 		"published":   {Role: "hidden", VisibilityGate: true},
+		"created_by":  {Role: "hidden", HideInFilterPanel: true},
+		"owner_id":    {Role: "hidden", HideInFilterPanel: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("column metadata =\n%+v\nwant\n%+v", got, want)

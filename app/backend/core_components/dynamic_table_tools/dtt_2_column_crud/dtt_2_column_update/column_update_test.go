@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/httpresponse"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +37,7 @@ type colUpdateState struct {
 	queries []queuedQuery
 	execs   []queuedExec
 
+	actorRows  [][]driver.Value
 	queryCalls []string
 	execCalls  []string
 }
@@ -84,6 +86,9 @@ func (c *colUpdateConn) QueryContext(_ context.Context, query string, _ []driver
 	defer c.state.mu.Unlock()
 
 	c.state.queryCalls = append(c.state.queryCalls, query)
+	if strings.Contains(query, "AS roles(actor_role)") {
+		return &colUpdateRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
+	}
 
 	if len(c.state.queries) == 0 {
 		return nil, fmt.Errorf("unexpected query: %s", query)
@@ -691,5 +696,28 @@ func TestUpdateColumnMetadataDeletesRemovedColumn(t *testing.T) {
 	}
 	if !strings.Contains(state.execCalls[1], "DELETE FROM system_column_details") {
 		t.Fatalf("exec[1] = %q, want DELETE", state.execCalls[1])
+	}
+}
+
+func TestActorColumnChangesRefusedBeforeAnyAlter(t *testing.T) {
+	for _, tc := range []struct{ name, typ string }{{"renamed", "bigint"}, {"created_by", "text"}} {
+		_, tx, state := openColUpdateTx(t, []queuedQuery{currentTypeQuery("bigint")}, nil)
+		state.actorRows = [][]driver.Value{{"created_by", "creator"}, {"user_id", "owner"}}
+		err := UpdateColumns(tx, "notes", []dtt_2_column_crud.ModifiedCol{{OriginalName: "ordinary", NewName: "renamed_ordinary", DataType: "text"}, {OriginalName: "created_by", NewName: tc.name, DataType: tc.typ}}, func(s string) (string, error) { return s, nil })
+		var refusal *httpresponse.Refusal
+		if !errors.As(err, &refusal) || refusal.Status != 400 || refusal.LangKey != "error_owner_column_protected" {
+			t.Fatalf("%+v: %v", tc, err)
+		}
+		if len(state.execCalls) != 0 {
+			t.Fatal("actor refusal changed an earlier column")
+		}
+	}
+	_, tx, state := openColUpdateTx(t, []queuedQuery{currentTypeQuery("bigint")}, nil)
+	state.actorRows = [][]driver.Value{{"created_by", "creator"}}
+	if err := UpdateColumns(tx, "notes", []dtt_2_column_crud.ModifiedCol{{OriginalName: "created_by", NewName: "created_by", DataType: "BIGINT"}}, func(s string) (string, error) { return s, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.execCalls) != 0 {
+		t.Fatal("a no-op rewrote actor constraints")
 	}
 }

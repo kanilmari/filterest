@@ -33,6 +33,8 @@ type deleteTableState struct {
 	queries []queuedDeleteQuery
 	execs   []queuedDeleteExec
 
+	committed  bool
+	rolledBack bool
 	queryCalls []string
 	execCalls  []string
 }
@@ -64,7 +66,7 @@ func (c *deleteTableConn) Prepare(string) (driver.Stmt, error) {
 func (c *deleteTableConn) Close() error { return nil }
 
 func (c *deleteTableConn) Begin() (driver.Tx, error) {
-	return nil, errors.New("transactions not supported in delete table test driver")
+	return &deleteTableTx{state: c.state}, nil
 }
 
 func (c *deleteTableConn) Query(query string, args []driver.Value) (driver.Rows, error) {
@@ -425,3 +427,8 @@ func TestCleanupTableMetadataTreatsLangCleanupFailureAsNonFatal(t *testing.T) {
 		t.Fatalf("final cleanup did not continue after lang cleanup failure:\n%s", state.execCalls[6])
 	}
 }
+
+type deleteTableTx struct{ state *deleteTableState }
+
+func (tx *deleteTableTx) Commit() error   { tx.state.committed = true; return nil }
+func (tx *deleteTableTx) Rollback() error { tx.state.rolledBack = true; return nil }

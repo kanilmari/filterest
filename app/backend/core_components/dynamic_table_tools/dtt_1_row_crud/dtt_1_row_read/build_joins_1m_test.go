@@ -17,8 +17,9 @@ import (
 )
 
 type buildJoinsQueryCounter struct {
-	mu     sync.Mutex
-	counts map[string]int
+	mu        sync.Mutex
+	counts    map[string]int
+	actorRows [][]driver.Value
 }
 
 func (c *buildJoinsQueryCounter) add(name string) {
@@ -123,6 +124,9 @@ func (c *buildJoinsMockConn) Query(query string, args []driver.Value) (driver.Ro
 
 func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "AS roles(actor_role)"):
+		c.counter.add("actor_marks")
+		return &buildJoinsMockRows{cols: []string{"column_name", "actor_role"}, rows: c.counter.actorRows}, nil
 	case strings.Contains(query, "SELECT table_uid FROM system_db_tables WHERE table_name = $1"):
 		c.counter.add("table_uid")
 		return &buildJoinsMockRows{
@@ -252,11 +256,14 @@ func TestBuildJoinsWith1MRelationsCachesMetadataAcrossCalls(t *testing.T) {
 		t.Fatalf("column expression count changed between calls: %d vs %d", len(firstExpressions), len(secondExpressions))
 	}
 
-	if got := counter.get("table_uid"); got != 1 {
-		t.Fatalf("table_uid query count = %d, want 1", got)
+	if got := counter.get("table_uid"); got != 2 {
+		t.Fatalf("table_uid query count = %d, want 2 identity checks", got)
 	}
 	if got := counter.get("fk_relations"); got != 1 {
 		t.Fatalf("fk_relations query count = %d, want 1", got)
+	}
+	if got := counter.get("actor_marks"); got != 1 {
+		t.Fatalf("actor mark query count = %d, want 1", got)
 	}
 	if got := counter.get("foreign_keys"); got != 1 {
 		t.Fatalf("foreign_keys query count = %d, want 1", got)

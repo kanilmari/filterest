@@ -151,6 +151,11 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 	if table_name == "system_column_details" {
 		if err := preprocessColumnDetailsDeletion(tx, request_data.IDs); err != nil {
 			log.Printf("error: %v", err)
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(w, refusal)
+				return
+			}
 			var bre *badRequestError
 			if errors.As(err, &bre) {
 				httpresponse.RespondWithError(w, http.StatusBadRequest, bre.msg)

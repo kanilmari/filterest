@@ -7,10 +7,12 @@ package dtt_3_table_create
 
 import (
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/security"
 	"fmt"
+	"github.com/lib/pq"
 	"sort"
 	"strings"
 )
@@ -231,7 +233,7 @@ func InsertNewTables(q dbutils.Querier) error {
             AND has_schema_privilege(n.nspname, 'USAGE')
             AND has_table_privilege(c.oid, 'SELECT')
             AND n.nspname NOT IN ('restricted', 'postgis')
-            AND NOT (n.nspname = 'public' AND c.relname IN ('system_media_assets', 'system_media_asset_usages'))
+            AND NOT (n.nspname = 'public' AND c.relname = ANY($1::text[]))
             AND NOT EXISTS (
                 SELECT 1
                 FROM system_db_tables s
@@ -239,7 +241,7 @@ func InsertNewTables(q dbutils.Querier) error {
                   AND s.schema_name = n.nspname
             )
     `
-	rows, err := q.Query(tablesQuery)
+	rows, err := q.Query(tablesQuery, pq.Array(row_mutation_policy.InternalRegistryTables))
 	if err != nil {
 		return fmt.Errorf("error fetching new tables: %v", err)
 	}

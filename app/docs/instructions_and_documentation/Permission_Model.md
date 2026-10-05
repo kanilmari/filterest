@@ -63,6 +63,30 @@ The RLS pilot is intentionally narrow. It applies to `app_service_catalog` and r
 
 The pilot has PostgreSQL policies for select, insert, update, and delete. Its write preflight follows the narrower admin-or-owner UPDATE/DELETE eligibility rather than the broader public SELECT policy. Non-pilot datasets still use the Go-side `must_be_true_unless_own` path.
 
+### Row creators, owners and backup restore
+
+New content datasets have permanent creator and owner marks in
+`system_row_actor_columns`, keyed by `system_db_tables.table_uid` (never its
+registry `id`). Ordinary inserts stamp both marked columns from the request's
+user id; guest and system actors become NULL. Client-supplied actor values and
+ordinary actor edits are refused, even for administrators or when column
+metadata allows editing. The marked owner fixes the registry's compatibility
+owner setting. Actor columns and their foreign keys cannot be removed, renamed
+or retyped through the schema tools. Unmarked user references retain their
+existing behavior; migration of existing datasets is a separate data step.
+
+The administrator-only development CSV restore is an explicit exception to
+new-row stamping: a newly restored row keeps its backup's creator and owner,
+while conflict updates leave the existing row's actors unchanged. References
+of 1 or less and references to missing users become NULL; the response counts
+cleared creator and owner references. Omitted actor columns use the request
+transaction's database defaults. Ordinary row editing is not an ownership
+transfer mechanism.
+
+During WL58 group A, generated actor-name labels are NULL for every viewer and
+have no user-table join. Other user references keep their existing labels;
+public display-name policy belongs to group B.
+
 ## 2. Target Permission Layers
 
 Filterest should use one vocabulary and one layered model for authorization. These layers are ordered from broadest to narrowest.

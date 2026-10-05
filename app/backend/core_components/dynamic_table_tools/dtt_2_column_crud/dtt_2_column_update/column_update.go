@@ -8,6 +8,7 @@ package dtt_2_column_update
 import (
 	"database/sql"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_2_column_crud "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"easelect/backend/core_components/lang"
 	"errors"
@@ -242,8 +243,36 @@ func UpdateColumns(
 	sanitizeIdentifierFunc func(string) (string, error),
 ) error {
 	fmt.Println("Modifying columns (if any):", modifiedCols)
+	marks := row_mutation_policy.RowActorColumns{}
+	if len(modifiedCols) > 0 {
+		var err error
+		marks, err = row_mutation_policy.ReadRowActorColumns(tx, strings.ToLower(sanitizedTableName))
+		if err != nil {
+			return err
+		}
+		for _, column := range modifiedCols {
+			if marks[strings.ToLower(column.OriginalName)] == "" {
+				continue
+			}
+			if !strings.EqualFold(column.OriginalName, column.NewName) {
+				return marks.Protect(column.OriginalName)
+			}
+			var currentType string
+			if err := tx.QueryRow(`SELECT data_type FROM information_schema.columns
+				WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+				strings.ToLower(sanitizedTableName), strings.ToLower(column.OriginalName)).Scan(&currentType); err != nil {
+				return err
+			}
+			if column.DataType != "" && !strings.EqualFold(strings.TrimSpace(column.DataType), currentType) {
+				return marks.Protect(column.OriginalName)
+			}
+		}
+	}
 
 	for _, mcol := range modifiedCols {
+		if marks[strings.ToLower(mcol.OriginalName)] != "" {
+			continue // A checked no-op must not rewrite actor constraints.
+		}
 		fmt.Println("Processing modification:", mcol)
 
 		sOrigName, err := sanitizeIdentifierFunc(mcol.OriginalName)

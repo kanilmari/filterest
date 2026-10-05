@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/security"
 	storagecleanup "easelect/backend/core_components/storagecleanup"
@@ -54,6 +55,11 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- SAFETY CHECK START ---
+	if row_mutation_policy.IsInternalRegistryTable(sanitizedTableName) {
+		httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400,
+			LangKey: "error_internal_table_not_droppable", Message: "internal registry tables cannot be deleted"})
+		return
+	}
 	var isDefault bool
 	var isRemovable bool
 	// We use COALESCE(is_removable, true) to treat NULL as true (removable) just in case.
@@ -82,8 +88,10 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 	var tableUID sql.NullInt64
 	var schemaName sql.NullString
 	uidQuery := `SELECT table_uid, schema_name FROM system_db_tables WHERE table_name = $1`
-	if scanErr := tx.QueryRow(uidQuery, sanitizedTableName).Scan(&tableUID, &schemaName); scanErr != nil {
-		log.Printf("[DropTableHandler] warning: could not look up table_uid/schema for %s: %v — metadata cleanup may be incomplete", sanitizedTableName, scanErr)
+	scanErr := tx.QueryRow(uidQuery, sanitizedTableName).Scan(&tableUID, &schemaName)
+	if (scanErr != nil && scanErr != sql.ErrNoRows) || (scanErr == nil && !tableUID.Valid) {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "metadata cleanup failed; the dataset was not deleted")
+		return
 	}
 
 	var managedAssetChildren []managedAssetChildTable
@@ -116,10 +124,12 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Poistetaan liittyvät metatiedot system-tauluista (käytetään jaettua CleanupTableMetadata-funktiota)
 	if tableUID.Valid {
-		storagecleanup.QueueArchiveTableStorageAfterCommit(r.Context(), fmt.Sprintf("%d", tableUID.Int64))
 		if cleanupErr := CleanupTableMetadata(tx, tableUID.Int64, schemaName.String); cleanupErr != nil {
 			log.Printf("\033[31merror: [DropTableHandler] metadata cleanup failed for table %s: %v\033[0m", sanitizedTableName, cleanupErr)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "metadata cleanup failed; the dataset was not deleted")
+			return
 		}
+		storagecleanup.QueueArchiveTableStorageAfterCommit(r.Context(), fmt.Sprintf("%d", tableUID.Int64))
 	}
 
 	w.Header().Set("Content-Type", "application/json")

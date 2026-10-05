@@ -4,7 +4,10 @@
 // Exists so add-row forms never ask users to type their own numeric owner ID.
 package dtt_1_row_create
 
-import dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
+import (
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
+	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
+)
 
 // isAddRowColumnUserInsertable reports whether a column may be shown in and
 // accepted from the add-row form. Missing metadata preserves legacy behavior.
@@ -12,13 +15,14 @@ func isAddRowColumnUserInsertable(column dtt_models.AddRowColumnInfo) bool {
 	return !column.Insertable.Valid || column.Insertable.Bool
 }
 
-// applyCurrentActorOwnership fills supported non-insertable ownership fields
-// from the authenticated session. Other non-insertable fields stay untouched.
+// applyCurrentActorOwnership stamps marked actors regardless of insertability.
+// Legacy non-insertable user_id and cached_username fields retain their rule.
 func applyCurrentActorOwnership(
 	filteredRow map[string]interface{},
 	columns []dtt_models.AddRowColumnInfo,
 	currentUserID int,
 	currentUsername string,
+	marks row_mutation_policy.RowActorColumns,
 ) {
 	for _, column := range columns {
 		if isAddRowColumnUserInsertable(column) {
@@ -30,6 +34,12 @@ func applyCurrentActorOwnership(
 			filteredRow[column.ColumnName] = currentUserID
 		case "cached_username":
 			filteredRow[column.ColumnName] = currentUsername
+		}
+	}
+	for column := range marks {
+		filteredRow[column] = nil
+		if currentUserID > 1 {
+			filteredRow[column] = currentUserID
 		}
 	}
 }

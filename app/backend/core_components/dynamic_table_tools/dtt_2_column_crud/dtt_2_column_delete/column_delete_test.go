@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/httpresponse"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +34,7 @@ type deleteState struct {
 	execs   []queuedDeleteExec
 
 	execCalls []string
+	actorRows [][]driver.Value
 }
 
 type deleteDriver struct {
@@ -82,9 +84,12 @@ func (c *deleteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *deleteConn) QueryContext(_ context.Context, _ string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *deleteConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
+	if strings.Contains(query, "AS roles(actor_role)") {
+		return &deleteRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
+	}
 
 	if len(c.state.queries) == 0 {
 		return nil, errors.New("unexpected query")
@@ -284,5 +289,20 @@ func TestRemoveColumnsSuccessWithNoLangSources(t *testing.T) {
 	}
 	if len(state.execCalls) != 1 || state.execCalls[0] != "ALTER TABLE users DROP COLUMN title" {
 		t.Fatalf("exec calls = %#v, want only drop statement", state.execCalls)
+	}
+}
+
+func TestActorRemovalRefusedBeforeDroppingAnyColumn(t *testing.T) {
+	for _, column := range []string{"created_by", "user_id"} {
+		_, tx, state := openDeleteTx(t, nil, nil)
+		state.actorRows = [][]driver.Value{{"created_by", "creator"}, {"user_id", "owner"}}
+		err := RemoveColumns(tx, "notes", []string{"ordinary", column})
+		var refusal *httpresponse.Refusal
+		if !errors.As(err, &refusal) || refusal.Status != 400 || refusal.LangKey != "error_owner_column_protected" {
+			t.Fatalf("%s: %v", column, err)
+		}
+		if len(state.execCalls) != 0 {
+			t.Fatal("refusal wrote columns")
+		}
 	}
 }

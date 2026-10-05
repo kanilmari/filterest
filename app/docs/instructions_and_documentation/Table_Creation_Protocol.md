@@ -87,6 +87,22 @@ Use the Filterest UI or the `dtt_3_table_create` Go component.
     reports `folder_path` and `in_site_navigation`, and a new folder with a
     parent but no name is refused.
 
+New content datasets receive `created_by` and `owner_id` after every requested
+ordinary column. Their SQL support functions run after general column metadata
+synchronization, then register hidden, non-insertable, non-editable defaults
+against the new dataset's `table_uid`. Explicit column-list roles and settings
+are applied afterward. A reserved declaration accepts only INTEGER or BIGINT
+without defaults, NOT NULL or sorting. Creator roles are hidden/details; owner
+roles are hidden/username; an empty role keeps the hidden default. Only
+`owner_id` may request the username role. An explicit actor foreign key must
+reference `system_users(id)`; the support function supplies its SET NULL rule.
+
+Side tables are classified by `app_row_actor_side_table_reason` and receive no
+actor columns. A side-table request declaring a reserved actor name is refused
+before creation. Managed asset-child creation remains separate. The shared
+`InternalRegistryTables` list excludes internal registries from dataset
+registration, consistency repair and dataset deletion.
+
 ### Method B: SQL Migrations (Manual)
 Use this for core system tables or permanent dev tools.
 *   **Requirement**: You must manually write the SQL for **ALL** steps above (Table, Trigger, Registration).

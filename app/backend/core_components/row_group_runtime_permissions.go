@@ -47,7 +47,8 @@ func rowGroupRuntimeRoleGrantSQL(rawRoleName string) (string, error) {
 			FROM %s;
 		GRANT SELECT
 			ON TABLE public.system_row_groups, public.system_row_group_memberships
-			TO %s`, quotedRole, quotedRole, quotedRole, quotedRole), nil
+			TO %s;
+		GRANT SELECT ON TABLE public.system_row_actor_columns TO %s`, quotedRole, quotedRole, quotedRole, quotedRole, quotedRole), nil
 }
 
 func configuredRowGroupRuntimeRoles() ([]rowGroupRuntimeRoleTarget, error) {
@@ -110,6 +111,7 @@ func EnsureRowGroupRuntimeRolePermissions(db *sql.DB) error {
 		currentDatabaseRole       string
 		groupsTableExists         bool
 		membershipsExists         bool
+		actorMarksExists          bool
 		groupsSequenceExists      bool
 		membershipsSequenceExists bool
 	)
@@ -118,18 +120,20 @@ func EnsureRowGroupRuntimeRolePermissions(db *sql.DB) error {
 		       to_regclass('public.system_row_groups') IS NOT NULL,
 		       to_regclass('public.system_row_group_memberships') IS NOT NULL,
 		       to_regclass('public.system_row_groups_id_seq') IS NOT NULL,
-		       to_regclass('public.system_row_group_memberships_id_seq') IS NOT NULL
+		       to_regclass('public.system_row_group_memberships_id_seq') IS NOT NULL,
+		       to_regclass('public.system_row_actor_columns') IS NOT NULL
 	`).Scan(
 		&currentDatabaseRole,
 		&groupsTableExists,
 		&membershipsExists,
 		&groupsSequenceExists,
 		&membershipsSequenceExists,
+		&actorMarksExists,
 	); err != nil {
 		return fmt.Errorf("EnsureRowGroupRuntimeRolePermissions inspect database contract: %w", err)
 	}
-	if !groupsTableExists || !membershipsExists || !groupsSequenceExists || !membershipsSequenceExists {
-		return fmt.Errorf("EnsureRowGroupRuntimeRolePermissions: row-group tables or identity sequences are missing")
+	if !groupsTableExists || !membershipsExists || !groupsSequenceExists || !membershipsSequenceExists || !actorMarksExists {
+		return fmt.Errorf("EnsureRowGroupRuntimeRolePermissions: row-group tables, identity sequences or actor marks are missing")
 	}
 	for _, target := range targets {
 		if target.roleName == currentDatabaseRole {

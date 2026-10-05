@@ -10,6 +10,7 @@ import (
 	backend "easelect/backend/core_components"
 	auth "easelect/backend/core_components/auth"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
 	"easelect/backend/core_components/httpresponse"
@@ -606,10 +607,16 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 			log.Printf("\033[33mwarning: related items audit column lookup failed for %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
 		}
 
+		actorColumns, err := row_mutation_policy.ReadRowActorColumns(readQuerier, fk_row.Referencing_table)
+		if err != nil {
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error reading related actor columns")
+			return
+		}
 		selectColumns, joinClauses := buildRelatedSelectColumnsWithFKLabels(
 			fk_row.Referencing_table,
 			visibleCols,
 			labelForeignKeys,
+			actorColumns,
 		)
 		readPolicy, policyErr := getLegacyMustTrueReadPolicy(currentDb, fk_row.Referencing_table)
 		if policyErr != nil {
@@ -880,10 +887,15 @@ func fetchOutgoingReferencedTableResults(
 			return nil, err
 		}
 
+		actorColumns, err := row_mutation_policy.ReadRowActorColumns(readQuerier, fk.ReferencedTable)
+		if err != nil {
+			return nil, err
+		}
 		selectColumns, joinClauses := buildRelatedSelectColumnsWithFKLabels(
 			fk.ReferencedTable,
 			visibleCols,
 			labelForeignKeys,
+			actorColumns,
 		)
 		readPolicy, policyErr := getLegacyMustTrueReadPolicy(currentDb, fk.ReferencedTable)
 		if policyErr != nil {
@@ -1188,6 +1200,7 @@ func buildRelatedSelectColumnsWithFKLabels(
 	tableName string,
 	columns []string,
 	foreignKeys map[string]dtt_utils.ForeignKey,
+	actorColumns row_mutation_policy.RowActorColumns,
 ) (string, string) {
 	if len(columns) == 0 {
 		return fmt.Sprintf("%s.*", pq.QuoteIdentifier(tableName)), ""
@@ -1214,6 +1227,11 @@ func buildRelatedSelectColumnsWithFKLabels(
 			),
 		)
 
+		if actorColumns[columnName] != "" {
+			displayAlias := buildRelatedFKDisplayAlias(columnName, existingColumns, usedDisplayAliases)
+			selectParts = append(selectParts, "NULL::text AS "+pq.QuoteIdentifier(displayAlias))
+			continue
+		}
 		fk, ok := foreignKeys[columnName]
 		if !ok || fk.NameColumn == "" {
 			continue

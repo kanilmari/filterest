@@ -8,8 +8,11 @@ package dtt_foreign_keys
 import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
+	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -53,6 +56,24 @@ func AddForeignKeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct the ALTER TABLE ADD CONSTRAINT command
+	tx, ok := dbutils.RequireTx(r.Context())
+	if !ok {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction not found")
+		return
+	}
+	marks, err := row_mutation_policy.ReadRowActorColumns(tx, requestData.ReferencingTable)
+	if err == nil {
+		err = marks.Protect(requestData.ReferencingColumn)
+	}
+	if err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	// Generate a unique constraint name
 	constraintName := fmt.Sprintf("fk_%s_%s", requestData.ReferencingTable, requestData.ReferencingColumn)
 
@@ -67,7 +88,7 @@ func AddForeignKeyHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Execute the statement
-	_, err := backend.Db.Exec(alterTableStmt)
+	_, err = tx.Exec(alterTableStmt)
 	if err != nil {
 		log.Printf("\033[31merror: adding foreign key: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error adding foreign key: %v", err))
@@ -282,6 +303,42 @@ func DeleteForeignKeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build the ALTER TABLE DROP CONSTRAINT statement
+	tx, ok := dbutils.RequireTx(r.Context())
+	if !ok {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction not found")
+		return
+	}
+	// The general FK reader is keyed by column, not constraint name. Resolve
+	// this exact constraint's columns in the catalog, including composite keys.
+	var columns pq.StringArray
+	err := tx.QueryRow(`SELECT COALESCE(array_agg(attribute.attname::text), ARRAY[]::text[])
+		FROM pg_catalog.pg_constraint AS constraint_info
+		JOIN pg_catalog.pg_attribute AS attribute
+		  ON attribute.attrelid = constraint_info.conrelid AND attribute.attnum = ANY(constraint_info.conkey)
+		WHERE constraint_info.conrelid = to_regclass(format('public.%I', $1::text))
+		  AND constraint_info.conname = $2
+	`, requestData.ReferencingTable, requestData.ConstraintName).Scan(&columns)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	marks, err := row_mutation_policy.ReadRowActorColumns(tx, requestData.ReferencingTable)
+	if err == nil {
+		for _, column := range columns {
+			if err = marks.Protect(column); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	dropConstraintStmt := fmt.Sprintf(
 		"ALTER TABLE %s DROP CONSTRAINT %s",
 		pq.QuoteIdentifier(requestData.ReferencingTable),
@@ -289,7 +346,7 @@ func DeleteForeignKeyHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Execute the statement
-	_, err := backend.Db.Exec(dropConstraintStmt)
+	_, err = tx.Exec(dropConstraintStmt)
 	if err != nil {
 		log.Printf("Virhe vierasavaimen poistamisessa: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Virhe vierasavaimen poistamisessa: %v", err))

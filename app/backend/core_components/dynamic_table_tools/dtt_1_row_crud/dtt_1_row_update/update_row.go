@@ -167,6 +167,16 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "transaction not found")
 		return
 	}
+	if err := validateRowActorUpdates(tx, tableName, updateRequest.ID, updates); err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(response_writer, refusal)
+			return
+		}
+		log.Printf("error checking actor updates: %v", err)
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error checking actor updates")
+		return
+	}
 	rowVisible, err := dtt_1_row_read.LockRowsVisibleForMutation(
 		tx,
 		tableName,

@@ -62,8 +62,8 @@ func TestApplyPilotCreatePayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("applyPilotCreatePayload returned error: %v", err)
 	}
-	if filtered["user_id"] != 42 {
-		t.Fatalf("filtered[user_id] = %v, want 42", filtered["user_id"])
+	if _, supplied := filtered["user_id"]; supplied {
+		t.Fatal("the pilot must leave actor stamping to the common writer")
 	}
 	if filtered["cached_username"] != "alice" {
 		t.Fatalf("filtered[cached_username] = %v, want alice", filtered["cached_username"])

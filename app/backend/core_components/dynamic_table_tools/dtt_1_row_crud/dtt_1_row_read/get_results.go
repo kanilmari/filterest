@@ -9,6 +9,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -315,6 +316,11 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 
 	query, query_args, rowCount, rowGroupFacets, err := BuildSelectQuery(ctx)
 	if err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(response_writer, refusal)
+			return
+		}
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building query")
 		return

@@ -19,6 +19,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
+	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/security"
 	"easelect/frontend/shared/card_roles"
 )
@@ -87,6 +88,23 @@ func validateCreateColumnList(list []CreateColumnDef) ([]CreateColumnDef, error)
 			return nil, fmt.Errorf("column %q is listed more than once", name)
 		}
 		seen[strings.ToLower(name)] = true
+		// These columns are added last by the actor SQL functions. Their
+		// request entries may only choose the permitted presentation settings.
+		if isReservedActorColumn(name) {
+			name = strings.ToLower(name)
+			typeName := normalizeTypeDefinition(column.DataType)
+			validRole := column.CardRole == "" || column.CardRole == "hidden" ||
+				(name == "owner_id" && column.CardRole == "username") ||
+				(name == "created_by" && column.CardRole == "details")
+			if (typeName != "INTEGER" && typeName != "BIGINT") || !validRole || column.Sortable ||
+				column.VisibilityGate || (column.IsMultilingual != nil && *column.IsMultilingual) {
+				return nil, &httpresponse.Refusal{Status: 400, LangKey: "error_reserved_owner_column",
+					Message: fmt.Sprintf("reserved actor column %s requires INTEGER or BIGINT, an allowed card role and no sort option", name)}
+			}
+		} else if column.CardRole == "username" {
+			return nil, &httpresponse.Refusal{Status: 400, LangKey: "error_reserved_owner_column",
+				Message: "the username card role belongs only to owner_id in a new dataset"}
+		}
 		if !isAllowedDataType(column.DataType) {
 			return nil, fmt.Errorf("column '%s' uses a forbidden data type '%s'", name, column.DataType)
 		}
@@ -118,9 +136,17 @@ func validateCreateColumnList(list []CreateColumnDef) ([]CreateColumnDef, error)
 func tableColumnsOf(list []CreateColumnDef) []dtt_3_table_create.ColumnDefinition {
 	tableColumns := make([]dtt_3_table_create.ColumnDefinition, 0, len(list))
 	for _, column := range list {
+		if isReservedActorColumn(column.Name) {
+			continue
+		}
 		tableColumns = append(tableColumns, dtt_3_table_create.ColumnDefinition{Name: column.Name, DataType: column.DataType})
 	}
 	return tableColumns
+}
+
+// Reserved names apply only during creation; existing datasets use their marks.
+func isReservedActorColumn(name string) bool {
+	return strings.EqualFold(name, "created_by") || strings.EqualFold(name, "owner_id")
 }
 
 // cardRolesOf collects the roles the list sets into the map

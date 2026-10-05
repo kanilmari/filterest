@@ -20,8 +20,12 @@ import (
 )
 
 type stubDriver struct {
-	lastQuery string
-	lastArgs  []driver.NamedValue
+	actorRows   [][]driver.Value
+	users       map[int64]bool
+	userLookups int
+	execArgs    [][]driver.NamedValue
+	lastQuery   string
+	lastArgs    []driver.NamedValue
 }
 
 func (d *stubDriver) Open(name string) (driver.Conn, error) {
@@ -41,6 +45,7 @@ func (c *stubConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.T
 	return &stubTx{conn: c}, nil
 }
 func (c *stubConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	c.drv.execArgs = append(c.drv.execArgs, append([]driver.NamedValue(nil), args...))
 	c.drv.lastQuery = query
 	c.drv.lastArgs = append([]driver.NamedValue(nil), args...)
 	return driver.RowsAffected(1), nil
@@ -49,6 +54,13 @@ func (c *stubConn) ExecContext(ctx context.Context, query string, args []driver.
 // QueryContext answers the restore's metadata lookups (which gallery a table belongs
 // to) with no rows: the stub's tables have no pictures.
 func (c *stubConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "AS roles(actor_role)") {
+		return &csvActorRows{cols: []string{"column_name", "actor_role"}, rows: c.drv.actorRows}, nil
+	}
+	if strings.Contains(query, "FROM public.system_users WHERE id") {
+		c.drv.userLookups++
+		return &csvActorRows{cols: []string{"exists"}, rows: [][]driver.Value{{c.drv.users[args[0].Value.(int64)]}}}, nil
+	}
 	return &stubEmptyRows{}, nil
 }
 

@@ -37,7 +37,7 @@ const raceReaderRole = "wl124_basic"
 const raceFixture = `
 CREATE TABLE system_users (id integer PRIMARY KEY, username text NOT NULL UNIQUE, enabled boolean NOT NULL DEFAULT true);
 CREATE TABLE system_db_tables (
-    table_uid bigint PRIMARY KEY, table_name text NOT NULL UNIQUE, schema_name text NOT NULL DEFAULT 'public',
+    table_uid integer PRIMARY KEY, table_name text NOT NULL UNIQUE, schema_name text NOT NULL DEFAULT 'public',
     row_policy_owner_column text
 );
 CREATE TABLE system_column_details (
@@ -137,6 +137,7 @@ func raceCluster(t *testing.T) (*sql.DB, *sql.DB) {
 	if _, err := owner.Exec(raceFixture); err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
+	loadRowActorFixture(t, owner)
 	// Every non-admin read wraps its policy in the canonical exact-row resolver.
 	migration, err := os.ReadFile("../../../../../server_tools/migrations/20260902000004_finalize_row_access_fail_closed_defaults.sql")
 	if err != nil {

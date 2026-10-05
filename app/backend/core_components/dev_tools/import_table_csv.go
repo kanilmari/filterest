@@ -7,6 +7,7 @@ package devtools
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"encoding/csv"
 	"fmt"
 	"net/http"
@@ -41,7 +42,7 @@ func ImportTableCSVTx(tx *sql.Tx, tableName string) (string, string, error) {
 }
 
 // ImportTableCSVTxWithUsername imports one CSV file, upserts the rows, and records lang-key provenance when needed.
-func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string) (string, string, error) {
+func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string, actorRepairs ...*CSVActorRepairCounts) (string, string, error) {
 	if tableName == "" {
 		tableName = "dev_todo"
 	}
@@ -86,6 +87,15 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 		}
 	}
 	importedLangKeys := make([]string, 0, 64)
+	if tx == nil {
+		return "", "", fmt.Errorf("tx is nil")
+	}
+	marks, err := row_mutation_policy.ReadRowActorColumns(tx, sanitizedTable)
+	if err != nil {
+		return "", "", err
+	}
+	repairs := CSVActorRepairCounts{}
+	knownUsers := make(map[int64]bool)
 
 	placeholders := make([]string, len(cols))
 	quotedCols := make([]string, len(cols))
@@ -93,7 +103,7 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 	for i, col := range cols {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 		quotedCols[i] = pq.QuoteIdentifier(col)
-		if col != "id" && col != "created" && col != "updated" {
+		if col != "id" && col != "created" && col != "updated" && marks[col] == "" {
 			updateParts = append(updateParts, fmt.Sprintf("%s = EXCLUDED.%s", pq.QuoteIdentifier(col), pq.QuoteIdentifier(col)))
 		}
 	}
@@ -114,9 +124,6 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 		)
 	}
 
-	if tx == nil {
-		return "", "", fmt.Errorf("tx is nil")
-	}
 	pictures, err := newCSVPictureRestore(tx, sanitizedTable, cols)
 	if err != nil {
 		return "", "", err
@@ -140,6 +147,20 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 				vals[i] = nil
 			} else {
 				vals[i] = v
+			}
+			if role := marks[cols[i]]; role != "" && vals[i] != nil {
+				value, cleared, err := normalizeCSVActorValue(tx, v, knownUsers)
+				if err != nil {
+					return "", "", err
+				}
+				vals[i] = value
+				if cleared {
+					if role == "creator" {
+						repairs.Creator++
+					} else {
+						repairs.Owner++
+					}
+				}
 			}
 		}
 
@@ -173,6 +194,11 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string)
 		lang.EnsureLangKeySourcesForCRUDImportTx(tx, sanitizedTable, importedLangKeys, username)
 	}
 
+	for _, result := range actorRepairs {
+		if result != nil {
+			*result = repairs
+		}
+	}
 	return filePath, sanitizedTable, nil
 }
 
@@ -191,14 +217,16 @@ func ImportTableCSVHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	username := getImportUsernameOrUnknown(r)
-	filePath, usedTable, err := ImportTableCSVTxWithUsername(tx, tableName, username)
+	var actorRepairs CSVActorRepairCounts
+	filePath, usedTable, err := ImportTableCSVTxWithUsername(tx, tableName, username, &actorRepairs)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, "imported %s from %s", usedTable, filePath)
+	fmt.Fprintf(w, "imported %s from %s; actor references cleared: creator=%d, owner=%d",
+		usedTable, filePath, actorRepairs.Creator, actorRepairs.Owner)
 }
 
 // getImportUsernameOrUnknown names the signed-in user for import-side provenance

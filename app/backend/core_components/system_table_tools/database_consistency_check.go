@@ -6,6 +6,7 @@ package system_table_tools
 
 import (
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
@@ -219,8 +220,8 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 
 		// These physical registries intentionally have no generic dataset metadata.
 		// Reject crafted repair requests as well as omitting them from the issue list.
-		if schemaName == "public" && (identifier == "system_media_assets" || identifier == "system_media_asset_usages") {
-			return fmt.Errorf("internal media registry requires its dedicated API")
+		if schemaName == "public" && row_mutation_policy.IsInternalRegistryTable(identifier) {
+			return fmt.Errorf("internal registry requires its dedicated API")
 		}
 
 		switch action {

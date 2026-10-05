@@ -118,6 +118,12 @@ func (*roleTxConn) QueryContext(_ context.Context, query string, _ []driver.Name
 	compact := strings.Join(strings.Fields(query), " ")
 	rows := &workflowQueueRows{}
 	switch {
+	case strings.Contains(compact, "app_row_actor_side_table_reason"):
+		rows.cols = []string{"reason"}
+		rows.data = [][]driver.Value{{nil}}
+	case strings.Contains(compact, "SELECT table_uid FROM public.system_db_tables"):
+		rows.cols = []string{"table_uid"}
+		rows.data = [][]driver.Value{{int64(123)}}
 	case strings.Contains(compact, "SELECT t.table_name, a.alias_slug"):
 		rows.cols = []string{"table_name", "alias_slug"}
 	case strings.Contains(compact, "SELECT table_uid, table_name"):

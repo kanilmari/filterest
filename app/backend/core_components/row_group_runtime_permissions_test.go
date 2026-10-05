@@ -17,13 +17,14 @@ import (
 )
 
 type rowGroupPermissionTestState struct {
-	currentRole    string
-	relationsExist bool
-	safeRoles      map[string]bool
-	queries        []string
-	execs          []string
-	committed      bool
-	rolledBack     bool
+	currentRole       string
+	relationsExist    bool
+	actorMarksMissing bool
+	safeRoles         map[string]bool
+	queries           []string
+	execs             []string
+	committed         bool
+	rolledBack        bool
 }
 
 type rowGroupPermissionTestDriver struct{ state *rowGroupPermissionTestState }
@@ -47,6 +48,7 @@ func TestRowGroupRuntimeRoleGrantSQLIsSelectOnly(t *testing.T) {
 		"REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER",
 		"REVOKE USAGE, UPDATE",
 		"GRANT SELECT",
+		`GRANT SELECT ON TABLE public.system_row_actor_columns TO "filterest_guest_123"`,
 	} {
 		if !strings.Contains(grantSQL, fragment) {
 			t.Fatalf("grant SQL lacks %q: %s", fragment, grantSQL)
@@ -140,7 +142,7 @@ func TestEnsureRowGroupRuntimeRolePermissionsRejectsPartialBootstrapBeforeRoleGr
 	t.Setenv("DB_READONLY_USER", "runtime_reader")
 
 	err := EnsureRowGroupRuntimeRolePermissions(database)
-	if err == nil || !strings.Contains(err.Error(), "tables or identity sequences are missing") {
+	if err == nil || !strings.Contains(err.Error(), "tables, identity sequences or actor marks are missing") {
 		t.Fatalf("error = %v, want partial-bootstrap rejection", err)
 	}
 	if len(state.queries) != 1 || len(state.execs) != 0 {
@@ -190,8 +192,8 @@ func (connection *rowGroupPermissionTestConn) QueryContext(_ context.Context, qu
 	if strings.Contains(query, "to_regclass('public.system_row_groups')") {
 		exists := connection.state.relationsExist
 		return &rowGroupPermissionTestRows{
-			columns: []string{"current_user", "groups", "memberships", "groups_sequence", "memberships_sequence"},
-			rows:    [][]driver.Value{{connection.state.currentRole, exists, exists, exists, exists}},
+			columns: []string{"current_user", "groups", "memberships", "groups_sequence", "memberships_sequence", "actor_marks"},
+			rows:    [][]driver.Value{{connection.state.currentRole, exists, exists, exists, exists, !connection.state.actorMarksMissing}},
 		}, nil
 	}
 	if strings.Contains(query, "FROM pg_roles AS candidate") {
@@ -230,4 +232,16 @@ func (rows *rowGroupPermissionTestRows) Next(values []driver.Value) error {
 	copy(values, rows.rows[rows.index])
 	rows.index++
 	return nil
+}
+
+func TestActorMarksMustExistBeforeRuntimeGrant(t *testing.T) {
+	db, state := openRowGroupPermissionTestDB(t, &rowGroupPermissionTestState{currentRole: "admin_role", relationsExist: true, actorMarksMissing: true})
+	setRowGroupPermissionTestEnvironment(t)
+	t.Setenv("DB_BASIC_USER", "runtime_reader")
+	if err := EnsureRowGroupRuntimeRolePermissions(db); err == nil || !strings.Contains(err.Error(), "actor marks are missing") {
+		t.Fatalf("%v", err)
+	}
+	if len(state.execs) != 0 {
+		t.Fatal("missing actor registry received grants")
+	}
 }

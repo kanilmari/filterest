@@ -6,7 +6,9 @@ package system_table_tools
 
 import (
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"fmt"
+	"github.com/lib/pq"
 	"log"
 )
 
@@ -73,7 +75,7 @@ func checkUnregisteredTables() CategoryResult {
 		  AND n.nspname NOT LIKE 'pg_%'
 		  AND n.nspname <> 'information_schema'
 		  AND n.nspname NOT IN ('restricted', 'postgis')
-		  AND NOT (n.nspname = 'public' AND c.relname IN ('system_media_assets', 'system_media_asset_usages'))
+		  AND NOT (n.nspname = 'public' AND c.relname = ANY($1::text[]))
 		  AND has_schema_privilege(n.nspname, 'USAGE')
 		  AND has_table_privilege(c.oid, 'SELECT')
 		  AND NOT EXISTS (
@@ -85,7 +87,7 @@ func checkUnregisteredTables() CategoryResult {
 		ORDER BY c.relname
 	`
 
-	rows, err := backend.Db.Query(query)
+	rows, err := backend.Db.Query(query, pq.Array(row_mutation_policy.InternalRegistryTables))
 	if err != nil {
 		log.Printf("[ConsistencyCheck] error in cat2 query: %v", err)
 		return cat

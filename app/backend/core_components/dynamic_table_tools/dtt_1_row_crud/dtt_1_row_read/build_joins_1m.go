@@ -8,11 +8,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"maps"
 	"strings"
 	"sync"
 	"time"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"github.com/lib/pq"
 
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
@@ -26,10 +28,11 @@ type rowQueryer interface {
 const joinMetadataCacheTTL = 5 * time.Minute
 
 type joinMetadataCacheEntry struct {
-	tableUID    string
-	fkRelations map[string]OneMRelation
-	foreignKeys map[string]dtt_utils.ForeignKey
-	cachedAt    time.Time
+	tableUID     string
+	fkRelations  map[string]OneMRelation
+	foreignKeys  map[string]dtt_utils.ForeignKey
+	actorColumns row_mutation_policy.RowActorColumns
+	cachedAt     time.Time
 }
 
 var joinMetadataCache = struct {
@@ -75,10 +78,11 @@ func cloneForeignKeyMap(source map[string]dtt_utils.ForeignKey) map[string]dtt_u
 
 func cloneJoinMetadataCacheEntry(source joinMetadataCacheEntry) joinMetadataCacheEntry {
 	return joinMetadataCacheEntry{
-		tableUID:    source.tableUID,
-		fkRelations: cloneOneMRelationMap(source.fkRelations),
-		foreignKeys: cloneForeignKeyMap(source.foreignKeys),
-		cachedAt:    source.cachedAt,
+		tableUID:     source.tableUID,
+		fkRelations:  cloneOneMRelationMap(source.fkRelations),
+		foreignKeys:  cloneForeignKeyMap(source.foreignKeys),
+		actorColumns: maps.Clone(source.actorColumns),
+		cachedAt:     source.cachedAt,
 	}
 }
 
@@ -117,13 +121,14 @@ func loadJoinMetadata(
 	db dbutils.Querier,
 	tableName string,
 ) (joinMetadataCacheEntry, error) {
-	if cached, found := getCachedJoinMetadata(tableName); found {
-		return cached, nil
-	}
-
 	tableUID, err := getTableUID(tableName, db)
 	if err != nil {
 		return joinMetadataCacheEntry{}, fmt.Errorf("getTableUID failed: %w", err)
+	}
+	// A dropped dataset's name can be reused before this cache expires. Its
+	// actor marks belong to the old table_uid and must not govern the new one.
+	if cached, found := getCachedJoinMetadata(tableName); found && cached.tableUID == tableUID {
+		return cached, nil
 	}
 
 	fkRelations, err := fetchForeignKeyRelations(db, tableUID)
@@ -138,10 +143,15 @@ func loadJoinMetadata(
 		return joinMetadataCacheEntry{}, err
 	}
 
+	actorColumns, err := row_mutation_policy.ReadRowActorColumns(db, tableName)
+	if err != nil {
+		return joinMetadataCacheEntry{}, err
+	}
 	entry := joinMetadataCacheEntry{
-		tableUID:    tableUID,
-		fkRelations: fkRelations,
-		foreignKeys: foreignKeys,
+		tableUID:     tableUID,
+		fkRelations:  fkRelations,
+		foreignKeys:  foreignKeys,
+		actorColumns: actorColumns,
 	}
 	setCachedJoinMetadata(tableName, entry)
 
@@ -197,6 +207,16 @@ func buildJoinsWith1MRelations(
 			)
 		}
 		colName := colInfo.ColumnName
+		if metadata.actorColumns[colName] != "" {
+			// Group A never projects an actor's name, including cached-name
+			// relations. Group B replaces this branch with the viewer rule.
+			generatedColumnName := generatedForeignNameAlias(colName)
+			selectColumns += fmt.Sprintf("%s.%s AS %s, NULL::text AS %s, ",
+				pq.QuoteIdentifier(tableName), pq.QuoteIdentifier(colName), pq.QuoteIdentifier(colName), pq.QuoteIdentifier(generatedColumnName))
+			columnExpressions[generatedColumnName] = "NULL::text"
+			columnExpressions[colName] = fmt.Sprintf("%s.%s", pq.QuoteIdentifier(tableName), pq.QuoteIdentifier(colName))
+			continue
+		}
 
 		// Tarkistetaan, onko colName foreignKeys-listassa:
 		if fk, ok := foreignKeys[colName]; ok && fk.NameColumn != "" {
@@ -220,12 +240,7 @@ func buildJoinsWith1MRelations(
 				aliasCount[colName]++
 				alias := fmt.Sprintf("%s_alias%d", colName, aliasCount[colName])
 
-				generatedColumnName := colName + "_name"
-				if strings.HasSuffix(colName, "_id") {
-					generatedColumnName = strings.TrimSuffix(colName, "_id") + "_name (ln)"
-				} else if strings.HasSuffix(colName, "_uid") {
-					generatedColumnName = strings.TrimSuffix(colName, "_uid") + "_name (ln)"
-				}
+				generatedColumnName := generatedForeignNameAlias(colName)
 
 				fullyQualifiedColumnName := fmt.Sprintf(
 					"%s.%s",
@@ -267,6 +282,15 @@ func buildJoinsWith1MRelations(
 
 	selectColumns = strings.TrimRight(selectColumns, ", ")
 	return selectColumns, joinClauses, columnExpressions, nil
+}
+
+// generatedForeignNameAlias keeps actor and ordinary reference labels compatible.
+func generatedForeignNameAlias(column string) string {
+	alias := relatedFKDisplayAliasBase(column)
+	if strings.HasSuffix(column, "_id") || strings.HasSuffix(column, "_uid") {
+		return alias + " (ln)"
+	}
+	return alias
 }
 
 // fetchForeignKeyRelations hakee system_foreign_key_relations_1_m -taulusta rivit,

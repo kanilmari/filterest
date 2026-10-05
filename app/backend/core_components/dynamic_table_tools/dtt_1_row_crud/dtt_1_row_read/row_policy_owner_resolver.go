@@ -67,9 +67,9 @@ const systemUsersForeignKeyColumnsQuery = `
 // setting can move or copy it. system_users is the only table that may own
 // itself: each of its rows is the user. The app_service_catalog pilot enforces
 // user_id as its owner in its database policies, its create preset, and its
-// write rule (appendMutationRowPolicyForAction). That column is not yet a
-// foreign key, so it is listed here to keep the pilot's current behaviour until
-// it gets one; the pilot's read and write rules never consult this resolver.
+// write rule (appendMutationRowPolicyForAction). WL58 also marks that owner
+// and gives it a SET NULL foreign key; the pilot's read and write rules still
+// use their fixed column and never consult this resolver.
 func builtInRowOwnerColumn(tableName string) (string, bool) {
 	switch tableName {
 	case rowOwnerUsersTableName:

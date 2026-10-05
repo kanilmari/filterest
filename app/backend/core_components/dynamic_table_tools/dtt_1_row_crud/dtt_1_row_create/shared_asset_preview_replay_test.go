@@ -33,7 +33,7 @@ import (
 )
 
 const replayFixtureSchema = `
-CREATE TABLE system_db_tables(table_uid bigint PRIMARY KEY, table_name text, schema_name text, multi_lang_embeddings boolean DEFAULT false);
+CREATE TABLE system_db_tables(table_uid integer PRIMARY KEY, table_name text, schema_name text, multi_lang_embeddings boolean DEFAULT false);
 CREATE TABLE system_column_details(table_uid bigint, column_name text, editable_in_ui boolean DEFAULT false, must_be_true_unless_own boolean);
 CREATE TABLE system_foreign_key_relations_1_m(id bigint PRIMARY KEY, source_table_uid bigint, target_table_uid bigint,
  source_column_name text, target_column_name text, target_insert_specs jsonb);
@@ -82,6 +82,7 @@ func replayDisposableDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { _ = db.Close() })
 
 	replayExec(t, db, replayFixtureSchema)
+	loadRowActorFixture(t, db)
 	specs, err := json.Marshal(dtt_asset_linking.BuildTargetInsertSpecs(
 		dtt_asset_linking.BuildImageFileUploadConfig("system_about", 10, []string{"png", "jpg"}),
 	))
@@ -392,7 +393,7 @@ func TestDisposableReplayMarkPrimaryWithoutInsertRightKeepsPreview(t *testing.T)
 	replayExec(t, db, `INSERT INTO system_about_assets(id, system_about_id, filename) VALUES (301, 30, '117_30_7.png')`)
 	replayWriteFile(t, paths.StorageRoot, "117/30/original/117_30_5.jpg")
 	replayExec(t, db, `CREATE ROLE gallery_editor`)
-	replayExec(t, db, `GRANT SELECT ON system_db_tables, system_column_details, system_foreign_key_relations_1_m TO gallery_editor`)
+	replayExec(t, db, `GRANT SELECT ON system_db_tables, system_row_actor_columns, system_column_details, system_foreign_key_relations_1_m TO gallery_editor`)
 	replayExec(t, db, `GRANT SELECT, UPDATE, DELETE ON system_about, system_about_assets TO gallery_editor`)
 
 	replayUpdate(t, db, "gallery_editor", `{"id":301,"column":"is_primary","value":true}`)

@@ -13,9 +13,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/httpresponse"
@@ -82,6 +84,24 @@ func CreateTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	marks, err := row_mutation_policy.ReadRowActorColumns(tx, trigger.TargetTable)
+	if err != nil {
+		log.Printf("error reading trigger actor columns: %v", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading trigger actor columns")
+		return
+	}
+	var actionValues map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(trigger.ActionValues), &actionValues); err != nil {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid trigger action values")
+		return
+	}
+	for column := range actionValues {
+		if marks[column] != "" {
+			httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400,
+				LangKey: "error_trigger_actor_column", Message: "trigger actions cannot supply actor columns"})
+			return
+		}
+	}
 	if err := insertTriggerIntoDB(tx, trigger); err != nil {
 		log.Printf("error saving trigger: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving trigger")
@@ -195,7 +215,7 @@ func ExecuteTriggers(q queryer, tableName string, newRow map[string]interface{})
 		log.Printf("Condition met: %t for trigger ID: %d", conditionMet, trigger.ID)
 
 		if conditionMet {
-			err = executeAction(q, trigger.TargetTable, trigger.ActionValues, newRow)
+			err = executeAction(q, trigger.ID, trigger.TargetTable, trigger.ActionValues, newRow)
 			if err != nil {
 				log.Printf("error executing action for trigger %d: %v", trigger.ID, err)
 				continue
@@ -361,9 +381,36 @@ func toFloat64(value interface{}) (float64, error) {
 	}
 }
 
+// Remember a stored action's warning so repeated executions do not fill the log.
+var reportedActorTriggerActions sync.Map
+
 // executeAction rakentaa INSERT-lauseen ja tallettaa actionValues:n targetTableen
-func executeAction(q queryer, targetTable, actionValuesStr string, sourceRow map[string]interface{}) error {
-	actionValues, err := parseActionValues(actionValuesStr, sourceRow)
+func executeAction(q queryer, triggerID int, targetTable, actionValuesStr string, sourceRow map[string]interface{}) error {
+	marks, err := row_mutation_policy.ReadRowActorColumns(q, targetTable)
+	if err != nil {
+		return err
+	}
+	var configured map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(actionValuesStr), &configured); err != nil {
+		return err
+	}
+	stripped := false
+	for column := range marks {
+		if _, present := configured[column]; present {
+			delete(configured, column)
+			stripped = true
+		}
+	}
+	if stripped {
+		if _, reported := reportedActorTriggerActions.LoadOrStore(triggerID, true); !reported {
+			log.Printf("warning: trigger %d for %s supplied actor columns; using the request actor", triggerID, targetTable)
+		}
+	}
+	cleaned, err := json.Marshal(configured)
+	if err != nil {
+		return err
+	}
+	actionValues, err := parseActionValues(string(cleaned), sourceRow)
 	if err != nil {
 		return err
 	}
@@ -377,6 +424,10 @@ func executeAction(q queryer, targetTable, actionValuesStr string, sourceRow map
 	}
 
 	columns, placeholders, values := buildInsertParameters(actionValues)
+	for column := range marks {
+		columns = append(columns, pq.QuoteIdentifier(column))
+		placeholders = append(placeholders, "public.app_request_actor_id()")
+	}
 	insertQuery := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		pq.QuoteIdentifier(targetTable),
 		strings.Join(columns, ", "),

@@ -6,6 +6,7 @@ package dtt_1_row_create
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -481,8 +482,11 @@ func resolveAndAuthorizeOwnedChildren(
 
 // normalizeMainForeignKeyValues applies missing-value semantics before integer
 // conversion can turn a missing required relation into the fabricated ID zero.
-func normalizeMainForeignKeyValues(columns []dtt_models.AddRowColumnInfo, row map[string]interface{}) error {
+func normalizeMainForeignKeyValues(columns []dtt_models.AddRowColumnInfo, row map[string]interface{}, marks row_mutation_policy.RowActorColumns) error {
 	for _, column := range columns {
+		if marks[column.ColumnName] != "" {
+			continue
+		}
 		if column.ForeignTableName == "" || column.ForeignColumnName == "" ||
 			!isAddRowColumnUserInsertable(column) || column.GenerationExpression != "" ||
 			strings.EqualFold(column.IsIdentity, "YES") {
@@ -530,9 +534,13 @@ func validateMainForeignKeyReads(
 	row map[string]interface{},
 	userID int,
 	userRole string,
+	marks row_mutation_policy.RowActorColumns,
 ) ([]checkedReference, error) {
 	var checked []checkedReference
 	for _, column := range columns {
+		if marks[column.ColumnName] != "" {
+			continue // Server stamps do not require read access to user accounts.
+		}
 		value, supplied := row[column.ColumnName]
 		if !supplied || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
 			continue

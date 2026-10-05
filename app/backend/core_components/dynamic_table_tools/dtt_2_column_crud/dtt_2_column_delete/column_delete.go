@@ -6,6 +6,7 @@ package dtt_2_column_delete
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_2_column_crud "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/security"
@@ -16,6 +17,18 @@ import (
 
 func RemoveColumns(tx *sql.Tx, sanitizedTableName string, removedCols []string) error {
 	fmt.Println("Removing columns (if any):", removedCols)
+	if len(removedCols) > 0 {
+		marks, err := row_mutation_policy.ReadRowActorColumns(tx, strings.ToLower(sanitizedTableName))
+		if err != nil {
+			return err
+		}
+		// Check the whole request before dropping its first column.
+		for _, column := range removedCols {
+			if err := marks.Protect(column); err != nil {
+				return err
+			}
+		}
+	}
 
 	// Haetaan ensin taulun primary key -sarakkeet, jotta voidaan estää niiden poisto.
 	pkCols, err := dtt_2_column_crud.GetPrimaryKeyColumns(tx, sanitizedTableName)

@@ -56,18 +56,19 @@ func registrationDisposableDB(t *testing.T) (*sql.DB, func(string) *sql.DB) {
 	run := func(name string, args ...string) {
 		t.Helper()
 		if output, err := exec.Command(bin+name, args...).CombinedOutput(); err != nil {
-			t.Fatalf("%s: %v: %s", name, err, output)
+			clusterLog, _ := os.ReadFile(filepath.Join(root, "postgres.log"))
+			t.Fatalf("%s: %v: %s\n%s", name, err, output, clusterLog)
 		}
 	}
 	run("initdb", "-D", data, "-A", "trust", "-U", "test_owner", "--no-locale", "--encoding=UTF8")
+	run("pg_ctl", "-D", data, "-l", filepath.Join(root, "postgres.log"),
+		"-o", "-h '' -k '"+socket+"' -p 15461", "-w", "start")
 	t.Cleanup(func() {
 		output, err := exec.Command(bin+"pg_ctl", "-D", data, "-m", "immediate", "-w", "stop").CombinedOutput()
 		if err != nil {
 			t.Errorf("stop isolated PostgreSQL: %v: %s", err, output)
 		}
 	})
-	run("pg_ctl", "-D", data, "-l", filepath.Join(root, "postgres.log"),
-		"-o", "-h '' -k '"+socket+"' -p 15461", "-w", "start")
 	connect := func(role string) *sql.DB {
 		t.Helper()
 		// Roles below are fixed test data; the quoted role exercises SQL identifier escaping.

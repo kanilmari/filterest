@@ -21,6 +21,9 @@ import (
 )
 
 type triggerAccountTargetState struct {
+	actorRows     [][]driver.Value
+	actionQuery   string
+	actionArgs    []driver.NamedValue
 	accountTables map[string]bool
 	queryErr      error
 	checked       []string
@@ -50,6 +53,18 @@ func (*triggerAccountTargetConn) Close() error { return nil }
 func (*triggerAccountTargetConn) Begin() (driver.Tx, error) { return triggerAccountTargetTx{}, nil }
 
 func (connection *triggerAccountTargetConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "AS roles(actor_role)") {
+		return &actorActionRows{cols: []string{"column_name", "actor_role"}, rows: connection.state.actorRows}, nil
+	}
+	if strings.Contains(query, "FROM information_schema.tables") {
+		return &actorActionRows{cols: []string{"exists"}, rows: [][]driver.Value{{false}}}, nil
+	}
+	if strings.HasPrefix(query, "SHOW myapp.trigger_session_var") {
+		return &actorActionRows{cols: []string{"setting"}, rows: [][]driver.Value{{""}}}, nil
+	}
+	if strings.Contains(query, "system_foreign_key_relations_1_m") {
+		return &actorActionRows{cols: []string{"empty"}}, nil
+	}
 	if !strings.Contains(query, "relation.relname::text = btrim($5::text)") || len(args) != 5 {
 		return nil, fmt.Errorf("unexpected query: %s", query)
 	}
@@ -62,6 +77,11 @@ func (connection *triggerAccountTargetConn) QueryContext(_ context.Context, quer
 }
 
 func (connection *triggerAccountTargetConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if strings.HasPrefix(query, `INSERT INTO "notes"`) {
+		connection.state.actionQuery = query
+		connection.state.actionArgs = append([]driver.NamedValue(nil), args...)
+		return driver.RowsAffected(1), nil
+	}
 	if !strings.Contains(query, "INSERT INTO system_triggers") || len(args) != 4 {
 		return nil, fmt.Errorf("unexpected statement: %s", query)
 	}

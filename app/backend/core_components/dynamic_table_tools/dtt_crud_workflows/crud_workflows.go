@@ -19,6 +19,7 @@ import (
 	"easelect/backend/core_components/dataset_routes"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_create"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_delete"
@@ -217,10 +218,20 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 	// step below works from that list.
 	columnList, err := validateCreateColumnList(req.ColumnList)
 	if err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	tableName = strings.ToLower(tableName)
+	hasReservedActorColumn := false
+	for _, column := range columnList {
+		hasReservedActorColumn = hasReservedActorColumn || isReservedActorColumn(column.Name)
+	}
 	var sanitizedForeignKeys []dtt_3_table_create.ForeignKeyDefinition
 	for _, fk := range req.ForeignKeys {
 		sRefCol, err := security.SanitizeIdentifier(fk.ReferencingColumn)
@@ -239,6 +250,15 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if isReservedActorColumn(sRefCol) {
+			hasReservedActorColumn = true
+			if !strings.EqualFold(sRefTable, "system_users") || !strings.EqualFold(sRefColumn, "id") {
+				httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400,
+					LangKey: "error_reserved_owner_column", Message: "actor columns may reference only system_users(id)"})
+				return
+			}
+			continue // The SQL function creates the key with ON DELETE SET NULL.
+		}
 		sanitizedForeignKeys = append(sanitizedForeignKeys, dtt_3_table_create.ForeignKeyDefinition{
 			ReferencingColumn: sRefCol,
 			ReferencedTable:   sRefTable,
@@ -250,6 +270,19 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction not available")
 		return
+	}
+
+	if hasReservedActorColumn {
+		var reason sql.NullString
+		if err := tx.QueryRow(`SELECT public.app_row_actor_side_table_reason($1)`, tableName).Scan(&reason); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error classifying dataset actor columns")
+			return
+		}
+		if reason.Valid {
+			httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400,
+				LangKey: "error_reserved_owner_column", Message: "reserved actor columns are not allowed: " + reason.String})
+			return
+		}
 	}
 
 	if err := dataset_routes.ValidateDatasetRouteAvailability(tx, tableName, 0); err != nil {
@@ -290,6 +323,17 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		_ = tx.Rollback()
 		log.Printf("\033[31merror: [CreateTableHandler] metadata refresh failed for %s: %v\033[0m", tableName, metaErr)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but metadata refresh failed: %v", metaErr))
+		return
+	}
+
+	if err := dtt_3_table_create.EnsureRowActorColumns(tx, tableName); err != nil {
+		_ = tx.Rollback()
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error creating actor columns: %v", err))
 		return
 	}
 
@@ -445,12 +489,32 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if len(req.ColumnCardRoles) > 0 {
+		marks, err := row_mutation_policy.ReadRowActorColumns(tx, strings.ToLower(sanitizedTableName))
+		if err == nil {
+			err = marks.ValidateCardRoles(req.ColumnCardRoles)
+		}
+		if err != nil {
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(w, refusal)
+				return
+			}
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 
 	// 1) Poistetut sarakkeet
 	if removeErr := RemoveColumnsWithBridge(
 		tx, sanitizedTableName, req.RemovedCols,
 	); removeErr != nil {
 		_ = tx.Rollback()
+		var refusal *httpresponse.Refusal
+		if errors.As(removeErr, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error removing columns: %v", removeErr))
 		return
 	}
@@ -460,6 +524,11 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 		tx, sanitizedTableName, req.ModifiedCols,
 	); updateErr != nil {
 		_ = tx.Rollback()
+		var refusal *httpresponse.Refusal
+		if errors.As(updateErr, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error updating columns: %v", updateErr))
 		return
 	}

@@ -32,6 +32,7 @@ type createTableState struct {
 	queries []queuedCreateQuery
 	execs   []queuedCreateExec
 
+	execArgs   [][]driver.NamedValue
 	execCalls  []string
 	queryCalls []string
 }
@@ -102,11 +103,12 @@ func (c *createTableConn) Exec(query string, args []driver.Value) (driver.Result
 	return c.ExecContext(context.Background(), query, named)
 }
 
-func (c *createTableConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func (c *createTableConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
 	c.state.execCalls = append(c.state.execCalls, query)
+	c.state.execArgs = append(c.state.execArgs, append([]driver.NamedValue(nil), args...))
 	if len(c.state.execs) == 0 {
 		return nil, errors.New("unexpected exec")
 	}
@@ -460,10 +462,32 @@ func TestInsertNewTablesExcludesOnlyPublicIndependentMediaRegistries(t *testing.
 	found := false
 	for _, query := range state.queryCalls {
 		if strings.Contains(query, "FROM pg_class c") {
-			found = strings.Contains(query, "NOT (n.nspname = 'public' AND c.relname IN ('system_media_assets', 'system_media_asset_usages'))")
+			found = strings.Contains(query, "NOT (n.nspname = 'public' AND c.relname = ANY($1::text[]))")
 		}
 	}
 	if !found || len(state.execCalls) != 0 {
 		t.Fatal("internal media registries must be excluded before insertion")
+	}
+}
+
+func TestEnsureRowActorColumnsUsesTheSQLAuthorityAndTableUID(t *testing.T) {
+	db, state := openCreateTableDB(t, []queuedCreateQuery{
+		{cols: []string{"reason"}, rows: [][]driver.Value{{nil}}},
+		{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(712)}}},
+	}, []queuedCreateExec{{}, {}, {}})
+	if err := EnsureRowActorColumns(db, "notes"); err != nil {
+		t.Fatal(err)
+	}
+	for i, function := range []string{"app_ensure_row_actor_columns", "app_ensure_row_actor_constraints", "app_register_row_actor_columns"} {
+		if !strings.Contains(state.execCalls[i], function) {
+			t.Fatalf("wrong order: %v", state.execCalls)
+		}
+	}
+	if state.execArgs[2][0].Value != int64(712) || state.execArgs[2][1].Value != "owner_id" {
+		t.Fatalf("registration used the wrong key: %v", state.execArgs[2])
+	}
+	db, state = openCreateTableDB(t, []queuedCreateQuery{{cols: []string{"reason"}, rows: [][]driver.Value{{"R1_history"}}}}, nil)
+	if err := EnsureRowActorColumns(db, "notes_history"); err != nil || len(state.execCalls) != 0 {
+		t.Fatalf("side table wrote actor columns: %v %v", err, state.execCalls)
 	}
 }

@@ -83,9 +83,33 @@ func (capture *StatusCapture) Unwrap() http.ResponseWriter {
 // distinguish session/auth failures (redirect to /login) from business-logic
 // permission denials (show toast). See Pipeline_Architecture.md §6.
 type ErrorBody struct {
-	Error       string `json:"error"`
-	Code        int    `json:"code"`
-	AuthFailure bool   `json:"auth_failure,omitempty"`
+	Error        string `json:"error"`
+	Code         int    `json:"code"`
+	AuthFailure  bool   `json:"auth_failure,omitempty"`
+	ErrorLangKey string `json:"error_lang_key,omitempty"`
+}
+
+// Refusal is a request the server understood and declines for a reason the
+// reader can act on. Handlers preserve it through wrapped service errors.
+type Refusal struct {
+	Status  int
+	LangKey string
+	Message string
+}
+
+func (refusal *Refusal) Error() string { return refusal.Message }
+
+// RespondWithRefusal writes the standard error body together with the reason
+// key, so the browser can translate a refusal without losing its API detail.
+func RespondWithRefusal(w http.ResponseWriter, refusal *Refusal) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(refusal.Status)
+	if err := json.NewEncoder(w).Encode(ErrorBody{
+		Error: refusal.Message, Code: refusal.Status, ErrorLangKey: refusal.LangKey,
+	}); err != nil {
+		log.Printf("[httpresponse] failed to encode refusal response: %v", err)
+	}
 }
 
 // RespondWithError writes a JSON error response with the given HTTP status code.

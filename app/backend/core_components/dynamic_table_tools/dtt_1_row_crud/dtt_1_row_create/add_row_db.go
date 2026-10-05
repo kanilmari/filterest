@@ -7,6 +7,7 @@ package dtt_1_row_create
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,13 +44,31 @@ func insertDataAccordingToPayload(
 		return 0, nil, err
 	}
 
-	currentUsername, err := getCurrentUsername(r)
-	if err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to fetch username from session")
-		return 0, nil, err
+	currentUsername := ""
+	if currentUserID > 1 {
+		currentUsername, err = getCurrentUsername(r)
+		if err != nil {
+			fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to fetch username from session")
+			return 0, nil, err
+		}
 	}
 	userRole := getSessionUserRoleOrGuest(r)
+	marks, err := row_mutation_policy.ReadRowActorColumns(tx, tableName)
+	if err != nil {
+		fmt.Printf("[insertDataAccordingToPayload] actor columns: %v\n", err)
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading actor columns")
+		return 0, nil, err
+	}
+	for column := range payload {
+		if err := marks.RefuseValue(column); err != nil {
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(w, refusal)
+			}
+			return 0, nil, err
+		}
+	}
 
 	// ------------------------------------------------------------ owned children & existing links
 	var childRows []ChildRowPayload
@@ -99,7 +118,7 @@ func insertDataAccordingToPayload(
 		return 0, nil, err
 	}
 
-	if err := normalizeMainForeignKeyValues(columnsInfo, payload); err != nil {
+	if err := normalizeMainForeignKeyValues(columnsInfo, payload, marks); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return 0, nil, err
 	}
@@ -114,7 +133,7 @@ func insertDataAccordingToPayload(
 	exclude := map[string]bool{"id": true, "created": true, "updated": true, "embedding_vector": true, "creation_spec": true}
 	allowed := map[string]bool{}
 	for _, c := range columnsInfo {
-		if exclude[strings.ToLower(c.ColumnName)] || c.GenerationExpression != "" || strings.ToUpper(c.IsIdentity) == "YES" {
+		if marks[c.ColumnName] != "" || exclude[strings.ToLower(c.ColumnName)] || c.GenerationExpression != "" || strings.ToUpper(c.IsIdentity) == "YES" {
 			continue
 		}
 		if isAddRowColumnUserInsertable(c) {
@@ -221,13 +240,14 @@ func insertDataAccordingToPayload(
 			filteredRow["cached_username"] = currentUsername
 		}
 	}
-	applyCurrentActorOwnership(filteredRow, columnsInfo, currentUserID, currentUsername)
+	applyCurrentActorOwnership(filteredRow, columnsInfo, currentUserID, currentUsername, marks)
 	checkedReferences, err := validateMainForeignKeyReads(
 		tx,
 		columnsInfo,
 		filteredRow,
 		currentUserID,
 		userRole,
+		marks,
 	)
 	if err != nil {
 		var forbidden *forbiddenError
@@ -252,6 +272,32 @@ func insertDataAccordingToPayload(
 			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 		}
 		return 0, nil, err
+	}
+	// Refuse actor input for every child before the main row is written.
+	childActorColumns := make(map[string]row_mutation_policy.RowActorColumns)
+	for _, child := range childRows {
+		childMarks, err := row_mutation_policy.ReadRowActorColumns(tx, child.TableName)
+		if err == nil {
+			err = childMarks.RefuseValue(child.ReferencingColumn)
+		}
+		if err == nil {
+			for column := range child.Data {
+				if err = childMarks.RefuseValue(column); err != nil {
+					break
+				}
+			}
+		}
+		if err != nil {
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(w, refusal)
+			} else {
+				fmt.Printf("[insertDataAccordingToPayload] child actor columns: %v\n", err)
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading child actor columns")
+			}
+			return 0, nil, err
+		}
+		childActorColumns[child.TableName] = childMarks
 	}
 	resolvedExistingLinks, err := resolveAndAuthorizeExistingLinks(
 		tx,
@@ -325,6 +371,7 @@ func insertDataAccordingToPayload(
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching child table columns")
 			return 0, nil, err
 		}
+		childMarks := childActorColumns[child.TableName]
 		if err := normalizeMultilingualCreatePayload(child.Data, childCols); err != nil {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 			return 0, nil, err
@@ -338,7 +385,7 @@ func insertDataAccordingToPayload(
 			lowerName := strings.ToLower(cc.ColumnName)
 			if lowerName != "id" && lowerName != "created" && lowerName != "updated" &&
 				lowerName != "embedding_vector" && lowerName != "creation_spec" &&
-				cc.ColumnName != child.ReferencingColumn && isAddRowColumnUserInsertable(cc) {
+				cc.ColumnName != child.ReferencingColumn && childMarks[cc.ColumnName] == "" && isAddRowColumnUserInsertable(cc) {
 				childAllowed[cc.ColumnName] = true
 			}
 		}
@@ -420,6 +467,9 @@ func insertDataAccordingToPayload(
 			}
 		}
 
+		if child.Data != nil {
+			applyCurrentActorOwnership(child.Data, childCols, currentUserID, currentUsername, childMarks)
+		}
 		cID, cErr := insertSingleChildRow(tx, mainRowID, child, childType)
 		if cErr != nil {
 			fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", cErr.Error())

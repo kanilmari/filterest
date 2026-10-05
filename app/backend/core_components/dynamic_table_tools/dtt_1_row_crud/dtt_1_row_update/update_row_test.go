@@ -34,8 +34,9 @@ type queuedQuery struct {
 }
 
 type updRowState struct {
-	mu      sync.Mutex
-	queries []queuedQuery
+	mu        sync.Mutex
+	queries   []queuedQuery
+	actorRows [][]driver.Value
 }
 
 type updRowDriver struct{ state *updRowState }
@@ -67,6 +68,9 @@ func (*updRowTx) Commit() error   { return nil }
 func (*updRowTx) Rollback() error { return nil }
 
 func (c *updRowConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "AS roles(actor_role)") {
+		return &updRowRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
+	}
 	if strings.Contains(query, "system_db_table_aliases") {
 		return nil, &pq.Error{Code: "42P01"}
 	}
@@ -105,12 +109,15 @@ func (r *updRowRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-func openUpdRowTx(t *testing.T, queries []queuedQuery) *sql.Tx {
+func openUpdRowTx(t *testing.T, queries []queuedQuery, actors ...[][]driver.Value) *sql.Tx {
 	t.Helper()
 	updRowDriverRegisterMu.Lock()
 	defer updRowDriverRegisterMu.Unlock()
 
 	state := &updRowState{queries: append([]queuedQuery(nil), queries...)}
+	if len(actors) > 0 {
+		state.actorRows = actors[0]
+	}
 	driverName := fmt.Sprintf("upd_row_test_%d", time.Now().UnixNano())
 	sql.Register(driverName, &updRowDriver{state: state})
 

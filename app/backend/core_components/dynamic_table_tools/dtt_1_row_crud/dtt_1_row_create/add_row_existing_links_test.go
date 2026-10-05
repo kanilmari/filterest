@@ -139,7 +139,7 @@ func TestResolveAndAuthorizeExistingLinksRejectsInvalidRowIDBeforeDatabaseAccess
 func TestRequiredForeignKeyCannotSkipValidation(t *testing.T) {
 	columns := []dtt_models.AddRowColumnInfo{{ColumnName: "status", DataType: "text", IsNullable: "NO", ForeignTableName: "statuses", ForeignColumnName: "slug"}}
 	for _, row := range []map[string]interface{}{{}, {"status": ""}, {"status": "  "}, {"status": nil}} {
-		if err := normalizeMainForeignKeyValues(columns, row); err == nil {
+		if err := normalizeMainForeignKeyValues(columns, row, nil); err == nil {
 			t.Errorf("required FK accepted missing value: %#v", row)
 		}
 	}
@@ -164,7 +164,7 @@ func TestForeignKeyMissingValueSemantics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			col := dtt_models.AddRowColumnInfo{ColumnName: "status", IsNullable: tt.nullable, ColumnDefault: tt.defaultValue, ForeignTableName: "statuses", ForeignColumnName: "slug"}
-			err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{col}, tt.row)
+			err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{col}, tt.row, nil)
 			if (err != nil) != tt.wantError {
 				t.Fatalf("error=%v", err)
 			}
@@ -176,7 +176,7 @@ func TestForeignKeyMissingValueSemantics(t *testing.T) {
 	}
 	// An ordinary text column is not a foreign key and retains its empty string.
 	row := map[string]interface{}{"title": ""}
-	if err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{{ColumnName: "title", IsNullable: "NO"}}, row); err != nil || row["title"] != "" {
+	if err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{{ColumnName: "title", IsNullable: "NO"}}, row, nil); err != nil || row["title"] != "" {
 		t.Fatalf("non-FK changed: %#v %v", row, err)
 	}
 }
@@ -214,11 +214,11 @@ func TestForeignKeyMainInsertInIsolatedPostgres(t *testing.T) {
 		{ColumnName: "status", DataType: "text", IsNullable: "NO", ForeignTableName: "add_row_test_statuses", ForeignColumnName: "slug"},
 		{ColumnName: "related_status", DataType: "text", IsNullable: "YES", ForeignTableName: "add_row_test_statuses", ForeignColumnName: "slug"},
 	}
-	if err = normalizeMainForeignKeyValues(columns, map[string]interface{}{"status": ""}); err == nil {
+	if err = normalizeMainForeignKeyValues(columns, map[string]interface{}{"status": ""}, nil); err == nil {
 		t.Fatal("missing required status accepted")
 	}
 	row := map[string]interface{}{"title": "synthetic fixture", "content": "isolated contract", "status": "new", "related_status": ""}
-	if err = normalizeMainForeignKeyValues(columns, row); err != nil {
+	if err = normalizeMainForeignKeyValues(columns, row, nil); err != nil {
 		t.Fatal(err)
 	}
 	id, err := insertMainRow(context.Background(), tx, "add_row_test_tickets", row, map[string]string{"title": "text", "content": "text", "status": "text", "related_status": "text"})
@@ -247,7 +247,7 @@ func TestForeignKeyNormalizationPreservesSupportedActorInsertSpecs(t *testing.T)
 	} {
 		t.Run(column.ColumnName, func(t *testing.T) {
 			row := map[string]interface{}{}
-			if err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{column}, row); err != nil {
+			if err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{column}, row, nil); err != nil {
 				t.Fatalf("server-filled actor FK was rejected before source_insert_specs ran: %v", err)
 			}
 			if len(row) != 0 {
@@ -257,7 +257,7 @@ func TestForeignKeyNormalizationPreservesSupportedActorInsertSpecs(t *testing.T)
 	}
 	for _, specs := range []string{`{"user_id":"otherUser"}`, `{"cached_username":"currentUserName"}`, `{"user_id":7}`, "not-json"} {
 		column := dtt_models.AddRowColumnInfo{ColumnName: "user_id", ForeignTableName: "system_users", ForeignColumnName: "id", IsNullable: "NO", SourceInsertSpecs: specs}
-		if err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{column}, map[string]interface{}{}); err == nil {
+		if err := normalizeMainForeignKeyValues([]dtt_models.AddRowColumnInfo{column}, map[string]interface{}{}, nil); err == nil {
 			t.Errorf("unsupported actor spec bypassed required validation: %s", specs)
 		}
 	}

@@ -48,7 +48,7 @@ func TestApplyCurrentActorOwnership(t *testing.T) {
 		{ColumnName: "server_note", Insertable: locked},
 	}
 
-	applyCurrentActorOwnership(row, columns, 42, "teppo_tekija")
+	applyCurrentActorOwnership(row, columns, 42, "teppo_tekija", nil)
 
 	if got := row["user_id"]; got != 42 {
 		t.Fatalf("user_id = %#v, want authenticated user 42", got)

@@ -1217,3 +1217,22 @@ func TestRespondOKWritesJSON(t *testing.T) {
 		t.Fatalf("body = %q, want 'test message'", rec.Body.String())
 	}
 }
+
+func TestDeletingActorMetadataReturnsRefusalWithoutDDL(t *testing.T) {
+	for _, column := range []string{"created_by", "user_id"} {
+		_, tx, state := openDelRowTx(t, []queuedQuery{
+			{cols: []string{"id"}, rows: [][]driver.Value{{int64(5)}}},
+			{cols: []string{"column_name", "table_uid"}, rows: [][]driver.Value{{column, int64(42)}}},
+			{cols: []string{"table_name"}, rows: [][]driver.Value{{"notes"}}},
+			{cols: []string{"column_name", "actor_role"}, rows: [][]driver.Value{{"created_by", "creator"}, {"user_id", "owner"}}},
+		}, nil)
+		req := httptest.NewRequest("POST", "/", strings.NewReader(`{"ids":[5]}`))
+		ctx := dbutils.SetTx(req.Context(), tx)
+		ctx = dbutils.SetRequestActorContext(ctx, dbutils.NewRequestActorContext(2, "admin"))
+		rec := httptest.NewRecorder()
+		DeleteRowsHandler(rec, req.WithContext(ctx), "system_column_details")
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"error_lang_key":"error_owner_column_protected"`) || len(state.execCalls) != 0 {
+			t.Fatalf("%s: %d %s writes=%v", column, rec.Code, rec.Body, state.execCalls)
+		}
+	}
+}

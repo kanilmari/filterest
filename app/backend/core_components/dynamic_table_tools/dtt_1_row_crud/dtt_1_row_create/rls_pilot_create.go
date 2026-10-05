@@ -69,7 +69,7 @@ func applyPilotCreatePayload(tableName, userRole string, payload map[string]inte
 		filtered[columnName] = value
 	}
 
-	filtered["user_id"] = currentUserID
+	// Actor columns are stamped after the common payload check, from marks.
 	filtered["cached_username"] = currentUsername
 	return filtered, nil
 }
