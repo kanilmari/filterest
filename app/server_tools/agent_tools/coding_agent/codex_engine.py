@@ -21,7 +21,7 @@ import sys
 
 # Exact installed CLI version every path requires. Upgrade deliberately: check
 # the new version's `exec --help` and a harmless sandbox probe first.
-PINNED_CODEX_VERSION = "0.155.1"
+PINNED_CODEX_VERSION = "0.160.0"
 
 CODE_WORKSPACE = "code_workspace"
 SITE_ASSISTANT = "site_assistant"

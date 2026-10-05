@@ -37,7 +37,7 @@ def worker(tmp_path):
     codex.write_text("""#!/usr/bin/python3
 import json, os, pathlib, sys, time
 if sys.argv[1:] == ['--version']:
-    print('codex-cli ' + os.environ.get('FAKE_CODEX_VERSION', '0.155.1'))
+    print('codex-cli ' + os.environ.get('FAKE_CODEX_VERSION', '0.160.0'))
     sys.exit(int(os.environ.get('FAKE_VERSION_EXIT', '0')))
 if sys.argv[1:] == ['login', 'status']:
     pathlib.Path(os.environ['SIGN_IN_CAPTURE']).write_text(json.dumps(sorted(os.environ)))
@@ -111,7 +111,7 @@ def test_explicit_model_effort_override_environment_and_preserve_stdin(worker, m
     status = next(output.glob('*/run_status.txt')).read_text()
     assert 'status=succeeded' in status
     assert f'codex_executable={codex}' in status
-    assert 'codex_version=0.155.1' in status
+    assert 'codex_version=0.160.0' in status
     assert f'codex_model_requested={model}' in status
     assert 'codex_reasoning_effort_requested=xhigh' in status
 
@@ -136,7 +136,7 @@ def test_background_preserves_explicit_executable_and_environment_settings(worke
     assert 'model_reasoning_effort="xhigh"' in capture['args']
     log = next(output.glob('*/worker_log_*.txt')).read_text()
     assert f'Worker Codex executable: {codex}' in log
-    assert 'Worker Codex version: 0.155.1' in log
+    assert 'Worker Codex version: 0.160.0' in log
 
 
 def test_omitted_model_takes_codex_default_while_effort_takes_the_project_default(worker):
