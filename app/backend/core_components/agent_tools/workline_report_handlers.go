@@ -307,10 +307,10 @@ func createWorklineReportHandler(w http.ResponseWriter, r *http.Request) {
 			workline_status_snapshot, changed_this_turn, context_text, plain_language_text,
 			technical_text, next_step_text, snapshot_json, git_head_commit,
 			git_worktree_state, git_has_other_changes, git_workline_changed_paths,
-			supersedes_report_id, created_by
+			supersedes_report_id, created_by, owner_id
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, 2, $11, $12,
-			$13, $14, $15, $16, $17, $18, $19::jsonb, $20, $21, $22, $23, $24, $25
+			$13, $14, $15, $16, $17, $18, $19::jsonb, $20, $21, $22, $23, $24, CASE WHEN $25 > 1 THEN $25 END, CASE WHEN $25 > 1 THEN $25 END
 		)
 		RETURNING id`,
 		normalized.WorklineID,

@@ -100,6 +100,10 @@ ALLOWED_SCHEMA_TABLES = {
 }
 
 ALLOWED_SEED_TABLES = {
+    # WL58 data migrations write identifier-only repair history and completion marks.
+    "public.system_data_repair_records",
+    # Common registration marks the sixteen package content datasets during 000004.
+    "public.system_row_actor_columns",
     "public.dev_agent_task_groups",
     "public.dev_agent_task_statuses",
     "public.dev_agent_task_todo_statuses",
@@ -437,6 +441,26 @@ def extract_migration_ledger_baseline(seed_sql: str) -> list[str]:
     return MIGRATION_LEDGER_FILENAME_PATTERN.findall(match.group(1))
 
 
+def forbidden_content_match(sql: str, label: str, pattern: re.Pattern[str], public_root: pathlib.Path):
+    """Keep private fixtures out while allowing WL58's exact reviewed pilot code.
+
+    000004 upgrades an optional pilot dataset already on a site; it does not ship
+    that dataset or its rows. Only its quoted table-name literal is allowed, and
+    only when the complete reviewed migration is present unchanged. Schema/seed
+    table allowlists still apply to all SQL, including this migration.
+    """
+    pilot_file = public_root / "app/server_tools/migrations/20261005000004_add_row_actor_columns.sql"
+    reviewed = read_text(pilot_file) if pilot_file.is_file() else ""
+    start = sql.find(reviewed) if reviewed else -1
+    for match in pattern.finditer(sql):
+        if (label == "private table" and match.group(0) == "app_service_catalog"
+                and start >= 0 and start <= match.start() < start + len(reviewed)
+                and sql[match.start() - 1:match.end() + 1] == "'app_service_catalog'"):
+            continue
+        return match
+    return None
+
+
 def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
     bootstrap_dir = public_root / "app" / "server_tools" / "public_bootstrap"
     schema_file = bootstrap_dir / "schema.sql"
@@ -643,7 +667,7 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
 
     for label, pattern in FORBIDDEN_CONTENT_PATTERNS.items():
         for file_label, text in (("schema.sql", schema_sql), ("seed_data.sql", seed_sql)):
-            match = pattern.search(text)
+            match = forbidden_content_match(text, label, pattern, public_root)
             if match:
                 findings.append(f"{file_label} contains forbidden {label}: {match.group(0)}")
 

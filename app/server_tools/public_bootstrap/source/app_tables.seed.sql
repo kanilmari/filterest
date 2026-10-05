@@ -134,7 +134,6 @@ VALUES
   (7, 'palvelutaso', 'Service level', 'text', 'details20', 5, 4, 4, 'palvelutaso', 'public fixture seed', TRUE, TRUE, FALSE, FALSE, TRUE, 'layers'),
   (7, 'tila', 'Status', 'text', 'details30', 6, 5, 5, 'tila', 'public fixture seed', TRUE, TRUE, FALSE, FALSE, TRUE, 'check-circle'),
   (7, 'vastuuhenkilo', 'Owner', 'text', 'details40', 7, 6, 6, 'vastuuhenkilo', 'public fixture seed', TRUE, TRUE, FALSE, FALSE, TRUE, 'user'),
-  (7, 'user_id', 'User ID', 'integer', 'hidden', 8, -10, NULL, NULL, 'public fixture seed', FALSE, FALSE, TRUE, TRUE, FALSE, NULL),
   (7, 'cached_username', 'Username', 'character varying', 'username', 9, -60, NULL, 'username', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, FALSE, NULL),
 
   (8, 'riski', 'Risk', 'text', 'header', 1, 1, 1, 'riski', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, TRUE, NULL),
@@ -147,7 +146,6 @@ VALUES
   (8, 'omistava_tiimi', 'Owning team', 'text', 'details', 8, 7, 7, 'omistava_tiimi', 'public fixture seed', TRUE, TRUE, TRUE, FALSE, TRUE, 'user'),
   (8, 'todennakoisyys', 'Likelihood', 'text', 'details', 9, 8, 8, 'todennakoisyys', 'public fixture seed', TRUE, TRUE, TRUE, FALSE, TRUE, 'ruler'),
   (8, 'palvelu_id', 'Service ID', 'integer', 'hidden', 10, NULL, NULL, 'palvelu_id', 'public fixture seed', FALSE, FALSE, TRUE, FALSE, FALSE, NULL),
-  (8, 'user_id', 'User ID', 'integer', 'hidden', 11, -10, NULL, NULL, 'public fixture seed', FALSE, FALSE, TRUE, TRUE, FALSE, NULL),
   (8, 'cached_username', 'Username', 'character varying', 'username', 12, -60, NULL, 'username', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, FALSE, NULL),
 
   (9, 'otsikko', 'Document', 'text', 'header', 1, 1, 1, 'otsikko', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, TRUE, NULL),
@@ -157,7 +155,6 @@ VALUES
   (9, 'voimassaolo', 'Validity', 'text', 'details20', 5, 4, 4, 'voimassaolo', 'public fixture seed', TRUE, TRUE, FALSE, FALSE, TRUE, 'check-circle'),
   (9, 'paivitetty', 'Reviewed', 'date', 'details30', 6, 5, 5, 'paivitetty', 'public fixture seed', TRUE, TRUE, FALSE, FALSE, FALSE, 'calendar'),
   (9, 'palvelu_id', 'Service ID', 'integer', 'hidden', 7, NULL, NULL, 'palvelu_id', 'public fixture seed', FALSE, FALSE, TRUE, FALSE, FALSE, NULL),
-  (9, 'user_id', 'User ID', 'integer', 'hidden', 8, -10, NULL, NULL, 'public fixture seed', FALSE, FALSE, TRUE, TRUE, FALSE, NULL),
   (9, 'cached_username', 'Username', 'character varying', 'username', 9, -60, NULL, 'username', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, FALSE, NULL),
 
   (10, 'otsikko', 'Ticket', 'text', 'header', 1, 1, 1, 'otsikko', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, TRUE, NULL),
@@ -171,9 +168,20 @@ VALUES
   (10, 'palvelu_id', 'Service ID', 'integer', 'hidden', 9, NULL, NULL, 'palvelu_id', 'public fixture seed', FALSE, FALSE, TRUE, FALSE, FALSE, NULL),
   (10, 'riski_id', 'Risk ID', 'integer', 'hidden', 10, NULL, NULL, 'riski_id', 'public fixture seed', FALSE, FALSE, TRUE, FALSE, FALSE, NULL),
   (10, 'dokumentaatio_id', 'Document ID', 'integer', 'hidden', 11, NULL, NULL, 'dokumentaatio_id', 'public fixture seed', FALSE, FALSE, TRUE, FALSE, FALSE, NULL),
-  (10, 'user_id', 'User ID', 'integer', 'hidden', 12, -10, NULL, NULL, 'public fixture seed', FALSE, FALSE, TRUE, TRUE, FALSE, NULL),
   (10, 'cached_username', 'Username', 'character varying', 'username', 13, -60, NULL, 'username', 'public fixture seed', FALSE, TRUE, FALSE, FALSE, FALSE, NULL);
 
+-- Actor metadata uses the same fields as upgrade registration (000002). The
+-- cached name keeps its role until group B. co_number follows the physical column.
+INSERT INTO public.system_column_details
+    (table_uid, column_name, data_type, co_number, lang_key, card_element, insertable,
+     editable_in_ui, hide_in_filter_panel, show_value_on_card, creation_spec)
+SELECT registry.table_uid, actor.column_name, format_type(attribute.atttypid, attribute.atttypmod),
+       attribute.attnum, actor.column_name, 'hidden', FALSE, FALSE, TRUE, TRUE, actor.spec
+  FROM public.system_db_tables AS registry
+ CROSS JOIN (VALUES ('created_by', 'WL58 row creator'), ('owner_id', 'WL58 row owner')) AS actor(column_name, spec)
+  JOIN pg_catalog.pg_attribute AS attribute
+    ON attribute.attrelid = to_regclass(format('public.%I', registry.table_name)) AND attribute.attname = actor.column_name
+ WHERE registry.table_name IN ('palvelukatalogi', 'riskienhallinta', 'dokumentaatio', 'tiketit');
 -- Register every language-registry field for the built-in administration
 -- views. These rows are presentation metadata only; editing remains disabled
 -- until the dedicated Site settings -> Languages UI is implemented.
@@ -273,7 +281,7 @@ ORDER BY registered.table_uid, columns.ordinal_position;
 UPDATE public.system_column_details
 SET insertable = FALSE
 WHERE table_uid IN (7, 8, 9, 10)
-  AND column_name IN ('user_id', 'cached_username');
+  AND column_name = 'cached_username';
 
 -- The file-upload relationship uses the same metadata contract as the runtime
 -- Asset linking tool. It enables click and drag-and-drop image uploads while
@@ -329,10 +337,11 @@ SELECT source_uid,
 FROM asset_relations;
 
 INSERT INTO public.palvelukatalogi
-    (id, user_id, cached_username, palvelu, kuvaus, omistava_tiimi,
+    (id, created_by, owner_id, cached_username, palvelu, kuvaus, omistava_tiimi,
      palvelutaso, tila, vastuuhenkilo)
 VALUES (
     1,
+    2,
     2,
     'teppo_tekija',
     json_build_object(
@@ -352,10 +361,11 @@ VALUES (
 );
 
 INSERT INTO public.riskienhallinta
-    (id, user_id, cached_username, palvelu_id, riski, kuvaus, vaikutus, riskitaso, tila,
+    (id, created_by, owner_id, cached_username, palvelu_id, riski, kuvaus, vaikutus, riskitaso, tila,
      omistava_tiimi, todennakoisyys, alentamistoimet)
 VALUES (
     1,
+    2,
     2,
     'teppo_tekija',
     1,
@@ -382,11 +392,12 @@ VALUES (
 );
 
 INSERT INTO public.dokumentaatio
-    (id, user_id, cached_username, palvelu_id, otsikko, kohdetiimi,
+    (id, created_by, owner_id, cached_username, palvelu_id, otsikko, kohdetiimi,
      ohje, paivitetty, voimassaolo)
 VALUES
   (
     1,
+    2,
     2,
     'teppo_tekija',
     1,
@@ -403,6 +414,7 @@ VALUES
   (
     2,
     2,
+    2,
     'teppo_tekija',
     NULL,
     json_build_object('en', 'First dataset', 'fi', 'Ensimmäinen tietoaineisto', 'yue', '第一個資料集')::text,
@@ -417,6 +429,7 @@ VALUES
   ),
   (
     3,
+    2,
     2,
     'teppo_tekija',
     NULL,
@@ -436,10 +449,11 @@ VALUES
   );
 
 INSERT INTO public.tiketit
-    (id, user_id, cached_username, palvelu_id, riski_id, dokumentaatio_id,
+    (id, created_by, owner_id, cached_username, palvelu_id, riski_id, dokumentaatio_id,
      otsikko, vastuutiimi, maarapaiva, tila, prioriteetti, pyyntotyyppi, kuvaus)
 VALUES (
     1,
+    2,
     2,
     'teppo_tekija',
     1,

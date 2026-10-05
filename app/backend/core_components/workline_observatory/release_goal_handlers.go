@@ -90,8 +90,8 @@ func createReleaseGoal(w http.ResponseWriter, r *http.Request, userID int) {
 	var id int64
 	err := tx.QueryRowContext(r.Context(), `
         INSERT INTO dev_agent_release_goals (
-            identity_key, version, title, outcome, is_selected, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+            identity_key, version, title, outcome, is_selected, created_by, owner_id
+        ) VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 1 THEN $6 END, CASE WHEN $6 > 1 THEN $6 END)
         RETURNING id`,
 		input.IdentityKey, input.Version, input.Title, input.Outcome, input.Selected, userID,
 	).Scan(&id)
@@ -229,8 +229,8 @@ func ReleaseContractsHandler(w http.ResponseWriter, r *http.Request) {
 	if count, _ := result.RowsAffected(); count == 0 {
 		if _, err := tx.ExecContext(r.Context(), `
             INSERT INTO dev_agent_release_goal_contracts (
-                release_goal_id, workline_id, completion_rule, target_phase, created_by
-            ) VALUES ($1, $2, $3, $4, $5)`,
+                release_goal_id, workline_id, completion_rule, target_phase, created_by, owner_id
+            ) VALUES ($1, $2, $3, $4, CASE WHEN $5 > 1 THEN $5 END, CASE WHEN $5 > 1 THEN $5 END)`,
 			input.ReleaseGoalID, input.WorklineID, input.CompletionRule, input.TargetPhase, userID,
 		); err != nil {
 			respondReleaseGoalDatabaseError(w, err)

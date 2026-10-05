@@ -404,13 +404,13 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		INSERT INTO dev_agent_tasks (title, issue_type, status, content, priority, tags, parent_id, assigned_to, queue_id, updated)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		INSERT INTO dev_agent_tasks (title, issue_type, status, content, priority, tags, parent_id, assigned_to, queue_id, updated, created_by, owner_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), CASE WHEN $10 > 1 THEN $10 END, CASE WHEN $10 > 1 THEN $10 END)
 		RETURNING id, created, updated
 	`
 
 	err = tx.QueryRow(query,
-		t.Title, t.IssueType, t.Status, t.Content, t.Priority, pq.Array(t.Tags), t.ParentID, t.AssignedTo, t.QueueID,
+		t.Title, t.IssueType, t.Status, t.Content, t.Priority, pq.Array(t.Tags), t.ParentID, t.AssignedTo, t.QueueID, currentAgentToolUserID(r),
 	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)

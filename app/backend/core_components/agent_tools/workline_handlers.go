@@ -217,8 +217,8 @@ func createWorklineHandler(w http.ResponseWriter, r *http.Request) {
 	userID := currentAgentToolUserID(r)
 	err = backend.Db.QueryRow(
 		`INSERT INTO dev_agent_worklines (
-			title, status, tags, created_by, status_changed_by, status_change_source
-		 ) VALUES ($1, $2, $3, $4, $4, 'creation') RETURNING id`,
+			title, status, tags, created_by, owner_id, status_changed_by, status_change_source
+		 ) VALUES ($1, $2, $3, CASE WHEN $4 > 1 THEN $4 END, CASE WHEN $4 > 1 THEN $4 END, $4, 'creation') RETURNING id`,
 		title, status, pq.Array(tags), userID,
 	).Scan(&id)
 	if err != nil {

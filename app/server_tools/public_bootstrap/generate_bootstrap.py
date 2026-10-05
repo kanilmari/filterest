@@ -51,6 +51,7 @@ language_seed_migrations = (
     "20260922000007_seed_embedding_refresh_and_dataset_header_language_keys.sql",
     "20260929000001_seed_connect_two_fields_language_keys.sql",
     "20260929000005_seed_missing_media_check_language_keys.sql",
+    "20261005000005_seed_row_actor_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -69,7 +70,14 @@ repair_schema_migrations = (
     "20260926000003_create_revoked_sign_in_store.sql",
     "20261005000001_add_row_actor_support.sql",
     "20261005000002_key_row_actor_marks_by_table_uid.sql",
+    "20261005000006_check_row_actor_trigger_definitions.sql",
 )
+# Complete the physical actor columns after development tables and support functions,
+# before schema privileges. The data step later registers the same columns.
+schema_completion_sources = ("row_actor_columns.schema.sql",)
+# The development metadata seed describes every physical column with generic defaults,
+# so the actor columns it meets get here the metadata an upgrade's data step gives them.
+seed_completion_sources = ("row_actor_metadata.seed.sql",)
 # Runs after every table exists, as the importing application role, so a new
 # installation withholds table creation from PUBLIC exactly as an upgrade does.
 schema_privilege_migrations = (
@@ -78,7 +86,9 @@ schema_privilege_migrations = (
 # A release's data step is run for a new installation by the same file, after every
 # seed: it needs the groups, folders, users and registry rows the seeds create. Each
 # is one DO block that writes its own completion marker.
-release_data_migrations: tuple[str, ...] = ()
+release_data_migrations = (
+    "20261005000004_add_row_actor_columns.sql",
+)
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.
 release_record_migrations = (
@@ -109,11 +119,13 @@ schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
     + "".join(reviewed_public_migration(name) for name in repair_schema_migrations)
+    + "".join(reviewed_source(name) for name in schema_completion_sources)
     + "".join(reviewed_public_migration(name) for name in schema_privilege_migrations)
 )
 seed_sql = (
     "".join(reviewed_source(name) for name in seed_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)
+    + "".join(reviewed_source(name) for name in seed_completion_sources)
     + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in release_data_migrations)
@@ -171,7 +183,7 @@ for name in included_migrations:
 
 # Enforce the same explicit content boundary used by the public release audit.
 sys.path.insert(0, str(public_root / "app/server_tools/public_slice_export"))
-from audit_public_bootstrap import ALLOWED_SCHEMA_TABLES, ALLOWED_SEED_TABLES, FORBIDDEN_CONTENT_PATTERNS, TABLE_PATTERN, INSERT_TABLE_PATTERN, EMAIL_PATTERN
+from audit_public_bootstrap import ALLOWED_SCHEMA_TABLES, ALLOWED_SEED_TABLES, FORBIDDEN_CONTENT_PATTERNS, forbidden_content_match, TABLE_PATTERN, INSERT_TABLE_PATTERN, EMAIL_PATTERN
 for label, sql, pattern, allowed in (
     ("schema", schema_sql, TABLE_PATTERN, ALLOWED_SCHEMA_TABLES),
     ("seed", seed_sql, INSERT_TABLE_PATTERN, ALLOWED_SEED_TABLES),
@@ -180,7 +192,7 @@ for label, sql, pattern, allowed in (
     if forbidden_tables:
         parser.error(f"Unreviewed {label} tables: {sorted(forbidden_tables)}")
     for description, forbidden in FORBIDDEN_CONTENT_PATTERNS.items():
-        if forbidden.search(sql):
+        if forbidden_content_match(sql, description, forbidden, public_root):
             parser.error(f"Public {label} contains forbidden {description}")
 for address in EMAIL_PATTERN.findall(seed_sql):
     if not address.endswith((".invalid", "@example.com", "@example.org", "@example.net")):
@@ -353,6 +365,7 @@ source_files = [
     public_bootstrap_sources / "dataset_rights.seed.sql",
     public_bootstrap_sources / "fixtures/runtime_media.v1.json",
 ]
+source_files.extend(public_bootstrap_sources / name for name in schema_completion_sources + seed_completion_sources)
 source_files.extend(sorted(public_migrations.glob("*.sql")))
 source_files.extend(sorted((public_bootstrap_sources / "fixtures/icons").glob("*.svg")))
 source_files.extend(sorted((public_bootstrap_sources / "fixtures/docs").glob("*.png")))

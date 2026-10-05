@@ -72,9 +72,9 @@ func createTaskGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := backend.Db.QueryRow(
-		`INSERT INTO dev_agent_task_groups (slug, title, description, sort_order)
-		VALUES ($1, $2, $3, $4) RETURNING id, created, updated`,
-		g.Slug, g.Title, g.Description, g.SortOrder,
+		`INSERT INTO dev_agent_task_groups (slug, title, description, sort_order, created_by, owner_id)
+		VALUES ($1, $2, $3, $4, CASE WHEN $5 > 1 THEN $5 END, CASE WHEN $5 > 1 THEN $5 END) RETURNING id, created, updated`,
+		g.Slug, g.Title, g.Description, g.SortOrder, currentAgentToolUserID(r),
 	).Scan(&g.ID, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)

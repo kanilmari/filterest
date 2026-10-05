@@ -168,3 +168,93 @@ def test_upgrade_preserves_an_existing_site_view_definition(database):
     for _ in range(2):
         database(repair.read_text())
         assert database("SELECT pg_get_viewdef('public.system_column_supported_views', true)") == before
+
+
+# WL58 uses the existing Unix-socket-only cluster and the two production import
+# scripts. No Docker daemon or installation database is involved in these tests.
+import json
+import os
+import subprocess
+import pytest
+from test_row_actor_support import cluster, DATA_STEP, ACTOR_TABLES
+
+
+def import_actor_package(cluster, tmp_path, path, schema, seed):
+    cluster("CREATE DATABASE imported")
+    (tmp_path / "schema.sql").write_text(schema)
+    (tmp_path / "seed_data.sql").write_text(seed)
+    connection = json.loads(cluster("SELECT json_build_object('host',current_setting('unix_socket_directories'),'port',current_setting('port'),'user',current_user)").stdout)
+    env = os.environ.copy()
+    env.update(PGHOST=connection['host'], PGPORT=connection['port'], PGUSER=connection['user'],
+               PGDATABASE='imported', POSTGRES_USER=connection['user'], POSTGRES_DB='imported',
+               FILTEREST_PUBLIC_BOOTSTRAP_DIR=str(tmp_path),
+               PATH=os.environ.get('PG_TEST_BIN', '/usr/lib/postgresql/16/bin') + ':' + env['PATH'])
+    if path == "docker-init":
+        command = ["bash", str(APP / "server_tools/db_init/02_import_public_bootstrap.sh")]
+    else:
+        command = ["bash", "-c", 'source "$1"; import_bootstrap_package "$2/schema.sql" "$2/seed_data.sql" 1 psql -X',
+                   "bootstrap-test", str(APP / "server_tools/lib/public_bootstrap.sh"), str(tmp_path)]
+    return subprocess.run(command, env=env, text=True, capture_output=True), env
+
+
+@pytest.mark.parametrize("path", ["docker-init", "native"])
+@pytest.mark.parametrize("fault", [None, "schema", "data", "policy"])
+def test_actor_package_import_stops_on_the_first_error(cluster, tmp_path, path, fault):
+    schema = (BOOTSTRAP / "schema.sql").read_text()
+    seed = (BOOTSTRAP / "seed_data.sql").read_text()
+    if fault == "schema":
+        schema = schema.replace("CREATE TABLE IF NOT EXISTS public.system_data_repair_records (",
+                                "DO $$ BEGIN RAISE EXCEPTION 'forced schema failure'; END $$;\nCREATE TABLE IF NOT EXISTS public.system_data_repair_records (", 1)
+    elif fault == "data":
+        seed = seed.replace("saved := public.app_suspend_row_triggers(target);",
+                            "saved := public.app_suspend_row_triggers(target); RAISE EXCEPTION 'forced data failure';", 1)
+    elif fault == "policy":
+        # Remove the entire guard statement, not merely its marker. 000006 now
+        # checks it even earlier than 000004; either way no import is accepted.
+        start = schema.index("CREATE POLICY repair_records_owner_role")
+        end = schema.index(";", start) + 1
+        schema = schema[:start] + schema[end:]
+    result, _ = import_actor_package(cluster, tmp_path, path, schema, seed)
+    if fault is None:
+        assert result.returncode == 0, result.stderr
+        assert cluster("SELECT version FROM system_db_version", "imported").stdout.strip() == "9.10.0"
+        assert cluster("SELECT count(*) FROM system_row_actor_columns", "imported").stdout.strip() == "32"
+        assert cluster("SELECT count(*) FROM app_check_row_actor_marks()", "imported").stdout.strip() == "0"
+        assert cluster("SELECT count(*) FROM system_data_repair_records WHERE migration='wl58_row_actor_columns' AND action IN ('column_added','fk_added','index_added','default_added','creator_trigger_added')", "imported").stdout.strip() == "0"
+        assert cluster("SELECT count(*) FROM system_db_tables r JOIN system_table_folders f ON f.id=r.folder_id WHERE r.table_name='system_data_repair_records' AND f.folder_name='logs' AND NOT r.is_removable", "imported").stdout.strip() == "1"
+        assert cluster("SELECT count(*) FROM system_group_table_func_rights r JOIN system_db_tables t ON t.table_uid=r.target_table_uid JOIN system_user_groups g ON g.id=r.user_group_id WHERE t.table_name='system_data_repair_records' AND g.name<>'admins'", "imported").stdout.strip() == "0"
+    else:
+        assert result.returncode != 0
+        assert ("repair_records_owner_role" if fault == "policy" else f"forced {fault} failure") in result.stderr
+        assert cluster("SELECT count(*) FROM system_schema_migrations", "imported").stdout.strip() == "0"
+        assert cluster("SELECT count(*) FROM system_db_version", "imported").stdout.strip() == "0"
+        if fault == "data":
+            assert cluster("SELECT count(*) FROM system_data_repair_records WHERE migration='wl58_row_actor_columns'", "imported").stdout.strip() == "0"
+            assert cluster("SELECT count(*) FROM pg_trigger WHERE tgname LIKE 'protect_%_creator' AND tgenabled='D'", "imported").stdout.strip() == "0"
+
+
+@pytest.mark.parametrize("prefix", ["filterest", "site_custom"])
+def test_actor_guards_work_with_the_real_role_creation_script(cluster, tmp_path, prefix):
+    result, env = import_actor_package(cluster, tmp_path, "docker-init", (BOOTSTRAP / "schema.sql").read_text(), (BOOTSTRAP / "seed_data.sql").read_text())
+    assert result.returncode == 0, result.stderr
+    env['POSTGRES_PASSWORD'] = 'disposable-test-only'
+    for role in ('BASIC', 'GUEST', 'READONLY', 'CONFIDENTIAL'):
+        env[f'DB_{role}_USER'] = prefix + '_' + role.lower()
+        env[f'DB_{role}_PASSWORD'] = 'disposable-test-only'
+    created = subprocess.run(['bash', str(APP / 'server_tools/db_init/03_create_roles.sh')], env=env, capture_output=True, text=True)
+    assert created.returncode == 0, created.stderr
+    for role in ('basic', 'guest', 'readonly', 'confidential'):
+        name = prefix + '_' + role
+        # Explicit rights make all four writes reach the guard, including DELETE
+        # and TRUNCATE that the production script correctly does not grant.
+        cluster(f"GRANT ALL ON system_row_actor_columns, system_data_repair_records TO {name}; GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO {name}", 'imported')
+        assert cluster(f"SET ROLE {name}; SELECT count(*) FROM system_row_actor_columns", 'imported').stdout.strip() == '32'
+        assert cluster(f"SET ROLE {name}; SELECT count(*) FROM system_data_repair_records", 'imported').stdout.strip() == '0'
+        for statement in ("INSERT INTO system_row_actor_columns(table_uid,actor_role,column_name) VALUES(7,'creator','created_by')",
+                          "UPDATE system_row_actor_columns SET column_name='bad' WHERE table_uid=7",
+                          "DELETE FROM system_row_actor_columns WHERE table_uid=7", "TRUNCATE system_row_actor_columns",
+                          "INSERT INTO system_data_repair_records(migration,action) VALUES('forged','completed')", "TRUNCATE system_data_repair_records"):
+            result = cluster(f'SET ROLE {name}; ' + statement, 'imported', check=False)
+            assert result.returncode != 0 and 'only the owner role' in result.stderr
+        cluster(f"SET ROLE {name}; UPDATE system_data_repair_records SET action='forged'; DELETE FROM system_data_repair_records", 'imported')
+    assert cluster("SELECT count(*) FROM app_check_row_actor_marks()", 'imported').stdout.strip() == '0'

@@ -122,13 +122,16 @@ func TestImageTableKeepsItsColumnSetInListOrderPostgres(t *testing.T) {
 	if got := physicalColumns(t, db, "wl135_places_assets"); !reflect.DeepEqual(got, wantChild) {
 		t.Fatalf("image table columns =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantChild, "\n"))
 	}
-	// The parent keeps its list order; the picture cache comes after it.
+	// The parent keeps its list order, then the creator and owner columns every new
+	// dataset gets last (WL58); the picture cache comes after them.
 	wantParent := []string{
 		"id integer nextval('wl135_places_id_seq'::regclass)",
 		"created timestamp with time zone now()",
 		"updated timestamp with time zone now()",
 		"name text",
 		"address text",
+		"created_by bigint app_request_actor_id()",
+		"owner_id bigint app_request_actor_id()",
 		"cached_image text",
 	}
 	if got := physicalColumns(t, db, "wl135_places"); !reflect.DeepEqual(got, wantParent) {

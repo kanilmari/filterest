@@ -327,8 +327,8 @@ func createHandoverReportHandler(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(
 		`INSERT INTO dev_agent_handover_reports (
 			title, source_kind, source_ref, tags, metadata_json, membership_hash,
-			supersedes_handover_id, created_by
-		) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+			supersedes_handover_id, created_by, owner_id
+		) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, CASE WHEN $8 > 1 THEN $8 END, CASE WHEN $8 > 1 THEN $8 END)
 		RETURNING id`,
 		normalized.Title,
 		normalized.SourceKind,

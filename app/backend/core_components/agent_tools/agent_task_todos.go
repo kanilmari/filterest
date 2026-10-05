@@ -330,8 +330,8 @@ func CreateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 	userID := currentAgentToolUserID(r)
 	var newID int64
 	err = backend.Db.QueryRow(
-		`INSERT INTO dev_agent_task_todos (task_id, parent_todo_id, todo_text, status, sort_order, created_by)
-		 VALUES ($1, $2, $3, 'todo', $4, $5)
+		`INSERT INTO dev_agent_task_todos (task_id, parent_todo_id, todo_text, status, sort_order, created_by, owner_id)
+		 VALUES ($1, $2, $3, 'todo', $4, CASE WHEN $5 > 1 THEN $5 END, CASE WHEN $5 > 1 THEN $5 END)
 		 RETURNING id`,
 		input.TaskID, input.ParentTodoID, todoText, sortOrder, userID,
 	).Scan(&newID)
