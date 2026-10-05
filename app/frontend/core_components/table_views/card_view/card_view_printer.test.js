@@ -218,6 +218,27 @@ describe('card language refresh', () => {
 
     test.each([
         ['standard', renderKeyValuePairs], ['single-line', renderSingleLineCardDetails], ['modern', renderModernCardDetails],
+    ])('preserves resolved name visibility for the %s detail renderer', async (layout, renderer) => {
+        const table = 'label_visibility_fixture';
+        const visibility = { hidden: false, shown: true, inherited: true };
+        const columns = Object.keys(visibility);
+        localStorage.setItem(table + '_dataTypes', JSON.stringify(Object.fromEntries(
+            columns.map(column => [column, {
+                card_element: 'details', show_value_on_card: true,
+                show_key_on_card: visibility[column],
+            }]),
+        )));
+        if (layout === 'modern') localStorage.setItem(table + '_tableMeta', JSON.stringify({card_style_variant: 'modern'}));
+        if (layout === 'single-line') vi.mocked(normalizeClientCardDetailsLayout).mockReturnValue('single-line');
+        await create_card_view(columns, [{ id: 7, hidden: 'One', shown: 'Two', inherited: 'Three' }], table);
+
+        const entries = vi.mocked(renderer).mock.calls.at(-1)[1];
+        expect(entries.map(entry => layout === 'standard' ? entry.labelText : entry.label))
+            .toEqual(['', 'shown', 'inherited']);
+    });
+
+    test.each([
+        ['standard', renderKeyValuePairs], ['single-line', renderSingleLineCardDetails], ['modern', renderModernCardDetails],
     ])('filters whole empty entries before the %s detail renderer and preserves the card node', async (layout, renderer) => {
         const table='field_fixture';
         const row={id:7, empty:null, whitespace:'   ', zero:0, boolean:false, dash:'—', na:'N/A', language:'{}'};

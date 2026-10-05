@@ -32,17 +32,21 @@ export function normalizeClientCardDetailLabelMode(labelMode) {
  *
  * This is the detail renderers' adapter to the one card-wide rule in
  * card_field_label_placement.js: it unpacks the column's own description — its
- * card roles, its declared type and its stated arrangement — and asks that rule.
- * It decides nothing itself, so a tile, a single-line row and a key/value pair
- * can never answer the same question differently.
+ * effective name visibility, card roles, declared type and stated arrangement —
+ * and asks that rule. The metadata API already resolves Show/Hide/role default;
+ * reading it also keeps a generated relation label subject to its source column.
+ * Without that metadata, the entry's visibility-resolved label is authoritative.
+ * Fallback text used for accessibility or icons never requests a visible name.
  *
- * @param {string} labelText - the field's name as this card would print it
+ * @param {string} label - the entry's label before any column-name fallback
  * @param {object} [labelMeta] - the column's metadata row
  * @returns {"hidden"|"inline"|"stacked"}
  */
-export function resolveCardDetailFieldLabelPlacement(labelText, labelMeta = {}) {
+export function resolveCardDetailFieldLabelPlacement(label, labelMeta = {}) {
     return resolveCardFieldLabelPlacement({
-        labelRequested: Boolean(String(labelText || "").trim()),
+        labelRequested: typeof labelMeta?.show_key_on_card === "boolean"
+            ? labelMeta.show_key_on_card
+            : Boolean(String(label || "").trim()),
         baseRoles: parseRoleString(labelMeta?.card_element || "").baseRoles,
         dataType: labelMeta?.data_type,
         labelValueLayout: labelMeta?.label_value_layout,
@@ -174,7 +178,7 @@ export function renderSingleLineCardDetails(containerElement, detailEntries, dat
 
         const labelText = String(detailEntry?.label || detailEntry?.column || "").trim();
         // The column decides where its name goes; one row's text never does.
-        const labelPlacement = resolveCardDetailFieldLabelPlacement(labelText, labelMeta);
+        const labelPlacement = resolveCardDetailFieldLabelPlacement(detailEntry?.label, labelMeta);
         const displayValue = String(detailEntry?.rawValue ?? "").trim();
         const renderedIcon = (
             labelMode === "icon" || labelMode === "both"

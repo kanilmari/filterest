@@ -1,3 +1,4 @@
+// card_detail_standard_key_decorator.js
 // Adapts a generic key/value pair to card-detail semantics.
 // Bridges the shared key-value renderer and card-detail column metadata: it adds
 // the field's icon, and it tells the renderer where that field's name belongs.
@@ -36,7 +37,7 @@ export function decorateStandardCardDetailKey(keyElement, pairData = {}) {
         pairData?.sourceColumn || pairData?.dataColumn || pairData?.column || pairData?.key || ""
     ).trim();
     const labelPlacement = resolveCardDetailFieldLabelPlacement(
-        labelText,
+        pairData?.labelText,
         pairData?.labelMeta
     );
 

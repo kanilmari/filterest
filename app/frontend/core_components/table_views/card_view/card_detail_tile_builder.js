@@ -170,7 +170,7 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
         textElement.className = "card_detail_tile_text";
 
         // The column decides where its name goes; one row's text never does.
-        const labelPlacement = resolveCardDetailFieldLabelPlacement(labelText, labelMeta);
+        const labelPlacement = resolveCardDetailFieldLabelPlacement(detailEntry?.label, labelMeta);
         const labelElement = createModernCardDetailTileLabel(
             detailEntry,
             labelMode,

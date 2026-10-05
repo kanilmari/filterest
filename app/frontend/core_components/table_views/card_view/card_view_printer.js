@@ -302,7 +302,8 @@ function renderCardDetailsSection(
     const kvDataArray = detailEntries.map((entry) => ({
         key: entry.labelKey || entry.column,
         labelKey: entry.labelKey || entry.column,
-        labelText: entry.label || entry.column,
+        // Preserve the empty label that carries the column's hidden-name setting.
+        labelText: entry.label,
         value: entry.rawValue,
         titleValue: entry.titleValue,
         isLink: entry.isLink,
