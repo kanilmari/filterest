@@ -4,6 +4,15 @@ This document consolidates information regarding Filterest's frontend architectu
 
 For the future admin/media architecture behind image linking and broader asset support, see [Asset_Linking_Architecture.md](Asset_Linking_Architecture.md).
 
+The administrator’s Classes and categories window uses the existing row-group endpoints and captures the row selection when opened. Catalogue requests use `target` and membership writes carry `dataset` in the body, keeping the administrator pool. Saving sends only edited names and changed assignments, then calls the unified refresh so the first-page ribbon reconciliation and committed search caches retain their existing owners. Partial failures retain the remaining draft and report that earlier successful requests persist.
+
+A class replacement uses one atomic membership POST, which removes peer values
+and assigns the chosen value in the backend transaction. The editor advances
+all membership baselines under that heading only after the replacement
+succeeds; a failed POST leaves the old assignment available for retry or
+cancellation when the chosen value or heading is disabled. Explicit clearing
+uses DELETE, and category checkboxes keep independent membership changes.
+
 ## 1. Showing Results in Different Views
 
 This section outlines the workflow for displaying search results and summarizes the differences between view types.
@@ -14,6 +23,15 @@ This section outlines the workflow for displaying search results and summarizes 
 3.  **Notices**: When the text-search stage finishes, a `text_search_ended` notice is inserted. If the AI stage returns suggestions, a `see_also` notice appears.
 4.  **Rendering**: `filterest/app/frontend/core_components/table_views/dataset_view_printer.js` renders the data using the selected view module.
 5.  **Filters**: The global search term appears as an `.active-filter-item` above the results.
+
+A successful, current first-page facet response resolves the row-group selection
+through `row_group_facet_printer.js`. Removing unavailable values also updates
+the same search's filter/execution signatures and its AI request context, and
+rekeys a matching remembered row prefix in `dataset_loaded_rows.js`. It keeps
+ordinary filters, search identity, rows, projection and next offset, without
+another fetch. Ordinary view builds remember their rows after reconciliation;
+searched listing reloads rekey the prefix already remembered by infinite scroll.
+Omitted facets, failures, later pages and stale responses cannot resolve it.
 
 ### View Types
 -   **Card View**: Presents each record as a card. Suitable for rich media. Implemented in `filterest/app/frontend/core_components/table_views/card_view/card_view_printer.js`.

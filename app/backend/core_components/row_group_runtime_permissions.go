@@ -40,13 +40,13 @@ func rowGroupRuntimeRoleGrantSQL(rawRoleName string) (string, error) {
 	return fmt.Sprintf(`
 		GRANT USAGE ON SCHEMA public TO %s;
 		REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-			ON TABLE public.system_row_groups, public.system_row_group_memberships
+			ON TABLE public.system_row_groups, public.system_row_group_memberships, public.system_row_group_classifications
 			FROM %s;
 		REVOKE USAGE, UPDATE
-			ON SEQUENCE public.system_row_groups_id_seq, public.system_row_group_memberships_id_seq
+			ON SEQUENCE public.system_row_groups_id_seq, public.system_row_group_memberships_id_seq, public.system_row_group_classifications_id_seq
 			FROM %s;
 		GRANT SELECT
-			ON TABLE public.system_row_groups, public.system_row_group_memberships
+			ON TABLE public.system_row_groups, public.system_row_group_memberships, public.system_row_group_classifications
 			TO %s;
 		GRANT SELECT ON TABLE public.system_row_actor_columns TO %s`, quotedRole, quotedRole, quotedRole, quotedRole, quotedRole), nil
 }
@@ -108,12 +108,14 @@ func EnsureRowGroupRuntimeRolePermissions(db *sql.DB) error {
 	}
 
 	var (
-		currentDatabaseRole       string
-		groupsTableExists         bool
-		membershipsExists         bool
-		actorMarksExists          bool
-		groupsSequenceExists      bool
-		membershipsSequenceExists bool
+		currentDatabaseRole           string
+		groupsTableExists             bool
+		membershipsExists             bool
+		actorMarksExists              bool
+		classificationsExists         bool
+		classificationsSequenceExists bool
+		groupsSequenceExists          bool
+		membershipsSequenceExists     bool
 	)
 	if err := db.QueryRow(`
 		SELECT current_user,
@@ -121,7 +123,9 @@ func EnsureRowGroupRuntimeRolePermissions(db *sql.DB) error {
 		       to_regclass('public.system_row_group_memberships') IS NOT NULL,
 		       to_regclass('public.system_row_groups_id_seq') IS NOT NULL,
 		       to_regclass('public.system_row_group_memberships_id_seq') IS NOT NULL,
-		       to_regclass('public.system_row_actor_columns') IS NOT NULL
+		       to_regclass('public.system_row_actor_columns') IS NOT NULL,
+		       to_regclass('public.system_row_group_classifications') IS NOT NULL,
+		       to_regclass('public.system_row_group_classifications_id_seq') IS NOT NULL
 	`).Scan(
 		&currentDatabaseRole,
 		&groupsTableExists,
@@ -129,10 +133,12 @@ func EnsureRowGroupRuntimeRolePermissions(db *sql.DB) error {
 		&groupsSequenceExists,
 		&membershipsSequenceExists,
 		&actorMarksExists,
+		&classificationsExists,
+		&classificationsSequenceExists,
 	); err != nil {
 		return fmt.Errorf("EnsureRowGroupRuntimeRolePermissions inspect database contract: %w", err)
 	}
-	if !groupsTableExists || !membershipsExists || !groupsSequenceExists || !membershipsSequenceExists || !actorMarksExists {
+	if !groupsTableExists || !membershipsExists || !groupsSequenceExists || !membershipsSequenceExists || !actorMarksExists || !classificationsExists || !classificationsSequenceExists {
 		return fmt.Errorf("EnsureRowGroupRuntimeRolePermissions: row-group tables, identity sequences or actor marks are missing")
 	}
 	for _, target := range targets {

@@ -609,3 +609,16 @@ describe('card language refresh', () => {
     });
 
 });
+
+
+test("classification permission alone enables card selection and the action bar", async () => {
+    const { create_card_view } = await import('./card_view_printer.js');
+    localStorage.setItem('orders_dataTypes', JSON.stringify({ title: { card_element: 'header' } }));
+    for (const allowed of [false, true]) {
+        hasDatasetPermissionMock.mockImplementation((route, dataset) => Promise.resolve(allowed && route === '/api/admin/row-groups' && dataset === ''));
+        const wrapper = await create_card_view(['id', 'title'], [{ id: 1, title: 'Trip' }], 'orders');
+        expect(Boolean(wrapper.querySelector('[data-testid="btn-row-group-assignment"]'))).toBe(allowed);
+        expect(Boolean(wrapper.querySelector('.card_checkbox'))).toBe(allowed);
+        if (allowed) expect(wrapper.querySelector('.card_mass_delete_bar').style.display).toBe('none');
+    }
+});

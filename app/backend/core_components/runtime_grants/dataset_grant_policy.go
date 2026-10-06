@@ -295,7 +295,7 @@ func evaluateRuntimeGrants(snapshot GrantSnapshot, diagnostics *[]Finding) (Gran
 					return nil, err
 				}
 			}
-			if object.Name == "system_row_groups" || object.Name == "system_row_group_memberships" || object.Name == "system_row_actor_columns" {
+			if object.Name == "system_row_group_classifications" || object.Name == "system_row_groups" || object.Name == "system_row_group_memberships" || object.Name == "system_row_actor_columns" {
 				for _, label := range []string{"basic", "guest"} {
 					if err := add(label, oid, "", "SELECT", "row visibility metadata"); err != nil {
 						return nil, err

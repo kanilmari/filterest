@@ -189,7 +189,13 @@ export async function refreshTableUnified(tableName, options = {}) {
 			result.dataset_presentation,
             // Counts belong to this listing, including its committed text search.
             result.row_group_facets,
-            ...((preserveCardReturn || loadedRows) ? [{ preserveCardReturn, loadedRows }] : [])
+            { preserveCardReturn, loadedRows, rowGroupFacetContext: {
+                // Remembered prefixes and later pages cannot resolve a fresh selection.
+                authoritative: !loadedRows && Number(currentState.offset) === 0
+                    && !result.error && result.success !== false,
+                isCurrent: isRenderCurrent,
+                requestFilters: { ...(currentState.filters || {}) },
+            } }
         );
         if (!isRenderCurrent()) return;
         const renderedView = resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || currentView);

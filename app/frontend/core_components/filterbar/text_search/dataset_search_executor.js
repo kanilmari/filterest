@@ -381,6 +381,8 @@ function cleanupSearchArtifacts(tableName) {
  * endless scrolling, so the reader can browse every match instead of a top few.
  */
 async function loadDatasetMatches(tableName, cache, isCurrent) {
+    let requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
+    let requestHost = getSearchViewContainer(tableName);
     let result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
     if (!isCurrent()) return false;
     // A URL-seeded search can begin while the route's first ordinary view
@@ -388,11 +390,17 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
     // reload even though its server answer was correct. Once the build has
     // settled, one fresh reload attaches the same answer to the live panel.
     if (!result) {
+        requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
+        requestHost = getSearchViewContainer(tableName);
         result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
     }
     if (!isCurrent() || !result) return false;
 
-    renderRowGroupFacets(tableName, result.row_group_facets);
+    renderRowGroupFacets(tableName, result.row_group_facets, {
+        authoritative: !result.error && result.success !== false,
+        isCurrent: () => isCurrent() && getSearchViewContainer(tableName) === requestHost,
+        requestFilters,
+    });
     const rows = Array.isArray(result?.data) ? result.data : [];
     if (Array.isArray(result?.columns) && result.columns.length) cache.columns = result.columns;
     cache.types = { ...(cache.types || {}), ...(result?.types || {}) };
@@ -540,7 +548,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     _ongoingSearchResults[tableName]?.supplemental?.destroy();
     const cache = initSearchCache();
     Object.assign(cache, {
-        query, filterSignature: context.signature,
+        query, filterSignature: context.signature, requestContext: context,
         // The selected filters reach the dataset's rows through the listing's
         // own query, so its rows are never filtered a second time here.
         filters: context.clientFilters, complete: false,

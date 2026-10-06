@@ -1,23 +1,20 @@
 // row_groups.go
-// Provides administrator list/create and membership management for reusable groups.
-// Bridges generic dataset rows and the normalized system_row_groups taxonomy.
-// Exists so projects can classify rows across datasets without comma-separated labels or table-specific schemas.
+// Provides administrator heading, value and assignment management on the existing routes.
+// Bridges bounded requests with transaction-owned catalogue and membership writers.
+// Exists so multilingual row classifications are managed through one administrator boundary.
 package system_table_tools
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
-	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"github.com/lib/pq"
@@ -28,100 +25,111 @@ const maxRowGroupRequestBytes = 64 * 1024
 var (
 	rowGroupSlugPattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 	rowGroupLanguagePattern = regexp.MustCompile(`^[a-z]{2,3}(-[A-Z]{2})?$`)
-	errRowGroupUnavailable  = errors.New("row group does not exist or is disabled")
-	errRowGroupConflict     = errors.New("a row group with this slug already exists")
+	errRowGroupUnavailable  = errors.New("row group or classification does not exist or is disabled")
+	errRowGroupConflict     = errors.New("a row group or classification with this slug already exists")
 	errRowGroupTarget       = errors.New("target dataset or row does not exist")
 	errRowGroupLanguages    = errors.New("row group languages must use the registered default language and known language codes")
-	listRowGroups           = listRowGroupsFromDB
-	createRowGroup          = createRowGroupInDB
-	assignRowGroup          = assignRowGroupInDB
-	removeRowGroup          = removeRowGroupInDB
 )
 
-// RowGroup is one reusable global classification.
+// RowGroup is a global value or heading, with additive assignment readback.
 type RowGroup struct {
-	ID          int64             `json:"id"`
-	Slug        string            `json:"slug"`
-	Title       map[string]string `json:"title"`
-	Description map[string]string `json:"description,omitempty"`
-	SortOrder   int               `json:"sort_order"`
-	Enabled     bool              `json:"enabled"`
-	Selected    bool              `json:"selected"`
+	ID               int64             `json:"id"`
+	Slug             string            `json:"slug"`
+	Title            map[string]string `json:"title"`
+	Description      map[string]string `json:"description,omitempty"`
+	ClassificationID *int64            `json:"classification_id"`
+	IsSingle         *bool             `json:"is_single,omitempty"`
+	SortOrder        int               `json:"sort_order"`
+	Enabled          bool              `json:"enabled"`
+	Selected         bool              `json:"selected"`
+	SelectedRows     []int64           `json:"selected_rows"`
 }
 
 type createRowGroupRequest struct {
-	Slug        string            `json:"slug"`
-	Title       map[string]string `json:"title"`
-	Description map[string]string `json:"description,omitempty"`
-	SortOrder   int               `json:"sort_order"`
-	Enabled     *bool             `json:"enabled,omitempty"`
+	ID               int64                  `json:"id,omitempty"`
+	Slug             string                 `json:"slug,omitempty"`
+	Title            map[string]string      `json:"title,omitempty"`
+	Description      map[string]string      `json:"description,omitempty"`
+	ClassificationID *int64                 `json:"classification_id,omitempty"`
+	IsSingle         *bool                  `json:"is_single,omitempty"`
+	SortOrder        *int                   `json:"sort_order,omitempty"`
+	Enabled          *bool                  `json:"enabled,omitempty"`
+	Classification   *createRowGroupRequest `json:"classification,omitempty"`
 }
 
 type rowGroupMembershipRequest struct {
-	GroupID  int64 `json:"group_id"`
-	TableUID int64 `json:"table_uid"`
-	RowID    int64 `json:"row_id"`
+	GroupID  int64   `json:"group_id"`
+	Dataset  string  `json:"dataset,omitempty"`
+	RowIDs   []int64 `json:"row_ids,omitempty"`
+	TableUID int64   `json:"table_uid,omitempty"`
+	RowID    int64   `json:"row_id,omitempty"`
 }
 
-// AdminRowGroupsHandler lists applicable groups or creates a reusable group.
-// GET|POST /api/admin/row-groups
+type rowGroupCatalogue struct {
+	Groups          []RowGroup `json:"groups"`
+	Classifications []RowGroup `json:"classifications"`
+	Dataset         string     `json:"dataset,omitempty"`
+	TableUID        int64      `json:"table_uid,omitempty"`
+	RowIDs          []int64    `json:"row_ids"`
+}
+
+func requireRowGroupAdministrator(w http.ResponseWriter, r *http.Request) bool {
+	actor := dbutils.RequestActorContextFromRequest(r)
+	if actor.UserRole != "admin" || actor.UserID <= 1 {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "administrator access required")
+		return false
+	}
+	return true
+}
+
+// AdminRowGroupsHandler lists headings and selected values, or creates/edits names.
+// GET|POST /api/admin/row-groups; the target query deliberately avoids dataset routing.
 func AdminRowGroupsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireRowGroupAdministrator(w, r) {
+		return
+	}
+	tx, ok := dbutils.RequireTx(r.Context())
+	if !ok {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction unavailable")
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
-		tableUID, err := optionalPositiveQueryValue(r, "table_uid")
+		response, err := getRowGroupCatalogue(r.Context(), tx, r)
 		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+			respondWithRowGroupError(w, err)
 			return
 		}
-		rowID, err := optionalPositiveQueryValue(r, "row_id")
-		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		if rowID > 0 && tableUID == 0 {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "row_id requires table_uid")
-			return
-		}
-
-		groups, err := listRowGroups(r.Context(), tableUID, rowID)
-		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "row groups unavailable")
-			return
-		}
-		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"groups": groups})
+		httpresponse.RespondWithJSON(w, http.StatusOK, response)
 	case http.MethodPost:
 		request, err := decodeCreateRowGroupRequest(r.Body)
 		if err != nil {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		tx, ok := dbutils.RequireTx(r.Context())
-		if !ok {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction unavailable")
-			return
+		heading := request.Classification != nil
+		if heading {
+			request = *request.Classification
 		}
-		group, err := createRowGroup(r.Context(), tx, request)
-		if errors.Is(err, errRowGroupConflict) {
-			httpresponse.RespondWithError(w, http.StatusConflict, err.Error())
-			return
-		}
-		if errors.Is(err, errRowGroupLanguages) {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+		result, err := saveRowGroupInDB(r.Context(), tx, request, heading)
 		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "row group creation failed")
+			respondWithRowGroupError(w, err)
 			return
 		}
-		httpresponse.RespondWithJSON(w, http.StatusCreated, group)
-
+		status := http.StatusCreated
+		if request.ID > 0 {
+			status = http.StatusOK
+		}
+		httpresponse.RespondWithJSON(w, status, result)
 	}
 }
 
-// AdminRowGroupMembershipsHandler assigns or removes a group from a dataset row.
+// AdminRowGroupMembershipsHandler applies one value to 1–200 rows, retaining legacy bodies.
 // POST|DELETE /api/admin/row-group-memberships
 func AdminRowGroupMembershipsHandler(w http.ResponseWriter, r *http.Request) {
-
+	if !requireRowGroupAdministrator(w, r) {
+		return
+	}
 	request, err := decodeRowGroupMembershipRequest(r.Body)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
@@ -132,67 +140,33 @@ func AdminRowGroupMembershipsHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction unavailable")
 		return
 	}
-
 	if r.Method == http.MethodPost {
-		err = assignRowGroup(r.Context(), tx, request)
+		err = assignRowGroupInDB(r.Context(), tx, request)
 	} else {
-		err = removeRowGroup(r.Context(), tx, request)
-	}
-	if errors.Is(err, errRowGroupUnavailable) || errors.Is(err, errRowGroupTarget) {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
-		return
+		err = removeRowGroupInDB(r.Context(), tx, request)
 	}
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "row group membership update failed")
+		respondWithRowGroupError(w, err)
 		return
 	}
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func decodeCreateRowGroupRequest(reader io.Reader) (createRowGroupRequest, error) {
-	var request createRowGroupRequest
-	decoder := json.NewDecoder(io.LimitReader(reader, maxRowGroupRequestBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
-		return createRowGroupRequest{}, errors.New("invalid request body")
+func respondWithRowGroupError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errRowGroupConflict):
+		httpresponse.RespondWithError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, errRowGroupUnavailable), errors.Is(err, errRowGroupTarget), errors.Is(err, errRowGroupLanguages),
+		errors.Is(err, errRowAccessRows), errors.Is(err, errRowAccessDataset):
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+	default:
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "row group operation failed")
 	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return createRowGroupRequest{}, errors.New("request body must contain one JSON object")
-	}
-
-	request.Slug = strings.TrimSpace(request.Slug)
-	if !rowGroupSlugPattern.MatchString(request.Slug) {
-		return createRowGroupRequest{}, errors.New("slug must contain 1-64 lowercase letters, digits, underscores, or hyphens")
-	}
-	if request.SortOrder < -100000 || request.SortOrder > 100000 {
-		return createRowGroupRequest{}, errors.New("sort_order is outside the supported range")
-	}
-	var err error
-	request.Title, err = normalizeRowGroupTranslations(request.Title, true)
-	if err != nil {
-		return createRowGroupRequest{}, fmt.Errorf("title: %w", err)
-	}
-	request.Description, err = normalizeRowGroupTranslations(request.Description, false)
-	if err != nil {
-		return createRowGroupRequest{}, fmt.Errorf("description: %w", err)
-	}
-	return request, nil
 }
 
-func decodeRowGroupMembershipRequest(reader io.Reader) (rowGroupMembershipRequest, error) {
-	var request rowGroupMembershipRequest
-	decoder := json.NewDecoder(io.LimitReader(reader, maxRowGroupRequestBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
-		return rowGroupMembershipRequest{}, errors.New("invalid request body")
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return rowGroupMembershipRequest{}, errors.New("request body must contain one JSON object")
-	}
-	if request.GroupID <= 0 || request.TableUID <= 0 || request.RowID <= 0 {
-		return rowGroupMembershipRequest{}, errors.New("group_id, table_uid, and row_id must be positive integers")
-	}
-	return request, nil
+// Query validation errors remain 400 without disguising database failures.
+func rowGroupQueryError(message string) error {
+	return errors.Join(errRowGroupTarget, errors.New(strings.TrimSpace(message)))
 }
 
 func normalizeRowGroupTranslations(input map[string]string, required bool) (map[string]string, error) {
@@ -226,169 +200,6 @@ func optionalPositiveQueryValue(r *http.Request, key string) (int64, error) {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
 	}
 	return value, nil
-}
-
-func listRowGroupsFromDB(ctx context.Context, tableUID int64, rowID int64) ([]RowGroup, error) {
-	rows, err := backend.Db.QueryContext(ctx, `
-		SELECT groups.id,
-		       groups.slug,
-		       groups.title::text,
-		       COALESCE(groups.description, '{}'::jsonb)::text,
-		       groups.sort_order,
-		       groups.enabled,
-		       CASE
-		           WHEN $1::bigint > 0 AND $2::bigint > 0 THEN EXISTS (
-		               SELECT 1
-		               FROM public.system_row_group_memberships AS membership
-		               WHERE membership.group_id = groups.id
-		                 AND membership.table_uid = $1
-		                 AND membership.row_id = $2
-		           )
-		           ELSE FALSE
-		       END AS selected
-		FROM public.system_row_groups AS groups
-		ORDER BY groups.sort_order, groups.slug, groups.id
-	`, tableUID, rowID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	groups := make([]RowGroup, 0)
-	for rows.Next() {
-		var group RowGroup
-		var titleJSON string
-		var descriptionJSON string
-		if err := rows.Scan(
-			&group.ID,
-			&group.Slug,
-			&titleJSON,
-			&descriptionJSON,
-			&group.SortOrder,
-			&group.Enabled,
-			&group.Selected,
-		); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal([]byte(titleJSON), &group.Title); err != nil {
-			return nil, fmt.Errorf("decode row group %d title: %w", group.ID, err)
-		}
-		if err := json.Unmarshal([]byte(descriptionJSON), &group.Description); err != nil {
-			return nil, fmt.Errorf("decode row group %d description: %w", group.ID, err)
-		}
-		groups = append(groups, group)
-	}
-	return groups, rows.Err()
-}
-
-func createRowGroupInDB(ctx context.Context, tx *sql.Tx, request createRowGroupRequest) (RowGroup, error) {
-	if err := validateRowGroupLanguagesInDB(ctx, tx, request.Title, request.Description); err != nil {
-		return RowGroup{}, err
-	}
-	titleJSON, err := json.Marshal(request.Title)
-	if err != nil {
-		return RowGroup{}, err
-	}
-	descriptionJSON, err := json.Marshal(request.Description)
-	if err != nil {
-		return RowGroup{}, err
-	}
-	enabled := true
-	if request.Enabled != nil {
-		enabled = *request.Enabled
-	}
-
-	group := RowGroup{
-		Slug: request.Slug, Title: request.Title, Description: request.Description,
-		SortOrder: request.SortOrder, Enabled: enabled,
-	}
-	err = tx.QueryRowContext(ctx, `
-		INSERT INTO public.system_row_groups (
-			slug, title, description, sort_order, enabled
-		)
-		VALUES ($1, $2::jsonb, $3::jsonb, $4, $5)
-		RETURNING id
-	`, request.Slug, string(titleJSON), string(descriptionJSON), request.SortOrder, enabled).Scan(&group.ID)
-	var pqError *pq.Error
-	if errors.As(err, &pqError) && pqError.Code == "23505" {
-		return RowGroup{}, errRowGroupConflict
-	}
-	return group, err
-}
-
-func assignRowGroupInDB(ctx context.Context, tx *sql.Tx, request rowGroupMembershipRequest) error {
-	var available bool
-	if err := tx.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM public.system_row_groups
-			WHERE id = $1
-			  AND enabled = TRUE
-		)
-	`, request.GroupID).Scan(&available); err != nil {
-		return err
-	}
-	if !available {
-		return errRowGroupUnavailable
-	}
-
-	var schemaName string
-	var tableName string
-	if err := tx.QueryRowContext(ctx, `
-		SELECT COALESCE(NULLIF(schema_name, ''), 'public'), table_name
-		FROM public.system_db_tables
-		WHERE table_uid = $1
-	`, request.TableUID).Scan(&schemaName, &tableName); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return errRowGroupTarget
-		}
-		return err
-	}
-
-	targetStableKey := ""
-	quotedTarget := pq.QuoteIdentifier(schemaName) + "." + pq.QuoteIdentifier(tableName)
-	if tableName == "system_config" && schemaName == "public" {
-		if err := tx.QueryRowContext(ctx, `SELECT key FROM public.system_config WHERE id = $1 FOR KEY SHARE`, request.RowID).Scan(&targetStableKey); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return errRowGroupTarget
-			}
-			return err
-		}
-	} else {
-		var targetID int64
-		query := fmt.Sprintf("SELECT id FROM %s WHERE id = $1 FOR KEY SHARE", quotedTarget)
-		if err := tx.QueryRowContext(ctx, query, request.RowID).Scan(&targetID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return errRowGroupTarget
-			}
-			return err
-		}
-	}
-	var err error
-	if targetStableKey != "" {
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO public.system_row_group_memberships (group_id, table_uid, row_id, target_stable_key)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (group_id, table_uid, target_stable_key)
-			WHERE target_stable_key IS NOT NULL
-			DO UPDATE SET row_id = EXCLUDED.row_id, updated = now()
-		`, request.GroupID, request.TableUID, request.RowID, targetStableKey)
-	} else {
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO public.system_row_group_memberships (group_id, table_uid, row_id)
-			VALUES ($1, $2, $3)
-			ON CONFLICT (group_id, table_uid, row_id) DO NOTHING
-		`, request.GroupID, request.TableUID, request.RowID)
-	}
-	return err
-}
-
-func removeRowGroupInDB(ctx context.Context, tx *sql.Tx, request rowGroupMembershipRequest) error {
-	_, err := tx.ExecContext(ctx, `
-		DELETE FROM public.system_row_group_memberships
-		WHERE group_id = $1 AND table_uid = $2 AND row_id = $3
-	`, request.GroupID, request.TableUID, request.RowID)
-	return err
 }
 
 func validateRowGroupLanguagesInDB(

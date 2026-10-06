@@ -34,6 +34,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.riskienhallinta_assets",
     "public.riskienhallinta_dokumentaatio_relation",
     "public.riskienhallinta_tiketit_relation",
+    "public.system_row_group_classifications",
     "public.tiketit",
     "public.tiketit_assets",
     "public.system_audit_log",

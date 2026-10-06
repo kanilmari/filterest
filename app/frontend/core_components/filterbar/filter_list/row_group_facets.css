@@ -84,3 +84,27 @@
     min-width: 44px;
     min-height: 44px;
 }
+
+
+.row-group-facets__title {
+    width: 100%;
+    color: var(--text_color);
+    text-align: center;
+    font-weight: 700;
+}
+
+.row-group-facet-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.row-group-facet-group__title {
+    width: 100%;
+    color: var(--text_color);
+    text-align: center;
+    overflow-wrap: anywhere;
+}

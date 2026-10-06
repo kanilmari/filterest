@@ -3,16 +3,13 @@
 package system_table_tools
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
 func TestDecodeCreateRowGroupRequestNormalizesMultilingualValues(t *testing.T) {
 	request, err := decodeCreateRowGroupRequest(strings.NewReader(`{
-		"slug":"security",
+		"classification_id":1,"slug":"security",
 		"title":{"fi":" Turvallisuus ","en":" Security "},
 		"description":{"fi":" Matkaturvallisuus "},
 		"sort_order":20
@@ -30,11 +27,11 @@ func TestDecodeCreateRowGroupRequestRejectsInvalidContract(t *testing.T) {
 		name string
 		body string
 	}{
-		{name: "unknown field", body: `{"slug":"security","title":{"en":"Security"},"extra":true}`},
+		{name: "unknown field", body: `{"classification_id":1,"slug":"security","title":{"en":"Security"},"extra":true}`},
 		{name: "unsafe slug", body: `{"slug":"Security News","title":{"en":"Security"}}`},
-		{name: "missing title", body: `{"slug":"security","title":{}}`},
-		{name: "invalid language code", body: `{"slug":"security","title":{"english":"Security"}}`},
-		{name: "extra object", body: `{"slug":"security","title":{"en":"Security"}} {}`},
+		{name: "missing title", body: `{"classification_id":1,"slug":"security","title":{}}`},
+		{name: "invalid language code", body: `{"classification_id":1,"slug":"security","title":{"english":"Security"}}`},
+		{name: "extra object", body: `{"classification_id":1,"slug":"security","title":{"en":"Security"}} {}`},
 	}
 
 	for _, test := range tests {
@@ -53,23 +50,5 @@ func TestDecodeRowGroupMembershipRequestRequiresPositiveIdentifiers(t *testing.T
 	}
 	if _, err := decodeRowGroupMembershipRequest(strings.NewReader(`{"group_id":4,"table_uid":0,"row_id":8}`)); err == nil {
 		t.Fatal("zero table_uid accepted")
-	}
-}
-
-func TestAdminRowGroupsHandlerListsThroughExplicitAdminRoute(t *testing.T) {
-	original := listRowGroups
-	listRowGroups = func(_ context.Context, tableUID int64, rowID int64) ([]RowGroup, error) {
-		if tableUID != 201 || rowID != 8 {
-			t.Fatalf("query target = %d/%d, want 201/8", tableUID, rowID)
-		}
-		return []RowGroup{{ID: 4, Slug: "security", Title: map[string]string{"en": "Security"}, Enabled: true, Selected: true}}, nil
-	}
-	t.Cleanup(func() { listRowGroups = original })
-
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/row-groups?table_uid=201&row_id=8", nil)
-	response := httptest.NewRecorder()
-	AdminRowGroupsHandler(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"slug":"security"`) || !strings.Contains(response.Body.String(), `"selected":true`) {
-		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }

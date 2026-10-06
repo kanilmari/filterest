@@ -35,6 +35,13 @@ when a final check names a function the bootstrap does not create; the previous
 artifacts then stay as they were. Release records (`*_record_database_release_*`)
 are not run here: the block writes the version row of the version it is built for.
 
+Classification headings are empty in the public seed, as are the existing values
+and assignments. The 9.10.0 package includes the heading schema, Finnish and
+English labels, and protected registry metadata through the same upgrade files.
+Acceptance requires both `wl103_row_group_classifications` and
+`wl103_row_group_classifications_registry`. Vocabulary and assignments belonging
+to a site are administrator-managed content, never public fixture data.
+
 The three reviewed walkthrough images and the user-approved service, risk, and
 ticket starter images remain immutable fixture inputs under `source/fixtures/`.
 The runtime-media manifest declares a monotonic materialization revision. On

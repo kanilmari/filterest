@@ -501,7 +501,7 @@ export async function createExperimentalFreeLayoutCard({
         card.dataset.id = rowItem.id;
     }
 
-    if (renderContext.hasDeleteRight || renderContext.canManageRowAccess) {
+    if (renderContext.hasDeleteRight || renderContext.canManageRowAccess || renderContext.canManageRowGroups) {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.classList.add("card_checkbox");

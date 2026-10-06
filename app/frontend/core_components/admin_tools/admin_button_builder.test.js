@@ -69,6 +69,10 @@ vi.mock("./field_view_editor.js", () => ({
     createFieldViewEditorButton: createFieldViewEditorButtonMock,
 }));
 
+vi.mock("./row_group_assignment_editor.js", () => ({
+    createRowGroupAssignmentButton: vi.fn(() => { const node = document.createElement("button"); node.dataset.testid = "btn-row-group-assignment"; return node; }),
+}));
+
 vi.mock("./row_access_editor.js", () => ({
     createEditRowPermissionsButton: createEditRowPermissionsButtonMock,
 }));
@@ -344,4 +348,15 @@ describe("appendChatUIIfAllowed", () => {
         expect(title?.dataset.langVariable).toBe("Kieliavaimet");
         expect(title?.textContent).toBe("Keskustelu – Kieliavaimet");
     });
+});
+
+
+test("classification button uses only its tableless permission", async () => {
+    const { appendAdminFeatures } = await import("./admin_button_builder.js");
+    for (const allowed of [false, true]) {
+        hasDatasetPermissionMock.mockImplementation((route, dataset) => Promise.resolve(allowed && route === "/api/admin/row-groups" && dataset === ""));
+        const container = document.createElement("div");
+        await appendAdminFeatures("orders", container, document.createElement("div"), "table");
+        expect(Boolean(container.querySelector('[data-testid="btn-row-group-assignment"]'))).toBe(allowed);
+    }
 });

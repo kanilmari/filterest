@@ -93,6 +93,7 @@ var productTables = map[string]bool{
 	"system_row_access_rules":           true,
 	"system_row_actor_columns":          true,
 	"system_row_group_memberships":      true,
+	"system_row_group_classifications":  true,
 	"system_row_groups":                 true,
 	"system_schema_migrations":          true,
 	"system_table_folders":              true,

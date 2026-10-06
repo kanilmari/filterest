@@ -17,14 +17,16 @@ import (
 )
 
 type rowGroupPermissionTestState struct {
-	currentRole       string
-	relationsExist    bool
-	actorMarksMissing bool
-	safeRoles         map[string]bool
-	queries           []string
-	execs             []string
-	committed         bool
-	rolledBack        bool
+	currentRole                   string
+	relationsExist                bool
+	actorMarksMissing             bool
+	classificationsMissing        bool
+	classificationSequenceMissing bool
+	safeRoles                     map[string]bool
+	queries                       []string
+	execs                         []string
+	committed                     bool
+	rolledBack                    bool
 }
 
 type rowGroupPermissionTestDriver struct{ state *rowGroupPermissionTestState }
@@ -48,6 +50,8 @@ func TestRowGroupRuntimeRoleGrantSQLIsSelectOnly(t *testing.T) {
 		"REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER",
 		"REVOKE USAGE, UPDATE",
 		"GRANT SELECT",
+		"public.system_row_group_classifications",
+		"public.system_row_group_classifications_id_seq",
 		`GRANT SELECT ON TABLE public.system_row_actor_columns TO "filterest_guest_123"`,
 	} {
 		if !strings.Contains(grantSQL, fragment) {
@@ -192,8 +196,8 @@ func (connection *rowGroupPermissionTestConn) QueryContext(_ context.Context, qu
 	if strings.Contains(query, "to_regclass('public.system_row_groups')") {
 		exists := connection.state.relationsExist
 		return &rowGroupPermissionTestRows{
-			columns: []string{"current_user", "groups", "memberships", "groups_sequence", "memberships_sequence", "actor_marks"},
-			rows:    [][]driver.Value{{connection.state.currentRole, exists, exists, exists, exists, !connection.state.actorMarksMissing}},
+			columns: []string{"current_user", "groups", "memberships", "groups_sequence", "memberships_sequence", "actor_marks", "classifications", "classifications_sequence"},
+			rows:    [][]driver.Value{{connection.state.currentRole, exists, exists, exists, exists, !connection.state.actorMarksMissing, exists && !connection.state.classificationsMissing, exists && !connection.state.classificationSequenceMissing}},
 		}, nil
 	}
 	if strings.Contains(query, "FROM pg_roles AS candidate") {
@@ -243,5 +247,24 @@ func TestActorMarksMustExistBeforeRuntimeGrant(t *testing.T) {
 	}
 	if len(state.execs) != 0 {
 		t.Fatal("missing actor registry received grants")
+	}
+}
+
+func TestRowGroupHeadingsMustExistBeforeRuntimeGrant(t *testing.T) {
+	for _, missing := range []string{"table", "sequence"} {
+		t.Run(missing, func(t *testing.T) {
+			db, state := openRowGroupPermissionTestDB(t, &rowGroupPermissionTestState{
+				currentRole: "admin_role", relationsExist: true,
+				classificationsMissing: missing == "table", classificationSequenceMissing: missing == "sequence",
+			})
+			setRowGroupPermissionTestEnvironment(t)
+			t.Setenv("DB_BASIC_USER", "runtime_reader")
+			if err := EnsureRowGroupRuntimeRolePermissions(db); err == nil {
+				t.Fatal("missing classification contract accepted")
+			}
+			if len(state.execs) != 0 {
+				t.Fatal("partial headings received runtime grants")
+			}
+		})
 	}
 }

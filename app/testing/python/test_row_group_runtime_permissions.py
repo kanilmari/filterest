@@ -1,6 +1,10 @@
-"""Focused static contract for DB 9.6.3 row-group runtime read repair."""
+"""Released row-group read repair and current heading runtime SELECT-only grants."""
 
 from pathlib import Path
+import re
+
+import pytest
+from test_row_actor_support import cluster, installed, value  # noqa: F401
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,3 +53,23 @@ def test_row_group_runtime_permission_failure_stops_before_readiness() -> None:
     listen_index = startup.index("server.ListenAndServe")
 
     assert grant_index < fatal_index < listen_index
+
+
+# WL103 exercises the current startup grant SQL on an opt-in disposable cluster.
+# The released 9.6.3 repair above remains historical and must not be edited.
+@pytest.mark.parametrize("role", ["wl103_basic", "wl103_guest", "wl103_readonly"])
+def test_headings_and_row_groups_are_select_only_for_runtime_roles(installed, role):
+    installed(f"CREATE ROLE {role} NOLOGIN")
+    tables = ("system_row_groups", "system_row_group_memberships", "system_row_group_classifications")
+    for table in tables:
+        installed(f"GRANT ALL ON TABLE public.{table} TO {role}; GRANT ALL ON SEQUENCE public.{table}_id_seq TO {role}")
+    source = (ROOT / "backend/core_components/row_group_runtime_permissions.go").read_text()
+    grant_sql = re.search(r"return fmt.Sprintf\(`(.*?)`, quotedRole", source, re.S).group(1)
+    installed(grant_sql.replace("%s", f'"{role}"'))
+    for table in tables:
+        assert value(installed, f"SELECT has_table_privilege('{role}','public.{table}','SELECT')") == "t"
+        for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"):
+            assert value(installed, f"SELECT has_table_privilege('{role}','public.{table}','{privilege}')") == "f"
+        for privilege in ("USAGE", "UPDATE"):
+            assert value(installed, f"SELECT has_sequence_privilege('{role}','public.{table}_id_seq','{privilege}')") == "f"
+        assert value(installed, f"SET ROLE {role}; SELECT count(*) FROM public.{table}; RESET ROLE") == "0"

@@ -35,6 +35,18 @@ func rowGroupPostgres(t *testing.T) (*sql.DB, *sql.DB) {
 	if _, err := owner.Exec(schema); err != nil {
 		t.Fatal(err)
 	}
+	headingMigration, err := os.ReadFile("../../../../../server_tools/migrations/20261005000035_add_row_group_classifications.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The minimal S1 fixture has no repair ledger; load the exact schema and trigger.
+	headingSchema, _, found := strings.Cut(string(headingMigration), "INSERT INTO public.system_data_repair_records")
+	if !found {
+		t.Fatal("classification schema boundary not found")
+	}
+	if _, err := owner.Exec(headingSchema); err != nil {
+		t.Fatal(err)
+	}
 	const fixture = `
 CREATE TABLE wl103_rows (id integer PRIMARY KEY, title text, status text,
     created_by integer REFERENCES system_users(id), published boolean NOT NULL);
@@ -54,6 +66,10 @@ INSERT INTO system_row_group_memberships (group_id, table_uid, row_id) VALUES
     (1,103,1), (1,103,3), (1,103,7), (2,103,2), (2,103,4), (2,103,7),
     (3,103,5), (4,103,6), (5,10,1), (6,103,8), (7,103,1),
     (1,3,1), (2,3,2), (4,3,3);
+INSERT INTO system_row_group_classifications (id,slug,title,sort_order) VALUES
+    (1,'transport','{"en":"Transport"}',-1), (2,'private_heading','{"en":"Secret heading"}',1);
+UPDATE system_row_groups SET classification_id = 1 WHERE id IN (1,2,6);
+UPDATE system_row_groups SET classification_id = 2 WHERE id IN (3,4,5);
 ALTER TABLE app_service_catalog ENABLE ROW LEVEL SECURITY;
 CREATE POLICY wl103_pilot_read ON app_service_catalog FOR SELECT USING (
     (published AND enabled) OR user_id = NULLIF(current_setting('app.user_id', true), '')::integer
@@ -119,7 +135,10 @@ func rowGroupQueryIDs(t *testing.T, db dbutils.Querier, query string, args []int
 }
 
 func TestRowGroupSelectionCountsAndPaginationPostgres(t *testing.T) {
-	_, reader := rowGroupPostgres(t)
+	owner, reader := rowGroupPostgres(t)
+	if _, err := owner.Exec("UPDATE system_row_groups SET classification_id = NULL"); err != nil {
+		t.Fatal(err)
+	}
 	for _, actor := range []struct {
 		role         string
 		id           int
@@ -159,6 +178,9 @@ func TestRowGroupSelectionCountsAndPaginationPostgres(t *testing.T) {
 
 func TestRowGroupFacetCapKeepsSelectedAndSortOrderPostgres(t *testing.T) {
 	owner, reader := rowGroupPostgres(t)
+	if _, err := owner.Exec("UPDATE system_row_groups SET classification_id = NULL"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := owner.Exec(`
 INSERT INTO system_row_groups (id,slug,title,sort_order)
 SELECT 1000+n, 'value_' || lpad(n::text,3,'0'), '{"en":"Value"}', n FROM generate_series(1,205) n;
@@ -204,6 +226,12 @@ func TestRowGroupUnreadableSlugsMatchUnknownAcrossReadPathsPostgres(t *testing.T
 				ids, count, facets := rowGroupListing(t, ctx)
 				if slug == "unknown" {
 					baselineIDs, baselineCount, baselineFacets = ids, count, facets
+					// Equality with later responses cannot catch a disclosure in every response.
+					for _, facet := range baselineFacets {
+						if facet.Heading != nil && (facet.Heading.ID == 2 || facet.Heading.Slug == "private_heading" || facet.Heading.Title["en"] == "Secret heading") {
+							t.Fatalf("%s baseline disclosed secret heading: %#v", table, facet.Heading)
+						}
+					}
 				}
 				if !reflect.DeepEqual(ids, baselineIDs) || count != baselineCount || !reflect.DeepEqual(facets, baselineFacets) {
 					t.Fatalf("%s disclosed %s: ids=%v count=%d facets=%#v", table, slug, ids, count, facets)

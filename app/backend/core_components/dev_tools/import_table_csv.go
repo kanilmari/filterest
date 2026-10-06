@@ -67,6 +67,10 @@ func importTableCSVTxWithContext(ctx context.Context, tx *sql.Tx, tableName stri
 		return "", "", err
 	}
 
+	switch strings.ToLower(sanitizedTable) {
+	case "system_row_groups", "system_row_group_memberships", "system_row_group_classifications":
+		return "", "", fmt.Errorf("table %s requires its dedicated mutation API", sanitizedTable)
+	}
 	filePath := tableCSVFilePath(sanitizedTable)
 	f, err := os.Open(filePath)
 	if err != nil {

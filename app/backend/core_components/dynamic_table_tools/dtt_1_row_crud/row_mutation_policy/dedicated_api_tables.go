@@ -7,6 +7,9 @@ package row_mutation_policy
 import "strings"
 
 var dedicatedMutationAPITables = map[string]struct{}{
+	"system_row_group_classifications":  {},
+	"system_row_groups":                 {},
+	"system_row_group_memberships":      {},
 	"system_row_actor_columns":          {},
 	"system_data_repair_records":        {},
 	"system_media_assets":               {},

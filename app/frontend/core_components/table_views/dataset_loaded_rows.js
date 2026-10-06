@@ -23,10 +23,10 @@ subscribeDatasetAccessRegistry(() => {
 
 // A remembered list belongs to the exact listing it came from: the same
 // conditions (the committed search among them), order and language.
-function signature(tableName) {
+function signature(tableName, filters = getUnifiedTableState(tableName).filters) {
     const state = getUnifiedTableState(tableName);
     return JSON.stringify([
-        Object.entries(getDatasetListingFilters(tableName, state.filters))
+        Object.entries(getDatasetListingFilters(tableName, filters))
             .sort(([a], [b]) => a.localeCompare(b)),
         state.sort || {},
         document.documentElement.lang,
@@ -66,6 +66,17 @@ export function rememberLoadedDatasetRows(container, tableName, result, projecti
 function currentList(container, tableName) {
     const entry = lists.get(container);
     return entry?.tableName === tableName && entry.signature === signature(tableName) ? entry : null;
+}
+
+/** Keep the current prefix when its first page resolves only row-group selection. */
+export function rekeyLoadedDatasetRows(tableName, previousFilters) {
+    const container = document.getElementById(getDatasetViewContainerId(getChosenDatasetView(tableName), tableName));
+    const entry = lists.get(container);
+    // A stale prefix must never become current through reconciliation. Keep its
+    // rows, projection and raw offset untouched only when the old scope matches.
+    if (entry?.tableName === tableName && entry.signature === signature(tableName, previousFilters)) {
+        entry.signature = signature(tableName);
+    }
 }
 
 export function getLoadedDatasetProjection(container, tableName) {

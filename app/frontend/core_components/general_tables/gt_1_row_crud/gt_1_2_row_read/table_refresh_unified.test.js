@@ -192,7 +192,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             false,
             undefined,
             undefined,
-            [{ id: 4, slug: "security", title: { en: "Security" }, row_count: 1 }]
+            [{ id: 4, slug: "security", title: { en: "Security" }, row_count: 1 }],
+            expect.objectContaining({ rowGroupFacetContext: expect.objectContaining({ authoritative: true, isCurrent: expect.any(Function) }) })
         );
         expect(applyColumnVisibilityMock).toHaveBeenCalledWith("dev_agent_tasks");
         expect(updateOffsetMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -277,7 +278,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 			{
 				background_image_path: "/storage/104/dataset_media/background/original/background.webp",
 			},
-            [{ id: 4, slug: "security", title: { en: "Security" }, row_count: 17 }]
+            [{ id: 4, slug: "security", title: { en: "Security" }, row_count: 17 }],
+            expect.objectContaining({ rowGroupFacetContext: expect.objectContaining({ authoritative: true, isCurrent: expect.any(Function) }) })
         );
         // The next page starts after the first one, and endless scrolling is
         // left connected: the only disconnect is the one before the request.
@@ -330,7 +332,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             false,
 			undefined,
 			undefined,
-            []
+            [],
+            expect.objectContaining({ rowGroupFacetContext: expect.objectContaining({ authoritative: true, isCurrent: expect.any(Function) }) })
         );
         expect(updateOffsetMock).toHaveBeenCalledWith("app_service_catalog", 0);
     });

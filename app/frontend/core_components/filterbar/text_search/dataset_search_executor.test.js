@@ -270,7 +270,9 @@ describe("do_intelligent_search browses the dataset", () => {
         const { do_intelligent_search } = await import("./dataset_search_executor.js");
         await do_intelligent_search("dev_agent_tasks", "boat");
         expect(clearRowGroupFacetsMock).not.toHaveBeenCalled();
-        expect(renderRowGroupFacetsMock).toHaveBeenCalledExactlyOnceWith("dev_agent_tasks", facets);
+        expect(renderRowGroupFacetsMock).toHaveBeenCalledExactlyOnceWith("dev_agent_tasks", facets, {
+            authoritative: true, isCurrent: expect.any(Function), requestFilters: {},
+        });
     });
 
 });

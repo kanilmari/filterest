@@ -316,7 +316,7 @@ export async function generate_table(
     tableMeta = null,
     datasetPresentation = null,
     rowGroupFacets = null,
-    { preserveCardReturn = null, loadedRows = null } = {}
+    { preserveCardReturn = null, loadedRows = null, rowGroupFacetContext = {} } = {}
 ) {
     try {
         const tableSpecs = getAllSpecs();
@@ -556,7 +556,7 @@ export async function generate_table(
         // until infinite scroll happened to update it later.
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
-        renderRowGroupFacets(dataset_name, rowGroupFacets);
+        renderRowGroupFacets(dataset_name, rowGroupFacets, rowGroupFacetContext);
         rememberLoadedDatasetRows(scrollableContainer, dataset_name, {
             data, columns, types: data_types, row_count: rowCount, has_geo: hasGeo,
             table_meta: tableMeta, dataset_presentation: datasetPresentation,

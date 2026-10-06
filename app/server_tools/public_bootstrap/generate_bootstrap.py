@@ -54,6 +54,8 @@ language_seed_migrations = (
     "20261005000005_seed_row_actor_language_keys.sql",
     "20261005000022_seed_favorites_language_keys.sql",
     "20261005000033_seed_front_page_language_keys.sql",
+    "20261005000036_seed_row_group_classification_language_keys.sql",
+    "20261005000038_seed_row_group_window_language_keys.sql",
     "20261005000051_seed_relation_reference_language_key.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",
@@ -81,6 +83,7 @@ repair_schema_migrations = (
     "20261005000021_create_system_favorites.sql",
     "20261005000030_create_front_page_revision_metadata.sql",
     "20261005000031_create_system_front_page_blocks.sql",
+    "20261005000035_add_row_group_classifications.sql",
     "20261005000070_drop_column_label_value_layout.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
@@ -101,6 +104,7 @@ release_data_migrations = (
     "20261005000004_add_row_actor_columns.sql",
     "20261005000023_register_system_favorites.sql",
     "20261005000034_register_system_front_page_blocks.sql",
+    "20261005000037_register_row_group_classifications.sql",
     "20261005000050_require_registry_reference_key.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
@@ -361,6 +365,7 @@ source_files = [
     Path(__file__).resolve(),
     public_root / "app/server_tools/public_slice_export/audit_public_bootstrap.py",
     public_root / "app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py",
+    public_root / "app/server_tools/public_slice_export/public_bootstrap_policy.py",
     public_bootstrap_sources / "runtime.schema.sql",
     public_bootstrap_sources / "runtime.seed.sql",
     public_bootstrap_sources / "db_9_7_0.schema.sql",

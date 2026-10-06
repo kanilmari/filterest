@@ -258,7 +258,7 @@ describe('generate_table', () => {
             facets
         );
 
-        expect(renderRowGroupFacetsMock).toHaveBeenCalledWith('demo_dataset', facets);
+        expect(renderRowGroupFacetsMock).toHaveBeenCalledWith('demo_dataset', facets, {});
         expect(setResultsCountMock.mock.invocationCallOrder[0]).toBeLessThan(
             renderRowGroupFacetsMock.mock.invocationCallOrder[0]
         );

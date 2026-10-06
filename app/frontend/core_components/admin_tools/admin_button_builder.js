@@ -41,6 +41,7 @@ import {
 } from "../table_views/dataset_view_registry.js";
 import { createFieldViewEditorButton } from "./field_view_editor.js";
 import { createEditRowPermissionsButton } from "./row_access_editor.js";
+import { createRowGroupAssignmentButton } from "./row_group_assignment_editor.js";
 
 /**
  * SSE-yhteyden avaava funktio, joka asuu nyt admin-tiedostossa,
@@ -238,6 +239,7 @@ export async function appendAdminFeatures(
         canModifyColumns,
         canEditFieldView,
         canManageRowAccess,
+        canManageRowGroups,
         canEmbedRows,
         canChangeViewStyle,
     ] = await Promise.all([
@@ -248,6 +250,7 @@ export async function appendAdminFeatures(
         // the strict checker for a table-specific grant that does not exist.
         hasDatasetPermission("/api/card-visibility/update", ""),
         hasDatasetPermission("/api/admin/row-access-rules", ""),
+        hasDatasetPermission("/api/admin/row-groups", ""),
         hasDatasetPermission("/api/embedding_stream_handler", table_name),
         hasDatasetPermission("/ui/table-view-style-buttons", table_name),
     ]);
@@ -262,6 +265,10 @@ export async function appendAdminFeatures(
         managementButtonsContainer.appendChild(
             createEditRowPermissionsButton(table_name)
         );
+    }
+
+    if (canManageRowGroups) {
+        managementButtonsContainer.appendChild(createRowGroupAssignmentButton(table_name));
     }
 
     // 2) Sarakehallinta

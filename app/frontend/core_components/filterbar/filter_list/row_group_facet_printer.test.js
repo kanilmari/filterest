@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const {
+    interfaceLanguage,
     languageRenderers,
     renderActiveFiltersMock,
     doIntelligentSearchMock,
@@ -17,6 +18,7 @@ const {
     setUnifiedTableStateMock,
     updateURLMock,
 } = vi.hoisted(() => ({
+    interfaceLanguage: { current: "fi" },
     languageRenderers: new Map(),
     renderActiveFiltersMock: vi.fn(),
     doIntelligentSearchMock: vi.fn(),
@@ -29,13 +31,22 @@ const {
 }));
 
 vi.mock("../../table_views/dataset_value_localizer.js", () => ({
-    bindDatasetLanguageRenderer: (element, render) => { languageRenderers.set(element, render); render("fi"); },
+    bindDatasetLanguageRenderer: (element, render) => {
+        const renderInLanguage = language => { interfaceLanguage.current = language; render(language); };
+        languageRenderers.set(element, renderInLanguage);
+        renderInLanguage(interfaceLanguage.current);
+    },
     resolveDatasetDisplayValue: (value, _metadata, language) => value?.[language] || "",
 }));
 
 vi.mock("../../lang/translation_handler.js", () => ({
-    getTranslationForKey: key => ({ filters: "Suodattimet", show_more: "Näytä enemmän", show_less: "Näytä vähemmän", clear_selections: "Tyhjennä valinnat", remove: "Poista" })[key],
+    getTranslationForKey: key => ({
+        fi: { row_group_categories: "Kategoriat", filters: "Suodattimet", show_more: "Näytä enemmän", show_less: "Näytä vähemmän", clear_selections: "Tyhjennä valinnat", remove: "Poista" },
+        en: { row_group_categories: "Categories", filters: "Filters", show_more: "Show more", show_less: "Show less", clear_selections: "Clear selections", remove: "Remove" },
+    })[interfaceLanguage.current][key],
 }));
+
+vi.mock("../../navigation/nav_engine/dataset_address_writer.js", () => ({ updateDatasetAddress: vi.fn() }));
 
 vi.mock("./active_filter_tag_printer.js", () => ({ renderActiveFilters: renderActiveFiltersMock }));
 
@@ -61,6 +72,8 @@ vi.mock("../text_search/dataset_search_executor.js", () => ({
 describe("row group facet controls", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        interfaceLanguage.current = "fi";
+        languageRenderers.clear();
         document.body.innerHTML = `
             <div id="travel_info_card_top_controls">
                 <div class="results_count">8 results</div>
@@ -89,7 +102,8 @@ describe("row group facet controls", () => {
         );
 
         expect(host.previousElementSibling?.classList.contains("results_count")).toBe(true);
-        expect(host.getAttribute("aria-label")).toBe("Suodattimet");
+        expect(host.getAttribute("aria-label")).toBe("Kategoriat");
+        expect(host.querySelector('[role="group"]').getAttribute("aria-label")).toBe("Suodattimet");
         const chips = host.querySelectorAll('[data-testid="row-group-facet-chip"]');
         expect(chips).toHaveLength(2);
         expect(chips[0].textContent).toBe("Turvallisuus5");
@@ -186,9 +200,16 @@ describe("row group facet controls", () => {
         expect(chip.getAttribute("aria-pressed")).toBe("true");
         expect(chip.getAttribute("aria-label")).toBe("Turvallisuus: 0");
         expect(host.querySelector('[data-row-group-slug="empty"]')).toBeNull();
-        expect(host.getAttribute("role")).toBe("group");
+        expect(host.getAttribute("role")).toBe("region");
         languageRenderers.get(host)("en");
+        expect(host.getAttribute("aria-label")).toBe("Categories");
+        expect(host.querySelector('[data-lang-key="row_group_categories"]').textContent).toBe("Categories");
+        expect(host.querySelector('[role="group"]').getAttribute("aria-label")).toBe("Filters");
+        expect(host.querySelector('[data-lang-key="show_more"]').textContent).toBe("Show more");
+        expect(host.querySelector('[data-lang-key="clear_selections"]').textContent).toBe("Clear selections");
         expect(host.querySelector('[data-row-group-slug="security"]').getAttribute("aria-label")).toBe("Security: 0");
+        host.querySelector('[data-lang-key="show_more"]').click();
+        expect(host.querySelector('[data-lang-key="show_less"]').textContent).toBe("Show less");
         host.querySelector('[data-lang-key="clear_selections"]').click();
         await vi.waitFor(() => expect(onClear).toHaveBeenCalledExactlyOnceWith("travel_info"));
     });
@@ -200,6 +221,59 @@ describe("row group facet controls", () => {
         expect(await toggleRowGroupFacet("travel_info", "bad value")).toBe(false);
         expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
         expect(await toggleRowGroupFacet("travel_info", "group_0")).toBe(true);
+    });
+
+    test("groups headings in order, uses text titles, relabels tags and preserves the untitled group", async () => {
+        const { renderRowGroupFacets, renderRowGroupFilterTags } = await import("./row_group_facet_printer.js");
+        const tags = document.createElement("div");
+        document.body.appendChild(tags);
+        renderRowGroupFilterTags("travel_info", tags);
+        const headings = [
+            { id: 2, slug: "theme", title: { fi: "<img src=x>", en: "Theme" }, is_single: false, sort_order: 10 },
+            { id: 1, slug: "transport", title: { fi: "Kulkumuoto", en: "Transport" }, is_single: true, sort_order: -1 },
+        ];
+        const host = renderRowGroupFacets("travel_info", [
+            { id: 4, slug: "security", title: { fi: "Turvallisuus", en: "Security" }, row_count: 2, heading: headings[0] },
+            { id: 5, slug: "boat", title: { fi: "Laiva", en: "Boat" }, row_count: 3, heading: headings[1] },
+            { id: 6, slug: "legacy", row_count: 4 },
+        ]);
+        let groups = host.querySelectorAll('[role="group"]');
+        expect([...groups].map(group => group.getAttribute("aria-label"))).toEqual(["Kulkumuoto", "Suodattimet", "<img src=x>"]);
+        expect(groups[1].querySelector(".row-group-facet-group__title")).toBeNull();
+        expect(host.querySelector("img")).toBeNull();
+        expect(tags.querySelector(".row-group-filter-label").textContent).toBe("<img src=x>: Turvallisuus");
+        languageRenderers.get(host)("en");
+        languageRenderers.get(tags.firstChild)("en");
+        groups = host.querySelectorAll('[role="group"]');
+        expect(groups[0].getAttribute("aria-label")).toBe("Transport");
+        expect(groups[1].getAttribute("aria-label")).toBe("Filters");
+        expect(groups[2].getAttribute("aria-label")).toBe("Theme");
+        expect(tags.querySelector(".row-group-filter-label").textContent).toBe("Theme: Security");
+        expect(tags.querySelector("button").getAttribute("aria-label")).toBe("Remove: Theme: Security");
+    });
+
+    test("collapses after three headings and twelve values each, retaining selected headings", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const facets = Array.from({ length: 4 }, (_, index) => {
+            const heading = { id: index + 1, slug: `heading_${index}`, title: { fi: `Otsikko ${index}` }, sort_order: index };
+            return Array.from({ length: 14 }, (_, value) => ({ id: index * 20 + value + 1,
+                slug: `value_${index}_${value}`, row_count: 1, heading }));
+        }).flat();
+        getUnifiedTableStateMock.mockReturnValue({ filters: {} });
+        let host = renderRowGroupFacets("travel_info", facets);
+        expect(host.querySelectorAll('[role="group"]')).toHaveLength(3);
+        expect(host.querySelectorAll('[data-testid="row-group-facet-chip"]')).toHaveLength(36);
+        host.querySelector('[data-lang-key="show_more"]').click();
+        expect(host.querySelectorAll('[role="group"]')).toHaveLength(4);
+        expect(host.querySelectorAll('[data-testid="row-group-facet-chip"]')).toHaveLength(56);
+        host.querySelector('[data-lang-key="show_less"]').click();
+        getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: "value_3_13" } });
+        facets.at(-1).selected = true;
+        facets.at(-1).row_count = 0;
+        host = renderRowGroupFacets("travel_info", facets);
+        expect(host.querySelectorAll('[role="group"]')).toHaveLength(4);
+        expect(host.querySelector('[data-row-group-slug="value_3_13"]').getAttribute("aria-pressed")).toBe("true");
+        expect(host.querySelector('[data-heading-id="4"]').querySelectorAll('[data-testid="row-group-facet-chip"]')).toHaveLength(13);
     });
 
 });

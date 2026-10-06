@@ -178,8 +178,9 @@ func TestBuildRowGroupFacetQueryReusesFilteredUniverseAndDistinctRows(t *testing
 		`WHERE "travel_info"."published" = $1 AND "travel_info"."owner_id" = $2`,
 		"LIMIT 200",
 		"row_group.slug = ANY($4::text[]) AS selected",
-		"ORDER BY selected DESC, row_group.sort_order ASC, row_group.slug ASC",
-		"ORDER BY sort_order ASC, slug ASC",
+		"ORDER BY selected DESC, heading_sort_order ASC, row_group.classification_id ASC NULLS FIRST",
+		"ORDER BY heading_sort_order ASC, classification_id ASC NULLS FIRST, sort_order ASC, slug ASC",
+		"selected_group.classification_id IS DISTINCT FROM row_group.classification_id",
 	} {
 		if !strings.Contains(query, fragment) {
 			t.Fatalf("facet query lacks %q: %s", fragment, query)
@@ -232,11 +233,11 @@ func (c *rowGroupFacetMockConn) QueryContext(
 		return &buildJoinsMockRows{cols: []string{"slug"}, rows: c.state.selectionRows}, nil
 	}
 	return &buildJoinsMockRows{
-		cols: []string{"id", "slug", "title", "row_count", "selected"},
+		cols: []string{"id", "slug", "title", "row_count", "selected", "classification_id", "heading_slug", "heading_title", "is_single", "heading_sort_order"},
 		rows: [][]driver.Value{
-			{int64(4), "security", `{"fi":"Turvallisuus","en":"Security"}`, int64(3), false},
-			{int64(5), "selected_empty", `{"en":"Empty"}`, int64(0), true},
-			{int64(6), "unselected_empty", `{}`, int64(0), false},
+			{int64(4), "security", `{"fi":"Turvallisuus","en":"Security"}`, int64(3), false, int64(10), "transport", `{"fi":"Kulkumuoto","en":"Transport"}`, true, int64(-1)},
+			{int64(5), "selected_empty", `{"en":"Empty"}`, int64(0), true, nil, nil, nil, nil, int64(0)},
+			{int64(6), "unselected_empty", `{}`, int64(0), false, nil, nil, nil, nil, int64(0)},
 		},
 	}, nil
 }
@@ -273,6 +274,9 @@ func TestFetchRowGroupFacetsDecodesMultilingualMetadata(t *testing.T) {
 	}
 	if facets[0].ID != 4 || facets[0].Slug != "security" || facets[0].RowCount != 3 {
 		t.Fatalf("unexpected facet: %#v", facets[0])
+	}
+	if facets[0].Heading == nil || facets[0].Heading.Title["en"] != "Transport" || !facets[0].Heading.IsSingle || facets[0].Heading.SortOrder != -1 || facets[1].Heading != nil {
+		t.Fatalf("heading metadata = %#v / %#v", facets[0].Heading, facets[1].Heading)
 	}
 	if facets[0].Title["fi"] != "Turvallisuus" || facets[0].Title["en"] != "Security" {
 		t.Fatalf("unexpected title metadata: %#v", facets[0].Title)
