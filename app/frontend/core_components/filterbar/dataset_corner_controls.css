@@ -10,11 +10,6 @@
 .dataset-corner-controls[hidden] { display: none; }
 .dataset-corner-controls--start { left: 12px; }
 .dataset-corner-controls--end { right: 12px; }
-/* The existing 1px scroll sentinel precedes the hero. Compensate that
-   leading space so both buttons retain the canonical viewport top inset. */
-.filterbar-scroll-sentinel + .filterbar-inline-hero > .dataset-corner-controls {
-  top: calc(12px - 1px);
-}
 /* Existing sidebar openers keep their corner slots; the normal-flow hero row
    reserves that space without moving controls into another visual row. */
 .filterbar-inline-hero:has(> .dataset-corner-controls--end:not([hidden])) > .filterbar-inline-hero__top-row {

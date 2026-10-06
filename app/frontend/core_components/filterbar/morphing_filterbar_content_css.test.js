@@ -47,12 +47,28 @@ describe('morphing filterbar content CSS', () => {
             'padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height))'
         );
         expect(defaultsRule).toContain('--dataset-cover-light-overlay-opacity: 0');
-        expect(coverRule).toContain('mask-image: var(--dataset-cover-mask-image, radial-gradient(');
+        expect(coverRule).toContain('var(--dataset-cover-mask-image, radial-gradient(');
         expect(coverRule).toContain(
             'ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y)'
         );
         expect(coverRule).toContain('opacity: var(--dataset-cover-image-opacity)');
         expect(coverRule).toContain('filter: blur(var(--dataset-cover-image-blur))');
+        // The blurred edge stays outside the clipped hero, and the bottom fade makes the cover itself
+        // transparent, so it blends into the content background image instead of the page colour.
+        expect(coverRule).toContain('--dataset-cover-image-bleed: calc(3 * var(--dataset-cover-image-blur))');
+        expect(coverRule).toContain('inset: calc(0px - var(--dataset-cover-image-bleed))');
+        expect(coverRule).toContain(
+            '#000 calc(100% - var(--dataset-cover-image-bleed) - var(--dataset-cover-hero-bottom-fade))'
+        );
+        expect(coverRule).toContain('transparent calc(100% - var(--dataset-cover-image-bleed))');
+        // The fade subtracts the inverted oval. A disabled oval ('none') is skipped by some browsers and counted
+        // as a transparent layer by others; subtracting it keeps the cover, intersecting it would hide the cover.
+        expect(coverRule).toContain('mask-composite: subtract');
+        expect(coverRule).not.toContain('intersect');
+        expect(coverRule.indexOf('linear-gradient(')).toBeLessThan(coverRule.indexOf('var(--dataset-cover-mask-image'));
+        expect(coverRule).toContain('rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-center-opacity))) 0%');
+        expect(coverRule).toContain('rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-mid-opacity)))');
+        expect(coverRule).toContain('rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-edge-opacity)))');
         expect(darkRule).toContain('--dataset-cover-mask-image: var(--dataset-cover-dark-mask-image)');
         expect(darkRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-dark-image-opacity)');
         expect(darkRule).toContain('--dataset-cover-image-blur: var(--dataset-cover-dark-image-blur)');
@@ -60,8 +76,21 @@ describe('morphing filterbar content CSS', () => {
         expect(lightRule).toContain('--dataset-cover-image-opacity: var(--dataset-cover-light-image-opacity)');
         expect(lightRule).toContain('--dataset-cover-image-blur: var(--dataset-cover-light-image-blur)');
         expect(overlayRule).toContain('rgb(0 0 0 / var(--dataset-cover-overlay-opacity))');
-        expect(overlayRule).toContain('calc(100% - var(--dataset-cover-hero-bottom-fade))');
-        expect(overlayRule).toContain('var(--bg_color) 100%');
+        expect(overlayRule).toContain('#000 calc(100% - var(--dataset-cover-hero-bottom-fade))');
+        expect(overlayRule).toContain('mask-image: linear-gradient(');
+        // Nothing paints the page colour over the cover's bottom edge.
+        expect(overlayRule).not.toContain('--bg_color');
+    });
+
+    test('lets the hero start at the top: the scroll sentinel takes no height', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
+        const sentinelRule = css.match(/\.filterbar-scroll-sentinel\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+        const cornerCss = readFileSync(resolve(CURRENT_DIR, 'dataset_corner_controls.css'), 'utf8');
+
+        expect(sentinelRule).toContain('height: 1px');
+        expect(sentinelRule).toContain('margin-bottom: -1px');
+        // With no leading space, the corner buttons need no compensation for the sentinel.
+        expect(cornerCss).not.toContain('.filterbar-scroll-sentinel + .filterbar-inline-hero');
     });
 
     test('uses the title colour for wide slogans and outlines the inline sort row', () => {

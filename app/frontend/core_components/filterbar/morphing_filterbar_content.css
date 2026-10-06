@@ -503,9 +503,13 @@
    SCROLL SENTINEL (invisible trigger element)
    ============================================ */
 
+/* The sentinel stays in the flow, so it scrolls with the content, but takes no
+   height: the hero after it, cover included, starts at the very top without a
+   1px strip of the page colour above it. */
 .filterbar-scroll-sentinel {
   height: 1px;
   width: 100%;
+  margin-bottom: -1px;
   pointer-events: none;
 }
 

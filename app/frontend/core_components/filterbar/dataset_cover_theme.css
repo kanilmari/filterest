@@ -87,33 +87,44 @@ body.dark-mode .filterbar-inline-hero--has-cover {
 	content: '';
 	pointer-events: none;
 }
+/* The blurred cover reaches three blur radii past the clipped hero, so its soft,
+   partly transparent edge stays outside and no light line shows at the top. The
+   bottom fade makes the cover itself transparent instead of painting the page
+   colour over it, so the cover blends into whatever lies below: the content
+   background image, or the page colour when there is none (owner 6.10.2026).
+   The fade subtracts the inverted oval beneath it. A disabled oval is none, which
+   browsers either skip or count as a transparent layer; subtracting nothing keeps
+   the cover in both cases, whereas intersecting with it would hide the cover. */
 .filterbar-inline-hero--has-cover::before {
+	--dataset-cover-image-bleed: calc(3 * var(--dataset-cover-image-blur));
 	z-index: -2;
-	inset: calc(0px - var(--dataset-cover-image-blur));
+	inset: calc(0px - var(--dataset-cover-image-bleed));
 	background-image: var(--dataset-cover-image);
 	background-position: center;
 	background-size: cover;
 	filter: blur(var(--dataset-cover-image-blur));
 	opacity: var(--dataset-cover-image-opacity);
-	mask-image: var(--dataset-cover-mask-image, radial-gradient(
-		ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y),
-		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) 0%,
-		rgb(0 0 0 / var(--dataset-cover-mask-center-opacity)) var(--dataset-cover-mask-center-stop),
-		rgb(0 0 0 / var(--dataset-cover-mask-mid-opacity)) var(--dataset-cover-mask-mid-stop),
-		rgb(0 0 0 / var(--dataset-cover-mask-edge-opacity)) var(--dataset-cover-mask-edge-stop)
-	));
+	mask-image:
+		linear-gradient(
+			to bottom,
+			#000 calc(100% - var(--dataset-cover-image-bleed) - var(--dataset-cover-hero-bottom-fade)),
+			transparent calc(100% - var(--dataset-cover-image-bleed))
+		),
+		var(--dataset-cover-mask-image, radial-gradient(
+			ellipse var(--dataset-cover-mask-oval-x) var(--dataset-cover-mask-oval-y) at 50% var(--dataset-cover-mask-position-y),
+			rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-center-opacity))) 0%,
+			rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-center-opacity))) var(--dataset-cover-mask-center-stop),
+			rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-mid-opacity))) var(--dataset-cover-mask-mid-stop),
+			rgb(0 0 0 / calc(1 - var(--dataset-cover-mask-edge-opacity))) var(--dataset-cover-mask-edge-stop)
+		));
+	mask-composite: subtract;
 }
 .filterbar-inline-hero--has-cover::after {
 	z-index: -1;
-	background:
-		linear-gradient(
-			rgb(0 0 0 / var(--dataset-cover-overlay-opacity)),
-			rgb(0 0 0 / var(--dataset-cover-overlay-opacity))
-		),
-		linear-gradient(
-			to bottom,
-			transparent 0,
-			transparent calc(100% - var(--dataset-cover-hero-bottom-fade)),
-			var(--bg_color) 100%
-		);
+	background: rgb(0 0 0 / var(--dataset-cover-overlay-opacity));
+	mask-image: linear-gradient(
+		to bottom,
+		#000 calc(100% - var(--dataset-cover-hero-bottom-fade)),
+		transparent 100%
+	);
 }
