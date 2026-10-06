@@ -47,7 +47,9 @@ WORKSTATION_ENVIRONMENT = BASE_ENVIRONMENT + (
 # default is Codex's full-access sandbox. workspace-write is the narrower choice
 # an operator may configure; it keeps network access so tests still run.
 CODE_WORKSPACE_SANDBOXES = ("danger-full-access", "workspace-write")
-WORKER_SANDBOXES = ("danger-full-access", "workspace-write")
+# A research worker runs read-only; Codex then saves its final message as the
+# summary, which the worker itself could not write.
+WORKER_SANDBOXES = ("danger-full-access", "workspace-write", "read-only")
 REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 
 # Argument templates per engine and mode. The site assistant list is guarded by
@@ -129,10 +131,16 @@ def engine_environment(config, mode, extra=None):
     return environment
 
 
-def worker_arguments(sandbox, model="", reasoning_effort=""):
-    """Arguments for the developer's ./worker_agent run; the prompt arrives on stdin."""
+def worker_arguments(sandbox, model="", reasoning_effort="", last_message_file=""):
+    """Arguments for the developer's ./worker_agent run; the prompt arrives on stdin.
+
+    A read-only run must name last_message_file: the sandbox refuses the worker's
+    own summary file, so Codex writes the final message there instead.
+    """
     if sandbox not in WORKER_SANDBOXES:
         raise ValueError("worker sandbox must be one of " + ", ".join(WORKER_SANDBOXES))
+    if sandbox == "read-only" and not last_message_file:
+        raise ValueError("a read-only worker needs a last-message file for its summary")
     arguments = ["exec", "--sandbox", sandbox]
     if model:
         arguments += ["--model", model]
@@ -140,6 +148,8 @@ def worker_arguments(sandbox, model="", reasoning_effort=""):
         if reasoning_effort not in REASONING_EFFORTS:
             raise ValueError("reasoning effort must be one of " + ", ".join(REASONING_EFFORTS))
         arguments += ["-c", 'model_reasoning_effort="%s"' % reasoning_effort]
+    if last_message_file:
+        arguments += ["--output-last-message", last_message_file]
     return arguments + ["-"]
 
 
@@ -178,6 +188,7 @@ def main(argv=None):
     worker.add_argument("--sandbox", required=True)
     worker.add_argument("--model", default="")
     worker.add_argument("--reasoning-effort", default="")
+    worker.add_argument("--last-message-file", default="")
     arguments = parser.parse_args(argv)
     if arguments.command == "version":
         print(PINNED_CODEX_VERSION)
@@ -186,7 +197,8 @@ def main(argv=None):
         print("\n".join(WORKSTATION_ENVIRONMENT))
         return 0
     try:
-        values = worker_arguments(arguments.sandbox, arguments.model, arguments.reasoning_effort)
+        values = worker_arguments(arguments.sandbox, arguments.model, arguments.reasoning_effort,
+                                  arguments.last_message_file)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2

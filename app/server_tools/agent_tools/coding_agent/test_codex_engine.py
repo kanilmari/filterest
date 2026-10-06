@@ -88,9 +88,18 @@ def test_environment_is_an_allowlist_in_every_mode(monkeypatch):
     (("workspace-write", "gpt-6-astra", "xhigh"),
      ["exec", "--sandbox", "workspace-write", "--model", "gpt-6-astra", "-c", 'model_reasoning_effort="xhigh"', "-"]),
     (("danger-full-access", "", ""), ["exec", "--sandbox", "danger-full-access", "-"]),
+    # A research worker: the sandbox refuses its summary file, so Codex saves the final message.
+    (("read-only", "", "xhigh", "/runs/1/worker_summary_1.md"),
+     ["exec", "--sandbox", "read-only", "-c", 'model_reasoning_effort="xhigh"',
+      "--output-last-message", "/runs/1/worker_summary_1.md", "-"]),
 ])
 def test_worker_arguments_match_the_terminal_launcher(arguments, expected):
     assert codex_engine.worker_arguments(*arguments) == expected
+
+
+def test_read_only_worker_without_a_summary_destination_is_refused():
+    with pytest.raises(ValueError, match="last-message file"):
+        codex_engine.worker_arguments("read-only")
 
 
 def test_command_line_serves_the_worker_launcher():
@@ -102,6 +111,13 @@ def test_command_line_serves_the_worker_launcher():
     assert listed.stdout.split("\0")[:-1] == ["exec", "--sandbox", "workspace-write",
                                               "-c", 'model_reasoning_effort="high"', "-"]
     refused = subprocess.run([sys.executable, script, "worker-arguments", "--sandbox", "read-only"],
+                             capture_output=True, text=True)
+    assert refused.returncode == 2 and refused.stdout == ""
+    research = subprocess.run([sys.executable, script, "worker-arguments", "--sandbox", "read-only",
+                               "--last-message-file", "/runs/1/summary.md"], capture_output=True, text=True, check=True)
+    assert research.stdout.split("\0")[:-1] == ["exec", "--sandbox", "read-only",
+                                                "--output-last-message", "/runs/1/summary.md", "-"]
+    refused = subprocess.run([sys.executable, script, "worker-arguments", "--sandbox", "none"],
                              capture_output=True, text=True)
     assert refused.returncode == 2 and refused.stdout == ""
     # ./ctl agent start passes on exactly this list and nothing else.

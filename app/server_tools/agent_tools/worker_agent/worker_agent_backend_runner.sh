@@ -49,8 +49,10 @@ cleanup_worker_server() {
 # with a default: this line is written from more than one context, and a run's
 # record must never be truncated because one variable was not exported.
 describe_write_access() {
-    if [[ "${RESEARCH_MODE:-false}" == true ]]; then
-        printf 'forbidden by instruction; sandbox still permits workspace writes'
+    if [[ "${RESEARCH_MODE:-false}" == true && "${BACKEND:-codex}" == claude ]]; then
+        printf 'none (read-only tools; the final message is the summary)'
+    elif [[ "${RESEARCH_MODE:-false}" == true ]]; then
+        printf 'none (read-only sandbox; the final message is the summary)'
     elif [[ "${FULL_ACCESS:-false}" == true ]]; then
         printf 'full (workspace, database and network)'
     else
@@ -322,18 +324,15 @@ verify_billing() {
 }
 
 run_codex_exec() {
-    # Research mode forbids writing through the prompt and keeps the worker out
-    # of the database and network through the sandbox. It is not yet a hard
-    # restriction, and the record says so rather than implying otherwise.
-    #
-    # Codex does have a read-only sandbox, and it works: a run under it was
-    # refused with "Read-only file system" on 2026-09-20. It was also refused
-    # when writing its own summary, which is the only way a worker returns
-    # anything, and --add-dir does not open a hole in it. Turning it on
-    # therefore needs the summary to arrive another way first. Recorded as a
-    # maintenance finding rather than decided here.
+    # Research mode runs in Codex's read-only sandbox, which refuses every
+    # write, the worker's own summary file included (2026-09-20). Codex itself
+    # therefore saves the worker's final message as the summary file.
     local sandbox_mode="workspace-write"
-    if [[ "$FULL_ACCESS" == true && "$RESEARCH_MODE" != true ]]; then
+    local -a summary_args=()
+    if [[ "$RESEARCH_MODE" == true ]]; then
+        sandbox_mode="read-only"
+        summary_args=(--last-message-file "$SUMMARY_FILE")
+    elif [[ "$FULL_ACCESS" == true ]]; then
         sandbox_mode="danger-full-access"
     fi
     # The shared engine module owns the Codex argument list, as it does for the
@@ -342,7 +341,7 @@ run_codex_exec() {
     local engine_output
     # Model IDs and efforts are validated to single tokens, so one per line is exact.
     if ! engine_output="$(python3 "$CODEX_ENGINE_MODULE" worker-arguments --sandbox "$sandbox_mode" \
-        --model "$CODEX_MODEL" --reasoning-effort "$CODEX_REASONING_EFFORT" | tr '\0' '\n'
+        --model "$CODEX_MODEL" --reasoning-effort "$CODEX_REASONING_EFFORT" "${summary_args[@]}" | tr '\0' '\n'
         exit "${PIPESTATUS[0]}")"; then
         printf 'Worker Codex arguments were refused by the engine module.\n' >> "$LOG_FILE"
         return 2
@@ -358,18 +357,30 @@ run_codex_exec() {
     # stdin preserves multiline/large prompts and cannot turn prompt text into flags;
     # the engine's argument list already ends with "-".
     billing_env "$CODEX_BIN" "${codex_args[@]}" < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
-    return $?
+    local status=$?
+    # An empty final message is no summary; recovery from the log may still find one.
+    if [[ "$RESEARCH_MODE" == true && ! -s "$SUMMARY_FILE" ]]; then
+        rm -f "$SUMMARY_FILE"
+    fi
+    return $status
 }
 
 run_claude_exec() {
     CLAUDE_BIN=$(find_claude_bin) || return 127
     printf 'Worker billing: %s\n' "$(describe_billing)" >> "$LOG_FILE"
+    local -a claude_args=(--print --model "$CLAUDE_MODEL" --permission-mode bypassPermissions --no-session-persistence)
     # Ignore inherited CLAUDECODE overrides so worker_agent controls the binary path explicitly.
-    billing_env env -u CLAUDECODE "$CLAUDE_BIN" \
-        --print \
-        --model "$CLAUDE_MODEL" \
-        --permission-mode bypassPermissions \
-        --no-session-persistence \
+    if [[ "$RESEARCH_MODE" == true ]]; then
+        # Research mode offers only tools that read. As with Codex, the final
+        # message (printed on stdout) becomes the summary file, and the log keeps a copy.
+        billing_env env -u CLAUDECODE "$CLAUDE_BIN" "${claude_args[@]}" --tools "Read,Grep,Glob" \
+            < "$PROMPT_SAVE_FILE" > "$SUMMARY_FILE" 2>> "$LOG_FILE"
+        local status=$?
+        cat "$SUMMARY_FILE" >> "$LOG_FILE" 2>/dev/null
+        [[ -s "$SUMMARY_FILE" ]] || rm -f "$SUMMARY_FILE"
+        return $status
+    fi
+    billing_env env -u CLAUDECODE "$CLAUDE_BIN" "${claude_args[@]}" \
         < "$PROMPT_SAVE_FILE" >> "$LOG_FILE" 2>&1
     return $?
 }
@@ -630,7 +641,7 @@ show_backend_info() {
             CLAUDE_BIN=$(find_claude_bin 2>/dev/null) || CLAUDE_BIN="(will resolve at runtime)"
             local claude_label="$CLAUDE_MODEL"
             if [[ "$RESEARCH_MODE" == true ]]; then
-                claude_label="${claude_label} — research mode"
+                claude_label="${claude_label} — research mode, read-only tools"
             fi
             info "Backend: Claude CLI ($claude_label)"
             ;;
@@ -640,7 +651,7 @@ show_backend_info() {
                 access_label="full-access sandbox"
             fi
             if [[ "$RESEARCH_MODE" == true ]]; then
-                access_label="${access_label% sandbox} — research mode"
+                access_label="read-only sandbox — research mode"
             fi
             info "Backend: Codex CLI ($access_label)"
             info "Codex executable: $CODEX_BIN ($CODEX_ACTUAL_VERSION)"

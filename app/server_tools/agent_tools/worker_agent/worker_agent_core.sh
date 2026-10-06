@@ -337,8 +337,9 @@ OPTIONS:
                             check --status and stop it with --stop.
   --subscription            Bill the CLI's signed-in subscription (default); see BILLING.
   --api                     Bill an API key from the environment; see BILLING.
-  --research                Read-only: the worker runs in a sandbox that cannot
-                            write, so the restriction does not rely on the prompt
+  --research                Read-only: Codex runs in its read-only sandbox and Claude
+                            gets read-only tools, so the restriction does not rely
+                            on the prompt; the final message becomes the summary
   --full-access             Full system access for Codex (danger-full-access sandbox).
                             OFF by default; ask for it only when the task needs
                             the database, the network or work outside the workspace.

@@ -48,6 +48,10 @@ pathlib.Path(os.environ['CODEX_CAPTURE']).write_text(json.dumps({
     'pid': os.getpid()}))
 time.sleep(float(os.environ.get('FAKE_CODEX_SECONDS', '0')))
 print('codex\\n# Stub worker summary\\nLocal test completed.')
+# Like Codex, save the final message where --output-last-message asks.
+if '--output-last-message' in sys.argv:
+    target = sys.argv[sys.argv.index('--output-last-message') + 1]
+    pathlib.Path(target).write_text('# Stub worker summary\\nLocal test completed.\\n')
 sys.exit(int(os.environ.get('FAKE_CODEX_EXIT', '0')))
 """)
     codex.chmod(0o755)
@@ -243,6 +247,45 @@ def test_worker_sandbox_defaults_to_workspace_write(worker, tmp_path, access_opt
         assert 'workspace only (no database, no network)' in status
     else:
         assert 'full (workspace, database and network)' in status
+
+
+@pytest.mark.parametrize('backend, access_flag, described', [
+    ('codex', ['--sandbox', 'read-only'], 'none (read-only sandbox; the final message is the summary)'),
+    ('claude', ['--tools', 'Read,Grep,Glob'], 'none (read-only tools; the final message is the summary)'),
+])
+def test_research_run_cannot_write_and_its_final_message_is_the_summary(
+        worker, tmp_path, backend, access_flag, described):
+    """--research used to forbid writing in the prompt only (WL151, 6.10.2026).
+
+    The status file admitted that the sandbox still permitted workspace writes.
+    Codex now runs in its read-only sandbox and Claude gets read-only tools; as
+    neither worker can write its summary, its final message is saved instead.
+    """
+    _run, env, output, _codex = worker
+    result = subprocess.run(
+        ['bash', str(CORE), f'family={backend}', '--research',
+         '--output-dir', str(output), '--task-id', 'research-run', '-'],
+        cwd=tmp_path, env=env, input='Which files read the summary?',
+        text=True, capture_output=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    capture = captured_run(env, backend)
+    arguments = capture['args']
+    assert any(arguments[index:index + 2] == access_flag for index in range(len(arguments)))
+    summary = next(output.glob('*/worker_summary_research-run.md'))
+    assert summary.read_text().startswith('# Stub worker summary')
+    if backend == 'codex':
+        assert arguments[arguments.index('--output-last-message') + 1] == str(summary)
+        assert arguments[-1] == '-'
+    else:
+        assert '--output-last-message' not in arguments
+    status = next(output.glob('*/run_status.txt')).read_text()
+    assert f'write_access={described}' in status and 'status=succeeded' in status
+    assert 'forbidden by instruction' not in status
+    prompt = capture['prompt']
+    assert 'READ-ONLY RESEARCH' in prompt and 'FINAL MESSAGE' in prompt
+    # Nothing in the prompt may invite a write the sandbox refuses.
+    assert 'go build' not in prompt and 'Write your complete findings' not in prompt
 
 
 def captured_run(env, backend):

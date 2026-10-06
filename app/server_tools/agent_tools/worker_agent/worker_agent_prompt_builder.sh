@@ -103,12 +103,10 @@ DB_ACCESS_INSTR
     if [[ "$RESEARCH_MODE" == true ]]; then
         cat >> "$prompt_save_file" <<'SANDBOX_INSTR'
 
-ENVIRONMENT — SANDBOX MODE:
-This is a read-only task. You may read every file. Do not write, create, move
-or delete any file except the one summary file you are asked for below. The
-sandbox would not stop you, so this is on you to honour.
+ENVIRONMENT — READ-ONLY RESEARCH:
+This is a read-only task. You may read every file. Every write is refused,
+build caches included, so compilation checks are not available here.
 You cannot access the database or network directly.
-You CAN run `go build ./backend/...` to check compilation.
 If you need schema information, check data/db_backups/ for SQL dump files, or data/ for pre-exported CSV/JSON snapshots.
 SANDBOX_INSTR
         return 0
@@ -136,14 +134,13 @@ append_summary_instruction() {
         cat >> "$prompt_save_file" <<SUMMARY_INSTR
 
 CRITICAL OUTPUT INSTRUCTION — RESEARCH MODE:
-This is a READ-ONLY research task. Do NOT modify any source files.
-Write your complete findings/summary to the file ${summary_relpath}.
-This is the ONLY output that will be read by the supervising agent. Terminal output is discarded.
+This is a READ-ONLY research task. Do not try to write any file; writing is refused.
+Give your complete findings as your FINAL MESSAGE. It is saved as ${summary_relpath}
+for the supervising agent, and it is the ONLY output that agent reads.
 Keep the summary concise (max 80 lines). Structure as:
 1. Key findings (with file:line references)
 2. Code snippets (only the relevant parts)
 3. Analysis / recommendations
-Do NOT print the summary to stdout — only write it to ${summary_relpath}.
 SUMMARY_INSTR
         return 0
     fi
