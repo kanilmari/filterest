@@ -6,9 +6,9 @@ package dtt_utils
 
 import (
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/fk_display"
 	"fmt"
 	"log"
-	"strings"
 )
 
 type ForeignKey struct {
@@ -124,14 +124,8 @@ func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
 			configured, schemaName, tableName)
 	}
 
-	// 2) Kovakoodatut poikkeukset (legacy-yhteensopivuus).
-	tableSpecificNameColumns := map[string]string{
-		"system_functions":   "name",
-		"system_user_groups": "name",
-		"system_db_tables":   "table_name",
-	}
-	if nameCol, ok := tableSpecificNameColumns[tableName]; ok {
-		return nameCol, nil
+	if column := fk_display.LegacyColumn(tableName); column != "" {
+		return column, nil
 	}
 
 	// 3-6) Heuristiikka + fallback: haetaan kaikki text/varchar-sarakkeet.
@@ -159,45 +153,11 @@ func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
 		return "", fmt.Errorf("rows iteration error in ResolveFKDisplayColumn: %w", err)
 	}
 
-	// 3) Täsmäävät priorisoidut nimet.
-	preferredNames := []string{
-		"name", "title", "label", "lang_key", "username",
-		"display_name", "full_name", "key", "code", "slug",
+	column, err := fk_display.Resolve(tableName, textCols)
+	if err != nil {
+		return "", fmt.Errorf("no text/varchar columns found in table %s.%s", schemaName, tableName)
 	}
-	for _, preferred := range preferredNames {
-		for _, col := range textCols {
-			if strings.EqualFold(col, preferred) {
-				return col, nil
-			}
-		}
-	}
-
-	// 4) Osittaiset päätteet.
-	preferredSuffixes := []string{"_name", "_title", "_label", "_key"}
-	for _, suffix := range preferredSuffixes {
-		for _, col := range textCols {
-			if strings.HasSuffix(strings.ToLower(col), suffix) {
-				return col, nil
-			}
-		}
-	}
-
-	// 5) Sisältö-osuma (taaksepäin yhteensopiva).
-	nameIndicators := []string{"name", "title", "username", "header"}
-	for _, indicator := range nameIndicators {
-		for _, col := range textCols {
-			if strings.Contains(strings.ToLower(col), indicator) {
-				return col, nil
-			}
-		}
-	}
-
-	// 6) Fallback: ensimmäinen text/varchar-sarake.
-	if len(textCols) > 0 {
-		return textCols[0], nil
-	}
-
-	return "", fmt.Errorf("no text/varchar columns found in table %s.%s", schemaName, tableName)
+	return column, nil
 }
 
 // getReferencedTableNameColumn on sisäinen apufunktio, joka delegoi

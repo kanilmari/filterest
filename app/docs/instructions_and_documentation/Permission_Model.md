@@ -38,6 +38,80 @@ This means the current model is closest to:
 - UI affordance hiding based on those rights
 - AI/tool execution checks that reuse the same route/table permission rows
 
+### Runtime Database Grant Audit
+
+The standalone runtime database grant audit is available with
+`(cd app && go run ./server_tools/runtime_grant_audit)`. Select the database and
+an independently provisioned audit identity with PostgreSQL's `PGHOST`, `PGPORT`,
+`PGDATABASE`, `PGUSER`, `PGPASSFILE` and `PGSSLMODE` environment. Supply the four
+configured application role names through `DB_BASIC_USER`, `DB_GUEST_USER`,
+`DB_READONLY_USER` and `DB_CONFIDENTIAL_USER`; application passwords are not read.
+The audit identity needs permission-metadata reads and catalogue visibility,
+and must have no write, ownership, inherited-role or elevated capability. PUBLIC
+writes also make that identity writable and cause refusal. Each run uses one
+repeatable-read, read-only transaction and prints JSON metadata findings only.
+Exit 1 means the audit could not run; exit 2 means policy blockers were found;
+exit 0 means the comparison completed, including any reported grant differences.
+Metadata rows without the table identities required by the application's joins
+are skipped with one `preserved_outside_scope` finding per row, naming its registry
+or relation table and row key; no grant follows. Set identities missing from the
+snapshot become identified blockers. The audit keeps collecting other metadata,
+SQL-path and privilege findings in that run. The pure policy still refuses a
+snapshot with blockers; evaluating valid rows for comparison never applies grants.
+Each unclassified active table route produces its own blocker with the function
+row ID and route, including routes without rights. Diagnostic comparison omits
+only those routes and their rights and continues checking the reviewed routes.
+Classification/dependency failures, including individual unclassified sequences, retain unrelated effective/direct-ACL comparisons; only unknown objects' checks are omitted. Findings remain sorted and deduplicated.
+The dataset AI query requires its canonical read right separately and grants no
+reads by itself; canonical delegates supply label and embedding dependencies. Chat
+capabilities and administrator-backed conversation storage grant no dataset
+access. The administrator-only coding-agent probe adds a basic read only for
+the existing service-catalog pilot. Its declared rights may authorize an
+administrator through any group, but never add reads to the guest pool.
+Assistant approvals manage in-memory delegations and dispatch separate API
+requests as the asking administrator, without granting runtime dataset writes.
+Direct uploads select their configuration by source UID alone. A usable upload
+configuration on a registered source with NULL target UID also produces a blocker:
+omitting its filename update could under-grant that reachable path. The upload
+identity contract needs review before such a row can be considered entirely unused.
+Unconfigured main-row uploads need narrow filename UPDATE with the add right; configured caches need narrow SELECT on the validated predicate column.
+Reader failures include their reader name and database/scan error, with configured
+role identities anonymized. Content rows and configuration values are not output.
+
+Its shared pure policy (`runtime_grants`) computes the basic pool's union over
+all declared non-administrator groups, including empty groups; guest reads use the
+site's group named `guests` plus anonymous account 1's memberships, never a fixed group ID (the plan's bootstrap group-3 assumption is invalid on existing sites). Ordinary routes accept disabled
+false or NULL; dependencies with strict route checks require false. Reads are
+additive: excess content and embedding reads are `excess_read_reported`, and
+existing product operational reads are `preserved_outside_scope`. Reference
+labels require only the target key and display columns; actor marks imply no
+account-name disclosure. Writes follow individual actions and validated
+dependencies, subject to the account, dedicated-API, internal-registry,
+embedding, readonly and confidential boundaries. Unknown routes, tables,
+dependencies and unreviewed owner-run SQL paths produce blockers. Registered
+`system_about_assets` follows the same independent content rights as other
+registered asset children. Reviewed legacy lookup, compatibility, identity,
+cache-registry and log tables are product objects, never generic writers.
+Dormant assistant instructions, column-type notes, source inventory, log classes,
+row-view history and styles use the protected class and contribute no new basic
+or guest grants through obsolete rights; an active dependency on them blocks the
+policy instead of silently omitting a required grant. The readonly
+public-read contract and preservation of existing reads still apply.
+Active product/dedicated reference locks or gallery preview writes block; their administrator-only galleries are discovered without adding limited-pool writes. Additional schema USAGE follows required objects/dependencies, preserving the approved public/restricted contracts; empty/unused schemas add none.
+Shared-gallery mutations may preserve a picture with direct child INSERT/sequence and narrow supporting reads, including attachment siblings. Adoption executes no child callbacks or nested galleries; primary is read-only support and ordering UPDATE requires actual insert settlement.
+Physical automation inserts settle galleries but do not dispatch the destination's automations (`notification_triggers.go:449`); direct picture adoption does neither.
+The request dispatches its own source (`add_row_db.go:526`); automation metadata chains alone supply no transitive grants.
+The administrator foreign-key deletion route changes schema metadata and grants
+no content privileges. Exact reviewed invoker timestamp fingerprints are accepted
+only for bodies that change their own row; definer variants and bodies that write
+another table or change privileges remain blockers. Stale automation destinations
+remain blockers and must be corrected through the site's application.
+Reviewed read-only SECURITY DEFINER functions are accepted only when their identity and
+exact migration-body fingerprint match, their language is SQL, they are STABLE
+or IMMUTABLE, and their exact reviewed search-path configuration matches (`search_path=pg_catalog, public` for the row-access resolver).
+STABLE alone does not exclude writes through shadowed volatile callees. This audit and policy do not apply grants or change request/startup behaviour;
+their transactional callers belong to subsequent implementation steps.
+
 ### Existing Row Visibility Rules
 
 There are two row-visibility mechanisms today:
