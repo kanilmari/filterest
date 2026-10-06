@@ -19,6 +19,7 @@ import {
     NAVBAR_ADMIN_TOOLS_SECTION_ID,
     ensureNavbarAdminToolsSection,
 } from "../navigation/database_tree/navbar_admin_tools_section.js";
+import { NAVBAR_FAVORITES_SECTION_ID, ensureNavbarFavoritesSection } from "../navigation/favorites/navbar_favorites_section.js";
 import { syncAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
 
 /**
@@ -33,8 +34,12 @@ function ensureNavShellElements() {
 
     const canShowNavContainer = hasRoutePermission("/ui/nav_container");
     const canShowNavTree = hasRoutePermission("/ui/nav_tree");
+    const favoritesSection = canShowNavContainer && hasRoutePermission("/api/favorites")
+        ? ensureNavbarFavoritesSection(navbar, tabsWrap)
+        : null;
+    if (!favoritesSection) document.getElementById(NAVBAR_FAVORITES_SECTION_ID)?.remove();
     const adminToolsContent = canShowNavContainer || canShowNavTree
-        ? ensureNavbarAdminToolsSection(navbar, tabsWrap)
+        ? ensureNavbarAdminToolsSection(navbar, favoritesSection || tabsWrap)
         : null;
 
     let navContainer = document.getElementById("navContainer");

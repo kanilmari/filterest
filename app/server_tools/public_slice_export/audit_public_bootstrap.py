@@ -71,6 +71,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_embedding_refresh_jobs",
     "public.system_foreign_key_relations_1_m",
     "public.system_foreign_key_relations_m_m",
+    "public.system_favorites",
     "public.system_functions",
     "public.system_group_table_func_rights",
     "public.system_languages",

@@ -42,24 +42,16 @@ This means the current model is closest to:
 
 The standalone runtime database grant audit is available with
 `(cd app && go run ./server_tools/runtime_grant_audit)`. Select the database and
-an independently provisioned audit identity with PostgreSQL's `PGHOST`, `PGPORT`,
-`PGDATABASE`, `PGUSER`, `PGPASSFILE` and `PGSSLMODE` environment. Supply the four
-configured application role names through `DB_BASIC_USER`, `DB_GUEST_USER`,
-`DB_READONLY_USER` and `DB_CONFIDENTIAL_USER`; application passwords are not read.
-The audit identity needs permission-metadata reads and catalogue visibility,
-and must have no write, ownership, inherited-role or elevated capability. PUBLIC
-writes also make that identity writable and cause refusal. Each run uses one
-repeatable-read, read-only transaction and prints JSON metadata findings only.
-Exit 1 means the audit could not run; exit 2 means policy blockers were found;
-exit 0 means the comparison completed, including any reported grant differences.
+an independently provisioned audit identity with PostgreSQL's `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSFILE` and `PGSSLMODE` environment. Supply the four
+configured application role names through `DB_BASIC_USER`, `DB_GUEST_USER`, `DB_READONLY_USER` and `DB_CONFIDENTIAL_USER`; application passwords are not read.
+The audit identity needs permission-metadata reads and catalogue visibility, and must have no write, ownership, inherited-role or elevated capability. PUBLIC
+writes also make that identity writable and cause refusal. Each run uses one repeatable-read, read-only transaction and prints JSON metadata findings only.
+Exit 1 means the audit could not run; exit 2 means policy blockers were found; exit 0 means the comparison completed, including any reported grant differences.
 Metadata rows without the table identities required by the application's joins
 are skipped with one `preserved_outside_scope` finding per row, naming its registry
-or relation table and row key; no grant follows. Set identities missing from the
-snapshot become identified blockers. The audit keeps collecting other metadata,
-SQL-path and privilege findings in that run. The pure policy still refuses a
-snapshot with blockers; evaluating valid rows for comparison never applies grants.
-Each unclassified active table route produces its own blocker with the function
-row ID and route, including routes without rights. Diagnostic comparison omits
+or relation table and row key; no grant follows. Set identities missing from the snapshot become identified blockers. The audit keeps collecting other metadata,
+SQL-path and privilege findings in that run. The pure policy still refuses a snapshot with blockers; evaluating valid rows for comparison never applies grants.
+Each unclassified active table route produces its own blocker with the function row ID and route, including routes without rights. Diagnostic comparison omits
 only those routes and their rights and continues checking the reviewed routes.
 Classification/dependency failures, including individual unclassified sequences, retain unrelated effective/direct-ACL comparisons; only unknown objects' checks are omitted. Findings remain sorted and deduplicated.
 The dataset AI query requires its canonical read right separately and grants no
@@ -68,6 +60,13 @@ capabilities and administrator-backed conversation storage grant no dataset
 access. The administrator-only coding-agent probe adds a basic read only for
 the existing service-catalog pilot. Its declared rights may authorize an
 administrator through any group, but never add reads to the guest pool.
+
+Personal administrator tool favorites use `/api/favorites` with the full admin profile.
+The owner comes from the session, and the server resolves a granted route to a `system_functions` row; reads hide targets whose route is no longer granted.
+`system_favorites` is a dedicated-API table, like visual preferences: it cannot receive generic row writes. Administrators can inspect the registered system dataset, including other administrators' rows.
+The runtime grant policy classifies its SELECT/INSERT/DELETE as operational metadata access; the dedicated route adds no generic dataset grant. Future target types must supply their own server resolver and read-permission checks.
+Each bootstrap binds personal shortcuts to the verified Account profile (`user_id`); GET/POST/DELETE return the session's `owner_user_id`. Results require that owner, connected elements and the current render generation; a mismatch hides the list/stars even with login sync off. Optional loading never blocks tabs or login-modal closing.
+
 Assistant approvals manage in-memory delegations and dispatch separate API
 requests as the asking administrator, without granting runtime dataset writes.
 Direct uploads select their configuration by source UID alone. A usable upload

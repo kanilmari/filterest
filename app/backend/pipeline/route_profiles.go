@@ -189,6 +189,8 @@ var RouteProfiles = map[string]RouteProfile{
 
 	// ── Admin-only routes (full access control + admin flag) ──
 
+	"favorites.FavoritesHandler": AdminProfile,
+
 	// Tab ordering
 	"system_table_tools.UpdateTabOrderHandler": AdminProfile,
 	"router.adminVersionInfoHandler":           AdminProfile,
@@ -271,12 +273,12 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_asset_linking.GetAttachmentLinkingStatusHandler": AdminProfile,
 
 	// Schema modification
-	"dtt_crud_workflows.ModifyColumnsHandler":     AdminProfile,
-	"dtt_crud_workflows.CreateIndexesHandler":     AdminProfile,
-	"dtt_crud_workflows.SetCommentsHandler":       AdminProfile,
-	"dtt_crud_workflows.CreateTableHandler":       AdminProfile,
-	"dtt_3_table_delete.DropTableHandler":         AdminProfile,
-	"dtt_triggers.CreateTriggerHandler":           AdminProfile, // Trigger creation is a schema-level operation
+	"dtt_crud_workflows.ModifyColumnsHandler": AdminProfile,
+	"dtt_crud_workflows.CreateIndexesHandler": AdminProfile,
+	"dtt_crud_workflows.SetCommentsHandler":   AdminProfile,
+	"dtt_crud_workflows.CreateTableHandler":   AdminProfile,
+	"dtt_3_table_delete.DropTableHandler":     AdminProfile,
+	"dtt_triggers.CreateTriggerHandler":       AdminProfile, // Trigger creation is a schema-level operation
 	// devtools.CheckJsonInTextColumnsHandler — registered conditionally in init() below
 
 	// Permission management
@@ -394,10 +396,10 @@ func ApplyDevOverrides() {
 
 	// Dev tool profiles — only relevant when dev routes are registered
 	devToolProfiles := map[string]RouteProfile{
-		"devtools.SessionHandler":                AdminProfile,
-		"devtools.ExportTableCSVHandler":         AdminProfile,
-		"devtools.ImportTableCSVHandler":         AdminProfile,
-		"pipeline.IntrospectionHandler":          AdminProfile,
+		"devtools.SessionHandler":        AdminProfile,
+		"devtools.ExportTableCSVHandler": AdminProfile,
+		"devtools.ImportTableCSVHandler": AdminProfile,
+		"pipeline.IntrospectionHandler":  AdminProfile,
 		// The client log stays pre-authentication so login-page failures are
 		// visible, but the handler itself accepts only requests from this
 		// machine and bounds what it writes into the developer's log.

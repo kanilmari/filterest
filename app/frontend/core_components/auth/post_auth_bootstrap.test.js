@@ -49,6 +49,9 @@ async function loadModule() {
     vi.doMock("../admin_tools/admin_update_notice_subscriber.js", () => ({
         syncAdminUpdateNoticeSubscriber: syncAdminUpdateNoticeSubscriberMock,
     }));
+    vi.doMock('../user_tools/current_user_profile_fetcher.js', () => ({
+        fetchCurrentUserProfile: vi.fn(async () => ({ user_id: 42 })),
+    }));
     return import("./post_auth_bootstrap.js");
 }
 
@@ -66,6 +69,7 @@ describe("runPostAuthBootstrap", () => {
         getButtonStateMock.mockReturnValue("logout");
         hasRoutePermissionMock.mockImplementation((route) =>
             [
+                "/api/favorites",
                 "/ui/nav_container",
                 "/ui/nav_tree",
                 "/api/update-oids",
@@ -94,7 +98,7 @@ describe("runPostAuthBootstrap", () => {
         expect(document.querySelectorAll("#nav_tree")).toHaveLength(1);
         expect(Array.from(document.getElementById("navbar").children).map((el) => (
             el.id || el.className
-        ))).toEqual(["navtabs_relative", "navbarAdminToolsSection"]);
+        ))).toEqual(["navtabs_relative", "navbarFavoritesSection", "navbarAdminToolsSection"]);
         expect(Array.from(document.getElementById("navbarAdminToolsContent").children).map((el) => (
             el.id || el.className
         ))).toEqual(["navContainer", "nav_tree"]);

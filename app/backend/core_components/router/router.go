@@ -33,6 +33,7 @@ import (
 	dtt_triggers "easelect/backend/core_components/dynamic_table_tools/dtt_triggers"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/event_bus"
+	"easelect/backend/core_components/favorites"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	lang "easelect/backend/core_components/lang"
 	missing_media_check "easelect/backend/core_components/missing_media_check"
@@ -175,6 +176,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/csrf-token", auth.CSRFTokenHandler, "auth.CSRFTokenHandler", http.MethodGet)
 	functionRegisterHandler("/api/user-profile", auth.UserProfileFetchHandler, "auth.UserProfileFetchHandler", http.MethodGet)
 	functionRegisterHandler("/api/update-profile", auth.UserProfileUpdateHandler, "auth.UserProfileUpdateHandler", http.MethodPost)
+	functionRegisterHandler("/api/favorites", favorites.FavoritesHandler, "favorites.FavoritesHandler", http.MethodGet, http.MethodPost, http.MethodDelete)
 	functionRegisterHandler("/api/user-visual-preference", auth.UserVisualPreferenceHandler, "auth.UserVisualPreferenceHandler", http.MethodGet, http.MethodPatch, http.MethodDelete)
 	functionRegisterHandler("/api/request-email-change-otp", auth.RequestEmailChangeOTPHandler, "auth.RequestEmailChangeOTPHandler", http.MethodPost)
 	functionRegisterHandler("/api/request-password-change-otp", auth.RequestPasswordChangeOTPHandler, "auth.RequestPasswordChangeOTPHandler", http.MethodPost)

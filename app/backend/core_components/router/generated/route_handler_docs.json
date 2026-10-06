@@ -95,6 +95,7 @@
   "dtt_triggers.GetTriggersHandler": "GetTriggersHandler lukee kaikki herätteet (GET /api/system_triggers/list)",
   "e_sessions.ResetSessionHandler": "",
   "event_bus.SSESubscribeHandler": "SSESubscribeHandler streams row_change events for subscribed datasets.",
+  "favorites.FavoritesHandler": "FavoritesHandler reads, adds or removes the signed-in administrator's favorites. GET is read-only. POST accepts {type:\"admin_tool\",route}; DELETE accepts that target or {id}. The AdminProfile supplies route rights, CSRF and the admin gate.",
   "image_source_picker.FileHandler": "",
   "image_source_picker.ProvidersHandler": "",
   "image_source_picker.ResolveHandler": "",

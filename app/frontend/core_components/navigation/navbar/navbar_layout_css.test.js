@@ -10,6 +10,13 @@ import { readFileSync } from 'node:fs';
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 
 describe('navbar layout CSS', () => {
+    test('reserves the shared front-page track before tabs and favorites', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
+        expect(css).toContain('grid-template-areas: "controls" "auth" "front-page" "tabs" "favorites" "admin";');
+        expect(css).toContain('align-content: start;');
+        expect(css).not.toMatch(/grid-row:\s*\d/);
+    });
+
     test('keeps the opening top row neutral except for its menu button', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
 

@@ -7,7 +7,8 @@ import { hasRoutePermission } from '../../route_permission_checker.js';
 import { handle_all_navigation } from '../nav_engine/navigation_handler.js';
 import { render_tree } from '../../../reusable_components/vanilla_tree/vanilla_tree_builder.js';
 import { createAnimatedDisclosureSection } from '../../../reusable_components/animated_disclosure/animated_disclosure_builder.js';
-import { groupViewsByGroup, appendMissingAdminViews, getAdminToolsStructure } from './nav_builder_helpers.js';
+import { groupViewsByGroup, appendMissingAdminViews, getAdminToolsStructure, collectNodeIds } from './nav_builder_helpers.js';
+import { getFavoritesSectionAccount, renderNavbarFavorites } from '../favorites/navbar_favorites_section.js';
 
 const NAV_GROUP_ICONS = {
     admin_tools: '/frontend/icons/general/table-tools-icon.svg',
@@ -23,6 +24,8 @@ export async function create_navigation_buttons(custom_views) {
     if (!nav_container) return;
     nav_container.replaceChildren();
 
+    const favoritesSection = document.getElementById('navbarFavoritesSection');
+    const favoritesAccount = getFavoritesSectionAccount(favoritesSection);
     const canViewAdminGroups = hasRoutePermission('/ui/nav_container');
 
     const custom_views_by_group = groupViewsByGroup(custom_views);
@@ -59,6 +62,11 @@ export async function create_navigation_buttons(custom_views) {
                 use_icons: false,
                 initial_open_level: 1
             });
+            const visibleIDs = collectNodeIds(treeData);
+            // Personal shortcuts must not hold up tabs or a successful login modal.
+            void renderNavbarFavorites(favoritesSection, treeContainer,
+                views.filter((view) => visibleIDs.has(view.name)), custom_views, favoritesAccount)
+                .catch((error) => console.warn('Favorites rendering failed', error));
         } else {
             // Luodaan jokaiselle view:lle varsinainen nappi
             views.forEach(view => {

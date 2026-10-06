@@ -87,11 +87,12 @@ def test_the_bootstrap_runs_the_support_and_leaves_the_release_record_to_its_acc
     source = GENERATOR.read_text(encoding="utf-8")
     assert ('"20261005000001_add_row_actor_support.sql",\n'
             '    "20261005000002_key_row_actor_marks_by_table_uid.sql",\n'
-            '    "20261005000006_check_row_actor_trigger_definitions.sql",\n)') in source
+            '    "20261005000006_check_row_actor_trigger_definitions.sql",') in source
     assert '"20261005000099_record_database_release_9_10_0.sql",\n)' in source
     seed = (BOOTSTRAP / "seed_data.sql").read_text(encoding="utf-8")
     block = seed[seed.index("DO $filterest_acceptance$"):]
-    assert f"ARRAY[{MARKERS}]::text[]" in block
+    acceptance_markers = re.search(r"FROM unnest\(ARRAY\[(.*?)\]::text\[\]\)", block).group(1)
+    assert set(re.findall(r"'([^']+)'", MARKERS)) <= set(re.findall(r"'([^']+)'", acceptance_markers))
     assert ("SELECT 'public.app_check_row_actor_marks(): ' || result "
             "FROM public.app_check_row_actor_marks() AS result") in block
     assert block.index("missing completion markers") < block.index("INSERT INTO public.system_schema_migrations")
@@ -162,7 +163,7 @@ def test_the_imported_bootstrap_is_accepted_whole(installed):
     ledger = int(value(installed, "SELECT count(*) FROM system_schema_migrations"))
     assert ledger == len(list(MIGRATIONS.glob("*.sql")))
     assert value(installed, "SELECT string_agg(migration || ':' || action, ' ' ORDER BY id) "
-                            "FROM system_data_repair_records WHERE action = 'completed'") == \
+                            "FROM system_data_repair_records WHERE action = 'completed' AND migration LIKE 'wl58_%'") == \
         "wl58_row_actor_support:completed wl58_row_actor_marks_by_table_uid:completed " \
         "wl58_row_actor_trigger_definitions:completed wl58_row_actor_columns:completed"
     assert value(installed, "SELECT count(*) FROM app_check_row_actor_marks()") == "0"
@@ -598,14 +599,13 @@ def published_bytes(root):
             for name in ("schema.sql", "seed_data.sql", "manifest.json")}
 
 
-LAST_REPAIR_ENTRY = '"20261005000006_check_row_actor_trigger_definitions.sql",\n)'
-
-
 def add_repair_migration(generator, name):
-    """Lists one more schema-phase file after the last repair entry of the generator copy."""
+    """Append to the schema class without assuming which release last extended it."""
     source = generator.read_text()
-    assert LAST_REPAIR_ENTRY in source
-    generator.write_text(source.replace(LAST_REPAIR_ENTRY, LAST_REPAIR_ENTRY[:-2] + f'\n    "{name}",\n)'))
+    entries = re.search(r"repair_schema_migrations = \(\n(.*?)\n\)", source, re.S)
+    assert entries is not None
+    position = entries.end(1)
+    generator.write_text(source[:position] + f'\n    "{name}",' + source[position:])
 
 
 def test_a_new_migration_outside_every_class_stops_the_generation(generator_copy):
@@ -644,7 +644,10 @@ def test_a_marked_and_checked_migration_joins_the_acceptance_block(generator_cop
     result = generate(generator_copy)
     assert result.returncode == 0, result.stderr
     seed = (generator_copy / "app/server_tools/public_bootstrap/seed_data.sql").read_text()
-    assert "'wl58_row_actor_trigger_definitions', 'test_checked', 'wl58_row_actor_columns']::text[]" in seed
+    acceptance = seed[seed.index("DO $filterest_acceptance$"):]
+    markers = re.search(r"FROM unnest\(ARRAY\[(.*?)\]::text\[\]\)", acceptance).group(1)
+    assert "'test_checked'" in markers
+    assert markers.index("'test_checked'") < markers.index("'wl58_row_actor_columns'")
     assert seed.count("SELECT 'public.app_check_row_actor_marks(): ' || result "
                       "FROM public.app_check_row_actor_marks() AS result") == 1
 

@@ -14,6 +14,7 @@
 
 /* --- Navigation --- */
 @import url("../core_components/navigation/navbar/navbar_layout.css");
+@import url("../core_components/navigation/favorites/favorites.css");
 @import url("../core_components/navigation/menu_button/menu_button.css");
 @import url("../core_components/navigation/main_tabs/tabs.css");
 @import url("../core_components/navigation/main_tabs/hero_dataset_tabs.css");

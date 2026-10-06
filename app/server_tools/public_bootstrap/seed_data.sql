@@ -5905,6 +5905,48 @@ ON CONFLICT (lang_key_id, language_code) DO UPDATE
         SELECT CASE existing.language_code WHEN 'fi' THEN authored.generated_fi ELSE authored.generated_en END
           FROM authored_keys AS authored JOIN served_keys AS served USING (lang_key)
          WHERE served.id = existing.lang_key_id));
+-- 20261005000022_seed_favorites_language_keys.sql
+-- Seeds Finnish and English personal favorite actions and labels.
+-- Connects the administrator quick list and tool stars to translated copy.
+-- Exists to keep favorites multilingual without overwriting reviewed site wording.
+-- VERSION_DB: 9.10.0
+-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql
+
+WITH authored_keys(lang_key, fi, en) AS (
+    VALUES
+        ('favorites_heading', 'Suosikit', 'Favorites'),
+        ('favorite_add', 'Lisää suosikkeihin', 'Add to favorites'),
+        ('favorite_remove', 'Poista suosikeista', 'Remove from favorites'),
+        ('favorite_save_failed', 'Suosikkia ei voitu tallentaa. Yritä uudelleen.', 'The favorite could not be saved. Try again.'),
+        ('system_favorites', 'Suosikit', 'Favorites')
+), written_keys AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, creation_spec)
+    SELECT lang_key, fi, en, 'WL142 personal favorites copy.' FROM authored_keys
+    ON CONFLICT (lang_key) DO UPDATE
+       SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+           en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+           creation_spec = CASE WHEN NULLIF(btrim(existing.creation_spec), '') IS NULL
+                                THEN EXCLUDED.creation_spec ELSE existing.creation_spec END,
+           updated = now()
+     WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+        OR NULLIF(btrim(existing.creation_spec), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en
+), served_keys AS (
+    SELECT id, lang_key, fi, en FROM written_keys
+    UNION ALL
+    SELECT keys.id, keys.lang_key, keys.fi, keys.en FROM public.system_lang_keys AS keys
+    JOIN authored_keys USING (lang_key) WHERE keys.lang_key NOT IN (SELECT lang_key FROM written_keys)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
+  FROM served_keys AS served
+ CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(language_code, translation)
+ JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
+ WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+   SET translation = EXCLUDED.translation, source_kind = 'manual', review_status = 'approved'
+ WHERE NULLIF(btrim(existing.translation), '') IS NULL;
 -- 20261005000055_seed_setting_check_language_keys.sql
 -- Seeds Finnish and English setting refusals and seven duration unit names.
 -- Connects shared settings checks and the duration input to translated copy.
@@ -6464,6 +6506,57 @@ BEGIN
         SELECT 1 FROM public.system_data_repair_records WHERE migration = migration_id AND action = 'completed');
     RAISE NOTICE 'wl58_row_actor_columns: % tables, % filled values, % cleared values', total_tables, total_filled, total_cleared;
 END $row_actors$;
+-- 20261005000023_register_system_favorites.sql
+-- Registers favorites as a protected system dataset after folders and metadata exist.
+-- Connects upgrades and fresh installations with the same registry and column definitions.
+-- Exists so favorites cannot be dropped or changed through generic dataset tools.
+-- VERSION_DB: 9.10.0
+-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql
+-- COMPLETION_MARKER: system_favorites_registry
+
+DO $favorites_registry$
+DECLARE
+    system_folder integer;
+    registered_uid integer;
+BEGIN
+    SELECT id INTO system_folder FROM public.system_table_folders
+     WHERE folder_name = 'system' ORDER BY id LIMIT 1;
+    IF system_folder IS NULL THEN
+        RAISE EXCEPTION 'system_favorites registration requires the system folder';
+    END IF;
+    INSERT INTO public.system_db_tables
+        (table_name, schema_name, folder_id, is_removable, description, cached_oid,
+         fk_display_column, filterbar_visible_by_default, display_name, sql_dump_policy)
+    SELECT 'system_favorites', 'public', system_folder, FALSE, 'Account-owned typed favorites',
+           'public.system_favorites'::regclass::oid::integer, 'target_key', FALSE, 'Favorites', 'all'
+     WHERE NOT EXISTS (SELECT 1 FROM public.system_db_tables
+        WHERE table_name = 'system_favorites' AND coalesce(NULLIF(schema_name, ''), 'public') = 'public');
+    SELECT table_uid INTO STRICT registered_uid FROM public.system_db_tables
+     WHERE table_name = 'system_favorites' AND coalesce(NULLIF(schema_name, ''), 'public') = 'public';
+    UPDATE public.system_db_tables
+       SET folder_id = system_folder, is_removable = FALSE,
+           cached_oid = 'public.system_favorites'::regclass::oid::integer
+     WHERE table_uid = registered_uid
+       AND (folder_id IS DISTINCT FROM system_folder OR is_removable IS DISTINCT FROM FALSE
+            OR cached_oid IS DISTINCT FROM 'public.system_favorites'::regclass::oid::integer);
+    INSERT INTO public.system_column_details
+        (table_uid, column_name, data_type, co_number, lang_key, insertable, editable_in_ui)
+    SELECT registered_uid, columns.column_name, columns.data_type, columns.ordinal_position,
+           columns.column_name, FALSE, FALSE
+      FROM information_schema.columns AS columns
+     WHERE columns.table_schema = 'public' AND columns.table_name = 'system_favorites'
+       AND NOT EXISTS (SELECT 1 FROM public.system_column_details AS existing
+            WHERE existing.table_uid = registered_uid AND existing.column_name = columns.column_name)
+     ORDER BY columns.ordinal_position;
+    UPDATE public.system_column_details SET insertable = FALSE, editable_in_ui = FALSE
+     WHERE table_uid = registered_uid AND (insertable IS DISTINCT FROM FALSE OR editable_in_ui IS DISTINCT FROM FALSE);
+    INSERT INTO public.system_data_repair_records (migration, action, detail)
+    SELECT 'system_favorites_registry', 'completed',
+           jsonb_build_object('file', '20261005000023_register_system_favorites.sql')
+     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+        WHERE migration = 'system_favorites_registry' AND action = 'completed');
+END
+$favorites_registry$;
 
 -- Generated migration-ledger baseline and version row, written by this acceptance block only after
 -- every completion marker is present and every final check comes back empty. These migrations are
@@ -6474,7 +6567,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'wl58_row_actor_columns']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'system_favorites_table', 'wl58_row_actor_columns', 'system_favorites_registry']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -6619,6 +6712,9 @@ BEGIN
       ('20261005000004_add_row_actor_columns.sql'),
       ('20261005000005_seed_row_actor_language_keys.sql'),
       ('20261005000006_check_row_actor_trigger_definitions.sql'),
+      ('20261005000021_create_system_favorites.sql'),
+      ('20261005000022_seed_favorites_language_keys.sql'),
+      ('20261005000023_register_system_favorites.sql'),
       ('20261005000055_seed_setting_check_language_keys.sql'),
       ('20261005000060_seed_shell_boot_recovery_language_keys.sql'),
       ('20261005000099_record_database_release_9_10_0.sql')

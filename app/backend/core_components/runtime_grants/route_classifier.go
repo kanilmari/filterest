@@ -18,6 +18,7 @@ var adminPilotRouteOperations = map[string]Operation{
 }
 
 var metadataRoutes = map[string]bool{
+	"/api/favorites": true, // AdminProfile; account-owned metadata, no generic dataset grant.
 	// filterbar_ai_facade_handler.go:240,335 separately authorizes the canonical
 	// read route. The facade right alone adds no dataset/label/embedding reads.
 	"/api/app/ai-chat/query":                                  true,

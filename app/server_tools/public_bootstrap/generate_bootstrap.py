@@ -52,6 +52,7 @@ language_seed_migrations = (
     "20260929000001_seed_connect_two_fields_language_keys.sql",
     "20260929000005_seed_missing_media_check_language_keys.sql",
     "20261005000005_seed_row_actor_language_keys.sql",
+    "20261005000022_seed_favorites_language_keys.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",
 )
@@ -73,6 +74,7 @@ repair_schema_migrations = (
     "20261005000001_add_row_actor_support.sql",
     "20261005000002_key_row_actor_marks_by_table_uid.sql",
     "20261005000006_check_row_actor_trigger_definitions.sql",
+    "20261005000021_create_system_favorites.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -90,6 +92,7 @@ schema_privilege_migrations = (
 # is one DO block that writes its own completion marker.
 release_data_migrations = (
     "20261005000004_add_row_actor_columns.sql",
+    "20261005000023_register_system_favorites.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

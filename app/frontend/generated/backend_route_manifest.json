@@ -3036,6 +3036,38 @@
       ]
     },
     {
+      "path_pattern": "/api/favorites",
+      "match_type": "exact",
+      "handler_name": "favorites.FavoritesHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/fetch-dynamic-children",
       "match_type": "exact",
       "handler_name": "dtt_1_row_read.GetDynamicChildItemsHandler",

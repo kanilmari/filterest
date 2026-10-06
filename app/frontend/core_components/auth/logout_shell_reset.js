@@ -72,6 +72,7 @@ function teardownRenderedShell() {
 
     document.getElementById("navContainer")?.remove();
     document.getElementById("nav_tree")?.remove();
+    document.getElementById("navbarFavoritesSection")?.remove();
     document.getElementById("navbarAdminToolsSection")?.remove();
     document.getElementById("navmenu")?.replaceChildren();
 }

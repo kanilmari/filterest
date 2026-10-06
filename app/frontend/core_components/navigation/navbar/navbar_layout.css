@@ -18,7 +18,7 @@
     height: 100vh;
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas: "controls" "auth" "front-page" "tabs" "favorites" "admin";
     align-content: start;
     gap: 2px;
     background-color: var(--bg_color);
@@ -270,6 +270,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
   } */
 
 .top-button-bar {
+    grid-area: controls;
     display: flex;
     justify-content: flex-end;
     gap: 12px;
@@ -310,7 +311,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 }
 
 .navbar-auth-actions {
-    grid-row: 2;
+    grid-area: auth;
     display: flex;
     align-items: stretch;
     flex-wrap: wrap;
@@ -449,8 +450,13 @@ body.light-mode #nav_tree .tree-current-project-badge {
     cursor: pointer !important;
 }
 
+/* WL143 fills the reserved area; an empty track has no intrinsic height. */
+#navbar > #navbarFrontPageSection {
+    grid-area: front-page;
+}
+
 .navtabs_relative {
-    grid-row: 3;
+    grid-area: tabs;
     right: 0;
     position: relative;
     z-index: 50;
@@ -472,14 +478,12 @@ body.light-mode #nav_tree .tree-current-project-badge {
 }
 
 #navContainer {
-    grid-row: 4;
     position: relative;
     z-index: 20;
     padding-top: 10px;
 }
 
 #nav_tree {
-    grid-row: 5;
     position: relative;
     z-index: 10;
 }
@@ -497,7 +501,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 }
 
 #navbar > #navbarAdminToolsSection {
-    grid-row: 4;
+    grid-area: admin;
     max-width: none;
     margin: 30px 2px 0 0;
     overflow: visible;
