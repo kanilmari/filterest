@@ -189,14 +189,34 @@ var handoverWorklineStatusLabels = map[string]string{
 	"paused": "tauolla", "closed": "suljettu", "archived": "arkistoitu",
 }
 
+// openPhaseSixWorklines names the open (active or paused) lines whose selected report is at phase 6.
+// Phase 6 never closes a line: only the owner's acceptance does, or the line still has a remaining step.
+func openPhaseSixWorklines(items []AgentHandoverReportItem) []string {
+	var names []string
+	for _, item := range items {
+		status := item.Report.WorklineStatusSnapshot
+		if item.Report.CurrentPhase == 6 && (status == "active" || status == "paused") {
+			names = append(names, fmt.Sprintf("WL%d (%s)", item.Report.WorklineID, item.Report.WorklineTitle))
+		}
+	}
+	return names
+}
+
 // renderHandoverMarkdown follows the chat status format: each workline is a level-two
 // heading "<title> — WL<id> — <exact phase>", and nothing else uses a heading that large.
+// Open phase-6 lines are named once above the sections, so a finished-looking line is not taken as closed.
 func renderHandoverMarkdown(handover AgentHandoverReport) string {
 	var builder strings.Builder
 	builder.WriteString("**")
 	builder.WriteString(handover.Title)
 	builder.WriteString("**\n\n")
 	builder.WriteString("Tämä on viimeisimmän chatin kanoninen jatkokonteksti. Jatka alla kuvatuista tiloista.\n")
+	if open := openPhaseSixWorklines(handover.Items); len(open) > 0 {
+		builder.WriteString("\n**Vaiheessa 6 mutta yhä avoinna:** ")
+		builder.WriteString(strings.Join(open, ", "))
+		builder.WriteString(". Vaihe 6 ei sulje linjaa: kukin odottaa omistajan hyväksyntää (`WL<n>: ok`) " +
+			"tai raporttinsa seuraavaa askelta.\n")
+	}
 	for _, item := range handover.Items {
 		builder.WriteString(fmt.Sprintf("\n## %s — WL%d — %d\n\n",
 			item.Report.WorklineTitle, item.Report.WorklineID, item.Report.CurrentPhase))

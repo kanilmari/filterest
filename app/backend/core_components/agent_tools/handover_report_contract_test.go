@@ -95,4 +95,33 @@ func TestRenderHandoverMarkdownRepeatsEachFullWorklineReport(t *testing.T) {
 	if strings.Count(markdown, "_Työlinjan tila:") != 1 {
 		t.Fatalf("status note expected only for the paused line: %s", markdown)
 	}
+	if strings.Contains(markdown, "Vaiheessa 6") {
+		t.Fatalf("no line is at phase 6, yet the open phase-6 note was rendered: %s", markdown)
+	}
+}
+
+func TestRenderHandoverMarkdownNamesOpenPhaseSixWorklines(t *testing.T) {
+	line := func(id int64, title, status string, phase int) AgentHandoverReportItem {
+		return AgentHandoverReportItem{Report: AgentWorklineReport{WorklineID: id, WorklineTitle: title,
+			WorklineStatusSnapshot: status, PhaseGate: "5-6", CurrentPhase: phase, State: "final",
+			Content: "**Konteksti:** " + title + "."}}
+	}
+	markdown := renderHandoverMarkdown(AgentHandoverReport{Title: "Jatkokonteksti", Items: []AgentHandoverReportItem{
+		line(103, "Kategoriat", "active", 4),
+		line(143, "Etusivu", "active", 6),
+		line(119, "Asetukset", "closed", 6),
+		line(121, "About-kuvatekstit", "paused", 6),
+	}})
+	want := "\n**Vaiheessa 6 mutta yhä avoinna:** WL143 (Etusivu), WL121 (About-kuvatekstit). Vaihe 6 ei sulje linjaa"
+	if !strings.Contains(markdown, want) {
+		t.Fatalf("open phase-6 lines not named once in order: %s", markdown)
+	}
+	// The note stands between the introduction and the first workline section, and only once.
+	if strings.Count(markdown, "Vaiheessa 6 mutta yhä avoinna") != 1 ||
+		strings.Index(markdown, "Vaiheessa 6") > strings.Index(markdown, "\n## Kategoriat — WL103 — 4") {
+		t.Fatalf("open phase-6 note misplaced: %s", markdown)
+	}
+	if strings.Contains(markdown, "WL119 (") || strings.Contains(markdown, "WL103 (") {
+		t.Fatalf("closed or unfinished line named among open phase-6 lines: %s", markdown)
+	}
 }
