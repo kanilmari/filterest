@@ -19,7 +19,7 @@ function translatedElement(tagName, key) {
     return element;
 }
 
-/** No nested icon target: the star mask is on the button, whose click stays local. */
+/** Keep the icon decorative and the button unmasked for hover and keyboard focus. */
 function createFavoriteStar(label, route, selected, onToggle) {
     if (!label.id) label.id = `favorite-tool-label-${++labelSequence}`;
     const action = translatedElement('span', selected ? 'favorite_remove' : 'favorite_add');
@@ -31,7 +31,10 @@ function createFavoriteStar(label, route, selected, onToggle) {
     button.dataset.favoriteRoute = route;
     button.setAttribute('aria-pressed', String(selected));
     button.setAttribute('aria-labelledby', `${action.id} ${label.id}`);
-    button.appendChild(action);
+    const icon = document.createElement('span');
+    icon.className = 'favorite-star-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    button.append(icon, action);
     button.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -88,7 +91,7 @@ export async function renderFavoriteTools(section, treeContainer, visibleViews, 
             const row = document.createElement('li');
             const label = translatedElement('button', view.name);
             label.type = 'button';
-            label.className = 'navigation_buttons general_button_nav';
+            label.className = 'navigation_buttons general_button_admin';
             label.dataset.testid = `favorite-view-${view.name}`;
             label.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -107,7 +110,7 @@ export async function renderFavoriteTools(section, treeContainer, visibleViews, 
         for (const star of treeContainer.querySelectorAll('.favorite-star')) {
             const selected = favorites.some((item) => item.route === star.dataset.favoriteRoute);
             star.setAttribute('aria-pressed', String(selected));
-            const action = star.firstElementChild;
+            const action = star.querySelector('.favorite-action-label');
             const key = selected ? 'favorite_remove' : 'favorite_add';
             action.dataset.langKey = key;
             action.textContent = getTranslationForKey(key);

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+// favorite_tools_printer.test.js
 // Verifies mapping, accessible stars, persistence failures, focus and auth lifecycle.
 // Connects admitted tree leaves with mocked typed API responses and navigation.
+// Keeps decorative icon clicks and translated names within the existing controls.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { renderFavoriteTools } from './favorite_tools_printer.js';
 import { fetchFavorites, addAdminToolFavorite, removeAdminToolFavorite } from './favorites_api.js';
@@ -45,7 +47,7 @@ describe('personal favorites', () => {
         removeAdminToolFavorite.mockResolvedValue({ owner_user_id: 42, removed: true });
         document.body.innerHTML = `<div id="navbar"><div class="navtabs_relative"></div><section id="navbarFavoritesSection"></section>
             <section id="navbarAdminToolsSection"><button class="navbar-section-heading">Ylläpito</button></section>
-            <div id="admin_tools_tree">${views.map((view) => `<div id="tree_node_${view.name}_admin"><div class="node-row"><button data-lang-key="${view.name}">${view.name}</button></div></div>`).join('')}</div></div>`;
+            <div id="admin_tools_tree">${views.map((view) => `<div class="node" id="tree_node_${view.name}_admin"><div class="node-row"><button class="general_button_admin" data-lang-key="${view.name}">${view.name}</button></div></div>`).join('')}</div></div>`;
         ensureNavbarFavoritesSection(document.getElementById('navbar'), document.querySelector('.navtabs_relative'));
         await getFavoritesSectionAccount(section()).ready;
     });
@@ -62,7 +64,12 @@ describe('personal favorites', () => {
         const labels = star.getAttribute('aria-labelledby').split(' ').map((id) => document.getElementById(id));
         expect(labels[0].textContent).toBe('Lisää suosikkeihin');
         expect(labels[1].dataset.langKey).toBe('permissions');
-        star.click();
+        const icon = star.querySelector(':scope > .favorite-star-icon');
+        expect(icon.tagName).toBe('SPAN');
+        expect(icon.getAttribute('aria-hidden')).toBe('true');
+        expect(star.querySelectorAll('button, svg, img')).toHaveLength(0);
+        expect(star.parentElement.lastElementChild).toBe(star);
+        icon.click();
         expect(star.disabled).toBe(true);
         await settle();
         expect(addAdminToolFavorite).toHaveBeenCalledWith('/ui/admin/permissions');
@@ -70,6 +77,8 @@ describe('personal favorites', () => {
         expect(handle_all_navigation).not.toHaveBeenCalled();
         expect(star.getAttribute('aria-pressed')).toBe('true');
         expect(labels[0].textContent).toBe('Poista suosikeista');
+        expect(star.querySelector('.favorite-star-icon')).toBe(icon);
+        expect(icon.textContent).toBe('');
         expect(section().hidden).toBe(false);
         expect(section().querySelector('h2').textContent).toBe('Suosikit');
         section().querySelector('.navigation_buttons').click();
@@ -78,6 +87,27 @@ describe('personal favorites', () => {
         await settle();
         expect(section().hidden).toBe(true);
         expect(star.getAttribute('aria-pressed')).toBe('false');
+        expect(labels[0].textContent).toBe('Lisää suosikkeihin');
+    });
+
+    test('quick-list labels reuse administration buttons and keep the star last in each row', async () => {
+        fetchFavorites.mockResolvedValue({ owner_user_id: 42, favorites: [item(0), item(1)] });
+        await render();
+        for (const row of section().querySelectorAll('li')) {
+            const label = row.firstElementChild;
+            const star = row.lastElementChild;
+            expect(label.classList.contains('general_button_admin')).toBe(true);
+            expect(label.classList.contains('general_button_nav')).toBe(false);
+            expect(row.querySelectorAll(':scope > button')).toHaveLength(2);
+            expect(star.className).toBe('favorite-star');
+            expect(star.getAttribute('aria-pressed')).toBe('true');
+            expect(star.querySelector('.favorite-star-icon').getAttribute('aria-hidden')).toBe('true');
+            const name = star.getAttribute('aria-labelledby').split(' ')
+                .map((id) => document.getElementById(id).textContent).join(' ');
+            expect(name).toBe(`Poista suosikeista ${label.textContent}`);
+            star.focus();
+            expect(document.activeElement).toBe(star);
+        }
     });
 
     test('uses insertion order and hides favorites with no visible tool', async () => {
@@ -90,9 +120,10 @@ describe('personal favorites', () => {
     test('removal focuses the next item and then the administrator header', async () => {
         fetchFavorites.mockResolvedValue({ owner_user_id: 42, favorites: [item(0), item(1)] });
         await render();
-        section().querySelector('.favorite-star').click();
+        section().querySelector('.favorite-star-icon').click();
         await settle();
         expect(document.activeElement.dataset.langKey).toBe('site_languages');
+        expect(document.activeElement.classList.contains('general_button_admin')).toBe(true);
         section().querySelector('.favorite-star').click();
         await settle();
         expect(section().hidden).toBe(true);

@@ -82,8 +82,8 @@
 
 /* ── Admin-puun erotteleva tyyli (indigo, monospace, reunaviiva) ─── */
 
-/* Admin-puun painikkeet: indigo-tausta + monospace-fontti */
-#admin_tools_tree .general_button_admin {
+/* Administration tools and their saved shortcuts share this button palette. */
+:is(#admin_tools_tree, #navbarFavoritesSection) .general_button_admin {
     font-family: 'Courier New', Courier, monospace;
     font-size: 16px;
     background-color: rgb(63 50 120 / 0.15);
@@ -92,13 +92,13 @@
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-#admin_tools_tree .general_button_admin:hover {
+:is(#admin_tools_tree, #navbarFavoritesSection) .general_button_admin:hover {
     background-color: rgb(75 60 160 / 0.3);
     border-left-color: rgb(100 80 200 / 0.7);
 }
 
 /* Admin-puun aktiivinen: indigo-korostus */
-#admin_tools_tree .general_button_admin.active {
+:is(#admin_tools_tree, #navbarFavoritesSection) .general_button_admin:is(.active, :active, :focus-visible) {
     background-color: rgb(75 50 180 / 0.25);
     color: var(--button_active_text_color);
     outline: 2px solid rgb(100 70 200 / 0.5);

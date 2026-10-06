@@ -34,38 +34,63 @@
     min-width: 0;
 }
 
+/* Expand both leaf nodes and their ancestors beyond the tree's fit-content
+ * default, so nested tools share the same right edge without widening tiles. */
+#admin_tools_tree .node:has(.favorite-star) {
+    box-sizing: border-box;
+    width: 100%;
+}
+
 #navbarFavoritesSection li > .navigation_buttons,
 #admin_tools_tree .favorite-tool-label {
-    flex: 1 1 auto;
     min-width: 0;
     min-height: 44px;
     white-space: normal;
     overflow-wrap: anywhere;
 }
 
+#navbarFavoritesSection li > .navigation_buttons {
+    flex: 1 1 auto;
+}
+
+#admin_tools_tree .favorite-tool-label {
+    flex: 0 1 auto;
+}
+
 #navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
     flex: 0 0 44px;
     width: 44px;
-    min-height: 44px;
+    height: 44px;
     padding: 0;
-    margin: 0 !important;
+    margin: 0 0 0 auto !important;
     border: 0;
-    background-color: var(--text_color);
-    mask: url('/frontend/icons/symbols/star.svg') center / 24px 24px no-repeat;
+    border-radius: var(--border_radius_small);
+    background-color: transparent;
     cursor: pointer;
 }
 
-/* Filled variant uses the outer contour of the existing star symbol, from its own
- * file: the content-security policy (img-src) refuses data: URLs, and a refused mask
- * hides the whole button. The mask remains on the button itself, so the tree row
- * never receives an SVG target. */
-#navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star[aria-pressed='true'] {
+#navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+    background-color: var(--empty_field_text_color);
+    mask: url('/frontend/icons/symbols/star.svg') center / contain no-repeat;
+    pointer-events: none;
+}
+
+/* Same-origin files satisfy img-src; only the decorative icon is masked so
+ * the 44px target can paint its hover background and unclipped focus ring. */
+#navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star[aria-pressed='true'] > .favorite-star-icon {
     background-color: var(--primary_color);
     mask-image: url('/frontend/icons/general/star-filled-icon.svg');
 }
 
 #navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star:hover:not(:disabled) {
-    background-color: var(--button_hover_text_color);
+    background-color: var(--button_hover_bg_color);
 }
 
 #navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star:disabled {
@@ -73,11 +98,16 @@
     cursor: wait;
 }
 
-/* A mask clips the button outline; draw keyboard focus on its unmasked row. */
-#admin_tools_tree .node-row:has(> .favorite-star:focus-visible),
-#navbarFavoritesSection li:has(> button:focus-visible) {
+#navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star:focus-visible,
+#navbarFavoritesSection .general_button_admin:focus-visible {
     outline: 3px solid var(--interaction-focus-ring);
     outline-offset: 2px;
+}
+
+/* Tree branches clip overflow. Keep the star ring inside its fixed target so
+ * the aligned right edge cannot clip keyboard feedback at any nesting depth. */
+#navbar :is(#admin_tools_tree, #navbarFavoritesSection) .favorite-star:focus-visible {
+    outline-offset: -3px;
 }
 
 .favorite-action-label {

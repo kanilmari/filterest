@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Favourite stars line up and shortcuts match the administration menu** — Stars stay at the right edge of every tool row, with a faded outline, a rounded hover highlight and keyboard focus in both themes. Saved favourites use the administration tool buttons' normal, hover and active colours.
 - **New rows keep the referenced keys** — Linking existing rows, bridge rows and nested uploads now uses the values their relations reference, including generated and text keys, while permissions still check physical rows. Missing keys refuse the whole save. The dataset registry requires its integer reference key and keeps it protected in the interface.
 - **Unused per-column wrapping choices removed** — Field wrapping already follows one site-wide choice. Database 9.10.0 now removes the unused per-column setting from storage, column APIs and editor saves while keeping field visibility unchanged. Older metadata CSVs still restore by skipping the retired setting; old column-setting requests ignore it.
 - **Administrators can keep their frequently used tools at hand** — Each tool in the navigation tree has a star that adds it to a personal Favorites list below the dataset tabs. The list keeps insertion order, survives signing in again, and hides tools whose access has been removed; removing the last favorite hides the list. Finnish and English labels, keyboard controls and both application themes are supported.
