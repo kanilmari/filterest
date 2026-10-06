@@ -8,6 +8,10 @@ set -euo pipefail
 
 CANONICAL_FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$CANONICAL_FILTEREST_ROOT}"
+# Docker cannot inspect the host checkout. Supply only its current branch, never
+# an inherited declaration; detached releases and Gitless copies stay neutral.
+export FILTEREST_UPDATE_CHECKOUT_BRANCH="$(git -C "$PROJECT_ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
 RUNTIME_ROOT="$PROJECT_ROOT/runtime"
 if [[ -n "${FILTEREST_ROOT:-}" ]]; then
     RUNTIME_ROOT="$FILTEREST_ROOT/data/runtime"

@@ -112,7 +112,7 @@ describe("admin version info indicator", () => {
         expect(panel.querySelector("caption")).toBeNull();
         expect(panel.querySelector("thead th")?.textContent).toBe("Sivustotiedot");
         expect(panel.querySelector("thead th")?.colSpan).toBe(2);
-        expect(panel.querySelectorAll("tbody > tr")).toHaveLength(13);
+        expect(panel.querySelectorAll("tbody > tr")).toHaveLength(16);
         expect(panel.querySelector('[data-version-info-key="site"]')?.textContent)
             .toBe("Sivusto");
         expect(panel.querySelector('[data-version-info-value="site"]')?.textContent)
@@ -154,8 +154,8 @@ describe("admin version info indicator", () => {
         const checkAgainButton = panel.querySelector(
             '[data-testid="filterbar-admin-version-check-again"]'
         );
-        expect(checkAgainButton?.textContent).toBe("Tarkista uudelleen");
-        expect(updateButton?.textContent).toBe("Päivitä…");
+        expect(checkAgainButton?.textContent).toBe("Tietojen päivitys");
+        expect(updateButton?.textContent).toBe("Sovelluksen päivitys…");
         expect(updateButton?.getAttribute("aria-expanded")).toBe("false");
         expect(panel.hidden).toBe(true);
 
@@ -364,12 +364,12 @@ describe("admin version info indicator", () => {
     });
 
     test.each([
-        ["fi", "Tarkista uudelleen"],
-        ["en", "Check again"],
-        ["ch", "再次检查"],
-        ["zh-TW", "再次檢查"],
-        ["zh-HK", "再次檢查"],
-        ["yue", "再檢查"],
+        ["fi", "Tietojen päivitys"],
+        ["en", "Refresh information"],
+        ["ch", "Refresh information"],
+        ["zh-TW", "Refresh information"],
+        ["zh-HK", "Refresh information"],
+        ["yue", "Refresh information"],
     ])("localizes the check-again action for %s", async (language, expectedLabel) => {
         hasRoutePermissionMock.mockReturnValue(true);
         getLanguageWithBrowserFallbackMock.mockReturnValue(language);
@@ -459,7 +459,7 @@ describe("admin version info indicator", () => {
         expect(indicator.dataset.closedTooltip).toContain("Database v. 8.0.55 (compatible)");
         expect(indicator.dataset.closedTooltip).toContain("Runtime Native");
         expect(panel.querySelector('[data-testid="filterbar-admin-update-preview-open"]'))
-            .toBeNull();
+            .toBeTruthy();
 
         document.documentElement.setAttribute("lang", "zh-CN");
         await vi.waitFor(() => {

@@ -180,12 +180,16 @@ test.describe('E9 — Admin version info', () => {
     await expect(panel.locator('[data-version-info-value="runtime"]'))
       .toHaveText(versionInfo.runtime_mode === 'docker' ? 'Docker' : 'Native');
     const checkAgainButton = panel.locator('[data-testid="filterbar-admin-version-check-again"]');
-    await expect(checkAgainButton).toHaveText('Check again');
+    await expect(checkAgainButton).toHaveText('Refresh information');
     if (versionInfo.update_checked_at) {
       await expect(panel.locator('[data-version-info-key="last-checked"]'))
         .toHaveText('Last checked');
     }
 
+    await expect(panel.locator('[data-testid="filterbar-admin-update-preview-open"]'))
+      .toHaveText('Application update…');
+    // The preceding GET may have performed the upstream check: respect its cooldown.
+    await expect(checkAgainButton).toBeEnabled({ timeout: 35_000 });
     const forcedCheckResponsePromise = page.waitForResponse((candidate) => {
       const request = candidate.request();
       return request.method() === 'POST'
@@ -196,7 +200,7 @@ test.describe('E9 — Admin version info', () => {
     expect(forcedCheckResponse.status()).toBe(200);
     const forcedVersionInfo = await forcedCheckResponse.json();
     expect(typeof forcedVersionInfo.upstream_check_performed).toBe('boolean');
-    await expect(checkAgainButton).toHaveText('Check again');
+    await expect(checkAgainButton).toHaveText('Refresh information');
     await expect(panel).toBeVisible();
     await expect(panel.locator('[data-version-info-value="application"]'))
       .toHaveText(`v. ${versionInfo.app_version}`);

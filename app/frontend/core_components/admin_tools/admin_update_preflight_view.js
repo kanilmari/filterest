@@ -1,43 +1,55 @@
 // admin_update_preflight_view.js
 // Builds a read-only Filterest update preview inside the administrator site-information panel.
 // Bridges verified release metadata with the existing command-line updater's operational contract.
-// Exists so an administrator can assess an available update without starting or simulating installation.
+// Exists so an administrator can assess update status without starting or simulating installation.
+
+import {
+    buildAdminUpdateCheckRows,
+    resolveVersionInfoLabels,
+} from "./admin_version_info_formatter.js";
 
 const UPDATE_DRY_RUN_COMMAND = "./filterest update --dry-run";
 
 const UPDATE_PREVIEW_LABELS = Object.freeze({
     fi: {
-        open: "Päivitä…",
-        title: "Päivityksen esitarkistus",
+        title: "Sovelluksen päivitystiedot",
         noInstall: "Tästä näkymästä ei asenneta eikä muuteta mitään.",
         currentVersion: "Nykyinen versio",
-        availableVersion: "Saatavilla oleva versio",
+        availableVersion: "Uusin vakaa versio",
         database: "Nykyinen tietokanta",
         databaseCompatible: "Yhteensopiva nykyisen sovelluksen kanssa",
         databaseIncompatible: "Ei yhteensopiva nykyisen sovelluksen kanssa",
         availability: "Palvelun saatavuus",
         interruptionExpected: "Nykyinen komentorivipäivitys pysäyttää palvelun varmuuskopioinnin ja asennuksen ajaksi.",
         dryRun: "Komentorivin kuivaharjoittelu",
-        commandLineOnly: "Varsinainen asennus tehdään edelleen vain palvelimen komentoriviltä.",
-        close: "Sulje esitarkistus",
+        close: "Sulje päivitystiedot",
+        targetDatabase: "Uuden version tietokantayhteensopivuus",
+        targetMigrations: "Uuden version migraatioyhteensopivuus",
+        notChecked: "ei tarkistettu",
+        runningOnly: "Tietokannan yhteensopivuustieto koskee vain käynnissä olevaa versiota.",
+        siteOperator: "Sivuston ylläpitäjä tekee päivitykset sivuston päivitysmenettelyllä.",
+        dryRunLimits: "Kuivaharjoittelu tarkistaa päivityskohteen; se ei testaa tietokantaa, migraatioita tai palautusta.",
     },
     en: {
-        open: "Update…",
-        title: "Update preview",
+        title: "Application update details",
         noInstall: "Nothing is installed or changed from this view.",
         currentVersion: "Current version",
-        availableVersion: "Available version",
+        availableVersion: "Latest stable version",
         database: "Current database",
         databaseCompatible: "Compatible with the running application",
         databaseIncompatible: "Not compatible with the running application",
         availability: "Service availability",
         interruptionExpected: "The current command-line updater stops the service during backup and installation.",
         dryRun: "Command-line dry run",
-        commandLineOnly: "Installation remains available only from the server command line.",
-        close: "Close preview",
+        close: "Close update details",
+        targetDatabase: "New version database compatibility",
+        targetMigrations: "New version migration compatibility",
+        notChecked: "not checked",
+        runningOnly: "The database compatibility mark concerns only the running version.",
+        siteOperator: "The site operator performs updates using the site's update procedure.",
+        dryRunLimits: "The dry run checks the update target; it does not test the database, migrations or restoration.",
     },
     ch: {
-        open: "更新…",
         title: "更新预检",
         noInstall: "此视图不会安装或更改任何内容。",
         currentVersion: "当前版本",
@@ -48,11 +60,9 @@ const UPDATE_PREVIEW_LABELS = Object.freeze({
         availability: "服务可用性",
         interruptionExpected: "当前命令行更新程序会在备份和安装期间停止服务。",
         dryRun: "命令行试运行",
-        commandLineOnly: "实际安装仍只能通过服务器命令行完成。",
         close: "关闭预检",
     },
     zhTW: {
-        open: "更新…",
         title: "更新預檢",
         noInstall: "此檢視不會安裝或變更任何內容。",
         currentVersion: "目前版本",
@@ -63,11 +73,9 @@ const UPDATE_PREVIEW_LABELS = Object.freeze({
         availability: "服務可用性",
         interruptionExpected: "目前的命令列更新程式會在備份及安裝期間停止服務。",
         dryRun: "命令列試行",
-        commandLineOnly: "實際安裝仍只能從伺服器命令列執行。",
         close: "關閉預檢",
     },
     zhHK: {
-        open: "更新…",
         title: "更新預檢",
         noInstall: "此檢視不會安裝或更改任何內容。",
         currentVersion: "目前版本",
@@ -78,11 +86,9 @@ const UPDATE_PREVIEW_LABELS = Object.freeze({
         availability: "服務可用性",
         interruptionExpected: "目前的命令列更新程式會在備份及安裝期間停止服務。",
         dryRun: "命令列試行",
-        commandLineOnly: "實際安裝仍只能從伺服器命令列執行。",
         close: "關閉預檢",
     },
     yue: {
-        open: "更新…",
         title: "更新預檢",
         noInstall: "呢個畫面唔會安裝或者更改任何內容。",
         currentVersion: "目前版本",
@@ -93,12 +99,11 @@ const UPDATE_PREVIEW_LABELS = Object.freeze({
         availability: "服務可用性",
         interruptionExpected: "目前嘅命令列更新程式會喺備份同安裝期間停止服務。",
         dryRun: "命令列試行",
-        commandLineOnly: "實際安裝仍然只可以由伺服器命令列執行。",
         close: "關閉預檢",
     },
 });
 
-function resolveUpdatePreviewLabels(language = "en") {
+function resolveExistingUpdatePreviewLabels(language = "en") {
     const normalizedLanguage = String(language || "en")
         .trim()
         .toLowerCase()
@@ -127,28 +132,28 @@ function resolveUpdatePreviewLabels(language = "en") {
         || UPDATE_PREVIEW_LABELS.en;
 }
 
-/**
- * Reports whether verified release metadata supports a passive update preview.
- * This is a presentation guard only: it never authorizes or starts an update.
- *
- * @param {object} versionInfo
- * @returns {boolean}
- */
-export function canShowAdminUpdatePreview(versionInfo) {
-    const normalizedRuntimeMode = String(versionInfo?.runtime_mode || "").trim().toLowerCase();
-    return versionInfo?.update_available === true
+function resolveUpdatePreviewLabels(language) {
+    return { ...UPDATE_PREVIEW_LABELS.en, ...resolveExistingUpdatePreviewLabels(language),
+        open: resolveVersionInfoLabels(language).applicationUpdate };
+}
+
+/** Offers the generic CLI rehearsal only for an evidenced main checkout and known update. */
+export function canShowAdminUpdateDryRun(versionInfo) {
+    return versionInfo?.update_procedure === "main_checkout"
+        && versionInfo?.update_status === "available"
+        && versionInfo?.update_available === true
+        && !versionInfo?.client_check_failed_at
         && versionInfo?.public_distribution === true
-        && String(versionInfo?.product_name || "").trim().toLowerCase() === "filterest"
-        && String(versionInfo?.release_channel || "").trim().toLowerCase() === "stable"
-        && String(versionInfo?.artifact_purpose || "").trim().toLowerCase() === "public_release"
-        && String(versionInfo?.artifact_type || "").trim().toLowerCase() === "runtime"
-        && String(versionInfo?.release_maturity || "").trim().toLowerCase() === "published"
-        && String(versionInfo?.identity_verification || "").trim().toLowerCase()
-            === "local_contract_validated"
-        && ["docker", "native"].includes(normalizedRuntimeMode)
-        && Boolean(String(versionInfo?.app_version || "").trim())
-        && Boolean(String(versionInfo?.latest_stable_version || "").trim())
-        && Boolean(String(versionInfo?.latest_release_url || "").trim());
+        && versionInfo?.product_name === "Filterest"
+        && versionInfo?.release_channel === "stable"
+        && versionInfo?.artifact_purpose === "public_release"
+        && versionInfo?.artifact_type === "runtime"
+        && versionInfo?.release_maturity === "published"
+        && versionInfo?.identity_verification === "local_contract_validated"
+        && ["docker", "native"].includes(versionInfo?.runtime_mode)
+        && /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(
+            versionInfo?.latest_stable_version || "",
+        );
 }
 
 function appendPreviewFact(container, label, value) {
@@ -177,8 +182,6 @@ export function appendAdminUpdatePreview(
     language = "en",
     onLayoutChange = () => {},
 ) {
-    if (!canShowAdminUpdatePreview(versionInfo)) return;
-
     const labels = resolveUpdatePreviewLabels(language);
     const previewId = `${panel.id}-update-preview`;
     const footer = document.createElement("tfoot");
@@ -192,13 +195,16 @@ export function appendAdminUpdatePreview(
     openButton.classList.add("filterbar-clock-bar__update-preview-open");
     openButton.dataset.testid = "filterbar-admin-update-preview-open";
     openButton.setAttribute("aria-controls", previewId);
-    openButton.setAttribute("aria-expanded", "false");
+    openButton.setAttribute("aria-expanded", panel.dataset.updatePreviewOpen || "false");
     openButton.textContent = labels.open;
+    openButton.classList.toggle("filterbar-clock-bar__version-info--update-available",
+        versionInfo?.update_status === "available" && versionInfo?.update_available === true
+            && !versionInfo?.client_check_failed_at);
     actionCell.appendChild(openButton);
     actionRow.appendChild(actionCell);
 
     const previewRow = document.createElement("tr");
-    previewRow.hidden = true;
+    previewRow.hidden = panel.dataset.updatePreviewOpen !== "true";
     const previewCell = document.createElement("td");
     previewCell.colSpan = 2;
     const preview = document.createElement("section");
@@ -213,30 +219,50 @@ export function appendAdminUpdatePreview(
     noInstall.classList.add("filterbar-clock-bar__update-preview-notice");
     noInstall.textContent = labels.noInstall;
     preview.append(title, noInstall);
-    appendPreviewFact(preview, labels.currentVersion, `v. ${versionInfo.app_version}`);
-    appendPreviewFact(preview, labels.availableVersion, `v. ${versionInfo.latest_stable_version}`);
+    const versionLabels = resolveVersionInfoLabels(language);
+    appendPreviewFact(preview, labels.currentVersion,
+        versionInfo?.app_version ? `v. ${versionInfo.app_version}` : versionLabels.channelUnknown);
+    appendPreviewFact(preview, labels.availableVersion,
+        versionInfo?.latest_stable_version ? `v. ${versionInfo.latest_stable_version}`
+            : versionLabels.updateUnavailable);
+    for (const { label, value } of buildAdminUpdateCheckRows(versionInfo, language)) {
+        appendPreviewFact(preview, label, value);
+    }
+    appendPreviewFact(preview, labels.targetDatabase, labels.notChecked);
+    appendPreviewFact(preview, labels.targetMigrations, labels.notChecked);
 
-    const databaseCompatibility = versionInfo?.db_compatible === true
-        ? labels.databaseCompatible
-        : labels.databaseIncompatible;
+    const databaseCompatibility = typeof versionInfo?.db_compatible !== "boolean"
+        ? labels.notChecked : versionInfo.db_compatible
+            ? labels.databaseCompatible : labels.databaseIncompatible;
     appendPreviewFact(
         preview,
         labels.database,
-        `v. ${versionInfo.db_version} / v. ${versionInfo.required_db_version} — ${databaseCompatibility}`,
+        `v. ${versionInfo?.db_version || "?"} / v. ${versionInfo?.required_db_version || "?"} — ${databaseCompatibility}`,
     );
-    appendPreviewFact(preview, labels.availability, labels.interruptionExpected);
-
-    const commandLabel = document.createElement("strong");
-    commandLabel.textContent = labels.dryRun;
-    const command = document.createElement("code");
-    command.textContent = UPDATE_DRY_RUN_COMMAND;
-    const commandLineOnly = document.createElement("p");
-    commandLineOnly.textContent = labels.commandLineOnly;
+    const runningOnly = document.createElement("p");
+    runningOnly.textContent = labels.runningOnly;
+    preview.appendChild(runningOnly);
+    if (canShowAdminUpdateDryRun(versionInfo)) {
+        appendPreviewFact(preview, labels.availability, labels.interruptionExpected);
+        const commandLabel = document.createElement("strong");
+        commandLabel.textContent = labels.dryRun;
+        const command = document.createElement("code");
+        command.textContent = `${UPDATE_DRY_RUN_COMMAND} --version ${versionInfo.latest_stable_version}`;
+        const limits = document.createElement("p");
+        limits.textContent = labels.dryRunLimits;
+        preview.append(commandLabel, command, limits);
+    } else {
+        // The neutral operator guidance stands in for the command; beside it, it would contradict the command.
+        const operatorGuidance = document.createElement("p");
+        operatorGuidance.textContent = labels.siteOperator;
+        preview.appendChild(operatorGuidance);
+    }
     const closeButton = document.createElement("button");
     closeButton.type = "button";
     closeButton.classList.add("filterbar-clock-bar__update-preview-close");
     closeButton.textContent = labels.close;
-    preview.append(commandLabel, command, commandLineOnly, closeButton);
+    closeButton.dataset.testid = "filterbar-admin-update-preview-close";
+    preview.appendChild(closeButton);
     previewCell.appendChild(preview);
     previewRow.appendChild(previewCell);
     footer.append(actionRow, previewRow);
@@ -244,7 +270,7 @@ export function appendAdminUpdatePreview(
 
     const setPreviewOpen = (isOpen) => {
         previewRow.hidden = !isOpen;
-        actionRow.hidden = isOpen;
+        panel.dataset.updatePreviewOpen = String(isOpen);
         openButton.setAttribute("aria-expanded", String(isOpen));
         onLayoutChange();
         if (isOpen) {

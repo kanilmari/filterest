@@ -35,6 +35,8 @@ type adminVersionInfoResponse struct {
 	UpdateCheckedAt        string                      `json:"update_checked_at,omitempty"`
 	RefreshAllowedAt       string                      `json:"refresh_allowed_at,omitempty"`
 	UpstreamCheckPerformed bool                        `json:"upstream_check_performed"`
+	LastSuccessfulCheckAt  string                      `json:"last_successful_check_at,omitempty"`
+	UpdateProcedure        string                      `json:"update_procedure"`
 	DBVersion              string                      `json:"db_version"`
 	RequiredDBVersion      string                      `json:"required_db_version"`
 	DBCompatible           bool                        `json:"db_compatible"`
@@ -54,8 +56,9 @@ func currentAdminRuntimeMode() string {
 	return adminRuntimeModeNative
 }
 
+// adminVersionInfoHandler combines running readiness with advisory release-check
+// history and installation guidance behind the router's administrator profile.
 func adminVersionInfoHandler(w http.ResponseWriter, r *http.Request) {
-
 	readiness := systemReadinessProbe()
 	var updateStatus releaseupdates.Status
 	if r.Method == http.MethodPost {
@@ -80,6 +83,8 @@ func adminVersionInfoHandler(w http.ResponseWriter, r *http.Request) {
 		UpdateCheckedAt:        updateStatus.CheckedAt,
 		RefreshAllowedAt:       updateStatus.RefreshAllowedAt,
 		UpstreamCheckPerformed: updateStatus.UpstreamCheckPerformed,
+		LastSuccessfulCheckAt:  updateStatus.LastSuccessfulCheckAt,
+		UpdateProcedure:        currentAdminUpdateProcedure(r.Context()),
 		DBVersion:              readiness.DBVersion,
 		RequiredDBVersion:      readiness.RequiredDBVersion,
 		DBCompatible:           readiness.DBCompatible,

@@ -16,6 +16,7 @@ import (
 
 func TestAdminVersionInfoHandlerReturnsReadinessVersions(t *testing.T) {
 	t.Setenv("EASELECT_RUNTIME_MODE", "docker")
+	t.Setenv("FILTEREST_UPDATE_CHECKOUT_BRANCH", "main")
 	restoreProbe := replaceSystemReadinessProbe(func() systemReadyResponse {
 		return systemReadyResponse{
 			ProductName:          "Filterest",
@@ -41,6 +42,7 @@ func TestAdminVersionInfoHandlerReturnsReadinessVersions(t *testing.T) {
 			UpdateAvailable:        true,
 			ReleaseURL:             "https://github.com/kanilmari/filterest/releases/tag/v8.28.0",
 			CheckedAt:              "2026-08-14T09:00:00Z",
+			LastSuccessfulCheckAt:  "2026-08-14T09:00:00Z",
 			RefreshAllowedAt:       "2026-08-14T09:00:30Z",
 			UpstreamCheckPerformed: true,
 		}
@@ -81,6 +83,9 @@ func TestAdminVersionInfoHandlerReturnsReadinessVersions(t *testing.T) {
 	}
 	if response.DBVersion != "8.0.55" || response.RequiredDBVersion != "8.0.55" || !response.DBCompatible {
 		t.Fatalf("database version payload = %#v, want compatible 8.0.55", response)
+	}
+	if response.UpdateProcedure != "main_checkout" || response.LastSuccessfulCheckAt != "2026-08-14T09:00:00Z" {
+		t.Fatalf("update guidance/success evidence = %#v", response)
 	}
 	if response.RuntimeMode != "docker" {
 		t.Fatalf("runtime mode = %q, want docker", response.RuntimeMode)
@@ -136,5 +141,31 @@ func TestAdminVersionInfoHandlerPostChecksAgain(t *testing.T) {
 	}
 	if response.LatestStableVersion != "8.28.1" || !response.UpstreamCheckPerformed {
 		t.Fatalf("POST response = %#v, want forced upstream snapshot", response)
+	}
+}
+
+func TestAdminVersionInfoHandlerRetainsFailureAndLastSuccessTimes(t *testing.T) {
+	t.Setenv("EASELECT_RUNTIME_MODE", "docker")
+	t.Setenv("FILTEREST_UPDATE_CHECKOUT_BRANCH", "")
+	restoreProbe := replaceSystemReadinessProbe(func() systemReadyResponse {
+		return systemReadyResponse{AppVersion: "9.3.21"}
+	})
+	defer restoreProbe()
+	originalCheck := adminLatestStableReleaseCheck
+	defer func() { adminLatestStableReleaseCheck = originalCheck }()
+	adminLatestStableReleaseCheck = func(context.Context, string) releaseupdates.Status {
+		return releaseupdates.Status{LatestStableVersion: "9.3.22", UpdateStatus: releaseupdates.UpdateStatusUnavailable,
+			CheckedAt: "2026-10-06T10:01:00Z", LastSuccessfulCheckAt: "2026-10-06T10:00:00Z"}
+	}
+	recorder := httptest.NewRecorder()
+	adminVersionInfoHandler(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/version-info", nil))
+	var response adminVersionInfoResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.UpdateCheckedAt != "2026-10-06T10:01:00Z" || response.LastSuccessfulCheckAt != "2026-10-06T10:00:00Z" ||
+		response.UpdateStatus != releaseupdates.UpdateStatusUnavailable || response.UpdateAvailable || response.LatestStableVersion != "9.3.22" ||
+		response.UpdateProcedure != "site_operator" {
+		t.Fatalf("failed check response = %#v", response)
 	}
 }

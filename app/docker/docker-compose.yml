@@ -38,6 +38,8 @@ services:
       APP_PORT: ${APP_PORT:-8100}
       FILTEREST_ROOT: /filterest
       FILTEREST_APPLICATION_ROOT: /filterest/app
+      # Supplied by ./filterest from the host checkout; direct Compose stays neutral.
+      FILTEREST_UPDATE_CHECKOUT_BRANCH: ${FILTEREST_UPDATE_CHECKOUT_BRANCH:-}
       TLS_CERT_FILE: /filterest/keys/tls/localhost.crt
       TLS_KEY_FILE: /filterest/keys/tls/localhost.key
       DB_HOST: db

@@ -123,7 +123,7 @@
   "router.ServeStorage": "ServeStorage serves public allowlisted files and database-authorized row assets.",
   "router.adminHandler": "",
   "router.adminUpdateNoticeStreamHandler": "adminUpdateNoticeStreamHandler streams snapshots, not operator-supplied events. Subscribing before the first read prevents a local write between snapshot and subscription from being missed; periodic snapshots cover other app nodes.",
-  "router.adminVersionInfoHandler": "",
+  "router.adminVersionInfoHandler": "adminVersionInfoHandler combines running readiness with advisory release-check history and installation guidance behind the router's administrator profile.",
   "router.datasetsRedirectHandler": "",
   "router.faviconHandler": "faviconHandler palvelee tiedoston \"/favicon...\"",
   "router.handleApps": "handleApps is the fail-closed boundary for application-owned static assets. Private apps must register each intentionally public asset as an exact route, so no source, configuration, credential, or directory listing is served here.",

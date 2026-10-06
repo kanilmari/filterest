@@ -46,6 +46,7 @@ type Status struct {
 	CheckedAt              string       `json:"update_checked_at,omitempty"`
 	RefreshAllowedAt       string       `json:"refresh_allowed_at,omitempty"`
 	UpstreamCheckPerformed bool         `json:"upstream_check_performed"`
+	LastSuccessfulCheckAt  string       `json:"last_successful_check_at,omitempty"`
 }
 
 type publishedRelease struct {
@@ -56,10 +57,11 @@ type publishedRelease struct {
 }
 
 type cachedPublishedRelease struct {
-	release   publishedRelease
-	err       error
-	checkedAt time.Time
-	expiresAt time.Time
+	lastSuccessfulRelease publishedRelease
+	lastSuccessfulAt      time.Time
+	err                   error
+	checkedAt             time.Time
+	expiresAt             time.Time
 }
 
 // Checker owns the bounded HTTP client and in-memory release lookup cache.
@@ -118,26 +120,30 @@ func (checker *Checker) check(ctx context.Context, currentVersion string, force 
 		return result
 	}
 
-	release, checkedAt, refreshAllowedAt, upstreamCheckMade, err := checker.latestPublishedRelease(ctx, force)
-	if !checkedAt.IsZero() {
-		result.CheckedAt = checkedAt.UTC().Format(time.RFC3339)
+	snapshot, refreshAllowedAt, upstreamCheckMade := checker.latestPublishedRelease(ctx, force)
+	if !snapshot.checkedAt.IsZero() {
+		result.CheckedAt = snapshot.checkedAt.UTC().Format(time.RFC3339)
 	}
 	if !refreshAllowedAt.IsZero() {
 		result.RefreshAllowedAt = refreshAllowedAt.UTC().Format(time.RFC3339)
 	}
 	result.UpstreamCheckPerformed = upstreamCheckMade
-	if err != nil {
+	if snapshot.lastSuccessfulAt.IsZero() {
 		return result
 	}
-
-	latestVersion := strings.TrimPrefix(strings.TrimSpace(release.TagName), "v")
+	result.LastSuccessfulCheckAt = snapshot.lastSuccessfulAt.UTC().Format(time.RFC3339)
+	latestVersion := strings.TrimPrefix(strings.TrimSpace(snapshot.lastSuccessfulRelease.TagName), "v")
+	result.LatestStableVersion = latestVersion
+	result.ReleaseURL = validatedFilterestReleaseURL(snapshot.lastSuccessfulRelease.HTMLURL)
+	// A failed lookup keeps the last release as explicitly historical evidence;
+	// it must never keep the available marker or claim a successful comparison.
+	if snapshot.err != nil {
+		return result
+	}
 	latest, err := parseSemanticVersion(latestVersion)
 	if err != nil {
 		return result
 	}
-
-	result.LatestStableVersion = latestVersion
-	result.ReleaseURL = validatedFilterestReleaseURL(release.HTMLURL)
 	switch compareSemanticVersions(current, latest) {
 	case -1:
 		result.UpdateStatus = UpdateStatusAvailable
@@ -153,7 +159,7 @@ func (checker *Checker) check(ctx context.Context, currentVersion string, force 
 func (checker *Checker) latestPublishedRelease(
 	ctx context.Context,
 	force bool,
-) (publishedRelease, time.Time, time.Time, bool, error) {
+) (cachedPublishedRelease, time.Time, bool) {
 	checker.mu.Lock()
 	defer checker.mu.Unlock()
 
@@ -163,10 +169,10 @@ func (checker *Checker) latestPublishedRelease(
 		refreshAllowedAt = checker.cache.checkedAt.Add(latestReleaseForcedCheckCooldown)
 	}
 	if force && !refreshAllowedAt.IsZero() && now.Before(refreshAllowedAt) {
-		return checker.cache.release, checker.cache.checkedAt, refreshAllowedAt, false, checker.cache.err
+		return checker.cache, refreshAllowedAt, false
 	}
 	if !force && !checker.cache.expiresAt.IsZero() && now.Before(checker.cache.expiresAt) {
-		return checker.cache.release, checker.cache.checkedAt, refreshAllowedAt, false, checker.cache.err
+		return checker.cache, refreshAllowedAt, false
 	}
 
 	release, err := checker.fetchLatestPublishedRelease(ctx)
@@ -174,13 +180,18 @@ func (checker *Checker) latestPublishedRelease(
 	if err != nil {
 		ttl = latestReleaseFailureTTL
 	}
-	checker.cache = cachedPublishedRelease{
-		release:   release,
-		err:       err,
-		checkedAt: now,
-		expiresAt: now.Add(ttl),
+	lastSuccessfulRelease, lastSuccessfulAt := checker.cache.lastSuccessfulRelease, checker.cache.lastSuccessfulAt
+	if err == nil {
+		lastSuccessfulRelease, lastSuccessfulAt = release, now
 	}
-	return release, now, now.Add(latestReleaseForcedCheckCooldown), true, err
+	checker.cache = cachedPublishedRelease{
+		lastSuccessfulRelease: lastSuccessfulRelease,
+		lastSuccessfulAt:      lastSuccessfulAt,
+		err:                   err,
+		checkedAt:             now,
+		expiresAt:             now.Add(ttl),
+	}
+	return checker.cache, now.Add(latestReleaseForcedCheckCooldown), true
 }
 
 func (checker *Checker) fetchLatestPublishedRelease(ctx context.Context) (publishedRelease, error) {
@@ -220,6 +231,9 @@ func (checker *Checker) fetchLatestPublishedRelease(ctx context.Context) (publis
 	}
 	if strings.TrimSpace(release.TagName) == "" {
 		return publishedRelease{}, errors.New("latest stable release has no tag")
+	}
+	if _, err := parseSemanticVersion(release.TagName); err != nil {
+		return publishedRelease{}, err
 	}
 	return release, nil
 }

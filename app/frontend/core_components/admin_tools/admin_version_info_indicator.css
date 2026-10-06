@@ -59,7 +59,8 @@
 .filterbar-clock-bar__version-info-panel {
   position: fixed;
   z-index: calc(var(--z-modal, 101000) + 10);
-  width: max-content;
+  display: block;
+  width: min(360px, calc(100vw - 24px));
   min-width: 250px;
   max-width: min(360px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
@@ -89,7 +90,9 @@
   padding: 0 19px 0 0;
   font-weight: 600;
   text-align: left;
-  white-space: nowrap;
+  width: 42%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .filterbar-clock-bar__version-info-title {
@@ -102,6 +105,7 @@
 
 .filterbar-clock-bar__version-info-value {
   min-width: 0;
+  overflow-wrap: anywhere;
   padding: 0;
   font-variant-numeric: tabular-nums;
   text-align: left;
@@ -141,14 +145,14 @@
 }
 
 .filterbar-clock-bar__version-refresh-button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.65;
 }
 
-.filterbar-clock-bar__version-refresh-error {
-  display: inline-block;
-  margin-left: 8px;
-  color: var(--danger_color, var(--text_color));
+.filterbar-clock-bar__version-refresh-status {
+  display: block;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .filterbar-clock-bar__update-preview-footer td {
@@ -158,6 +162,7 @@
 
 .filterbar-clock-bar__update-preview-open,
 .filterbar-clock-bar__update-preview-close {
+  position: relative;
   width: 100%;
   min-height: 32px;
   border: 1px solid var(--fw-color-primary, var(--border_color));
@@ -216,4 +221,17 @@
   opacity: 1;
   outline: 2px solid var(--fw-color-primary, currentcolor);
   outline-offset: 2px;
+}
+
+.filterbar-clock-bar__update-preview-open::after {
+  top: 7px;
+  right: 7px;
+}
+
+.filterbar-clock-bar__update-preview-open {
+  padding: 4px 20px;
+}
+
+.filterbar-clock-bar__update-preview-fact span {
+  overflow-wrap: anywhere;
 }

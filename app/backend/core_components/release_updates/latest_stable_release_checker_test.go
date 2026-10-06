@@ -7,6 +7,7 @@ package release_updates
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -243,5 +244,52 @@ func TestCheckerRejectsOversizedResponse(t *testing.T) {
 func TestValidatedFilterestReleaseURLRejectsOtherHosts(t *testing.T) {
 	if got := validatedFilterestReleaseURL("https://example.com/kanilmari/filterest/releases/tag/v8.30.1"); got != "" {
 		t.Fatalf("validatedFilterestReleaseURL() = %q, want empty", got)
+	}
+}
+
+// Keep both times through transport and malformed-tag failures, including cached
+// failure reuse and recovery. This uses an in-memory transport, never a socket.
+func TestCheckerRetainsLastSuccessThroughFailedChecks(t *testing.T) {
+	for _, malformed := range []bool{false, true} {
+		t.Run(fmt.Sprint(malformed), func(t *testing.T) {
+			now := time.Date(2026, 10, 6, 10, 0, 0, 0, time.UTC)
+			phase := 0
+			client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				body := `{"tag_name":"v9.3.22","html_url":"https://github.com/kanilmari/filterest/releases/tag/v9.3.22"}`
+				if phase == 1 {
+					if !malformed {
+						return nil, errors.New("offline")
+					}
+					body = `{"tag_name":"not-a-version"}`
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+			})}
+			checker := NewChecker(client, "https://updates.invalid/latest")
+			checker.now = func() time.Time { return now }
+			first := checker.Check(context.Background(), "9.3.21")
+			if first.LastSuccessfulCheckAt != first.CheckedAt || !first.UpdateAvailable {
+				t.Fatalf("first = %#v", first)
+			}
+			now = now.Add(time.Minute)
+			phase = 1
+			failed := checker.CheckNow(context.Background(), "9.3.21")
+			if failed.UpdateStatus != UpdateStatusUnavailable || failed.UpdateAvailable || !failed.UpstreamCheckPerformed {
+				t.Fatalf("failed = %#v", failed)
+			}
+			if failed.LatestStableVersion != first.LatestStableVersion || failed.ReleaseURL != first.ReleaseURL ||
+				failed.LastSuccessfulCheckAt != first.CheckedAt || failed.CheckedAt == first.CheckedAt {
+				t.Fatalf("retained release/times = %#v, first = %#v", failed, first)
+			}
+			reused := checker.CheckNow(context.Background(), "9.3.21")
+			if reused.UpstreamCheckPerformed || reused.CheckedAt != failed.CheckedAt || reused.LastSuccessfulCheckAt != first.CheckedAt {
+				t.Fatalf("reused failure = %#v", reused)
+			}
+			now = now.Add(31 * time.Second)
+			phase = 2
+			recovered := checker.CheckNow(context.Background(), "9.3.21")
+			if !recovered.UpdateAvailable || recovered.LastSuccessfulCheckAt != recovered.CheckedAt || recovered.CheckedAt == first.CheckedAt {
+				t.Fatalf("recovery = %#v", recovered)
+			}
+		})
 	}
 }

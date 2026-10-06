@@ -31,6 +31,7 @@ export function renderAdminVersionInfoRows(panel, rows, title) {
         if (href) {
             const releaseLink = document.createElement("a");
             releaseLink.classList.add("filterbar-clock-bar__version-info-link");
+            releaseLink.dataset.testid = `filterbar-admin-version-info-link-${id}`;
             releaseLink.href = href;
             releaseLink.target = "_blank";
             releaseLink.rel = "noopener noreferrer";
@@ -68,10 +69,11 @@ export function renderAdminVersionInfoMessage(panel, title, message) {
     panel.replaceChildren(heading, body);
 }
 
+/** Keeps the refresh action present, exposing server cooldown evidence beside the control. */
 export function appendAdminVersionRefreshControl(
     panel,
     labels,
-    { checking = false, checkFailed = false, onCheckAgain = () => {} } = {},
+    { checking = false, cooldownUntil = "", onCheckAgain = () => {} } = {},
 ) {
     const body = panel.tBodies[0];
     if (!body) return;
@@ -84,17 +86,21 @@ export function appendAdminVersionRefreshControl(
     button.type = "button";
     button.classList.add("filterbar-clock-bar__version-refresh-button");
     button.dataset.testid = "filterbar-admin-version-check-again";
-    button.disabled = checking;
-    button.textContent = checking ? labels.checkingAgain : labels.checkAgain;
+    button.disabled = checking || Boolean(cooldownUntil);
+    button.textContent = labels.checkAgain;
     button.addEventListener("click", onCheckAgain);
     cell.appendChild(button);
 
-    if (checkFailed) {
-        const errorMessage = document.createElement("span");
-        errorMessage.classList.add("filterbar-clock-bar__version-refresh-error");
-        errorMessage.setAttribute("role", "status");
-        errorMessage.textContent = labels.checkFailed;
-        cell.appendChild(errorMessage);
+    if (checking || cooldownUntil) {
+        const message = document.createElement("span");
+        message.id = `${panel.id}-refresh-status`;
+        message.classList.add("filterbar-clock-bar__version-refresh-status");
+        message.setAttribute("role", "status");
+        message.textContent = cooldownUntil ? `${labels.refreshAllowed} ${cooldownUntil}`
+            : labels.checkingAgain;
+        button.title = message.textContent;
+        button.setAttribute("aria-describedby", message.id);
+        cell.appendChild(message);
     }
 
     row.appendChild(cell);
