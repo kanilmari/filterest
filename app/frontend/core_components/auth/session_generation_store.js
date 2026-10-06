@@ -92,10 +92,12 @@ subscribeToAuthBroadcast(event => {
 });
 
 if (typeof window !== 'undefined') {
-    window.addEventListener('blur', () => invalidateSessionGeneration({ reason: 'suspend' }));
-    window.addEventListener('focus', () => invalidateSessionGeneration({ reason: 'resume' }));
+    // Focus changes keep the page in view, so they carry their own reasons; a hidden
+    // document ('suspend'/'resume') and a back-forward cache restore ('restore') do not.
+    window.addEventListener('blur', () => invalidateSessionGeneration({ reason: 'blur' }));
+    window.addEventListener('focus', () => invalidateSessionGeneration({ reason: 'focus' }));
     window.addEventListener('pageshow', event => {
-        if (event.persisted) invalidateSessionGeneration({ reason: 'resume' });
+        if (event.persisted) invalidateSessionGeneration({ reason: 'restore' });
     });
     document.addEventListener('visibilitychange', () => {
         invalidateSessionGeneration({ reason: document.hidden ? 'suspend' : 'resume' });

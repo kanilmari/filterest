@@ -1,6 +1,7 @@
 // front_page_storage_test.go
 // Verifies configured front page images reuse storage actor, containment and HTTP range delivery.
 // No storage path becomes public merely by living under site_media.
+// Video originals retain range delivery while even existing sized copies stay private.
 package router
 
 import (
@@ -60,5 +61,39 @@ func TestFrontPageStorageOnlyConfiguredImageAndBrowsingActor(t *testing.T) {
 	attachStorageHandlerSessionActor(t, signedIn, 42, "basic")
 	if decision := authorizeStorageRequest(httptest.NewRecorder(), signedIn, "site_media/front_page/2160/file.png"); decision != storageAuthorizationAllowed {
 		t.Fatal("signed in", decision)
+	}
+}
+
+func TestFrontPageVideoStorageOriginalRangeAndNoVariants(t *testing.T) {
+	setupStorageHandlerTest(t)
+	settings, background := storageFrontPageSettingsReader, storageFrontPageBackgroundReader
+	t.Cleanup(func() { storageFrontPageSettingsReader, storageFrontPageBackgroundReader = settings, background })
+	storageFrontPageSettingsReader = func(context.Context, *sql.DB) (backend.FrontPageSettings, error) {
+		return backend.FrontPageSettings{SeparateFrontPage: true}, nil
+	}
+	storageFrontPageBackgroundReader = func(context.Context, *sql.DB) (*backend.FrontPageBackground, error) {
+		return &backend.FrontPageBackground{StorageKey: "site_media/front_page/original/movie.mp4", MIMEType: "video/mp4", FocalX: 0.5, FocalY: 0.5}, nil
+	}
+	storageCheckLoginToBrowse = func() (bool, error) { return false, nil }
+	for _, variant := range []string{"original", "1000", "2160"} {
+		dir := filepath.Join(localStorageDir, "site_media", "front_page", variant)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "movie.mp4"), []byte("0123456789"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request := httptest.NewRequest("GET", "/storage/site_media/front_page/original/movie.mp4", nil)
+	request.Header.Set("Range", "bytes=2-4")
+	response := httptest.NewRecorder()
+	ServeStorage(response, request)
+	if response.Code != 206 || response.Body.String() != "234" || response.Header().Get("Content-Type") != "video/mp4" {
+		t.Fatal(response.Code, response.Header(), response.Body.String())
+	}
+	for _, key := range []string{"site_media/front_page/1000/movie.mp4", "site_media/front_page/2160/movie.mp4", "site_media/front_page/original/other.mp4"} {
+		if decision := authorizeStorageRequest(httptest.NewRecorder(), httptest.NewRequest("GET", "/storage/"+key, nil), key); decision != storageAuthorizationNotFound {
+			t.Fatal(key, decision)
+		}
 	}
 }

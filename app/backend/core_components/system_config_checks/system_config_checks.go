@@ -1,6 +1,6 @@
 // system_config_checks.go
 // Owns per-key checks for every generic writer of the settings table.
-// Connects transaction-local row candidates to shared duration validation.
+// Connects transaction-local row candidates to duration and boolean validation.
 // Exists to refuse unusable settings before a writer changes any data.
 package system_config_checks
 
@@ -35,6 +35,15 @@ func durationChecks() map[string]check {
 			return err
 		}
 	}
+	registry["front_page_show_blocks"] = func(row map[string]interface{}) error {
+		if fmt.Sprint(row["value_type"]) != "2" {
+			return fmt.Errorf("boxes setting requires boolean value type 2")
+		}
+		if _, valid := row["boolean_value"].(bool); !valid {
+			return fmt.Errorf("boxes setting requires a boolean value")
+		}
+		return nil
+	}
 	return registry
 }
 
@@ -55,7 +64,11 @@ func ValidateRow(table string, row map[string]interface{}) error {
 		return nil
 	}
 	if err := validate(row); err != nil {
-		return &httpresponse.Refusal{Status: 400, LangKey: InvalidValueLangKey,
+		langKey := InvalidValueLangKey
+		if key == "front_page_show_blocks" {
+			langKey = "error_setting_boolean_invalid"
+		}
+		return &httpresponse.Refusal{Status: 400, LangKey: langKey,
 			Message: fmt.Sprintf("invalid setting %s: %v", key, err)}
 	}
 	return nil

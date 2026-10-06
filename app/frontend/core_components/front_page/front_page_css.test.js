@@ -33,3 +33,20 @@ test('text has theme surfaces and background sizing follows width, never OS them
     expect(css).toMatch(/@media \(width < 1000px\)[\s\S]*--front-page-background-1000/);
     expect(css).not.toMatch(/prefers-color-scheme|background-attachment:\s*fixed/);
 });
+
+
+test('only Home content scrolls, with a fixed sibling background and no structural top-row line', () => {
+    const scroller = css.match(/\.front-page-scroller\s*\{([^}]+)\}/)?.[1];
+    const row = css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1];
+    expect(scroller).toContain('overflow: hidden auto');
+    expect(scroller).toContain('display: block');
+    expect(scroller).toContain('padding: 0');
+    expect(scroller).toContain('min-height: 0');
+    expect(row).toContain('flex: 0 0 auto');
+    expect(row).toContain('border-bottom: 0');
+    expect(row).toContain('box-shadow: none');
+    expect(css).toMatch(/\.front-page-background\s*\{[^}]*position: absolute;[^}]*inset:/);
+    expect(css).toMatch(/\.front-page-background video\s*\{[^}]*object-fit: cover;/);
+    expect(css).toContain('image-rendering: auto');
+    expect(css).not.toContain('padding-top: calc(12px + 44px');
+});

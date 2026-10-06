@@ -83,6 +83,10 @@ func signatureMatchesExtension(ext string, sample []byte) bool {
 	case "heic", "heif":
 		return hasISOBrand(sample, "heic") || hasISOBrand(sample, "heif") || hasISOBrand(sample, "heix") ||
 			hasISOBrand(sample, "hevc") || hasISOBrand(sample, "hevx") || hasISOBrand(sample, "mif1")
+	case "mp4":
+		return hasISOBrand(sample, "isom") || hasISOBrand(sample, "mp41") || hasISOBrand(sample, "mp42") || hasISOBrand(sample, "avc1")
+	case "webm":
+		return bytes.HasPrefix(sample, []byte{0x1a, 0x45, 0xdf, 0xa3}) && bytes.Contains(sample, []byte("webm"))
 	case "pdf":
 		return bytes.HasPrefix(sample, []byte("%PDF-"))
 	case "zip", "docx", "xlsx", "odt":

@@ -10,6 +10,8 @@ import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_
 import { setAuthModes } from './auth_mode_handler.js';
 import { openFrontPage } from '../front_page/front_page_navigation.js';
 import { renderNavbarFrontPage } from '../front_page/navbar_front_page.js';
+import { refreshFrontPage } from '../front_page/front_page_printer.js';
+import { createLangKeyEditor, applyLangKeyConfig } from './lang_key_editor_builder.js';
 import { createFrontPageBackgroundControl } from './front_page_background_control.js';
 import {
     frontPageText, frontPageLabel, frontPageButton, frontPageField, frontPageSection, frontPageStatus,
@@ -34,7 +36,7 @@ function scopeSignature(blocks) {
 }
 
 /** Generates Admin → Site settings → Home settings using the existing management container. */
-export async function generate_front_page_settings_view(container) {
+export async function generate_front_page_settings_view(container, { onSaved = refreshFrontPage, modal = false } = {}) {
     if (!(container instanceof HTMLElement)) return;
     container.replaceChildren();
     container.classList.add('front-page-settings-view');
@@ -42,6 +44,8 @@ export async function generate_front_page_settings_view(container) {
     const status = frontPageStatus('status');
     const reloadButton = frontPageButton('front_page_reload', 'reload');
     const openButton = frontPageButton('front_page_open', 'open');
+    // In the dialog the modal's own title names the editor, and Home is already behind it.
+    openButton.hidden = modal;
     const toolbar = document.createElement('div');
     toolbar.className = 'front-page-settings-actions';
     toolbar.append(reloadButton, openButton);
@@ -49,13 +53,32 @@ export async function generate_front_page_settings_view(container) {
     const settingsSection = frontPageSection('front_page_settings');
     const enabledInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const siteNameInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
+    const showBlocksInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const settingsSave = frontPageButton('save', 'settings-save', true);
     const settingsStatus = frontPageStatus('settings-status');
     settingsSection.append(
         frontPageField('front_page_enabled', enabledInput, 'enabled'),
         frontPageField('front_page_button_shows_site_name', siteNameInput, 'site-name'),
+        frontPageField('front_page_show_blocks', showBlocksInput, 'show-blocks'),
         settingsStatus, settingsSave,
     );
+
+    const heroSection = frontPageSection('front_page_hero');
+    const titleEditor = createLangKeyEditor('title', { includeChinese: false });
+    const sloganEditor = createLangKeyEditor('dataset_header_config_slogan', { includeChinese: false });
+    const heroHelp = frontPageLabel(document.createElement('p'), 'front_page_hero_help');
+    const heroSave = frontPageButton('save', 'hero-save', true);
+    heroSection.append(heroHelp, titleEditor.wrapper, sloganEditor.wrapper, heroSave);
+    let heroBaseline = '';
+    [titleEditor, sloganEditor].forEach((editor, index) => {
+        ['keyInput', 'fiInput', 'enInput', 'usageExplanationInput'].forEach(name => {
+            const control = editor[name];
+            control.id = `front-page-${index === 0 ? 'title' : 'slogan'}-${name}`;
+            control.dataset.testid = control.id;
+            control.closest('label').htmlFor = control.id;
+            if (name !== 'keyInput') control.addEventListener('input', updateState);
+        });
+    });
 
     const scopeSection = frontPageSection('system_front_page_blocks');
     const scopeSelect = document.createElement('select');
@@ -108,25 +131,35 @@ export async function generate_front_page_settings_view(container) {
         onChange: () => { if (ready) updateState(); }, report,
         isEnabled: () => localStorage.getItem('separate_front_page') === 'true',
     });
-    container.append(heading, toolbar, status, settingsSection, scopeSection, background.element);
+    container.append(...(modal ? [] : [heading]), toolbar, status, settingsSection, heroSection, scopeSection, background.element);
 
     function settingsValue() {
-        return { separate_front_page: enabledInput.checked, front_page_button_shows_site_name: siteNameInput.checked };
+        return { separate_front_page: enabledInput.checked, front_page_button_shows_site_name: siteNameInput.checked,
+            front_page_show_blocks: showBlocksInput.checked };
     }
 
+    function heroValue() {
+        const value = editor => ({ fi: editor.fiInput.value.trim(), en: editor.enInput.value.trim(),
+            usage_explanation: editor.usageExplanationInput.value.trim() });
+        return { title: value(titleEditor), slogan: value(sloganEditor) };
+    }
+    function heroDirty() { return JSON.stringify(heroValue()) !== heroBaseline; }
     function blocksDirty() { return scopeSignature(blocks) !== blockBaseline; }
     function settingsDirty() { return JSON.stringify(settingsValue()) !== settingsBaseline; }
-    function anyDirty() { return settingsDirty() || blocksDirty() || background.dirty(); }
+    function anyDirty() { return settingsDirty() || heroDirty() || blocksDirty() || background.dirty(); }
 
     function report(key) {
         if (!disposed) frontPageLabel(status, key);
     }
 
     function updateState() {
-        [settingsSection, scopeSection, background.element].forEach(section => { section.disabled = busy || !ready; });
+        [settingsSection, heroSection, background.element].forEach(section => { section.disabled = busy || !ready; });
+        scopeSection.disabled = busy || !ready || !showBlocksInput.checked;
+        scopeSection.classList.toggle('front-page-settings-section--disabled', !showBlocksInput.checked);
+        heroSave.disabled = busy || !ready || !heroDirty();
         container.setAttribute('aria-busy', String(busy));
         settingsSave.disabled = busy || !ready || !settingsDirty();
-        scopeSave.disabled = busy || !ready || conflicted || !blocksDirty();
+        scopeSave.disabled = busy || !ready || !showBlocksInput.checked || conflicted || !blocksDirty();
         resetButton.hidden = copyButton.hidden = !currentScope;
         resetButton.disabled = busy || conflicted || !ready || (!saved && !blocksDirty());
         copyButton.disabled = busy || conflicted || !ready;
@@ -152,7 +185,7 @@ export async function generate_front_page_settings_view(container) {
             return option;
         }));
         if (choices.some(dataset => dataset.dataset === previous)) addSelect.value = previous;
-        addSelect.disabled = addButton.disabled = busy || conflicted || blocks.length >= MAX_BLOCKS || choices.length === 0;
+        addSelect.disabled = addButton.disabled = busy || !showBlocksInput.checked || conflicted || blocks.length >= MAX_BLOCKS || choices.length === 0;
     }
 
     function updateSource() {
@@ -267,6 +300,10 @@ export async function generate_front_page_settings_view(container) {
         if (global) {
             enabledInput.checked = data.settings.separate_front_page === true;
             siteNameInput.checked = data.settings.front_page_button_shows_site_name === true;
+            showBlocksInput.checked = data.settings.front_page_show_blocks !== false;
+            applyLangKeyConfig(titleEditor, data.hero?.title || { lang_key: 'site_front_page_title' });
+            applyLangKeyConfig(sloganEditor, data.hero?.slogan || { lang_key: 'site_front_page_slogan' });
+            heroBaseline = JSON.stringify(heroValue());
             settingsBaseline = JSON.stringify(settingsValue());
             background.setSnapshot(data.background, data.background_error);
         }
@@ -283,6 +320,8 @@ export async function generate_front_page_settings_view(container) {
         report('saving');
         try {
             await operation();
+            if (disposed) return false;
+            await onSaved?.();
             if (disposed) return false;
             report(successKey);
             return true;
@@ -340,7 +379,7 @@ export async function generate_front_page_settings_view(container) {
         renderBlocks(dataset.dataset, 'remove');
         updateState();
     });
-    [enabledInput, siteNameInput].forEach(input => input.addEventListener('change', updateState));
+    [enabledInput, siteNameInput, showBlocksInput].forEach(input => input.addEventListener('change', updateState));
     settingsSave.addEventListener('click', () => {
         if (!ready || !settingsDirty()) return;
         void operate(async () => {
@@ -353,6 +392,14 @@ export async function generate_front_page_settings_view(container) {
             if (disposed) return;
             renderNavbarFrontPage({ isLoggedIn: localStorage.getItem('button_state') === 'logout' });
             background.update();
+        });
+    });
+    heroSave.addEventListener('click', () => {
+        if (!ready || !heroDirty()) return;
+        void operate(async () => {
+            await endpoint_router('adminFrontPage', { method: 'POST', body_data: { hero: heroValue() },
+                suppressErrorToast: true, signal: lifetime.signal });
+            if (!disposed) heroBaseline = JSON.stringify(heroValue());
         });
     });
     background.saveButton.addEventListener('click', () => {
@@ -413,10 +460,10 @@ export async function generate_front_page_settings_view(container) {
 
     // Reuse the navigation pipeline's dirty hook and the shell's existing cleanup contract.
     const checkDirty = async () => !busy && await confirmDiscard(ready && anyDirty());
-    window.check_manage_permissions_dirty = checkDirty;
+    if (!modal) window.check_manage_permissions_dirty = checkDirty;
     const beforeUnload = event => { if (busy || (ready && anyDirty())) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', beforeUnload);
-    const owner = container.closest('.content_div') || container;
+    const owner = modal ? container : container.closest('.content_div') || container;
     owner.__cleanupListeners = () => {
         disposed = true;
         lifetime.abort();

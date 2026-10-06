@@ -131,6 +131,21 @@ func TestWithCSP_AllowsLocalBlobImagePreviewWithoutOpeningOtherSources(t *testin
 	}
 }
 
+func TestWithCSP_AllowsLocalBlobVideoPreviewWithoutOpeningOtherSources(t *testing.T) {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	WithCSP(http.HandlerFunc(okHandler)).ServeHTTP(rr, req)
+
+	csp := rr.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "media-src 'self' blob:;") {
+		t.Fatalf("CSP media policy does not allow the local object-URL video preview: %s", csp)
+	}
+	if strings.Contains(csp, "media-src *") || strings.Contains(csp, "media-src https:") {
+		t.Fatalf("CSP media policy unexpectedly allows arbitrary remote media: %s", csp)
+	}
+}
+
 func TestGetCSPNonce_InsideMiddleware(t *testing.T) {
 	var nonce string
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

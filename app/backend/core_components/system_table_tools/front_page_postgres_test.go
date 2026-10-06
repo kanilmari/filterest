@@ -27,6 +27,7 @@ var frontPageMigrations = []string{
 	"20261005000030_create_front_page_revision_metadata.sql",
 	"20261005000031_create_system_front_page_blocks.sql", "20261005000032_add_front_page_settings.sql",
 	"20261005000033_seed_front_page_language_keys.sql", "20261005000034_register_system_front_page_blocks.sql",
+	"20261005000085_add_front_page_show_blocks.sql", "20261005000086_seed_front_page_hero_language_keys.sql",
 }
 
 func frontPageDisposableDB(t *testing.T) *sql.DB {
@@ -430,5 +431,73 @@ func TestFrontPagePostgresCanonicalReadKeepsColumnsFlagsOwnerAndExactRowRules(t 
 	GetFrontPageHandler(response, guest)
 	if !strings.Contains(response.Body.String(), "wl143_rows") || strings.Contains(response.Body.String(), "own unapproved") || strings.Contains(response.Body.String(), "flag denied") {
 		t.Fatal("guest canonical flag filtering", response.Body.String())
+	}
+}
+
+func TestFrontPagePostgresHeroBoxSwitchAndRepeatMigrations(t *testing.T) {
+	db := frontPageDisposableDB(t)
+	settings, err := backend.ReadFrontPageSettings(context.Background(), db)
+	if err != nil || !settings.FrontPageShowBlocks {
+		t.Fatal(settings, err)
+	}
+	frontPageExec(t, db, `DELETE FROM public.system_config WHERE key='front_page_show_blocks'`)
+	settings, err = backend.ReadFrontPageSettings(context.Background(), db)
+	if err != nil || !settings.FrontPageShowBlocks {
+		t.Fatal("missing switch default", settings, err)
+	}
+	on, off := true, false
+	_, err = frontPageTestSave(db, frontPageAdminRequest{Settings: &frontPageAdminSettings{SeparateFrontPage: &on, FrontPageButtonShowsSiteName: &off, FrontPageShowBlocks: &off}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hero := frontPageHero{Title: &frontPageHeroText{Fi: "Oma otsikko", En: "Our title", UsageExplanation: "Reviewed Home copy"}, Slogan: &frontPageHeroText{Fi: "Oma iskulause", En: "Our slogan"}}
+	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &hero}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readFrontPageHeroForAdmin(db)
+	if err != nil || got.Title.Fi != hero.Title.Fi || got.Slogan.En != hero.Slogan.En || got.Title.UsageExplanation != hero.Title.UsageExplanation {
+		t.Fatal(got, err)
+	}
+	if frontPageCount(t, db, `SELECT count(*) FROM public.system_lang_keys k JOIN public.system_lang_key_translations tr ON tr.lang_key_id=k.id
+  WHERE k.lang_key IN ('site_front_page_title','site_front_page_slogan') AND tr.language_code IN ('fi','en') AND tr.translation=CASE tr.language_code WHEN 'fi' THEN k.fi ELSE k.en END`) != 4 {
+		t.Fatal("translation stores disagree")
+	}
+	for _, name := range frontPageMigrations[len(frontPageMigrations)-2:] {
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		frontPageExec(t, db, string(content))
+		frontPageExec(t, db, string(content))
+	}
+	settings, err = backend.ReadFrontPageSettings(context.Background(), db)
+	if err != nil || settings.FrontPageShowBlocks {
+		t.Fatal("migration overwrote boxes off", settings, err)
+	}
+	got, err = readFrontPageHeroForAdmin(db)
+	if err != nil || got.Title.Fi != hero.Title.Fi {
+		t.Fatal("migration overwrote hero", got, err)
+	}
+	oldResolver := frontPageBlocksResolver
+	t.Cleanup(func() { frontPageBlocksResolver = oldResolver })
+	frontPageBlocksResolver = func(dbutils.Querier, int) ([]frontPageBlock, string, error) {
+		t.Fatal("boxes off resolved datasets")
+		return nil, "", nil
+	}
+	response := httptest.NewRecorder()
+	GetFrontPageHandler(response, frontPageSessionRequest(t, 42, "basic", "GET", "/api/front-page"))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"blocks":[]`) || !strings.Contains(response.Body.String(), `"show_blocks":false`) {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	hero.Title.Fi = ""
+	hero.Title.En = ""
+	hero.Slogan.Fi = ""
+	hero.Slogan.En = ""
+	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &hero}); err != nil {
+		t.Fatal(err)
+	}
+	if frontPageCount(t, db, `SELECT count(*) FROM public.system_lang_key_translations tr JOIN public.system_lang_keys k ON k.id=tr.lang_key_id
+  WHERE k.lang_key IN ('site_front_page_title','site_front_page_slogan')`) != 0 {
+		t.Fatal("cleared copy stayed in served translations")
 	}
 }

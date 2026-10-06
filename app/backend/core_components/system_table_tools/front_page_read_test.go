@@ -44,14 +44,17 @@ func frontPageSessionRequest(t *testing.T, userID int, role, method, target stri
 
 func stubFrontPageRead(t *testing.T, blocks []frontPageBlock) {
 	t.Helper()
+	heroReader := frontPageHeroReader
 	settings, background, resolver, canRead, handler, now := frontPageSettingsReader, frontPageBackgroundReader, frontPageBlocksResolver, frontPageCanRead, frontPageResultsHandler, frontPageNow
 	frontPageSettingsReader = func(context.Context, *sql.DB) (backend.FrontPageSettings, error) {
-		return backend.FrontPageSettings{SeparateFrontPage: true}, nil
+		return backend.FrontPageSettings{SeparateFrontPage: true, FrontPageShowBlocks: true}, nil
 	}
+	frontPageHeroReader = func(dbutils.Querier) (frontPageHero, error) { return frontPageHero{}, nil }
 	frontPageBackgroundReader = func(context.Context, *sql.DB) (*backend.FrontPageBackground, error) { return nil, nil }
 	frontPageBlocksResolver = func(dbutils.Querier, int) ([]frontPageBlock, string, error) { return blocks, "common", nil }
 	frontPageCanRead = func(int, string) bool { return true }
 	t.Cleanup(func() {
+		frontPageHeroReader = heroReader
 		frontPageSettingsReader, frontPageBackgroundReader, frontPageBlocksResolver, frontPageCanRead, frontPageResultsHandler, frontPageNow = settings, background, resolver, canRead, handler, now
 	})
 }
@@ -151,4 +154,24 @@ func TestFrontPageReadBudgetAndCanonicalPageCap(t *testing.T) {
 		return nil, "", errors.New("database failed")
 	}
 	GetFrontPageHandler(httptest.NewRecorder(), frontPageSessionRequest(t, 42, "basic", "GET", "/api/front-page"))
+}
+
+func TestFrontPageReadBoxesOffDoesNotResolveOrDelegateData(t *testing.T) {
+	stubFrontPageRead(t, nil)
+	frontPageSettingsReader = func(context.Context, *sql.DB) (backend.FrontPageSettings, error) {
+		return backend.FrontPageSettings{SeparateFrontPage: true, FrontPageShowBlocks: false}, nil
+	}
+	frontPageBlocksResolver = func(dbutils.Querier, int) ([]frontPageBlock, string, error) {
+		t.Fatal("resolved hidden boxes")
+		return nil, "", nil
+	}
+	frontPageResultsHandler = func(http.ResponseWriter, *http.Request) { t.Fatal("delegated hidden boxes") }
+	frontPageHeroReader = func(dbutils.Querier) (frontPageHero, error) {
+		return frontPageHero{Title: &frontPageHeroText{Fi: "Otsikko", En: "Title"}, Slogan: &frontPageHeroText{}}, nil
+	}
+	response := httptest.NewRecorder()
+	GetFrontPageHandler(response, frontPageSessionRequest(t, 42, "basic", "GET", "/api/front-page"))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"blocks":[]`) || !strings.Contains(response.Body.String(), `"show_blocks":false`) || !strings.Contains(response.Body.String(), `"en":"Title"`) {
+		t.Fatal(response.Code, response.Body.String())
+	}
 }

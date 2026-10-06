@@ -215,7 +215,8 @@
 }
 
 .filterbar-panel--wide .morphing-title,
-.filterbar-inline-hero .morphing-title {
+.filterbar-inline-hero .morphing-title,
+.front-page-hero .morphing-title {
   font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: clamp(1.5rem, 3vw, 2.2rem);
   font-weight: 700;
@@ -225,7 +226,8 @@
 }
 
 .filterbar-panel--wide .morphing-subtitle,
-.filterbar-inline-hero .morphing-subtitle {
+.filterbar-inline-hero .morphing-subtitle,
+.front-page-hero .morphing-subtitle {
   font-size: 16px;
   color: var(--text_color);
   margin-bottom: 0;

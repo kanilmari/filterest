@@ -18,6 +18,7 @@ import (
 type FrontPageSettings struct {
 	SeparateFrontPage            bool `json:"separate_front_page"`
 	FrontPageButtonShowsSiteName bool `json:"front_page_button_shows_site_name"`
+	FrontPageShowBlocks          bool `json:"front_page_show_blocks"`
 }
 
 type FrontPageBackground struct {
@@ -28,16 +29,16 @@ type FrontPageBackground struct {
 	FocalY       float64 `json:"focal_y"`
 }
 
-// ReadFrontPageSettings defaults missing switches to off, never a malformed value.
+// ReadFrontPageSettings keeps boxes on when missing; the opt-in switches default off.
 func ReadFrontPageSettings(ctx context.Context, db *sql.DB) (FrontPageSettings, error) {
-	settings := FrontPageSettings{}
+	settings := FrontPageSettings{FrontPageShowBlocks: true}
 	if db == nil {
 		return settings, errors.New("front page settings database unavailable")
 	}
 	for _, item := range []struct {
 		key   string
 		value *bool
-	}{{"separate_front_page", &settings.SeparateFrontPage}, {"front_page_button_shows_site_name", &settings.FrontPageButtonShowsSiteName}} {
+	}{{"separate_front_page", &settings.SeparateFrontPage}, {"front_page_button_shows_site_name", &settings.FrontPageButtonShowsSiteName}, {"front_page_show_blocks", &settings.FrontPageShowBlocks}} {
 		var value sql.NullBool
 		err := db.QueryRowContext(ctx, `SELECT boolean_value FROM public.system_config WHERE key = $1`, item.key).Scan(&value)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -54,7 +55,7 @@ func ReadFrontPageSettings(ctx context.Context, db *sql.DB) (FrontPageSettings, 
 	return settings, nil
 }
 
-// ReadFrontPageBackground returns nil for a missing or deliberately removed image.
+// ReadFrontPageBackground returns nil for missing or deliberately removed media.
 func ReadFrontPageBackground(ctx context.Context, db *sql.DB) (*FrontPageBackground, error) {
 	if db == nil {
 		return nil, errors.New("front page background database unavailable")
@@ -88,9 +89,9 @@ func ValidateFrontPageBackground(background FrontPageBackground) error {
 		key != path.Clean(key) || strings.Contains(key, `\`) || strings.TrimSpace(parts[3]) != parts[3] {
 		return errors.New("invalid front page background storage key")
 	}
-	mimeType := map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}[path.Ext(key)]
+	mimeType := map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".mp4": "video/mp4", ".webm": "video/webm"}[path.Ext(key)]
 	if mimeType == "" || background.MIMEType != mimeType {
-		return errors.New("invalid front page background image type")
+		return errors.New("invalid front page background media type")
 	}
 	if math.IsNaN(background.FocalX) || math.IsNaN(background.FocalY) || background.FocalX < 0 || background.FocalX > 1 || background.FocalY < 0 || background.FocalY > 1 {
 		return errors.New("front page background focal point must be between 0 and 1")
@@ -98,12 +99,16 @@ func ValidateFrontPageBackground(background FrontPageBackground) error {
 	return nil
 }
 
-// FrontPageBackgroundMatches accepts only the original and two display sizes of the configured file.
+// FrontPageBackgroundMatches serves only the configured original video or original/sized image.
 func FrontPageBackgroundMatches(background *FrontPageBackground, key string) bool {
 	if background == nil || ValidateFrontPageBackground(*background) != nil || strings.Contains(key, `\`) || key != path.Clean(key) {
 		return false
 	}
-	for _, variant := range []string{"original", "1000", "2160"} {
+	variants := []string{"original"}
+	if !strings.HasPrefix(background.MIMEType, "video/") {
+		variants = append(variants, "1000", "2160")
+	}
+	for _, variant := range variants {
 		if key == path.Join("site_media", "front_page", variant, path.Base(background.StorageKey)) {
 			return true
 		}

@@ -60,6 +60,7 @@ language_seed_migrations = (
     "20261005000055_seed_setting_check_language_keys.sql",
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",
     "20261005000075_seed_runtime_grant_refusal_language_keys.sql",
+    "20261005000086_seed_front_page_hero_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -69,6 +70,7 @@ setting_seed_migrations = (
     "20260927000001_add_absolute_sign_in_limit.sql",
     "20260929000004_add_missing_media_check_setting.sql",
     "20261005000032_add_front_page_settings.sql",
+    "20261005000085_add_front_page_show_blocks.sql",
 )
 # What an upgrade adds where a site lacks it — a table, or a relationship between
 # two tables — is added for a new installation by the same file, so an upgraded

@@ -72,8 +72,17 @@ beforeEach(() => {
 
 afterEach(() => {
     document.getElementById('front_page_container')?.__cleanupListeners?.();
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
     vi.unstubAllGlobals();
 });
+
+/** Switching browser tabs away and back; a mere window focus change keeps Home (owner 7.10.2026). */
+function hideAndShowDocument() {
+    for (const hidden of [true, false]) {
+        Object.defineProperty(document, 'hidden', { value: hidden, configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    }
+}
 
 async function returnHome() {
     await home();
@@ -135,7 +144,7 @@ test.each([false, true])('resume after returning Home clears A before validation
         if (route === 'fetchUserProfile') return new Promise(resolve => { verify = resolve; });
         return new Promise(resolve => { finishB = resolve; });
     });
-    window.dispatchEvent(new Event('focus'));
+    hideAndShowDocument();
     expect(page.textContent).not.toContain('Account A blocks');
     await vi.waitFor(() => expect(verify).toBeTypeOf('function'));
     expect(mocks.request.mock.calls.filter(([route]) => route === 'frontPage')).toHaveLength(2);

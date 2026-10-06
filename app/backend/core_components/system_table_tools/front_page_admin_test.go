@@ -1,6 +1,7 @@
 // front_page_admin_test.go
 // Exercises strict administrator request forms and conflict responses without a database.
 // Atomic replacement, reset and concurrency are separately proved on disposable PostgreSQL.
+// Holds the Home hero and optional boxes to the same strict write boundary.
 package system_table_tools
 
 import (
@@ -12,6 +13,8 @@ import (
 
 func TestFrontPageAdminRequestForms(t *testing.T) {
 	valid := []string{
+		`{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false,"front_page_show_blocks":false}}`,
+		`{"hero":{"title":{"fi":"Otsikko","en":"Title"},"slogan":{"fi":"","en":""}}}`,
 		`{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false}}`,
 		`{"version":"none","blocks":[]}`,
 		`{"user_id":42,"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":1,"enabled":true}]}`,
@@ -23,7 +26,7 @@ func TestFrontPageAdminRequestForms(t *testing.T) {
 			t.Fatal(body, err)
 		}
 	}
-	invalid := []string{`{}`, `null`, `{"version":"none","blocks":[],"reset":true}`, `{"version":"none","reset":false}`, `{"version":"none","copy_from_common":true}`,
+	invalid := []string{`{"hero":{}}`, `{"hero":{"title":{"lang_key":"unrelated"},"slogan":{}}}`, `{"hero":{"title":{},"slogan":{}},"version":"none"}`, `{"hero":{"title":{},"slogan":{}},"user_id":42}`, `{"hero":{"title":{"ch":"no"},"slogan":{}}}`, `{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false,"front_page_show_blocks":"false"}}`, `{}`, `null`, `{"version":"none","blocks":[],"reset":true}`, `{"version":"none","reset":false}`, `{"version":"none","copy_from_common":true}`,
 		`{"user_id":1,"version":"none","blocks":[]}`, `{"user_id":0,"version":"none","blocks":[]}`, `{"blocks":[]}`,
 		`{"settings":{}}`, `{"settings":{},"user_id":42}`, `{"settings":{"unknown":true}}`, `{"settings":{"separate_front_page":"true"}}`,
 		`{"version":"none","blocks":[]} {}`, `{"version":"none","blocks":null}`, `{"version":"none","blocks":[],"sql":"DROP"}`,

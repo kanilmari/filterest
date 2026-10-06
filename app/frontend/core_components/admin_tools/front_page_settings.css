@@ -160,6 +160,26 @@
     display: none !important;
 }
 
+/* A hidden box list retains its draft but cannot be edited until enabled. */
+.front-page-settings-section--disabled {
+    opacity: 0.55;
+}
+
+.front-page-settings-section:disabled {
+    cursor: default;
+}
+
+/* framework.css gives a disabled button no look of its own; each Save stays off
+   until its section changes, so it has to look off. */
+.front-page-settings-view .fw-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.front-page-settings-section--disabled .fw-btn:disabled {
+    opacity: 1; /* the section itself is already dimmed */
+}
+
 @media (width <= 720px) {
     .front-page-settings-view,
     .front-page-settings-section,

@@ -32,10 +32,12 @@ type frontPageBlockInput struct {
 type frontPageAdminSettings struct {
 	SeparateFrontPage            *bool `json:"separate_front_page"`
 	FrontPageButtonShowsSiteName *bool `json:"front_page_button_shows_site_name"`
+	FrontPageShowBlocks          *bool `json:"front_page_show_blocks"`
 }
 
 type frontPageAdminRequest struct {
 	Settings       *frontPageAdminSettings `json:"settings"`
+	Hero           *frontPageHero          `json:"hero"`
 	UserID         *int                    `json:"user_id"`
 	Version        string                  `json:"version"`
 	Blocks         *[]frontPageBlockInput  `json:"blocks"`
@@ -46,14 +48,16 @@ type frontPageAdminRequest struct {
 var frontPageAdminSaver = saveFrontPageAdminRequest
 
 // AdminFrontPageHandler manages front page settings and scope lists.
-// GET ?user_id=42 returns settings, background, background_error, scope, saved,
+// GET ?user_id=42 returns settings, hero, background, background_error, scope, saved,
 // inherits_common, source, version, blocks and datasets (newest_capable, can_read).
 // GET ?user_query=text returns at most 20 {user_id,display_name} accounts.
-// POST accepts exactly {settings:{separate_front_page,front_page_button_shows_site_name}}
+// POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks}}
+// or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation}}}
 // or {user_id,version,blocks:[{dataset,result_limit,sort_order,enabled}]},
 // {user_id,version,reset:true}, {user_id,version,copy_from_common:true}.
 // Omit user_id or use null for common. Version is opaque, initially "none";
-// successful scope writes return {version}, stale writes return 409.
+// successful scope writes return {version}, stale writes return 409. Older settings
+// clients may omit front_page_show_blocks to preserve it; hero strings allow at most 2000 characters.
 func AdminFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "GET, POST")
@@ -98,6 +102,12 @@ func decodeFrontPageAdminRequest(body io.Reader) (frontPageAdminRequest, error) 
 	if request.Settings != nil {
 		modes++
 	}
+	if request.Hero != nil {
+		modes++
+		if err := validateFrontPageHero(*request.Hero); err != nil {
+			return request, err
+		}
+	}
 	if request.Blocks != nil {
 		modes++
 	}
@@ -118,6 +128,10 @@ func decodeFrontPageAdminRequest(body io.Reader) (frontPageAdminRequest, error) 
 	}
 	if request.Settings != nil {
 		if request.UserID != nil || request.Version != "" || request.Settings.SeparateFrontPage == nil || request.Settings.FrontPageButtonShowsSiteName == nil {
+			return request, errFrontPageInput
+		}
+	} else if request.Hero != nil {
+		if request.UserID != nil || request.Version != "" {
 			return request, errFrontPageInput
 		}
 	} else if request.Version == "" || len(request.Version) > 100 {
@@ -193,6 +207,11 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	background, backgroundErr := frontPageBackgroundReader(r.Context(), backend.Db)
+	hero, err := readFrontPageHeroForAdmin(backend.Db)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "home hero unavailable")
+		return
+	}
 	datasets, err := readFrontPageDatasets(backend.Db, viewer)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "datasets unavailable")
@@ -253,7 +272,7 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 		backgroundError = "invalid front_page_background"
 		log.Printf("[AdminFrontPageHandler] %v", backgroundErr)
 	}
-	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"settings": settings, "background": background,
+	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"settings": settings, "hero": hero, "background": background,
 		"background_error": backgroundError, "scope": map[string]any{"user_id": userID, "display_name": displayName},
 		"saved": saved, "inherits_common": scope > 1 && !saved, "source": source, "version": version,
 		"blocks": blocks, "datasets": datasets})

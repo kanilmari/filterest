@@ -123,7 +123,43 @@ search; the server's row cap for Home). Search retains its existing navigation.
 Home row links preselect their exact article without adding a dataset entry,
 so one Back returns to Home; Show all opens the
 card collection newest first (`__newest`). Theme surfaces keep text above a
-decorative sized background, and phones show one column.
+decorative sized image or original video background, and phones show one column.
+
+The `front_page_show_blocks` boolean defaults to **true even when its row is
+absent**, so existing sites and localhost retain their boxes. When false the
+public facade resolves no datasets and returns `show_blocks:false, blocks:[]`;
+the editor disables and greys its retained box list. The key is registered in
+`system_config_checks`, so generic writes also refuse a non-boolean value.
+Home's inner `.front-page-scroller` scrolls vertically below a stationary top
+row; its background is an absolute sibling, outside that scroller. Row caps
+continue to belong to the compact group renderer.
+
+`front_page_top_row_builder.js` composes the existing hero grid/actions and
+`createHeroDatasetTabs()` without an active dataset. It borrows the shell's
+single menu button into the shared menu slot, restoring its original position
+on teardown, and destroys the tab subscription. Site identity uses the actual
+server-rendered favicon link at 32 px with smooth scaling and the article
+bar's title class. Home applies no bottom border or shadow to that row.
+
+Fixed language keys `site_front_page_title` and `site_front_page_slogan` store
+Finnish and English copy. The response carries both languages so a live language
+switch can show intentional empty values: the title falls back to the site name
+(or Home when no name exists), and an empty slogan stays hidden. The Home gear
+requires `/api/admin/front-page` and opens the existing editor in shared modal
+chrome. It reuses `lang_key_editor_builder.js`, extracted from the dataset hero
+editor, and saves both legacy language columns and served translations. Its
+`front_page_hero` sources retain these fixed keys through catalog cleanup.
+Saving any section refreshes visible Home without changing navigation/history.
+
+Background uploads retain PNG/JPEG/WebP with a 10 MiB file ceiling, plus
+MP4/WebM with a 50 MiB ceiling matching the media library. The request body
+allows 1 MiB of multipart overhead. Videos are signature-checked and stored
+only under `site_media/front_page/original/`; the protected route refuses
+resized video URLs, other files and disabled Home access. The decorative video
+uses autoplay, mute, loop, inline playback and focal-point positioning with
+`object-fit:cover`. Reduced motion disables autoplay, changes pause playback,
+and teardown releases its source and preference listener. Image variants,
+focal points and transactional replacement cleanup retain their existing rules.
 
 Admin → Site settings → Home settings uses the `/api/admin/front-page` permission
 through the custom-view registry. The editor searches accounts by display name,

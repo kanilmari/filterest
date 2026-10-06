@@ -1,6 +1,7 @@
 // front_page_background_test.go
 // Verifies the shared saver, conservative image allowlist and complete variant cleanup.
 // Uses real image bytes and temporary storage without installation or network access.
+// Covers the added Home boxes and video contracts without a live database.
 package system_table_tools
 
 import (
@@ -92,5 +93,35 @@ func TestFrontPageBackgroundRejectsTypeSignatureSizeAndBrokenImage(t *testing.T)
 	FrontPageBackgroundHandler(response, httptest.NewRequest("GET", "/api/admin/front-page/background", nil))
 	if response.Code != 405 {
 		t.Fatal(response.Code)
+	}
+}
+
+func TestFrontPageVideoSaverOriginalOnlyAndSignatureRefusal(t *testing.T) {
+	for name, data := range map[string][]byte{
+		"movie.mp4":  {0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm', 0, 0, 0, 0, 'm', 'p', '4', '2'},
+		"movie.webm": {0x1a, 0x45, 0xdf, 0xa3, 0x87, 0x42, 0x82, 0x84, 'w', 'e', 'b', 'm'},
+	} {
+		root := t.TempDir()
+		header := datasetMediaTestFileHeader(t, name, data)
+		saved, err := savePresentationMediaFile(root, frontPageBackgroundRoot, header, isAllowedFrontPageMediaExtension, frontPageVideoMaxBytes, func(string, string) error { return nil })
+		if err != nil || !strings.HasPrefix(saved.MIMEType, "video/") {
+			t.Fatal(saved, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, saved.StorageKey)); err != nil {
+			t.Fatal(err)
+		}
+		for _, variant := range []string{"1000", "2160"} {
+			if _, err := os.Stat(filepath.Join(root, frontPageBackgroundRoot, variant, filepath.Base(saved.StorageKey))); !os.IsNotExist(err) {
+				t.Fatal("resized video", err)
+			}
+		}
+		bad := datasetMediaTestFileHeader(t, name, frontPageTestPNG(t))
+		if _, err := savePresentationMediaFile(root, frontPageBackgroundRoot, bad, isAllowedFrontPageMediaExtension, frontPageVideoMaxBytes, func(string, string) error { return nil }); err == nil {
+			t.Fatal("renamed video accepted")
+		}
+		header.Size = frontPageVideoMaxBytes + 1
+		if _, err := savePresentationMediaFile(root, frontPageBackgroundRoot, header, isAllowedFrontPageMediaExtension, frontPageVideoMaxBytes, func(string, string) error { return nil }); err == nil {
+			t.Fatal("oversized video accepted")
+		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
@@ -19,15 +20,19 @@ import (
 const frontPageBackgroundRoot = "site_media/front_page"
 const frontPageBackgroundMaxBytes int64 = 10 << 20
 
+// Video follows the media library ceiling; images retain their existing limit.
+const frontPageVideoMaxBytes int64 = 50 << 20
+
 func isAllowedFrontPageMediaExtension(ext string) bool {
-	return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp"
+	return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".mp4" || ext == ".webm"
 }
 
 // FrontPageBackgroundHandler saves or removes the front page background.
 // POST /api/admin/front-page/background accepts multipart file "background_image"
 // and optional focal_x/focal_y in [0,1] (default 0.5). With an existing image,
-// omitting the file updates its focal point. PNG, JPEG and WebP only, at most 10 MB
-// including the multipart body. DELETE removes it. Returns {background}, null when removed.
+// omitting the file updates its focal point. PNG/JPEG/WebP: 10 MiB; MP4/WebM: 50 MiB.
+// The body allows 1 MiB of multipart overhead. Videos have no resized variants.
+// DELETE removes it. Returns {background}, null when removed.
 func FrontPageBackgroundHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
 		w.Header().Set("Allow", "POST, DELETE")
@@ -35,7 +40,7 @@ func FrontPageBackgroundHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		r.Body = http.MaxBytesReader(w, r.Body, frontPageBackgroundMaxBytes)
+		r.Body = http.MaxBytesReader(w, r.Body, frontPageVideoMaxBytes+(1<<20))
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid background upload")
 			return
@@ -83,8 +88,15 @@ func FrontPageBackgroundHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(files) == 1 {
+			limit := frontPageBackgroundMaxBytes
+			if ext := strings.ToLower(filepath.Ext(files[0].Filename)); ext == ".mp4" || ext == ".webm" {
+				limit = frontPageVideoMaxBytes
+			}
 			saved, err := savePresentationMediaFile(storageDir, frontPageBackgroundRoot, files[0], isAllowedFrontPageMediaExtension,
-				frontPageBackgroundMaxBytes, func(filename, ext string) error {
+				limit, func(filename, ext string) error {
+					if ext == ".mp4" || ext == ".webm" {
+						return nil
+					}
 					return createPresentationMediaDisplayVariants(storageDir, frontPageBackgroundRoot, filename, ext, []int{1000, 2160}, true)
 				})
 			if err != nil {

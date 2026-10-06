@@ -12,7 +12,9 @@ import {
 } from './front_page_settings_controls.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const VIDEO_MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MEDIA_EXTENSIONS = { 'image/png': /\.png$/i, 'image/jpeg': /\.jpe?g$/i, 'image/webp': /\.webp$/i,
+    'video/mp4': /\.mp4$/i, 'video/webm': /\.webm$/i };
 
 /** Builds a draft control; save() writes only this section, never a scope list. */
 export function createFrontPageBackgroundControl({ onChange, report, isEnabled }) {
@@ -20,12 +22,18 @@ export function createFrontPageBackgroundControl({ onChange, report, isEnabled }
     const errorMessage = frontPageStatus('background-error');
     const help = frontPageLabel(document.createElement('p'), 'front_page_background_help');
     const fileInput = Object.assign(document.createElement('input'), {
-        type: 'file', accept: '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp',
+        type: 'file', accept: '.png,.jpg,.jpeg,.webp,.mp4,.webm,image/png,image/jpeg,image/webp,video/mp4,video/webm',
     });
     const webButton = frontPageButton('pick_image_from_web', 'background-web');
     const preview = document.createElement('img');
     preview.className = 'front-page-settings-background-preview';
     preview.alt = ''; // Decorative crop preview; the original name is printed separately.
+    const videoPreview = document.createElement('video');
+    videoPreview.className = 'front-page-settings-background-preview';
+    videoPreview.muted = true;
+    videoPreview.controls = true;
+    videoPreview.playsInline = true;
+    videoPreview.preload = 'metadata';
     const filename = document.createElement('p');
     filename.className = 'front-page-settings-filename';
     const focalFields = document.createElement('div');
@@ -40,7 +48,7 @@ export function createFrontPageBackgroundControl({ onChange, report, isEnabled }
     const saveButton = frontPageButton('save', 'background-save', true);
     const status = frontPageStatus('background-status');
     element.append(help, errorMessage, frontPageField('front_page_upload_background', fileInput, 'background-file'),
-        webButton, filename, preview, focalFields, removeButton, saveButton, status);
+        webButton, filename, preview, videoPreview, focalFields, removeButton, saveButton, status);
 
     let stored = null;
     let backgroundError = false;
@@ -69,12 +77,20 @@ export function createFrontPageBackgroundControl({ onChange, report, isEnabled }
         removeButton.disabled = removing || !(selectedFile || stored || backgroundError);
         saveButton.disabled = !dirty();
         const match = stored?.storage_key?.match(/^site_media\/front_page\/original\/([^/]+)$/);
+        const isVideo = (selectedFile?.type || stored?.mime_type || '').startsWith('video/');
         const source = previewUrl || (isEnabled() && match
-            ? `/storage/site_media/front_page/1000/${encodeURIComponent(match[1])}` : '');
-        preview.hidden = !hasImage || !source;
-        if (preview.hidden) preview.removeAttribute('src');
-        else preview.src = source;
-        preview.style.objectPosition = `${focalX.value}% ${focalY.value}%`;
+            ? `/storage/site_media/front_page/${isVideo ? 'original' : '1000'}/${encodeURIComponent(match[1])}` : '');
+        for (const media of [preview, videoPreview]) {
+            media.hidden = !hasImage || !source || (media === videoPreview) !== isVideo;
+            if (media.hidden) {
+                const wasVideo = media === videoPreview && media.hasAttribute('src');
+                if (wasVideo) media.pause();
+                media.removeAttribute('src');
+                if (wasVideo) media.load();
+            }
+            else if (media.getAttribute('src') !== source) media.src = source;
+            media.style.objectPosition = `${focalX.value}% ${focalY.value}%`;
+        }
         filename.textContent = removing ? '' : selectedFile?.name || stored?.original_name || '';
         errorMessage.hidden = !backgroundError;
         if (backgroundError) frontPageLabel(errorMessage, 'front_page_background_error');
@@ -101,8 +117,9 @@ export function createFrontPageBackgroundControl({ onChange, report, isEnabled }
 
     function selectFile(file) {
         if (disposed || !file) return;
-        if (!IMAGE_TYPES.has(file.type) || !/\.(png|jpe?g|webp)$/i.test(file.name)
-            || file.size === 0 || file.size >= MAX_FILE_BYTES) {
+        const limit = file.type.startsWith('video/') ? VIDEO_MAX_FILE_BYTES : MAX_FILE_BYTES;
+        if (!MEDIA_EXTENSIONS[file.type]?.test(file.name)
+            || file.size === 0 || file.size >= limit) {
             report('front_page_background_invalid');
             fileInput.value = '';
             return;
@@ -171,6 +188,11 @@ export function createFrontPageBackgroundControl({ onChange, report, isEnabled }
         destroy() {
             disposed = true;
             picker?.hide();
+            if (videoPreview.hasAttribute('src')) {
+                videoPreview.pause();
+                videoPreview.removeAttribute('src');
+                videoPreview.load();
+            }
             revokePreview();
         },
     };

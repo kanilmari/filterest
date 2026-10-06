@@ -158,6 +158,8 @@
     "20261005000070_drop_column_label_value_layout.sql",
     "20261005000075_seed_runtime_grant_refusal_language_keys.sql",
     "20261005000080_add_dataset_media_hidden.sql",
+    "20261005000085_add_front_page_show_blocks.sql",
+    "20261005000086_seed_front_page_hero_language_keys.sql",
     "20261005000099_record_database_release_9_10_0.sql"
   ],
   "allowed_schema_tables": [
@@ -312,11 +314,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1160,
+    "public.system_lang_keys": 1176,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 152,
+    "public.system_schema_migrations": 154,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -331,7 +333,7 @@
       "sha256": "f1181ec444ca18850b192b43c2353f53b6190e2f81d6e559e1d1e5f4fea79821"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "b05f2afd32d0f0412d9ad2ea0ec9993627165be7aa85790c7e9ef3e7f79eb878"
+      "sha256": "fb5972d2ca0c7e3cc031dbe572c40c362241eb38de336450e9ade5df8c69c632"
     }
   },
   "source_files": {
@@ -348,7 +350,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "6fa04476507ad936444a419576c23b26953065f9fb342cd9bc729da465d9e713"
+      "sha256": "185c0492c1160ed8289019bdc4239b11daf22391a96093eab457fc5c2225197d"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "cadab74b97ae8328417bbbcdefd7a9b770250c3a25ebe7272978622a10807e54"
@@ -871,6 +873,12 @@
     },
     "filterest/app/server_tools/migrations/20261005000080_add_dataset_media_hidden.sql": {
       "sha256": "69ec41d19c4d8d8b16df53a3e49e04333d8c820d6247934648126df24cae1d7c"
+    },
+    "filterest/app/server_tools/migrations/20261005000085_add_front_page_show_blocks.sql": {
+      "sha256": "9cab21df24aa87a52335798e69713235b656a2ab64847acbacf6005952277c86"
+    },
+    "filterest/app/server_tools/migrations/20261005000086_seed_front_page_hero_language_keys.sql": {
+      "sha256": "ea90805dc12148fc66b3392058a72b99b86474c0aae8531b18f401bd54cf0f96"
     },
     "filterest/app/server_tools/migrations/20261005000099_record_database_release_9_10_0.sql": {
       "sha256": "3635c5ef4dd28494225d97e92b73148ed3cb23279f8107774785b4a93e8f6e2c"

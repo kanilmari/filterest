@@ -20,6 +20,8 @@ FILES = tuple(MIGRATIONS / name for name in (
     "20261005000032_add_front_page_settings.sql",
     "20261005000033_seed_front_page_language_keys.sql",
     "20261005000034_register_system_front_page_blocks.sql",
+    "20261005000085_add_front_page_show_blocks.sql",
+    "20261005000086_seed_front_page_hero_language_keys.sql",
 ))
 
 

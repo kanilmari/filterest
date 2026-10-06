@@ -2,6 +2,7 @@
 // Checks the registry independently of HTTP handlers or a live database.
 // Connects candidate row values to the existing translated refusal contract.
 // Exists to protect registered settings while leaving unrelated keys unchanged.
+// Covers the added Home boxes and video contracts without a live database.
 package system_config_checks
 
 import (
@@ -32,5 +33,24 @@ func TestRegistryRefusesInvalidSignInLimit(t *testing.T) {
 	}
 	if err := ValidateRow("system_config", map[string]interface{}{"key": SignInLimitKey, "value_type": 0}); err == nil {
 		t.Fatal("a duration changed to text was accepted")
+	}
+}
+
+func TestFrontPageBoxesBooleanRegistry(t *testing.T) {
+	for _, value := range []bool{true, false} {
+		if err := ValidateRow("system_config", map[string]interface{}{"key": "front_page_show_blocks", "boolean_value": value, "value_type": 2}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []map[string]interface{}{
+		{"key": "front_page_show_blocks", "boolean_value": "true", "value_type": 2},
+		{"key": "front_page_show_blocks", "boolean_value": nil, "value_type": 2},
+		{"key": "front_page_show_blocks", "boolean_value": true, "value_type": 5},
+	} {
+		err := ValidateRow("system_config", row)
+		var refusal *httpresponse.Refusal
+		if !errors.As(err, &refusal) || refusal.LangKey != "error_setting_boolean_invalid" || refusal.Status != 400 {
+			t.Fatal(err)
+		}
 	}
 }

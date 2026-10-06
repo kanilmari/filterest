@@ -70,8 +70,15 @@ func savePresentationMediaFile(storageDir, relativeRoot string, header *multipar
 		removePresentationMediaFiles(storageDir, relativeRoot, filename)
 		return savedDatasetMediaFile{}, err
 	}
+	mimeType := datasetMediaMIMEType(ext)
+	if ext == ".mp4" {
+		mimeType = "video/mp4"
+	}
+	if ext == ".webm" {
+		mimeType = "video/webm"
+	}
 	return savedDatasetMediaFile{StorageKey: filepath.ToSlash(filepath.Join(relativeDir, filename)),
-		OriginalName: filepath.Base(header.Filename), MIMEType: datasetMediaMIMEType(ext)}, nil
+		OriginalName: filepath.Base(header.Filename), MIMEType: mimeType}, nil
 }
 
 func createPresentationMediaDisplayVariants(storageDir, relativeRoot, filename, ext string, sizes []int, strict bool) error {

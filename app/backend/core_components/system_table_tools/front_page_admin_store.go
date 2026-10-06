@@ -13,6 +13,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/system_config_checks"
 )
 
 func frontPageScopeKey(scope int) string { return "front_page_scope_version:" + strconv.Itoa(scope) }
@@ -52,14 +53,28 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 	if !ok {
 		return "", fmt.Errorf("request transaction unavailable")
 	}
+	if request.Hero != nil {
+		return "", saveFrontPageHero(tx, *request.Hero)
+	}
 	if request.Settings != nil {
-		for _, setting := range []struct {
+		// Older clients may omit the new switch and must preserve its stored value.
+		settings := []struct {
 			key   string
 			value bool
 		}{
 			{"separate_front_page", *request.Settings.SeparateFrontPage},
 			{"front_page_button_shows_site_name", *request.Settings.FrontPageButtonShowsSiteName},
-		} {
+		}
+		if request.Settings.FrontPageShowBlocks != nil {
+			settings = append(settings, struct {
+				key   string
+				value bool
+			}{"front_page_show_blocks", *request.Settings.FrontPageShowBlocks})
+		}
+		for _, setting := range settings {
+			if err := system_config_checks.ValidateRow("system_config", map[string]interface{}{"key": setting.key, "value_type": 2, "boolean_value": setting.value}); err != nil {
+				return "", err
+			}
 			if _, err := tx.Exec(`INSERT INTO public.system_config (key,boolean_value,json_value,text_value,value_type,creation_spec)
                 VALUES ($1,$2,jsonb_build_object('value',$2::boolean),$2::text,2,'Site-wide front page presentation switch.')
                 ON CONFLICT (key) DO UPDATE SET boolean_value=EXCLUDED.boolean_value,json_value=EXCLUDED.json_value,

@@ -5,7 +5,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { renderFrontPage } from './front_page_printer.js';
+import { renderFrontPage, refreshFrontPage } from './front_page_printer.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_events.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
@@ -33,12 +33,24 @@ beforeEach(() => {
     localStorage.clear(); sessionStorage.clear();
     localStorage.setItem('chosen_language', 'fi');
     mocks.request.mockReset().mockResolvedValue(response());
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    window.matchMedia = vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
 
 afterEach(() => {
     document.getElementById('front_page_container')?.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
     vi.useRealTimers();
+    vi.restoreAllMocks();
 });
+
+/** Hides or shows the document as switching browser tabs does. */
+function setHidden(hidden) {
+    Object.defineProperty(document, 'hidden', { value: hidden, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+}
 
 test('single-flight loader issues only one facade request and shows an accessible skeleton', async () => {
     let finish;
@@ -88,7 +100,7 @@ test('renders localized blocks, empty blocks and newest-first collection/article
     expect(new URL(page.querySelector('li a').href).pathname).toBe('/news/42');
     await refreshLocalizedDatasetValues('en');
     expect(page.textContent).toContain('English title');
-    expect(page.querySelector('p').textContent).toBe('Safe excerpt');
+    expect(page.querySelector('.supplemental-dataset-group p').textContent).toBe('Safe excerpt');
 });
 
 test('uses configured site heading and decorative sized background at the focal point', async () => {
@@ -204,7 +216,8 @@ test('resume with no broadcast revalidates identity before requesting or showing
         if (route === 'fetchUserProfile') return new Promise(resolve => { confirmIdentity = resolve; });
         return Promise.resolve({ ...response('Account B'), viewer_id: 73 });
     });
-    window.dispatchEvent(new Event('focus'));
+    setHidden(true);
+    setHidden(false);
     expect(page.textContent).not.toContain('Current account');
     await vi.waitFor(() => expect(confirmIdentity).toBeTypeOf('function'));
     expect(mocks.request.mock.calls.filter(([route]) => route === 'frontPage')).toHaveLength(1);
@@ -216,8 +229,145 @@ test('a suspended page remains empty if identity validation fails on resume', as
     const page = renderFrontPage();
     await vi.waitFor(() => expect(page.textContent).toContain('Current account'));
     mocks.request.mockRejectedValue(new Error('session expired'));
-    window.dispatchEvent(new Event('focus'));
+    setHidden(true);
+    setHidden(false);
     expect(page.textContent).not.toContain('Current account');
     await vi.waitFor(() => expect(page.querySelector('button')).not.toBeNull());
     expect(mocks.request.mock.calls.filter(([route]) => route === 'frontPage')).toHaveLength(1);
+});
+
+test('window blur and focus keep the visible blocks (owner 7.10.2026)', async () => {
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.textContent).toContain('Current account'));
+    const requests = mocks.request.mock.calls.length;
+    window.dispatchEvent(new Event('blur'));
+    expect(page.textContent).toContain('Current account');
+    window.dispatchEvent(new Event('focus'));
+    expect(page.textContent).toContain('Current account');
+    expect(page.querySelector('.front-page-scroller')).not.toBeNull();
+    expect(mocks.request.mock.calls.length).toBe(requests);
+});
+
+test('a load cut by a focus change starts again instead of leaving the page empty', async () => {
+    let first;
+    mocks.request.mockReturnValueOnce(new Promise(resolve => { first = resolve; }));
+    const page = renderFrontPage();
+    mocks.request.mockImplementation(route => {
+        if (route === 'fetchAuthModes') return Promise.resolve({ needs_button: 'logout' });
+        if (route === 'fetchUserProfile') return Promise.resolve({ user_id: 42 });
+        return Promise.resolve(response('Reloaded'));
+    });
+    window.dispatchEvent(new Event('blur'));
+    first(response('Stale'));
+    await vi.waitFor(() => expect(page.textContent).toContain('Reloaded'));
+    expect(page.textContent).not.toContain('Stale');
+    expect(page.getAttribute('aria-busy')).toBe('false');
+});
+
+test('a page restored from the back-forward cache is cleared until the viewer is confirmed', async () => {
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.textContent).toContain('Current account'));
+    let confirmIdentity;
+    mocks.request.mockImplementation(route => {
+        if (route === 'fetchAuthModes') return Promise.resolve({ needs_button: 'logout' });
+        if (route === 'fetchUserProfile') return new Promise(resolve => { confirmIdentity = resolve; });
+        return Promise.resolve(response('Restored'));
+    });
+    const restored = new Event('pageshow');
+    Object.defineProperty(restored, 'persisted', { value: true });
+    window.dispatchEvent(restored);
+    expect(page.textContent).not.toContain('Current account');
+    await vi.waitFor(() => expect(confirmIdentity).toBeTypeOf('function'));
+    confirmIdentity({ user_id: 42 });
+    await vi.waitFor(() => expect(page.textContent).toContain('Restored'));
+});
+
+test('top row has the shared tabs/actions and favicon/name beside the single menu in both menu states', async () => {
+    document.head.innerHTML = '<link rel="icon" href="/frontend/icons/site_favicons/site-initial-f-v1-16.png">';
+    const navbar = document.createElement('div'); navbar.id = 'navbar'; navbar.className = 'collapsed';
+    const menu = document.createElement('button'); menu.id = 'showMenuButton';
+    document.body.prepend(navbar, menu);
+    const originalParent = menu.parentNode;
+    mocks.request.mockResolvedValue({ ...response(), site_name: 'test site' });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('.front-page-top-row')).not.toBeNull());
+    const identity = page.querySelector('.front-page-top-row__identity');
+    expect(identity.querySelector('#showMenuButton')).toBe(menu);
+    expect(document.querySelectorAll('#showMenuButton')).toHaveLength(1);
+    expect(identity.querySelector('img').width).toBe(32);
+    expect(identity.querySelector('img').src).toContain('site-initial-f-v1-16.png');
+    expect(identity.querySelector('.dataset-shared-topbar__dataset-title').textContent).toBe('Test site');
+    expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(false);
+    expect(page.querySelector('.hero-dataset-tabs')).not.toBeNull();
+    expect(page.querySelector('.filterbar-inline-hero__actions')).not.toBeNull();
+    expect(page.querySelector('.dataset-shared-topbar')).toBeNull();
+    expect(page.querySelector('.hero-dataset-tabs [aria-current]')).toBeNull();
+    navbar.classList.remove('collapsed');
+    window.dispatchEvent(new Event('navbar-visibility-changed'));
+    expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(true);
+    page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+    expect(menu.parentNode).toBe(originalParent);
+});
+
+test('hero title and slogan follow fi/en, with site-name and empty slogan fallback', async () => {
+    mocks.request.mockResolvedValue({ ...response(), site_name: 'my site', hero: {
+        title: { fi: 'Oma otsikko', en: 'Our title' }, slogan: { fi: 'Oma iskulause', en: '' },
+    } });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('h1')?.textContent).toBe('Oma otsikko'));
+    expect(page.querySelector('.morphing-subtitle').textContent).toBe('Oma iskulause');
+    await refreshLocalizedDatasetValues('en');
+    expect(page.querySelector('h1').textContent).toBe('Our title');
+    expect(page.querySelector('.morphing-subtitle').hidden).toBe(true);
+    mocks.request.mockResolvedValue({ ...response(), site_name: 'my site', hero: { title: { fi: '', en: '' }, slogan: {} } });
+    await refreshFrontPage();
+    expect(page.querySelector('h1').textContent).toBe('My site');
+});
+
+test('boxes off omits boxes and empty-state text even if stale data is present; boxes on retains caps', async () => {
+    mocks.request.mockResolvedValue({ ...response(), show_blocks: false });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('h1')).not.toBeNull());
+    expect(page.querySelector('.front-page-blocks')).toBeNull();
+    expect(page.textContent).not.toContain('Ei tuloksia');
+    expect(page.textContent).not.toContain('Current account');
+    mocks.request.mockResolvedValue({ ...response(), show_blocks: true });
+    await refreshFrontPage();
+    expect(page.querySelectorAll('.supplemental-dataset-group')).toHaveLength(1);
+    expect(page.querySelector('.front-page-scroller').contains(page.querySelector('.front-page-content'))).toBe(true);
+    expect(page.querySelector('.front-page-scroller').contains(page.querySelector('.front-page-top-row'))).toBe(false);
+});
+
+test.each(['mp4', 'webm'])('video %s uses original, autoplay/mute/loop/inline and focal point, with lifecycle cleanup', async ext => {
+    mocks.request.mockResolvedValue({ ...response(), background: { storage_key: `site_media/front_page/original/movie.${ext}`,
+        mime_type: `video/${ext}`, focal_x: 0.3, focal_y: 0.6 } });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('video')).not.toBeNull());
+    const video = page.querySelector('video');
+    expect(video.src).toContain(`/original/movie.${ext}`);
+    expect(video.autoplay).toBe(true); expect(video.muted).toBe(true);
+    expect(video.loop).toBe(true); expect(video.playsInline).toBe(true); expect(video.controls).toBe(false);
+    expect(video.style.objectPosition).toBe('30% 60%');
+    expect(video.parentElement.style.getPropertyValue('--front-page-background-1000')).toBe('');
+    expect(page.querySelector('.front-page-scroller').contains(video)).toBe(false);
+    page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+    expect(video.hasAttribute('src')).toBe(false);
+    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+});
+
+test('reduced motion prevents autoplay and reacts to changes without leaving a listener after teardown', async () => {
+    const motion = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    window.matchMedia.mockReturnValue(motion);
+    mocks.request.mockResolvedValue({ ...response(), background: { storage_key: 'site_media/front_page/original/movie.mp4',
+        mime_type: 'video/mp4', focal_x: 0.5, focal_y: 0.5 } });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('video')).not.toBeNull());
+    const video = page.querySelector('video');
+    expect(video.autoplay).toBe(false);
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    const listener = motion.addEventListener.mock.calls[0][1];
+    motion.matches = false; listener(); expect(video.autoplay).toBe(true);
+    motion.matches = true; listener(); expect(video.autoplay).toBe(false);
+    page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+    expect(motion.removeEventListener).toHaveBeenCalledWith('change', listener);
 });

@@ -15,6 +15,8 @@ import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from '../table_view
 import { resolveVisibleDatasetMediaPath } from '../table_views/dataset_media_visibility_resolver.js';
 import { syncCachedTreeDatasetMedia } from '../vanilla_tree/van_tr_components/admin_tree_metadata_reader.js';
 
+import { createLangKeyEditor, applyLangKeyConfig, appendLangKeyPayload } from './lang_key_editor_builder.js';
+
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderConfigResponse} DatasetHeaderConfigResponse */
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderTextConfig} DatasetHeaderTextConfig */
 /**
@@ -534,81 +536,4 @@ async function loadDatasetOptions() {
         console.warn('dataset_header_config_view: dataset list failed', error);
         return null;
     }
-}
-
-function createLangKeyEditor(titleKey) {
-    const wrapper = document.createElement('section');
-    wrapper.classList.add('dataset-header-config-text-card', 'fw-panel', 'fw-flex', 'fw-flex-col', 'fw-gap-3');
-    wrapper.appendChild(setHeaderText(document.createElement('h4'), titleKey));
-
-    const keyInput = createTextInput();
-    keyInput.readOnly = true;
-    keyInput.classList.add('dataset-header-config-readonly-key');
-    wrapper.appendChild(createLabeledField(setHeaderText(document.createElement('span'), 'lang_key'), keyInput));
-
-    const translationsGrid = document.createElement('div');
-    translationsGrid.classList.add('dataset-header-config-translation-grid');
-    const fiInput = createTextInput();
-    const enInput = createTextInput();
-    const chInput = createTextInput();
-    translationsGrid.append(
-        createLabeledField(createLanguageCaption('fi'), fiInput),
-        createLabeledField(createLanguageCaption('en'), enInput),
-        createLabeledField(createLanguageCaption('ch'), chInput),
-    );
-    wrapper.appendChild(translationsGrid);
-
-    const usageExplanationInput = document.createElement('textarea');
-    usageExplanationInput.classList.add('fw-form-control');
-    usageExplanationInput.rows = 3;
-    usageExplanationInput.placeholder = headerText('dataset_header_config_usage_placeholder');
-    wrapper.appendChild(createLabeledField(
-        setHeaderText(document.createElement('span'), 'usage_explanation'),
-        usageExplanationInput
-    ));
-
-    return { wrapper, keyInput, fiInput, enInput, chInput, usageExplanationInput };
-}
-
-function createTextInput() {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.classList.add('fw-form-control');
-    return input;
-}
-
-/** A caption above its control, inside one label so the caption focuses the control. */
-function createLabeledField(caption, control) {
-    const wrapper = document.createElement('label');
-    wrapper.classList.add('fw-flex', 'fw-flex-col', 'fw-gap-2');
-    caption.classList.add('fw-label');
-    wrapper.append(caption, control);
-    return wrapper;
-}
-
-/** A language's name with its code, such as "Finnish (FI)"; only the name is translated. */
-function createLanguageCaption(code) {
-    const caption = document.createElement('span');
-    caption.classList.add('dataset-header-config-language-caption');
-    caption.append(setHeaderText(document.createElement('span'), code), ` (${code.toUpperCase()})`);
-    return caption;
-}
-
-/**
- * @param {ReturnType<typeof createLangKeyEditor>} editor
- * @param {DatasetHeaderTextConfig | null | undefined} config
- */
-function applyLangKeyConfig(editor, config) {
-    editor.keyInput.value = config?.lang_key || '';
-    editor.fiInput.value = config?.fi || '';
-    editor.enInput.value = config?.en || '';
-    editor.chInput.value = config?.ch || '';
-    editor.usageExplanationInput.value = config?.usage_explanation || '';
-}
-
-function appendLangKeyPayload(payload, prefix, editor) {
-    payload.append(`${prefix}_fi`, editor.fiInput.value.trim());
-    payload.append(`${prefix}_en`, editor.enInput.value.trim());
-    payload.append(`${prefix}_ch`, editor.chInput.value.trim());
-    payload.append(`${prefix}_usage_explanation`, editor.usageExplanationInput.value.trim());
 }

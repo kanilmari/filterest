@@ -28,8 +28,9 @@ vi.mock('../../reusable_components/image_source_picker/image_source_picker.js', 
 import { generate_front_page_settings_view } from './front_page_settings_view.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const migration = readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000033_seed_front_page_language_keys.sql'), 'utf8');
-for (const match of migration.matchAll(/\('([^']+)', '([^']+)', '([^']+)'\)/g)) {
+const migration = readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000033_seed_front_page_language_keys.sql'), 'utf8')
+    + readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000086_seed_front_page_hero_language_keys.sql'), 'utf8');
+for (const match of migration.matchAll(/\('([^']+)', '([^']*)', '([^']*)'(?:,|\))/g)) {
     mocks.copy[match[1]] = { fi: match[2], en: match[3] };
 }
 Object.assign(mocks.copy, {
@@ -51,7 +52,9 @@ const backgroundFixture = { storage_key: 'site_media/front_page/original/landsca
 
 function fixture(overrides = {}) {
     return {
-        settings: { separate_front_page: true, front_page_button_shows_site_name: false },
+        settings: { separate_front_page: true, front_page_button_shows_site_name: false, front_page_show_blocks: true },
+        hero: { title: { lang_key: 'site_front_page_title', fi: '', en: '', usage_explanation: '' },
+            slogan: { lang_key: 'site_front_page_slogan', fi: '', en: '', usage_explanation: '' } },
         background: null, background_error: '', scope: { user_id: null, display_name: '' },
         saved: true, inherits_common: false, source: 'common', version: 'common-v1',
         blocks: [
@@ -102,6 +105,8 @@ function setFile(file) {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
     mocks.language = 'fi';
     common = fixture();
     personal = fixture({ scope: { user_id: 42, display_name: 'Aino Åström' }, version: 'user-v1',
@@ -131,6 +136,7 @@ beforeEach(() => {
         if (name !== 'adminFrontPage') throw new Error(`Unexpected route ${name}`);
         if (options.method === 'POST') {
             const body = options.body_data;
+            if (body.hero) { common.hero = structuredClone(body.hero); return { version: "" }; }
             if (body.settings) { common.settings = { ...body.settings }; return { version: '' }; }
             const view = body.user_id ? personal : common;
             view.version = `saved-v${++serial}`;
@@ -150,7 +156,7 @@ beforeEach(() => {
     });
 });
 
-afterEach(() => { target?.closest('.content_div')?.__cleanupListeners?.(); });
+afterEach(() => { target?.closest('.content_div')?.__cleanupListeners?.(); vi.restoreAllMocks(); });
 
 describe('Home settings and scope drafts', () => {
     test('renders Finnish keys, native labels, seeded checkboxes and clean live results', async () => {
@@ -167,6 +173,15 @@ describe('Home settings and scope drafts', () => {
         expect(query('reset').hidden).toBe(true);
         expect(query('copy').hidden).toBe(true);
         target.querySelectorAll('input, select').forEach(control => expect(target.querySelector(`label[for="${control.id}"]`)).not.toBeNull());
+    });
+
+    test('leaves the title to the dialog and drops Open Home inside it', async () => {
+        await generate_front_page_settings_view(target, { modal: true });
+        expect(target.querySelector('h2')).toBeNull();
+        expect(query('open').hidden).toBe(true);
+        expect(query('reload').hidden).toBe(false);
+        expect(query('hero-save')).not.toBeNull();
+        target.__cleanupListeners?.();
     });
 
     test('keeps drafts and focus while switching rendered language', async () => {
@@ -278,7 +293,7 @@ describe('Home settings and scope drafts', () => {
         await generate_front_page_settings_view(target);
         input(query('enabled'), false, 'change'); input(query('site-name'), true, 'change');
         await click('settings-save');
-        expect(writes()[0][1].body_data).toEqual({ settings: { separate_front_page: false, front_page_button_shows_site_name: true } });
+        expect(writes()[0][1].body_data).toEqual({ settings: { separate_front_page: false, front_page_button_shows_site_name: true, front_page_show_blocks: true } });
         expect(mocks.auth).toHaveBeenCalledOnce();
         expect(mocks.navbar).toHaveBeenCalledWith({ isLoggedIn: true });
         expect(query('open').disabled).toBe(true);
@@ -449,7 +464,7 @@ describe('Background and editor lifecycle', () => {
         input(row('alpha').querySelector('input[type="number"]'), '13');
         const pending = deferred(); mocks.endpoint.mockReturnValueOnce(pending.promise);
         query('blocks-save').click();
-        expect(target.querySelectorAll('fieldset:disabled')).toHaveLength(3);
+        expect(target.querySelectorAll('fieldset:disabled')).toHaveLength(4);
         expect(query('reload').disabled).toBe(true);
         pending.reject(Object.assign(new Error('failed'), { status: 500 })); await settled();
         expect(query('status').textContent).toBe(mocks.copy.front_page_save_failed.fi);
@@ -462,7 +477,7 @@ describe('Background and editor lifecycle', () => {
         mocks.endpoint.mockRejectedValueOnce(new Error('offline'));
         await generate_front_page_settings_view(target);
         expect(query('status').textContent).toBe(mocks.copy.front_page_load_failed.fi);
-        expect(target.querySelectorAll('fieldset:disabled')).toHaveLength(3);
+        expect(target.querySelectorAll('fieldset:disabled')).toHaveLength(4);
         expect(query('reload').disabled).toBe(false);
         await click('reload');
         expect(row('alpha')).toBeDefined();
@@ -498,4 +513,62 @@ describe('Background and editor lifecycle', () => {
         stale.resolve({ users: [{ user_id: 42, display_name: 'Aino' }] });
         await Promise.resolve(); await Promise.resolve(); expect(target.children).toHaveLength(0);
     });
+});
+
+
+test('shows fi/en fixed hero keys, saves only hero copy and refreshes visible Home after successful save', async () => {
+    const onSaved = vi.fn();
+    await generate_front_page_settings_view(target, { onSaved });
+    expect(query('title-keyInput').value).toBe('site_front_page_title');
+    expect(query('slogan-keyInput').value).toBe('site_front_page_slogan');
+    expect(query('title-keyInput').readOnly).toBe(true);
+    expect(target.querySelectorAll('.dataset-header-config-language-caption')).toHaveLength(4);
+    input(query('title-fiInput'), 'Oma otsikko'); input(query('title-enInput'), 'Our title');
+    input(query('slogan-fiInput'), 'Oma iskulause');
+    await click('hero-save');
+    expect(writes()[0][1].body_data).toEqual({ hero: {
+        title: { fi: 'Oma otsikko', en: 'Our title', usage_explanation: '' },
+        slogan: { fi: 'Oma iskulause', en: '', usage_explanation: '' },
+    } });
+    expect(onSaved).toHaveBeenCalledOnce();
+    expect(query('hero-save').disabled).toBe(true);
+});
+
+test('boxes default on when absent, off disables and greys the list and settings save sends the switch', async () => {
+    delete common.settings.front_page_show_blocks;
+    await generate_front_page_settings_view(target);
+    expect(query('show-blocks').checked).toBe(true);
+    input(query('show-blocks'), false, 'change');
+    const listSection = query('block-list').closest('fieldset');
+    expect(listSection.disabled).toBe(true);
+    expect(listSection.classList.contains('front-page-settings-section--disabled')).toBe(true);
+    expect(query('blocks-save').disabled).toBe(true);
+    await click('settings-save');
+    expect(writes()[0][1].body_data.settings.front_page_show_blocks).toBe(false);
+    input(query('show-blocks'), true, 'change');
+    expect(listSection.disabled).toBe(false);
+});
+
+test('video picker accepts original-only previews and saves the existing upload payload; MIME mismatch is refused', async () => {
+    await generate_front_page_settings_view(target);
+    const video = new File(['movie'], 'background.webm', { type: 'video/webm' });
+    setFile(video);
+    expect(query('background-file').accept).toContain('video/mp4');
+    expect(target.querySelector('video').hidden).toBe(false);
+    expect(target.querySelector('img').hidden).toBe(true);
+    await click('background-save');
+    expect(writes('adminFrontPageBackground')[0][1].body_data.get('background_image')).toBe(video);
+    setFile(new File(['wrong'], 'background.png', { type: 'video/webm' }));
+    expect(query('status').textContent).toBe(mocks.copy.front_page_background_invalid.fi);
+});
+
+test('stored video previews request original and empty title/slogan can be saved intentionally', async () => {
+    common.background = { ...backgroundFixture, storage_key: 'site_media/front_page/original/movie.mp4', mime_type: 'video/mp4' };
+    common.hero.title.fi = 'Earlier title';
+    await generate_front_page_settings_view(target);
+    expect(target.querySelector('video').src).toContain('/original/movie.mp4');
+    expect(target.querySelector('video').autoplay).toBe(false);
+    input(query('title-fiInput'), '');
+    await click('hero-save');
+    expect(writes()[0][1].body_data.hero.title.fi).toBe('');
 });

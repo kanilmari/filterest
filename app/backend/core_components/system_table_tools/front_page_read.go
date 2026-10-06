@@ -20,6 +20,7 @@ import (
 
 var frontPageSettingsReader = backend.ReadFrontPageSettings
 var frontPageBackgroundReader = backend.ReadFrontPageBackground
+var frontPageHeroReader = readFrontPageHero
 var frontPageBlocksResolver = resolveFrontPageBlocks
 var frontPageCanRead = frontPageDatasetReadable
 var frontPageResultsHandler http.HandlerFunc = read.GetResultsHandlerWrapper
@@ -33,11 +34,12 @@ type frontPageResultBlock struct {
 	Data        []json.RawMessage `json:"data"`
 }
 
-// GetFrontPageHandler returns viewer_id, site_name, background, blocks and partial.
+// GetFrontPageHandler returns viewer_id, site_name, hero (fi/en), background, show_blocks, blocks and partial.
 // GET /api/front-page. Disabled sites return 404. LoginOnlyProfile establishes the
 // viewer; each block separately requires /api/get-results rights and delegates
 // with __newest DESC and row_count=0, preserving the request actor. These text
-// summaries never opt into the separate image/card enrichment path.
+// summaries never opt into the separate image/card enrichment path. Boxes off
+// skips resolution and delegates entirely, returning an empty blocks array.
 func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
@@ -58,9 +60,18 @@ func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start := frontPageNow()
-	blocks, _, err := frontPageBlocksResolver(backend.Db, userID)
+	var blocks []frontPageBlock
+	if settings.FrontPageShowBlocks {
+		blocks, _, err = frontPageBlocksResolver(backend.Db, userID)
+		if err != nil {
+			log.Printf("[GetFrontPageHandler] blocks unavailable: %v", err)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "front page unavailable")
+			return
+		}
+	}
+	hero, err := frontPageHeroReader(backend.Db)
 	if err != nil {
-		log.Printf("[GetFrontPageHandler] blocks unavailable: %v", err)
+		log.Printf("[GetFrontPageHandler] hero unavailable: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "front page unavailable")
 		return
 	}
@@ -97,7 +108,7 @@ func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", "Cookie")
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{
 		"viewer_id": userID, "site_name": backend.ConfiguredSiteName(r.Context(), backend.Db), "background": background,
-		"blocks": results, "partial": partial,
+		"hero": hero, "show_blocks": settings.FrontPageShowBlocks, "blocks": results, "partial": partial,
 	})
 }
 

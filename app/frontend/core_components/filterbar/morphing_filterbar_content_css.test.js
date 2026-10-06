@@ -96,7 +96,7 @@ describe('morphing filterbar content CSS', () => {
     test('uses the title colour for wide slogans and outlines the inline sort row', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
         const subtitleRule = css.match(
-            /\.filterbar-panel--wide \.morphing-subtitle,[\s\S]*?\.filterbar-inline-hero \.morphing-subtitle\s*\{([\s\S]*?)\n\}/,
+            /\.filterbar-panel--wide \.morphing-subtitle,[\s\S]*?\.filterbar-inline-hero \.morphing-subtitle,[\s\S]*?\.front-page-hero \.morphing-subtitle\s*\{([\s\S]*?)\n\}/,
         )?.[1] || '';
         const sortRule = css.match(
             /\.filterbar-inline-hero-sort-row\s*\{([\s\S]*?)\n\}/,

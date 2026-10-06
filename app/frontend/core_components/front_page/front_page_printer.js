@@ -3,6 +3,7 @@
 // Reuses the shared group renderer, translations and dataset-background treatment.
 // Discards all content on deactivation; no account's blocks survive a hidden visit.
 
+import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { getOrCreateContainer } from '../../reusable_components/dom_container_builder.js';
 import { hasContentBesideLoadingIndicator } from '../../reusable_components/loading/loading_indicator_printer.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_events.js';
@@ -11,7 +12,7 @@ import { getTranslationForKey } from '../lang/translation_handler.js';
 import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_localizer.js';
 import { createSupplementalDatasetGroup } from '../table_views/compact_dataset_group.js';
 import { encodeCssUrlValue } from '../table_views/storage_media_urls.js';
-import { formatSiteNameForDisplay } from '../state_stores/site_identity_reader.js';
+import { formatSiteNameForDisplay, getCurrentSiteName } from '../state_stores/site_identity_reader.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getSessionGeneration, acceptSessionIdentity, isSessionValidationRequired,
     revalidateSessionIdentity, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
@@ -27,12 +28,38 @@ function translatedElement(tag, key) {
     return element;
 }
 
-function createBackground(background) {
+function createBackground(background, visit) {
     const match = background?.storage_key?.match(/^site_media\/front_page\/original\/([^/]+)$/);
     if (!match) return null;
     const layer = document.createElement('div');
     layer.className = 'front-page-background';
     layer.setAttribute('aria-hidden', 'true');
+    if (background.mime_type?.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.src = `/storage/site_media/front_page/original/${encodeURIComponent(match[1])}`;
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.setAttribute('muted', '');
+        video.setAttribute('playsinline', '');
+        video.style.objectPosition = `${background.focal_x * 100}% ${background.focal_y * 100}%`;
+        const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+        const syncMotion = () => {
+            video.autoplay = !motion?.matches;
+            if (motion?.matches) video.pause();
+            else if (video.isConnected) void video.play()?.catch(() => {});
+        };
+        syncMotion();
+        motion?.addEventListener('change', syncMotion);
+        visit.backgroundCleanup = () => {
+            motion?.removeEventListener('change', syncMotion);
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+        };
+        layer.append(video);
+        return layer;
+    }
     for (const variant of ['1000', '2160']) {
         layer.style.setProperty(`--front-page-background-${variant}`,
             encodeCssUrlValue(`/storage/site_media/front_page/${variant}/${match[1]}`));
@@ -41,18 +68,28 @@ function createBackground(background) {
     return layer;
 }
 
-function renderBlocks(container, data) {
+function renderBlocks(container, data, visit) {
     const page = document.createElement('div');
     page.className = 'front-page-content';
-    const heading = translatedElement('h1', 'front_page');
-    const siteName = formatSiteNameForDisplay(data.site_name);
-    if (siteName) {
-        bindDatasetLanguageRenderer(heading, () => { heading.textContent = siteName; });
-    }
-    page.append(heading);
+    const hero = document.createElement('header');
+    hero.className = 'front-page-hero morphing-header';
+    const heading = document.createElement('h1');
+    heading.className = 'morphing-title';
+    const slogan = document.createElement('p');
+    slogan.className = 'morphing-subtitle';
+    bindDatasetLanguageRenderer(hero, language => {
+        const code = language === 'fi' ? 'fi' : 'en';
+        heading.textContent = data.hero?.title?.[code]?.trim()
+            || formatSiteNameForDisplay(data.site_name || getCurrentSiteName())
+            || getTranslationForKey('front_page', { countUsage: false });
+        slogan.textContent = data.hero?.slogan?.[code]?.trim() || '';
+        slogan.hidden = !slogan.textContent;
+    });
+    hero.append(heading, slogan);
+    page.append(hero);
     const grid = document.createElement('div');
     grid.className = 'front-page-blocks';
-    for (const block of data.blocks || []) {
+    for (const block of (data.show_blocks === false ? [] : data.blocks || [])) {
         const group = createSupplementalDatasetGroup({
             dataset: block.dataset, text: block.dataset, langKey: block.dataset,
         }, '', {
@@ -65,15 +102,25 @@ function renderBlocks(container, data) {
         group.render(block.data || [], block.columns || [], block.types || {});
         grid.append(group.element);
     }
-    if (!grid.hasChildNodes()) grid.append(translatedElement('p', 'front_page_no_results'));
-    page.append(grid);
-    const background = createBackground(data.background);
-    container.replaceChildren(...(background ? [background] : []), page);
+    if (data.show_blocks !== false) {
+        if (!grid.hasChildNodes()) grid.append(translatedElement('p', 'front_page_no_results'));
+        page.append(grid);
+    }
+    const scroller = document.createElement('div');
+    scroller.className = 'front-page-scroller scrollable_content';
+    scroller.append(page);
+    visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage());
+    const background = createBackground(data.background, visit);
+    container.replaceChildren(...(background ? [background] : []), visit.topRow.element, scroller);
 }
 
 /** Starts one bounded request for this visit and owns its render generation. */
 function loadVisit(container, visit) {
     if (visit.pending) return visit.pending;
+    visit.topRow?.destroy();
+    visit.topRow = null;
+    visit.backgroundCleanup?.();
+    visit.backgroundCleanup = null;
     const generation = ++visit.generation;
     const sessionGeneration = getSessionGeneration();
     container.dataset.sessionGeneration = String(sessionGeneration);
@@ -109,7 +156,7 @@ function loadVisit(container, visit) {
     visit.pending = Promise.race([
         isSessionValidationRequired() ? revalidateSessionIdentity().then(request) : request(), deadline,
     ]).then(data => {
-        if (isCurrent() && acceptSessionIdentity(data.viewer_id, sessionGeneration)) renderBlocks(container, data);
+        if (isCurrent() && acceptSessionIdentity(data.viewer_id, sessionGeneration)) renderBlocks(container, data, visit);
     }).catch(() => {
         if (!isCurrent()) return;
         skeleton.remove();
@@ -139,20 +186,40 @@ export function renderFrontPage() {
     if (!visit) {
         visit = { generation: 0, pending: null, controller: null };
         visits.set(container, visit);
-        const deactivateVisit = () => {
+        const isVisible = () => container.isConnected && !container.classList.contains('hidden');
+        // Every session notice starts a new generation, so a load still in flight is stale.
+        const cancelPending = () => {
             visit.generation += 1;
             visit.cancel?.();
             visit.cancel = null;
             visit.controller = null;
             visit.pending = null;
+        };
+        const deactivateVisit = () => {
+            cancelPending();
+            visit.topRow?.destroy();
+            visit.topRow = null;
+            visit.backgroundCleanup?.();
+            visit.backgroundCleanup = null;
             container.replaceChildren();
             container.removeAttribute('aria-busy');
         };
         const unsubscribe = subscribeToSessionGeneration(reason => {
-            deactivateVisit();
-            if (reason === 'resume' && container.isConnected && !container.classList.contains('hidden')) {
-                void loadVisit(container, visit);
+            // Losing or regaining window focus is not a session change, and the page
+            // stayed in view: keep the blocks it shows (owner 7.10.2026: they used to
+            // vanish whenever the address bar or another window took focus). A load the
+            // notice made stale starts again at once.
+            if (reason === 'blur' || reason === 'focus') {
+                const rendered = Boolean(container.querySelector('.front-page-scroller'));
+                cancelPending();
+                if (rendered) container.dataset.sessionGeneration = String(getSessionGeneration());
+                else if (isVisible()) void loadVisit(container, visit);
+                return;
             }
+            // A hidden or restored page, a sign-in or a sign-out may now belong to another
+            // viewer: clear it until the server confirms who is browsing (WL143).
+            deactivateVisit();
+            if ((reason === 'resume' || reason === 'restore') && isVisible()) void loadVisit(container, visit);
         });
         let ended = false;
         // Navigation cleans every mounted container, including retained Home.
@@ -172,4 +239,12 @@ export function renderFrontPage() {
     // Navigation's spinner may already be inside the emptied container.
     if (!hasContentBesideLoadingIndicator(container)) void loadVisit(container, visit);
     return container;
+}
+
+/** Refresh visible Home after settings save without navigation, history or a reload. */
+export function refreshFrontPage() {
+    const container = document.getElementById('front_page_container');
+    const visit = container && visits.get(container);
+    if (!visit || container.classList.contains('hidden')) return Promise.resolve();
+    return loadVisit(container, visit);
 }
