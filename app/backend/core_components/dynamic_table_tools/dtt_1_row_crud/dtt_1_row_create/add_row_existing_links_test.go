@@ -26,8 +26,8 @@ func TestResolveOneToManyExistingLinkUsesRegisteredRelation(t *testing.T) {
 	defer tx.Rollback()
 
 	pushQuery(queuedQuery{
-		cols: []string{"id", "source_table_uid", "table_name", "source_column_name", "target_insert_specs"},
-		rows: [][]driver.Value{{int64(41), "10", "tickets", "documentation_id", `{}`}},
+		cols: []string{"id", "source_table_uid", "table_name", "source_column_name", "main_table", "target_column_name", "target_insert_specs"},
+		rows: [][]driver.Value{{int64(41), "10", "tickets", "documentation_id", "documentation", "table_uid", `{}`}},
 	})
 	relation, err := resolveOneToManyExistingLink(tx, "9", ExistingRelationLinkPayload{
 		RelationKind: existingRelationOneToMany,
@@ -37,7 +37,7 @@ func TestResolveOneToManyExistingLinkUsesRegisteredRelation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveOneToManyExistingLink() error = %v", err)
 	}
-	if relation.RelatedTableName != "tickets" || relation.RelatedForeignKey != "documentation_id" {
+	if relation.RelatedTableName != "tickets" || relation.RelatedForeignKey != "documentation_id" || relation.MainReferencedColumn != "table_uid" || relation.MainTableName != "documentation" {
 		t.Fatalf("resolved relation = %#v", relation)
 	}
 	if len(relation.RowIDs) != 2 || relation.RowIDs[1] != 8 {
@@ -57,8 +57,8 @@ func TestResolveOneToManyExistingLinkRejectsAssetRelation(t *testing.T) {
 	defer tx.Rollback()
 
 	pushQuery(queuedQuery{
-		cols: []string{"id", "source_table_uid", "table_name", "source_column_name", "target_insert_specs"},
-		rows: [][]driver.Value{{int64(42), "302", "documentation_assets", "documentation_id", `{"file_upload":{"enabled":true}}`}},
+		cols: []string{"id", "source_table_uid", "table_name", "source_column_name", "main_table", "target_column_name", "target_insert_specs"},
+		rows: [][]driver.Value{{int64(42), "302", "documentation_assets", "documentation_id", "documentation", "id", `{"file_upload":{"enabled":true}}`}},
 	})
 	_, err = resolveOneToManyExistingLink(tx, "9", ExistingRelationLinkPayload{
 		RelationKind: existingRelationOneToMany,
@@ -83,10 +83,11 @@ func TestApplyExistingLinksRequiresExactOneToManyCount(t *testing.T) {
 
 	pushExec(queuedExec{rowsAffected: 1})
 	err = applyExistingLinks(tx, 100, []resolvedExistingLink{{
-		Kind:              existingRelationOneToMany,
-		RelatedTableName:  "tickets",
-		RelatedForeignKey: "documentation_id",
-		RowIDs:            []int64{7, 8},
+		MainReferencedColumn: "id",
+		Kind:                 existingRelationOneToMany,
+		RelatedTableName:     "tickets",
+		RelatedForeignKey:    "documentation_id",
+		RowIDs:               []int64{7, 8},
 	}})
 	if err == nil {
 		t.Fatal("partial one-to-many update unexpectedly accepted")
@@ -107,11 +108,13 @@ func TestApplyExistingLinksCreatesEveryManyToManyBridge(t *testing.T) {
 	pushExec(queuedExec{rowsAffected: 1})
 	pushExec(queuedExec{rowsAffected: 1})
 	err = applyExistingLinks(tx, 100, []resolvedExistingLink{{
-		Kind:                  existingRelationManyToMany,
-		BridgeTableName:       "documentation_services_relation",
-		BridgeMainForeignKey:  "documentation_id",
-		BridgeOtherForeignKey: "service_id",
-		RowIDs:                []int64{7, 8},
+		MainReferencedColumn:    "id",
+		RelatedReferencedColumn: "id",
+		Kind:                    existingRelationManyToMany,
+		BridgeTableName:         "documentation_services_relation",
+		BridgeMainForeignKey:    "documentation_id",
+		BridgeOtherForeignKey:   "service_id",
+		RowIDs:                  []int64{7, 8},
 	}})
 	if err != nil {
 		t.Fatalf("applyExistingLinks() error = %v", err)

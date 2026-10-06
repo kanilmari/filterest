@@ -556,9 +556,13 @@ func respondToTriggerExecutionError(w http.ResponseWriter, tableName string, tri
 }
 
 // fetchInsertedTriggerSourceRow reads the committed shape inside the current
-// transaction so create triggers also receive database defaults and generated
-// values, not only fields present in the request payload.
-func fetchInsertedTriggerSourceRow(ctx context.Context, tx *sql.Tx, tableName string, mainRowID int64) (map[string]interface{}, error) {
+// transaction so create triggers and links also receive database defaults and generated
+// values. Required reference columns refuse absent/NULL values. An id reference
+// uses the already known physical row ID, preserving the original link queries.
+func fetchInsertedTriggerSourceRow(ctx context.Context, tx *sql.Tx, tableName string, mainRowID int64, referenceColumns ...string) (map[string]interface{}, error) {
+	if len(referenceColumns) == 1 && referenceColumns[0] == "id" {
+		return map[string]interface{}{"id": mainRowID}, nil
+	}
 	query := fmt.Sprintf(
 		"SELECT * FROM %s WHERE id = $1",
 		pq.QuoteIdentifier(tableName),
@@ -577,6 +581,9 @@ func fetchInsertedTriggerSourceRow(ctx context.Context, tx *sql.Tx, tableName st
 		if err := rows.Err(); err != nil {
 			return nil, err
 		}
+		if len(referenceColumns) > 0 {
+			return nil, missingRelationReference(tableName, referenceColumns[0])
+		}
 		return nil, sql.ErrNoRows
 	}
 
@@ -588,7 +595,19 @@ func fetchInsertedTriggerSourceRow(ctx context.Context, tx *sql.Tx, tableName st
 	if err := rows.Scan(scanTargets...); err != nil {
 		return nil, err
 	}
-	return mapInsertedRowValues(columnNames, columnValues)
+	row, err := mapInsertedRowValues(columnNames, columnValues)
+	if err != nil {
+		return nil, err
+	}
+	for _, column := range referenceColumns {
+		if row[column] == nil {
+			return nil, missingRelationReference(tableName, column)
+		}
+		if value, ok := row[column].([]byte); ok {
+			row[column] = string(value)
+		}
+	}
+	return row, nil
 }
 
 func mapInsertedRowValues(columnNames []string, columnValues []interface{}) (map[string]interface{}, error) {

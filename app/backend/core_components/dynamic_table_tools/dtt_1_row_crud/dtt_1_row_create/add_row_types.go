@@ -12,10 +12,12 @@ import (
 // Between: Frontend JSON payload -> insertDataAccordingToPayload
 // Why: Defines structure for child row data in the add-row request.
 type ChildRowPayload struct {
-	RelationID        int64                  `json:"relationId"`
-	TableName         string                 `json:"-"`
-	ReferencingColumn string                 `json:"-"`
-	Data              map[string]interface{} `json:"data"`
+	MainTableName        string                 `json:"-"`
+	MainReferencedColumn string                 `json:"-"`
+	RelationID           int64                  `json:"relationId"`
+	TableName            string                 `json:"-"`
+	ReferencingColumn    string                 `json:"-"`
+	Data                 map[string]interface{} `json:"data"`
 }
 
 // ExistingRelationLinkPayload identifies one server-registered relation and

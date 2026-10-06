@@ -53,6 +53,7 @@ language_seed_migrations = (
     "20260929000005_seed_missing_media_check_language_keys.sql",
     "20261005000005_seed_row_actor_language_keys.sql",
     "20261005000022_seed_favorites_language_keys.sql",
+    "20261005000051_seed_relation_reference_language_key.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",
 )
@@ -94,6 +95,7 @@ schema_privilege_migrations = (
 release_data_migrations = (
     "20261005000004_add_row_actor_columns.sql",
     "20261005000023_register_system_favorites.sql",
+    "20261005000050_require_registry_reference_key.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

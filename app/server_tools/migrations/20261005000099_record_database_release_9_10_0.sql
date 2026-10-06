@@ -12,7 +12,7 @@
 
 INSERT INTO public.system_db_version (version, description)
 SELECT '9.10.0',
-       'Added creator and owner columns to every content dataset, with the actor marks, repair record and guards they rest on; added account-owned favorites and administrator quick-list copy; removed unused per-column field wrapping'
+       'Added creator and owner columns to every content dataset, with the actor marks, repair record and guards they rest on; added account-owned favorites and administrator quick-list copy; removed unused per-column field wrapping; required, protected dataset registry reference key'
 WHERE NOT EXISTS (
     SELECT 1 FROM public.system_db_version WHERE version = '9.10.0'
 );

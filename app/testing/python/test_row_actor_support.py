@@ -485,6 +485,7 @@ def test_a_mark_whose_registry_row_has_no_table_uid_stops_the_conversion_and_cha
     cluster("CREATE DATABASE stopped")
     cluster(before, "stopped")
     cluster("""
+        ALTER TABLE public.system_db_tables ALTER COLUMN table_uid DROP NOT NULL;
         INSERT INTO public.system_db_tables (id, table_name, schema_name, table_uid) VALUES (99801, 'no_uid', 'public', NULL);
         INSERT INTO public.system_row_actor_columns (table_id, actor_role, column_name)
         VALUES (99801, 'creator', 'created_by'), (99801, 'owner', 'owner_id');

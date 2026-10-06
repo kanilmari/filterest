@@ -19,7 +19,7 @@ import (
 )
 
 // TreeNode edustaa puun solmua. db_id on varsinainen numeroinen ID tietokannassa.
-// TableUID edustaa yksilöivää tunnistetta (UUID tms.),
+// TableUID on system_db_tables-rekisterin kokonaislukuinen viiteavain; id on vain rekisteririvin numero.
 // DefaultViewID on oletusnäkymän numeroinen ID, jos sellainen on tallennettu.
 type TreeNode struct {
 	ID                         string  `json:"id"`

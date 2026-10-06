@@ -7,7 +7,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
+	"reflect"
 	"sync"
 )
 
@@ -36,13 +38,17 @@ var qMu sync.Mutex
 
 // queuedQuery holds a canned QueryRow / Query response.
 type queuedQuery struct {
-	cols []string
-	rows [][]driver.Value
-	err  error // returned as query-level error (rare); use empty rows for no-rows
+	wantSQL  string
+	wantArgs []driver.Value
+	cols     []string
+	rows     [][]driver.Value
+	err      error // returned as query-level error (rare); use empty rows for no-rows
 }
 
 // queuedExec holds a canned Exec response.
 type queuedExec struct {
+	wantSQL      string
+	wantArgs     []driver.Value
 	err          error
 	rowsAffected int64
 }
@@ -107,7 +113,7 @@ func (d *queueDriver) Open(name string) (driver.Conn, error) {
 type queueConn struct{}
 
 func (c *queueConn) Prepare(query string) (driver.Stmt, error) {
-	return &queueStmt{}, nil
+	return &queueStmt{query: query}, nil
 }
 
 func (c *queueConn) Close() error { return nil }
@@ -123,7 +129,7 @@ func (t *queueTx) Commit() error   { return nil }
 func (t *queueTx) Rollback() error { return nil }
 
 // queueStmt dispatches to the queue on Query vs Exec.
-type queueStmt struct{}
+type queueStmt struct{ query string }
 
 func (s *queueStmt) Close() error  { return nil }
 func (s *queueStmt) NumInput() int { return -1 }
@@ -132,6 +138,9 @@ func (s *queueStmt) Exec(args []driver.Value) (driver.Result, error) {
 	e, ok := popExec()
 	if !ok {
 		return nil, errors.New("mock: unexpected Exec call (exec queue empty)")
+	}
+	if err := checkQueuedSQL(s.query, args, e.wantSQL, e.wantArgs); err != nil {
+		return nil, err
 	}
 	if e.err != nil {
 		return nil, e.err
@@ -143,6 +152,9 @@ func (s *queueStmt) Query(args []driver.Value) (driver.Rows, error) {
 	q, ok := popQuery()
 	if !ok {
 		return nil, errors.New("mock: unexpected Query call (query queue empty)")
+	}
+	if err := checkQueuedSQL(s.query, args, q.wantSQL, q.wantArgs); err != nil {
+		return nil, err
 	}
 	if q.err != nil {
 		return nil, q.err
@@ -176,3 +188,14 @@ type queueResult struct {
 
 func (r *queueResult) LastInsertId() (int64, error) { return 0, nil }
 func (r *queueResult) RowsAffected() (int64, error) { return r.rowsAffected, nil }
+
+// Optional expectations let focused tests prove the written key and physical row scope.
+func checkQueuedSQL(query string, args []driver.Value, wantSQL string, wantArgs []driver.Value) error {
+	if wantSQL != "" && query != wantSQL {
+		return fmt.Errorf("SQL = %q, want %q", query, wantSQL)
+	}
+	if wantArgs != nil && !reflect.DeepEqual(args, wantArgs) {
+		return fmt.Errorf("SQL args = %#v, want %#v", args, wantArgs)
+	}
+	return nil
+}

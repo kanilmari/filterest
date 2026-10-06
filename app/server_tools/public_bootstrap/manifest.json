@@ -142,6 +142,8 @@
     "20261005000021_create_system_favorites.sql",
     "20261005000022_seed_favorites_language_keys.sql",
     "20261005000023_register_system_favorites.sql",
+    "20261005000050_require_registry_reference_key.sql",
+    "20261005000051_seed_relation_reference_language_key.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",
     "20261005000070_drop_column_label_value_layout.sql",
@@ -296,11 +298,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1067,
+    "public.system_lang_keys": 1071,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 139,
+    "public.system_schema_migrations": 141,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -312,15 +314,15 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "abbdfc6586f1b63f69478f5e287aa643ad3e88901a17d0c56dae9baee0319b34"
+      "sha256": "c4aca4bf925d59ae88765c69d800c8c4084b942a8ca9abde12d1c1e38cf9534d"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "21d90d7e43a4a0f7974fe46a83bae95f3bbc4f34347e6d24c353cc224461e2ba"
+      "sha256": "bbedc56ccd8b0fd37178c18fd3b27744584ab6be9dbd94c9d7c5955a7de45b82"
     }
   },
   "source_files": {
     "filterest/app/server_tools/public_bootstrap/source/base.schema.sql": {
-      "sha256": "3bafc71695d29a77e3fa9e0716cee40d06f92bfc01ce6e16d530826410244812"
+      "sha256": "6a47d79a9c9ee6aecbb85724a0a3832775b6776b368b0ae08721ceb42cb1c010"
     },
     "filterest/app/server_tools/public_bootstrap/source/base.seed.sql": {
       "sha256": "a9af982083ad7cb32115a839a2d10e51dec05c403c69f27e164ee8b00cd9c962"
@@ -332,7 +334,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "f947ec50035c138eb17fce7d3da0502e80389c7e3d134ba4aada84fac3daec1f"
+      "sha256": "f1fe649effc9253c97da029cd4534018b98ff247552146f98eb1d107d7de8daf"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "66f22a786e5e3ddf0c81031e3a2b4f9aeeb465553214aabe526b02263b2dc564"
@@ -802,6 +804,12 @@
     "filterest/app/server_tools/migrations/20261005000023_register_system_favorites.sql": {
       "sha256": "f0bfebe148ab6dec2e60f4ac920c343e44cb3f19170bb8e50682616e26837bc1"
     },
+    "filterest/app/server_tools/migrations/20261005000050_require_registry_reference_key.sql": {
+      "sha256": "a387680b59182dcbb992948d660c356ebd8f8808664575c2ff9cfa57b4138d65"
+    },
+    "filterest/app/server_tools/migrations/20261005000051_seed_relation_reference_language_key.sql": {
+      "sha256": "7734fab80009608797f7999f625f4bf0d02b67d52bc0f8a09bd933c8bc952097"
+    },
     "filterest/app/server_tools/migrations/20261005000055_seed_setting_check_language_keys.sql": {
       "sha256": "3a20e3061d13510362e0acffde625481501b3134ab0f918d6d603104facb7eeb"
     },
@@ -812,7 +820,7 @@
       "sha256": "63af33d9f6bcb1feb5d6825ef503f68fc00ca44ca3f06733f5c9d2f2f9697b37"
     },
     "filterest/app/server_tools/migrations/20261005000099_record_database_release_9_10_0.sql": {
-      "sha256": "0c6c9e25757f1bdbce1a545d2ffc7fb6eef10ad02c115ad7a55522d5dc85c8dd"
+      "sha256": "43de7913c2254d657fdd82177e1262009273a5eb01e90e1a282ed10244c21777"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

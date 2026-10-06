@@ -27,7 +27,7 @@ func TestSettingInsertRefusalBeforeAnySQL(t *testing.T) {
 	if !errors.As(err, &refusal) {
 		t.Fatalf("main insert: %v", err)
 	}
-	_, err = insertSingleChildRow(nil, 1, ChildRowPayload{TableName: "system_config", ReferencingColumn: "int_value", Data: payload}, nil)
+	_, err = insertSingleChildRow(nil, 1, ChildRowPayload{MainReferencedColumn: "id", TableName: "system_config", ReferencingColumn: "int_value", Data: payload}, nil)
 	if !errors.As(err, &refusal) {
 		t.Fatalf("child insert: %v", err)
 	}

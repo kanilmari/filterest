@@ -7,6 +7,7 @@ package dtt_1_row_create
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -93,10 +94,11 @@ func saveUploadedFiles(
 			childRowID,
 			effectiveReferencingColumn,
 			len(uploadConfig.Profiles) > 0,
+			hasChildResult,
 		)
 		if storedContextErr != nil {
 			fmt.Printf("\033[31m[saveUploadedFiles] error loading stored upload context for %s: %s\033[0m\n", childTableName, storedContextErr.Error())
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error loading uploaded row")
+			respondToSettingWriteError(w, storedContextErr, "error loading uploaded row")
 			srcFile.Close()
 			return fmt.Errorf("load stored upload row context for %s: %w", childTableName, storedContextErr)
 		}
@@ -244,10 +246,7 @@ func saveUploadedFiles(
 				filenameColumn: newFileName,
 			}
 			shouldUpdateCache := false
-			if hasChildResult {
-				tempChildData[effectiveReferencingColumn] = mainRowID
-				shouldUpdateCache = true
-			} else if storedContextErr == nil && storedReferenceValue != nil {
+			if storedReferenceValue != nil {
 				tempChildData[effectiveReferencingColumn] = storedReferenceValue
 				shouldUpdateCache = true
 			}
@@ -381,12 +380,17 @@ func loadStoredUploadRowContext(
 	childRowID int64,
 	referencingColumn string,
 	includeAssetKind bool,
+	requireReference bool,
 ) (string, interface{}, error) {
 	if childRowID <= 0 || strings.TrimSpace(referencingColumn) == "" {
+		if requireReference {
+			return "", nil, missingRelationReference(childTableName, referencingColumn)
+		}
 		return "", nil, nil
 	}
 
 	var (
+		err       error
 		assetKind string
 		refValue  interface{}
 	)
@@ -397,19 +401,26 @@ func loadStoredUploadRowContext(
 			pq.QuoteIdentifier(referencingColumn),
 			pq.QuoteIdentifier(childTableName),
 		)
-		if err := q.QueryRow(query, childRowID).Scan(&assetKind, &refValue); err != nil {
-			return "", nil, err
-		}
-		return assetKind, refValue, nil
+		err = q.QueryRow(query, childRowID).Scan(&assetKind, &refValue)
+	} else {
+		query := fmt.Sprintf(
+			`SELECT %s FROM %s WHERE id = $1`,
+			pq.QuoteIdentifier(referencingColumn),
+			pq.QuoteIdentifier(childTableName),
+		)
+		err = q.QueryRow(query, childRowID).Scan(&refValue)
 	}
-
-	query := fmt.Sprintf(
-		`SELECT %s FROM %s WHERE id = $1`,
-		pq.QuoteIdentifier(referencingColumn),
-		pq.QuoteIdentifier(childTableName),
-	)
-	if err := q.QueryRow(query, childRowID).Scan(&refValue); err != nil {
+	if err != nil {
+		if requireReference && errors.Is(err, sql.ErrNoRows) {
+			return "", nil, missingRelationReference(childTableName, referencingColumn)
+		}
 		return "", nil, err
 	}
-	return "", refValue, nil
+	if requireReference && refValue == nil {
+		return "", nil, missingRelationReference(childTableName, referencingColumn)
+	}
+	if value, ok := refValue.([]byte); ok {
+		refValue = string(value)
+	}
+	return assetKind, refValue, nil
 }

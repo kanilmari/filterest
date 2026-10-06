@@ -18,7 +18,7 @@ const fintravelNodes = [
     { id: 'f_4', db_id: 4, name: 'apps', parent_id: 'f_1' },
     { id: 'f_14', db_id: 14, name: 'other_tables', parent_id: 'f_1' },
     { id: 'f_10000', db_id: 10000, name: 'fintravel', parent_id: 'f_4', is_current_project: true },
-    { id: 't_blogs', db_id: 10044, name: 'blogs', parent_id: 'f_14', table_uid: '10044' },
+    { id: 't_blogs', db_id: 544, name: 'blogs', parent_id: 'f_14', table_uid: '10044' },
 ];
 
 describe('dataset folder options', () => {
@@ -73,7 +73,7 @@ describe('dataset folder options', () => {
 
     test('reports where a dataset sits, and stays silent about one it cannot find', () => {
         expect(findDatasetPlacement(fintravelNodes, 'blogs'))
-            .toEqual({ folderId: '14', itemId: 10044, datasetUID: 10044 });
+            .toEqual({ folderId: '14', itemId: 544, datasetUID: 10044 });
         expect(findDatasetPlacement(fintravelNodes, 'unknown_dataset'))
             .toEqual({ folderId: '', itemId: 0, datasetUID: 0 });
     });

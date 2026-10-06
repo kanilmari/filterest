@@ -5,6 +5,7 @@
 package dtt_1_row_create
 
 import (
+	"context"
 	"database/sql"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"encoding/json"
@@ -44,16 +45,19 @@ type checkedReference struct {
 var recheckRowsVisibleAfterInsert = dtt_1_row_read.RecheckRowsVisibleAfterInsert
 
 type resolvedExistingLink struct {
-	Kind                  string
-	RelationID            int64
-	RelatedTableUID       string
-	RelatedTableName      string
-	RelatedForeignKey     string
-	BridgeTableUID        string
-	BridgeTableName       string
-	BridgeMainForeignKey  string
-	BridgeOtherForeignKey string
-	RowIDs                []int64
+	MainTableName           string
+	MainReferencedColumn    string
+	RelatedReferencedColumn string
+	Kind                    string
+	RelationID              int64
+	RelatedTableUID         string
+	RelatedTableName        string
+	RelatedForeignKey       string
+	BridgeTableUID          string
+	BridgeTableName         string
+	BridgeMainForeignKey    string
+	BridgeOtherForeignKey   string
+	RowIDs                  []int64
 }
 
 func resolveAndAuthorizeExistingLinks(
@@ -116,10 +120,13 @@ func resolveOneToManyExistingLink(
 			fr.source_table_uid,
 			source_table.table_name,
 			fr.source_column_name,
+			target_table.table_name,
+			fr.target_column_name,
 			fr.target_insert_specs
 		FROM system_foreign_key_relations_1_m fr
 		JOIN system_db_tables source_table
 			ON source_table.table_uid = fr.source_table_uid
+		JOIN system_db_tables target_table ON target_table.table_uid = fr.target_table_uid
 		WHERE fr.id = $1
 			AND fr.target_table_uid = $2
 	`, link.RelationID, mainTableUID).Scan(
@@ -127,6 +134,8 @@ func resolveOneToManyExistingLink(
 		&relation.RelatedTableUID,
 		&relation.RelatedTableName,
 		&relation.RelatedForeignKey,
+		&relation.MainTableName,
+		&relation.MainReferencedColumn,
 		&targetInsertSpecs,
 	)
 	if err != nil {
@@ -157,7 +166,10 @@ func resolveManyToManyExistingLink(
 			CASE WHEN fr.table_a_uid = $2 THEN fr.bridging_col_a ELSE fr.bridging_col_b END,
 			CASE WHEN fr.table_a_uid = $2 THEN fr.table_b_uid ELSE fr.table_a_uid END,
 			CASE WHEN fr.table_a_uid = $2 THEN table_b.table_name ELSE table_a.table_name END,
-			CASE WHEN fr.table_a_uid = $2 THEN fr.bridging_col_b ELSE fr.bridging_col_a END
+			CASE WHEN fr.table_a_uid = $2 THEN fr.bridging_col_b ELSE fr.bridging_col_a END,
+			CASE WHEN fr.table_a_uid = $2 THEN table_a.table_name ELSE table_b.table_name END,
+			CASE WHEN fr.table_a_uid = $2 THEN fr.table_a_column ELSE fr.table_b_column END,
+			CASE WHEN fr.table_a_uid = $2 THEN fr.table_b_column ELSE fr.table_a_column END
 		FROM system_foreign_key_relations_m_m fr
 		JOIN system_db_tables bridge_table ON bridge_table.table_uid = fr.bridging_table_uid
 		JOIN system_db_tables table_a ON table_a.table_uid = fr.table_a_uid
@@ -172,6 +184,9 @@ func resolveManyToManyExistingLink(
 		&relation.RelatedTableUID,
 		&relation.RelatedTableName,
 		&relation.BridgeOtherForeignKey,
+		&relation.MainTableName,
+		&relation.MainReferencedColumn,
+		&relation.RelatedReferencedColumn,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -315,10 +330,16 @@ func requireUnlinkedRows(tx *sql.Tx, relation resolvedExistingLink) error {
 
 func applyExistingLinks(tx *sql.Tx, mainRowID int64, links []resolvedExistingLink) error {
 	for _, relation := range links {
+		// Read defaults and generated keys after insertion, within this transaction.
+		mainRow, err := fetchInsertedTriggerSourceRow(context.Background(), tx, relation.MainTableName, mainRowID, relation.MainReferencedColumn)
+		if err != nil {
+			return err
+		}
+		mainValue := mainRow[relation.MainReferencedColumn]
 		switch relation.Kind {
 		case existingRelationOneToMany:
 			for _, id := range relation.RowIDs {
-				if err := system_config_checks.ValidateUpdate(tx, relation.RelatedTableName, id, map[string]interface{}{relation.RelatedForeignKey: mainRowID}); err != nil {
+				if err := system_config_checks.ValidateUpdate(tx, relation.RelatedTableName, id, map[string]interface{}{relation.RelatedForeignKey: mainValue}); err != nil {
 					return err
 				}
 			}
@@ -329,7 +350,7 @@ func applyExistingLinks(tx *sql.Tx, mainRowID int64, links []resolvedExistingLin
 				pq.QuoteIdentifier("id"),
 				pq.QuoteIdentifier(relation.RelatedForeignKey),
 			)
-			result, err := tx.Exec(query, mainRowID, pq.Array(relation.RowIDs))
+			result, err := tx.Exec(query, mainValue, pq.Array(relation.RowIDs))
 			if err != nil {
 				return fmt.Errorf("link one-to-many rows: %w", err)
 			}
@@ -350,10 +371,15 @@ func applyExistingLinks(tx *sql.Tx, mainRowID int64, links []resolvedExistingLin
 				pq.QuoteIdentifier(relation.BridgeOtherForeignKey),
 			)
 			for _, relatedRowID := range relation.RowIDs {
-				if err := system_config_checks.ValidateRow(relation.BridgeTableName, map[string]interface{}{relation.BridgeMainForeignKey: mainRowID, relation.BridgeOtherForeignKey: relatedRowID}); err != nil {
+				relatedRow, err := fetchInsertedTriggerSourceRow(context.Background(), tx, relation.RelatedTableName, relatedRowID, relation.RelatedReferencedColumn)
+				if err != nil {
 					return err
 				}
-				if _, err := tx.Exec(query, mainRowID, relatedRowID); err != nil {
+				relatedValue := relatedRow[relation.RelatedReferencedColumn]
+				if err := system_config_checks.ValidateRow(relation.BridgeTableName, map[string]interface{}{relation.BridgeMainForeignKey: mainValue, relation.BridgeOtherForeignKey: relatedValue}); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(query, mainValue, relatedValue); err != nil {
 					return fmt.Errorf("link many-to-many row: %w", err)
 				}
 			}
@@ -423,6 +449,7 @@ func resolveAndAuthorizeOwnedChildren(
 		var childTableUID string
 		var childTableName string
 		var referencingColumn string
+		var mainTableName, referencedColumn string
 		var insertNewSourceWithTarget sql.NullBool
 		var hasSpatialColumn bool
 		err := tx.QueryRow(`
@@ -430,6 +457,8 @@ func resolveAndAuthorizeOwnedChildren(
 				fr.source_table_uid,
 				source_table.table_name,
 				fr.source_column_name,
+				target_table.table_name,
+				fr.target_column_name,
 				fr.target_insert_specs,
 				fr.insert_new_source_with_target,
 				EXISTS (
@@ -445,12 +474,15 @@ func resolveAndAuthorizeOwnedChildren(
 			FROM system_foreign_key_relations_1_m fr
 			JOIN system_db_tables source_table
 				ON source_table.table_uid = fr.source_table_uid
+			JOIN system_db_tables target_table ON target_table.table_uid = fr.target_table_uid
 			WHERE fr.id = $1
 				AND fr.target_table_uid = $2
 		`, child.RelationID, mainTableUID).Scan(
 			&childTableUID,
 			&childTableName,
 			&referencingColumn,
+			&mainTableName,
+			&referencedColumn,
 			&targetInsertSpecs,
 			&insertNewSourceWithTarget,
 			&hasSpatialColumn,
@@ -484,6 +516,8 @@ func resolveAndAuthorizeOwnedChildren(
 		}
 		child.TableName = childTableName
 		child.ReferencingColumn = referencingColumn
+		child.MainTableName = mainTableName
+		child.MainReferencedColumn = referencedColumn
 		resolved = append(resolved, child)
 	}
 	return resolved, nil

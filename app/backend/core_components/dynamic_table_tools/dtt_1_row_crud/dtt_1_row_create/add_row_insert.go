@@ -74,7 +74,7 @@ func insertMainRow(ctx context.Context, tx *sql.Tx, tableName string, rowData ma
 }
 
 // insertSingleChildRow lisää yksittäisen lapsirivin child.TableName-tauluun
-// ja asettaa referencingColumnin arvoksi mainRowID.
+// ja asettaa referencingColumnin arvoksi päärivin tallennetun viitearvon.
 // Palauttaa lisätyn rivin id-arvon (childRowID).
 // Between: insertDataAccordingToPayload -> Database
 // Why: Executes the SQL INSERT for a child row.
@@ -89,8 +89,12 @@ func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload, co
 	// Poistetaan _file -kenttä, ettei yritetä SQL:ään
 	delete(child.Data, "_file")
 
-	// Lisätään viite päärivin ID:hen
-	child.Data[child.ReferencingColumn] = mainRowID
+	// Viite kohdistuu relaation sarakkeeseen, joka voi olla oletusarvo tai generoitu.
+	mainRow, err := fetchInsertedTriggerSourceRow(context.Background(), tx, child.MainTableName, mainRowID, child.MainReferencedColumn)
+	if err != nil {
+		return 0, err
+	}
+	child.Data[child.ReferencingColumn] = mainRow[child.MainReferencedColumn]
 	if err := system_config_checks.ValidateRow(child.TableName, child.Data); err != nil {
 		return 0, err
 	}
@@ -129,7 +133,7 @@ func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload, co
 	)
 
 	var childRowID int64
-	err := tx.QueryRow(insertQuery, values...).Scan(&childRowID)
+	err = tx.QueryRow(insertQuery, values...).Scan(&childRowID)
 	if err != nil {
 		fmt.Printf("\033[31m[add_row_db.go] [insertSingleChildRow] error: %s\033[0m\n", err.Error())
 		return 0, err

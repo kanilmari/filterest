@@ -27,7 +27,7 @@ identifiers remain compatibility names unless a documented migration changes the
 
 ### Tables
 -   **system_column_details (SCD)** – Holds per-column configuration for datasets, such as card roles, visibility and localized field metadata. **SCD** is the shared technical abbreviation for this table.
--   **system_db_tables (SDT)** – Catalog of datasets and their physical tables, with table-level metadata such as `multi_lang_embeddings`. **SDT** is the shared technical abbreviation for this table.
+-   **system_db_tables (SDT)** – Catalog of datasets and their physical tables, with table-level metadata such as `multi_lang_embeddings`. **SDT** is the shared technical abbreviation for this table. Its integer `table_uid` is the reference key for datasets; `id` only identifies the physical registry row and must not be used for dataset references. The reference key is required and cannot be edited in the interface.
 -   **system_db_table_aliases** – Stores explicit public URL aliases for datasets. `app_` datasets may still expose a stripped alias automatically when available, but stripped `system_` aliases stay raw until an admin explicitly saves one here.
 -   **system_functions** – Registers backend routes and indicates if they relate to a specific table.
 -   **root_file_groups** – GUI-managed grouping taxonomy for repository-root entries. The `root_` prefix means this table describes the project root domain, not the database system layer.

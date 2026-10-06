@@ -67,7 +67,8 @@ CREATE TABLE system_row_access_rules (
     valid_from timestamptz NOT NULL DEFAULT now(), valid_until timestamptz
 );
 CREATE TABLE system_foreign_key_relations_m_m (
-    id bigint PRIMARY KEY, table_a_uid bigint, table_b_uid bigint, bridging_table_uid bigint, bridging_col_a text, bridging_col_b text
+    id bigint PRIMARY KEY, table_a_uid bigint, table_b_uid bigint, bridging_table_uid bigint, bridging_col_a text, bridging_col_b text,
+    table_a_column text NOT NULL DEFAULT 'id', table_b_column text NOT NULL DEFAULT 'id'
 );
 CREATE TABLE review_notes (id serial PRIMARY KEY, title text NOT NULL, reviewer_id integer REFERENCES system_users(id));
 CREATE TABLE review_note_watchers (
@@ -75,7 +76,7 @@ CREATE TABLE review_note_watchers (
     system_users_id integer NOT NULL REFERENCES system_users(id)
 );
 INSERT INTO system_db_tables (table_uid, table_name) VALUES (21, 'review_note_watchers');
-INSERT INTO system_foreign_key_relations_m_m VALUES (1, 20, 1, 21, 'review_notes_id', 'system_users_id');
+INSERT INTO system_foreign_key_relations_m_m (id, table_a_uid, table_b_uid, bridging_table_uid, bridging_col_a, bridging_col_b) VALUES (1, 20, 1, 21, 'review_notes_id', 'system_users_id');
 INSERT INTO system_group_table_func_rights (user_group_id, function_id, target_table_uid) VALUES (3, 11, 21);
 
 INSERT INTO system_permission_actions (id, action_key) VALUES (1, 'read'), (2, 'update'), (3, 'delete');

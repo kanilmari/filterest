@@ -54,7 +54,7 @@ CREATE TABLE public.system_db_tables (
     id bigint,
     table_name character varying,
     description character varying,
-    table_uid integer,
+    table_uid integer NOT NULL,
     cached_oid integer,
     folder_id integer,
     created timestamp without time zone,
