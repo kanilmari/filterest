@@ -1,5 +1,6 @@
 """Fresh-install contract for the login privacy acceptance sentence and link."""
 
+import re
 from pathlib import Path
 
 
@@ -58,7 +59,8 @@ def test_standalone_login_has_main_landmark_and_visible_link_affordances():
         PUBLIC_SOURCE_ROOT / "frontend/core_components/auth/auth.css"
     ).read_text(encoding="utf-8")
 
-    assert '<main class="auth-page-shell" data-testid="login-page-shell">' in template
+    main = re.search(r"<main\b[^>]*>", template)
+    assert main and 'class="auth-page-shell"' in main.group(0) and 'data-testid="login-page-shell"' in main.group(0)
     assert "</main>\n    {{end}}" in template
     assert ".privacy-notice-link a {" in auth_css
     assert ".auth-secondary-actions a {" in auth_css

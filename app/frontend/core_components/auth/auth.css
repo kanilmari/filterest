@@ -1281,3 +1281,6 @@ body.loading .auth-page-shell {
         width: 100%;
     }
 }
+
+/* The document guard verifies this essential stylesheet actually applied. */
+:root { --filterest-auth-css-applied: 1; }

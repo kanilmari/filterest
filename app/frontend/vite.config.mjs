@@ -251,7 +251,7 @@ export function devForcedLoginRootRedirect() {
 
 function scanGoTemplateVars(dir) {
   const vars = new Set();
-  const scalarRe = /{{\s*\.(\w+)\s*}}/g;
+  const scalarRe = /{{\s*\.([\w.]+)\s*}}/g;
   const condRe = /{{\s*(?:if|if not|if eq)\s+\.(\w+)(?:\s+"[^"]*")?\s*}}/g;
 
   function walk(d) {
@@ -276,6 +276,15 @@ function scanGoTemplateVars(dir) {
 // that isn't listed here — but nothing breaks (replaced with "").
 const KNOWN_DEFAULTS = {
   CSPNonce: 'dev-nonce',
+  'ShellBoot.Script': readFileSync(join(canonicalApplicationRoot, 'backend/core_components/frontend_assets/shell_boot_recovery.js'), 'utf8'),
+  'ShellBoot.Style': readFileSync(join(canonicalApplicationRoot, 'backend/core_components/frontend_assets/shell_boot_recovery.css'), 'utf8'),
+  'ShellBoot.IsGET': 'true',
+  'ShellBoot.Texts.Loading': 'Sivua ladataan…',
+  'ShellBoot.Texts.FailedTitle': 'Sivu ei latautunut.',
+  'ShellBoot.Texts.FailedMessage': 'Kokeile ladata sivu uudelleen.',
+  'ShellBoot.Texts.Reload': 'Lataa sivu uudelleen',
+  'ShellBoot.Texts.JavaScriptRequired': 'Sovelluksen käyttö vaatii JavaScriptin. Ota JavaScript käyttöön ja lataa sivu uudelleen.',
+  'ShellBoot.Texts.BrowserUnsupported': 'Tätä selainta ei tueta. Avaa sivu ajan tasalla olevalla selaimella.',
   CSRFToken: 'dev-csrf-token',
   LangCode: 'fi',
   PageTitle: DEV_PAGE_TITLE,
@@ -387,7 +396,7 @@ function goTemplateTransform() {
         );
 
         // 4. Scalar vars → known default or ""
-        h = h.replace(/{{\s*\.(\w+)\s*}}/g, (_, v) => {
+        h = h.replace(/{{\s*\.([\w.]+)\s*}}/g, (_, v) => {
           if (v in KNOWN_DEFAULTS) return KNOWN_DEFAULTS[v];
           console.warn(`\x1b[33m⚠ Unknown Go template var {{.${v}}} — replaced with ""\x1b[0m`);
           return '';

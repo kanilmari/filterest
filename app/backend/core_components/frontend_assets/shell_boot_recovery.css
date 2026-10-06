@@ -1,0 +1,52 @@
+/* shell_boot_recovery.css */
+/* Presents recovery independently of the stylesheet it protects. */
+/* Bridges the hidden raw shell and the application's stored theme preference. */
+/* Nonce-authorized inline CSS keeps failure and no-JavaScript text usable. */
+html[data-shell-boot-pending] [data-shell-boot-content],
+html[data-shell-boot-pending] [data-shell-boot-content] * { visibility: hidden !important; }
+#shell-boot-notice[hidden], #shell-boot-notice [hidden] { display: none !important; }
+#shell-boot-notice, .shell-boot-noscript {
+    --shell-boot-background: #fafafa;
+    --shell-boot-text: #202020;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--shell-boot-background);
+    color: var(--shell-boot-text);
+    font: 16px/1.5 system-ui, sans-serif;
+    text-align: center;
+}
+#shell-boot-notice *, .shell-boot-noscript * { color: inherit; }
+#shell-boot-notice h1 {
+    font-size: 1.25rem;
+    margin: 0 0 12px;
+}
+#shell-boot-reload {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid currentcolor;
+    border-radius: 6px;
+    padding: 8px 16px;
+    margin-top: 16px;
+    cursor: pointer;
+}
+#shell-boot-reload:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: 4px;
+}
+html[data-shell-boot-theme="dark"] #shell-boot-notice {
+    --shell-boot-background: #202020;
+    --shell-boot-text: #f5f5f5;
+}
+@media (prefers-color-scheme: dark) {
+    html:not([data-shell-boot-theme="light"], [data-shell-boot-theme="dark"]) #shell-boot-notice,
+    .shell-boot-noscript {
+        --shell-boot-background: #202020;
+        --shell-boot-text: #f5f5f5;
+    }
+}

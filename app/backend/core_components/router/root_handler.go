@@ -11,6 +11,7 @@ import (
 	dataset_visibility "easelect/backend/core_components/dataset_visibility"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -172,7 +173,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		tpl, err := template.ParseFiles(tplPath)
 		if err != nil {
 			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-			http.ServeFile(w, r, tplPath)
+			frontendassets.RenderShellTemplateFailure(w, r)
 			return
 		}
 		useMinified, flagErr := middlewares.ShouldUseMinifiedAssetsInDev()
@@ -183,7 +184,8 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		meta := resolvePageMeta(r)
 		assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 		data := indexTemplateData{
-			CSPNonce: nonce, UseMinifiedAssets: useMinified,
+			ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
+			CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: os.Getenv("ENVIRONMENT_TYPE") == "dev",
 			InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
 			ProductName: getSiteName(),
 			FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),

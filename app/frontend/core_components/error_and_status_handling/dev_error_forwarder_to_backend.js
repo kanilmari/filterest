@@ -88,8 +88,8 @@ function createBufferedEntry(type, message, stack, source, line, col) {
         source: truncateText(source || ""),
         line: Number.isFinite(line) ? line : null,
         col: Number.isFinite(col) ? col : null,
-        href: truncateText(window.location.href),
-        userAgent: truncateText(navigator.userAgent),
+        href: type === 'shell-boot' ? window.location.pathname : truncateText(window.location.href),
+        userAgent: type === 'shell-boot' ? '' : truncateText(navigator.userAgent),
     };
 }
 
@@ -172,7 +172,10 @@ async function ensureCsrfToken() {
 }
 
 async function sendLog(type, message, stack, source, line, col) {
-    if (isLogging) return;
+    if (!IS_DEV_MODE || isLogging) return false;
+    // An auth dependency can load this transport before the entry module has
+    // evaluated. Pending-shell errors belong to the guard's safe representation.
+    if (type !== 'shell-boot' && window.__filterestShellBoot && !window.__filterestShellBoot.status().revealed) return false;
     isLogging = true;
 
     recordBufferedError(type, message, stack, source, line, col);
@@ -195,15 +198,16 @@ async function sendLog(type, message, stack, source, line, col) {
             headers['X-CSRF-Token'] = token;
         }
 
-        await fetch('/api/log-client-error', {
+        const response = await fetch('/api/log-client-error', {
             method: 'POST',
             headers: headers,
             credentials: 'include',
             body: JSON.stringify(payload)
         });
+        return response.ok;
     } catch (_err) {
-        // Fallback to original console if fetch fails, but don't retry sending
-        // console.error("Failed to send log to backend:", err);
+        // The caller retains recovery records when transport is unavailable.
+        return false;
     } finally {
         isLogging = false;
     }
@@ -239,3 +243,39 @@ console.error = function(...args) {
 
 if (IS_DEV_MODE) console.log("[DevTools] Log forwarding enabled.");
 if (IS_DEV_MODE) console.log(`[DevTools] Error buffer enabled: ${DEV_ERROR_BUFFER_KEY}`);
+
+
+const SHELL_BOOT_RECORDS_KEY = "__filterest_shell_boot_records_v1";
+let isForwardingShellBoot = false;
+
+// Forward only after the protected shell recovered, and acknowledge each record
+// individually. Failed/non-2xx sends retain the bounded tab-local evidence.
+export async function forwardShellBootRecords() {
+    const guard = window.__filterestShellBoot;
+    if (!IS_DEV_MODE || isForwardingShellBoot || !guard?.status().revealed || !guard.safeRecord) return;
+    isForwardingShellBoot = true;
+    try {
+        let records = JSON.parse(sessionStorage.getItem(SHELL_BOOT_RECORDS_KEY) || "[]");
+        if (!Array.isArray(records)) return;
+        records = records.map(guard.safeRecord).filter((entry) => entry.time > Date.now() - DEV_ERROR_BUFFER_MAX_AGE_MS).slice(-10);
+        sessionStorage.setItem(SHELL_BOOT_RECORDS_KEY, JSON.stringify(records));
+        for (const entry of records) {
+            const acknowledged = await sendLog('shell-boot', JSON.stringify(entry), null, entry.resource || entry.source, entry.line, entry.column);
+            if (!acknowledged) break;
+            // Read again: another event may have added a record while fetch awaited.
+            const current = JSON.parse(sessionStorage.getItem(SHELL_BOOT_RECORDS_KEY) || "[]").map(guard.safeRecord);
+            const matchingIndex = current.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(entry));
+            if (matchingIndex >= 0) current.splice(matchingIndex, 1);
+            sessionStorage.setItem(SHELL_BOOT_RECORDS_KEY, JSON.stringify(current));
+        }
+    } catch {
+        // Storage/log transport failures are diagnostic only.
+    } finally {
+        isForwardingShellBoot = false;
+    }
+}
+
+if (IS_DEV_MODE) {
+    window.addEventListener('filterest-shell-boot-recovered', forwardShellBootRecords);
+    void forwardShellBootRecords();
+}

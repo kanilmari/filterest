@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import {
   existsSync,
+  readFileSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -81,6 +82,19 @@ describe('vite forced-login root redirect helpers', () => {
 });
 
 describe('vite Go-template development rendering', () => {
+  test('inlines the shared guard and independent style in the index preview', () => {
+    const config = viteConfig({ command: 'serve' });
+    const transform = config.plugins.find((plugin) => plugin.name === 'easelect-go-template-transform');
+    const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+    const rendered = transform.transformIndexHtml.handler(html);
+    const source = readFileSync(new URL('../backend/core_components/frontend_assets/shell_boot_recovery.js', import.meta.url), 'utf8');
+    expect(rendered).toContain(source);
+    expect(rendered).toContain('data-shell-boot-get="true"');
+    expect(rendered).toContain('Sivua ladataan…');
+    expect(rendered).not.toContain('{{');
+    expect(rendered).toContain('visibility: hidden !important');
+  });
+
   test('selects only matching equality-conditional defaults', () => {
     const html = [
       '<input value="dev" {{if eq .Environment "dev"}}checked{{end}}>',

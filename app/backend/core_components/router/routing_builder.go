@@ -18,6 +18,7 @@ import (
 	backend "easelect/backend/core_components"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/permissions"
 	productidentity "easelect/backend/core_components/product_identity"
@@ -32,6 +33,7 @@ var (
 )
 
 type indexTemplateData struct {
+	ShellBoot               frontendassets.ShellBootData
 	CSPNonce                string
 	UseMinifiedAssets       bool
 	IsDev                   bool
@@ -120,19 +122,19 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool) {
 	tpl, err := template.ParseFiles(tplPath)
 	if err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		http.ServeFile(w, r, tplPath) // fallback – ei noncea
+		frontendassets.RenderShellTemplateFailure(w, r)
 		return
 	}
 
 	// 3) Ajetaan templaatti ja syötetään nonce + SEO-metatiedot
-	envType := os.Getenv("ENVIRONMENT_TYPE")
-	isDev := envType == "" || envType == "dev"
+	isDev := os.Getenv("ENVIRONMENT_TYPE") == "dev"
 	meta := resolvePageMeta(r)
 	siteName := meta.SiteName
 	noIndex := !isIndexingAllowed()
 	assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 	data := indexTemplateData{
-		CSPNonce: nonce, UseMinifiedAssets: useMinified, IsDev: isDev,
+		ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
+		CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: isDev,
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: siteName,
 		ProductName: getSiteName(),
 		FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
@@ -166,14 +168,15 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	tpl, err := template.ParseFiles(tplPath)
 	if err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-		http.ServeFile(w, r, tplPath)
+		frontendassets.RenderShellTemplateFailure(w, r)
 		return
 	}
 
 	meta := resolvePageMeta(r)
 	assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 	data := indexTemplateData{
-		CSPNonce: nonce, UseMinifiedAssets: useMinified,
+		ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
+		CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: os.Getenv("ENVIRONMENT_TYPE") == "dev",
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
 		ProductName: getSiteName(),
 		FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
@@ -294,18 +297,9 @@ func robotsHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join(localFrontendDir, "robots.txt"))
 }
 
-// setAuthShellNoStoreHeaders marks auth-gated HTML shell responses as uncacheable.
-// This keeps browser back/forward navigation from reviving a stale authenticated shell
-// after logout when login_to_browse is enabled.
-func setAuthShellNoStoreHeaders(w http.ResponseWriter, loginToBrowse bool) {
-	if !loginToBrowse {
-		return
-	}
-
-	w.Header().Set("Cache-Control", "no-store, max-age=0, must-revalidate, private")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	w.Header().Set("Vary", "Cookie")
+// setAuthShellNoStoreHeaders protects every rendered shell, including public pages.
+func setAuthShellNoStoreHeaders(w http.ResponseWriter, _ bool) {
+	frontendassets.SetShellNoStoreHeaders(w)
 }
 
 // isAuthShellEntryRequest detects the SPA shell handoff queries that must be

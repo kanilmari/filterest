@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
@@ -361,6 +362,7 @@ func createFirstRunAdmin(ctx context.Context, db *sql.DB, input firstRunAdminInp
 }
 
 func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRunAdminInput, errs firstRunAdminErrors, status int) {
+	frontendassets.SetShellNoStoreHeaders(w)
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("[showFirstRunAdminForm] session get failed: %v, resetting", err)
@@ -378,7 +380,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	if totpSecret == "" {
 		totpSecret, err = generateTOTPSecret()
 		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+			respondAuthPageFailure(w, r, true)
 			return
 		}
 		session.Values["first_run_totp_secret"] = totpSecret
@@ -386,7 +388,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	}
 	if sessionChanged {
 		if err = e_sessions.Save(w, r, session); err != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+			respondAuthPageFailure(w, r, true)
 			return
 		}
 	}
@@ -394,14 +396,8 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	tmpl, err := template.ParseFiles(filepath.Join(frontend_dir, "templates", "first_run_admin.html"))
 	if err != nil {
 		logging.Errorf("[showFirstRunAdminForm] template load failed: %v", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+		respondAuthPageFailure(w, r, true)
 		return
-	}
-	w.Header().Set("Cache-Control", "no-store, max-age=0, must-revalidate, private")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	if status != http.StatusOK {
-		w.WriteHeader(status)
 	}
 	if input.Environment == "" {
 		if isExplicitDevEnvironment() {
@@ -421,7 +417,11 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	if faviconSiteName == "" {
 		faviconSiteName = resolveLoginSiteName(r)
 	}
+	shellPage := frontendassets.NewShellPageData(r)
+	// First Run always returns a document; it has no SPA fragment renderer.
+	shellPage.StandalonePage = true
 	data := struct {
+		frontendassets.ShellPageData
 		FirstRunSiteName   string
 		Username           string
 		Email              string
@@ -440,6 +440,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		GeneralErr         string
 		CSRFToken          string
 	}{
+		ShellPageData:    shellPage,
 		FirstRunSiteName: input.SiteName, Username: input.Username, Email: input.Email,
 		Environment: input.Environment, VerificationMethod: input.VerificationMethod,
 		TOTPSecret: totpSecret, InitialSection: initialSection,
@@ -449,7 +450,12 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		VerificationErr: errs.Verification, FactorErr: errs.Factor, GeneralErr: errs.General,
 		CSRFToken: csrfToken,
 	}
-	if err = tmpl.Execute(w, data); err != nil {
+	var rendered bytes.Buffer
+	if err = tmpl.Execute(&rendered, data); err != nil {
 		logging.Errorf("[showFirstRunAdminForm] template execution failed: %v", err)
+		respondAuthPageFailure(w, r, true)
+		return
 	}
+	w.WriteHeader(status)
+	_, _ = w.Write(rendered.Bytes())
 }

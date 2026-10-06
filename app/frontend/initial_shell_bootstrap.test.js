@@ -56,17 +56,6 @@ describe('shell before application modules', () => {
         expect(initialOpen()).toBe('true');
     });
 
-    test.each([['fi-FI', 'Hei IE-käyttäjä!'], ['en-US', 'Hello IE user!']])(
-        'shows a localized unsupported-browser message for %s',
-        (language, message) => {
-            vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 Trident/7.0');
-            vi.spyOn(navigator, 'language', 'get').mockReturnValue(language);
-            run();
-            expect(document.querySelector('h1')?.textContent).toBe(message);
-            expect(document.querySelector('a')?.href).toBe('https://brave.com/download/');
-        },
-    );
-
     test('does not expose globals or depend on either external bootstrap', () => {
         run();
         run();

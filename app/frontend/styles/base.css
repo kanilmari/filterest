@@ -1,4 +1,7 @@
 /* base.css */
+/* Defines essential application layout and the document guard's CSS sentinel. */
+/* Bridges the shell, shared controls and theme variables. */
+/* Gives the guard evidence that core styling applied before controls appear. */
 /* 
  * Visual Documentation:
  * - instructions_and_documentation/visual_documentation/layout_and_navigation_concepts.md
@@ -377,3 +380,6 @@ summary {
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 */
+
+/* The document guard verifies this essential stylesheet actually applied. */
+:root { --filterest-shell-css-applied: 1; }

@@ -21,6 +21,8 @@ import {
     loadPublicUiLanguageCatalog,
 } from "./core_components/lang/ui_language_catalog.js";
 
+window.__filterestShellBoot?.evaluated();
+
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 
 import "./core_components/table_views/table_view/table_column_resizer.js";
@@ -81,6 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Initial deep-link resolution happens inside load_tables() before initTabs().
     updateMenuLanguageDisplay();
+    window.__filterestShellBoot?.ready();
 });
 
 // Reagoidaan “tableSelected”-eventtiin

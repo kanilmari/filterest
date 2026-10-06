@@ -64,4 +64,11 @@ export async function initializeAuthPreferenceControls(root = document) {
     });
 }
 
-void initializeAuthPreferenceControls(document);
+export const authPreferenceControlsReady = initializeAuthPreferenceControls(document);
+
+
+// Standalone auth recovery uses the same dev-only transport as main.js.
+if (document.documentElement.dataset.shellBootProbe === '--filterest-auth-css-applied'
+    && document.querySelector('meta[name="app-env"]')?.content === 'dev') {
+    import("../error_and_status_handling/dev_error_forwarder_to_backend.js");
+}

@@ -1,9 +1,15 @@
 <!-- index.html -->
+<!-- Renders the application shell with metadata and early recovery. -->
+<!-- Bridges server language/nonce data and the essential stylesheet/module gates. -->
+<!-- Keeps unfinished controls hidden until the application can take over. -->
 <!DOCTYPE html>
-<html lang="{{.LangCode}}">
+<html lang="{{.LangCode}}" data-shell-boot-pending data-shell-boot-get="{{.ShellBoot.IsGET}}" data-shell-boot-dev="{{.IsDev}}" data-shell-boot-probe="--filterest-shell-css-applied">
 
 <head>
     <meta charset="UTF-8">
+    <style id="shell-boot-style" nonce="{{.CSPNonce}}">{{.ShellBoot.Style}}</style>
+    <script id="shell-boot-guard" nonce="{{.CSPNonce}}">{{.ShellBoot.Script}}</script>
+
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
     <!-- Disable automatic phone number detection for better design control -->
@@ -64,18 +70,24 @@
     })();
     </script>
     {{if .UseMinifiedAssets}}
-    <link rel="stylesheet" id="imports-css" href="{{.ImportsCSSPath}}">
+    <link rel="stylesheet" id="imports-css" data-shell-boot-required data-shell-boot-probe-link href="{{.ImportsCSSPath}}">
     {{else}}
-    <link rel="stylesheet" id="imports-css" href="/frontend/styles/imports.css">
+    <link rel="stylesheet" id="imports-css" data-shell-boot-required data-shell-boot-probe-link href="/frontend/styles/imports.css">
     {{end}}
 </head>
 
 <body>
-<!--[if IE]>
-<div>Internet Explorer not supported. Download Brave browser and use it.</div>
-<a href="https://brave.com/download/">Brave browser download</a>
-<![endif]-->
-    <div class="body_wrapper">
+    <div id="shell-boot-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <p id="shell-boot-loading" hidden>{{.ShellBoot.Texts.Loading}}</p>
+        <div id="shell-boot-failed" hidden>
+            <h1>{{.ShellBoot.Texts.FailedTitle}}</h1>
+            <p>{{.ShellBoot.Texts.FailedMessage}}</p>
+            <button type="button" id="shell-boot-reload">{{.ShellBoot.Texts.Reload}}</button>
+        </div>
+        <p id="shell-boot-unsupported" hidden>{{.ShellBoot.Texts.BrowserUnsupported}}</p>
+    </div>
+    <noscript><div class="shell-boot-noscript"><p>{{.ShellBoot.Texts.JavaScriptRequired}}</p></div></noscript>
+    <div class="body_wrapper" data-shell-boot-content>
         <!-- Sisältö -->
         <div class="body_content">
             <!-- <div class="vertical-nav"> -->
@@ -122,19 +134,8 @@
     </div>
     <script id="initial-shell-bootstrap" nonce="{{ .CSPNonce }}">
     // Local shell state is ready before modules, without a blocking script request.
-    // Keep this compatibility check ES5 so an unsupported browser can read its message.
+    // Browser compatibility and translated recovery belong to the head guard.
     (function () {
-        var userAgent = window.navigator.userAgent;
-        var userLang = navigator.language || navigator.userLanguage || 'en';
-        if (userAgent.indexOf('MSIE ') >= 0 || userAgent.indexOf('Trident/') >= 0) {
-            document.body.innerHTML = userLang.toLowerCase().indexOf('fi') === 0
-                ? '<h1>Hei IE-käyttäjä!</h1><p>Internet Explorer on vanhentunut selain. '
-                    + 'Lataa jokin uudempi, esimerkiksi <a href="https://brave.com/download/">Brave</a>.</p>'
-                : '<h1>Hello IE user!</h1><p>Your Internet Explorer browser is outdated. '
-                    + 'Please install a more modern browser, for example <a href="https://brave.com/download/">Brave</a>.</p>';
-            return;
-        }
-
         var bodyContent = document.querySelector('.body_content');
         if (!bodyContent) return;
         var threshold = 1850;
@@ -155,9 +156,9 @@
     })();
     </script>
     {{if .UseMinifiedAssets}}
-    <script type="module" id="main-bundle" src="{{.MainBundlePath}}"></script>
+    <script type="module" id="main-bundle" data-shell-boot-required src="{{.MainBundlePath}}"></script>
     {{else}}
-    <script type="module" id="main-bundle" src="/frontend/main.js"></script>
+    <script type="module" id="main-bundle" data-shell-boot-required src="/frontend/main.js"></script>
     {{end}}
 </body>
 

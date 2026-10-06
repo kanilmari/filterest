@@ -63,6 +63,7 @@ func IsMaintenanceMode() bool {
 func WithMaintenanceMode(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if maintenanceActive.Load() {
+			w.Header().Set("Cache-Control", "no-store")
 			// Serve a minimal valid response for common browser-initiated
 			// requests that would otherwise show as console errors.
 			path := r.URL.Path

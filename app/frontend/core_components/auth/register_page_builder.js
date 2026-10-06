@@ -6,6 +6,10 @@
 import { translatePage } from "../lang/translation_handler.js";
 import { getPreferredAvailableLanguage } from "../state_stores/lang_preference_reader.js";
 
+if (document.documentElement.dataset.shellBootProbe === '--filterest-auth-css-applied') {
+    window.__filterestShellBoot?.evaluated();
+}
+
 const initializedRegistrationForms = new WeakSet();
 
 function updateRegistrationVerificationFields(form) {
@@ -43,5 +47,16 @@ export function initializeRegistrationVerificationFields(root = document) {
 const standaloneForm = initializeRegistrationVerificationFields(document);
 if (standaloneForm) {
     const chosenLanguage = getPreferredAvailableLanguage(["en", "fi"]);
-    translatePage(chosenLanguage);
+    void translatePage(chosenLanguage).then(() => {
+        if (document.documentElement.dataset.shellBootProbe === "--filterest-auth-css-applied") {
+            window.__filterestShellBoot?.ready();
+        }
+    });
+}
+
+
+// Standalone auth recovery uses the same dev-only transport as main.js.
+if (document.documentElement.dataset.shellBootProbe === '--filterest-auth-css-applied'
+    && document.querySelector('meta[name="app-env"]')?.content === 'dev') {
+    import("../error_and_status_handling/dev_error_forwarder_to_backend.js");
 }

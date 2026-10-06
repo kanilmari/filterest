@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	backend "easelect/backend/core_components"
 	"fmt"
@@ -129,6 +130,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
+	frontendassets.SetShellNoStoreHeaders(w)
+	standalonePage := r.URL.Query().Get("fragment") != "1"
 	log.Println("showLoginForm() started 🪪")
 
 	// --- Sessio & sessio-cookie ---
@@ -153,7 +156,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 
 		log.Println("attempting to save session (csrf-token)...")
 		if err = e_sessions.Save(w, r, session); err != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+			respondAuthPageFailure(w, r, standalonePage)
 			return
 		}
 		log.Println("session save OK ✅")
@@ -166,7 +169,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
 		fmt.Printf("\033[31merror: login template load failed: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+		respondAuthPageFailure(w, r, standalonePage)
 		return
 	}
 
@@ -178,7 +181,6 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 
 	siteName := resolveLoginSiteName(r)
 	assetPaths := frontendassets.Resolve(frontend_dir, useMinified)
-	standalonePage := r.URL.Query().Get("fragment") != "1"
 	loginToBrowse, loginToBrowseErr := middlewares.CheckLoginToBrowse()
 	if loginToBrowseErr != nil {
 		log.Printf("[showLoginForm] login_to_browse check failed; public return button stays hidden: %v", loginToBrowseErr)
@@ -186,23 +188,23 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	}
 
 	data := struct {
+		frontendassets.ShellPageData
 		ErrorMsg            string
 		CSRFToken           string
 		UseMinifiedAssets   bool
 		SiteName            string
 		FaviconPath         string
-		StandalonePage      bool
 		ShowBackButton      bool
 		ShowTourScreenshots bool
 		ImportsCSSPath      string
 		LoginBundlePath     string
 	}{
+		ShellPageData:       frontendassets.NewShellPageData(r),
 		ErrorMsg:            errorMsg,
 		CSRFToken:           csrfToken,
 		UseMinifiedAssets:   useMinified,
 		SiteName:            siteName,
 		FaviconPath:         frontendassets.SiteFaviconPath(frontend_dir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
-		StandalonePage:      standalonePage,
 		ShowBackButton:      standalonePage && !loginToBrowse,
 		ShowTourScreenshots: shouldShowLoginTourScreenshots(siteName),
 		ImportsCSSPath:      assetPaths.ImportsCSSPath,
@@ -215,13 +217,23 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	// goes stale as soon as the session changes. Without this a browser restart
 	// or the back button can show a cached page whose token no longer matches,
 	// and the sign-in is refused.
-	w.Header().Set("Cache-Control", "no-store")
-
-	if err = tmpl.Execute(w, data); err != nil {
+	var rendered bytes.Buffer
+	if err = tmpl.Execute(&rendered, data); err != nil {
 		fmt.Printf("\033[31merror: login template execution failed: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+		respondAuthPageFailure(w, r, standalonePage)
 		return
 	}
+	_, _ = w.Write(rendered.Bytes())
 
 	log.Println("login template rendered successfully 🖼️")
+}
+
+// respondAuthPageFailure shares document recovery while preserving the fragment
+// API's JSON error contract. Callers set no-store before session/template work.
+func respondAuthPageFailure(w http.ResponseWriter, r *http.Request, standalone bool) {
+	if standalone {
+		frontendassets.RenderShellTemplateFailure(w, r)
+		return
+	}
+	httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
 }

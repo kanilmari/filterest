@@ -1,23 +1,44 @@
-<!-- first_run_admin.html: one-time form for creating the first login-ready administrator. -->
+<!-- first_run_admin.html -->
+<!-- Renders the one-time form for creating the first login-ready administrator. -->
+<!-- Bridges server setup state with translated recovery and preference controls. -->
+<!-- Keeps an incomplete standalone form hidden until its styles and module work. -->
 <!DOCTYPE html>
-<html lang="fi">
+<html lang="{{.LangCode}}" {{if .StandalonePage}}data-shell-boot-pending data-shell-boot-get="{{.ShellBoot.IsGET}}" data-shell-boot-dev="{{.IsDev}}" data-shell-boot-probe="--filterest-auth-css-applied"{{end}}>
 <head>
     <meta charset="UTF-8">
+    {{if .StandalonePage}}
+    <meta name="csp-nonce" content="{{.CSPNonce}}">
+    <meta name="app-env" content="{{if .IsDev}}dev{{else}}prod{{end}}">
+    <style id="shell-boot-style" nonce="{{.CSPNonce}}">{{.ShellBoot.Style}}</style>
+    <script id="shell-boot-guard" nonce="{{.CSPNonce}}">{{.ShellBoot.Script}}</script>
+    {{end}}
     <base href="/">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="format-detection" content="telephone=no">
     <title data-lang-key="first_run_admin_title">Create the first administrator</title>
-    <link rel="stylesheet" href="/frontend/styles/variables.css">
-    <link rel="stylesheet" href="/frontend/styles/base.css">
-    <link rel="stylesheet" href="/frontend/styles/form.css">
-    <link rel="stylesheet" href="/frontend/core_components/auth/auth.css">
-    <link rel="stylesheet" href="/frontend/reusable_components/form_section_navigator/form_section_navigator.css">
-    <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/variables.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/base.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/form.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/reusable_components/form_section_navigator/form_section_navigator.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
     <link rel="icon" href="{{.FaviconPath}}" type="image/png" sizes="16x16">
-    <script type="module" src="/frontend/core_components/auth/first_run_admin_page.js"></script>
+    <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} src="/frontend/core_components/auth/first_run_admin_page.js"></script>
 </head>
 <body class="loading login-page standalone-login-page first-run-admin-page">
-    <main class="auth-page-shell first-run-admin-shell" data-testid="first-run-admin-shell">
+    {{if .StandalonePage}}
+    <div id="shell-boot-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <p id="shell-boot-loading" hidden>{{.ShellBoot.Texts.Loading}}</p>
+        <div id="shell-boot-failed" hidden>
+            <h1>{{.ShellBoot.Texts.FailedTitle}}</h1>
+            <p>{{.ShellBoot.Texts.FailedMessage}}</p>
+            <button type="button" id="shell-boot-reload">{{.ShellBoot.Texts.Reload}}</button>
+        </div>
+        <p id="shell-boot-unsupported" hidden>{{.ShellBoot.Texts.BrowserUnsupported}}</p>
+    </div>
+    <noscript><div class="shell-boot-noscript"><p>{{.ShellBoot.Texts.JavaScriptRequired}}</p></div></noscript>
+    {{end}}
+    <main data-shell-boot-content class="auth-page-shell first-run-admin-shell" data-testid="first-run-admin-shell">
         <section class="auth-page-content-card">
             <div class="auth-preferences-row">
                 <div

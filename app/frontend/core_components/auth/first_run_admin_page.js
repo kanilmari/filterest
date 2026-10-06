@@ -3,8 +3,14 @@
 // Bridges server-rendered choices with reusable standalone-auth and form-navigation components.
 // Exists so First Run owns only its method-specific visibility rules.
 
-import "./auth_preference_controls.js";
+import { translatePage } from "../lang/translation_handler.js";
+import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
+import { authPreferenceControlsReady } from "./auth_preference_controls.js";
 import { initializeFormSectionNavigators } from "../../reusable_components/form_section_navigator/form_section_navigator.js";
+
+if (document.documentElement.dataset.shellBootProbe === '--filterest-auth-css-applied') {
+    window.__filterestShellBoot?.evaluated();
+}
 
 function updateVerificationFields(form) {
     const method = form.querySelector('input[name="verification_method"]:checked')?.value || "";
@@ -32,3 +38,8 @@ export function initializeFirstRunAdminPage(root = document) {
 }
 
 initializeFirstRunAdminPage(document);
+if (document.documentElement.dataset.shellBootProbe === "--filterest-auth-css-applied") {
+    void authPreferenceControlsReady
+        .then(() => translatePage(getLanguageWithBrowserFallback()))
+        .then(() => window.__filterestShellBoot?.ready());
+}

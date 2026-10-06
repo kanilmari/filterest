@@ -1,8 +1,17 @@
 <!-- register.html -->
+<!-- Renders standalone and SPA-mounted registration forms. -->
+<!-- Bridges server validation with translated recovery and registration fields. -->
+<!-- Arms recovery only for a full document, preserving mounted forms. -->
 <!DOCTYPE html>
-<html lang="fi">
+<html lang="{{.LangCode}}" {{if .StandalonePage}}data-shell-boot-pending data-shell-boot-get="{{.ShellBoot.IsGET}}" data-shell-boot-dev="{{.IsDev}}" data-shell-boot-probe="--filterest-auth-css-applied"{{end}}>
 <head>
     <meta charset="UTF-8">
+    {{if .StandalonePage}}
+    <meta name="csp-nonce" content="{{.CSPNonce}}">
+    <meta name="app-env" content="{{if .IsDev}}dev{{else}}prod{{end}}">
+    <style id="shell-boot-style" nonce="{{.CSPNonce}}">{{.ShellBoot.Style}}</style>
+    <script id="shell-boot-guard" nonce="{{.CSPNonce}}">{{.ShellBoot.Script}}</script>
+    {{end}}
     <base href="/">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="format-detection" content="telephone=no">
@@ -13,11 +22,23 @@
     <title data-lang-key="register">Register</title>
 
     <!-- Käytetään samaa CSS-tiedostoa kuin login-sivulla -->
-    <link rel="stylesheet" href="/frontend/core_components/auth/auth.css">
-    <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
 </head>
 <body>
-    <form method="POST" action="{{.FormAction}}" class="auth-form" data-testid="register-form">
+    {{if .StandalonePage}}
+    <div id="shell-boot-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <p id="shell-boot-loading" hidden>{{.ShellBoot.Texts.Loading}}</p>
+        <div id="shell-boot-failed" hidden>
+            <h1>{{.ShellBoot.Texts.FailedTitle}}</h1>
+            <p>{{.ShellBoot.Texts.FailedMessage}}</p>
+            <button type="button" id="shell-boot-reload">{{.ShellBoot.Texts.Reload}}</button>
+        </div>
+        <p id="shell-boot-unsupported" hidden>{{.ShellBoot.Texts.BrowserUnsupported}}</p>
+    </div>
+    <noscript><div class="shell-boot-noscript"><p>{{.ShellBoot.Texts.JavaScriptRequired}}</p></div></noscript>
+    {{end}}
+    <form {{if .StandalonePage}}data-shell-boot-content{{end}} method="POST" action="{{.FormAction}}" class="auth-form" data-testid="register-form">
         <h2 data-lang-key="register"></h2>
 
         <label for="username" data-lang-key="username"></label>
@@ -80,6 +101,6 @@
         <p class="error" data-lang-key="{{.GeneralErr}}"></p>
         {{end}}
     </form>
-    <script type="module" src="/frontend/core_components/auth/register_page_builder.js"></script>
+    <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} src="/frontend/core_components/auth/register_page_builder.js"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ import {
     ensurePasswordVisibilityIconsLoaded,
     getPasswordVisibilityIcons,
 } from "./password_visibility_icon_reader.js";
-import { getTranslationForKey } from "../lang/translation_handler.js";
+import { getTranslationForKey, translatePage } from "../lang/translation_handler.js";
 import {
     translateError,
     pickLang,
@@ -35,7 +35,11 @@ import { publishAuthLogin } from "./auth_broadcast.js";
 import { isCrossTabLoginSyncEnabled } from "../config_fetcher.js";
 import { initializeStandaloneLoginShell } from "./login_page_shell_builder.js";
 import { initializeAuthSessionNotice } from './auth_session_notice_handler.js';
-import "./auth_preference_controls.js";
+import { authPreferenceControlsReady } from "./auth_preference_controls.js";
+
+if (document.documentElement.dataset.shellBootProbe === '--filterest-auth-css-applied') {
+    window.__filterestShellBoot?.evaluated();
+}
 
 // 2-step AJAX login: Phase 1 (credentials) → Phase 2 (OTP verification)
 document.addEventListener("DOMContentLoaded", () => {
@@ -534,6 +538,11 @@ document.addEventListener("DOMContentLoaded", () => {
             event.preventDefault();
             showPrivacyNoticeModal();
         });
+    }
+    if (document.body.dataset.loginPageMode === "standalone") {
+        void authPreferenceControlsReady
+            .then(() => translatePage(getLanguageWithBrowserFallback()))
+            .then(() => window.__filterestShellBoot?.ready());
     }
 });
 

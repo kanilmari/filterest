@@ -219,7 +219,7 @@ func TestLoginHandlerForbidsTheBrowserFromStoringThePage(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("%s: status = %d, want %d", target, rr.Code, http.StatusOK)
 		}
-		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+		if got := rr.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
 			t.Fatalf("%s: Cache-Control = %q, want no-store", target, got)
 		}
 	}

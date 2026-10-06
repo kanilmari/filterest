@@ -5,8 +5,10 @@
 package auth
 
 import (
+	"bytes"
 	"database/sql"
 	backend "easelect/backend/core_components"
+	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/middlewares"
@@ -52,7 +54,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, buildRegisterEntryRedirectTarget(r.URL.Query().Get("redirect")), http.StatusSeeOther)
 			return
 		}
-		showRegisterForm(w, r, registerErrors{}, string(defaultRegistrationVerificationMethod))
+		showRegisterForm(w, r, registerErrors{}, string(defaultRegistrationVerificationMethod), http.StatusOK)
 		return
 	}
 }
@@ -126,14 +128,13 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("error: session get failed: %s", err.Error())
-		showRegisterForm(w, r, registerErrors{General: "session_error"}, verificationMethodValue)
+		showRegisterForm(w, r, registerErrors{General: "session_error"}, verificationMethodValue, http.StatusOK)
 		return
 	}
 	postedToken := r.FormValue("csrf_token")
 	sessionToken, _ := session.Values["csrf_token"].(string)
 	if postedToken == "" || sessionToken == "" || postedToken != sessionToken {
-		w.WriteHeader(http.StatusForbidden)
-		showRegisterForm(w, r, registerErrors{General: "csrf_token_invalid"}, verificationMethodValue)
+		showRegisterForm(w, r, registerErrors{General: "csrf_token_invalid"}, verificationMethodValue, http.StatusForbidden)
 		return
 	}
 
@@ -143,7 +144,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		confirmFixedPIN,
 	)
 	if verificationError != "" {
-		showRegisterForm(w, r, registerErrors{Verification: verificationError}, verificationMethodValue)
+		showRegisterForm(w, r, registerErrors{Verification: verificationError}, verificationMethodValue, http.StatusOK)
 		return
 	}
 
@@ -160,7 +161,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (check)")
 		return
 	case err != sql.ErrNoRows:
-		showRegisterForm(w, r, registerErrors{Username: "username_exists"}, string(verificationMethod))
+		showRegisterForm(w, r, registerErrors{Username: "username_exists"}, string(verificationMethod), http.StatusOK)
 		return
 	}
 
@@ -173,7 +174,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (check)")
 		return
 	case err != sql.ErrNoRows:
-		showRegisterForm(w, r, registerErrors{Email: "email_exists"}, string(verificationMethod))
+		showRegisterForm(w, r, registerErrors{Email: "email_exists"}, string(verificationMethod), http.StatusOK)
 		return
 	}
 
@@ -315,7 +316,9 @@ func selectedRegistrationVerificationMethod(value string, emailAvailable bool) s
 	return string(method)
 }
 
-func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerErrors, verificationMethod string) {
+func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerErrors, verificationMethod string, status int) {
+	frontendassets.SetShellNoStoreHeaders(w)
+	standalonePage := r.URL.Query().Get("fragment") != "1"
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
 		logging.Errorf("[showRegisterForm] session get failed: %v, resetting", err)
@@ -327,7 +330,7 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 		csrfToken = uuid.NewString()
 		session.Values["csrf_token"] = csrfToken
 		if err = e_sessions.Save(w, r, session); err != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+			respondAuthPageFailure(w, r, standalonePage)
 			return
 		}
 	}
@@ -336,12 +339,13 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
 		logging.Errorf("error: register template load failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+		respondAuthPageFailure(w, r, standalonePage)
 		return
 	}
 
 	emailVerificationAvailable := registrationEmailVerificationAvailable()
 	data := struct {
+		frontendassets.ShellPageData
 		UsernameErr                string
 		EmailErr                   string
 		VerificationErr            string
@@ -351,6 +355,7 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 		VerificationMethod         string
 		EmailVerificationAvailable bool
 	}{
+		ShellPageData:              frontendassets.NewShellPageData(r),
 		UsernameErr:                errs.Username,
 		EmailErr:                   errs.Email,
 		VerificationErr:            errs.Verification,
@@ -361,11 +366,15 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 		EmailVerificationAvailable: emailVerificationAvailable,
 	}
 
-	if err = tmpl.Execute(w, data); err != nil {
+	var rendered bytes.Buffer
+	if err = tmpl.Execute(&rendered, data); err != nil {
 		logging.Errorf("error: register template execution failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
+		respondAuthPageFailure(w, r, standalonePage)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(rendered.Bytes())
 }
 
 func buildRegisterFormActionPath(r *http.Request) string {

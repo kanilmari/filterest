@@ -140,6 +140,7 @@
     "20261005000005_seed_row_actor_language_keys.sql",
     "20261005000006_check_row_actor_trigger_definitions.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
+    "20261005000060_seed_shell_boot_recovery_language_keys.sql",
     "20261005000099_record_database_release_9_10_0.sql"
   ],
   "allowed_schema_tables": [
@@ -290,11 +291,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1050,
+    "public.system_lang_keys": 1059,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 134,
+    "public.system_schema_migrations": 135,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -309,7 +310,7 @@
       "sha256": "142979cb3b98c1e50bfa3d8934de7159f97868562975b1cb6488cad431c8b68a"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "2262360c26edcf018feb7a17271b651d22b82b9450b19f04e3361e86c1c9fc03"
+      "sha256": "a5a0e525d20183a2204b5019358e895bcfa02254f80d64d5f61288afad8f36e5"
     }
   },
   "source_files": {
@@ -326,7 +327,7 @@
       "sha256": "b13e5f6970150b23813bbc85674d5bf3b8e86353663c3b85968f99b744f61889"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "ee2443fbf9a63956f7a034e142abb407cc2cdecb680abd20145624d1d163f3b4"
+      "sha256": "7a3042ce0bdf2b64e7c6804ec4701eb759a05160cc1f42c5db4744a982123f35"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "6c01a80f3dd3e05c3ec1d0845d38ab1c8c06f8a21853a50983e2d4d9e4cdb58e"
@@ -789,6 +790,9 @@
     },
     "filterest/app/server_tools/migrations/20261005000055_seed_setting_check_language_keys.sql": {
       "sha256": "3a20e3061d13510362e0acffde625481501b3134ab0f918d6d603104facb7eeb"
+    },
+    "filterest/app/server_tools/migrations/20261005000060_seed_shell_boot_recovery_language_keys.sql": {
+      "sha256": "9e45d2fb2bb9f411cbf759253479f8959d6b194900f74e85ab3bcba6668a7fc1"
     },
     "filterest/app/server_tools/migrations/20261005000099_record_database_release_9_10_0.sql": {
       "sha256": "b812cd1e192296d2fae2252112fc97889ecb76aa3177b56d2b89b8a2dd227324"

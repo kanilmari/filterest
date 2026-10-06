@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -110,6 +111,9 @@ func (c *registerAdminConn) ExecContext(_ context.Context, q string, args []driv
 func setupRegisterAdmin(t *testing.T) *registerAdminState {
 	t.Helper()
 	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	previousFrontend := frontend_dir
+	frontend_dir = filepath.Join("..", "..", "..", "frontend")
+	t.Cleanup(func() { frontend_dir = previousFrontend })
 	oldEnabled := registrationEnabledFunc
 	registrationEnabledFunc = func() bool { return false }
 	t.Cleanup(func() { registrationEnabledFunc = oldEnabled })
@@ -154,7 +158,9 @@ func validRegistrationAdminSession() map[interface{}]interface{} {
 }
 func TestClosedRegistrationAllowsCurrentAdminWithoutReplacingSession(t *testing.T) {
 	state := setupRegisterAdmin(t)
-	req := registerAdminRequest(t, validRegistrationAdminSession(), "test-csrf")
+	// One fixture for the request and the comparison: its sign-in deadline is read from the clock.
+	adminSession := validRegistrationAdminSession()
+	req := registerAdminRequest(t, adminSession, "test-csrf")
 	rr := httptest.NewRecorder()
 	RegisterAPIHandler(rr, req)
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" {
@@ -173,7 +179,7 @@ func TestClosedRegistrationAllowsCurrentAdminWithoutReplacingSession(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range validRegistrationAdminSession() {
+	for key, want := range adminSession {
 		if session.Values[key] != want {
 			t.Fatalf("administrator session field %v changed", key)
 		}

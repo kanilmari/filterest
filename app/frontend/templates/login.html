@@ -3,10 +3,16 @@
 <!-- Keeps modal-only and public standalone navigation controls explicitly separate. -->
 <!-- Exists to provide one multilingual authentication surface across entry modes. -->
 <!DOCTYPE html>
-<html lang="fi">
+<html lang="{{.LangCode}}" {{if .StandalonePage}}data-shell-boot-pending data-shell-boot-get="{{.ShellBoot.IsGET}}" data-shell-boot-dev="{{.IsDev}}" data-shell-boot-probe="--filterest-auth-css-applied"{{end}}>
 
 <head>
     <meta charset="UTF-8">
+    {{if .StandalonePage}}
+    <meta name="csp-nonce" content="{{.CSPNonce}}">
+    <meta name="app-env" content="{{if .IsDev}}dev{{else}}prod{{end}}">
+    <style id="shell-boot-style" nonce="{{.CSPNonce}}">{{.ShellBoot.Style}}</style>
+    <script id="shell-boot-guard" nonce="{{.CSPNonce}}">{{.ShellBoot.Script}}</script>
+    {{end}}
     <base href="/">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="format-detection" content="telephone=no">
@@ -15,14 +21,14 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title data-lang-key="login">Kirjaudu sisään</title>
     {{if .UseMinifiedAssets}}
-    <link rel="stylesheet" href="{{.ImportsCSSPath}}">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="{{.ImportsCSSPath}}">
     {{else}}
-    <link rel="stylesheet" href="/frontend/styles/variables.css">
-    <link rel="stylesheet" href="/frontend/styles/base.css">
-    <link rel="stylesheet" href="/frontend/styles/form.css">
-    <link rel="stylesheet" href="/frontend/core_components/auth/auth.css">
-    <link rel="stylesheet" href="/frontend/reusable_components/modal/modals.css">
-    <link rel="stylesheet" href="/frontend/styles/theme_transition.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/variables.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/base.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/form.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/reusable_components/modal/modals.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
     {{end}}
     <link rel="icon" href="{{.FaviconPath}}" type="image/png" sizes="16x16">
     <meta name="login-tour-screenshots-enabled" content="{{if .ShowTourScreenshots}}true{{else}}false{{end}}">
@@ -30,16 +36,28 @@
     <script async src="/frontend/core_components/auth/translation_prefetcher.js"></script>
     {{end}}
     {{if .UseMinifiedAssets}}
-    <script type="module" id="login-bundle" src="{{.LoginBundlePath}}"></script>
+    <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} id="login-bundle" src="{{.LoginBundlePath}}"></script>
     {{else}}
-    <script type="module" id="login-bundle" src="/frontend/core_components/auth/login_page_builder.js"></script>
+    <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} id="login-bundle" src="/frontend/core_components/auth/login_page_builder.js"></script>
     {{end}}
 </head>
 
 <body class="loading login-page{{if .StandalonePage}} standalone-login-page{{end}}" data-login-page-mode="{{if .StandalonePage}}standalone{{else}}fragment{{end}}">
+    {{if .StandalonePage}}
+    <div id="shell-boot-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <p id="shell-boot-loading" hidden>{{.ShellBoot.Texts.Loading}}</p>
+        <div id="shell-boot-failed" hidden>
+            <h1>{{.ShellBoot.Texts.FailedTitle}}</h1>
+            <p>{{.ShellBoot.Texts.FailedMessage}}</p>
+            <button type="button" id="shell-boot-reload">{{.ShellBoot.Texts.Reload}}</button>
+        </div>
+        <p id="shell-boot-unsupported" hidden>{{.ShellBoot.Texts.BrowserUnsupported}}</p>
+    </div>
+    <noscript><div class="shell-boot-noscript"><p>{{.ShellBoot.Texts.JavaScriptRequired}}</p></div></noscript>
+    {{end}}
     <!-- <div class="info-banner" data-lang-key="site_will_be_published_soon">Site will be published soon</div> -->
     {{if .StandalonePage}}
-    <main class="auth-page-shell" data-testid="login-page-shell">
+    <main data-shell-boot-content class="auth-page-shell" data-testid="login-page-shell">
         <div class="auth-page-content-card">
             <div class="auth-page-header-row" data-testid="login-page-header-row">
                 <div class="auth-page-header-leading">
