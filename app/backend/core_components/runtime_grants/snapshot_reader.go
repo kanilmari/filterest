@@ -163,6 +163,7 @@ func LoadGrantSnapshot(ctx context.Context, tx *sql.Tx, config RoleConfiguration
 		snapshot.Groups[id] = true
 		if name.Valid && name.String == "guests" {
 			snapshot.GuestGroups[id] = true
+			snapshot.GuestGroupID = id
 			guestGroupCount++
 		}
 		return nil

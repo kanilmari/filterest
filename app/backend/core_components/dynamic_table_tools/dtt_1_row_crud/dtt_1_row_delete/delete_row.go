@@ -19,6 +19,7 @@ import (
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
 	media_utils "easelect/backend/core_components/media_utils"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/runtimepaths"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -81,14 +82,28 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 		return
 	}
 
-	tx, ok := dbutils.GetTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
+	tx, mutation, err := runtime_grant_mutations.BeginGeneric(r.Context(), w, table_name)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 
+	if err := mutation.IncludeRows(r.Context(), table_name, intIDsToInt64(request_data.IDs)...); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
 	if len(request_data.IDs) == 0 && len(request_data.Rows) == 0 {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "no rows to delete")
+		return
+	}
+
+	if err := refuseManagedPrivilegeDeletion(tx, table_name, request_data.IDs, request_data.Rows); err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+		} else {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking privilege roles")
+		}
 		return
 	}
 
@@ -98,6 +113,10 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 		if err := deleteSystemTables(r.Context(), tx, request_data.IDs); err != nil {
 			log.Printf("error: %v", err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := mutation.Finish(r.Context()); err != nil {
+			runtime_grant_mutations.RespondError(w, err)
 			return
 		}
 		respondOK(w, "Valitut taulut poistettiin onnistuneesti")
@@ -212,6 +231,11 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 	}
 	sharedAssetFileMoves = dtt_asset_linking.OmitStillReferencedSharedAssetFileMoves(tx, table_name, sharedAssetFileMoves)
 
+	if err := mutation.Finish(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+
 	fileMoves := append([]dtt_asset_linking.SharedAssetFileMove(nil), sharedAssetFileMoves...)
 	storageMoves := append([]rowStorageMove(nil), childStorageMoves...)
 	storageMoves = append(storageMoves, rowStorageMoves...)
@@ -308,135 +332,6 @@ func deleteSystemTables(ctx context.Context, tx *sql.Tx, ids []int) error {
 		} else {
 			if _, err = tx.Exec("DELETE FROM system_db_tables WHERE id = $1", oneID); err != nil {
 				return fmt.Errorf("error deleting row from system_db_tables: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-// canonicalizeRevokePrivilege converts one privilege emitted by PostgreSQL's
-// information_schema column/table privilege views to its SQL keyword. The
-// closed allowlist prevents request or view data from introducing extra tokens
-// or statements into a REVOKE command.
-func canonicalizeRevokePrivilege(rawPrivilege string, scope revokePrivilegeScope) (string, error) {
-	privilegeTokens := strings.Fields(rawPrivilege)
-	if len(privilegeTokens) != 1 {
-		return "", fmt.Errorf("invalid %s privilege %q", scope, rawPrivilege)
-	}
-
-	canonicalPrivilege := strings.ToUpper(privilegeTokens[0])
-	switch scope {
-	case revokeColumnPrivilegeScope:
-		switch canonicalPrivilege {
-		case "SELECT", "INSERT", "UPDATE", "REFERENCES":
-			return canonicalPrivilege, nil
-		}
-	case revokeTablePrivilegeScope:
-		switch canonicalPrivilege {
-		case "SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER":
-			return canonicalPrivilege, nil
-		}
-	default:
-		return "", fmt.Errorf("invalid privilege scope %q", scope)
-	}
-
-	return "", fmt.Errorf("unsupported %s privilege %q", scope, rawPrivilege)
-}
-
-// revokeColumnPrivileges revokes column-level privileges by ID or by row data.
-func revokeColumnPrivileges(tx *sql.Tx, ids []int, rows []map[string]string) error {
-	if len(ids) > 0 {
-		for _, oneID := range ids {
-			var roleName, tableSchema, tableName, columnName, privilege string
-			err := tx.QueryRow(
-				"SELECT role_name, table_schema, table_name, column_name, privilege FROM systemview_role_column_privileges WHERE id = $1",
-				oneID,
-			).Scan(&roleName, &tableSchema, &tableName, &columnName, &privilege)
-			if err != nil {
-				return fmt.Errorf("error fetching row: %w", err)
-			}
-			canonicalPrivilege, err := canonicalizeRevokePrivilege(privilege, revokeColumnPrivilegeScope)
-			if err != nil {
-				return err
-			}
-
-			revokeStmt := fmt.Sprintf(
-				"REVOKE %s (%s) ON %s.%s FROM %s",
-				canonicalPrivilege,
-				pq.QuoteIdentifier(columnName),
-				pq.QuoteIdentifier(tableSchema),
-				pq.QuoteIdentifier(tableName),
-				pq.QuoteIdentifier(roleName),
-			)
-			if _, err := tx.Exec(revokeStmt); err != nil {
-				return fmt.Errorf("error revoking privilege: %w", err)
-			}
-		}
-	} else {
-		for _, row := range rows {
-			canonicalPrivilege, err := canonicalizeRevokePrivilege(row["privilege"], revokeColumnPrivilegeScope)
-			if err != nil {
-				return err
-			}
-			revokeStmt := fmt.Sprintf(
-				"REVOKE %s (%s) ON %s.%s FROM %s",
-				canonicalPrivilege,
-				pq.QuoteIdentifier(row["column_name"]),
-				pq.QuoteIdentifier(row["table_schema"]),
-				pq.QuoteIdentifier(row["table_name"]),
-				pq.QuoteIdentifier(row["role_name"]),
-			)
-			if _, err := tx.Exec(revokeStmt); err != nil {
-				return fmt.Errorf("error revoking privilege: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-// revokeTablePrivileges revokes table-level privileges by ID or by row data.
-func revokeTablePrivileges(tx *sql.Tx, ids []int, rows []map[string]string) error {
-	if len(ids) > 0 {
-		for _, oneID := range ids {
-			var roleName, tableSchema, tableName, privilege string
-			err := tx.QueryRow(
-				"SELECT role_name, table_schema, table_name, privilege FROM systemview_role_table_privileges WHERE id = $1",
-				oneID,
-			).Scan(&roleName, &tableSchema, &tableName, &privilege)
-			if err != nil {
-				return fmt.Errorf("error fetching row: %w", err)
-			}
-			canonicalPrivilege, err := canonicalizeRevokePrivilege(privilege, revokeTablePrivilegeScope)
-			if err != nil {
-				return err
-			}
-
-			revokeStmt := fmt.Sprintf(
-				"REVOKE %s ON %s.%s FROM %s",
-				canonicalPrivilege,
-				pq.QuoteIdentifier(tableSchema),
-				pq.QuoteIdentifier(tableName),
-				pq.QuoteIdentifier(roleName),
-			)
-			if _, err := tx.Exec(revokeStmt); err != nil {
-				return fmt.Errorf("error revoking privilege: %w", err)
-			}
-		}
-	} else {
-		for _, row := range rows {
-			canonicalPrivilege, err := canonicalizeRevokePrivilege(row["privilege"], revokeTablePrivilegeScope)
-			if err != nil {
-				return err
-			}
-			revokeStmt := fmt.Sprintf(
-				"REVOKE %s ON %s.%s FROM %s",
-				canonicalPrivilege,
-				pq.QuoteIdentifier(row["table_schema"]),
-				pq.QuoteIdentifier(row["table_name"]),
-				pq.QuoteIdentifier(row["role_name"]),
-			)
-			if _, err := tx.Exec(revokeStmt); err != nil {
-				return fmt.Errorf("error revoking privilege: %w", err)
 			}
 		}
 	}

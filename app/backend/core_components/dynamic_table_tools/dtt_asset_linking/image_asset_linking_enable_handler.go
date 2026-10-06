@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 )
 
@@ -39,11 +39,12 @@ func EnableImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		allowedTypes = append([]string(nil), DefaultImageAllowedTypes...)
 	}
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction not available")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
 	var parentTableUID int
 	err = tx.QueryRow(
@@ -69,6 +70,11 @@ func EnableImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		if saveErr := SaveFileUploadConfigByRelationID(tx, existingStatus.RelationID, uploadConfig); saveErr != nil {
 			_ = tx.Rollback()
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update image asset specs: %v", saveErr))
+			return
+		}
+
+		if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+			runtime_grant_mutations.RespondError(w, err)
 			return
 		}
 
@@ -99,6 +105,11 @@ func EnableImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 	if err := SaveFileUploadConfigByRelationID(tx, relationStatus.RelationID, uploadConfig); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to persist image asset specs: %v", err))
+		return
+	}
+
+	if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 

@@ -156,7 +156,10 @@ func evaluateRuntimeGrants(snapshot GrantSnapshot, diagnostics *[]Finding) (Gran
 			adminCaps[oid] = entry
 		}
 		for _, label := range []string{"basic", "guest"} {
-			eligible := right.GroupID != 1
+			// Creation's users and guests flags are independent. The dedicated
+			// guests group provisions only its pool; other ordinary groups still
+			// contribute to basic, even when anonymous user 1 also belongs to them.
+			eligible := right.GroupID != 1 && right.GroupID != snapshot.GuestGroupID
 			if label == "basic" && snapshot.Objects[oid].Name == "app_service_catalog" {
 				eligible = true
 			}
@@ -337,6 +340,9 @@ func evaluateRuntimeGrants(snapshot GrantSnapshot, diagnostics *[]Finding) (Gran
 		}
 	}
 	for _, dependency := range snapshot.Dependencies {
+		if dependency.Kind == "trigger_update" || dependency.Kind == "trigger_read" {
+			continue
+		}
 		for _, label := range []string{"basic", "guest"} {
 			op := caps[label][dependency.SourceOID].ordinary
 			if label == "basic" && (dependency.Kind == "gallery" || dependency.Kind == "gallery_insert" || dependency.Kind == "gallery_read") {
@@ -395,6 +401,9 @@ func evaluateRuntimeGrants(snapshot GrantSnapshot, diagnostics *[]Finding) (Gran
 				}
 			}
 		}
+	}
+	if err := addLegacyTriggerGrants(snapshot, entries, add); err != nil {
+		return nil, err
 	}
 	for _, use := range snapshot.Sequences {
 		for _, label := range []string{"basic", "confidential"} {

@@ -23,6 +23,7 @@ import (
 	devtools "easelect/backend/core_components/dev_tools"
 	create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
 	update "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_update"
+	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/runtimepaths"
 	e_sessions "easelect/backend/core_components/sessions"
 	"github.com/gorilla/sessions"
@@ -120,20 +121,10 @@ func TestRowActorLifecyclePostgres(t *testing.T) {
 		}
 		session.Values["user_id"] = user
 		session.Values["user_role"] = role
-		lt := dbutils.NewLazyTxWithBeginHook(db, func(tx *sql.Tx) error {
-			return dbutils.ApplyRequestActorToTx(tx, dbutils.NewRequestActorContext(user, role))
-		})
 		ctx := dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(user, role))
-		req = req.WithContext(dbutils.SetLazyTx(ctx, lt))
+		req = req.WithContext(ctx)
 		rec := httptest.NewRecorder()
-		handler(rec, req)
-		if rec.Code < 400 {
-			if err := lt.Commit(); err != nil {
-				t.Fatal(err)
-			}
-		} else {
-			_ = lt.Rollback()
-		}
+		middlewares.WithLazyTransaction(http.HandlerFunc(handler)).ServeHTTP(rec, req)
 		return rec
 	}
 	add := func(user int, payload string) *httptest.ResponseRecorder {

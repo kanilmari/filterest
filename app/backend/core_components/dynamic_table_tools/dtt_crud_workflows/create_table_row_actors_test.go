@@ -6,6 +6,7 @@ package dtt_crud_workflows
 
 import (
 	"database/sql/driver"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -22,7 +23,7 @@ func TestCreateActorColumnValidation(t *testing.T) {
 	} {
 		body, _ := json.Marshal(CreateTableRequest{TableName: "sample", ColumnList: []CreateColumnDef{{Name: "id", DataType: "SERIAL"}, column}})
 		rec := httptest.NewRecorder()
-		CreateTableHandler(rec, httptest.NewRequest("POST", "/", strings.NewReader(string(body))))
+		CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, httptest.NewRequest("POST", "/", strings.NewReader(string(body))))
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"error_lang_key":"error_reserved_owner_column"`) {
 			t.Fatalf("%+v: %d %s", column, rec.Code, rec.Body)
 		}
@@ -45,7 +46,7 @@ func TestCreateActorColumnValidation(t *testing.T) {
 func TestCreateActorForeignKeyRefusal(t *testing.T) {
 	for _, target := range []string{`"referenced_dataset":"other","referenced_column":"id"`, `"referenced_dataset":"system_users","referenced_column":"username"`} {
 		rec := httptest.NewRecorder()
-		CreateTableHandler(rec, httptest.NewRequest("POST", "/", strings.NewReader(`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL"}],"foreign_keys":[{"referencing_column":"owner_id",`+target+`}]}`)))
+		CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, httptest.NewRequest("POST", "/", strings.NewReader(`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL"}],"foreign_keys":[{"referencing_column":"owner_id",`+target+`}]}`)))
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_reserved_owner_column") {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -59,7 +60,7 @@ func TestSideTableActorDeclarationRefusedBeforeCreation(t *testing.T) {
 	pushWorkflowQuery(queuedWorkflowQuery{cols: []string{"reason"}, rows: [][]driver.Value{{"R1_history"}}})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"dataset_name":"notes_history","column_list":[{"name":"id","data_type":"SERIAL"},{"name":"created_by","data_type":"BIGINT"}]}`))
-	CreateTableHandler(rec, withWorkflowTx(req, db))
+	CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, withWorkflowTx(req, db))
 	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_reserved_owner_column") || !strings.Contains(rec.Body.String(), "R1_history") {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
@@ -74,7 +75,7 @@ func TestModifyActorCardRoleRefusedBeforeWrites(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{"dataset_name": "notes", "column_card_roles": role})
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/", strings.NewReader(string(body)))
-		ModifyColumnsHandler(rec, withWorkflowTx(req, db))
+		ModifyColumnsHandler(granttest.Recorder{ResponseRecorder: rec}, withWorkflowTx(req, db))
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_reserved_owner_column") {
 			t.Fatalf("%v: %d %s", role, rec.Code, rec.Body)
 		}
@@ -94,7 +95,7 @@ func TestModifyActorColumnChangesReturnTranslatedRefusal(t *testing.T) {
 		pushWorkflowQuery(queuedWorkflowQuery{cols: []string{"column_name", "actor_role"}, rows: [][]driver.Value{{"created_by", "creator"}, {"owner_id", "owner"}}})
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/", strings.NewReader(body))
-		ModifyColumnsHandler(rec, withWorkflowTx(req, db))
+		ModifyColumnsHandler(granttest.Recorder{ResponseRecorder: rec}, withWorkflowTx(req, db))
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"error_lang_key":"error_owner_column_protected"`) {
 			t.Fatalf("%s: %d %s", body, rec.Code, rec.Body)
 		}

@@ -87,12 +87,13 @@ type AssetCapabilitySnapshot struct {
 
 // FileUploadRelationStatus describes one file_upload relation row from FK metadata.
 type FileUploadRelationStatus struct {
-	RelationID       int              `json:"relation_id"`
-	ParentTable      string           `json:"parent_table"`
-	ChildTable       string           `json:"child_table"`
-	ForeignKeyColumn string           `json:"foreign_key_column,omitempty"`
-	StorageDriver    string           `json:"storage_driver"`
-	UploadConfig     FileUploadConfig `json:"upload_config"`
+	RelationID           int              `json:"relation_id"`
+	ParentTable          string           `json:"parent_table"`
+	ChildTable           string           `json:"child_table"`
+	ForeignKeyColumn     string           `json:"foreign_key_column,omitempty"`
+	StorageDriver        string           `json:"storage_driver"`
+	UploadConfig         FileUploadConfig `json:"upload_config"`
+	fileUploadConfigured bool             // Existing plain FK rows are linked once, then retain independent child rights.
 }
 
 const (

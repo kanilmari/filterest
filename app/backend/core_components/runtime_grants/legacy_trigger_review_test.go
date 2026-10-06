@@ -1,5 +1,5 @@
 // legacy_trigger_review_test.go
-// Pins reviewed legacy timestamp bodies and refuses cross-table/privilege writers.
+// Pins reviewed legacy function bytes and detects unreviewed SQL side effects.
 // Reuses the metadata driver's read-only transaction for offline reader proofs.
 // Fixture SQL records exact source bytes without depending on private files.
 package runtime_grants
@@ -34,9 +34,10 @@ func legacyTriggerFixtures(t *testing.T) []legacyTriggerFixture {
 		"update_updated_column":                             {"37c0cc2d0e0371408f4d1d00b21513a9", true},
 		"set_auth_user_group_memberships_updated_timestamp": {"1a55728c1558ee7a641163442e85b778", true},
 		"set_transaction_log_updated_at_timestamp":          {"06bcf30ac3d0a7f279a54cbf228a7bec", true},
-		"tg_location_touch_parent":                          {"3dca2b659502c2291c1a908db58f9b38", false},
-		"fn_sync_cached_username":                           {"82e78c911a285ee6eb9d81ee00a96206", false},
-		"systemview_role_table_privileges_upd":              {"9a87d4938809ea845f63e034ddffc75a", false},
+		"tg_upd_service_searchvec":                          {"fd6c8fb19384174612fa2d2431b34683", true},
+		"tg_location_touch_parent":                          {"3dca2b659502c2291c1a908db58f9b38", true},
+		"fn_sync_cached_username":                           {"82e78c911a285ee6eb9d81ee00a96206", true},
+		"systemview_role_table_privileges_upd":              {"9a87d4938809ea845f63e034ddffc75a", true},
 	}
 	pattern := regexp.MustCompile(`(?s)CREATE FUNCTION public\.(\w+)\(\) RETURNS trigger\s+LANGUAGE plpgsql( SECURITY DEFINER)?\s+AS \$\$(.*?)\$\$;`)
 	var fixtures []legacyTriggerFixture
@@ -60,7 +61,8 @@ func TestLegacyTriggerFingerprintsAndReader(t *testing.T) {
 			if got := fmt.Sprintf("%x", md5.Sum([]byte(fixture.body))); got != fixture.digest {
 				t.Fatalf("fixture body fingerprint=%s; want %s", got, fixture.digest)
 			}
-			if reviewedTriggerBodies[fixture.digest] != fixture.reviewed {
+			_, legacy := reviewedLegacyTriggers[fixture.digest]
+			if (reviewedTriggerBodies[fixture.digest] || legacy) != fixture.reviewed {
 				t.Fatal("legacy body review decision differs")
 			}
 			for _, variant := range []struct {
@@ -69,10 +71,16 @@ func TestLegacyTriggerFingerprintsAndReader(t *testing.T) {
 				blocked bool
 			}{
 				{fixture.digest, fixture.definer, !fixture.reviewed},
-				{fixture.digest, true, true},
+				{fixture.digest, !fixture.definer, true},
 				{fmt.Sprintf("%x", md5.Sum([]byte(fixture.body+" "))), false, true},
 			} {
 				db := metadataTestDB(t, func(query string, _ []driver.NamedValue) (int, [][]driver.Value, error) {
+					if strings.HasPrefix(query, "SELECT t.tgtype,") {
+						return 2, [][]driver.Value{{int64(28), "{}"}}, nil
+					}
+					if strings.HasPrefix(query, "SELECT EXISTS(") {
+						return 1, [][]driver.Value{{true}}, nil
+					}
 					if !strings.Contains(query, "FROM pg_trigger t JOIN pg_proc") {
 						t.Fatal("unexpected query", query)
 					}
@@ -83,6 +91,12 @@ func TestLegacyTriggerFingerprintsAndReader(t *testing.T) {
 					t.Fatal(err)
 				}
 				s := policyFixture()
+				if identity, legacy := reviewedLegacyTriggers[fixture.digest]; legacy {
+					object := s.Objects[10]
+					object.Name = identity.table
+					s.Objects[10] = object
+					s.Objects[90] = Object{OID: 90, Schema: "public", Name: "app_service_catalog", Kind: "table", DatasetUID: 90, Columns: []Column{{Name: "id"}, {Name: "updated"}}}
+				}
 				err = readTriggerDependencies(context.Background(), tx, &s)
 				tx.Rollback()
 				if err != nil || HasBlockers(s.Blockers) != variant.blocked {

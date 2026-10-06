@@ -103,3 +103,32 @@ BEGIN
 END;
 $$;
 
+
+-- Easelect db-9.7.13 snapshot:8564; reviewed recursive location-column reads.
+CREATE FUNCTION public.tg_upd_service_searchvec() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  loc_text text;
+BEGIN
+  -- kerää paikkatekstit yhteen merkkijonoon
+  SELECT string_agg(
+           title      || ' ' ||
+           coalesce(street,'') || ' ' ||
+           coalesce(city,'')   || ' ' ||
+           coalesce(state,''),
+           ' '
+         )
+  INTO loc_text
+  FROM app_service_locations
+  WHERE service_id = NEW.id;
+
+  NEW.search_vector :=
+       setweight(to_tsvector('finnish', coalesce(NEW.header,'')),       'A') ||
+       setweight(to_tsvector('finnish', coalesce(NEW.description,'')),  'B') ||
+       setweight(to_tsvector('finnish', coalesce(NEW.keywords_static,'')), 'C') ||
+       setweight(to_tsvector('finnish', coalesce(loc_text,'')),         'D');
+
+  RETURN NEW;
+END;
+$$;

@@ -9,7 +9,9 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -130,25 +132,38 @@ func FixDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to acquire transaction")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
 	fixed := 0
-	var fixErrors []string
+	fixErrors := []string{}
 
 	for _, id := range idsToFix {
 		err := fixIssue(tx, id, req.FixAction)
+		if errors.Is(err, errConsistencyFixSkipped) {
+			log.Printf("[FixDatabaseConsistency] skipped %s: %v", id, err)
+			continue
+		}
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: %v", id, err)
 			fixErrors = append(fixErrors, errMsg)
 			log.Printf("[FixDatabaseConsistency] error fixing %s: %v", id, err)
+			_ = tx.Rollback()
+			runtime_grant_mutations.RespondError(w, err)
+			return
 		} else {
 			fixed++
 			log.Printf("[FixDatabaseConsistency] fixed: %s", id)
 		}
+	}
+
+	if err := mutation.FinishRepair(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -280,15 +295,13 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 		`, parts[0], parts[1])
 		return execErr
 	case 5:
-		// Orvot viiteavainrivit: poistetaan id:n perusteella (muoto: cat5_1m_ID tai cat5_mm_ID)
+		// Recheck the category-5 listing's orphan condition in the DELETE itself.
 		if strings.HasPrefix(identifier, "1m_") {
 			rowID := strings.TrimPrefix(identifier, "1m_")
-			_, execErr := q.Exec("DELETE FROM system_foreign_key_relations_1_m WHERE id = $1::bigint", rowID)
-			return execErr
+			return repairOrphanForeignKeyRelation(q, false, rowID)
 		} else if strings.HasPrefix(identifier, "mm_") {
 			rowID := strings.TrimPrefix(identifier, "mm_")
-			_, execErr := q.Exec("DELETE FROM system_foreign_key_relations_m_m WHERE id = $1::bigint", rowID)
-			return execErr
+			return repairOrphanForeignKeyRelation(q, true, rowID)
 		}
 		return fmt.Errorf("invalid foreign key ID: %s", identifier)
 	case 6:

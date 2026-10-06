@@ -13,9 +13,7 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
@@ -25,10 +23,12 @@ import (
 	row_mutation_policy "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_triggers/automation_metadata"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
 	lang "easelect/backend/core_components/lang"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	security "easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/system_config_checks"
@@ -128,7 +128,6 @@ func normalizeUpdateOperations(request updateRowRequest) ([]updateRowFieldUpdate
 
 // UpdateRowHandler hoitaa tietokantarivin päivityksen
 func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request, tableName string) {
-
 	if row_mutation_policy.RequiresDedicatedMutationAPI(tableName) {
 		httpresponse.RespondWithError(response_writer, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
 		return
@@ -163,9 +162,9 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			return
 		}
 	}
-	tx, ok := dbutils.GetTx(request.Context())
-	if !ok {
-		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "transaction not found")
+	tx, mutation, err := runtime_grant_mutations.BeginGeneric(request.Context(), response_writer, tableName)
+	if err != nil {
+		runtime_grant_mutations.RespondError(response_writer, err)
 		return
 	}
 	if err := validateRowActorUpdates(tx, tableName, updateRequest.ID, updates); err != nil {
@@ -176,6 +175,10 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		}
 		log.Printf("error checking actor updates: %v", err)
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error checking actor updates")
+		return
+	}
+	if err := mutation.IncludeRows(request.Context(), tableName, updateRequest.ID); err != nil {
+		runtime_grant_mutations.RespondError(response_writer, err)
 		return
 	}
 	rowVisible, err := dtt_1_row_read.LockRowsVisibleForMutation(
@@ -199,6 +202,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	for _, update := range updates {
 		settingChanges[update.Column] = update.Value
 	}
+	mutation.IncludeValues(tableName, settingChanges)
 	if err := system_config_checks.ValidateUpdate(tx, tableName, updateRequest.ID, settingChanges); err != nil {
 		var refusal *httpresponse.Refusal
 		if errors.As(err, &refusal) {
@@ -326,6 +330,13 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 						return
 					}
 
+					// Keep name-keyed automation endpoints valid before reconciliation.
+					if err := automation_metadata.RenameDataset(tx, oldName, sanitized); err != nil {
+						log.Printf("error: %v", err)
+						httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error renaming table")
+						return
+					}
+
 					// Update lang key sources and descriptions to reflect the new table name.
 					if cleanErr := lang.UpdateLangKeySourcesForTableRename(tx, oldName, sanitized); cleanErr != nil {
 						log.Printf("[UpdateRow] warning: lang key source update for table rename %s→%s: %v",
@@ -447,6 +458,11 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error choosing the card picture")
 			return
 		}
+	}
+
+	if err := mutation.Finish(request.Context()); err != nil {
+		runtime_grant_mutations.RespondError(response_writer, err)
+		return
 	}
 
 	eventToPublish := event_bus.Event{
@@ -578,118 +594,4 @@ func getSessionUsernameOrUnknown(request *http.Request) string {
 		return "unknown"
 	}
 	return backend.UserDisplayNameOr(request.Context(), backend.Db, userID, "unknown")
-}
-
-// convertValue muuntaa pyynnön arvon sarakkeen data_type:n perusteella
-func convertValue(value interface{}, dataType string) (interface{}, error) {
-	// Keep NULL as a bound SQL parameter. PostgreSQL still enforces NOT NULL,
-	// foreign keys and other constraints through the existing authorized UPDATE.
-	if value == nil {
-		return nil, nil
-	}
-	normalizedDataType := strings.ToLower(strings.TrimSpace(dataType))
-	switch {
-	case strings.Contains(normalizedDataType, "integer"), strings.Contains(normalizedDataType, "bigint"), strings.Contains(normalizedDataType, "smallint"):
-		// Sallitaan float64 ja string
-		var intValue int64
-		switch v := value.(type) {
-		case float64:
-			intValue = int64(v)
-		case string:
-			trimmed := strings.TrimSpace(v)
-			if trimmed == "" {
-				intValue = 0
-			} else {
-				parsedInt, err := strconv.ParseInt(trimmed, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("invalid integer value")
-				}
-				intValue = parsedInt
-			}
-		default:
-			return nil, fmt.Errorf("invalid integer value")
-		}
-		return intValue, nil
-
-	case strings.Contains(normalizedDataType, "boolean"):
-		boolValue, ok := value.(bool)
-		if !ok {
-			return nil, fmt.Errorf("invalid boolean value")
-		}
-		return boolValue, nil
-
-	case strings.Contains(normalizedDataType, "character varying"), strings.Contains(normalizedDataType, "text"):
-		strValue, ok := value.(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid string value")
-		}
-		return strValue, nil
-
-	case normalizedDataType == "date":
-		strValue, ok := value.(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid date value")
-		}
-		strValue = strings.ReplaceAll(strings.TrimSpace(strValue), "/", "-")
-		parsedDate, err := time.Parse("2006-01-02", strValue)
-		if err != nil {
-			return nil, fmt.Errorf("invalid date format")
-		}
-		return parsedDate.Format("2006-01-02"), nil
-
-	case strings.Contains(normalizedDataType, "timestamp with time zone"), strings.Contains(normalizedDataType, "timestamptz"):
-		strValue, ok := value.(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid timestamp with time zone value")
-		}
-		normalizedValue := strings.TrimSpace(strValue)
-		if len(normalizedValue) > 10 && normalizedValue[10] == ' ' {
-			normalizedValue = normalizedValue[:10] + "T" + normalizedValue[11:]
-		}
-		parsedInstant, err := time.Parse(time.RFC3339Nano, normalizedValue)
-		if err != nil {
-			return nil, fmt.Errorf("timestamp with time zone requires an explicit RFC3339 offset")
-		}
-		return parsedInstant.UTC(), nil
-
-	case strings.Contains(normalizedDataType, "timestamp"):
-		strValue, ok := value.(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid timestamp value")
-		}
-		normalizedValue := strings.ReplaceAll(strings.TrimSpace(strValue), "/", "-")
-		layouts := []string{
-			"2006-01-02",
-			"2006-01-02 15:04",
-			"2006-01-02 15:04:05.999999999",
-			"2006-01-02T15:04",
-			"2006-01-02T15:04:05.999999999",
-		}
-		for _, layout := range layouts {
-			if parsedTimestamp, err := time.Parse(layout, normalizedValue); err == nil {
-				return parsedTimestamp.Format("2006-01-02 15:04:05.999999999"), nil
-			}
-		}
-		return nil, fmt.Errorf("invalid timestamp format")
-
-	case strings.Contains(normalizedDataType, "numeric"), strings.Contains(normalizedDataType, "decimal"):
-		var floatValue float64
-		switch v := value.(type) {
-		case float64:
-			floatValue = v
-		case string:
-			parsedFloat, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid numeric value")
-			}
-			floatValue = parsedFloat
-		default:
-			return nil, fmt.Errorf("invalid numeric value")
-		}
-		return floatValue, nil
-
-	default:
-		// Jos ei osuta mihinkään, palautetaan sellaisenaan
-		return value, nil
-	}
 }

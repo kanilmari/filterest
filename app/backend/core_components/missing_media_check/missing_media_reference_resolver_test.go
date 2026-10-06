@@ -166,7 +166,12 @@ func TestCardPictureReferenceIsPlacedLikeTheWriterPlacesIt(t *testing.T) {
 	if reference, ok = ResolveCardPictureReference("/storage/media/"+assetID+"/original/image.webp", "117", 4); !ok || !reference.MediaLibrary {
 		t.Fatalf("a media-library address resolved to %+v (%v), want the library folder", reference, ok)
 	}
-	for _, unplaceable := range []string{"../../etc/passwd", "117/5/extra/original/photo.jpg", "117/5/original/photo.jpg?size=1", "null/4/photo.jpg"} {
+	for _, alias := range []string{"117/5/original/photo.jpg?size=1", "/storage/117/5/300/photo.jpg#preview", "117/5/photo.jpg?size=1#preview"} {
+		if reference, ok := ResolveCardPictureReference(alias, "117", 4); !ok || reference.OwnerFolder != "117/5" || reference.Filename != "photo.jpg" {
+			t.Errorf("picture alias %q lost its stored coordinates: %+v (%v)", alias, reference, ok)
+		}
+	}
+	for _, unplaceable := range []string{"../../etc/passwd", "117/5/extra/original/photo.jpg", "null/4/photo.jpg"} {
 		if reference, ok := ResolveCardPictureReference(unplaceable, "117", 4); ok {
 			t.Errorf("%q resolved to %+v; the writer cannot place it, so neither may the check", unplaceable, reference)
 		}

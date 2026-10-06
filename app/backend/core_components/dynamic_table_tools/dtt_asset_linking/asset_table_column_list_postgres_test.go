@@ -16,14 +16,26 @@ import (
 	"strings"
 	"testing"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	dtt_crud_workflows "easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
+	"easelect/backend/core_components/middlewares"
+	e_sessions "easelect/backend/core_components/sessions"
+	"github.com/gorilla/sessions"
+	"github.com/lib/pq"
 )
 
 // loadAssetTestBootstrap gives the disposable cluster the schema and seed a
 // fresh installation starts from.
 func loadAssetTestBootstrap(t *testing.T, db *sql.DB) {
 	t.Helper()
+	for label, key := range map[string]string{"basic": "DB_BASIC_USER", "guest": "DB_GUEST_USER", "readonly": "DB_READONLY_USER", "confidential": "DB_CONFIDENTIAL_USER"} {
+		role := "wl124 asset " + label + ` "bootstrap"`
+		if _, err := db.Exec("CREATE ROLE " + pq.QuoteIdentifier(role) + " LOGIN"); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(key, role)
+	}
 	root := filepath.Join("..", "..", "..", "..", "server_tools", "public_bootstrap")
 	for _, name := range []string{"schema.sql", "seed_data.sql"} {
 		script, err := os.ReadFile(filepath.Join(root, name))
@@ -37,20 +49,19 @@ func loadAssetTestBootstrap(t *testing.T, db *sql.DB) {
 }
 
 // postInLazyTransaction runs one route the way the request middleware does:
-// in a lazy transaction that only a success commits.
+// in a lazy transaction with opt-in response buffering and commit delivery.
 func postInLazyTransaction(t *testing.T, db *sql.DB, handler http.HandlerFunc, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	lt := dbutils.NewLazyTx(db)
+	oldDB, oldAdmin := backend.Db, backend.DbAdmin
+	backend.Db, backend.DbAdmin = db, db
+	defer func() { backend.Db, backend.DbAdmin = oldDB, oldAdmin }()
+	oldStore := e_sessions.Store
+	e_sessions.Store = sessions.NewCookieStore([]byte("disposable-asset-column-list-test"))
+	defer func() { e_sessions.Store = oldStore }()
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(2, "admin")))
 	rec := httptest.NewRecorder()
-	handler(rec, req.WithContext(dbutils.SetLazyTx(req.Context(), lt)))
-	if rec.Code >= http.StatusOK && rec.Code < http.StatusBadRequest {
-		if err := lt.Commit(); err != nil {
-			t.Fatalf("commit: %v", err)
-		}
-	} else {
-		_ = lt.Rollback()
-	}
+	middlewares.WithLazyTransaction(handler).ServeHTTP(rec, req)
 	return rec
 }
 

@@ -86,6 +86,7 @@ type Dependency struct {
 	Requires             Operation // strict-false target capability, combined across groups
 	Columns              []string
 	ReadColumns          []string // Predicate/readback columns required beside a narrow write.
+	SourceUpdateColumns  []string // UPDATE OF attachment columns; empty means every UPDATE.
 	RelatedOID           int64    // M:M read target; bridge has its independent add right
 }
 
@@ -105,6 +106,7 @@ type GrantSnapshot struct {
 	Functions     map[int64]Function
 	Groups        map[int64]bool
 	GuestGroups   map[int64]bool // site's named guests group plus user 1's memberships; IDs are installation-specific
+	GuestGroupID  int64          // named guests group belongs to the guest pool, independently of ordinary groups
 	Rights        []Right
 	Dependencies  []Dependency
 	Sequences     []SequenceUse

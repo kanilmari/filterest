@@ -14,16 +14,17 @@ import (
 )
 
 type Finding struct {
-	Role       string `json:"role"`
-	Kind       string `json:"kind,omitempty"`
-	ObjectOID  int64  `json:"object_oid,omitempty"`
-	Object     string `json:"object,omitempty"`
-	FunctionID int64  `json:"function_id,omitempty"`
-	Route      string `json:"route,omitempty"`
-	Column     string `json:"column,omitempty"`
-	Privilege  string `json:"privilege,omitempty"`
-	Finding    string `json:"finding"`
-	Reason     string `json:"reason"`
+	ScopeOIDs  [3]int64 `json:"-"` // Request-only metadata identities; audit output stays unchanged.
+	Role       string   `json:"role"`
+	Kind       string   `json:"kind,omitempty"`
+	ObjectOID  int64    `json:"object_oid,omitempty"`
+	Object     string   `json:"object,omitempty"`
+	FunctionID int64    `json:"function_id,omitempty"`
+	Route      string   `json:"route,omitempty"`
+	Column     string   `json:"column,omitempty"`
+	Privilege  string   `json:"privilege,omitempty"`
+	Finding    string   `json:"finding"`
+	Reason     string   `json:"reason"`
 }
 
 type Check struct {

@@ -5,7 +5,9 @@
 package dtt_crud_workflows
 
 import (
+	"context"
 	"database/sql"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"errors"
 	"fmt"
 	"os"
@@ -18,20 +20,6 @@ import (
 	dtt_3_table_create "easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
 	"github.com/lib/pq"
 )
-
-func TestRequestedTableReadPermissionsNoFlagsNeedNoPools(t *testing.T) {
-	oldBasic, oldGuest := backend.DbBasic, backend.DbGuest
-	backend.DbBasic, backend.DbGuest = nil, nil
-	t.Cleanup(func() { backend.DbBasic, backend.DbGuest = oldBasic, oldGuest })
-	if err := grantRequestedTableReadPermissions(nil, "new_dataset", false, false); err != nil {
-		t.Fatal(err)
-	}
-	for _, flags := range [][2]bool{{true, false}, {false, true}} {
-		if err := grantRequestedTableReadPermissions(nil, "new_dataset", flags[0], flags[1]); err == nil {
-			t.Fatal("requested reader without its runtime pool was accepted")
-		}
-	}
-}
 
 func registrationDisposableDB(t *testing.T) (*sql.DB, func(string) *sql.DB) {
 	t.Helper()
@@ -96,22 +84,24 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, role := range []string{basicRole, guestRole} {
+	for _, role := range []string{basicRole, guestRole, "wl74 readonly", "wl74 confidential"} {
 		mustExec("CREATE ROLE " + pq.QuoteIdentifier(role) + " LOGIN")
 		mustExec("GRANT USAGE ON SCHEMA public TO " + pq.QuoteIdentifier(role))
 	}
 	mustExec(`
-        CREATE TABLE system_db_tables(table_uid integer PRIMARY KEY,table_name text,schema_name text);
-        CREATE TABLE system_functions(id integer PRIMARY KEY,name text,specific_table_related boolean,disabled boolean);
+        CREATE TABLE system_db_tables(id integer PRIMARY KEY,table_uid integer UNIQUE,table_name text,schema_name text,cached_oid bigint,fk_display_column text);
+        CREATE TABLE system_functions(id integer PRIMARY KEY,name text,specific_table_related boolean,disabled boolean,url_route_endpoint text,ui_only boolean);
         CREATE TABLE system_user_groups(id integer PRIMARY KEY,name text);
-        CREATE TABLE system_group_table_func_rights(user_group_id integer,function_id integer,target_table_uid integer,target_schema_name text);
+        CREATE TABLE system_users(id integer PRIMARY KEY,enabled boolean);
+CREATE TABLE system_user_group_memberships(id integer PRIMARY KEY,user_id integer,group_id integer);
+CREATE TABLE system_group_table_func_rights(user_group_id integer,function_id integer,target_table_uid integer,target_schema_name text,id serial PRIMARY KEY);
         CREATE UNIQUE INDEX fixture_permission_identity ON system_group_table_func_rights(user_group_id,function_id,COALESCE(target_table_uid,0));
         INSERT INTO system_user_groups VALUES(1,'admins'),(2,'users'),(3,'guests');
         INSERT INTO system_functions VALUES
-            (1,'dtt_1_row_read.GetResultsHandlerWrapper',true,false),
-            (4,'dtt_1_row_read.FilterbarAICodexQueryHandler',true,false),
-            (5,'router.RetiredHandler',true,true),
-            (6,'system_table_tools.GetGroupedTables',false,false);
+            (1,'dtt_1_row_read.GetResultsHandlerWrapper',true,false,'/api/get-results',false),
+            (4,'dtt_1_row_read.FilterbarAICodexQueryHandler',true,false,'/api/get-columns',false),
+            (5,'router.RetiredHandler',true,true,'/api/retired',false),
+            (6,'system_table_tools.GetGroupedTables',false,false,'/api/get-grouped-tables',false);
         -- Creating a dataset now also names it and its columns for the
         -- interface, so the fixture carries the two stores those names live in.
         -- Without them the fixture passes for a reason production does not share.
@@ -127,9 +117,11 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 	oldBasic, oldGuest := backend.DbBasic, backend.DbGuest
 	backend.DbBasic, backend.DbGuest = connect(basicRole), connect(guestRole)
 	t.Cleanup(func() { backend.DbBasic, backend.DbGuest = oldBasic, oldGuest })
-	// An existing runtime pool is authoritative even when env/default resolution differs.
-	t.Setenv("DB_BASIC_USER", "deliberately_not_the_connected_role")
-	t.Setenv("DB_GUEST_USER", "")
+	// The same configured role identities now drive creation and all rights writers.
+	t.Setenv("DB_BASIC_USER", basicRole)
+	t.Setenv("DB_GUEST_USER", guestRole)
+	t.Setenv("DB_READONLY_USER", "wl74 readonly")
+	t.Setenv("DB_CONFIDENTIAL_USER", "wl74 confidential")
 	var baselineACL string
 	if err := db.QueryRow("SELECT COALESCE(relacl::text,'') FROM pg_class WHERE oid='existing_dataset'::regclass").Scan(&baselineACL); err != nil {
 		t.Fatal(err)
@@ -141,18 +133,25 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 			return err
 		}
 		defer tx.Rollback()
+		mutation, err := runtime_grant_mutations.BeginTx(context.Background(), tx)
+		if err != nil {
+			return err
+		}
 		if err := dtt_3_table_create.CreateNewTableInDatabase(tx, name, []dtt_3_table_create.ColumnDefinition{
 			{Name: "id", DataType: "SERIAL"}, {Name: "title", DataType: "TEXT"},
 		}, nil); err != nil {
 			return err
 		}
-		if _, err := tx.Exec("INSERT INTO system_db_tables VALUES($1,$2,'public')", uid, name); err != nil {
+		if _, err := tx.Exec("INSERT INTO system_db_tables(id,table_uid,table_name,schema_name,cached_oid) VALUES($1,$1,$2,'public',to_regclass($2)::oid)", uid, name); err != nil {
 			return err
 		}
 		if err := ensureTablePermissions(tx, name, users, guests); err != nil {
 			return err
 		}
 		if _, err := tx.Exec("INSERT INTO " + pq.QuoteIdentifier(name) + "(title) VALUES('visible')"); err != nil {
+			return err
+		}
+		if err := mutation.Finish(context.Background(), int64(uid)); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -246,11 +245,9 @@ func TestCreatedDatasetReadPermissionMatrixPostgres(t *testing.T) {
 		}
 	})
 	t.Run("missing_runtime_role_rolls_back_table_metadata_and_grants", func(t *testing.T) {
-		old := backend.DbGuest
-		backend.DbGuest = connect("wl74_missing_reader")
-		defer func() { backend.DbGuest = old }()
+		t.Setenv("DB_GUEST_USER", "wl74_missing_reader")
 		err := create("failed_dataset", 99, true, true)
-		if err == nil || !strings.Contains(err.Error(), "resolve guest database role") {
+		if err == nil || !strings.Contains(err.Error(), "read runtime role guest identity") {
 			t.Fatalf("expected role failure, got %v", err)
 		}
 		var relationExists bool

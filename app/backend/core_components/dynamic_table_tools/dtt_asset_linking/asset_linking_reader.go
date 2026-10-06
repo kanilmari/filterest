@@ -170,23 +170,31 @@ func FindFileUploadRelationStatusByChildTable(q dbutils.Querier, parentTableUID 
 		childTable,
 	).Scan(&relationID, &parentTable, &foreignKeyColumn, &rawSpecsSQL)
 	if err != nil {
-		return FileUploadRelationStatus{}, ErrFileUploadRelationNotFound
+		if errors.Is(err, sql.ErrNoRows) {
+			return FileUploadRelationStatus{}, ErrFileUploadRelationNotFound
+		}
+		return FileUploadRelationStatus{}, err
 	}
 
 	uploadConfig := NormalizeFileUploadConfig(FileUploadConfig{})
+	configured := false
 	if rawSpecsSQL.Valid && rawSpecsSQL.String != "" {
 		parsedConfig, parseErr := ParseFileUploadConfig([]byte(rawSpecsSQL.String))
 		if parseErr == nil {
 			uploadConfig = parsedConfig
+			configured = true
+		} else if !errors.Is(parseErr, ErrMissingFileUploadConfig) {
+			return FileUploadRelationStatus{}, parseErr
 		}
 	}
 
 	return FileUploadRelationStatus{
-		RelationID:       relationID,
-		ParentTable:      parentTable,
-		ChildTable:       childTable,
-		ForeignKeyColumn: foreignKeyColumn,
-		StorageDriver:    StorageDriverLocalFilesystem,
-		UploadConfig:     uploadConfig,
+		RelationID:           relationID,
+		ParentTable:          parentTable,
+		ChildTable:           childTable,
+		ForeignKeyColumn:     foreignKeyColumn,
+		StorageDriver:        StorageDriverLocalFilesystem,
+		UploadConfig:         uploadConfig,
+		fileUploadConfigured: configured,
 	}, nil
 }

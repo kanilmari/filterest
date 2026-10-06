@@ -6,6 +6,7 @@ package dtt_3_table_delete
 
 import (
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_triggers/automation_metadata"
 	"easelect/backend/core_components/lang"
 	"fmt"
 	"log"
@@ -48,6 +49,12 @@ func CleanupTableMetadata(q dbutils.Querier, tableUID int64, schemaName string) 
 	}
 	if n := rowsAffected(res); n > 0 {
 		log.Printf("[CleanupTableMetadata]   - system_foreign_key_relations_m_m: deleted %d rows", n)
+	}
+
+	// Automation endpoints use names, so remove them while the registry still
+	// maps this UID to its name. The optional legacy table is absent in bootstrap.
+	if err := automation_metadata.DeleteDataset(q, tableUID); err != nil {
+		return err
 	}
 
 	// 3. Poistetaan ryhmäoikeudet tälle taululle

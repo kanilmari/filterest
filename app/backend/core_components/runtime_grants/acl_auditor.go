@@ -133,7 +133,7 @@ func readSQLPathBlockers(ctx context.Context, tx *sql.Tx, snapshot GrantSnapshot
 }
 
 const directACLsSQL = `SELECT c.oid,CASE WHEN c.relkind='S' THEN 'sequence' ELSE 'table' END,n.nspname,c.relname,'',a.grantee,a.grantor,c.relowner,a.privilege_type,a.is_grantable
- FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a
+ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 's'::"char" ELSE 'r'::"char" END,c.relowner))) a
  WHERE c.relkind IN ('r','p','v','m','f','S') AND n.nspname !~ '^pg_' AND n.nspname<>'information_schema'
  UNION ALL
  SELECT c.oid,'column',n.nspname,c.relname,att.attname,a.grantee,a.grantor,c.relowner,a.privilege_type,a.is_grantable FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute att ON att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE n.nspname !~ '^pg_' AND n.nspname<>'information_schema'
@@ -152,7 +152,7 @@ const sqlPathReviewSQL = `WITH roles AS (SELECT * FROM jsonb_to_recordset($1::js
  SELECT r.label,'function',p.oid,format('%I.%I',n.nspname,p.proname),'SECURITY DEFINER execution requires review'
  FROM roles r CROSS JOIN pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE p.prosecdef AND n.nspname !~ '^pg_' AND n.nspname<>'information_schema' AND has_function_privilege(r.role_oid,p.oid,'EXECUTE') AND p.oid NOT IN (SELECT oid FROM reviewed_definer_functions) AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.classid='pg_proc'::regclass AND d.objid=p.oid AND d.deptype='e')
  UNION ALL
- SELECT r.label,'trigger',t.oid,format('%I.%I',n.nspname,c.relname),'owner-run trigger requires review' FROM roles r CROSS JOIN pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE NOT t.tgisinternal AND p.prosecdef AND has_table_privilege(r.role_oid,c.oid,'INSERT,UPDATE,DELETE') AND n.nspname !~ '^pg_'
+ SELECT r.label,'trigger',t.oid,format('%I.%I',n.nspname,c.relname),'owner-run trigger requires review' FROM roles r CROSS JOIN pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE NOT t.tgisinternal AND p.prosecdef AND p.oid NOT IN (SELECT oid FROM reviewed_definer_functions) AND has_table_privilege(r.role_oid,c.oid,'INSERT,UPDATE,DELETE') AND n.nspname !~ '^pg_'
  UNION ALL
  SELECT r.label,'rule',rule.oid,format('%I.%I',n.nspname,c.relname),'write rule requires review' FROM roles r CROSS JOIN pg_rewrite rule JOIN pg_class c ON c.oid=rule.ev_class JOIN pg_namespace n ON n.oid=c.relnamespace WHERE rule.rulename<>'_RETURN' AND has_table_privilege(r.role_oid,c.oid,'INSERT,UPDATE,DELETE') AND n.nspname !~ '^pg_'
  UNION ALL

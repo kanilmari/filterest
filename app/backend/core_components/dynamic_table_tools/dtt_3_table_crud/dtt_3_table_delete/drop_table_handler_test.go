@@ -5,6 +5,7 @@ package dtt_3_table_delete
 
 import (
 	"bytes"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,7 +49,7 @@ func TestDropTableHandlerRejectsInvalidRequestsBeforeDatabaseWork(t *testing.T) 
 			method:     http.MethodPost,
 			body:       `{"dataset_name":"users","confirm_dataset_name":"users"}`,
 			wantStatus: http.StatusInternalServerError,
-			wantBody:   "failed to acquire transaction",
+			wantBody:   "permissions could not be saved",
 		},
 	}
 
@@ -57,7 +58,7 @@ func TestDropTableHandlerRejectsInvalidRequestsBeforeDatabaseWork(t *testing.T) 
 			req := httptest.NewRequest(tt.method, "/api/drop-dataset", bytes.NewBufferString(tt.body))
 			rec := httptest.NewRecorder()
 
-			DropTableHandler(rec, req)
+			DropTableHandler(granttest.Recorder{ResponseRecorder: rec}, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, tt.wantStatus, rec.Body.String())

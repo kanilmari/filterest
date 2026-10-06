@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 )
 
 // BuildFilesystemBaseDir returns the current local-storage base directory for one parent row.
@@ -300,69 +301,8 @@ func ResolveSharedAssetStorageLocation(
 	return resolveSharedAssetStorageLocation(storedFilename, defaultTableUID, defaultRowID)
 }
 
-func resolveSharedAssetStorageLocation(
-	storedFilename string,
-	defaultTableUID string,
-	defaultRowID int64,
-) (string, int64, string) {
-	trimmedFilename := strings.TrimSpace(storedFilename)
-	leafFilename := strings.TrimSpace(filepath.Base(trimmedFilename))
-	if leafFilename == "." {
-		leafFilename = trimmedFilename
-	}
-
-	if tableUID, rowID, ok := parseStorageCoordinatesFromStructuredPath(trimmedFilename); ok {
-		return tableUID, rowID, leafFilename
-	}
-	if tableUID, rowID, ok := parseStorageCoordinatesFromFlatFilename(leafFilename); ok {
-		return tableUID, rowID, leafFilename
-	}
-
-	return defaultTableUID, defaultRowID, leafFilename
-}
-
-func parseStorageCoordinatesFromStructuredPath(storedFilename string) (string, int64, bool) {
-	trimmedFilename := strings.TrimSpace(storedFilename)
-	if !strings.Contains(trimmedFilename, "/") {
-		return "", 0, false
-	}
-
-	pathParts := strings.Split(trimmedFilename, "/")
-	if len(pathParts) < 3 {
-		return "", 0, false
-	}
-
-	rowID, err := strconv.ParseInt(strings.TrimSpace(pathParts[1]), 10, 64)
-	if err != nil || rowID <= 0 {
-		return "", 0, false
-	}
-
-	tableUID := strings.TrimSpace(pathParts[0])
-	if tableUID == "" {
-		return "", 0, false
-	}
-
-	return tableUID, rowID, true
-}
-
-func parseStorageCoordinatesFromFlatFilename(filename string) (string, int64, bool) {
-	trimmedFilename := strings.TrimSpace(filename)
-	filenameParts := strings.SplitN(trimmedFilename, "_", 3)
-	if len(filenameParts) < 3 {
-		return "", 0, false
-	}
-
-	rowID, err := strconv.ParseInt(strings.TrimSpace(filenameParts[1]), 10, 64)
-	if err != nil || rowID <= 0 {
-		return "", 0, false
-	}
-
-	tableUID := strings.TrimSpace(filenameParts[0])
-	if tableUID == "" {
-		return "", 0, false
-	}
-
-	return tableUID, rowID, true
+func resolveSharedAssetStorageLocation(storedFilename string, defaultTableUID string, defaultRowID int64) (string, int64, string) {
+	return dtt_card_picture.ResolveSharedAssetStorageLocation(storedFilename, defaultTableUID, defaultRowID)
 }
 
 func pqQuoteIdentifier(identifier string) string {

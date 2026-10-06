@@ -5,7 +5,9 @@
 package dtt_asset_linking
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"easelect/backend/core_components/dbutils"
@@ -25,13 +27,23 @@ func EnsureSharedAssetRelation(
 	fkColumnName := parentTable + "_id"
 
 	if existingStatus, err := FindFileUploadRelationStatusByChildTable(tx, parentTableUID, childTable); err == nil {
-		if permissionErr := CopyPhysicalTablePermissions(tx, parentTable, childTable); permissionErr != nil {
-			return FileUploadRelationStatus{}, false, permissionErr
+		// A pre-existing ordinary FK becomes an asset relation here. Once the
+		// file-upload config exists, later edits never seed its rights again.
+		if !existingStatus.fileUploadConfigured {
+			childUID, err := LookupParentTableUID(tx, childTable)
+			if err != nil {
+				return FileUploadRelationStatus{}, false, err
+			}
+			if err := CopyTablePermissions(tx, parentTableUID, childUID); err != nil {
+				return FileUploadRelationStatus{}, false, err
+			}
 		}
 		if existingStatus.UploadConfig.FilenameColumn == "" {
 			existingStatus.UploadConfig.FilenameColumn = initialConfig.FilenameColumn
 		}
 		return existingStatus, true, nil
+	} else if err != ErrFileUploadRelationNotFound {
+		return FileUploadRelationStatus{}, false, err
 	}
 
 	var childTableUID int
@@ -39,7 +51,10 @@ func EnsureSharedAssetRelation(
 		"SELECT table_uid FROM system_db_tables WHERE table_name = $1 AND schema_name = 'public'",
 		childTable,
 	).Scan(&childTableUID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return FileUploadRelationStatus{}, false, err
+	}
+	if errors.Is(err, sql.ErrNoRows) {
 		// The child table's columns in creation order: its identity, the link
 		// to the parent row, the file's details and the timestamps.
 		columns := []dtt_3_table_create.ColumnDefinition{
@@ -70,9 +85,6 @@ func EnsureSharedAssetRelation(
 		if createErr := dtt_3_table_create.CreateTableInDatabase(tx, childTable, columns, foreignKeys); createErr != nil {
 			return FileUploadRelationStatus{}, false, createErr
 		}
-		if permissionErr := CopyPhysicalTablePermissions(tx, parentTable, childTable); permissionErr != nil {
-			return FileUploadRelationStatus{}, false, permissionErr
-		}
 		if refreshErr := refreshAssetLinkingCatalogMetadata(tx); refreshErr != nil {
 			return FileUploadRelationStatus{}, false, refreshErr
 		}
@@ -84,7 +96,6 @@ func EnsureSharedAssetRelation(
 			return FileUploadRelationStatus{}, false, lookupErr
 		}
 
-		CopyTablePermissions(tx, parentTableUID, childTableUID)
 	}
 
 	specsJSON, err := BuildTargetInsertSpecsJSON(initialConfig)
@@ -108,7 +119,9 @@ func EnsureSharedAssetRelation(
 	); err != nil {
 		return FileUploadRelationStatus{}, false, err
 	}
-	CopyTablePermissions(tx, parentTableUID, childTableUID)
+	if err := CopyTablePermissions(tx, parentTableUID, childTableUID); err != nil {
+		return FileUploadRelationStatus{}, false, err
+	}
 
 	status, err := FindFileUploadRelationStatusByChildTable(tx, parentTableUID, childTable)
 	if err != nil {

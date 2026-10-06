@@ -90,14 +90,14 @@ func validateDependency(snapshot GrantSnapshot, classes map[int64]TableClass, de
 		return fmt.Errorf("unclassified dependency")
 	}
 	switch dependency.Kind {
-	case "label", "embedding", "child", "bridge", "lock", "gallery_read":
+	case "label", "embedding", "child", "bridge", "lock", "gallery_read", "trigger_read":
 	case "gallery", "gallery_insert":
 		// The real gallery can have a product/dedicated parent. Its dormant
 		// metadata is valid; add() refuses writes when a runtime consumer runs.
 		if class := classes[dependency.TargetOID]; class != Content && class != Product && class != Dedicated {
 			return fmt.Errorf("forbidden operational destination %s", snapshot.Objects[dependency.TargetOID].Identifier())
 		}
-	case "cache", "automation":
+	case "cache", "automation", "trigger_update":
 		if classes[dependency.TargetOID] != Content {
 			return fmt.Errorf("forbidden operational destination %s", snapshot.Objects[dependency.TargetOID].Identifier())
 		}

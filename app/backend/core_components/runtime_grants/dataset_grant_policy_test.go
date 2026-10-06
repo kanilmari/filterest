@@ -12,7 +12,7 @@ import (
 func boolPointer(value bool) *bool { return &value }
 
 func policyFixture() GrantSnapshot {
-	s := GrantSnapshot{Objects: map[int64]Object{}, Functions: map[int64]Function{}, Groups: map[int64]bool{1: true, 2: true, 3: true, 4: true, 5: true}, GuestGroups: map[int64]bool{3: true}, Roles: []Role{{Label: "basic", OID: 101}, {Label: "guest", OID: 102}, {Label: "readonly", OID: 103}, {Label: "confidential", OID: 104}}}
+	s := GrantSnapshot{Objects: map[int64]Object{}, Functions: map[int64]Function{}, Groups: map[int64]bool{1: true, 2: true, 3: true, 4: true, 5: true}, GuestGroups: map[int64]bool{3: true}, GuestGroupID: 3, Roles: []Role{{Label: "basic", OID: 101}, {Label: "guest", OID: 102}, {Label: "readonly", OID: 103}, {Label: "confidential", OID: 104}}}
 	s.Objects[10] = Object{OID: 10, Schema: "public", Name: "fresh_dataset", Kind: "table", DatasetUID: 1, Columns: []Column{{Name: "id"}, {Name: "title", Text: true}, {Name: "private"}, {Name: "search_vector_simple"}}}
 	s.Objects[11] = Object{OID: 11, Schema: "public", Name: "fresh_target", Kind: "table", DatasetUID: 2, Columns: []Column{{Name: "id"}, {Name: "title", Text: true}, {Name: "private"}}}
 	s.Objects[12] = Object{OID: 12, Schema: "public", Name: "fresh_bridge", Kind: "table", DatasetUID: 3, Columns: []Column{{Name: "id"}, {Name: "filename"}, {Name: "parent_id"}}}

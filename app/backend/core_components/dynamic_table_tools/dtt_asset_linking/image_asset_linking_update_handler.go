@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"net/http"
 
-	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 )
 
@@ -29,13 +29,20 @@ func UpdateImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentTableUID, err := LookupParentTableUID(backend.Db, parentTable)
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	tx := mutation.Tx
+
+	parentTableUID, err := LookupParentTableUID(tx, parentTable)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("parent table '%s' not found", parentTable))
 		return
 	}
 
-	status, err := FindFileUploadRelationStatusByProfile(backend.Db, parentTableUID, AssetProfileImage)
+	status, err := FindFileUploadRelationStatusByProfile(tx, parentTableUID, AssetProfileImage)
 	if err != nil {
 		if err == ErrFileUploadProfileNotFound {
 			httpresponse.RespondWithError(w, http.StatusNotFound, fmt.Sprintf("no image assets found for table '%s'", parentTable))
@@ -61,12 +68,17 @@ func UpdateImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	uploadConfig := SetProfileUploadConfig(status.UploadConfig, AssetProfileImage, profileConfig)
 
-	if err := SaveFileUploadConfigByRelationID(backend.Db, status.RelationID, uploadConfig); err != nil {
+	if err := SaveFileUploadConfigByRelationID(tx, status.RelationID, uploadConfig); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update specs: %v", err))
 		return
 	}
 
 	specs := BuildTargetInsertSpecs(uploadConfig)
+
+	if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"message":       fmt.Sprintf("Image asset configuration updated for table '%s'", parentTable),

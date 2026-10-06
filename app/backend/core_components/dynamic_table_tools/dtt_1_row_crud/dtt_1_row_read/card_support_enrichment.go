@@ -20,11 +20,12 @@ import (
 )
 
 type canonicalAssetImageValue struct {
-	filename     string
-	typeID       int64
-	metadataJSON string
-	title        string
-	originalName string
+	filename         string
+	typeID           int64
+	metadataJSON     string
+	title            string
+	originalName     string
+	visibleFilenames []string
 }
 
 func collectHiddenCardSupportColumns(
@@ -154,10 +155,23 @@ func enrichRowsWithCardSupportColumns(
 	rows []map[string]interface{},
 	columnsMap map[int]dtt_models.ColumnInfo,
 	visibleColumns []string,
-) error {
+	actor dbutils.RequestActorContext,
+	gallery *cardGalleryRead,
+) (err error) {
 	if len(rows) == 0 {
 		return nil
 	}
+	rowIDs := collectCardSupportRowIDs(rows)
+	if len(rowIDs) == 0 {
+		return nil
+	}
+	// Optional gallery enrichment also runs when parent support metadata fails.
+	defer func() {
+		galleryErr := enrichRowsWithCanonicalAssetImages(readQuerier, tableName, rows, rowIDs, actor, gallery)
+		if err == nil {
+			err = galleryErr
+		}
+	}()
 
 	supportColumns := collectHiddenCardSupportColumns(columnsMap, visibleColumns)
 	if len(supportColumns) == 0 {
@@ -166,11 +180,6 @@ func enrichRowsWithCardSupportColumns(
 		if err != nil {
 			return err
 		}
-	}
-
-	rowIDs := collectCardSupportRowIDs(rows)
-	if len(rowIDs) == 0 {
-		return nil
 	}
 
 	if !rowsAlreadyContainCardSupportColumns(rows, supportColumns) {
@@ -200,23 +209,6 @@ func enrichRowsWithCardSupportColumns(
 		}
 	}
 
-	missingRowIDs := collectRowsMissingCardImageValues(rows, supportColumns)
-	if len(missingRowIDs) == 0 {
-		return nil
-	}
-
-	if err := enrichRowsWithCanonicalAssetImages(readQuerier, tableName, rows, missingRowIDs); err != nil {
-		return err
-	}
-
-	missingRowIDs = collectRowsMissingCardImageValues(rows, supportColumns)
-	if len(missingRowIDs) == 0 {
-		return nil
-	}
-
-	// Repo-wide shared-asset migration means read-side card support should stop
-	// probing table-specific image child tables here. Remaining image support is now
-	// expected to come from `cached_image` or canonical shared `_assets` rows.
 	return nil
 }
 
@@ -327,40 +319,24 @@ func enrichRowsWithCanonicalAssetImages(
 	parentTable string,
 	rows []map[string]interface{},
 	rowIDs []int64,
+	actor dbutils.RequestActorContext,
+	gallery *cardGalleryRead,
 ) error {
 	if len(rows) == 0 || len(rowIDs) == 0 {
 		return nil
 	}
 
-	relation, err := dtt_card_picture.PictureRelationOf(querier, parentTable)
-	if (relation == nil || err != nil) && backend.Db != nil {
-		fallbackRelation, fallbackErr := dtt_card_picture.PictureRelationOf(backend.Db, parentTable)
-		if fallbackErr == nil && fallbackRelation != nil {
-			relation = fallbackRelation
-			err = nil
-		} else if err == nil {
-			err = fallbackErr
-		}
+	if gallery == nil {
+		gallery = &cardGalleryRead{}
 	}
-	if err != nil || relation == nil {
+	if err := gallery.discover(querier, parentTable); err != nil || gallery.relation == nil {
 		return err
 	}
-
-	imageByID, err := fetchCanonicalAssetImageValues(querier, *relation, rowIDs)
-	if (len(imageByID) == 0 || err != nil) && backend.Db != nil {
-		fallbackImages, fallbackErr := fetchCanonicalAssetImageValues(backend.Db, *relation, rowIDs)
-		if fallbackErr == nil && len(fallbackImages) > 0 {
-			imageByID = fallbackImages
-			err = nil
-		} else if err == nil {
-			err = fallbackErr
-		}
-	}
+	imageByID, err := gallery.visibleImages(querier, rowIDs, actor)
 	if err != nil {
 		return err
 	}
-
-	applyLegacyChildImageValues(rows, imageByID)
+	applyLegacyChildImageValues(rows, imageByID, gallery.parentTableUID)
 	return nil
 }
 
@@ -371,6 +347,7 @@ func fetchCanonicalAssetImageValues(
 	querier dbutils.Querier,
 	relation dtt_card_picture.PictureRelation,
 	rowIDs []int64,
+	actor dbutils.RequestActorContext,
 ) (map[string]canonicalAssetImageValue, error) {
 	if querier == nil || relation.ChildTable == "" || relation.ForeignKey == "" || relation.FilenameColumn == "" || len(rowIDs) == 0 {
 		return nil, nil
@@ -423,6 +400,15 @@ func fetchCanonicalAssetImageValues(
 		strings.Join(placeholders, ", "),
 		relation.PictureCondition(""),
 	)
+	policy, err := getLegacyMustTrueReadPolicy(querier, relation.ChildTable)
+	if err != nil {
+		return nil, err
+	}
+	condition, args := buildReadRowPolicyCondition(relation.ChildTable, actor.UserRole, actor.UserID, policy, len(queryArgs)+1)
+	if condition != "" {
+		query += " AND (" + condition + ")"
+		queryArgs = append(queryArgs, args...)
+	}
 	query += fmt.Sprintf(` ORDER BY %s`, strings.Join(orderByParts, ", "))
 
 	rows, err := querier.Query(query, queryArgs...)
@@ -461,15 +447,18 @@ func fetchCanonicalAssetImageValues(
 		}
 
 		key := strconv.FormatInt(parentID, 10)
-		if _, exists := imageByID[key]; exists {
+		if value, exists := imageByID[key]; exists {
+			value.visibleFilenames = append(value.visibleFilenames, filename)
+			imageByID[key] = value
 			continue
 		}
 		imageByID[key] = canonicalAssetImageValue{
-			filename:     filename,
-			typeID:       coerceCanonicalAssetTypeID(rawTypeID),
-			metadataJSON: normalizeCardSupportValue(rawMetadataJSON),
-			title:        normalizeCardSupportValue(rawTitle),
-			originalName: normalizeCardSupportValue(rawOriginalName),
+			filename:         filename,
+			visibleFilenames: []string{filename},
+			typeID:           coerceCanonicalAssetTypeID(rawTypeID),
+			metadataJSON:     normalizeCardSupportValue(rawMetadataJSON),
+			title:            normalizeCardSupportValue(rawTitle),
+			originalName:     normalizeCardSupportValue(rawOriginalName),
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -477,218 +466,6 @@ func fetchCanonicalAssetImageValues(
 	}
 
 	return imageByID, nil
-}
-
-func collectRowsMissingCardImageValues(rows []map[string]interface{}, supportColumns []string) []int64 {
-	imageKeys := resolveCardImageLookupKeys(supportColumns)
-	missing := make([]int64, 0, len(rows))
-	seen := make(map[int64]bool, len(rows))
-
-	for _, row := range rows {
-		rowID, ok := coerceCardSupportRowID(row["id"])
-		if !ok || seen[rowID] {
-			continue
-		}
-		if rowHasMeaningfulCardImageValue(row, imageKeys) && rowHasCardImageAssetCompanionValue(row) {
-			continue
-		}
-		seen[rowID] = true
-		missing = append(missing, rowID)
-	}
-
-	return missing
-}
-
-func resolveCardImageLookupKeys(supportColumns []string) []string {
-	merged := make([]string, 0, len(dtt_card_picture.CardPictureFields)+len(supportColumns))
-	seen := make(map[string]bool, len(dtt_card_picture.CardPictureFields)+len(supportColumns))
-
-	for _, columnName := range dtt_card_picture.CardPictureFields {
-		if columnName == "" || seen[columnName] {
-			continue
-		}
-		seen[columnName] = true
-		merged = append(merged, columnName)
-	}
-
-	for _, columnName := range supportColumns {
-		if columnName == "" || seen[columnName] {
-			continue
-		}
-		seen[columnName] = true
-		merged = append(merged, columnName)
-	}
-
-	return merged
-}
-
-func rowHasMeaningfulCardImageValue(row map[string]interface{}, imageKeys []string) bool {
-	if row == nil {
-		return false
-	}
-
-	for _, key := range imageKeys {
-		if hasMeaningfulCardSupportValue(row[key]) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func resolveExistingCardImageValue(row map[string]interface{}, imageKeys []string) string {
-	if row == nil {
-		return ""
-	}
-
-	for _, key := range imageKeys {
-		value := normalizeCardSupportValue(row[key])
-		if value != "" {
-			return value
-		}
-	}
-
-	return ""
-}
-
-func rowHasCardImageAssetCompanionValue(row map[string]interface{}) bool {
-	if row == nil {
-		return false
-	}
-	_, exists := row["cached_image_type_id"]
-	return exists
-}
-
-func hasMeaningfulCardSupportValue(rawValue interface{}) bool {
-	return normalizeCardSupportValue(rawValue) != ""
-}
-
-func normalizeCardSupportValue(rawValue interface{}) string {
-	switch typedValue := rawValue.(type) {
-	case nil:
-		return ""
-	case string:
-		return strings.TrimSpace(typedValue)
-	case []byte:
-		return strings.TrimSpace(string(typedValue))
-	default:
-		return strings.TrimSpace(fmt.Sprint(rawValue))
-	}
-}
-
-func coerceCanonicalAssetTypeID(rawValue interface{}) int64 {
-	switch typedValue := rawValue.(type) {
-	case nil:
-		return 0
-	case int:
-		return int64(typedValue)
-	case int32:
-		return int64(typedValue)
-	case int64:
-		return typedValue
-	case float64:
-		return int64(typedValue)
-	case string:
-		parsed, err := strconv.ParseInt(strings.TrimSpace(typedValue), 10, 64)
-		if err == nil {
-			return parsed
-		}
-	case []byte:
-		parsed, err := strconv.ParseInt(strings.TrimSpace(string(typedValue)), 10, 64)
-		if err == nil {
-			return parsed
-		}
-	}
-	return 0
-}
-
-func applyLegacyChildImageValues(rows []map[string]interface{}, imageByID map[string]canonicalAssetImageValue) {
-	if len(rows) == 0 || len(imageByID) == 0 {
-		return
-	}
-
-	imageKeys := resolveCardImageLookupKeys(nil)
-	for _, row := range rows {
-		rowID, ok := coerceCardSupportRowID(row["id"])
-		if !ok {
-			continue
-		}
-
-		imageValue, exists := imageByID[strconv.FormatInt(rowID, 10)]
-		if !exists || imageValue.filename == "" {
-			continue
-		}
-
-		existingImage := resolveExistingCardImageValue(row, imageKeys)
-		if existingImage != "" && !cardImageFilenameMatches(existingImage, imageValue.filename) {
-			continue
-		}
-		if existingImage == "" {
-			row["cached_image"] = imageValue.filename
-		}
-		row["cached_image_type_id"] = imageValue.typeID
-		if imageValue.metadataJSON != "" {
-			row["cached_image_metadata_json"] = imageValue.metadataJSON
-		}
-		if imageValue.title != "" {
-			row["cached_image_title"] = imageValue.title
-		}
-		if imageValue.originalName != "" {
-			row["cached_image_original_name"] = imageValue.originalName
-		}
-	}
-}
-
-func cardImageFilenameMatches(existingImage string, canonicalFilename string) bool {
-	existingImage = strings.TrimSpace(existingImage)
-	canonicalFilename = strings.TrimSpace(canonicalFilename)
-	if existingImage == "" || canonicalFilename == "" {
-		return false
-	}
-	if existingImage == canonicalFilename {
-		return true
-	}
-
-	existingParts := strings.Split(strings.Split(existingImage, "?")[0], "/")
-	existingBasename := existingParts[len(existingParts)-1]
-	return existingBasename == canonicalFilename
-}
-
-func collectCardSupportRowIDs(rows []map[string]interface{}) []int64 {
-	collected := make([]int64, 0, len(rows))
-	seen := make(map[int64]bool, len(rows))
-
-	for _, row := range rows {
-		rowID, ok := coerceCardSupportRowID(row["id"])
-		if !ok || seen[rowID] {
-			continue
-		}
-		seen[rowID] = true
-		collected = append(collected, rowID)
-	}
-
-	return collected
-}
-
-func coerceCardSupportRowID(rawValue interface{}) (int64, bool) {
-	switch typedValue := rawValue.(type) {
-	case int:
-		return int64(typedValue), true
-	case int32:
-		return int64(typedValue), true
-	case int64:
-		return typedValue, true
-	case float64:
-		return int64(typedValue), true
-	case string:
-		parsed, err := strconv.ParseInt(strings.TrimSpace(typedValue), 10, 64)
-		return parsed, err == nil
-	case []byte:
-		parsed, err := strconv.ParseInt(strings.TrimSpace(string(typedValue)), 10, 64)
-		return parsed, err == nil
-	default:
-		return 0, false
-	}
 }
 
 func logCardSupportEnrichmentWarning(tableName string, err error) {

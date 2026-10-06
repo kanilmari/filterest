@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"easelect/backend/core_components/runtimepaths"
 )
 
@@ -42,6 +43,8 @@ func TestImportTableCSVSkipsOnlyRetiredColumnMetadata(t *testing.T) {
 		{"other unknown column", "system_column_details", "id,unknown_metadata\n1,kept\n", []interface{}{"1", "kept"}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			// system_column_details is policy metadata, so the import opens the grant boundary.
+			granttest.ConfigureRoles(t)
 			root := t.TempDir()
 			paths, err := runtimepaths.Resolve(root, root, false)
 			if err != nil {
@@ -107,6 +110,10 @@ func (c *stubConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.T
 	return &stubTx{conn: c}, nil
 }
 func (c *stubConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	// The grant boundary's lock statements are not the import's row writes.
+	if granttest.IsPolicyLock(query) {
+		return driver.RowsAffected(0), nil
+	}
 	c.drv.execArgs = append(c.drv.execArgs, append([]driver.NamedValue(nil), args...))
 	c.drv.lastQuery = query
 	c.drv.lastArgs = append([]driver.NamedValue(nil), args...)
@@ -122,6 +129,10 @@ func (c *stubConn) QueryContext(ctx context.Context, query string, args []driver
 	if strings.Contains(query, "FROM public.system_users WHERE id") {
 		c.drv.userLookups++
 		return &csvActorRows{cols: []string{"exists"}, rows: [][]driver.Value{{c.drv.users[args[0].Value.(int64)]}}}, nil
+	}
+	// A policy-metadata import reads an empty, valid grant catalogue.
+	if result, ok := granttest.BoundaryQuery(query, args); ok {
+		return result, nil
 	}
 	return &stubEmptyRows{}, nil
 }

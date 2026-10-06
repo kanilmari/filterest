@@ -7,10 +7,12 @@ package backend
 import (
 	"database/sql"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 func PermissionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -90,228 +92,89 @@ func createPermissions(w http.ResponseWriter, r *http.Request) {
 		Permissions []Permission `json:"permissions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Printf("\033[31merror decoding data: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid data")
 		return
 	}
-
-	type funcInfo struct {
-		tableRelated bool
-		uiOnly       bool
-	}
-	fCache := make(map[int]funcInfo)
-
-	for _, perm := range payload.Permissions {
-		info, ok := fCache[perm.FunctionID]
-		if !ok {
-			err := Db.QueryRow(
-				"SELECT COALESCE(specific_table_related, true), COALESCE(ui_only, false) FROM system_functions WHERE id = $1",
-				perm.FunctionID,
-			).Scan(&info.tableRelated, &info.uiOnly)
-			if err != nil {
-				log.Printf("\033[31merror in function check: %v\033[0m", err)
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error in function check")
-				return
-			}
-			fCache[perm.FunctionID] = info
-		}
-		if !info.tableRelated && (perm.TargetTableUID != 0 || perm.TargetTableName != "") {
-			log.Printf("\033[31merror: table-specific permissions not allowed for function %d\033[0m", perm.FunctionID)
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "error: table-specific permissions not allowed for this function")
-			return
-		}
-	}
-
-	if len(payload.Permissions) == 0 {
-		schemaName := r.URL.Query().Get("schema")
-		if schemaName == "" {
-			schemaName = "public"
-		}
-		tableName := r.URL.Query().Get("dataset")
-		tableUIDStr := r.URL.Query().Get("dataset_uid")
-		if tableUIDStr == "" && tableName != "" {
-			if uid, err := getTableUIDByName(tableName, Db); err == nil {
-				tableUIDStr = fmt.Sprintf("%d", uid)
-			}
-		}
-		if tableName == "" && tableUIDStr != "" {
-			if scanErr := Db.QueryRow(`SELECT table_name FROM system_db_tables WHERE table_uid=$1`, tableUIDStr).Scan(&tableName); scanErr != nil {
-				log.Printf("[DeletePermissions] warning: could not resolve table_name for uid %s: %v", tableUIDStr, scanErr)
-			}
-		}
-
-		isTableless := tableUIDStr == "" && tableName == ""
-		var uiDeleted int
-		if isTableless {
-			countQuery := `SELECT COUNT(*) FROM system_group_table_func_rights gf JOIN system_functions f ON gf.function_id = f.id WHERE gf.target_schema_name = $1 AND gf.target_table_uid IS NULL AND f.ui_only = true`
-			if scanErr := Db.QueryRow(countQuery, schemaName).Scan(&uiDeleted); scanErr != nil {
-				log.Printf("[DeletePermissions] warning: could not count UI-only rights: %v", scanErr)
-			}
-			delQuery := `DELETE FROM system_group_table_func_rights WHERE target_schema_name = $1 AND target_table_uid IS NULL`
-			res, err := Db.Exec(delQuery, schemaName)
-			if err != nil {
-				log.Printf("\033[31merror deleting permissions: %v\033[0m", err)
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error deleting permissions")
-				return
-			}
-			rowsDeleted, _ := res.RowsAffected()
-			log.Printf("Deleted %d tableless permissions from schema %s", rowsDeleted, schemaName)
-		} else {
-			countQuery := `SELECT COUNT(*) FROM system_group_table_func_rights gf JOIN system_functions f ON gf.function_id = f.id WHERE gf.target_schema_name = $1 AND gf.target_table_uid = $2 AND f.ui_only = true`
-			if scanErr := Db.QueryRow(countQuery, schemaName, tableUIDStr).Scan(&uiDeleted); scanErr != nil {
-				log.Printf("[DeletePermissions] warning: could not count UI-only rights for table %s: %v", tableUIDStr, scanErr)
-			}
-			delQuery := `DELETE FROM system_group_table_func_rights WHERE target_schema_name = $1 AND target_table_uid = $2`
-			res, err := Db.Exec(delQuery, schemaName, tableUIDStr)
-			if err != nil {
-				log.Printf("\033[31merror deleting permissions: %v\033[0m", err)
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error deleting permissions")
-				return
-			}
-			rowsDeleted, _ := res.RowsAffected()
-			log.Printf("Deleted %d permissions from table %s.%s", rowsDeleted, schemaName, tableName)
-		}
-		log.Printf("UI permissions deleted: %d", uiDeleted)
-
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{"message": "permissions deleted"})
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
-
-	tableName := payload.Permissions[0].TargetTableName
-	schemaName := payload.Permissions[0].TargetSchemaName
-	tableUID := payload.Permissions[0].TargetTableUID
-	if schemaName == "" {
-		schemaName = "public"
+	tx := mutation.Tx
+	schema := r.URL.Query().Get("schema")
+	if schema == "" {
+		schema = "public"
 	}
-	if tableName == "" && tableUID != 0 {
-		if scanErr := Db.QueryRow(`SELECT table_name FROM system_db_tables WHERE table_uid = $1`, tableUID).Scan(&tableName); scanErr != nil {
-			log.Printf("[SavePermissions] warning: could not resolve table_name for uid %d: %v", tableUID, scanErr)
+	var uid int64
+	if len(payload.Permissions) > 0 {
+		schema = payload.Permissions[0].TargetSchemaName
+		if schema == "" {
+			schema = "public"
 		}
-	}
-
-	if tableUID == 0 && tableName == "" {
-		// *** Tauluton tapaus => Poistetaan entiset "table_name = ''" -rivimme ja lisätään uudet
-		deleteQuery := `
-           DELETE FROM system_group_table_func_rights
-           WHERE target_schema_name = $1
-             AND target_table_uid IS NULL
-       `
-		res, err := Db.Exec(deleteQuery, schemaName)
-		if err != nil {
-			log.Printf("\033[31merror deleting old tableless permissions: %v\033[0m", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error deleting old tableless permissions")
-			return
-		}
-		rowsDeleted, _ := res.RowsAffected()
-		insertedCount := 0
-		uiInserted := 0
-
-		// Lisätään nyt uudet
-		for _, perm := range payload.Permissions {
-			if perm.TargetTableUID == 0 && perm.TargetTableName != "" {
-				uid, err := getTableUIDByName(perm.TargetTableName, Db)
-				if err == nil {
-					perm.TargetTableUID = uid
-				}
-			}
-			inserted, err := insertPermission(perm)
-			if err != nil {
-				log.Printf("\033[31merror saving permission: %v\033[0m", err)
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving permission")
+		for i, permission := range payload.Permissions {
+			var tableRelated bool
+			if err := tx.QueryRow(`SELECT COALESCE(specific_table_related,true) FROM system_functions WHERE id=$1`, permission.FunctionID).Scan(&tableRelated); err != nil {
+				runtime_grant_mutations.RespondError(w, err)
 				return
 			}
-			if inserted {
-				insertedCount++
-				if fCache[perm.FunctionID].uiOnly {
-					uiInserted++
-				}
+			if !tableRelated && (permission.TargetTableUID != 0 || permission.TargetTableName != "") {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "table-specific permissions not allowed for this function")
+				return
 			}
+			if permission.TargetTableUID == 0 && permission.TargetTableName != "" {
+				resolved, err := getTableUIDByName(permission.TargetTableName, tx)
+				if err != nil {
+					httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid target dataset")
+					return
+				}
+				permission.TargetTableUID = resolved
+			}
+			if permission.TargetSchemaName == "" {
+				permission.TargetSchemaName = schema
+			}
+			if i > 0 && (permission.TargetSchemaName != schema || permission.TargetTableUID != payload.Permissions[0].TargetTableUID) {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "permission replacement must name one dataset")
+				return
+			}
+			payload.Permissions[i] = permission
 		}
-		uiDelQuery := `
-                        SELECT COUNT(*) FROM system_group_table_func_rights gf
-                        JOIN system_functions f ON gf.function_id = f.id
-                        WHERE gf.target_schema_name = $1 AND gf.target_table_uid IS NULL AND f.ui_only = true`
-		var uiDeleted int
-		if scanErr := Db.QueryRow(uiDelQuery, schemaName).Scan(&uiDeleted); scanErr != nil {
-			log.Printf("[SavePermissions] warning: could not count UI-only rights: %v", scanErr)
-		}
-		log.Printf("Deleted %d old tableless permissions from schema %s, inserted %d permissions", rowsDeleted, schemaName, insertedCount)
-		log.Printf("UI permissions deleted: %d, inserted: %d", uiDeleted, uiInserted)
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"message": "permissions saved (old deleted, new added)",
-		})
-		return
-
+		uid = int64(payload.Permissions[0].TargetTableUID)
 	} else {
-		// *** Taulukohtainen tapaus
-		countQuery := `
-            SELECT COUNT(*) FROM system_group_table_func_rights
-            WHERE target_schema_name = $1 AND target_table_uid = $2
-        `
-		var count int
-		if err := Db.QueryRow(countQuery, schemaName, tableUID).Scan(&count); err != nil {
-			log.Printf("\033[31merror counting existing permissions: %v\033[0m", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error counting existing permissions")
+		if value := r.URL.Query().Get("dataset_uid"); value != "" {
+			uid, err = strconv.ParseInt(value, 10, 64)
+			if err != nil || uid <= 0 {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid target dataset")
+				return
+			}
+		} else if name := r.URL.Query().Get("dataset"); name != "" {
+			resolved, err := getTableUIDByName(name, tx)
+			if err != nil {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid target dataset")
+				return
+			}
+			uid = int64(resolved)
+		}
+	}
+	// Begin captured old targets before replacement, including an empty save.
+	var target sql.NullInt64
+	if uid != 0 {
+		target = sql.NullInt64{Int64: uid, Valid: true}
+	}
+	if _, err := tx.Exec(`DELETE FROM system_group_table_func_rights WHERE target_schema_name=$1 AND target_table_uid IS NOT DISTINCT FROM $2`, schema, target); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	for _, permission := range payload.Permissions {
+		if _, err := insertPermission(tx, permission); err != nil {
+			runtime_grant_mutations.RespondError(w, err)
 			return
 		}
-
-		rowsDeleted := int64(0)
-		if count > 0 {
-			delQuery := `
-                DELETE FROM system_group_table_func_rights
-                WHERE target_schema_name = $1 AND target_table_uid = $2
-            `
-			res, err := Db.Exec(delQuery, schemaName, tableUID)
-			if err != nil {
-				log.Printf("\033[31merror deleting old permissions: %v\033[0m", err)
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error deleting old permissions")
-				return
-			}
-			rowsDeleted, _ = res.RowsAffected()
-		}
-
-		insertedCount := 0
-		uiInserted := 0
-		for _, perm := range payload.Permissions {
-			if perm.TargetTableUID == 0 && perm.TargetTableName != "" {
-				uid, err := getTableUIDByName(perm.TargetTableName, Db)
-				if err == nil {
-					perm.TargetTableUID = uid
-				}
-			}
-			inserted, err := insertPermission(perm)
-			if err != nil {
-				log.Printf("\033[31merror saving permission: %v\033[0m", err)
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving permission")
-				return
-			}
-			if inserted {
-				insertedCount++
-				if fCache[perm.FunctionID].uiOnly {
-					uiInserted++
-				}
-			}
-		}
-
-		uiDelQuery := `
-                        SELECT COUNT(*) FROM system_group_table_func_rights gf
-                        JOIN system_functions f ON gf.function_id = f.id
-                        WHERE gf.target_schema_name = $1 AND gf.target_table_uid = $2 AND f.ui_only = true`
-		var uiDeleted int
-		if scanErr := Db.QueryRow(uiDelQuery, schemaName, tableUID).Scan(&uiDeleted); scanErr != nil {
-			log.Printf("[SavePermissions] warning: could not count UI-only rights: %v", scanErr)
-		}
-
-		log.Printf("Deleted %d old permissions from table %s.%s, inserted %d permissions", rowsDeleted, schemaName, tableName, insertedCount)
-		log.Printf("UI permissions deleted: %d, inserted: %d", uiDeleted, uiInserted)
-
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"message": "permissions saved successfully",
-		})
 	}
+	if err := mutation.Finish(r.Context(), uid); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	httpresponse.RespondWithJSON(w, http.StatusCreated, map[string]string{"message": "permissions saved successfully"})
 }
 
 func patchPermissions(w http.ResponseWriter, r *http.Request) {
@@ -320,71 +183,44 @@ func patchPermissions(w http.ResponseWriter, r *http.Request) {
 		Remove []Permission `json:"remove"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Printf("\033[31merror decoding data: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid data")
 		return
 	}
-
-	added := make(map[string]int)
-	removed := make(map[string]int)
-	for _, p := range payload.Add {
-		resolvedPermission, err := resolveTableSpecificPermissionTarget(p, func(name string) (int, error) {
-			return getTableUIDByName(name, Db)
-		})
-		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid target dataset")
-			return
-		}
-		p = resolvedPermission
-
-		ok, err := insertPermission(p)
-		if err != nil {
-			log.Printf("\033[31merror inserting permission: %v\033[0m", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting permission")
-			return
-		}
-		if ok {
-			key := fmt.Sprintf("%s.%s", p.TargetSchemaName, p.TargetTableName)
-			added[key]++
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	tx := mutation.Tx
+	var targets []int64
+	for _, batch := range []struct {
+		permissions []Permission
+		remove      bool
+	}{{payload.Add, false}, {payload.Remove, true}} {
+		for _, permission := range batch.permissions {
+			resolved, err := resolveTableSpecificPermissionTarget(permission, func(name string) (int, error) { return getTableUIDByName(name, tx) })
+			if err != nil {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid target dataset")
+				return
+			}
+			permission = resolved
+			targets = append(targets, int64(permission.TargetTableUID))
+			if batch.remove {
+				_, err = tx.Exec(`DELETE FROM system_group_table_func_rights WHERE user_group_id=$1 AND function_id=$2 AND COALESCE(NULLIF(target_schema_name,''),'public')=COALESCE(NULLIF($3,''),'public') AND COALESCE(target_table_uid,0)=$4`, permission.AuthUserGroupID, permission.FunctionID, permission.TargetSchemaName, permission.TargetTableUID)
+			} else {
+				_, err = insertPermission(tx, permission)
+			}
+			if err != nil {
+				runtime_grant_mutations.RespondError(w, err)
+				return
+			}
 		}
 	}
-
-	delQuery := `DELETE FROM system_group_table_func_rights
-WHERE user_group_id=$1 AND function_id=$2 AND COALESCE(target_schema_name,'')=COALESCE($3,'') AND COALESCE(target_table_uid,0)=COALESCE($4,0)`
-	for _, p := range payload.Remove {
-		resolvedPermission, err := resolveTableSpecificPermissionTarget(p, func(name string) (int, error) {
-			return getTableUIDByName(name, Db)
-		})
-		if err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid target dataset")
-			return
-		}
-		p = resolvedPermission
-		var uid sql.NullInt64
-		if p.TargetTableUID != 0 {
-			uid = sql.NullInt64{Int64: int64(p.TargetTableUID), Valid: true}
-		}
-		res, err := Db.Exec(delQuery, p.AuthUserGroupID, p.FunctionID, sql.NullString{String: p.TargetSchemaName, Valid: p.TargetSchemaName != ""}, uid)
-		if err != nil {
-			log.Printf("\033[31merror removing permission: %v\033[0m", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error removing permission")
-			return
-		}
-		count, _ := res.RowsAffected()
-		if count > 0 {
-			key := fmt.Sprintf("%s.%s", p.TargetSchemaName, p.TargetTableName)
-			removed[key] += int(count)
-		}
+	if err := mutation.Finish(r.Context(), targets...); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
 	}
-
-	for tbl, cnt := range added {
-		log.Printf("added %d permissions to table %s", cnt, tbl)
-	}
-	for tbl, cnt := range removed {
-		log.Printf("removed %d permissions from table %s", cnt, tbl)
-	}
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "permissions updated"})
+	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{"message": "permissions updated"})
 }
 
 func resolveTableSpecificPermissionTarget(p Permission, lookup func(string) (int, error)) (Permission, error) {

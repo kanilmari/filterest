@@ -7,6 +7,7 @@ package dtt_1_row_update
 import (
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +21,7 @@ func TestOwnerSettingReadFailureDoesNotExposeDatabaseDetails(t *testing.T) {
 	req := buildUpdateRowSessionRequest(t, "POST", "/", `{"id":4,"column":"row_policy_owner_column","value":"user_id"}`)
 	req = req.WithContext(dbutils.SetTx(req.Context(), tx))
 	rec := httptest.NewRecorder()
-	UpdateRowHandler(rec, req, "system_db_tables")
+	UpdateRowHandler(granttest.Recorder{ResponseRecorder: rec}, req, "system_db_tables")
 	if rec.Code != 500 || strings.Contains(rec.Body.String(), "private database detail") {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
@@ -48,7 +49,7 @@ func TestRegistryOwnerSettingMustMatchItsMark(t *testing.T) {
 		req := buildUpdateRowSessionRequest(t, "POST", "/", body)
 		req = req.WithContext(dbutils.SetTx(req.Context(), tx))
 		rec := httptest.NewRecorder()
-		UpdateRowHandler(rec, req, "system_db_tables")
+		UpdateRowHandler(granttest.Recorder{ResponseRecorder: rec}, req, "system_db_tables")
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_row_owner_setting_fixed") {
 			t.Fatalf("%v: %d %s", value, rec.Code, rec.Body)
 		}

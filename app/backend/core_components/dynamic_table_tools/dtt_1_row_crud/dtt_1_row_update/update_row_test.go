@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,7 +68,10 @@ func (c *updRowConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, erro
 func (*updRowTx) Commit() error   { return nil }
 func (*updRowTx) Rollback() error { return nil }
 
-func (c *updRowConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *updRowConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if rows, ok := granttest.SnapshotQuery(query, args); ok {
+		return rows, nil
+	}
 	if strings.Contains(query, "AS roles(actor_role)") {
 		return &updRowRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
 	}
@@ -111,6 +115,7 @@ func (r *updRowRows) Next(dest []driver.Value) error {
 
 func openUpdRowTx(t *testing.T, queries []queuedQuery, actors ...[][]driver.Value) *sql.Tx {
 	t.Helper()
+	granttest.ConfigureRoles(t)
 	updRowDriverRegisterMu.Lock()
 	defer updRowDriverRegisterMu.Unlock()
 
@@ -557,6 +562,7 @@ func TestHandlerRejectsPilotNonOwnerBeforeColumnOrUpdateWork(t *testing.T) {
 
 func TestHandlerRejectsDatasetRouteConflictForSystemTableRename(t *testing.T) {
 	tx := openUpdRowTx(t, []queuedQuery{
+		{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(99)}}},
 		{cols: []string{"id"}, rows: [][]driver.Value{{int64(5)}}},
 		{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(99)}}},
 		{cols: []string{"editable_in_ui"}, rows: [][]driver.Value{{true}}},
@@ -574,7 +580,7 @@ func TestHandlerRejectsDatasetRouteConflictForSystemTableRename(t *testing.T) {
 	req = req.WithContext(dbutils.SetTx(req.Context(), tx))
 	rec := httptest.NewRecorder()
 
-	UpdateRowHandler(rec, req, "system_db_tables")
+	UpdateRowHandler(granttest.Recorder{ResponseRecorder: rec}, req, "system_db_tables")
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
@@ -668,4 +674,11 @@ func TestUpdateRequestKeepsFalseZeroAndEmptyString(t *testing.T) {
 	if err != nil || len(updates) != 3 || updates[0].Value != false || updates[1].Value != float64(0) || updates[2].Value != "" {
 		t.Fatalf("explicit values changed: %#v, %v", updates, err)
 	}
+}
+
+func (c *updRowConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if granttest.IsPolicyLock(query) {
+		return driver.RowsAffected(0), nil
+	}
+	return nil, fmt.Errorf("unexpected exec: %s", query)
 }

@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_delete"
 	dtt_crud_workflows "easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 
 	"github.com/lib/pq"
@@ -38,11 +38,12 @@ func RemoveAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to acquire transaction")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
 	parentTableUID, err := LookupParentTableUID(tx, parentTable)
 	if err != nil {
@@ -119,11 +120,22 @@ func RemoveAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to drop child table: %v", err))
 			return
 		}
-		_ = dtt_3_table_delete.CleanupTableMetadata(tx, childTableUID, childSchemaName)
+		if err := dtt_3_table_delete.CleanupTableMetadata(tx, childTableUID, childSchemaName); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to clean asset metadata: %v", err))
+			return
+		}
 		droppedTable = true
 	}
 
-	_ = dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx)
+	if err := dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to refresh asset metadata: %v", err))
+		return
+	}
+
+	if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"message":       fmt.Sprintf("Attachment linking permanently removed for table '%s'", parentTable),

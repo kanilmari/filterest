@@ -19,6 +19,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	lang "easelect/backend/core_components/lang"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/system_config_checks"
@@ -42,7 +43,7 @@ func ImportTableCSV(ctx context.Context, tableName string) (string, string, erro
 		return "", "", fmt.Errorf("transaction missing from context")
 	}
 
-	return ImportTableCSVTxWithUsername(tx, tableName, "unknown")
+	return importTableCSVTxWithContext(ctx, tx, tableName, "unknown", nil)
 }
 
 // ImportTableCSVTx imports a table dump with a transaction-only API for internal callers and tests.
@@ -52,6 +53,11 @@ func ImportTableCSVTx(tx *sql.Tx, tableName string) (string, string, error) {
 
 // ImportTableCSVTxWithUsername imports one CSV file, upserts the rows, and records lang-key provenance when needed.
 func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string, actorRepairs ...*CSVActorRepairCounts) (string, string, error) {
+	return importTableCSVTxWithContext(context.Background(), tx, tableName, username, nil, actorRepairs...)
+}
+
+func importTableCSVTxWithContext(ctx context.Context, tx *sql.Tx, tableName string, username string, mutation *runtime_grant_mutations.Mutation, actorRepairs ...*CSVActorRepairCounts) (string, string, error) {
+	mutation.KeepImportBlockerScope()
 	if tableName == "" {
 		tableName = "dev_todo"
 	}
@@ -103,6 +109,12 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 	importedLangKeys := make([]string, 0, 64)
 	if tx == nil {
 		return "", "", fmt.Errorf("tx is nil")
+	}
+	if mutation == nil && runtime_grant_mutations.ReadsPolicyMetadata(sanitizedTable) {
+		mutation, err = runtime_grant_mutations.BeginTx(ctx, tx)
+		if err != nil {
+			return "", "", err
+		}
 	}
 	marks, err := row_mutation_policy.ReadRowActorColumns(tx, sanitizedTable)
 	if err != nil {
@@ -194,6 +206,14 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 		for index, column := range cols {
 			settingRow[column] = vals[index]
 		}
+		mutation.IncludeValues(sanitizedTable, settingRow)
+		if value := settingRow["id"]; value != nil {
+			var id int64
+			_, _ = fmt.Sscan(fmt.Sprint(value), &id)
+			if err := mutation.IncludeRows(ctx, sanitizedTable, id); err != nil {
+				return "", "", err
+			}
+		}
 		if err := system_config_checks.ValidateInsert(tx, sanitizedTable, settingRow); err != nil {
 			return "", "", err
 		}
@@ -233,6 +253,9 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 			*result = repairs
 		}
 	}
+	if err := mutation.Finish(ctx); err != nil {
+		return "", "", err
+	}
 	return filePath, sanitizedTable, nil
 }
 
@@ -244,22 +267,22 @@ func ImportTableCSVHandler(w http.ResponseWriter, r *http.Request) {
 	// writes.
 
 	tableName := r.URL.Query().Get("dataset")
-	tx, ok := dbutils.GetTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
+	tx, mutation, err := runtime_grant_mutations.BeginGeneric(r.Context(), w, tableName)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 
 	username := getImportUsernameOrUnknown(r)
 	var actorRepairs CSVActorRepairCounts
-	filePath, usedTable, err := ImportTableCSVTxWithUsername(tx, tableName, username, &actorRepairs)
+	filePath, usedTable, err := importTableCSVTxWithContext(r.Context(), tx, tableName, username, mutation, &actorRepairs)
 	if err != nil {
 		var refusal *httpresponse.Refusal
 		if errors.As(err, &refusal) {
 			httpresponse.RespondWithRefusal(w, refusal)
 			return
 		}
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 

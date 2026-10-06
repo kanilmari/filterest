@@ -5,10 +5,11 @@
 package backend
 
 import (
+	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"encoding/json"
 	"net/http"
-	"easelect/backend/core_components/httpresponse"
 )
 
 func SaveUserGroupRight(w http.ResponseWriter, r *http.Request) {
@@ -37,12 +38,21 @@ func SaveUserGroupRight(w http.ResponseWriter, r *http.Request) {
 		TargetTableUID:   data.TableUID,
 	}
 
-	if _, err := insertPermission(perm); err != nil {
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	if _, err := insertPermission(mutation.Tx, perm); err != nil {
 		logging.Errorf("error inserting permission: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Virhe tallennettaessa oikeutta")
 		return
 	}
 
+	if err := mutation.Finish(r.Context(), int64(perm.TargetTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Oikeus tallennettu onnistuneesti",

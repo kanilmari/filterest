@@ -20,6 +20,7 @@ import (
 
 	"easelect/backend/core_components/dbutils"
 	dtt_3_table_create "easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"github.com/lib/pq"
 )
 
@@ -27,6 +28,13 @@ import (
 // installation starts from, so creation runs against the real metadata tables.
 func loadPublicBootstrap(t *testing.T, db *sql.DB) {
 	t.Helper()
+	for label, key := range map[string]string{"basic": "DB_BASIC_USER", "guest": "DB_GUEST_USER", "readonly": "DB_READONLY_USER", "confidential": "DB_CONFIDENTIAL_USER"} {
+		role := "wl124 " + label + ` "bootstrap"`
+		if _, err := db.Exec("CREATE ROLE " + pq.QuoteIdentifier(role) + " LOGIN"); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(key, role)
+	}
 	root := filepath.Join("..", "..", "..", "..", "server_tools", "public_bootstrap")
 	for _, name := range []string{"schema.sql", "seed_data.sql"} {
 		script, err := os.ReadFile(filepath.Join(root, name))
@@ -39,14 +47,15 @@ func loadPublicBootstrap(t *testing.T, db *sql.DB) {
 	}
 }
 
-// postCreateDataset sends one creation request the way the request
-// middleware runs it: in a lazy transaction that only a success commits.
+// postCreateDataset uses a lazy transaction that only a success commits.
+// The capability recorder serves these catalogue assertions; middleware tests
+// separately prove that buffered HTTP success is released only after commit.
 func postCreateDataset(t *testing.T, db *sql.DB, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	lt := dbutils.NewLazyTx(db)
 	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(body))
 	rec := httptest.NewRecorder()
-	CreateTableHandler(rec, req.WithContext(dbutils.SetLazyTx(req.Context(), lt)))
+	CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, req.WithContext(dbutils.SetLazyTx(req.Context(), lt)))
 	if rec.Code >= http.StatusOK && rec.Code < http.StatusBadRequest {
 		if err := lt.Commit(); err != nil {
 			t.Fatalf("commit: %v", err)

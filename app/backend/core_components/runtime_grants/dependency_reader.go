@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/fk_display"
@@ -240,7 +241,12 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 					return nil
 				}
 			}
+			columnNames := make([]string, 0, len(columns))
 			for column := range columns {
+				columnNames = append(columnNames, column)
+			}
+			sort.Strings(columnNames)
+			for _, column := range columnNames {
 				if !snapshot.Objects[target].hasColumn(column) {
 					metadataFinding(snapshot, "system_triggers", row, "blocker", "missing automation destination column "+column)
 					return nil
@@ -252,7 +258,8 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 			return fmt.Errorf("read automation destinations: %w", err)
 		}
 	}
-	for oid, object := range snapshot.Objects {
+	for _, oid := range sortedObjectOIDs(*snapshot) {
+		object := snapshot.Objects[oid]
 		if object.Kind != "table" {
 			continue
 		}

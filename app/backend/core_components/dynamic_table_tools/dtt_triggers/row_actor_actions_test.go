@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,6 +35,7 @@ func (r *actorActionRows) Next(dest []driver.Value) error {
 	return nil
 }
 func TestTriggerActorsAreRefusedOrServerStamped(t *testing.T) {
+	granttest.ConfigureRoles(t)
 	state := &triggerAccountTargetState{actorRows: [][]driver.Value{{"created_by", "creator"}, {"user_id", "owner"}}}
 	name := fmt.Sprintf("actor-actions-%d", time.Now().UnixNano())
 	sql.Register(name, &triggerAccountTargetDriver{state})
@@ -51,7 +53,7 @@ func TestTriggerActorsAreRefusedOrServerStamped(t *testing.T) {
 		body, _ := json.Marshal(Trigger{SourceTable: "notes", TargetTable: "notes", ActionValues: fmt.Sprintf(`{%q:99}`, column)})
 		req := httptest.NewRequest("POST", "/", strings.NewReader(string(body)))
 		rec := httptest.NewRecorder()
-		CreateTriggerHandler(rec, req.WithContext(dbutils.SetTx(req.Context(), tx)))
+		CreateTriggerHandler(granttest.Recorder{ResponseRecorder: rec}, req.WithContext(dbutils.SetTx(req.Context(), tx)))
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"error_lang_key":"error_trigger_actor_column"`) || len(state.inserted) != 0 {
 			t.Fatalf("%s: %d %s", column, rec.Code, rec.Body)
 		}

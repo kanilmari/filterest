@@ -22,6 +22,7 @@ import (
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/system_config_checks"
 
 	"github.com/lib/pq"
@@ -59,18 +60,34 @@ func GetTriggersHandler(w http.ResponseWriter, r *http.Request) {
 // CreateTriggerHandler luo uuden herätteen (POST /api/system_triggers/create)
 func CreateTriggerHandler(w http.ResponseWriter, r *http.Request) {
 
-	tx, ok := dbutils.GetTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
-		return
-	}
-
 	trigger, err := decodeTriggerRequest(r)
 	if err != nil {
 		log.Printf("error decoding data: %v", err)
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid data")
 		return
 	}
+
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	tx := mutation.Tx
+	for _, endpoint := range []struct{ label, name string }{{"source", trigger.SourceTable}, {"target", trigger.TargetTable}} {
+		var exists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM public.system_db_tables
+		 WHERE table_name=$1 AND to_regclass(format('%I.%I',COALESCE(NULLIF(schema_name,''),'public'),table_name)) IS NOT NULL)`, endpoint.name).Scan(&exists); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking automation dataset")
+			return
+		}
+		if !exists {
+			httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: http.StatusBadRequest,
+				LangKey: "error_trigger_" + endpoint.label + "_dataset_missing",
+				Message: "automation " + endpoint.label + " dataset does not exist"})
+			return
+		}
+	}
+	mutation.IncludeTables(trigger.SourceTable, trigger.TargetTable)
 
 	// An automation writes on the caller's own database connection without a route
 	// check on its destination, so it may never write the account and rights tables
@@ -107,6 +124,11 @@ func CreateTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	if err := insertTriggerIntoDB(tx, trigger); err != nil {
 		log.Printf("error saving trigger: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving trigger")
+		return
+	}
+
+	if err := mutation.Finish(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 

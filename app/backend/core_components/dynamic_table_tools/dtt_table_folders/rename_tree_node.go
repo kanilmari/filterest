@@ -7,9 +7,10 @@ package dtt_system_table_folders
 import (
 	"database/sql"
 	"easelect/backend/core_components/dataset_routes"
-	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_triggers/automation_metadata"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/lang"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 	"encoding/json"
 	"errors"
@@ -51,11 +52,12 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[HandleRenameTreeNode] item_id=%d, item_type=%s, new_name=%s, translations=%v\n",
 		req.ItemID, req.ItemType, req.NewName, req.Translations)
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to acquire transaction")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
 	switch strings.ToLower(req.ItemType) {
 	case "folder":
@@ -65,6 +67,10 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "table":
+		if err := mutation.IncludeRows(r.Context(), "system_db_tables", int64(req.ItemID)); err != nil {
+			runtime_grant_mutations.RespondError(w, err)
+			return
+		}
 		if err := renameTable(tx, req); err != nil {
 			log.Printf("\033[31m[HandleRenameTreeNode] table error: %v\033[0m\n", err)
 			var conflictErr *dataset_routes.RouteConflictError
@@ -77,6 +83,11 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "item_type must be 'folder' or 'table'")
+		return
+	}
+
+	if err := mutation.Finish(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 
@@ -145,6 +156,9 @@ func renameTable(tx *sql.Tx, req RenameTreeNodeRequest) error {
 			return fmt.Errorf("ALTER TABLE RENAME %s → %s: %w", oldName, sanitizedName, err)
 		}
 		log.Printf("[HandleRenameTreeNode] ALTER TABLE %s RENAME TO %s", oldName, sanitizedName)
+	}
+	if err := automation_metadata.RenameDataset(tx, oldName, sanitizedName); err != nil {
+		return err
 	}
 
 	// 3. Päivitetään system_db_tables.table_name

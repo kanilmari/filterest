@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_delete"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 
 	"github.com/lib/pq"
@@ -38,11 +38,12 @@ func RemoveImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to acquire transaction")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
 	parentTableUID, err := LookupParentTableUID(tx, parentTable)
 	if err != nil {
@@ -106,13 +107,30 @@ func RemoveImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 				httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to drop shared asset table: %v", err))
 				return
 			}
-			_ = dtt_3_table_delete.CleanupTableMetadata(tx, childTableUID, childSchemaName)
+			if err := dtt_3_table_delete.CleanupTableMetadata(tx, childTableUID, childSchemaName); err != nil {
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to clean asset metadata: %v", err))
+				return
+			}
 			tableDropped = true
 		}
 
-		_, _ = tx.Exec(fmt.Sprintf("UPDATE %s SET cached_image = NULL", parentTable))
-		_, _ = tx.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS cached_image", parentTable))
-		_ = dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx)
+		if _, err := tx.Exec(fmt.Sprintf("UPDATE %s SET cached_image = NULL", parentTable)); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to remove image cache: %v", err))
+			return
+		}
+		if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS cached_image", parentTable)); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to remove image cache: %v", err))
+			return
+		}
+		if err := dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to refresh asset metadata: %v", err))
+			return
+		}
+
+		if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+			runtime_grant_mutations.RespondError(w, err)
+			return
+		}
 
 		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
 			"message":       fmt.Sprintf("Image assets permanently removed for table '%s'", parentTable),
@@ -141,13 +159,17 @@ func RemoveImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status.RelationID > 0 {
-		_, _ = tx.Exec(`DELETE FROM system_foreign_key_relations_1_m WHERE id = $1`, status.RelationID)
+		if _, err := tx.Exec(`DELETE FROM system_foreign_key_relations_1_m WHERE id = $1`, status.RelationID); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to remove image relation: %v", err))
+			return
+		}
 	} else {
-		_, _ = tx.Exec(
-			`DELETE FROM system_foreign_key_relations_1_m
-			 WHERE source_table_uid = $1 AND target_table_uid = $2`,
-			childTableUID, parentTableUID,
-		)
+		if _, err := tx.Exec(
+			`DELETE FROM system_foreign_key_relations_1_m WHERE source_table_uid = $1 AND target_table_uid = $2`, childTableUID, parentTableUID,
+		); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to remove image relation: %v", err))
+			return
+		}
 	}
 
 	if _, err := tx.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", childTable)); err != nil {
@@ -155,9 +177,23 @@ func RemoveImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = dtt_3_table_delete.CleanupTableMetadata(tx, childTableUID, childSchemaName)
-	_, _ = tx.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS cached_image", parentTable))
-	_ = dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx)
+	if err := dtt_3_table_delete.CleanupTableMetadata(tx, childTableUID, childSchemaName); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to clean asset metadata: %v", err))
+		return
+	}
+	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS cached_image", parentTable)); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to remove image cache: %v", err))
+		return
+	}
+	if err := dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to refresh asset metadata: %v", err))
+		return
+	}
+
+	if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"message":       fmt.Sprintf("Image assets permanently removed for table '%s'", parentTable),

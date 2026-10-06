@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"errors"
 	"fmt"
 	"io"
@@ -53,6 +54,12 @@ func (*triggerAccountTargetConn) Close() error { return nil }
 func (*triggerAccountTargetConn) Begin() (driver.Tx, error) { return triggerAccountTargetTx{}, nil }
 
 func (connection *triggerAccountTargetConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.HasPrefix(query, "SELECT EXISTS(SELECT 1 FROM public.system_db_tables") {
+		return &actorActionRows{cols: []string{"exists"}, rows: [][]driver.Value{{true}}}, nil
+	}
+	if rows, ok := granttest.BoundaryQuery(query, args); ok {
+		return rows, nil
+	}
 	if strings.Contains(query, "AS roles(actor_role)") {
 		return &actorActionRows{cols: []string{"column_name", "actor_role"}, rows: connection.state.actorRows}, nil
 	}
@@ -77,6 +84,9 @@ func (connection *triggerAccountTargetConn) QueryContext(_ context.Context, quer
 }
 
 func (connection *triggerAccountTargetConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if granttest.IsPolicyLock(query) {
+		return driver.RowsAffected(0), nil
+	}
 	if strings.HasPrefix(query, `INSERT INTO "notes"`) {
 		connection.state.actionQuery = query
 		connection.state.actionArgs = append([]driver.NamedValue(nil), args...)
@@ -105,6 +115,7 @@ func (rows *triggerAccountTargetRows) Next(dest []driver.Value) error {
 }
 
 func TestCreateTriggerHandlerRefusesAccountTableTarget(t *testing.T) {
+	granttest.ConfigureRoles(t)
 	for _, testCase := range []struct {
 		name         string
 		target       string
@@ -141,7 +152,7 @@ func TestCreateTriggerHandlerRefusesAccountTableTarget(t *testing.T) {
 			request = request.WithContext(dbutils.SetTx(request.Context(), tx))
 			recorder := httptest.NewRecorder()
 
-			CreateTriggerHandler(recorder, request)
+			CreateTriggerHandler(granttest.Recorder{ResponseRecorder: recorder}, request)
 
 			if recorder.Code != testCase.wantStatus || !strings.Contains(recorder.Body.String(), testCase.wantBody) {
 				t.Fatalf("response = %d %q, want %d containing %q", recorder.Code, recorder.Body.String(), testCase.wantStatus, testCase.wantBody)

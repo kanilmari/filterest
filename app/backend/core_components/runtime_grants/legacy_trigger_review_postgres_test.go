@@ -49,8 +49,8 @@ func TestLegacyTriggerReviewPostgres(t *testing.T) {
 					t.Fatalf("catalogue trigger review: %v %+v", err, s.Blockers)
 				}
 			}
-			check(!fixture.reviewed)
-			if !fixture.reviewed {
+			check(!reviewedTriggerBodies[fixture.digest])
+			if !reviewedTriggerBodies[fixture.digest] {
 				return // cross-table and privilege writers are never invoked
 			}
 			fixtureExec(t, owner, `UPDATE legacy_trigger_rows SET title='new' WHERE id=1`)

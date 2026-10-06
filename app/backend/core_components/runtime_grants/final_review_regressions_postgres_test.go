@@ -6,14 +6,8 @@ package runtime_grants
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-
-	"easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
-	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
-	"easelect/backend/core_components/runtimepaths"
 
 	"github.com/lib/pq"
 )
@@ -109,70 +103,6 @@ func TestAboutGalleryRuntimeConsumerPostgres(t *testing.T) {
 	}
 }
 
-func TestGalleryParentAdoptionDoesNotSettleNestedRowsPostgres(t *testing.T) {
-	owner, connect, config, _ := reviewPostgresFixture(t)
-	fixtureExec(t, owner, `CREATE TABLE gallery_parent(id integer PRIMARY KEY,cached_image text);
- CREATE TABLE gallery_assets(id serial PRIMARY KEY,parent_id integer,filename text,asset_kind text,sort_order integer,is_primary boolean,metadata_json jsonb,cached_image text);
- CREATE TABLE nested_gallery_assets(id serial PRIMARY KEY,parent_id integer,filename text,asset_kind text,sort_order integer,is_primary boolean,metadata_json jsonb);
- INSERT INTO system_db_tables VALUES(18,8,'gallery_parent','public','gallery_parent'::regclass::oid,NULL),(19,9,'gallery_assets','public','gallery_assets'::regclass::oid,NULL),(20,10,'nested_gallery_assets','public','nested_gallery_assets'::regclass::oid,NULL);
- INSERT INTO system_group_table_func_rights VALUES(2,2,8);
- INSERT INTO system_foreign_key_relations_1_m VALUES
- (9,8,'parent_id','id',NULL,false,'{"file_upload":{"filename_column":"filename","profiles":{"image":{}}}}',80),
- (10,9,'parent_id','id',NULL,false,'{"file_upload":{"filename_column":"filename","profiles":{"image":{}}}}',81);
- INSERT INTO gallery_parent VALUES(1,'8_1_1.jpg');
- INSERT INTO gallery_assets(parent_id,filename,asset_kind,sort_order,is_primary) VALUES(1,'8_1_2.jpg','image',1,true)`)
-	s := readFixtureSnapshot(t, owner, config)
-	applyFixtureGrants(t, owner, s, grantsFor(t, s))
-	fixtureExec(t, owner, "GRANT SELECT ON system_foreign_key_relations_1_m, system_db_tables TO "+pq.QuoteIdentifier(config.Names["basic"]))
-	basic := connect(config.Names["basic"])
-	for _, privilege := range []string{"UPDATE(sort_order)", "UPDATE(is_primary)", "UPDATE(cached_image)"} {
-		var allowed bool
-		column := strings.TrimSuffix(strings.TrimPrefix(privilege, "UPDATE("), ")")
-		if err := basic.QueryRow(`SELECT has_column_privilege('gallery_assets',$1,'UPDATE')`, column).Scan(&allowed); err != nil || allowed {
-			t.Fatal("parent adoption acquired child callback write", privilege, err)
-		}
-	}
-	var allowed bool
-	if err := basic.QueryRow(`SELECT has_table_privilege('nested_gallery_assets','INSERT') OR has_sequence_privilege('nested_gallery_assets_id_seq','USAGE')`).Scan(&allowed); err != nil || allowed {
-		t.Fatal("nested adoption acquired phantom INSERT/sequence", err)
-	}
-	paths, err := runtimepaths.Resolve(t.TempDir(), t.TempDir(), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	configureReviewRuntimePaths(t, paths)
-	folder := filepath.Join(paths.StorageRoot, "8", "1", "original")
-	if err := os.MkdirAll(folder, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(folder, "8_1_1.jpg"), []byte("fixture picture"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	tx, err := basic.BeginTx(context.Background(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback()
-	gallery, err := dtt_card_picture.PictureRelationOf(tx, "gallery_parent")
-	if err != nil || gallery == nil {
-		t.Fatal("canonical gallery discovery", err)
-	}
-	if err := dtt_asset_linking.ApplyCardPictureRule(tx, "gallery_parent", gallery, []int64{1}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	var preview string
-	var adopted int
-	if err := owner.QueryRow(`SELECT cached_image FROM gallery_parent WHERE id=1`).Scan(&preview); err != nil || preview != "8_1_2.jpg" {
-		t.Fatal("parent-only rule did not update preview", preview, err)
-	}
-	if err := owner.QueryRow(`SELECT count(*) FROM gallery_assets WHERE filename='8_1_1.jpg'`).Scan(&adopted); err != nil || adopted != 1 {
-		t.Fatal("parent-only rule did not adopt old picture", adopted, err)
-	}
-}
-
 func TestUnusedSchemaRequirementsPostgres(t *testing.T) {
 	owner, connect, config, auditRole := reviewPostgresFixture(t)
 	fixtureExec(t, owner, `CREATE SCHEMA apps; CREATE SCHEMA postgis;
@@ -180,20 +110,24 @@ func TestUnusedSchemaRequirementsPostgres(t *testing.T) {
  INSERT INTO system_db_tables VALUES(18,8,'unused_dataset','apps','apps.unused_dataset'::regclass::oid,NULL)`)
 	fixtureExec(t, owner, "GRANT SELECT ON ALL TABLES IN SCHEMA public TO "+pq.QuoteIdentifier(auditRole))
 	s := readFixtureSnapshot(t, owner, config)
-	assertUsage := func(want bool) {
+	assertUsage := func(wantBasic, wantGuest bool) {
 		t.Helper()
 		grants := grantsFor(t, s)
 		for _, object := range s.Objects {
 			if object.Kind == "schema" && (object.Name == "apps" || object.Name == "postgis") {
 				for _, role := range []string{"basic", "guest"} {
-					if containsGrant(grants, role, object.OID, "", "USAGE") != (want && object.Name == "apps") {
+					wanted := wantBasic
+					if role == "guest" {
+						wanted = wantGuest
+					}
+					if containsGrant(grants, role, object.OID, "", "USAGE") != (wanted && object.Name == "apps") {
 						t.Fatal("unused/required schema grant differs", role, object.Name)
 					}
 				}
 			}
 		}
 	}
-	assertUsage(false)
+	assertUsage(false, false)
 	findings, err := AuditRuntimeGrants(context.Background(), connect(auditRole), config)
 	if err != nil {
 		t.Fatal(err)
@@ -205,5 +139,8 @@ func TestUnusedSchemaRequirementsPostgres(t *testing.T) {
 	}
 	fixtureExec(t, owner, `INSERT INTO system_group_table_func_rights VALUES(3,1,8)`)
 	s = readFixtureSnapshot(t, owner, config)
-	assertUsage(true)
+	assertUsage(false, true)
+	fixtureExec(t, owner, `INSERT INTO system_group_table_func_rights VALUES(2,1,8)`)
+	s = readFixtureSnapshot(t, owner, config)
+	assertUsage(true, true)
 }

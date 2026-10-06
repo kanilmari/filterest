@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"errors"
 	"fmt"
 	"io"
@@ -161,7 +162,7 @@ func TestCreateTableHandlerRejectsDatasetRouteConflictBeforeFolderResolution(t *
 	req = withWorkflowTx(req, db)
 	rec := httptest.NewRecorder()
 
-	CreateTableHandler(rec, req)
+	CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, req)
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
@@ -184,6 +185,7 @@ func withWorkflowTx(req *http.Request, db *sql.DB) *http.Request {
 
 func newWorkflowQueueTestDB(t *testing.T) *sql.DB {
 	t.Helper()
+	granttest.ConfigureRoles(t)
 	initWorkflowQueueDriver()
 	resetWorkflowQueue()
 	name := fmt.Sprintf("easelect-workflow-test-%d", time.Now().UnixNano())
@@ -244,7 +246,10 @@ func (c *workflowQueueConn) Begin() (driver.Tx, error)             { return &wor
 func (tx *workflowQueueTx) Commit() error                          { return nil }
 func (tx *workflowQueueTx) Rollback() error                        { return nil }
 
-func (c *workflowQueueConn) QueryContext(_ context.Context, _ string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *workflowQueueConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if rows, ok := granttest.SnapshotQuery(query, args); ok {
+		return rows, nil
+	}
 	q, ok := popWorkflowQuery()
 	if !ok {
 		return nil, errors.New("mock: unexpected Query call")
@@ -255,7 +260,10 @@ func (c *workflowQueueConn) QueryContext(_ context.Context, _ string, _ []driver
 	return &workflowQueueRows{cols: q.cols, data: q.rows}, nil
 }
 
-func (c *workflowQueueConn) ExecContext(_ context.Context, _ string, _ []driver.NamedValue) (driver.Result, error) {
+func (c *workflowQueueConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if granttest.IsPolicyLock(query) {
+		return driver.RowsAffected(0), nil
+	}
 	e, ok := popWorkflowExec()
 	if !ok {
 		return nil, errors.New("mock: unexpected Exec call")

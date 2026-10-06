@@ -42,6 +42,7 @@ type definerFunctionIdentity struct {
 	Schema        string `json:"schema"`
 	Name          string `json:"name"`
 	ArgumentTypes string `json:"argument_types"`
+	LegacyTrigger bool   `json:"legacy_trigger,omitempty"`
 	SearchPath    string `json:"search_path"` // Exact reviewed pg_proc.proconfig entry.
 }
 
@@ -57,7 +58,14 @@ var reviewedDefinerBodies = map[string]definerFunctionIdentity{
 }
 
 func reviewedDefinerBodiesJSON() []byte {
-	encoded, _ := json.Marshal(reviewedDefinerBodies)
+	bodies := map[string]definerFunctionIdentity{}
+	for digest, identity := range reviewedDefinerBodies {
+		bodies[digest] = identity
+	}
+	for digest, identity := range reviewedLegacyDefiners {
+		bodies[digest] = identity
+	}
+	encoded, _ := json.Marshal(bodies)
 	return encoded
 }
 
@@ -69,9 +77,10 @@ const reviewedDefinerFunctionsSQL = `SELECT p.oid
  JOIN reviewed_definer_bodies b ON b.body_md5=md5(p.prosrc)
  WHERE p.prosecdef AND n.nspname=b.identity->>'schema' AND p.proname=b.identity->>'name'
  AND oidvectortypes(p.proargtypes)=b.identity->>'argument_types'
- AND l.lanname='sql' AND p.provolatile IN ('s','i')
+ AND ((COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND ` + reviewedLegacyDefinerSQL + `)
+ OR (NOT COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND l.lanname='sql' AND p.provolatile IN ('s','i')
  AND (SELECT array_agg(setting) FROM unnest(p.proconfig) setting WHERE setting LIKE 'search_path=%')
-     = ARRAY[b.identity->>'search_path']`
+     = ARRAY[b.identity->>'search_path']))`
 
 func readTriggerDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) (err error) {
 	defer func() {
@@ -79,7 +88,13 @@ func readTriggerDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSna
 			err = metadataReaderError("readTriggerDependencies", err, snapshot.Roles)
 		}
 	}()
-	return readRows(ctx, tx, `SELECT t.oid,t.tgrelid,md5(p.prosrc),p.prosecdef
+	type triggerRecord struct {
+		oid, source int64
+		digest      string
+		definer     bool
+	}
+	var records []triggerRecord
+	err = readRows(ctx, tx, `SELECT t.oid,t.tgrelid,md5(p.prosrc),p.prosecdef
   FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE NOT t.tgisinternal AND t.tgenabled <> 'D' AND n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
   AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.classid='pg_proc'::regclass AND d.objid=p.oid AND d.deptype='e')`, nil, func(rows *sql.Rows) error {
@@ -89,17 +104,38 @@ func readTriggerDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSna
 		if err := rows.Scan(&oid, &source, &digest, &definer); err != nil {
 			return err
 		}
+		records = append(records, triggerRecord{oid, source, digest, definer})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		oid, source, digest, definer := record.oid, record.source, record.digest, record.definer
 		object, ok := snapshot.Objects[source]
 		if !ok {
 			snapshot.Blockers = append(snapshot.Blockers, Finding{Role: "policy", Kind: "trigger", ObjectOID: oid, Object: "pg_catalog.pg_trigger", Finding: "blocker", Reason: fmt.Sprintf("pg_trigger row OID %d: missing tgrelid=%d", oid, source)})
-			return nil
+			continue
 		}
 		if !definer && reviewedTriggerBodies[digest] {
-			return nil
+			accepted, err := readReviewedInvokerTrigger(ctx, tx, snapshot, oid, digest)
+			if err != nil {
+				return err
+			}
+			if accepted {
+				continue
+			}
+		}
+		accepted, err := readReviewedLegacyTrigger(ctx, tx, snapshot, oid, source, digest, definer)
+		if err != nil {
+			return err
+		}
+		if accepted {
+			continue
 		}
 		snapshot.Blockers = append(snapshot.Blockers, Finding{Role: "policy", Kind: "trigger", ObjectOID: oid, Object: object.Identifier(), Finding: "blocker", Reason: "unreviewed trigger SQL side effects"})
-		return nil
-	})
+	}
+	return nil
 }
 
 // The request-actor default reads transaction context only (WL58); compare its

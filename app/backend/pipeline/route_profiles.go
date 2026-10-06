@@ -349,7 +349,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_system_table_folders.HandleSetCurrentProjectFolder": DefaultProfile,
 	"dtt_system_table_folders.HandleCreateFolder":            DefaultProfile,
 	"dtt_system_table_folders.HandleDeleteFolder":            DefaultProfile,
-	"dtt_system_table_folders.HandleRenameTreeNode":          DefaultProfile,
+	"dtt_system_table_folders.HandleRenameTreeNode":          AdminProfile,
 
 	// Language / translation
 	"lang.GenerateTranslationsHandler":   DefaultProfile,

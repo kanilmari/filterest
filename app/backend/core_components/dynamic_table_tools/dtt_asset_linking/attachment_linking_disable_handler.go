@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"net/http"
 
-	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 )
 
@@ -29,13 +29,20 @@ func DisableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentTableUID, err := LookupParentTableUID(backend.Db, parentTable)
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
+	tx := mutation.Tx
+
+	parentTableUID, err := LookupParentTableUID(tx, parentTable)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("parent table '%s' not found", parentTable))
 		return
 	}
 
-	status, err := FindFileUploadRelationStatusByProfile(backend.Db, parentTableUID, AssetProfileAttachment)
+	status, err := FindFileUploadRelationStatusByProfile(tx, parentTableUID, AssetProfileAttachment)
 	if err != nil {
 		if err == ErrFileUploadProfileNotFound {
 			httpresponse.RespondWithError(w, http.StatusNotFound, fmt.Sprintf("no attachment linking found for table '%s'", parentTable))
@@ -53,8 +60,13 @@ func DisableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 	profileConfig.Enabled = false
 	uploadConfig := SetProfileUploadConfig(status.UploadConfig, AssetProfileAttachment, profileConfig)
 
-	if err := SaveFileUploadConfigByRelationID(backend.Db, status.RelationID, uploadConfig); err != nil {
+	if err := SaveFileUploadConfigByRelationID(tx, status.RelationID, uploadConfig); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to disable attachment linking: %v", err))
+		return
+	}
+
+	if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 

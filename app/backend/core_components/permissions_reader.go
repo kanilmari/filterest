@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/security"
 )
 
@@ -37,22 +38,28 @@ func getTableUIDByName(name string, q rowQueryer) (int, error) {
 	return uid, nil
 }
 
-func insertPermission(p Permission) (bool, error) {
+func insertPermission(q dbutils.Querier, p Permission) (bool, error) {
+	if p.TargetSchemaName == "" {
+		p.TargetSchemaName = "public"
+	}
+	// Bind each parameter to the application's declared column type. In an
+	// INSERT ... SELECT, COALESCE's integer literal otherwise infers $4 before
+	// the destination column (which older snapshots can store as bigint).
 	query := `
     INSERT INTO system_group_table_func_rights
         (user_group_id,
          function_id,
          target_schema_name,
          target_table_uid)
-    SELECT $1, $2, $3,
-           $4
+    SELECT $1::integer, $2::integer, $3::text,
+           $4::integer
     WHERE NOT EXISTS (
         SELECT 1
         FROM system_group_table_func_rights
-        WHERE user_group_id = $1
-          AND function_id = $2
-          AND COALESCE(target_schema_name, '') = COALESCE($3, '')
-          AND COALESCE(target_table_uid, 0) = COALESCE($4, 0)
+        WHERE user_group_id = $1::integer
+          AND function_id = $2::integer
+          AND COALESCE(target_schema_name, '') = COALESCE($3::text, '')
+          AND COALESCE(target_table_uid, 0) = COALESCE($4::integer, 0)
     )
     `
 
@@ -61,7 +68,7 @@ func insertPermission(p Permission) (bool, error) {
 		uid = sql.NullInt64{Int64: int64(p.TargetTableUID), Valid: true}
 	}
 
-	res, err := Db.Exec(query,
+	res, err := q.Exec(query,
 		p.AuthUserGroupID,
 		p.FunctionID,
 		sql.NullString{String: p.TargetSchemaName, Valid: p.TargetSchemaName != ""},

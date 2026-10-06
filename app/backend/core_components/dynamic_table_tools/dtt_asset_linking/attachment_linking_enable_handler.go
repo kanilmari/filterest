@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"easelect/backend/core_components/dbutils"
 	attachmentprofile "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking/profiles/attachment"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 )
 
@@ -40,11 +40,12 @@ func EnableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		allowedTypes = attachmentprofile.DefaultAllowedFileTypes()
 	}
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction not available")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
 	parentTableUID, err := LookupParentTableUID(tx, parentTable)
 	if err != nil {
@@ -61,6 +62,11 @@ func EnableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		if err := SaveFileUploadConfigByRelationID(tx, existingStatus.RelationID, uploadConfig); err != nil {
 			_ = tx.Rollback()
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update attachment specs: %v", err))
+			return
+		}
+
+		if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+			runtime_grant_mutations.RespondError(w, err)
 			return
 		}
 
@@ -91,6 +97,11 @@ func EnableAttachmentLinkingHandler(w http.ResponseWriter, r *http.Request) {
 	if err := SaveFileUploadConfigByRelationID(tx, relationStatus.RelationID, uploadConfig); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("failed to persist attachment specs: %v", err))
+		return
+	}
+
+	if err := mutation.Finish(r.Context(), int64(parentTableUID)); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 

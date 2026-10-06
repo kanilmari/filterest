@@ -9,17 +9,33 @@ package dtt_crud_workflows
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 
-	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	dtt_3_table_create "easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
-	"easelect/backend/core_components/security"
-	"github.com/lib/pq"
 )
+
+// writeCreateTableLangKeyError tarkistaa onko virhe ErrMissingPrimaryKey-tyyppiä
+// ja palauttaa JSON-vastauksen kieliavaimella frontendille. Palauttaa true, jos virhe käsiteltiin.
+func writeCreateTableLangKeyError(w http.ResponseWriter, err error) bool {
+	var pkErr *dtt_3_table_create.ErrMissingPrimaryKey
+	if errors.As(err, &pkErr) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error_lang_key": pkErr.LangKey,
+			"error_message":  pkErr.Message,
+		})
+		return true
+	}
+	return false
+}
 
 // errNewFolderNameRequired refuses a new folder that has a parent but no name.
 // Such a request used to be read as "no new folder", and the dataset landed in
@@ -235,7 +251,7 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 		}
 	}
 
-	return grantRequestedTableReadPermissions(q, tableName, grantUsersRead, grantGuestsRead)
+	return nil // Flags seed application rights; the outer creation boundary reconciles once.
 }
 
 func ensureRegisteredTableUID(q dbutils.Querier, tableName string) (int, error) {
@@ -324,43 +340,4 @@ func insertPerm(q dbutils.Querier, groupID, funcID, tableUID int) error {
 		ON CONFLICT (user_group_id, function_id, COALESCE(target_table_uid, 0)) DO NOTHING`
 	_, err := q.Exec(query, groupID, funcID, tableUID)
 	return err
-}
-
-// grantRequestedTableReadPermissions completes the application read grants
-// inside the same creation transaction. Resolve each grantee from its existing
-// runtime pool so connection-driver defaults cannot diverge from real reads.
-func grantRequestedTableReadPermissions(q dbutils.Querier, tableName string, grantUsersRead, grantGuestsRead bool) error {
-	if !grantUsersRead && !grantGuestsRead {
-		return nil
-	}
-	tableName, err := security.SanitizeIdentifier(tableName)
-	if err != nil {
-		return fmt.Errorf("validate new dataset for read permissions: %w", err)
-	}
-	readers := []struct {
-		requested bool
-		label     string
-		pool      *sql.DB
-	}{
-		{grantUsersRead, "basic", backend.DbBasic},
-		{grantGuestsRead, "guest", backend.DbGuest},
-	}
-	for _, reader := range readers {
-		if !reader.requested {
-			continue
-		}
-		if reader.pool == nil {
-			return fmt.Errorf("%s database pool is unavailable", reader.label)
-		}
-		var roleName string
-		if err := reader.pool.QueryRow("SELECT current_user").Scan(&roleName); err != nil {
-			return fmt.Errorf("resolve %s database role: %w", reader.label, err)
-		}
-		query := "GRANT SELECT ON TABLE " + pq.QuoteIdentifier("public") + "." +
-			pq.QuoteIdentifier(tableName) + " TO " + pq.QuoteIdentifier(roleName)
-		if _, err := q.Exec(query); err != nil {
-			return fmt.Errorf("grant new dataset read permission to %s role: %w", reader.label, err)
-		}
-	}
-	return nil
 }

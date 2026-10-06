@@ -11,6 +11,7 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 	storagecleanup "easelect/backend/core_components/storagecleanup"
 	"encoding/json"
@@ -48,11 +49,13 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, ok := dbutils.RequireTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to acquire transaction")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
+	mutation.IncludeTables(sanitizedTableName)
 
 	// --- SAFETY CHECK START ---
 	if row_mutation_policy.IsInternalRegistryTable(sanitizedTableName) {
@@ -130,6 +133,11 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		storagecleanup.QueueArchiveTableStorageAfterCommit(r.Context(), fmt.Sprintf("%d", tableUID.Int64))
+	}
+
+	if err := mutation.Finish(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"errors"
 	"fmt"
 	"net/http"
@@ -35,6 +36,7 @@ type roleTx struct{ state *roleTxState }
 
 func openRoleTxDB(t *testing.T, state *roleTxState) *sql.DB {
 	t.Helper()
+	granttest.ConfigureRoles(t)
 	name := fmt.Sprintf("role-rollback-%d", time.Now().UnixNano())
 	sql.Register(name, &roleTxDriver{state})
 	db, err := sql.Open(name, "")
@@ -51,7 +53,7 @@ func TestCreateHandlerRollsBackSchemaAndMetadataAfterRoleAssignmentFailure(t *te
 	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(
 		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL"},{"name":"title","data_type":"TEXT","card_role":"header"}],"folder_id":1}`))
 	rec := httptest.NewRecorder()
-	CreateTableHandler(rec, withWorkflowTx(req, db))
+	CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, withWorkflowTx(req, db))
 	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "card role assignment failed") {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body)
 	}
@@ -71,7 +73,7 @@ func TestCreateHandlerRollsBackEverythingAfterColumnSettingsFailure(t *testing.T
 	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(
 		`{"dataset_name":"sample","column_list":[{"name":"id","data_type":"SERIAL"},{"name":"title","data_type":"TEXT","card_role":"header","sortable":true}],"folder_id":1}`))
 	rec := httptest.NewRecorder()
-	CreateTableHandler(rec, withWorkflowTx(req, db))
+	CreateTableHandler(granttest.Recorder{ResponseRecorder: rec}, withWorkflowTx(req, db))
 	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "column settings failed") {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body)
 	}
@@ -114,7 +116,10 @@ func (c *roleTxConn) ExecContext(_ context.Context, query string, _ []driver.Nam
 	return &workflowQueueResult{rowsAffected: 1}, nil
 }
 
-func (*roleTxConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (*roleTxConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if rows, ok := granttest.SnapshotQuery(query, args); ok {
+		return rows, nil
+	}
 	compact := strings.Join(strings.Fields(query), " ")
 	rows := &workflowQueueRows{}
 	switch {

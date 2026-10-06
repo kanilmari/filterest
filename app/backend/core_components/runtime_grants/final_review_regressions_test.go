@@ -40,7 +40,7 @@ func TestSiteGuestGroupAndAnonymousMembershipUnion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if s.GuestGroups[3] || !s.GuestGroups[4] || s.GuestGroups[5] != (membership == 5) {
+		if s.GuestGroupID != 4 || s.GuestGroups[3] || !s.GuestGroups[4] || s.GuestGroups[5] != (membership == 5) {
 			t.Fatal("site guests and anonymous membership union differ", s.GuestGroups)
 		}
 		// This reader fixture deliberately retains unrelated dangling metadata.
@@ -52,7 +52,7 @@ func TestSiteGuestGroupAndAnonymousMembershipUnion(t *testing.T) {
 		if !containsGrant(grants, "basic", 10, "", "SELECT") || containsGrant(grants, "guest", 10, "", "SELECT") {
 			t.Fatal("users-only price chart leaked to guests")
 		}
-		if !containsGrant(grants, "guest", 11, "", "SELECT") || containsGrant(grants, "guest", 12, "", "SELECT") != (membership == 5) {
+		if containsGrant(grants, "basic", 11, "", "SELECT") || !containsGrant(grants, "guest", 11, "", "SELECT") || containsGrant(grants, "guest", 12, "", "SELECT") != (membership == 5) {
 			t.Fatal("named guest group or anonymous membership lost its read")
 		}
 	}
@@ -239,7 +239,7 @@ func TestAdditionalSchemasRequireDesiredObjects(t *testing.T) {
 	unused.Schema = "unused"
 	s.Objects[12] = unused
 	s.Dependencies = []Dependency{{SourceOID: 10, TargetOID: 11, Kind: "label", When: Read, Columns: []string{"id", "title"}}}
-	for _, rights := range [][]Right{nil, {{2, 1, 1}}, {{3, 1, 1}}} {
+	for _, rights := range [][]Right{nil, {{2, 1, 1}}, {{3, 1, 1}}, {{2, 1, 1}, {3, 1, 1}}} {
 		s.Rights = rights
 		grants := grantsFor(t, s)
 		for _, role := range []string{"basic", "guest", "readonly", "confidential"} {
@@ -251,7 +251,10 @@ func TestAdditionalSchemasRequireDesiredObjects(t *testing.T) {
 					t.Fatal("empty or unused schema became a requirement", role, oid)
 				}
 			}
-			wantLabel := len(rights) != 0 && (role == "basic" || role == "guest" && rights[0].GroupID == 3)
+			wantLabel := false
+			for _, right := range rights {
+				wantLabel = wantLabel || (role == "basic" && right.GroupID == 2) || (role == "guest" && right.GroupID == 3)
+			}
 			if containsGrant(grants, role, 44, "", "USAGE") != wantLabel {
 				t.Fatal("narrow label dependency lost/widened namespace access", role)
 			}

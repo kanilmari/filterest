@@ -1,12 +1,14 @@
 // table_metadata_cleanup_test.go
 // Unit tests for shared table-delete metadata cleanup helpers.
 // Uses a package-local database/sql driver double so the delete/query sequence can be verified without a live PostgreSQL instance or production refactors.
+// Covers optional automation metadata and registry cleanup ordering after dataset drops.
 package dtt_3_table_delete
 
 import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"errors"
 	"fmt"
 	"io"
@@ -33,10 +35,11 @@ type deleteTableState struct {
 	queries []queuedDeleteQuery
 	execs   []queuedDeleteExec
 
-	committed  bool
-	rolledBack bool
-	queryCalls []string
-	execCalls  []string
+	committed             bool
+	rolledBack            bool
+	automationTableExists bool
+	queryCalls            []string
+	execCalls             []string
 }
 
 type deleteTableDriver struct {
@@ -77,7 +80,16 @@ func (c *deleteTableConn) Query(query string, args []driver.Value) (driver.Rows,
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *deleteTableConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *deleteTableConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.HasPrefix(query, "SELECT r.id,r.target_insert_specs,COALESCE(") {
+		return &deleteTableRows{cols: []string{"id", "specs", "destination"}}, nil
+	}
+	if query == "SELECT to_regclass('public.system_triggers') IS NOT NULL" {
+		return &deleteTableRows{cols: []string{"present"}, rows: [][]driver.Value{{c.state.automationTableExists}}}, nil
+	}
+	if rows, ok := granttest.BoundaryQuery(query, args); ok {
+		return rows, nil
+	}
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
@@ -107,6 +119,9 @@ func (c *deleteTableConn) Exec(query string, args []driver.Value) (driver.Result
 }
 
 func (c *deleteTableConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if granttest.IsPolicyLock(query) {
+		return driver.RowsAffected(0), nil
+	}
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
@@ -144,6 +159,7 @@ func cloneDeleteTableRows(rows [][]driver.Value) [][]driver.Value {
 }
 
 func openDeleteTableDB(t *testing.T, queries []queuedDeleteQuery, execs []queuedDeleteExec) (*sql.DB, *deleteTableState) {
+	granttest.ConfigureRoles(t)
 	t.Helper()
 	deleteTableDriverRegisterMu.Lock()
 	defer deleteTableDriverRegisterMu.Unlock()
@@ -258,6 +274,7 @@ func TestDropManagedAssetChildTableDropsSchemaAndMetadataTogether(t *testing.T) 
 		},
 		[]queuedDeleteExec{
 			{rowsAffected: 1}, // DROP TABLE
+			{rowsAffected: 1}, // automation cleanup
 			{rowsAffected: 1},
 			{rowsAffected: 1},
 			{rowsAffected: 1},
@@ -267,6 +284,7 @@ func TestDropManagedAssetChildTableDropsSchemaAndMetadataTogether(t *testing.T) 
 			{rowsAffected: 1},
 		},
 	)
+	state.automationTableExists = true
 
 	err := dropManagedAssetChildTable(db, managedAssetChildTable{
 		tableName:  "articles_assets",
@@ -276,14 +294,17 @@ func TestDropManagedAssetChildTableDropsSchemaAndMetadataTogether(t *testing.T) 
 	if err != nil {
 		t.Fatalf("dropManagedAssetChildTable returned error: %v", err)
 	}
-	if len(state.execCalls) != 8 {
-		t.Fatalf("exec call count = %d, want 8", len(state.execCalls))
+	if len(state.execCalls) != 9 {
+		t.Fatalf("exec call count = %d, want 9", len(state.execCalls))
 	}
 	if !strings.Contains(state.execCalls[0], "DROP TABLE articles_assets CASCADE") {
 		t.Fatalf("first exec must drop canonical child table:\n%s", state.execCalls[0])
 	}
-	if !strings.Contains(state.execCalls[7], "DELETE FROM system_db_tables") {
-		t.Fatalf("final exec must delete child catalog metadata:\n%s", state.execCalls[7])
+	if !strings.Contains(state.execCalls[3], "DELETE FROM public.system_triggers") {
+		t.Fatal("managed child automations were not removed before registry deletion")
+	}
+	if !strings.Contains(state.execCalls[8], "DELETE FROM system_db_tables") {
+		t.Fatalf("final exec must delete child catalog metadata:\n%s", state.execCalls[8])
 	}
 }
 
@@ -297,6 +318,7 @@ func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 			},
 		},
 		[]queuedDeleteExec{
+			{rowsAffected: 1}, // automation cleanup
 			{rowsAffected: 1},
 			{rowsAffected: 1},
 			{rowsAffected: 1},
@@ -306,14 +328,15 @@ func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 			{rowsAffected: 1},
 		},
 	)
+	state.automationTableExists = true
 
 	err := CleanupTableMetadata(db, 42, "public")
 	if err != nil {
 		t.Fatalf("CleanupTableMetadata returned error: %v", err)
 	}
 
-	if len(state.execCalls) != 7 {
-		t.Fatalf("exec call count = %d, want 7", len(state.execCalls))
+	if len(state.execCalls) != 8 {
+		t.Fatalf("exec call count = %d, want 8", len(state.execCalls))
 	}
 	if len(state.queryCalls) != 1 {
 		t.Fatalf("query call count = %d, want 1", len(state.queryCalls))
@@ -324,8 +347,11 @@ func TestCleanupTableMetadataHappyPathAndSkippedLangCleanup(t *testing.T) {
 	if !strings.Contains(state.execCalls[0], "DELETE FROM system_foreign_key_relations_1_m") {
 		t.Fatalf("first exec missing 1:M cleanup:\n%s", state.execCalls[0])
 	}
-	if !strings.Contains(state.execCalls[6], "DELETE FROM system_db_tables") {
-		t.Fatalf("final exec missing system_db_tables cleanup:\n%s", state.execCalls[6])
+	if !strings.Contains(state.execCalls[2], "DELETE FROM public.system_triggers") {
+		t.Fatal("dataset automations were not cleaned up")
+	}
+	if !strings.Contains(state.execCalls[7], "DELETE FROM system_db_tables") {
+		t.Fatalf("final exec missing system_db_tables cleanup:\n%s", state.execCalls[7])
 	}
 }
 
@@ -399,6 +425,7 @@ func TestCleanupTableMetadataTreatsLangCleanupFailureAsNonFatal(t *testing.T) {
 			},
 		},
 		[]queuedDeleteExec{
+			{rowsAffected: 1}, // automation cleanup
 			{rowsAffected: 1},
 			{rowsAffected: 1},
 			{rowsAffected: 1},
@@ -408,6 +435,7 @@ func TestCleanupTableMetadataTreatsLangCleanupFailureAsNonFatal(t *testing.T) {
 			{rowsAffected: 1},
 		},
 	)
+	state.automationTableExists = true
 
 	err := CleanupTableMetadata(db, 42, "public")
 	if err != nil {
@@ -417,14 +445,14 @@ func TestCleanupTableMetadataTreatsLangCleanupFailureAsNonFatal(t *testing.T) {
 	if len(state.queryCalls) != 2 {
 		t.Fatalf("query call count = %d, want 2", len(state.queryCalls))
 	}
-	if len(state.execCalls) != 7 {
-		t.Fatalf("exec call count = %d, want 7", len(state.execCalls))
+	if len(state.execCalls) != 8 {
+		t.Fatalf("exec call count = %d, want 8", len(state.execCalls))
 	}
 	if !strings.Contains(state.queryCalls[1], "SELECT DISTINCT lang_key_id") {
 		t.Fatalf("lang cleanup query missing:\n%s", state.queryCalls[1])
 	}
-	if !strings.Contains(state.execCalls[6], "DELETE FROM system_db_tables") {
-		t.Fatalf("final cleanup did not continue after lang cleanup failure:\n%s", state.execCalls[6])
+	if !strings.Contains(state.execCalls[7], "DELETE FROM system_db_tables") {
+		t.Fatalf("final cleanup did not continue after lang cleanup failure:\n%s", state.execCalls[7])
 	}
 }
 

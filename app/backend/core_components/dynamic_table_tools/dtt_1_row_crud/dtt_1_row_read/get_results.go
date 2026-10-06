@@ -349,17 +349,10 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	}
 	result_columns = appendServiceCatalogModerationColumns(table_name, result_columns, query_results, userRole)
 
-	if request.URL.Query().Get("include_card_support") == "1" {
-		logCardSupportEnrichmentWarning(
-			table_name,
-			enrichRowsWithCardSupportColumns(
-				readQuerier,
-				table_name,
-				query_results,
-				columnsMap,
-				result_columns,
-			),
-		)
+	if err := prepareRowsForCardResponse(readQuerier, table_name, query_results, columnsMap, result_columns,
+		dbutils.NewRequestActorContext(userID, userRole), request.URL.Query().Get("include_card_support") == "1"); err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error authorizing card pictures")
+		return
 	}
 	if request.URL.Query().Get("include_map_support") == "1" {
 		mapSupportColumns := filterAllowedGeometryColumns(geomCols, allowedColumnsMap)

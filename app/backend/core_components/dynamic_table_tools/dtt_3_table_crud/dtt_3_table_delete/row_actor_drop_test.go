@@ -7,6 +7,7 @@ package dtt_3_table_delete
 import (
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	"errors"
 	"fmt"
 	"net/http/httptest"
@@ -37,7 +38,7 @@ func TestActorDatasetDropGuardsAndRollback(t *testing.T) {
 		req := httptest.NewRequest("POST", "/", strings.NewReader(fmt.Sprintf(`{"dataset_name":%q,"confirm_dataset_name":%q}`, tc.name, tc.name)))
 		req = req.WithContext(dbutils.SetLazyTx(req.Context(), lt))
 		rec := httptest.NewRecorder()
-		DropTableHandler(rec, req)
+		DropTableHandler(granttest.Recorder{ResponseRecorder: rec}, req)
 		if rec.Code >= 400 {
 			_ = lt.Rollback()
 		} else {

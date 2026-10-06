@@ -14,7 +14,6 @@ import (
 
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
-	media_utils "easelect/backend/core_components/media_utils"
 
 	"github.com/lib/pq"
 )
@@ -37,34 +36,10 @@ type sharedAssetPreviewLocation struct {
 // filename, or `<table_uid>/<row_id>/[<variant>/]<file>` with an optional /storage/
 // prefix. Other shapes cannot be proven to name a stored file. Placement otherwise
 // follows resolveSharedAssetStorageLocation, the rule delete-time file moves use.
+// Query/fragment suffixes select the same file, as the card and article renderers do.
 func resolveSharedAssetPreviewLocation(value string, parentTableUID string, parentRowID int64) (sharedAssetPreviewLocation, bool) {
-	trimmed := strings.TrimSpace(value)
-	switch {
-	case strings.HasPrefix(trimmed, "/storage/"):
-		trimmed = strings.TrimPrefix(trimmed, "/storage/")
-	case strings.HasPrefix(trimmed, "storage/"):
-		trimmed = strings.TrimPrefix(trimmed, "storage/")
-	}
-	if trimmed == "" || strings.ContainsAny(trimmed, `\?#`) {
-		return sharedAssetPreviewLocation{}, false
-	}
-	if strings.Contains(trimmed, "/") {
-		parts := strings.Split(trimmed, "/")
-		if len(parts) != 3 && len(parts) != 4 {
-			return sharedAssetPreviewLocation{}, false
-		}
-		if !media_utils.IsCanonicalStorageID(parts[0]) || !media_utils.IsCanonicalStorageID(parts[1]) {
-			return sharedAssetPreviewLocation{}, false
-		}
-		if len(parts) == 4 && !media_utils.IsKnownVariant(parts[2]) {
-			return sharedAssetPreviewLocation{}, false
-		}
-	}
-	tableUID, rowID, filename := resolveSharedAssetStorageLocation(trimmed, parentTableUID, parentRowID)
-	if !media_utils.IsCanonicalStorageID(tableUID) || rowID <= 0 || !isPlainStorageFilename(filename) {
-		return sharedAssetPreviewLocation{}, false
-	}
-	return sharedAssetPreviewLocation{TableUID: tableUID, RowID: rowID, Filename: filename}, true
+	tableUID, rowID, filename, ok := dtt_card_picture.ResolveStoredPictureLocation(value, parentTableUID, parentRowID)
+	return sharedAssetPreviewLocation{TableUID: tableUID, RowID: rowID, Filename: filename}, ok
 }
 
 // ResolveStoredPictureLocation exposes the card picture rule's strict placement, so
@@ -72,11 +47,6 @@ func resolveSharedAssetPreviewLocation(value string, parentTableUID string, pare
 func ResolveStoredPictureLocation(value string, parentTableUID string, parentRowID int64) (tableUID string, rowID int64, filename string, ok bool) {
 	location, ok := resolveSharedAssetPreviewLocation(value, parentTableUID, parentRowID)
 	return location.TableUID, location.RowID, location.Filename, ok
-}
-
-func isPlainStorageFilename(filename string) bool {
-	return filename != "" && filename != "." && filename != ".." &&
-		!strings.ContainsAny(filename, `/\`) && filename == strings.TrimSpace(filename)
 }
 
 // isIndependentMediaReference names a media-library picture. Those live in

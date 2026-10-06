@@ -12,7 +12,6 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
-	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/pipeline/txlog"
 )
@@ -54,11 +53,12 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 			}
 		}()
 
-		statusCapture := httpresponse.NewStatusCapture(w)
+		statusCapture := newCommitResponse(w)
 		next.ServeHTTP(statusCapture, r)
 
 		// Only commit/log if a transaction was actually opened
 		if !lt.WasStarted() {
+			statusCapture.release()
 			return
 		}
 
@@ -75,11 +75,14 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 				rollbackCause = fmt.Errorf("%w: rollback failed: %v", rollbackCause, err)
 			}
 			txlog.LogTransactionResult(r, false, rollbackCause)
+			statusCapture.release()
 			return
 		}
 
 		if err := lt.Commit(); err != nil {
 			if err == sql.ErrTxDone {
+				_ = lt.Rollback()
+				statusCapture.commitFailed()
 				txlog.LogTransactionResult(r, false, err)
 				return
 			}
@@ -90,11 +93,13 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 			)
 			_ = lt.Rollback()
 			txlog.LogTransactionResult(r, false, err)
+			statusCapture.commitFailed()
 		} else {
 			if enabled, _ := CheckTransactionConsoleLogs(); enabled {
 				logging.InfoAttrs("transaction committed", slog.String("path", r.URL.Path))
 			}
 			txlog.LogTransactionResult(r, true, nil)
+			statusCapture.release()
 		}
 	})
 }

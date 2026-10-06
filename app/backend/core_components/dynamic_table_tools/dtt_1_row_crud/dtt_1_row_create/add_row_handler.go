@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"strconv"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dynamic_table_tools/ai_features"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	row_mutation_policy "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/runtimepaths"
 
 	"easelect/backend/core_components/dbutils"
@@ -34,12 +36,7 @@ func AddRowMultipartHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tableName == "" {
-		tx, ok := dbutils.GetTx(r.Context())
-		if !ok {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
-			return
-		}
-		name, err := getTableNameFromUID(tableUID, tx)
+		name, err := getTableNameFromUID(tableUID, backend.Db)
 		if err != nil {
 			fmt.Printf("\033[31m[add_row_handler.go] [AddRowMultipartHandlerWrapper] error: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to fetch table name")
@@ -70,15 +67,16 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 		httpresponse.RespondWithError(w, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
 		return
 	}
-	tx, ok := dbutils.GetTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
-		return
-	}
 	err := r.ParseMultipartForm(50 << 20) // sallit. esim. 50 MB
 	if err != nil {
 		fmt.Printf("\033[31m[add_row_handler.go] [AddRowMultipartHandler] error: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "multipart parse error")
+		return
+	}
+
+	tx, mutation, err := runtime_grant_mutations.BeginGeneric(r.Context(), w, tableName)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 
@@ -102,6 +100,7 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 		return
 	}
 
+	mutation.IncludeValues(tableName, payload)
 	selections, selectionErr := media_library.TakeSelections(payload)
 	if selectionErr != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "media_reuse_not_allowed")
@@ -142,6 +141,11 @@ func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName st
 	); queueErr != nil {
 		log.Printf("embedding refresh scheduling failed table_uid=%s row_id=%d", tableUID, mainRowID)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Error scheduling embedding refresh")
+		return
+	}
+
+	if err := mutation.Finish(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
 
