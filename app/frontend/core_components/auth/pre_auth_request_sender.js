@@ -6,6 +6,15 @@
 // runApiPipeline; see docs/instructions_and_documentation/PIPELINE_EXCEPTIONS.md.
 import { ensureCsrfToken } from "../pipeline/api_pipeline.js";
 import { isCsrfFailureResponse } from "../pipeline/api_pipeline_helpers.js";
+import { publishSessionChange } from './session_generation_store.js';
+
+async function observeLoginResponse(url, response) {
+    if (url === '/api/login' && response.ok) {
+        const data = await response.clone().json();
+        if (data.authenticated === true) publishSessionChange('login');
+    }
+    return response;
+}
 
 /**
  * Posts one JSON request with the CSRF token kept in the form's hidden field.
@@ -35,7 +44,7 @@ export async function postPreAuthJson(url, tokenField, buildBody) {
 
     const firstResponse = await send(tokenField?.value || "");
     if (firstResponse.status !== 403) {
-        return firstResponse;
+        return observeLoginResponse(url, firstResponse);
     }
 
     let refusal = "";
@@ -55,5 +64,5 @@ export async function postPreAuthJson(url, tokenField, buildBody) {
     if (tokenField) {
         tokenField.value = sessionToken;
     }
-    return send(sessionToken);
+    return observeLoginResponse(url, await send(sessionToken));
 }

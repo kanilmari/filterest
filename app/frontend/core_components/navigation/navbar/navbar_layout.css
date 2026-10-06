@@ -451,7 +451,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 }
 
 /* WL143 fills the reserved area; an empty track has no intrinsic height. */
-#navbar > #navbarFrontPageSection {
+#navbar > #navbarFrontPage {
     grid-area: front-page;
 }
 

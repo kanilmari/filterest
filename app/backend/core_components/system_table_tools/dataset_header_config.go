@@ -8,22 +8,17 @@ import (
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
-	dtt_1_row_create "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create"
-	filevalidation "easelect/backend/core_components/filevalidation"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/lang_key_naming"
 	"easelect/backend/core_components/runtimepaths"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type datasetHeaderTextConfig struct {
@@ -335,51 +330,11 @@ func saveDatasetMediaFile(storageDir string, tableUID int, role string, fileHead
 	if role != "cover" && role != "background" {
 		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media role: %s", role)
 	}
-	if fileHeader == nil {
-		return savedDatasetMediaFile{}, fmt.Errorf("dataset media file is required")
-	}
-
-	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-	if !isAllowedDatasetMediaExtension(ext) {
-		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media file type: %s", ext)
-	}
-
-	src, err := fileHeader.Open()
-	if err != nil {
-		return savedDatasetMediaFile{}, err
-	}
-	defer src.Close()
-	if err := filevalidation.ValidateExtensionSignature(src, ext); err != nil {
-		return savedDatasetMediaFile{}, fmt.Errorf("unsupported dataset media file type: %w", err)
-	}
-
-	relativeDir := filepath.Join(strconv.Itoa(tableUID), "dataset_media", role, "original")
-	absDir := filepath.Join(storageDir, relativeDir)
-	if err := os.MkdirAll(absDir, 0o755); err != nil {
-		return savedDatasetMediaFile{}, err
-	}
-	fileName := time.Now().UTC().Format("20060102T150405.000000000Z") + ext
-	absPath := filepath.Join(absDir, fileName)
-	dst, err := os.OpenFile(absPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		return savedDatasetMediaFile{}, err
-	}
-	_, copyErr := io.Copy(dst, src)
-	closeErr := dst.Close()
-	if copyErr != nil {
-		return savedDatasetMediaFile{}, copyErr
-	}
-	if closeErr != nil {
-		return savedDatasetMediaFile{}, closeErr
-	}
-
-	createDatasetMediaDisplayVariants(storageDir, tableUID, role, fileName, ext)
-
-	return savedDatasetMediaFile{
-		StorageKey:   filepath.ToSlash(filepath.Join(relativeDir, fileName)),
-		OriginalName: filepath.Base(fileHeader.Filename),
-		MIMEType:     datasetMediaMIMEType(ext),
-	}, nil
+	return savePresentationMediaFile(storageDir, filepath.Join(strconv.Itoa(tableUID), "dataset_media", role),
+		fileHeader, isAllowedDatasetMediaExtension, 0, func(filename, ext string) error {
+			createDatasetMediaDisplayVariants(storageDir, tableUID, role, filename, ext)
+			return nil
+		})
 }
 
 func datasetMediaMIMEType(ext string) string {
@@ -401,24 +356,8 @@ func isAllowedDatasetMediaExtension(ext string) bool {
 }
 
 func createDatasetMediaDisplayVariants(storageDir string, tableUID int, role, fileName, ext string) {
-	switch strings.ToLower(ext) {
-	case ".svg", ".gif":
-		return
-	}
-	originalPath := filepath.Join(storageDir, strconv.Itoa(tableUID), "dataset_media", role, "original", fileName)
-	for _, size := range []int{300, 1000, 2160} {
-		variantPath := filepath.Join(
-			storageDir,
-			strconv.Itoa(tableUID),
-			"dataset_media",
-			role,
-			strconv.Itoa(size),
-			fileName,
-		)
-		if err := dtt_1_row_create.CreateImageDisplayVariant(originalPath, variantPath, size); err != nil {
-			log.Printf("dataset media display variant %s/%d: %v", role, size, err)
-		}
-	}
+	_ = createPresentationMediaDisplayVariants(storageDir, filepath.Join(strconv.Itoa(tableUID), "dataset_media", role),
+		fileName, strings.ToLower(ext), []int{300, 1000, 2160}, false)
 }
 
 func saveDatasetHeaderLangKeyConfig(tx *sql.Tx, datasetName string, configs []datasetHeaderTextSaveRequest) error {

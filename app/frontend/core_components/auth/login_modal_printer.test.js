@@ -91,6 +91,8 @@ async function loadModule() {
     }));
     vi.doMock("./auth_broadcast.js", () => ({
         publishAuthLogin: publishAuthLoginMock,
+        publishAuthInvalidation: vi.fn(),
+        subscribeToAuthBroadcast: vi.fn(() => () => {}),
     }));
     vi.doMock("../config_fetcher.js", () => ({
         isCrossTabLoginSyncEnabled: isCrossTabLoginSyncEnabledMock,
@@ -125,6 +127,7 @@ describe("showLoginModal", () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({ authenticated: true }),
+            clone: () => ({ json: async () => ({ authenticated: true }) }),
         }));
     });
 

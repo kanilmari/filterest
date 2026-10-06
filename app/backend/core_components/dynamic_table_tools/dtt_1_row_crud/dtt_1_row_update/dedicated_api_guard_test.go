@@ -15,6 +15,7 @@ func TestUpdateRowRejectsDedicatedAPIReportTableBeforeSessionAccess(t *testing.T
 		"dev_agent_handover_reports",
 		"dev_agent_release_goal_contracts",
 		"system_column_field_set_members",
+		"system_front_page_revisions",
 	} {
 		t.Run(tableName, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/update-row", nil)

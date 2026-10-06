@@ -146,6 +146,19 @@ export function hideLoadingIndicator(targetId) {
 }
 
 /**
+ * hasContentBesideLoadingIndicator — whether an element holds anything other than this module's own
+ * transient spinner. Navigation shows the spinner inside its target before it decides whether an
+ * emptied view must load again, so an empty view must not count the spinner as content.
+ *
+ * @param {Element|null} element
+ * @returns {boolean}
+ */
+export function hasContentBesideLoadingIndicator(element) {
+    return Array.from(element?.childNodes || []).some(node =>
+        !(node.nodeType === Node.ELEMENT_NODE && node.hasAttribute(LOADING_SPINNER_ATTR_KEY)));
+}
+
+/**
  * withLoadingIndicator — wraps an async function with show/hide loading state.
  * The spinner is always hidden via finally, even if the function throws.
  *

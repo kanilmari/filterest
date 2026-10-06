@@ -1,0 +1,154 @@
+/* front_page.css
+ * Applies the dataset content-background treatment to Home and its compact blocks.
+ * Uses application theme surfaces and a single column on phones.
+ * Keeps the Home control aligned with the rectangular dataset tabs.
+ */
+
+.front-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  overflow: hidden;
+  color: var(--text_color);
+}
+
+.front-page-background {
+  position: absolute;
+  z-index: -1;
+  inset: calc(0px - var(--dataset-background-image-blur, 0px));
+  background-image: var(--front-page-background-2160);
+  background-repeat: no-repeat;
+  background-size: cover;
+  clip-path: inset(var(--dataset-background-image-blur, 0));
+  filter: blur(var(--dataset-background-image-blur, 0));
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.front-page-content,
+.front-page-status {
+  max-width: 1200px;
+  padding: 1rem;
+  margin-inline: auto;
+}
+
+.front-page-content h1,
+.front-page-status,
+.front-page-blocks > p,
+.front-page-blocks .supplemental-dataset-group {
+  padding: 1rem;
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--fw-radius-md, 8px);
+  overflow-wrap: anywhere;
+}
+
+.front-page-blocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.front-page-blocks .supplemental-dataset-group {
+  min-width: 0;
+}
+
+.front-page-blocks .supplemental-dataset-group p[hidden] {
+  display: none;
+}
+
+.front-page-blocks a,
+.front-page-status button {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.front-page-status:empty {
+  padding: 0;
+  border: 0;
+}
+
+.front-page-skeleton {
+  min-height: 160px;
+  margin: 1rem;
+  background: var(--bg_color_2);
+  border-radius: var(--fw-radius-md, 8px);
+}
+
+#navbarFrontPage[hidden] {
+  display: none;
+}
+
+/* Match the tabs' full-width region inside WL142's reserved grid area. */
+#navbar > #navbarFrontPage {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.navbar-front-page-link {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 18px 0 22px;
+  border-block: 1px solid var(--border_color);
+  background: transparent;
+  color: var(--text_color);
+  font-size: 18px;
+  text-decoration: none;
+}
+
+.navbar-front-page-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar-front-page-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.navbar-front-page-link:hover {
+  background: var(--button_hover_bg_color);
+}
+
+.navbar-front-page-link[aria-current="page"] .navbar-front-page-label {
+  text-decoration-line: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+.navbar-front-page-link[aria-current="page"] .navbar-front-page-icon {
+  color: var(--primary_color);
+}
+
+.navbar-front-page-link:focus-visible {
+  outline: 2px solid var(--primary_color);
+  outline-offset: -2px;
+}
+
+@media (width < 1000px) {
+  .front-page-background {
+    background-image: var(--front-page-background-1000);
+  }
+}
+
+/* The floating menu button (12px from the corner, 44px square) covers Home's first card
+   whenever the centred content reaches the corner; keep the heading below it. */
+@media (width < 1300px) {
+  .front-page-content {
+    padding-top: calc(12px + 44px + 0.75rem);
+  }
+}
+
+@media (width <= 600px) {
+  .front-page-blocks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

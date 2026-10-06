@@ -71,6 +71,8 @@ var productTables = map[string]bool{
 	"system_foreign_key_relations_1_m":  true,
 	"system_foreign_key_relations_m_m":  true,
 	"system_fk_cache_triggers":          true, // Private 20260301 migration; administrator cache tools.
+	"system_front_page_blocks":          true,
+	"system_front_page_revisions":       true,
 	"system_favorites":                  true,
 	"system_functions":                  true,
 	"system_group_table_func_rights":    true,
@@ -172,6 +174,7 @@ var operationalPrivileges = map[string][]string{
 	"system_column_field_set_members":   {"SELECT", "INSERT", "DELETE"},
 	"system_view_field_set_assignments": {"SELECT", "INSERT", "UPDATE", "DELETE"},
 	"system_dataset_sort_defaults":      {"SELECT", "INSERT", "UPDATE"},
+	"system_front_page_blocks":          {"SELECT"},
 	"system_favorites":                  {"SELECT", "INSERT", "DELETE"},
 	"system_user_visual_preferences":    {"SELECT", "INSERT", "UPDATE", "DELETE"},
 	"system_media_assets":               {"SELECT", "INSERT"},

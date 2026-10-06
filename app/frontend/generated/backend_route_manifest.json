@@ -346,6 +346,67 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/front-page",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AdminFrontPageHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/admin/front-page/background",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.FrontPageBackgroundHandler",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/lang-key",
       "match_type": "exact",
       "handler_name": "lang.AdminLangKeyHandler",
@@ -3327,6 +3388,45 @@
           "name": "api_language",
           "profile_name": "default",
           "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/front-page",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.GetFrontPageHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
           "admin_only": false
         }
       ]

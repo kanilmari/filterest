@@ -19,6 +19,10 @@ vi.mock("../navigation/main_tabs/main_tab_printer.js", () => ({
     initTabs: vi.fn(async () => {}),
     openNavTab: (...args) => cycle.openNavTab(...args),
 }));
+// This suite proves the existing setting-off cycle; enabled Home has visit-isolation proofs.
+vi.mock("../front_page/front_page_navigation.js", () => ({
+    isSeparateFrontPageEnabled: () => false, openFrontPage: vi.fn(),
+}));
 vi.mock("./auth_broadcast.js", () => ({ subscribeToAuthBroadcast: vi.fn(() => () => {}), publishAuthLogout: vi.fn() }));
 // Signed in once the bootstrap runs: the shell's auth button offers "logout".
 vi.mock("../admin_tools/auth_mode_handler.js", () => ({

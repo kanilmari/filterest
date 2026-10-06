@@ -29,6 +29,7 @@ import {
     getSelectedDataset,
 } from '../../state_stores/dataset_selection_saver.js';
 import { parseDeepLink, resolveTableName } from './table_loader_handler_helpers.js';
+import { isSeparateFrontPageEnabled, openFrontPage } from '../../front_page/front_page_navigation.js';
 
 // The page's first load forgets earlier visits; later loads in the same page --
 // the one after signing in -- must keep what this visit has chosen.
@@ -97,9 +98,11 @@ export async function load_tables(options = {}) {
 
         // Koonti: kaikki taulut + custom-näkymät samaan joukkoon
         const set_of_every_table_and_view_name = new Set();
-        custom_views.forEach((view) => set_of_every_table_and_view_name.add(view.name));
+        custom_views.forEach((view) => {
+            if (view.name !== 'front_page') set_of_every_table_and_view_name.add(view.name);
+        });
         array_of_grouped_tables.forEach((table) =>
-            set_of_every_table_and_view_name.add(table.dataset_name)
+            table.dataset_name !== 'front_page' && set_of_every_table_and_view_name.add(table.dataset_name)
         );
 
         /* ----------------------------------------------------------
@@ -111,9 +114,12 @@ export async function load_tables(options = {}) {
         const deepLink = parseDeepLink(current_pathname, DATASET_PREFIX);
         let deepLinkedName = deepLink.tableName;
         let deepLinkedRowId = deepLink.rowId;
+        if (/^\/(?:admin\/)?front_page(?:\/|$)/.test(current_pathname)) {
+            deepLinkedName = 'front_page';
+        }
 
         // Validate deep-linked row ID against available tables
-        if (deepLinkedRowId && deepLinkedName && !set_of_every_table_and_view_name.has(deepLinkedName)) {
+        if (deepLinkedRowId && deepLinkedName && deepLinkedName !== 'front_page' && !set_of_every_table_and_view_name.has(deepLinkedName)) {
             deepLinkedRowId = null;
             deepLinkedName = null;
         }
@@ -126,6 +132,7 @@ export async function load_tables(options = {}) {
             customViews: custom_views,
             isLandingOnFrontpage,
             tabOrder: result_from_server?.tab_order || [],
+            separateFrontPage: isSeparateFrontPageEnabled(),
         });
 
         let resolved_table_name = resolution.resolvedName;
@@ -144,6 +151,13 @@ export async function load_tables(options = {}) {
             if (!isLandingOnFrontpage) {
                 window.history.replaceState({}, '', '/');
             }
+        }
+
+        if (resolved_table_name === 'front_page') {
+            forgetViewsFromEarlierVisits(set_of_every_table_and_view_name);
+            await openFrontPage({ replace: true, forceReload,
+                isCurrentNavigation: () => isCurrentDatasetAccessRefresh(accessGeneration) });
+            return result_from_server;
         }
 
         if (resolved_table_name) {

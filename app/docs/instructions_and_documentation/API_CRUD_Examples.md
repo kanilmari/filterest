@@ -163,3 +163,56 @@ USERS_UID=replace_with_fresh_table_uid
 
 Use `./filterest language upsert` for corresponding dataset-language keys; keep those
 writes separate so names and icons have independent readback evidence.
+
+## Optional Home Page API
+
+The front page is disabled by default. `GET /api/front-page` returns 404 while
+`separate_front_page` is off. When enabled, it returns `{viewer_id, site_name, background,
+blocks, partial}`. Each block contains `{dataset, result_limit, columns, types,
+data}` from the ordinary results handler, capped to its requested row count.
+Denied, hidden and failing datasets leave no name or placeholder. Delegates keep
+the request actor and transaction, request text summaries with `__newest DESC`,
+skip the count, and never request card or image enrichment. `viewer_id` binds the
+response to the actual session viewer. No new block starts after the three-second budget.
+
+Only administrators write front page configuration. `GET /api/admin/front-page`
+reads the common scope; `?user_id=42` reads that account's scope, and
+`?user_query=text` searches at most twenty public display names. The scope read
+returns `{settings, background, background_error, scope, saved, inherits_common,
+source, version, blocks, datasets}`. Dataset candidates carry `newest_capable`
+and `can_read`; blocks carry `dataset`, `result_limit`, `sort_order`, `enabled`
+and `can_read`. Never use generic row writes for `system_front_page_blocks`.
+
+POST exactly one operation to `/api/admin/front-page`:
+
+- `{settings:{separate_front_page:false,front_page_button_shows_site_name:false}}`
+- `{user_id:42,version:"opaque value from GET",blocks:[{dataset:"tiketit",result_limit:5,sort_order:1,enabled:true}]}`
+- `{user_id:42,version:"opaque value from GET",reset:true}`
+- `{user_id:42,version:"opaque value from GET",copy_from_common:true}`
+
+Omit `user_id` or use null for common. Lists contain at most twenty distinct
+content datasets with a newest column; positions are unique from 1 to 100 and
+limits are 1 to 20. Any saved account row, even disabled, replaces common wholly.
+An empty list resets the scope: accounts inherit common, common uses the computed
+readable project-menu default (at most twelve blocks of five rows). Copy uses the
+saved common list, or that account's readable default. A successful scope write
+returns `{version}`; a stale version returns 409. Versions survive resets in
+protected `system_front_page_revisions` metadata, so a previously empty editor
+cannot silently overwrite newer work. This metadata is excluded from dataset
+registration and settings, refuses generic writes, and cascades with account
+deletion. Saves lock account existence until commit. Treat versions
+as opaque; `"none"` identifies only a scope that has never been written.
+
+POST multipart to `/api/admin/front-page/background` with `background_image`
+and optional `focal_x`/`focal_y` from 0 to 1. With an existing image, omit the file
+to change its focal point. The complete multipart body is capped at 10 MB;
+PNG, JPEG and WebP are accepted. DELETE removes it. Both return `{background}`.
+The background object is `{storage_key,original_name,mime_type,focal_x,focal_y}`;
+null means none. Use `/storage/<storage_key>` or replace its `original` segment
+with `1000` or `2160`. Storage serves only the configured file when the feature
+is on and the current visitor can browse. Replaced files are removed after
+commit; newly saved files are removed on rollback.
+
+Authentication bootstrap adds `separate_front_page` and
+`front_page_button_site_name` on every response. An empty button name means the
+translated `front_page` key; unavailable optional configuration leaves it off.

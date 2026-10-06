@@ -59,6 +59,8 @@
 @import url("../core_components/admin_tools/admin_update_notice.css");
 @import url("../core_components/filterbar/text_search/text_search.css");
 @import url("../core_components/filterbar/text_search/supplemental_dataset_results.css");
+@import url("../core_components/front_page/front_page.css");
+@import url("../core_components/admin_tools/front_page_settings.css");
 @import url("../core_components/filterbar/morphing_filterbar_content.css");
 @import url("../core_components/filterbar/dataset_corner_controls.css");
 @import url("../core_components/filterbar/dataset_cover_theme.css");

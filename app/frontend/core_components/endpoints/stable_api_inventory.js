@@ -194,11 +194,15 @@ export const SUPPORTING_ROUTE_GROUPS = Object.freeze({
 
 /** @type {Readonly<Record<string, readonly string[]>>} */
 export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
+    frontPageAdministration: Object.freeze([
+        'adminFrontPage', 'adminFrontPageBackground',
+    ]),
     mediaLibrary: Object.freeze([
         'mediaLibraryList', 'mediaLibraryAttach', 'mediaLibraryDetach',
     ]),
     datasetReads: Object.freeze([
         'fetchContentTables',
+        'frontPage',
         'fetchDynamicChildren',
         'fetchComments',
         'createComment',

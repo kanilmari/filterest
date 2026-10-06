@@ -1,17 +1,20 @@
-// supplemental_dataset_results.js
+// compact_dataset_group.js
 // Renders compact, localized matches from other permitted main-tab datasets.
 // Reuses canonical dataset/row URLs and navigation approval before changing target query state.
 // Keeps result content as text, with no editor or full article lifecycle inside a search group.
 
-import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
     bindDatasetLanguageRenderer,
     resolveDatasetDisplayValue,
     setLocalizedDatasetText,
-} from "../../table_views/dataset_value_localizer.js";
-import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
-import { buildCardUrl } from "../../table_views/card_view/row_article_opener_helpers.js";
-import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
+} from "./dataset_value_localizer.js";
+import { buildDatasetPath } from "../navigation/nav_engine/dataset_aliases.js";
+import { buildCardUrl } from "./card_view/row_article_opener_helpers.js";
+import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
+import { getChosenDatasetView, setChosenDatasetView, forgetChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
+import { getParams, setParams } from "../navigation/nav_engine/query_params.js";
+import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 
 const COPY = Object.freeze({
     fi: { heading: "Muista aineistoista", showAll: "Näytä kaikki" },
@@ -136,33 +139,76 @@ function snippetColumns(columns, types, titleColumn) {
     });
 }
 
-function bindQueryNavigation(link, dataset, query, rowID = null) {
+/** Home row state is set before loading, just as for a deep link, so a remembered
+ * article cannot open instead. Only the article opener writes an entry.
+ * Ordinary show-all links keep the collection's existing navigation behavior.
+ */
+export function bindQueryNavigation(link, dataset, query, rowID = null, options = {}) {
     link.addEventListener("click", async event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
+        let previousView;
+        let previousState;
+        let previousParams;
+        const restoreState = () => {
+            if (!previousState) return;
+            if (previousView) setChosenDatasetView(dataset, previousView);
+            else forgetChosenDatasetView(dataset);
+            setUnifiedTableState(dataset, previousState);
+            setParams(dataset, previousParams);
+        };
         try {
-            const { openNavTab } = await import("../../navigation/main_tabs/main_tab_printer.js");
+            const { openNavTab } = await import("../navigation/main_tabs/main_tab_printer.js");
+            const replacementParams = options.replacementParams || { search: query };
+            // Search keeps its established dataset-then-article transition.
+            // Only Home opts into an article directly from the root entry.
+            if (!options.preselectArticle) {
+                const result = await openNavTab(dataset, { forceReload: true, replacementParams });
+                if (result?.abort || rowID === null || getSelectedDataset() !== dataset) return;
+                const { openRowArticleView } = await import("./card_view/row_article_opener.js");
+                await openRowArticleView({ id: rowID }, dataset, null, {
+                    isCurrent: () => getSelectedDataset() === dataset,
+                });
+                return;
+            }
+            const targetView = rowID !== null ? "article_view" : replacementParams.view;
+            if (targetView) {
+                previousView = getChosenDatasetView(dataset);
+                previousState = getUnifiedTableState(dataset);
+                previousParams = { ...getParams(dataset) };
+                setChosenDatasetView(dataset, targetView);
+                setUnifiedTableState(dataset, {
+                    articleView: { collapsed: rowID !== null, expandedId: rowID, returnView: "card",
+                        pendingAutoOpenFirstRenderedResult: false, pendingAutoOpenFirstSearchResult: false },
+                    ...(rowID === null ? { cardView: { collapsed: false, expandedId: null } } : {}),
+                });
+                // Skipping the URL stage also skips its parameter-cache write.
+                // Prime the target query without changing the origin history entry.
+                if (rowID !== null) setParams(dataset, { ...replacementParams, view: targetView });
+            }
             const result = await openNavTab(dataset, {
-                forceReload: true, replacementParams: { search: query },
+                forceReload: true,
+                ...(rowID !== null ? { skipUrlUpdate: true } : {}),
+                replacementParams: { ...replacementParams, ...(rowID !== null ? { view: "article_view" } : {}) },
             });
-            if (result?.abort || rowID === null || getSelectedDataset() !== dataset) return;
-            const { openRowArticleView } = await import("../../table_views/card_view/row_article_opener.js");
-            await openRowArticleView({ id: rowID }, dataset, null, {
-                isCurrent: () => getSelectedDataset() === dataset,
-            });
+            if (result?.abort) restoreState();
         } catch (error) {
-            console.warn("Supplemental result navigation failed:", error);
+            restoreState();
+            console.warn("Compact result navigation failed:", error);
         }
     });
 }
 
 /** One stable group per dataset; order comes solely from the accepted main-tab list. */
-export function createSupplementalDatasetGroup(tab, query) {
+export function createSupplementalDatasetGroup(tab, query, {
+    rowCap = 3, headingTag = 'h3', showAllKey = null, emptyKey = null, replacementParams,
+    preselectArticle = false,
+} = {}) {
     const element = document.createElement("section");
     element.className = "supplemental-dataset-group";
     element.dataset.dataset = tab.dataset;
     element.hidden = true;
-    const heading = document.createElement("h3");
+    const heading = document.createElement(headingTag);
     bindDatasetLanguageRenderer(heading, () => {
         heading.textContent = plainText(getTranslationForKey(tab.langKey, {
             fallback: tab.text || tab.dataset, countUsage: false,
@@ -171,12 +217,22 @@ export function createSupplementalDatasetGroup(tab, query) {
     const list = document.createElement("ul");
     const showAll = document.createElement("a");
     showAll.className = "supplemental-dataset-show-all";
-    showAll.href = buildDatasetPath(tab.dataset) + "?" + new URLSearchParams({ search: query });
+    const linkParams = replacementParams || { search: query };
+    const queryString = new URLSearchParams(linkParams).toString();
+    const querySuffix = queryString ? "?" + queryString : "";
+    showAll.href = buildDatasetPath(tab.dataset) + querySuffix;
     bindDatasetLanguageRenderer(showAll, language => {
-        showAll.textContent = getSupplementalSearchCopy(language).showAll;
+        showAll.textContent = showAllKey
+            ? getTranslationForKey(showAllKey, { countUsage: false })
+            : getSupplementalSearchCopy(language).showAll;
     });
-    bindQueryNavigation(showAll, tab.dataset, query);
-    element.append(heading, list, showAll);
+    bindQueryNavigation(showAll, tab.dataset, query, null, { replacementParams, preselectArticle });
+    const empty = document.createElement("p");
+    empty.hidden = true;
+    if (emptyKey) bindDatasetLanguageRenderer(empty, () => {
+        empty.textContent = getTranslationForKey(emptyKey, { countUsage: false });
+    });
+    element.append(heading, list, ...(emptyKey ? [empty] : []), showAll);
 
     return {
         element,
@@ -184,15 +240,15 @@ export function createSupplementalDatasetGroup(tab, query) {
             list.replaceChildren();
             const titleColumn = roleColumn(columns, types, "header");
             const extractColumns = snippetColumns(columns, types, titleColumn);
-            for (const row of rows.slice(0, 3)) {
+            for (const row of rows.slice(0, rowCap)) {
                 const item = document.createElement("li");
                 const title = document.createElement("a");
-                title.href = buildCardUrl("/", tab.dataset, row.id, "") + "?" + new URLSearchParams({ search: query });
+                title.href = buildCardUrl("/", tab.dataset, row.id, "") + querySuffix;
                 title.dataset.rowId = String(row.id);
                 setLocalizedDatasetText(title, titleColumn ? row[titleColumn] : row.id, types[titleColumn], {
                     transform: value => plainText(value, 140) || String(row.id),
                 });
-                bindQueryNavigation(title, tab.dataset, query, row.id);
+                bindQueryNavigation(title, tab.dataset, query, row.id, { replacementParams, preselectArticle });
                 item.append(title);
                 if (extractColumns.length) {
                     const description = document.createElement("p");
@@ -214,7 +270,8 @@ export function createSupplementalDatasetGroup(tab, query) {
                 }
                 list.append(item);
             }
-            element.hidden = rows.length === 0;
+            empty.hidden = !emptyKey || rows.length > 0;
+            element.hidden = !emptyKey && rows.length === 0;
         },
     };
 }

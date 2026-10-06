@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     ensurePrivateCustomViewsLoaded: vi.fn(() => Promise.resolve()),
     endpointRouter: vi.fn(),
     openNavTab: vi.fn(() => Promise.resolve()),
+    openFrontPage: vi.fn(() => Promise.resolve()),
     countThisFunction: vi.fn(),
     primeDatasetAccessRegistry: vi.fn(() => true),
     beginDatasetAccessRefresh: vi.fn(() => 1),
@@ -19,6 +20,11 @@ const mocks = vi.hoisted(() => ({
     clearDatasetSelectionState: vi.fn(),
     setSelectedDataset: vi.fn(),
     getSelectedDataset: vi.fn(() => null),
+}));
+
+vi.mock("../../front_page/front_page_navigation.js", () => ({
+    isSeparateFrontPageEnabled: () => localStorage.getItem('separate_front_page') === 'true',
+    openFrontPage: mocks.openFrontPage,
 }));
 
 const ifav = vi.hoisted(() => ({ restore: vi.fn(async () => true) }));
@@ -33,7 +39,7 @@ vi.mock("../../navigation/database_tree/nav_builder.js", () => ({
 }));
 
 vi.mock("../../navigation/admin_and_user_tools/custom_view_reader.js", () => ({
-    custom_views: [],
+    custom_views: [{ name: "front_page", navigationHidden: true }],
     ensure_private_custom_views_loaded: mocks.ensurePrivateCustomViewsLoaded,
 }));
 
@@ -117,6 +123,44 @@ describe("load_tables deep-link startup routing", () => {
             datasets: [{ dataset_name: "dev_agent_tasks" }],
             tab_order: [],
         });
+    });
+
+    test("enabled cold root opens only Home without selecting or loading a dataset", async () => {
+        localStorage.setItem('separate_front_page', 'true');
+        await load_tables({ forceReload: true });
+        expect(mocks.openFrontPage).toHaveBeenCalledExactlyOnceWith({
+            replace: true, forceReload: true, isCurrentNavigation: expect.any(Function),
+        });
+        expect(mocks.openNavTab).not.toHaveBeenCalled();
+        expect(mocks.setSelectedDataset).not.toHaveBeenCalled();
+        expect(mocks.endpointRouter).toHaveBeenCalledExactlyOnceWith('fetchContentTables');
+    });
+
+    test("setting off keeps the existing cold root dataset load", async () => {
+        await load_tables();
+        expect(mocks.openFrontPage).not.toHaveBeenCalled();
+        expect(mocks.setSelectedDataset).toHaveBeenCalledWith('dev_agent_tasks');
+        expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', {
+            skipUrlUpdate: true, forceReload: false,
+        });
+    });
+
+    test.each([true, false])("refuses /front_page even with a registered hidden view, enabled=%s", async enabled => {
+        localStorage.setItem('separate_front_page', String(enabled));
+        history.replaceState({}, '', '/front_page/42');
+        await load_tables();
+        expect(location.pathname).toBe('/');
+        expect(mocks.openFrontPage).not.toHaveBeenCalled();
+        expect(mocks.openNavTab).not.toHaveBeenCalled();
+        expect(mocks.setSelectedDataset).not.toHaveBeenCalled();
+    });
+
+    test("Home mode preserves dataset deep links", async () => {
+        localStorage.setItem('separate_front_page', 'true');
+        history.replaceState({}, '', '/dev_agent_tasks/853');
+        await load_tables();
+        expect(mocks.openFrontPage).not.toHaveBeenCalled();
+        expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false });
     });
 
     test("opens a deep-linked row without pushing the dataset base URL first", async () => {

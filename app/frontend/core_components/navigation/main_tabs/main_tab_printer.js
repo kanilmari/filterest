@@ -37,6 +37,8 @@ import { updateBrowserTabTitle } from "../nav_engine/browser_tab_title_writer.js
 import { NAVBAR_VISIBILITY_CHANGED_EVENT } from "../menu_button/navbar_visibility_handler.js";
 import { resolveFilterBarElement } from "../../filterbar/filterbar_engine/filterbar_visibility_handler.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
+import { isSeparateFrontPageEnabled, openFrontPage } from "../../front_page/front_page_navigation.js";
+import { renderNavbarFrontPage } from "../../front_page/navbar_front_page.js";
 
 /** User friendly tabs **/
 // Imports and SVG paths defined already...
@@ -138,6 +140,7 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         isLoggedIn = getButtonState() === 'logout';
     } catch (_) { /* not set yet — treat as not logged in */ }
     renderNavbarAuthActions({ isLoggedIn });
+    renderNavbarFrontPage({ isLoggedIn });
 
     // For guests: try fetching datasets (works when login_to_browse=false and guest
     // has permissions). suppressAuthRedirect prevents navigating away on 401/403 —
@@ -233,6 +236,12 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
     scheduleNavTabTextLineClassSync(container);
 
     if (!isLoggedIn && hasExplicitAuthShellEntry()) {
+        return;
+    }
+
+    if (isSeparateFrontPageEnabled() && window.location.pathname === '/'
+        && (isLoggedIn || localStorage.getItem('login_required_for_browse') !== 'true')) {
+        await openFrontPage({ replace: true });
         return;
     }
 
@@ -584,6 +593,8 @@ window.addEventListener("resize", () => {
         const selectedTable = getSelectedDataset();
         if (selectedTable) {
             updateTabPathsForView(selectedTable);
+        } else if (isSeparateFrontPageEnabled()) {
+            refreshMainTabPresentation();
         }
     }, 150);
 });
@@ -592,5 +603,7 @@ window.addEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, () => {
     const selectedTable = getSelectedDataset();
     if (selectedTable) {
         updateTabPathsForView(selectedTable);
+    } else if (isSeparateFrontPageEnabled()) {
+        refreshMainTabPresentation();
     }
 });

@@ -1,6 +1,7 @@
 // nav_builder_helpers.js
 // Pure helper functions extracted from nav_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
+// Keeps custom administrative tools in the existing translated hierarchy.
 
 /**
  * Group visible navigation entries without removing compatibility routes from the registry.
@@ -97,6 +98,7 @@ export function getAdminToolsStructure() {
             id: 'site_settings', name: 'site_settings', children: [
                 { id: 'site_languages', name: 'site_languages' },
                 { id: 'user_authentication', name: 'user_authentication' },
+                { id: 'front_page_settings', name: 'front_page_settings' },
             ],
         },
         {

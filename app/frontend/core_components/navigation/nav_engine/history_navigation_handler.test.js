@@ -144,6 +144,36 @@ describe("history_navigation_handler", () => {
         window.history.replaceState({}, "", "/events");
     });
 
+    test.each([false, true])('Back to enabled root restores Home after article cleanup, articleOpen=%s', async articleOpen => {
+        localStorage.setItem('separate_front_page', 'true');
+        if (articleOpen) document.body.innerHTML = `
+            <div class="card_view_wrapper big-card-open" data-table-name="events">
+                <div class="card_container"></div><article class="active_row_article"></article>
+            </div>`;
+        history.replaceState({}, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledWith(
+            'front_page', expect.any(Array), expect.objectContaining({ skipUrlUpdate: true })
+        ));
+        expect(closeRowArticleMock).toHaveBeenCalledTimes(articleOpen ? 1 : 0);
+        expect(location.pathname).toBe('/');
+    });
+
+    test('setting-off Back to root keeps its existing no-navigation behavior', async () => {
+        history.replaceState({}, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        await vi.waitFor(() => expect(browserTabTitle.update).toHaveBeenCalled());
+        expect(handleAllNavigationMock).not.toHaveBeenCalled();
+    });
+
+    test.each([true, false])('history never renders /front_page, enabled=%s', async enabled => {
+        localStorage.setItem('separate_front_page', String(enabled));
+        history.replaceState({}, '', '/front_page');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        await vi.waitFor(() => expect(browserTabTitle.update).toHaveBeenCalled());
+        expect(handleAllNavigationMock).not.toHaveBeenCalled();
+    });
+
     test("retitles the browser tab even when an early return skips navigation", async () => {
         // The image-first history path answers the entry itself and returns
         // before any navigation runs; the tab must still describe where the

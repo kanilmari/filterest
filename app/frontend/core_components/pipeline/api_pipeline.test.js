@@ -468,3 +468,60 @@ test('passes opt-in AbortSignal to fetch and propagates cancellation', async () 
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
 });
+
+test.each([401, 403])('expiry invalidates session-owned content even with auth redirect suppressed (HTTP %s)', async status => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    const clear = vi.fn();
+    const unsubscribe = session.subscribeToSessionGeneration(clear);
+    const generation = session.getSessionGeneration();
+    vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ auth_failure: true }, { ok: false, status })));
+    const result = await mod.runApiPipeline({ routeName: 'frontPage', suppressAuthRedirect: true });
+    expect(result.abort).toBe(true);
+    expect(session.getSessionGeneration()).toBeGreaterThan(generation);
+    expect(clear).toHaveBeenCalledExactlyOnceWith('expiry');
+    unsubscribe();
+});
+
+test.each([401, 403])('expiry on a CSRF retry invalidates with redirects suppressed (HTTP %s)', async status => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    const generation = session.getSessionGeneration();
+    const clear = vi.fn();
+    const unsubscribe = session.subscribeToSessionGeneration(clear);
+    const responses = [
+        new Response(JSON.stringify({ csrf_token: 'old-token' })),
+        new Response(JSON.stringify({ error: 'missing CSRF token' }), { status: 403 }),
+        new Response(JSON.stringify({ csrf_token: 'fresh-token' })),
+        new Response(JSON.stringify({ auth_failure: true }), { status }),
+    ];
+    const fetchMock = vi.fn(async () => responses.shift());
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+        const result = await mod.runApiPipeline({ routeName: 'updateRow', method: 'POST',
+            bodyData: { id: 7 }, suppressAuthRedirect: true });
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+        expect(fetchMock.mock.calls[3][1].headers['X-CSRF-Token']).toBe('fresh-token');
+        expect(result).toMatchObject({ abort: true, reason: 'auth_redirect' });
+        expect(session.getSessionGeneration()).toBe(generation + 1);
+        expect(clear).toHaveBeenCalledExactlyOnceWith('expiry');
+        expect(requestLoginRedirectMock).not.toHaveBeenCalled();
+    } finally {
+        unsubscribe();
+    }
+});
+
+test('sign-out invalidates synchronously before a pending CSRF bootstrap or network response', async () => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    const generation = session.getSessionGeneration();
+    let finishToken;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { finishToken = resolve; })));
+    const pending = mod.runApiPipeline({ routeName: 'logout', method: 'POST' });
+    expect(session.getSessionGeneration()).toBeGreaterThan(generation);
+    await vi.waitFor(() => expect(finishToken).toBeTypeOf('function'));
+    finishToken(buildResponse({ csrf_token: null }));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    finishToken(buildResponse({ success: true }));
+    await pending;
+});

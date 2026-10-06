@@ -5,7 +5,7 @@
 
 import { getMainDatasetTabs, subscribeMainDatasetTabs } from "../../navigation/main_tabs/main_dataset_tabs.js";
 import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
-import { createSupplementalDatasetGroup, getSupplementalSearchCopy } from "./supplemental_dataset_results.js";
+import { createSupplementalDatasetGroup, getSupplementalSearchCopy } from "../../table_views/compact_dataset_group.js";
 import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_localizer.js";
 import { VIEW_DEACTIVATE_EVENT } from "../../../reusable_components/view_lifecycle_events.js";
 

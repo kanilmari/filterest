@@ -6,8 +6,10 @@ import { count_this_function } from "../dev_tools/function_counter.js";
 import { fetchAuthModes, fetchUserPermissions } from "../endpoints/stable_endpoint_router.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
+import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
 
 export async function setAuthModes() {
+    invalidateSessionGeneration({ reason: 'bootstrap', revalidate: false });
     count_this_function("setAuthModes");
     try {
         const data = await fetchAuthModes();
@@ -19,6 +21,9 @@ export async function setAuthModes() {
             // Missing fields from an older server reset stale values to compatible defaults.
             localStorage.setItem('show_login_button', String(data.show_login_button !== false));
             localStorage.setItem('only_admin_can_login', String(data.only_admin_can_login === true));
+            localStorage.setItem('separate_front_page', String(data.separate_front_page === true));
+            localStorage.setItem('front_page_button_site_name',
+                typeof data.front_page_button_site_name === 'string' ? data.front_page_button_site_name : '');
 
             // Store registration_enabled flag for tab visibility
             if (typeof data.registration_enabled === 'boolean') {

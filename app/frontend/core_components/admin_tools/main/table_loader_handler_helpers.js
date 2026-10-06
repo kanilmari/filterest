@@ -72,6 +72,7 @@ export function parseDeepLink(pathname, datasetPrefix = '/') {
  * @param {Array<{ name: string }>} options.customViews - Custom view list
  * @param {boolean} options.isLandingOnFrontpage - Whether user landed on "/"
  * @param {Array<{ tab_id?: string, dataset_name?: string, sort_order?: number }>} [options.tabOrder] - Active project tab order
+ * @param {boolean} [options.separateFrontPage=false] - Whether the site root opens Home
  * @returns {{ resolvedName: string|null, deepLinkInvalid: boolean }}
  */
 export function resolveTableName({
@@ -82,7 +83,12 @@ export function resolveTableName({
     customViews,
     isLandingOnFrontpage,
     tabOrder = [],
+    separateFrontPage = false,
 }) {
+    // This hidden view only has the site root as its address, in either mode.
+    if (deepLinkedName === 'front_page') {
+        return { resolvedName: null, deepLinkInvalid: true };
+    }
     // 1) Deep-linked name
     if (deepLinkedName) {
         if (availableNames.has(deepLinkedName)) {
@@ -90,6 +96,10 @@ export function resolveTableName({
         }
         // Deep link pointed to a table that doesn't exist
         return { resolvedName: null, deepLinkInvalid: true };
+    }
+
+    if (separateFrontPage && isLandingOnFrontpage) {
+        return { resolvedName: 'front_page', deepLinkInvalid: false };
     }
 
     // 2) Stored/session name (skip if landing on front page)
@@ -113,8 +123,9 @@ export function resolveTableName({
     }
 
     if (!availableNames.has(defaultName)) {
-        defaultName = customViews.length > 0
-            ? customViews[0].name
+        const fallbackViews = customViews.filter(view => view.name !== 'front_page');
+        defaultName = fallbackViews.length > 0
+            ? fallbackViews[0].name
             : [...availableNames][0] || null;
     }
 

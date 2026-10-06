@@ -43,6 +43,18 @@ describe('auth_mode_handler', () => {
     vi.restoreAllMocks();
   });
 
+  test('invalidates the session generation before awaiting delayed auth modes', async () => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    const generation = session.getSessionGeneration();
+    let finishModes;
+    fetchAuthModesMock.mockReturnValueOnce(new Promise(resolve => { finishModes = resolve; }));
+    const pending = mod.setAuthModes();
+    expect(session.getSessionGeneration()).toBeGreaterThan(generation);
+    finishModes({ needs_button: 'login' });
+    await pending;
+  });
+
   test('stores logout state, registration flag, and user permissions for logged-in users', async () => {
     fetchAuthModesMock.mockResolvedValue({
       needs_button: 'logout',
@@ -87,6 +99,19 @@ describe('auth_mode_handler', () => {
     expect(localStorage.getItem('only_admin_can_login')).toBe('false');
     expect(sessionStorage.getItem('user_permissions')).toBe(null);
     expect(synchronizeThemePreferenceForAuthStateMock).toHaveBeenCalledWith(false);
+  });
+
+  test('stores the two Home presentation fields and resets stale values from an older server', async () => {
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', separate_front_page: true,
+      front_page_button_site_name: 'Configured site' });
+    const mod = await loadModule();
+    await mod.setAuthModes();
+    expect(localStorage.getItem('separate_front_page')).toBe('true');
+    expect(localStorage.getItem('front_page_button_site_name')).toBe('Configured site');
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login' });
+    await mod.setAuthModes();
+    expect(localStorage.getItem('separate_front_page')).toBe('false');
+    expect(localStorage.getItem('front_page_button_site_name')).toBe('');
   });
 
   test('removes cached permissions when permission fetch is malformed', async () => {

@@ -38,6 +38,9 @@ var protectedStorageVariants = map[string]struct{}{
 	"original": {},
 }
 
+var storageFrontPageSettingsReader = backend.ReadFrontPageSettings
+var storageFrontPageBackgroundReader = backend.ReadFrontPageBackground
+
 var storageAuthorizeRead = dtt_1_row_read.AuthorizeStorageRead
 var storageAuthorizeDatasetMediaRead = dtt_1_row_read.AuthorizeDatasetMediaStorageRead
 var storageCheckLoginToBrowse = middlewares.CheckLoginToBrowse
@@ -217,6 +220,22 @@ func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *
 var storageAuthorizeMediaRead = media_library.AuthorizeStorageRead
 
 func authorizeStorageRequest(w http.ResponseWriter, r *http.Request, cleanRel string) storageAuthorizationDecision {
+	if strings.HasPrefix(cleanRel, "site_media/front_page/") {
+		_, decision := storageRequestActor(w, r)
+		if decision != storageAuthorizationAllowed {
+			return storageAuthorizationNotFound
+		}
+		settings, err := storageFrontPageSettingsReader(r.Context(), backend.Db)
+		if err != nil || !settings.SeparateFrontPage {
+			return storageAuthorizationNotFound
+		}
+		background, err := storageFrontPageBackgroundReader(r.Context(), backend.Db)
+		if err != nil || !backend.FrontPageBackgroundMatches(background, cleanRel) {
+			return storageAuthorizationNotFound
+		}
+		return storageAuthorizationAllowed
+	}
+
 	// Reused images retain the existing protected response and contained-open path.
 	if strings.HasPrefix(cleanRel, "media/") {
 		id, _, filename, ok := media_utils.ParseMediaLibraryStoragePath(cleanRel)

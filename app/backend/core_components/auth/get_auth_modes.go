@@ -19,14 +19,18 @@ import (
 )
 
 var authModesAuthenticationGenerationMatches = backend.AuthenticatedSessionMatches
+var authModesFrontPageSettingsReader = backend.ReadFrontPageSettings
+var authModesFrontPageSiteNameReader = backend.ConfiguredSiteName
 
 // AuthModesResponse keeps the public auth bootstrap payload stable for typed frontend callers.
 type AuthModesResponse struct {
-	NeedsButton            string `json:"needs_button"`
-	RegistrationEnabled    bool   `json:"registration_enabled"`
-	LoginRequiredForBrowse bool   `json:"login_required_for_browse"`
-	ShowLoginButton        bool   `json:"show_login_button"`
-	OnlyAdminCanLogin      bool   `json:"only_admin_can_login"`
+	NeedsButton             string `json:"needs_button"`
+	RegistrationEnabled     bool   `json:"registration_enabled"`
+	LoginRequiredForBrowse  bool   `json:"login_required_for_browse"`
+	ShowLoginButton         bool   `json:"show_login_button"`
+	OnlyAdminCanLogin       bool   `json:"only_admin_can_login"`
+	SeparateFrontPage       bool   `json:"separate_front_page"`
+	FrontPageButtonSiteName string `json:"front_page_button_site_name"`
 }
 
 // GetAuthModesHandler tallentaa käyttäjän roolin sessioon
@@ -50,13 +54,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 	if err != nil || userID <= 0 {
 		if loginToBrowse {
 			response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-			responseData := AuthModesResponse{
-				NeedsButton:            "login",
-				RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
-				LoginRequiredForBrowse: loginToBrowse,
-				ShowLoginButton:        loginSettings.ShowLoginButton,
-				OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
-			}
+			responseData := buildAuthModesResponse(request, "login", loginToBrowse, loginSettings)
 			if encodeErr := json.NewEncoder(response_writer).Encode(responseData); encodeErr != nil {
 				log.Printf("\033[31mvirhe: %s\033[0m\n", encodeErr.Error())
 				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding auth modes")
@@ -92,13 +90,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 			}
 
 			response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-			responseData := AuthModesResponse{
-				NeedsButton:            "login",
-				RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
-				LoginRequiredForBrowse: loginToBrowse,
-				ShowLoginButton:        loginSettings.ShowLoginButton,
-				OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
-			}
+			responseData := buildAuthModesResponse(request, "login", loginToBrowse, loginSettings)
 			if encodeErr := json.NewEncoder(response_writer).Encode(responseData); encodeErr != nil {
 				log.Printf("\033[31mvirhe: %s\033[0m\n", encodeErr.Error())
 				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding auth modes")
@@ -124,13 +116,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 		}
 
 		response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-		responseData := AuthModesResponse{
-			NeedsButton:            "login",
-			RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
-			LoginRequiredForBrowse: loginToBrowse,
-			ShowLoginButton:        loginSettings.ShowLoginButton,
-			OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
-		}
+		responseData := buildAuthModesResponse(request, "login", loginToBrowse, loginSettings)
 		if encodeErr := json.NewEncoder(response_writer).Encode(responseData); encodeErr != nil {
 			log.Printf("\033[31mvirhe: %s\033[0m\n", encodeErr.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding auth modes")
@@ -166,13 +152,7 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 
 	// 4. Palautetaan JSON-muotoinen vastaus (tarvittava painike)
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-	responseData := AuthModesResponse{
-		NeedsButton:            buttonState,
-		RegistrationEnabled:    middlewares.CheckRegistrationEnabled(),
-		LoginRequiredForBrowse: loginToBrowse,
-		ShowLoginButton:        loginSettings.ShowLoginButton,
-		OnlyAdminCanLogin:      loginSettings.OnlyAdminCanLogin,
-	}
+	responseData := buildAuthModesResponse(request, buttonState, loginToBrowse, loginSettings)
 	if err := json.NewEncoder(response_writer).Encode(responseData); err != nil {
 		log.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding auth modes")
@@ -185,4 +165,21 @@ func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Requ
 // It exists so every stale-session path clears the same session fields.
 func clearAuthSessionValues(session *gorillaSessions.Session) {
 	auth_generation.ClearIdentity(session)
+}
+
+// buildAuthModesResponse adds presentation switches equally to every bootstrap response.
+// Authentication decisions above remain unchanged; an unavailable optional setting stays off.
+func buildAuthModesResponse(request *http.Request, button string, loginToBrowse bool, loginSettings backend.LoginAccessSettings) AuthModesResponse {
+	response := AuthModesResponse{NeedsButton: button, RegistrationEnabled: middlewares.CheckRegistrationEnabled(),
+		LoginRequiredForBrowse: loginToBrowse, ShowLoginButton: loginSettings.ShowLoginButton, OnlyAdminCanLogin: loginSettings.OnlyAdminCanLogin}
+	settings, err := authModesFrontPageSettingsReader(request.Context(), backend.Db)
+	if err != nil {
+		log.Printf("[GetAuthModesHandler] front page presentation settings unavailable: %v", err)
+		return response
+	}
+	response.SeparateFrontPage = settings.SeparateFrontPage
+	if settings.FrontPageButtonShowsSiteName {
+		response.FrontPageButtonSiteName = authModesFrontPageSiteNameReader(request.Context(), backend.Db)
+	}
+	return response
 }

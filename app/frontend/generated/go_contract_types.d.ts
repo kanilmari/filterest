@@ -17,6 +17,8 @@ export interface AuthModesResponse {
     login_required_for_browse: boolean;
     show_login_button: boolean;
     only_admin_can_login: boolean;
+    separate_front_page: boolean;
+    front_page_button_site_name: string;
 }
 
 export interface UserPermissionsResponse {

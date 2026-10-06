@@ -129,3 +129,8 @@ export function publishAuthLogout(detail = {}) {
 export function publishAuthLogin(detail = {}) {
     emitAuthEvent(buildAuthEvent("login", detail));
 }
+
+// Mandatory privacy invalidation is independent of optional shell login sync.
+export function publishAuthInvalidation(detail = {}) {
+    emitAuthEvent(buildAuthEvent("session-invalidated", detail));
+}

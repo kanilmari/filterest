@@ -28,6 +28,7 @@ import {
 } from './history_navigation_handler_helpers.js';
 import { updateBrowserTabTitle } from './browser_tab_title_writer.js';
 import { updateDatasetAddress } from './dataset_address_writer.js';
+import { isSeparateFrontPageEnabled, openFrontPage } from '../../front_page/front_page_navigation.js';
 
 function getTargetView(datasetName, parsed) {
     const view = parsed.view || getHistoryDatasetView(datasetName);
@@ -215,6 +216,11 @@ async function restoreHistoryEntryState() {
         return;
     }
     const path = window.location.pathname;
+    if (path === '/' && isSeparateFrontPageEnabled()) {
+        await openFrontPage({ replace: true, isCurrentNavigation });
+        return;
+    }
+    if (/^\/(?:admin\/)?front_page(?:\/|$)/.test(path)) return;
     const prefix = getPrefixFromPathname(path, DATASET_PREFIX);
     if (!prefix) return;
 

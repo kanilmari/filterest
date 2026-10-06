@@ -49,7 +49,7 @@ async function loadStartup() {
     vi.doMock('../../reusable_components/dom_container_builder.js', () => ({
         renderAllowedHtml: () => document.createElement('div'),
     }));
-    vi.doMock('./auth_broadcast.js', () => ({ publishAuthLogin: vi.fn() }));
+    vi.doMock('./auth_broadcast.js', () => ({ publishAuthLogin: vi.fn(), publishAuthInvalidation: vi.fn(), subscribeToAuthBroadcast: vi.fn(() => () => {}) }));
     vi.doMock('../config_fetcher.js', () => ({ isCrossTabLoginSyncEnabled: async () => false }));
     vi.doMock('./login_page_shell_builder.js', () => ({ initializeStandaloneLoginShell: initializeShell }));
     vi.doMock('./auth_session_notice_handler.js', () => ({ initializeAuthSessionNotice: vi.fn() }));

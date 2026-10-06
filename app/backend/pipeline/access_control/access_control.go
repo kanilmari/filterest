@@ -224,66 +224,57 @@ func adminPermissionRecoveryModeEnabled() bool {
 
 // Yhdistetty tarkistusfunktio: tarkistaa sekä function-level että (tarvittaessa) table-level -oikeudet.
 // userHasFunctionPermissionOnTable.go
-func userHasFunctionPermissionOnTable(userID int, urlRoute, tableName, tableUID string) bool {
-	specificTableRelated, err := permissions.FunctionSpecificTableRelated(
-		backend.Db,
-		urlRoute,
-		permissions.DisabledFunctionFalseOrNull,
-	)
-	if err != nil {
-		log.Printf("\033[31m[userHasFunctionPermissionOnTable] specific_table_related fetch error for urlRoute='%s': %v\033[0m", urlRoute, err)
-		return false
-	}
+// UserHasFunctionPermissionOnTableQuiet uses the exact route decision without denial logs.
+// Facades omit unreadable datasets rather than exposing their names in a response.
+func UserHasFunctionPermissionOnTableQuiet(userID int, urlRoute, tableName, tableUID string) bool {
+	allowed, _, _, _, _ := routeTablePermissionDecision(userID, urlRoute, tableName, tableUID)
+	return allowed
+}
 
+func routeTablePermissionDecision(userID int, urlRoute, tableName, tableUID string) (bool, bool, string, string, error) {
+	specificTableRelated, err := permissions.FunctionSpecificTableRelated(backend.Db, urlRoute, permissions.DisabledFunctionFalseOrNull)
+	if err != nil {
+		return false, false, tableName, tableUID, fmt.Errorf("specific_table_related fetch error for urlRoute='%s': %w", urlRoute, err)
+	}
 	if !specificTableRelated {
-		tableName = ""
-		tableUID = ""
+		tableName, tableUID = "", ""
 	} else if tableUID == "" && tableName == "" {
-		log.Printf("\033[31m[userHasFunctionPermissionOnTable] specific_table_related true but table info missing for urlRoute='%s'\033[0m", urlRoute)
-		return false
+		return false, false, tableName, tableUID, fmt.Errorf("specific_table_related true but table info missing for urlRoute='%s'", urlRoute)
 	}
-
-	recovery_mode := adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
-
-	scope := permissions.RouteTableScope{TableName: tableName, TableUID: tableUID}
-	allowed, err := permissions.CheckRouteTablePermission(
-		backend.Db,
-		urlRoute,
-		userID,
-		scope,
-		permissions.AccessControlRouteTableOptions(false),
-	)
+	recovery := adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
+	allowed, err := permissions.CheckRouteTablePermission(backend.Db, urlRoute, userID,
+		permissions.RouteTableScope{TableName: tableName, TableUID: tableUID}, permissions.AccessControlRouteTableOptions(false))
 	if err != nil {
-		log.Printf("\033[31m[userHasFunctionPermissionOnTable] database error: %v\033[0m", err)
+		return false, false, tableName, tableUID, fmt.Errorf("database error: %w", err)
+	}
+	return allowed || recovery, !allowed && recovery, tableName, tableUID, nil
+}
+
+func userHasFunctionPermissionOnTable(userID int, urlRoute, tableName, tableUID string) bool {
+	allowed, recovery, tableName, tableUID, err := routeTablePermissionDecision(userID, urlRoute, tableName, tableUID)
+	if err != nil {
+		log.Printf("\033[31m[userHasFunctionPermissionOnTable] %v\033[0m", err)
 		return false
 	}
-	if allowed {
+	if allowed && !recovery {
 		return true
 	}
-
-	if recovery_mode {
+	if recovery {
 		if tableUID != "" {
-			log.Printf("\033[33m[userHasFunctionPermissionOnTable] recovery mode active: no permission row found for route='%s', table_uid='%s' (userID=%d), allowing exceptionally\033[0m",
-				urlRoute, tableUID, userID)
+			log.Printf("\033[33m[userHasFunctionPermissionOnTable] recovery mode active: no permission row found for route='%s', table_uid='%s' (userID=%d), allowing exceptionally\033[0m", urlRoute, tableUID, userID)
 		} else if tableName != "" {
-			log.Printf("\033[33m[userHasFunctionPermissionOnTable] recovery mode active: no permission row found for route='%s', table='%s' (userID=%d), allowing exceptionally\033[0m",
-				urlRoute, tableName, userID)
+			log.Printf("\033[33m[userHasFunctionPermissionOnTable] recovery mode active: no permission row found for route='%s', table='%s' (userID=%d), allowing exceptionally\033[0m", urlRoute, tableName, userID)
 		} else {
-			log.Printf("\033[33m[userHasFunctionPermissionOnTable] recovery mode active: no tableless function permission found for route='%s' (userID=%d), allowing exceptionally\033[0m",
-				urlRoute, userID)
+			log.Printf("\033[33m[userHasFunctionPermissionOnTable] recovery mode active: no tableless function permission found for route='%s' (userID=%d), allowing exceptionally\033[0m", urlRoute, userID)
 		}
 		return true
 	}
-
 	if tableUID != "" {
-		log.Printf("\033[31m[userHasFunctionPermissionOnTable] no permission row found for route='%s', table_uid='%s' (userID=%d)\033[0m",
-			urlRoute, tableUID, userID)
+		log.Printf("\033[31m[userHasFunctionPermissionOnTable] no permission row found for route='%s', table_uid='%s' (userID=%d)\033[0m", urlRoute, tableUID, userID)
 	} else if tableName != "" {
-		log.Printf("\033[31m[userHasFunctionPermissionOnTable] no permission row found for route='%s', table='%s' (userID=%d)\033[0m",
-			urlRoute, tableName, userID)
+		log.Printf("\033[31m[userHasFunctionPermissionOnTable] no permission row found for route='%s', table='%s' (userID=%d)\033[0m", urlRoute, tableName, userID)
 	} else {
-		log.Printf("\033[31m[userHasFunctionPermissionOnTable] no tableless function permission found for route='%s' (userID=%d)\033[0m",
-			urlRoute, userID)
+		log.Printf("\033[31m[userHasFunctionPermissionOnTable] no tableless function permission found for route='%s' (userID=%d)\033[0m", urlRoute, userID)
 	}
 	return false
 }

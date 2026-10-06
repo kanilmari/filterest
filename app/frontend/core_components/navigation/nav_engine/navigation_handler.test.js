@@ -211,6 +211,33 @@ describe('navigation_handler', () => {
         expect(clearSSEActiveDatasetMock).toHaveBeenCalledTimes(1);
         expect(setSelectedDatasetMock).not.toHaveBeenCalled();
     });
+
+    test('an emptied view loads again although the navigation spinner is already inside it', async () => {
+        const { performNavigation } = await loadModule();
+        const loadFunction = vi.fn().mockResolvedValue(undefined);
+        const spinner = document.createElement('div');
+        spinner.setAttribute('data-loading-spinner-for', 'permissions_container');
+        document.getElementById('permissions_container').append(spinner);
+
+        await performNavigation('permissions', 'permissions_container', loadFunction, 'admin_tools', true);
+
+        expect(loadFunction).toHaveBeenCalledTimes(1);
+    });
+
+    test('a mounted view with content beside the spinner is shown without loading again', async () => {
+        const { performNavigation } = await loadModule();
+        const loadFunction = vi.fn().mockResolvedValue(undefined);
+        const container = document.getElementById('permissions_container');
+        const spinner = document.createElement('div');
+        spinner.setAttribute('data-loading-spinner-for', 'permissions_container');
+        container.append(spinner, Object.assign(document.createElement('p'), { textContent: 'kept view' }));
+
+        await performNavigation('permissions', 'permissions_container', loadFunction, 'admin_tools', true);
+
+        expect(loadFunction).not.toHaveBeenCalled();
+        expect(container.classList.contains('hidden')).toBe(false);
+    });
+
     test('replacement query is applied after real dirty/permission stages and forces cached view reload', async () => {
         const { handle_all_navigation } = await loadModule({ realPipeline: true });
         const oldParams = { search: 'old', orders_status: 'closed' };

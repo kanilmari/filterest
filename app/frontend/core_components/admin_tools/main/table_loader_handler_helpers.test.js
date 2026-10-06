@@ -284,3 +284,25 @@ describe('resolveTableName', () => {
         expect(result.resolvedName).toBeNull();
     });
 });
+
+// Home is root-only; these explicit flags leave every earlier default proof intact.
+describe('optional Home resolution', () => {
+    const options = { deepLinkedName: null, storedName: 'news',
+        availableNames: new Set(['news', 'front_page']), tables: [{ dataset_name: 'news', is_default: true }],
+        customViews: [{ name: 'front_page' }], isLandingOnFrontpage: true };
+    test('enabled root chooses Home, disabled root keeps the current default dataset', () => {
+        expect(resolveTableName({ ...options, separateFrontPage: true })).toEqual({ resolvedName: 'front_page', deepLinkInvalid: false });
+        expect(resolveTableName({ ...options, separateFrontPage: false })).toEqual({ resolvedName: 'news', deepLinkInvalid: false });
+    });
+    test.each([true, false])('/front_page is never an address, enabled=%s', separateFrontPage => {
+        expect(resolveTableName({ ...options, deepLinkedName: 'front_page', separateFrontPage })).toEqual({ resolvedName: null, deepLinkInvalid: true });
+    });
+    test('enabled mode preserves an explicit dataset link and stored nonroot selection', () => {
+        expect(resolveTableName({ ...options, separateFrontPage: true, deepLinkedName: 'news' }).resolvedName).toBe('news');
+        expect(resolveTableName({ ...options, separateFrontPage: true, isLandingOnFrontpage: false }).resolvedName).toBe('news');
+    });
+    test('hidden Home never becomes the setting-off custom-view fallback', () => {
+        expect(resolveTableName({ ...options, availableNames: new Set(['account']), tables: [],
+            customViews: [{ name: 'front_page' }, { name: 'account' }] }).resolvedName).toBe('account');
+    });
+});

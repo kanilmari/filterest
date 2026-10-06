@@ -31,7 +31,9 @@ vi.mock('../../admin_tools/admin_update_notice_subscriber.js', () => ({ syncAdmi
 vi.mock('../../endpoints/endpoint_router.js', () => ({ endpoint_router: vi.fn() }));
 vi.mock('../../pipeline/api_pipeline.js', () => ({ ensureCsrfToken: vi.fn(async () => null) }));
 vi.mock('../../ai_features/table_chat/table_chat_printer.js', () => ({ destroy_chat: vi.fn() }));
-vi.mock('../../auth/auth_broadcast.js', () => ({ publishAuthLogout: vi.fn(), publishAuthLogin: vi.fn(), subscribeToAuthBroadcast: vi.fn() }));
+vi.mock('../../auth/auth_broadcast.js', () => ({
+    publishAuthLogout: vi.fn(), publishAuthLogin: vi.fn(), publishAuthInvalidation: vi.fn(), subscribeToAuthBroadcast: vi.fn(),
+}));
 vi.mock('../../auth/login_shell_entry.js', () => ({ handleLoginShellEntry: vi.fn() }));
 vi.mock('../../auth/session_access_prompt.js', () => ({ requestSessionAccessPrompt: vi.fn() }));
 vi.mock('../../config_fetcher.js', () => ({ isCrossTabLoginSyncEnabled: vi.fn() }));
@@ -193,7 +195,10 @@ test('a stalled favorites GET does not delay tabs or a successful login modal cl
     await runPostAuthBootstrap();
     await vi.waitFor(() => expect(fetchFavorites).toHaveBeenCalledOnce());
     expect(initTabs).toHaveBeenCalledOnce();
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ authenticated: true }) })));
+    // A real Response: the sign-in sender reads a clone of it to publish the session change.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ authenticated: true }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+    })));
     await showLoginModal();
     document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(hideModal).toHaveBeenCalledOnce());

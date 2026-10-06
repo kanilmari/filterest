@@ -22,6 +22,7 @@ import {
 } from './api_pipeline_helpers.js';
 import { getBackendRoutePathByHandler } from '../endpoints/backend_route_manifest_reader.js';
 import { markCallerOwnsFailureNotice } from '../error_and_status_handling/error_monitor_handler_helpers.js';
+import { getSessionGeneration, invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import {
     isExpectedNetworkAbort,
     showRequestFailureNotice,
@@ -100,6 +101,9 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     adminSymbols: 'symbol_registry.AdminHandler',
     adminUiFeatureFlags: 'system_table_tools.GetAdminUIFeatureFlagsHandler',
     sitePresentationSettings: 'system_table_tools.GetSitePresentationSettingsHandler',
+    frontPage: 'system_table_tools.GetFrontPageHandler',
+    adminFrontPage: 'system_table_tools.AdminFrontPageHandler',
+    adminFrontPageBackground: 'system_table_tools.FrontPageBackgroundHandler',
     adminSitePresentationSettings: 'system_table_tools.AdminSitePresentationSettingsHandler',
     adminRowGroups: 'system_table_tools.AdminRowGroupsHandler',
     adminRowGroupMemberships: 'system_table_tools.AdminRowGroupMembershipsHandler',
@@ -298,6 +302,27 @@ export async function ensureCsrfToken({ forceRefresh = false } = {}) {
 // ==========================================
 // Stage Implementations
 // ==========================================
+
+/** Sign-out clears session-owned views before CSRF or network awaits begin. */
+function sessionStartStage(ctx) {
+    if (ctx.routeName === 'logout') invalidateSessionGeneration({ reason: 'logout' });
+    ctx.sessionGeneration = getSessionGeneration();
+}
+
+/** Expiry clears private views even when a caller suppresses the login redirect.
+ * A late failure from a superseded session cannot invalidate the new account.
+ */
+async function sessionResponseStage(ctx) {
+    if (ctx.sessionGeneration !== getSessionGeneration()) return;
+    let ended = ctx.response.status === 401
+        || (!ctx.returnResponse && !ctx.stream && isDataRequestAnsweredWithPage(ctx.response));
+    if (ctx.response.status === 403) {
+        ended = isAuthFailure403(await ctx.response.clone().text());
+    }
+    if (ended && ctx.sessionGeneration === getSessionGeneration()) {
+        invalidateSessionGeneration({ reason: 'expiry' });
+    }
+}
 
 /**
  * resolveUrlStage — resolves the route name to a full URL.
@@ -579,12 +604,15 @@ async function responseParseStage(ctx) {
 // ==========================================
 
 const apiRequestStages = [
+    createStage('sessionStart', sessionStartStage, true),
     createStage('resolveUrl',          resolveUrlStage,          true),
     createStage('buildFetchOptions',   buildFetchOptionsStage,   true),
     createStage('csrf',                csrfStage,                true),
     createStage('fingerprint',         fingerprintStage,         false),
     createStage('execute',             executeStage,             true),
     createStage('csrfRecovery',        csrfRecoveryStage,        true),
+    // Recovery may replace the answer with an expired-session response.
+    createStage('sessionResponse', sessionResponseStage, true),
     createStage('authRedirect',        authRedirectStage,        true),
     createStage('rateLimitHandler',    rateLimitHandlerStage,    false),
     createStage('serviceUnavailable',  serviceUnavailableHandlerStage, true),

@@ -142,6 +142,11 @@
     "20261005000021_create_system_favorites.sql",
     "20261005000022_seed_favorites_language_keys.sql",
     "20261005000023_register_system_favorites.sql",
+    "20261005000030_create_front_page_revision_metadata.sql",
+    "20261005000031_create_system_front_page_blocks.sql",
+    "20261005000032_add_front_page_settings.sql",
+    "20261005000033_seed_front_page_language_keys.sql",
+    "20261005000034_register_system_front_page_blocks.sql",
     "20261005000050_require_registry_reference_key.sql",
     "20261005000051_seed_relation_reference_language_key.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
@@ -200,6 +205,8 @@
     "public.system_favorites",
     "public.system_foreign_key_relations_1_m",
     "public.system_foreign_key_relations_m_m",
+    "public.system_front_page_blocks",
+    "public.system_front_page_revisions",
     "public.system_functions",
     "public.system_group_table_func_rights",
     "public.system_lang_key_sources",
@@ -290,7 +297,7 @@
     "public.riskienhallinta_tiketit_relation": 1,
     "public.system_about": 1,
     "public.system_column_details": 45,
-    "public.system_config": 17,
+    "public.system_config": 19,
     "public.system_data_repair_records": 1,
     "public.system_db_tables": 73,
     "public.system_db_version": 1,
@@ -299,11 +306,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1077,
+    "public.system_lang_keys": 1126,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 142,
+    "public.system_schema_migrations": 147,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -315,10 +322,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "c4aca4bf925d59ae88765c69d800c8c4084b942a8ca9abde12d1c1e38cf9534d"
+      "sha256": "0b773792a7eed93103060679ed1dc310951cc08fe60fff965e58bb673710c190"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "bdad1f402800467c629e1b5b3153cc6ef5be74364425286263db0c1c1767a94c"
+      "sha256": "4f907a2d984605653ebc05ee9f66be053ce9831f7aad69f523dcee85980407fe"
     }
   },
   "source_files": {
@@ -335,10 +342,13 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "345d31418b9909c4faf0800b7c7ecbba20d6b05c5a8a6eb2682b6e0e4f6c1a7b"
+      "sha256": "a2c9d3051d0aaa6c45c70ea9f272e837d89381f8b68d9c094d41817097489084"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
-      "sha256": "66f22a786e5e3ddf0c81031e3a2b4f9aeeb465553214aabe526b02263b2dc564"
+      "sha256": "dcd249b5ac08e9ec5bc034724a431f58bc69a7cece12867a8631bcaa058f7073"
+    },
+    "filterest/app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py": {
+      "sha256": "d3ff22160320134cafa18a4efcdd010626786e8314e712e38665c0bf42c4b8c3"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.schema.sql": {
       "sha256": "d78b9e231e499f7982c15231722450020b7844386fb31d98067f625891a33801"
@@ -805,6 +815,21 @@
     "filterest/app/server_tools/migrations/20261005000023_register_system_favorites.sql": {
       "sha256": "f0bfebe148ab6dec2e60f4ac920c343e44cb3f19170bb8e50682616e26837bc1"
     },
+    "filterest/app/server_tools/migrations/20261005000030_create_front_page_revision_metadata.sql": {
+      "sha256": "7c1eb89e0f6ab98a55af57082af8308f2474d076ec6e2d223fda99e3ba37b671"
+    },
+    "filterest/app/server_tools/migrations/20261005000031_create_system_front_page_blocks.sql": {
+      "sha256": "8b690cc7f73118d9009019eadc0f9edffb900bc93c37883d867a3bd92f0e74ae"
+    },
+    "filterest/app/server_tools/migrations/20261005000032_add_front_page_settings.sql": {
+      "sha256": "04c4bfacbfb4d136d0cc1ec92d4339643c19a74637c19e5ea01321a8835c4ddc"
+    },
+    "filterest/app/server_tools/migrations/20261005000033_seed_front_page_language_keys.sql": {
+      "sha256": "628b94ec60c63e2bd3349353628b1e4955e5377617be149e49f98c21317f8177"
+    },
+    "filterest/app/server_tools/migrations/20261005000034_register_system_front_page_blocks.sql": {
+      "sha256": "a2a7b1587009d236c823b81bf872379dc8618ee59e19ca2252d2c7427b631435"
+    },
     "filterest/app/server_tools/migrations/20261005000050_require_registry_reference_key.sql": {
       "sha256": "a387680b59182dcbb992948d660c356ebd8f8808664575c2ff9cfa57b4138d65"
     },
@@ -824,7 +849,7 @@
       "sha256": "bf75f60595e65577b791f62687848fd30825cbea9f579ff9a406611c9fbe135a"
     },
     "filterest/app/server_tools/migrations/20261005000099_record_database_release_9_10_0.sql": {
-      "sha256": "43de7913c2254d657fdd82177e1262009273a5eb01e90e1a282ed10244c21777"
+      "sha256": "58370de0adba3d2693fe7b3618341967177173db26f8323fa347fcc78e0d4da4"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

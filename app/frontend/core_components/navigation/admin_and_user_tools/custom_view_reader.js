@@ -7,6 +7,7 @@ import { loadManagementView } from '../../../reusable_components/dom_container_b
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { getSelectedDataset } from '../../state_stores/dataset_selection_saver.js';
 import { buildDatasetPath } from '../nav_engine/dataset_aliases.js';
+import { renderFrontPage } from '../../front_page/front_page_printer.js';
 
 // Tuodaan generaattorifunktiot, jotka rakentavat varsinaisen sisällön.
 // Nämä funktiot voivat sijaita esim. eri tiedostoissa:
@@ -33,6 +34,7 @@ import { generate_asset_linking_view } from '../../admin_tools/asset_linking/ass
 import { generate_site_language_settings_view } from '../../admin_tools/site_language_settings_view.js';
 import { generate_user_authentication_view } from '../../admin_tools/user_authentication_view.js';
 import { generate_symbol_registry_view } from '../../admin_tools/symbol_registry_view.js';
+import { generate_front_page_settings_view } from '../../admin_tools/front_page_settings_view.js';
 
 // Nämä user_tools-näkymät:
 import { generate_register_view } from '../../user_tools/register_tab_printer.js';
@@ -61,6 +63,12 @@ function returnFromDatasetHeaderConfiguration() {
  */
 
 export const custom_views = [
+    {
+        name: 'front_page',
+        loadFunction: renderFrontPage,
+        containerId: 'front_page_container',
+        navigationHidden: true,
+    },
     // --- ADMIN_TOOLS RYHMÄ ---
     {
         name: 'permissions',
@@ -250,6 +258,15 @@ export const custom_views = [
         containerId: 'site_languages_container',
         group: 'admin_tools',
         requiredPermission: '/api/admin/ui-languages',
+    },
+    {
+        name: 'front_page_settings',
+        loadFunction: async () => {
+            return loadManagementView('front_page_settings_container', generate_front_page_settings_view);
+        },
+        containerId: 'front_page_settings_container',
+        group: 'admin_tools',
+        requiredPermission: '/api/admin/front-page',
     },
     {
         name: 'user_authentication',

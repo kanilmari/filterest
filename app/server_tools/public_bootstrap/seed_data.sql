@@ -5950,6 +5950,89 @@ SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
 ON CONFLICT (lang_key_id, language_code) DO UPDATE
    SET translation = EXCLUDED.translation, source_kind = 'manual', review_status = 'approved'
  WHERE NULLIF(btrim(existing.translation), '') IS NULL;
+-- 20261005000033_seed_front_page_language_keys.sql
+-- Seeds Finnish and English front page actions and labels.
+-- Connects the front page and its administrator editor to translated copy.
+-- Exists to keep the front page multilingual without overwriting reviewed site wording.
+-- VERSION_DB: 9.10.0
+-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql
+
+WITH authored_keys(lang_key, fi, en) AS (
+    VALUES
+        ('front_page', 'Etusivu', 'Home'),
+        ('front_page_settings', 'Etusivun asetukset', 'Home settings'),
+        ('front_page_common', 'Yhteinen etusivu', 'Common home'),
+        ('front_page_user_scope', 'Käyttäjän etusivu', 'User home'),
+        ('front_page_inherits', 'Käyttää yhteistä etusivua', 'Inherits common home'),
+        ('front_page_reset', 'Palauta yhteiseen', 'Reset to common'),
+        ('front_page_copy_common', 'Kopioi yhteinen', 'Copy common'),
+        ('front_page_add_block', 'Lisää lohko', 'Add block'),
+        ('front_page_result_limit', 'Rivien määrä', 'Row limit'),
+        ('front_page_show_all', 'Näytä kaikki', 'Show all'),
+        ('front_page_no_results', 'Ei tuloksia', 'No results'),
+        ('front_page_load_failed', 'Etusivua ei voitu ladata. Yritä uudelleen.', 'Home could not be loaded. Try again.'),
+        ('front_page_background', 'Taustakuva', 'Background image'),
+        ('front_page_remove_background', 'Poista taustakuva', 'Remove background'),
+        ('front_page_default_not_saved', 'Oletuslista, ei tallennettu', 'Default list, not saved'),
+        ('front_page_hidden_for_user', 'Käyttäjä ei voi lukea tätä aineistoa', 'This user cannot read this dataset'),
+        ('front_page_save_conflict', 'Etusivu muuttui. Lataa uudelleen ennen tallennusta.', 'Home changed. Reload before saving.'),
+        ('front_page_enabled', 'Erillinen etusivu', 'Separate home page'),
+        ('front_page_button_shows_site_name', 'Sivuston nimi etusivupainikkeessa', 'Site name on the Home button'),
+        ('front_page_open', 'Avaa etusivu', 'Open Home'),
+        ('front_page_reload', 'Lataa uudelleen', 'Reload'),
+        ('front_page_loaded', 'Etusivun asetukset ladattu.', 'Home settings loaded.'),
+        ('front_page_move_up', 'Siirrä ylös', 'Move up'),
+        ('front_page_move_down', 'Siirrä alas', 'Move down'),
+        ('front_page_remove_block', 'Poista lohko', 'Remove block'),
+        ('front_page_blocks_help', 'Enintään 20 lohkoa. Jokaisessa voi näyttää 1–20 uusinta riviä. Tyhjä lista palauttaa oletuksen.', 'Up to 20 blocks, each showing 1–20 newest rows. An empty list restores the default.'),
+        ('front_page_find_user', 'Etsi käyttäjä näyttönimellä', 'Find a user by display name'),
+        ('front_page_choose_user', 'Valitse käyttäjä etusivun valikosta.', 'Choose a user from the home scope menu.'),
+        ('front_page_no_users', 'Näyttönimellä ei löytynyt käyttäjiä.', 'No users found by that display name.'),
+        ('front_page_user_search_failed', 'Käyttäjiä ei voitu hakea. Yritä uudelleen.', 'User search failed. Try again.'),
+        ('front_page_limit_invalid', 'Rivien määrän on oltava kokonaisluku 1–20.', 'The row limit must be a whole number from 1 to 20.'),
+        ('front_page_blocks_invalid', 'Valitse enintään 20 eri aineistoa, joissa on uusimmat rivit -lajittelu.', 'Choose up to 20 different datasets that support newest-row sorting.'),
+        ('front_page_save_failed', 'Etusivun asetuksia ei voitu tallentaa. Muutokset ovat edelleen lomakkeessa.', 'Home settings could not be saved. Your changes are still in the form.'),
+        ('front_page_refresh_failed', 'Muutokset tallennettiin, mutta asetuksia ei voitu ladata. Lataa uudelleen ennen seuraavaa tallennusta.', 'Changes were saved, but settings could not be loaded. Reload before saving again.'),
+        ('front_page_discard_changes', 'Hylätäänkö tallentamattomat muutokset?', 'Discard unsaved changes?'),
+        ('front_page_discard', 'Hylkää muutokset', 'Discard changes'),
+        ('front_page_upload_background', 'Valitse taustakuvatiedosto', 'Choose a background image file'),
+        ('front_page_background_help', 'Sivuston yhteinen taustakuva. PNG, JPEG tai WebP, alle 10 Mt. Valitse kuvan kohdistuspiste prosentteina.', 'One background for the site. PNG, JPEG or WebP, under 10 MB. Set its focal point as percentages.'),
+        ('front_page_background_picker_help', 'Valitse kuva sivuston yhteiseksi etusivun taustaksi liittämällä kuvapalvelun kuvasivun osoite.', 'Paste a provider photo-page URL to choose a shared Home background for the site.'),
+        ('front_page_background_error', 'Tallennettu taustakuva-asetus on virheellinen. Vaihda kuva tai poista se.', 'The saved background setting is invalid. Replace or remove it.'),
+        ('front_page_background_invalid', 'Valitse PNG-, JPEG- tai WebP-kuva, jonka koko on alle 10 Mt.', 'Choose a PNG, JPEG or WebP image under 10 MB.'),
+        ('front_page_background_save_failed', 'Taustakuvaa ei voitu tallentaa. Tarkista kuva ja yritä uudelleen.', 'The background could not be saved. Check the image and try again.'),
+        ('front_page_focal_x', 'Kohdistuspiste vasemmalta (%)', 'Focal point from the left (%)'),
+        ('front_page_focal_y', 'Kohdistuspiste ylhäältä (%)', 'Focal point from the top (%)'),
+        ('front_page_focal_invalid', 'Kohdistuspisteen arvojen on oltava 0–100 prosenttia.', 'Focal point values must be from 0 to 100 percent.'),
+        ('system_front_page_blocks', 'Etusivun lohkot', 'Home blocks')
+), written_keys AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, creation_spec)
+    SELECT lang_key, fi, en, 'WL143 front page copy.' FROM authored_keys
+    ON CONFLICT (lang_key) DO UPDATE
+       SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+           en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+           creation_spec = CASE WHEN NULLIF(btrim(existing.creation_spec), '') IS NULL
+                                THEN EXCLUDED.creation_spec ELSE existing.creation_spec END,
+           updated = now()
+     WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+        OR NULLIF(btrim(existing.creation_spec), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en
+), served_keys AS (
+    SELECT id, lang_key, fi, en FROM written_keys
+    UNION ALL
+    SELECT keys.id, keys.lang_key, keys.fi, keys.en FROM public.system_lang_keys AS keys
+    JOIN authored_keys USING (lang_key) WHERE keys.lang_key NOT IN (SELECT lang_key FROM written_keys)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT served.id, copy.language_code, copy.translation, 'manual', 'approved'
+  FROM served_keys AS served
+ CROSS JOIN LATERAL (VALUES ('fi', served.fi), ('en', served.en)) AS copy(language_code, translation)
+ JOIN public.system_languages AS languages ON languages.language_code = copy.language_code
+ WHERE NULLIF(btrim(copy.translation), '') IS NOT NULL
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+   SET translation = EXCLUDED.translation, source_kind = 'manual', review_status = 'approved'
+ WHERE NULLIF(btrim(existing.translation), '') IS NULL;
 -- 20261005000051_seed_relation_reference_language_key.sql
 -- Seeds the missing stored-reference refusal in Finnish and English.
 -- Connects transactional relation readers with the request pipeline's reason key.
@@ -6229,6 +6312,20 @@ UPDATE public.system_config AS setting
         OR (jsonb_typeof(setting.json_value) = 'object'
             AND setting.json_value IS DISTINCT FROM
                 defaults.value || setting.json_value || '{"schema_version": 2, "run_on_startup": false, "run_after_update": true}'::jsonb));
+-- 20261005000032_add_front_page_settings.sql
+-- Adds the two site-wide front page switches, disabled by default.
+-- Connects the public bootstrap and administrator settings editor to the same stored defaults.
+-- Exists so new and upgraded sites preserve today's opening view until explicitly enabled.
+-- VERSION_DB: 9.10.0
+-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql
+
+WITH settings(key, description) AS (
+    VALUES ('separate_front_page', 'Open the optional front page at the site root instead of the first dataset.'),
+           ('front_page_button_shows_site_name', 'Use the configured site name on the Home button; an empty name uses the translated label.')
+)
+INSERT INTO public.system_config (key, boolean_value, json_value, text_value, value_type, creation_spec)
+SELECT key, false, '{"value":false}'::jsonb, 'false', 2, description FROM settings
+WHERE NOT EXISTS (SELECT 1 FROM public.system_config existing WHERE existing.key = settings.key);
 -- 20261005000004_add_row_actor_columns.sql
 -- Gives registered content datasets their creator and owner, keeping a site's proven
 -- owner column and filling old rows only from the approved creator sources.
@@ -6637,6 +6734,57 @@ BEGIN
         WHERE migration = 'system_favorites_registry' AND action = 'completed');
 END
 $favorites_registry$;
+-- 20261005000034_register_system_front_page_blocks.sql
+-- Registers front page blocks as a protected system dataset after folders and metadata exist.
+-- Connects upgrades and fresh installations with the same registry and column definitions.
+-- Exists so front page blocks cannot be dropped or changed through generic dataset tools.
+-- VERSION_DB: 9.10.0
+-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql
+-- COMPLETION_MARKER: system_front_page_blocks_registry
+
+DO $front_page_registry$
+DECLARE
+    system_folder integer;
+    registered_uid integer;
+BEGIN
+    SELECT id INTO system_folder FROM public.system_table_folders
+     WHERE folder_name = 'system' ORDER BY id LIMIT 1;
+    IF system_folder IS NULL THEN
+        RAISE EXCEPTION 'system_front_page_blocks registration requires the system folder';
+    END IF;
+    INSERT INTO public.system_db_tables
+        (table_name, schema_name, folder_id, is_removable, description, cached_oid,
+         fk_display_column, filterbar_visible_by_default, display_name, sql_dump_policy)
+    SELECT 'system_front_page_blocks', 'public', system_folder, FALSE, 'Common and account-specific front page blocks',
+           'public.system_front_page_blocks'::regclass::oid::integer, 'table_uid', FALSE, 'Home blocks', 'all'
+     WHERE NOT EXISTS (SELECT 1 FROM public.system_db_tables
+        WHERE table_name = 'system_front_page_blocks' AND coalesce(NULLIF(schema_name, ''), 'public') = 'public');
+    SELECT table_uid INTO STRICT registered_uid FROM public.system_db_tables
+     WHERE table_name = 'system_front_page_blocks' AND coalesce(NULLIF(schema_name, ''), 'public') = 'public';
+    UPDATE public.system_db_tables
+       SET folder_id = system_folder, is_removable = FALSE,
+           cached_oid = 'public.system_front_page_blocks'::regclass::oid::integer
+     WHERE table_uid = registered_uid
+       AND (folder_id IS DISTINCT FROM system_folder OR is_removable IS DISTINCT FROM FALSE
+            OR cached_oid IS DISTINCT FROM 'public.system_front_page_blocks'::regclass::oid::integer);
+    INSERT INTO public.system_column_details
+        (table_uid, column_name, data_type, co_number, lang_key, insertable, editable_in_ui)
+    SELECT registered_uid, columns.column_name, columns.data_type, columns.ordinal_position,
+           columns.column_name, FALSE, FALSE
+      FROM information_schema.columns AS columns
+     WHERE columns.table_schema = 'public' AND columns.table_name = 'system_front_page_blocks'
+       AND NOT EXISTS (SELECT 1 FROM public.system_column_details AS existing
+            WHERE existing.table_uid = registered_uid AND existing.column_name = columns.column_name)
+     ORDER BY columns.ordinal_position;
+    UPDATE public.system_column_details SET insertable = FALSE, editable_in_ui = FALSE
+     WHERE table_uid = registered_uid AND (insertable IS DISTINCT FROM FALSE OR editable_in_ui IS DISTINCT FROM FALSE);
+    INSERT INTO public.system_data_repair_records (migration, action, detail)
+    SELECT 'system_front_page_blocks_registry', 'completed',
+           jsonb_build_object('file', '20261005000034_register_system_front_page_blocks.sql')
+     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+        WHERE migration = 'system_front_page_blocks_registry' AND action = 'completed');
+END
+$front_page_registry$;
 -- 20261005000050_require_registry_reference_key.sql
 -- Requires the dataset registry's integer reference key and protects it in the UI.
 -- Bridges stored dataset references with the registry's own column metadata.
@@ -6721,7 +6869,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'system_favorites_table', 'wl52_drop_column_label_value_layout', 'wl58_row_actor_columns', 'system_favorites_registry', 'wl144_registry_reference_key']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl52_drop_column_label_value_layout', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl144_registry_reference_key']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -6871,6 +7019,11 @@ BEGIN
       ('20261005000021_create_system_favorites.sql'),
       ('20261005000022_seed_favorites_language_keys.sql'),
       ('20261005000023_register_system_favorites.sql'),
+      ('20261005000030_create_front_page_revision_metadata.sql'),
+      ('20261005000031_create_system_front_page_blocks.sql'),
+      ('20261005000032_add_front_page_settings.sql'),
+      ('20261005000033_seed_front_page_language_keys.sql'),
+      ('20261005000034_register_system_front_page_blocks.sql'),
       ('20261005000050_require_registry_reference_key.sql'),
       ('20261005000051_seed_relation_reference_language_key.sql'),
       ('20261005000055_seed_setting_check_language_keys.sql'),

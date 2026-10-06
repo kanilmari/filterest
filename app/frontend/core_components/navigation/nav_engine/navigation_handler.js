@@ -25,6 +25,7 @@ import {
 } from '../main_tabs/main_tab_active_state.js';
 import { ensure_private_custom_views_loaded } from '../admin_and_user_tools/custom_view_reader.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
+import { hasContentBesideLoadingIndicator } from '../../../reusable_components/loading/loading_indicator_printer.js';
 
 export async function handle_all_navigation(name, customViews, options = {}) {
     const { skipUrlUpdate = false, forceReload = false, replacementParams, restoreMountedView, preserveCardReturn, isCurrentNavigation } = options;
@@ -172,7 +173,9 @@ async function _performNavigationCore(
         await load_function();
         container_element = document.getElementById(container_id);
         contentWasReloaded = true;
-    } else if (!restoredMountedView && (forceReload || !container_element.hasChildNodes())) {
+    } else if (!restoredMountedView && (forceReload || !hasContentBesideLoadingIndicator(container_element))) {
+        // The view-render stage has already put its spinner here; an emptied view
+        // (Home after a visit ends) must still load instead of keeping only the spinner.
         // The article reload preserves this exact card host and its return
         // viewport. Ordinary reloads and invalidated tokens still clear it.
         if (!preserveCardReturn || getCardArticleReturnToken(data_lang_key) !== preserveCardReturn) {

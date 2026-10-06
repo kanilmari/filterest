@@ -8,7 +8,7 @@ vi.mock("../../navigation/main_tabs/main_dataset_tabs.js", () => ({
     subscribeMainDatasetTabs: listener => { state.listener = listener; return () => { state.listener = null; }; },
 }));
 vi.mock("./dataset_search_response_reader.js", () => ({ readDatasetSearchResponse: state.reader }));
-vi.mock("./supplemental_dataset_results.js", () => ({
+vi.mock("../../table_views/compact_dataset_group.js", () => ({
     getSupplementalSearchCopy: () => ({ heading: "Others" }),
     createSupplementalDatasetGroup: tab => {
         const element = document.createElement("section"); element.dataset.dataset = tab.dataset;

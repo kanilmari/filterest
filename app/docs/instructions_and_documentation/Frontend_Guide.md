@@ -44,6 +44,55 @@ Each browser tab keeps its own view and open row, so one tab never changes or er
 -   `show_child_items_on_big_cards`: Show child items in the article view. The setting name still uses the internal `big_card` term.
 -   `always_show_empty_fields_on_cards`: Show empty fields on cards to maintain order.
 
+### Optional Home page
+
+The site-wide `separate_front_page` setting defaults to false, retaining the
+existing default-dataset start and root history behavior. When enabled, `/`
+opens the hidden `front_page` custom view; `/front_page` is never a view address.
+The SPA reads the setting and the optional Home-button site name from the
+auth-modes response before loading datasets. Explicit dataset/article links
+and login/register entry flows retain their existing behavior.
+
+`front_page/front_page_navigation.js` opens Home through the navigation
+pipeline, clears dataset selection only after navigation succeeds, writes the
+root entry, then retitles it. Repeated clicks on current-session Home do nothing;
+bootstrap passes `forceReload` to refresh the current session. The static
+`navbarFrontPage` region is rendered by `initTabs`, in the reserved `front-page`
+grid area, with a translated label or the configured site name.
+
+`front_page/front_page_printer.js` makes one `/api/front-page` request per visit,
+with cancellation, a render generation and a fifteen-second timeout/retry.
+Deactivation empties the view and aborts its request. Navigation's cleanup hook
+also removes the visit's listener and session subscription, so returning to a
+retained Home container creates a complete new lifecycle. The shared session
+generation also clears visible Home on sign-out,
+expiry, sign-in and bootstrap before asynchronous work, independently of optional
+login synchronization. Resume without a broadcast revalidates identity before
+Home loads or reuses blocks; pending opens and responses require the same session
+generation, and the response viewer must match the verified identity. The API
+pipeline inspects the final response after CSRF recovery, so expiry on a retried
+save invalidates Home even when the caller suppresses the sign-in redirect. Compact groups share
+`table_views/compact_dataset_group.js` with cross-dataset search (three rows for
+search; the server's row cap for Home). Search retains its existing navigation.
+Home row links preselect their exact article without adding a dataset entry,
+so one Back returns to Home; Show all opens the
+card collection newest first (`__newest`). Theme surfaces keep text above a
+decorative sized background, and phones show one column.
+
+Admin → Site settings → Home settings uses the `/api/admin/front-page` permission
+through the custom-view registry. The editor searches accounts by display name,
+keeps global settings/background drafts across scope changes, and asks before
+discarding unsaved blocks. Native inputs and up/down buttons work by keyboard.
+Scope writes include the loaded opaque revision; a conflict keeps the draft and
+requires an explicit reload before retrying. Reset and Copy common refresh the
+chosen user's inheritance and read-access warnings from the API. Settings,
+scope lists and staged background files/focal points save separately through the
+routed pipeline, with translated live feedback. The shared web-image picker
+supplies a local File to the same background upload flow. Deactivation releases
+previews and requests and empties the management form so returning fetches fresh
+settings. Both explicit themes use shared tokens; phones use one column and
+controls have 44 px targets.
+
 ## 3. Reusable Components: Vanilla Dropdown
 
 `filterest/app/frontend/reusable_components/vanilla_dropdown/` contains a small dropdown component with search and clear functionality.
