@@ -5,14 +5,18 @@
 package system_table_tools
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"log"
 	"strings"
 	"sync"
 	"time"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants"
 
 	"github.com/lib/pq"
 )
@@ -75,68 +79,88 @@ func StartAutomaticDataRetentionLoop(db *sql.DB) {
 }
 
 func runAutomaticDataRetentionPass(db *sql.DB) {
-	enabled, err := isAutomaticDataRetentionEnabled(db)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	err := runDrainedDataRetentionPass(ctx, db)
 	if err != nil {
-		log.Printf("\033[31merror: [data-retention] automatic enable check failed: %v\033[0m", err)
-		return
+		log.Printf("[data-retention] admission/prune failed: %v", err)
 	}
-	if !enabled {
-		return
-	}
+}
 
-	policies, err := loadDataRetentionPolicies(db)
+func runDrainedDataRetentionPass(ctx context.Context, db *sql.DB) error {
+	conn, err := db.Conn(ctx)
 	if err != nil {
-		log.Printf("\033[31merror: [data-retention] policy load failed: %v\033[0m", err)
-		return
+		return err
 	}
-	if len(policies) == 0 {
-		return
+	defer conn.Close()
+	locked := false
+	// A dedicated retention session prevents overlapping passes while each
+	// policy commits independently and releases lifecycle admission between phases.
+	defer func() {
+		if !locked {
+			return
+		}
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var released bool
+		err := runtime_grants.WithRequestBarrier(releaseCtx, backend.DbLifecycle, func(ctx context.Context) error {
+			return conn.QueryRowContext(ctx, `SELECT pg_advisory_unlock($1)`, dataRetentionAdvisoryLockKey).Scan(&released)
+		})
+		if err != nil || !released {
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
+	}()
+	var policies []dataRetentionPolicy
+	err = runtime_grants.WithRequestBarrier(ctx, backend.DbLifecycle, func(ctx context.Context) error {
+		q := dbutils.BindQueryContext(ctx, conn)
+		enabled, err := isAutomaticDataRetentionEnabled(q)
+		if err != nil || !enabled {
+			return err
+		}
+		policies, err = loadDataRetentionPolicies(q)
+		if err != nil || len(policies) == 0 {
+			return err
+		}
+		return conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, dataRetentionAdvisoryLockKey).Scan(&locked)
+	})
+	if err != nil || !locked {
+		return err
 	}
-
-	locked, lockErr := tryAcquireDataRetentionAdvisoryLock(db)
-	if lockErr != nil {
-		log.Printf("\033[31merror: [data-retention] advisory lock failed: %v\033[0m", lockErr)
-		return
+	var totalDeleted int64
+	now := time.Now()
+	for _, policy := range policies {
+		err = runtime_grants.WithRequestBarrier(ctx, backend.DbLifecycle, func(ctx context.Context) error {
+			tx, err := conn.BeginTx(ctx, nil)
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback()
+			response, err := runDataRetentionAt(dbutils.BindQueryContext(ctx, tx), []dataRetentionPolicy{policy}, false, now)
+			if err != nil {
+				return err
+			}
+			if err = tx.Commit(); err != nil {
+				return err
+			}
+			totalDeleted += response.TotalDeleted
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
-	if !locked {
-		return
+	if totalDeleted > 0 {
+		log.Printf("[data-retention] automatic prune deleted %d row(s)", totalDeleted)
 	}
-	defer releaseDataRetentionAdvisoryLock(db)
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("\033[31merror: [data-retention] transaction begin failed: %v\033[0m", err)
-		return
-	}
-
-	response, err := runDataRetentionAt(tx, policies, false, time.Now())
-	if err != nil {
-		_ = tx.Rollback()
-		log.Printf("\033[31merror: [data-retention] automatic prune failed: %v\033[0m", err)
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		log.Printf("\033[31merror: [data-retention] commit failed: %v\033[0m", err)
-		return
-	}
-
-	if response.TotalDeleted > 0 {
-		log.Printf("[data-retention] automatic prune deleted %d row(s) across %d policy result(s)", response.TotalDeleted, len(response.Results))
-	}
+	return nil
 }
 
 func tryAcquireDataRetentionAdvisoryLock(q dbutils.Querier) (bool, error) {
 	var locked bool
-	if err := q.QueryRow(`SELECT pg_try_advisory_lock($1)`, dataRetentionAdvisoryLockKey).Scan(&locked); err != nil {
+	if err := q.QueryRow(`SELECT pg_try_advisory_xact_lock($1)`, dataRetentionAdvisoryLockKey).Scan(&locked); err != nil {
 		return false, err
 	}
 	return locked, nil
-}
-
-func releaseDataRetentionAdvisoryLock(q dbutils.Querier) {
-	if _, err := q.Exec(`SELECT pg_advisory_unlock($1)`, dataRetentionAdvisoryLockKey); err != nil {
-		log.Printf("\033[31merror: [data-retention] advisory unlock failed: %v\033[0m", err)
-	}
 }
 
 func parseDataRetentionPoliciesQuery(raw string) []string {

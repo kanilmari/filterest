@@ -63,16 +63,18 @@ import_bootstrap_package() {
         fi
     done
     log_file="$(mktemp)" || return 1
-    if ! stream_bootstrap_schema_sql "$schema_file" "$postgis_available" |
-        "$@" -v ON_ERROR_STOP=1 >"$log_file" 2>&1; then
-        echo "Bootstrap schema import failed; first errors:" >&2
-        bootstrap_import_first_errors "$log_file" >&2
-        rm -f "$log_file"
-        return 1
-    fi
-    if ! sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' "$seed_file" |
-        "$@" -v ON_ERROR_STOP=1 >"$log_file" 2>&1; then
-        echo "Bootstrap seed import failed; first errors:" >&2
+    # One session holds the exclusive barrier through both schema and seed.
+    # Callers keep applications/workers stopped until this import and the next
+    # start-up reconciliation succeed. A separate psql per file loses the lock.
+    if ! (
+        set -o pipefail
+        {
+            printf "SELECT pg_advisory_lock(hashtext('filterest.runtime_startup_barrier'));\n"
+            stream_bootstrap_schema_sql "$schema_file" "$postgis_available" || exit 1
+            sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' "$seed_file" || exit 1
+        } | "$@" -v ON_ERROR_STOP=1 >"$log_file" 2>&1
+    ); then
+        echo "Bootstrap package import failed; first errors:" >&2
         bootstrap_import_first_errors "$log_file" >&2
         rm -f "$log_file"
         return 1

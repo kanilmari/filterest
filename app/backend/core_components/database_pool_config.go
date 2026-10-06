@@ -321,6 +321,7 @@ func CurrentDatabasePoolRuntimeStatus() ([]DatabasePoolRuntimeStatus, DatabasePo
 		db        *sql.DB
 	}{
 		{roleLabel: "admin", db: DbAdmin},
+		{roleLabel: "lifecycle", db: DbLifecycle},
 		{roleLabel: "readonly", db: DbReaderOnly},
 		{roleLabel: "confidential", db: DbConfidential},
 		{roleLabel: "basic", db: DbBasic},

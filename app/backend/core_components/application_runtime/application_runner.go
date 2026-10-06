@@ -20,13 +20,11 @@ import (
 	backend "easelect/backend/core_components"
 	appregistry "easelect/backend/core_components/app_registry"
 	"easelect/backend/core_components/auth"
-	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
-	dtt_crud_workflows "easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
-	dtt_foreign_keys "easelect/backend/core_components/dynamic_table_tools/dtt_foreign_keys"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/middlewares/firewall"
 	productidentity "easelect/backend/core_components/product_identity"
 	"easelect/backend/core_components/router"
+	"easelect/backend/core_components/runtime_grants"
 	"easelect/backend/core_components/runtimepaths"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/startup"
@@ -85,25 +83,6 @@ func startRegisteredApps(port string, environmentType string) {
 	}
 
 	log.Println("All applications started successfully.")
-}
-
-func runDeferredMetadataMaintenance() {
-	log.Println("[STARTUP] Metadata maintenance continues in background.")
-
-	if err := dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(backend.Db); err != nil {
-		log.Printf("OID-päivitysvirhe: %v", err)
-	}
-	if err := dtt_2_column_update.UpdateColumnMetadata(backend.Db); err != nil {
-		log.Printf("kolumnimetadatan synkronointivirhe: %v", err)
-	}
-	if err := dtt_foreign_keys.SyncOneToManyFKConstraints(backend.Db); err != nil {
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
-	}
-	if err := dtt_foreign_keys.SyncManyToManyFKConstraints(backend.Db); err != nil {
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
-	}
-
-	log.Println("[STARTUP] Metadata maintenance completed.")
 }
 
 func resolveProductRoot(rootHint string, installationRoot string, applicationRoot string) string {
@@ -284,48 +263,11 @@ func Run(options Options) {
 	}
 	defer backend.CloseDB()
 
-	if err := startup.RunEnabledMigrations(
-		backend.Db,
-		productRoot,
-		options.MigrationDirectories...,
-	); err != nil {
-		log.Fatalf("[MIGRATIONS] migration failed: %v", err)
-	}
-
-	if err := backend.EnsureConfidentialRolePermissions(backend.Db); err != nil {
-		log.Fatalf("[CONFIDENTIAL ROLE PERMISSIONS] startup reconcile failed: %v", err)
-	}
-	if err := backend.EnsureRowGroupRuntimeRolePermissions(backend.Db); err != nil {
-		log.Fatalf("[ROW GROUP PERMISSIONS] startup reconcile failed: %v", err)
-	}
-	// After the migrations, which may still grant the development role names,
-	// and before any request: visitors write nothing in the database itself, and
-	// no runtime role may use the privilege-editing views.
-	if err := backend.EnsureGuestAndPrivilegeViewWriteRevocations(backend.Db); err != nil {
-		log.Fatalf("[RUNTIME ROLE WRITE REVOCATIONS] startup reconcile failed: %v", err)
-	}
-	// Then no runtime role may write the account and rights tables, and the
-	// confidential role writes nothing in public, before any request arrives.
-	if err := backend.EnsureAccountTableWriteRevocations(backend.Db); err != nil {
-		log.Fatalf("[ACCOUNT TABLE WRITE REVOCATIONS] startup reconcile failed: %v", err)
-	}
-
-	if err := startup.ReconcileReservedTestUsers(backend.Db, backend.DbConfidential, environmentType); err != nil {
-		log.Fatalf("Reserved test user reconcile failed: %v", err)
-	}
-
-	if err := startup.CheckDatabaseVersion(backend.Db, productRoot); err != nil {
-		log.Printf("\033[33m⚠ %v\033[0m", err)
-	}
-
-	startRegisteredApps(port, environmentType)
-
 	executablePath, err := os.Executable()
 	if err != nil {
 		log.Fatalf("Executable-polun haku epäonnistui: %v", err)
 	}
 	executableDirectory := filepath.Dir(executablePath)
-	startup.RunOptionalTasks(productRoot, options.AppDBCompatibilityManifest)
 
 	frontendDirectory, err := resolveFrontendDirectory(
 		options.FrontendRoot,
@@ -336,7 +278,6 @@ func Run(options Options) {
 		log.Fatalf("Frontend directory resolution failed: %v", err)
 	}
 
-	rate_limiting.InitDevRateLimitingFlag(backend.Db)
 	auth.InitAuth(frontendDirectory)
 	router.RegisterRoutes(frontendDirectory, runtimePaths.StorageRoot)
 	for _, extension := range options.FrontendExtensions {
@@ -347,42 +288,25 @@ func Run(options Options) {
 			log.Fatalf("Frontend extension registration failed: %v", err)
 		}
 	}
-	if err := router.RegisterAllRoutesAndUpdateFunctions(backend.Db); err != nil {
-		log.Printf("virhe rekisteröidessä reittejä/päivittäessä funktioita: %v", err)
+	if err := runtime_grants.WithStartupBarrier(context.Background(), backend.DbLifecycle, func() error {
+		return runRequiredStartup(requiredStartupSteps(productRoot, options, environmentType))
+	}); err != nil {
+		log.Fatalf("[STARTUP] required initialization failed; site is not ready: %v", err)
 	}
-	if err := router.SyncFunctions(backend.Db); err != nil {
-		log.Printf("virhe synkronoitaessa funktioita: %v", err)
+	backend.EnableRuntimeDatabaseAdmission()
+	if err := startup.CheckDatabaseVersion(backend.Db, productRoot); err != nil {
+		log.Printf("[STARTUP] database version: %v", err)
 	}
-	if err := router.ReactivateUIRoutes(backend.Db); err != nil {
-		log.Printf("virhe UI-reittien aktivoinnissa: %v", err)
-	}
-	// Startup reports what looks stale and removes nothing. An administrator's
-	// permission settings are their own data, and a grant deleted on boot is
-	// gone with no record of what it was; the operator applies a removal
-	// deliberately by starting once with FILTEREST_APPLY_PERMISSION_CLEANUP=1.
-	cleanupOptions := backend.PermissionCleanupOptions{
-		RemoveMissingTables: true,
-		RemoveDisabledFuncs: true,
-		RemoveMismatchedUID: true,
-		ReportOnly:          !permissionCleanupApprovedByOperator(),
-	}
-	if err := backend.CleanGroupTableFuncRights(backend.Db, cleanupOptions); err != nil {
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
-	}
-	if err := backend.EnsureAdminPermissions(backend.Db); err != nil {
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
-	}
-	if err := backend.EnsureAdminTablePermissions(backend.Db); err != nil {
-		fmt.Printf("\033[31mvirhe: %s\033[0m\n", err.Error())
-	}
-
-	go runDeferredMetadataMaintenance()
+	rate_limiting.InitDevRateLimitingFlag(backend.Db)
+	startRegisteredApps(port, environmentType)
+	startup.RunOptionalTasks(productRoot, options.AppDBCompatibilityManifest)
 
 	baseMultiplexer := http.DefaultServeMux
 	firewallWrappedHandler := firewall.FirewallHandler(baseMultiplexer)
 	securityWrappedHandler := middlewares.WithSecurityHeaders(firewallWrappedHandler)
 	wrappedHandler := middlewares.WithCSP(securityWrappedHandler)
 	wrappedHandler = router.WithSystemActiveRequestTracking(wrappedHandler)
+	wrappedHandler = middlewares.WithStartupRequestBarrier(wrappedHandler)
 	wrappedHandler = router.WithSystemAPIDrainGate(wrappedHandler)
 	wrappedHandler = middlewares.WithPanicRecovery(wrappedHandler)
 

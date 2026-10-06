@@ -183,3 +183,59 @@ var operationalPrivileges = map[string][]string{
 	"deletion_log":                      {"SELECT", "INSERT"},
 	"system_embedding_refresh_jobs":     {"SELECT", "INSERT", "UPDATE"},
 }
+
+// Operational metadata reads do not depend on a dataset route right. WL58's
+// runtime-role acceptance reads both actor-support tables in all four pools;
+// repair-history rows remain owner-only through their existing RLS policy.
+var operationalReadRoles = map[string][]string{
+	// Dataset results/card/article/filter/search read these through the caller's
+	// pool. Home/tree and saved-view resolution share the same metadata.
+	"system_db_tables":                  {"basic", "guest"},
+	"system_config":                     {"basic", "guest"},
+	"system_config_value_data_types":    {"basic", "guest"},
+	"system_column_details":             {"basic", "guest"},
+	"system_column_control":             {"basic", "guest"},
+	"system_column_supported_views":     {"basic", "guest"},
+	"system_column_view_presets":        {"basic", "guest"},
+	"system_table_views":                {"basic", "guest"},
+	"system_table_folders":              {"basic", "guest"},
+	"system_child_tab_config":           {"basic", "guest"},
+	"system_dataset_view_settings":      {"basic", "guest"},
+	"system_dataset_media":              {"basic", "guest"},
+	"system_dataset_sort_defaults":      {"basic", "guest"},
+	"system_column_field_sets":          {"basic", "guest"},
+	"system_column_field_set_members":   {"basic", "guest"},
+	"system_view_field_set_assignments": {"basic", "guest"},
+	"system_foreign_key_relations_1_m":  {"basic", "guest"},
+	"system_foreign_key_relations_m_m":  {"basic", "guest"},
+	// View variants and favourites join these permission identities. Writes
+	// still use dedicated handlers; these contracts never authorize a write.
+	"system_functions":               {"basic", "guest"},
+	"system_group_table_func_rights": {"basic", "guest"},
+	"system_user_group_memberships":  {"basic", "guest"},
+	"system_user_groups":             {"basic", "guest"},
+	"system_favorites":               {"basic"},
+	"system_front_page_blocks":       {"basic", "guest"},
+	"system_user_visual_preferences": {"basic"},
+	"system_languages":               {"basic", "guest"},
+	"system_lang_keys":               {"basic", "guest"},
+	"system_lang_key_translations":   {"basic", "guest"},
+
+	"system_row_group_classifications": {"basic", "guest"},
+	"system_row_groups":                {"basic", "guest"},
+	"system_row_group_memberships":     {"basic", "guest"},
+	"system_row_actor_columns":         {"basic", "guest", "readonly", "confidential"},
+	"system_data_repair_records":       {"basic", "guest", "readonly", "confidential"},
+}
+
+func hasOperationalReadContract(object Object, label string) bool {
+	if object.Schema != "public" || object.Kind != "table" {
+		return false
+	}
+	for _, role := range operationalReadRoles[object.Name] {
+		if role == label {
+			return true
+		}
+	}
+	return false
+}

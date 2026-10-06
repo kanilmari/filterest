@@ -443,10 +443,10 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 				newRateLimitMinutes,
 			)
 			if err != nil {
-				log.Printf("error registering function %s: %v", handlerName, err)
+				return fmt.Errorf("register function %s: %w", handlerName, err)
 			}
 		case err != nil:
-			log.Printf("error fetching function %s: %v", handlerName, err)
+			return fmt.Errorf("read function %s: %w", handlerName, err)
 		default:
 			existingRateLimitAmount, existingRateLimitMinutes = reconcileExistingRateLimit(
 				handlerName,
@@ -478,7 +478,7 @@ func RegisterAllRoutesAndUpdateFunctions(db *sql.DB) error {
 				`, existingID, packageName, rd.UrlPattern, false, existingRateLimitAmount, existingRateLimitMinutes)
 			}
 			if err != nil {
-				log.Printf("error updating function %s: %v", handlerName, err)
+				return fmt.Errorf("update function %s: %w", handlerName, err)
 			}
 		}
 
@@ -507,11 +507,15 @@ func SyncFunctions(db *sql.DB) error {
 		dbFuncs = append(dbFuncs, fname)
 	}
 
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate function registry: %w", err)
+	}
+
 	for _, dbf := range dbFuncs {
 		if !registeredFunctions[dbf] {
 			_, err := db.Exec(`UPDATE system_functions SET disabled = true WHERE name = $1`, dbf)
 			if err != nil {
-				log.Printf("error marking function %s as disabled=true: %v", dbf, err)
+				return fmt.Errorf("disable function %s: %w", dbf, err)
 			} else {
 				log.Printf("function %s marked as disabled=true", dbf)
 			}

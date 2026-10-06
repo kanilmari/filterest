@@ -17,6 +17,10 @@ import (
 	"sync"
 	"time"
 
+	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants"
+
 	"github.com/lib/pq"
 	pgvector "github.com/pgvector/pgvector-go"
 )
@@ -51,7 +55,11 @@ func StartEmbeddingRefreshWorker(db *sql.DB) {
 	if db == nil {
 		return
 	}
-	if !embeddingRefreshQueueAvailable(db) {
+	available := false
+	if err := withEmbeddingDatabasePhase(func(ctx context.Context) error {
+		available = embeddingRefreshQueueAvailable(dbutils.BindQueryContext(ctx, db))
+		return nil
+	}); err != nil || !available {
 		log.Printf("[embedding-refresh] worker disabled code=queue_unavailable")
 		return
 	}
@@ -67,7 +75,7 @@ func StartEmbeddingRefreshWorker(db *sql.DB) {
 	})
 }
 
-func embeddingRefreshQueueAvailable(db *sql.DB) bool {
+func embeddingRefreshQueueAvailable(db dbutils.Querier) bool {
 	var available bool
 	if err := db.QueryRow(
 		`SELECT to_regclass('public.system_embedding_refresh_jobs') IS NOT NULL`,
@@ -79,7 +87,12 @@ func embeddingRefreshQueueAvailable(db *sql.DB) bool {
 
 func runEmbeddingRefreshPass(db *sql.DB, generate embeddingGenerateFunc) {
 	for processed := 0; processed < embeddingWorkerBatchSize; processed++ {
-		job, err := claimEmbeddingRefreshJob(db)
+		var job embeddingRefreshJob
+		err := withEmbeddingDatabasePhase(func(ctx context.Context) error {
+			var err error
+			job, err = claimEmbeddingRefreshJob(dbutils.BindQueryContext(ctx, db))
+			return err
+		})
 		if errors.Is(err, sql.ErrNoRows) {
 			return
 		}
@@ -90,14 +103,16 @@ func runEmbeddingRefreshPass(db *sql.DB, generate embeddingGenerateFunc) {
 		if err := processEmbeddingRefreshJob(db, job, generate); err != nil {
 			code := classifyEmbeddingRefreshError(err)
 			logEmbeddingRefreshFailure(job, code)
-			if retryErr := retryEmbeddingRefreshJob(db, job, code); retryErr != nil {
+			if retryErr := withEmbeddingDatabasePhase(func(ctx context.Context) error {
+				return retryEmbeddingRefreshJob(dbutils.BindQueryContext(ctx, db), job, code)
+			}); retryErr != nil {
 				log.Printf("[embedding-refresh] retry scheduling failed job_id=%d code=queue_retry_error", job.ID)
 			}
 		}
 	}
 }
 
-func claimEmbeddingRefreshJob(db *sql.DB) (embeddingRefreshJob, error) {
+func claimEmbeddingRefreshJob(db dbutils.Querier) (embeddingRefreshJob, error) {
 	leaseToken, err := newEmbeddingLeaseToken()
 	if err != nil {
 		return embeddingRefreshJob{}, err
@@ -135,16 +150,25 @@ func claimEmbeddingRefreshJob(db *sql.DB) (embeddingRefreshJob, error) {
 }
 
 func processEmbeddingRefreshJob(db *sql.DB, job embeddingRefreshJob, generate embeddingGenerateFunc) error {
-	capabilities, err := resolveEmbeddingCapabilities(db, job.TableName)
-	if err != nil {
-		return fmt.Errorf("capability: %w", err)
-	}
-	source, err := LoadAuthorizedEmbeddingSource(db, job.TableName, job.RowID, false)
-	if errors.Is(err, sql.ErrNoRows) {
-		return finishMissingEmbeddingRow(db, job)
-	}
-	if err != nil {
-		return fmt.Errorf("source: %w", err)
+	var capabilities embeddingCapabilities
+	var source AuthorizedEmbeddingSource
+	missing := false
+	err := withEmbeddingDatabasePhase(func(ctx context.Context) error {
+		q := dbutils.BindQueryContext(ctx, db)
+		var err error
+		capabilities, err = resolveEmbeddingCapabilities(q, job.TableName)
+		if err != nil {
+			return fmt.Errorf("capability: %w", err)
+		}
+		source, err = LoadAuthorizedEmbeddingSource(q, job.TableName, job.RowID, false)
+		if errors.Is(err, sql.ErrNoRows) {
+			missing = true
+			return finishMissingEmbeddingRow(q, job)
+		}
+		return err
+	})
+	if err != nil || missing {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -153,7 +177,9 @@ func processEmbeddingRefreshJob(db *sql.DB, job embeddingRefreshJob, generate em
 	if err != nil {
 		return fmt.Errorf("provider: %w", err)
 	}
-	return storeEmbeddingRefreshResult(db, job, capabilities, source, vectors)
+	return withEmbeddingDatabasePhase(func(ctx context.Context) error {
+		return storeEmbeddingRefreshResultContext(ctx, db, job, capabilities, source, vectors)
+	})
 }
 
 func generateEmbeddingVectorSet(
@@ -199,15 +225,27 @@ func storeEmbeddingRefreshResult(
 	claimedSource AuthorizedEmbeddingSource,
 	vectors embeddingVectorSet,
 ) error {
-	tx, err := db.Begin()
+	return storeEmbeddingRefreshResultContext(context.Background(), db, job, claimedCapabilities, claimedSource, vectors)
+}
+
+// Only database phases join the drain; the provider call above holds no admission.
+func withEmbeddingDatabasePhase(work func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return runtime_grants.WithRequestBarrier(ctx, backend.DbLifecycle, work)
+}
+
+func storeEmbeddingRefreshResultContext(ctx context.Context, db *sql.DB, job embeddingRefreshJob, claimedCapabilities embeddingCapabilities, claimedSource AuthorizedEmbeddingSource, vectors embeddingVectorSet) error {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store begin: %w", err)
 	}
 	defer tx.Rollback()
+	q := dbutils.BindQueryContext(ctx, tx)
 
-	currentSource, err := LoadAuthorizedEmbeddingSource(tx, job.TableName, job.RowID, true)
+	currentSource, err := LoadAuthorizedEmbeddingSource(q, job.TableName, job.RowID, true)
 	if errors.Is(err, sql.ErrNoRows) {
-		if _, deleteErr := tx.Exec(
+		if _, deleteErr := q.Exec(
 			`DELETE FROM system_embedding_refresh_jobs WHERE id=$1 AND lease_token=$2 AND generation=$3`,
 			job.ID,
 			job.LeaseToken,
@@ -223,7 +261,7 @@ func storeEmbeddingRefreshResult(
 
 	var currentGeneration int64
 	var currentLeaseToken string
-	if err := tx.QueryRow(`
+	if err := q.QueryRow(`
 		SELECT generation, lease_token
 		FROM system_embedding_refresh_jobs
 		WHERE id=$1
@@ -233,7 +271,7 @@ func storeEmbeddingRefreshResult(
 		}
 		return fmt.Errorf("store generation: %w", err)
 	}
-	currentCapabilities, err := resolveEmbeddingCapabilities(tx, job.TableName)
+	currentCapabilities, err := resolveEmbeddingCapabilities(q, job.TableName)
 	if err != nil {
 		return fmt.Errorf("store capability: %w", err)
 	}
@@ -247,7 +285,7 @@ func storeEmbeddingRefreshResult(
 		claimedCapabilities,
 		currentCapabilities,
 	) {
-		if _, err := tx.Exec(`
+		if _, err := q.Exec(`
 			UPDATE system_embedding_refresh_jobs
 			SET lease_token='', lease_expires_at=NULL, available_at=now(), updated=now()
 			WHERE id=$1 AND lease_token=$2`, job.ID, job.LeaseToken); err != nil {
@@ -256,10 +294,10 @@ func storeEmbeddingRefreshResult(
 		return tx.Commit()
 	}
 
-	if err := persistEmbeddingVectors(tx, job, currentCapabilities, currentSource, vectors); err != nil {
+	if err := persistEmbeddingVectors(q, job, currentCapabilities, currentSource, vectors); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`
+	if _, err := q.Exec(`
 		DELETE FROM system_embedding_refresh_jobs
 		WHERE id=$1 AND generation=$2 AND lease_token=$3`, job.ID, job.Generation, job.LeaseToken); err != nil {
 		return fmt.Errorf("complete embedding job: %w", err)
@@ -268,7 +306,7 @@ func storeEmbeddingRefreshResult(
 }
 
 func persistEmbeddingVectors(
-	tx *sql.Tx,
+	tx dbutils.Querier,
 	job embeddingRefreshJob,
 	capabilities embeddingCapabilities,
 	source AuthorizedEmbeddingSource,
@@ -321,7 +359,7 @@ func persistEmbeddingVectors(
 	return nil
 }
 
-func finishMissingEmbeddingRow(db *sql.DB, job embeddingRefreshJob) error {
+func finishMissingEmbeddingRow(db dbutils.Querier, job embeddingRefreshJob) error {
 	_, err := db.Exec(
 		`DELETE FROM system_embedding_refresh_jobs WHERE id=$1 AND lease_token=$2 AND generation=$3`,
 		job.ID,
@@ -331,7 +369,7 @@ func finishMissingEmbeddingRow(db *sql.DB, job embeddingRefreshJob) error {
 	return err
 }
 
-func retryEmbeddingRefreshJob(db *sql.DB, job embeddingRefreshJob, errorCode string) error {
+func retryEmbeddingRefreshJob(db dbutils.Querier, job embeddingRefreshJob, errorCode string) error {
 	nextAttempt := job.AttemptCount + 1
 	availableAt := time.Now().UTC().Add(embeddingRetryDelay(nextAttempt))
 	_, err := db.Exec(`

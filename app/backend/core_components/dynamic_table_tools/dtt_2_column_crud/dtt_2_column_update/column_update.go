@@ -19,7 +19,8 @@ import (
 
 // UpdateColumnMetadata updates system_column_details based on current table schema.
 // Accepts a Querier (either *sql.DB or *sql.Tx) for transaction safety.
-func UpdateColumnMetadata(q dbutils.Querier) error {
+func UpdateColumnMetadata(q dbutils.Querier, preserveLegacy ...bool) error {
+	preserve := len(preserveLegacy) > 0 && preserveLegacy[0]
 	// Poista rivit system_column_details-taulusta, joiden table_uid ei enää ole olemassa
 	cleanupQuery := `
         DELETE FROM system_column_details
@@ -37,6 +38,9 @@ func UpdateColumnMetadata(q dbutils.Querier) error {
         SELECT table_name, table_uid
         FROM system_db_tables
     `
+	if preserve {
+		tablesQuery += ` WHERE table_uid IS NOT NULL AND table_name IS NOT NULL`
+	}
 	rows, err := q.Query(tablesQuery)
 	if err != nil {
 		return fmt.Errorf("error fetching tables: %w", err)
@@ -110,6 +114,10 @@ func UpdateColumnMetadata(q dbutils.Querier) error {
 		if err := colRows.Close(); err != nil {
 			return fmt.Errorf("error closing columns for table %s: %w", table.TableName, err)
 		}
+
+		if preserve && len(existingColumns) == 0 {
+			continue
+		} // Missing legacy datasets stay diagnosable.
 
 		// Hae olemassa olevat system_column_details-rivit käyttäen column_name:a
 		metadataQuery := `

@@ -7,11 +7,11 @@ package system_table_tools
 
 import (
 	backend "easelect/backend/core_components"
-	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/pipeline/access_control"
 	"encoding/json"
@@ -185,14 +185,14 @@ func HandleUpdateOidsAndTableNames(w http.ResponseWriter, r *http.Request) {
 	// anyone to approve the change, because approval is only required of
 	// writes.
 
-	// Get the lazy request transaction opened by the pipeline transaction stage.
-	tx, ok := dbutils.GetTx(r.Context())
-	if !ok {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
+	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
+	if err != nil {
+		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	tx := mutation.Tx
 
-	err := dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx)
+	err = dtt_crud_workflows.UpdateOidsAndTableNamesWithBridge(tx)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error updating OID values and table names: %v", err))
 		return
@@ -204,6 +204,10 @@ func HandleUpdateOidsAndTableNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := mutation.Finish(r.Context()); err != nil {
+		runtime_grant_mutations.RespondError(w, err)
+		return
+	}
 	fmt.Fprintf(w, "OID values, table names, and column metadata updated successfully.")
 }
 

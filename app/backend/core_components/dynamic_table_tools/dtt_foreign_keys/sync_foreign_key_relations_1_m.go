@@ -15,7 +15,7 @@ import (
 // ja synkronoi ne system_foreign_key_relations_1_m -tauluun.
 // Nyt rajataan mukaan vain ne ulkoavaimet, joissa *lähdetaululla*
 // on yksisarakkeinen PK. "1" viittaa siis lähdetauluun.
-func SyncOneToManyFKConstraints(db *sql.DB) error {
+func SyncOneToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 	// log.Println("[INFO] Synchronizing 1-to-many foreign keys...")
 
 	// 1. Haetaan kaikki ulkoavaimet tietokannasta.
@@ -85,7 +85,7 @@ func SyncOneToManyFKConstraints(db *sql.DB) error {
 	}
 
 	// 2. Haetaan rivit system_foreign_key_relations_1_m -taulusta
-	const qryAllCustom = `
+	qryAllCustom := `
                SELECT
                        fr.id,
                        s_src.table_name AS source_table_name,
@@ -103,6 +103,12 @@ func SyncOneToManyFKConstraints(db *sql.DB) error {
 		SourceColumn string
 		TargetTable  string
 		TargetColumn string
+	}
+
+	// Preserve malformed legacy rows without letting NULL, empty or missing
+	// table names or columns enter discovery comparisons. The final policy audit reports them.
+	if len(preserveLegacy) > 0 && preserveLegacy[0] {
+		qryAllCustom += ` WHERE EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname=s_src.table_name AND n.nspname=COALESCE(NULLIF(s_src.schema_name,''),'public')) AND a.attname = fr.source_column_name AND a.attnum > 0 AND NOT a.attisdropped) AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname=s_tgt.table_name AND n.nspname=COALESCE(NULLIF(s_tgt.schema_name,''),'public')) AND a.attname = fr.target_column_name AND a.attnum > 0 AND NOT a.attisdropped)`
 	}
 
 	rows2, err := db.Query(qryAllCustom)
@@ -143,6 +149,9 @@ func SyncOneToManyFKConstraints(db *sql.DB) error {
 		}
 	}
 	for key, er := range existingRows {
+		if len(preserveLegacy) > 0 && preserveLegacy[0] {
+			continue
+		}
 		if _, ok := foundConstraints[key]; !ok {
 			toDelete = append(toDelete, er.ID)
 		}

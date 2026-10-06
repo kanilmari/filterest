@@ -22,6 +22,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grants"
 )
 
 const (
@@ -356,6 +357,9 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := runtime_grants.ReleaseRequestBarrier(r.Context()); err != nil {
+		return
+	}
 	wakeEvents, unsubscribe := event_bus.Bus.Subscribe(event_bus.InternalUpdateNoticeTopic)
 	defer unsubscribe()
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -364,7 +368,12 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	writeSnapshot := func() bool {
-		snapshot, err := readProductionUpdateNotice(r.Context(), productionUpdateNoticeNow())
+		var snapshot productionUpdateNoticeSnapshot
+		err := runtime_grants.WithRequestBarrier(r.Context(), backend.DbLifecycle, func(ctx context.Context) error {
+			var err error
+			snapshot, err = readProductionUpdateNotice(ctx, productionUpdateNoticeNow())
+			return err
+		})
 		if err != nil {
 			log.Printf("\033[31merror: read production update notice snapshot: %v\033[0m", err)
 			return false
@@ -408,7 +417,12 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-recheckTicker.C:
-			allowed, err := productionUpdateNoticeAdminOK(r.Context(), actor.UserID)
+			var allowed bool
+			err := runtime_grants.WithRequestBarrier(r.Context(), backend.DbLifecycle, func(ctx context.Context) error {
+				var err error
+				allowed, err = productionUpdateNoticeAdminOK(ctx, actor.UserID)
+				return err
+			})
 			if err != nil || !allowed {
 				fmt.Fprintf(w, "event: %s\ndata: {}\n\n", productionUpdateNoticeRevokedEvent)
 				flusher.Flush()

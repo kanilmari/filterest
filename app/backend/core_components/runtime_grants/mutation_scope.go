@@ -115,6 +115,9 @@ func DatasetScopeIdentity(snapshot GrantSnapshot, uid int64) int64 {
 // Old audit findings include row keys and identifiers rather than row values.
 // Resolve their explicit metadata identities; never guess from a table prefix.
 func findingObjects(snapshot GrantSnapshot, finding Finding) []int64 {
+	if strings.HasPrefix(finding.Kind, "default_") {
+		return nil
+	}
 	oids := append([]int64{}, finding.ScopeOIDs[:]...)
 	metadataRow := strings.HasPrefix(finding.Reason, "row ")
 	// A row diagnostic names its storage registry for the audit. That registry
@@ -145,6 +148,12 @@ func findingObjects(snapshot GrantSnapshot, finding Finding) []int64 {
 }
 
 func excludeBlockedChecks(snapshot GrantSnapshot, before *GrantSnapshot, scope []int64, checks []Check, findings []Finding) ([]Check, error) {
+	return filterBlockedChecks(snapshot, before, scope, checks, findings, false)
+}
+
+// Startup keeps every known positive requirement, even on a blocked object.
+// Legacy uncertainty protects revocations, while only structural findings refuse boot.
+func filterBlockedChecks(snapshot GrantSnapshot, before *GrantSnapshot, scope []int64, checks []Check, findings []Finding, startup bool) ([]Check, error) {
 	graph := mutationDependencyGraph(snapshot, before)
 	closure := dependencyClosure(graph, scope)
 	blocked := map[int64]bool{}
@@ -157,11 +166,11 @@ func excludeBlockedChecks(snapshot GrantSnapshot, before *GrantSnapshot, scope [
 		if before != nil {
 			oids = append(oids, findingObjects(*before, finding)...)
 		}
-		affected := scope == nil
+		affected := scope == nil && !startup
 		for _, oid := range oids {
 			if oid != 0 {
 				blocked[oid] = true
-				affected = affected || closure[oid]
+				affected = affected || (!startup && closure[oid])
 			}
 		}
 		// Role preconditions and absent principal registries are structural;
@@ -169,7 +178,7 @@ func excludeBlockedChecks(snapshot GrantSnapshot, before *GrantSnapshot, scope [
 		if finding.Kind == "" && finding.Object == "" {
 			affected = true
 		}
-		if finding.Kind == "event_trigger" && len(closure) != 0 {
+		if finding.Kind == "event_trigger" && len(closure) != 0 && !startup {
 			affected = true
 		}
 		if affected {
@@ -201,11 +210,12 @@ func excludeBlockedChecks(snapshot GrantSnapshot, before *GrantSnapshot, scope [
 	}
 	blocked = dependencyClosure(graph, seeds)
 	var safe []Check
+	globalSQLBlocker := startup && hasGlobalSQLBlocker(findings)
 	for _, check := range checks {
-		if (check.Role != "basic" && check.Role != "guest") || directlyBlocked[check.ObjectOID] {
+		if !startup && (check.Role != "basic" && check.Role != "guest" || directlyBlocked[check.ObjectOID]) {
 			continue
 		}
-		if blocked[check.ObjectOID] {
+		if blocked[check.ObjectOID] || globalSQLBlocker {
 			check.Managed = false
 		}
 		safe = append(safe, check)

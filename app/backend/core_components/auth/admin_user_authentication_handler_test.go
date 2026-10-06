@@ -12,6 +12,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/middlewares"
+	"easelect/backend/core_components/runtime_grants/granttest"
 	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
 	"errors"
@@ -37,6 +38,7 @@ type adminAuthenticationMockState struct {
 	missingUser          bool
 	apiOnlyTarget        bool
 	failRestrictedUpdate bool
+	failAdmission        bool
 
 	// targetLockedInTx records that the locked target read, which carries the
 	// API-only marker, ran inside the same transaction as the provisioning writes.
@@ -168,6 +170,12 @@ func (connection *adminAuthenticationMockConn) ExecContext(
 	connection.state.mu.Lock()
 	defer connection.state.mu.Unlock()
 
+	if granttest.IsRequestBarrier(query, arguments) {
+		if connection.state.failAdmission && strings.Contains(query, "pg_advisory_xact_lock_shared") {
+			return nil, errors.New("request admission unavailable")
+		}
+		return driver.RowsAffected(0), nil
+	}
 	if strings.Contains(normalized, "set_config('app.user_id'") {
 		return driver.RowsAffected(1), nil
 	}
@@ -423,6 +431,23 @@ func TestAdminUserAuthenticationPostRejectsMissingUser(t *testing.T) {
 	}
 	if state.userUpdateCount != 0 || state.membershipInsertCount != 0 || state.restrictedUpdateCount != 0 {
 		t.Fatal("missing user must not start provisioning mutations")
+	}
+}
+
+func TestAdminUserAuthenticationPostRefusesUnavailableAdmission(t *testing.T) {
+	state := &adminAuthenticationMockState{failAdmission: true}
+	db := openAdminAuthenticationMockDB(t, state)
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/user-authentication",
+		strings.NewReader(`{"user_id":42,"verification_method":"none"}`))
+	recorder := serveAdminAuthenticationWithTransaction(t, db, request)
+	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "transaction_unavailable") {
+		t.Fatalf("failed admission response = %d %s", recorder.Code, recorder.Body)
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.beginCount != 1 || state.commitCount != 0 || state.rollbackCount != 1 || state.targetLockedInTx ||
+		state.userUpdateCount != 0 || state.membershipInsertCount != 0 || state.restrictedUpdateCount != 0 {
+		t.Fatalf("failed admission reached provisioning: %+v", state)
 	}
 }
 

@@ -1,0 +1,15 @@
+{
+  "8c5a769a59dfaa06a4c1ce947ff562b9": {
+    "schema": "public",
+    "name": "resolve_effective_row_access",
+    "argument_types": "text, bigint, bigint, text, boolean, boolean",
+    "search_path": "search_path=pg_catalog, public"
+  },
+  "9a87d4938809ea845f63e034ddffc75a": {
+    "schema": "public",
+    "name": "systemview_role_table_privileges_upd",
+    "argument_types": "",
+    "legacy_trigger": true,
+    "search_path": ""
+  }
+}

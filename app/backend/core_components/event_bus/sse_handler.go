@@ -17,6 +17,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/permissions"
+	"easelect/backend/core_components/runtime_grants"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
@@ -34,8 +35,22 @@ func SSESubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		r,
 		authorizeSSEDatasetSubscription,
 		Bus.Subscribe,
-		authorizeSSEEventRead,
-		validateSSESession,
+		func(r *http.Request, event Event) (allowed bool, err error) {
+			err = runtime_grants.WithRequestBarrier(r.Context(), backend.DbLifecycle, func(ctx context.Context) error {
+				var readErr error
+				allowed, readErr = authorizeSSEEventRead(r.WithContext(ctx), event)
+				return readErr
+			})
+			return
+		},
+		func(r *http.Request) (valid bool, err error) {
+			err = runtime_grants.WithRequestBarrier(r.Context(), backend.DbLifecycle, func(ctx context.Context) error {
+				var readErr error
+				valid, readErr = validateSSESession(r.WithContext(ctx))
+				return readErr
+			})
+			return
+		},
 		nil,
 	)
 }
@@ -89,6 +104,14 @@ func serveSSESubscription(
 		}
 	}
 
+	// Authentication and dataset authorization ran under the middleware's
+	// admission. Idle streams hold no lifecycle or work connection; each later
+	// database authorization is admitted separately by the production callbacks.
+	if err := runtime_grants.ReleaseRequestBarrier(r.Context()); err != nil {
+		log.Printf("[SSESubscribeHandler] stream admission release failed: %v", err)
+		httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: http.StatusServiceUnavailable, LangKey: "service_unavailable_notice", Message: "The service is temporarily under maintenance. Please retry shortly."})
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")

@@ -33,6 +33,8 @@ type LazyTx struct {
 	afterCommitHooks   []func()
 	afterRollbackHooks []func()
 	mu                 sync.Mutex
+	admit              func(context.Context) (func() error, error)
+	admissionRelease   func() error
 }
 
 // NewLazyTx creates a new LazyTx bound to the given database pool.
@@ -46,21 +48,45 @@ func NewLazyTxWithBeginHook(db *sql.DB, onBegin LazyTxBeginHook) *LazyTx {
 	return &LazyTx{db: db, onBegin: onBegin}
 }
 
+// SetAdmissionHook admits before work-pool acquisition and releases on every
+// transaction ending, including begin failure. Middleware supplies lifecycle policy.
+func (lt *LazyTx) SetAdmissionHook(admit func(context.Context) (func() error, error)) {
+	lt.admit = admit
+}
+
 // Begin opens the actual database transaction (called internally by RequireTx).
 // Returns the existing transaction if already started.
 func (lt *LazyTx) Begin() (*sql.Tx, error) {
+	return lt.BeginContext(context.Background())
+}
+
+// BeginContext bounds both pool acquisition and the transaction to its caller.
+func (lt *LazyTx) BeginContext(ctx context.Context) (*sql.Tx, error) {
 	lt.mu.Lock()
 	defer lt.mu.Unlock()
 	if lt.started {
 		return lt.tx, nil
 	}
-	tx, err := lt.db.Begin()
+	if lt.admit != nil {
+		release, err := lt.admit(ctx)
+		if err != nil {
+			return nil, err
+		}
+		lt.admissionRelease = release
+	}
+	tx, err := lt.db.BeginTx(ctx, nil)
 	if err != nil {
+		if lt.admissionRelease != nil {
+			_ = lt.admissionRelease()
+		}
 		return nil, fmt.Errorf("lazy transaction begin failed: %w", err)
 	}
 	if lt.onBegin != nil {
 		if err := lt.onBegin(tx); err != nil {
 			_ = tx.Rollback()
+			if lt.admissionRelease != nil {
+				_ = lt.admissionRelease()
+			}
 			return nil, fmt.Errorf("lazy transaction begin hook failed: %w", err)
 		}
 	}
@@ -77,7 +103,14 @@ func (lt *LazyTx) WasStarted() bool {
 }
 
 // Commit commits the transaction if it was started. No-op otherwise.
-func (lt *LazyTx) Commit() error {
+func (lt *LazyTx) Commit() (err error) {
+	if lt.admissionRelease != nil {
+		defer func() {
+			if e := lt.admissionRelease(); err == nil {
+				err = e
+			}
+		}()
+	}
 	lt.mu.Lock()
 	if !lt.started {
 		lt.afterCommitHooks = nil
@@ -93,6 +126,9 @@ func (lt *LazyTx) Commit() error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	if lt.admissionRelease != nil {
+		err = lt.admissionRelease()
+	}
 	lt.mu.Lock()
 	lt.afterRollbackHooks = nil
 	lt.mu.Unlock()
@@ -101,11 +137,18 @@ func (lt *LazyTx) Commit() error {
 			hook()
 		}
 	}
-	return nil
+	return err
 }
 
 // Rollback rolls back the transaction if it was started. No-op otherwise.
-func (lt *LazyTx) Rollback() error {
+func (lt *LazyTx) Rollback() (err error) {
+	if lt.admissionRelease != nil {
+		defer func() {
+			if e := lt.admissionRelease(); err == nil {
+				err = e
+			}
+		}()
+	}
 	lt.mu.Lock()
 	if !lt.started {
 		lt.afterCommitHooks = nil
@@ -119,7 +162,12 @@ func (lt *LazyTx) Rollback() error {
 	lt.afterRollbackHooks = nil
 	lt.mu.Unlock()
 
-	err := tx.Rollback()
+	err = tx.Rollback()
+	if lt.admissionRelease != nil {
+		if e := lt.admissionRelease(); err == nil {
+			err = e
+		}
+	}
 	for _, hook := range hooks {
 		if hook != nil {
 			hook()
@@ -191,7 +239,7 @@ func RequireTx(ctx context.Context) (*sql.Tx, bool) {
 	if !ok || lt == nil {
 		return nil, false
 	}
-	tx, err := lt.Begin()
+	tx, err := lt.BeginContext(ctx)
 	if err != nil {
 		return nil, false
 	}
@@ -203,7 +251,7 @@ func RequireTx(ctx context.Context) (*sql.Tx, bool) {
 func RequireTxWithError(ctx context.Context) (*sql.Tx, error) {
 	val := ctx.Value(txKey)
 	if lt, ok := val.(*LazyTx); ok && lt != nil {
-		return lt.Begin()
+		return lt.BeginContext(ctx)
 	}
 	if tx, ok := val.(*sql.Tx); ok && tx != nil {
 		return tx, nil
@@ -242,7 +290,7 @@ func GetTx(ctx context.Context) (*sql.Tx, bool) {
 	val := ctx.Value(txKey)
 	// LazyTx path (HTTP requests via middleware)
 	if lt, ok := val.(*LazyTx); ok && lt != nil {
-		tx, err := lt.Begin()
+		tx, err := lt.BeginContext(ctx)
 		if err != nil {
 			return nil, false
 		}

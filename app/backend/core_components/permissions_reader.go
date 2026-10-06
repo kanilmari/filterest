@@ -9,11 +9,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
-	"strings"
 
 	"easelect/backend/core_components/dbutils"
-	"easelect/backend/core_components/security"
 )
 
 type rowQueryer interface {
@@ -151,51 +148,6 @@ func EnsureAdminTablePermissions(db *sql.DB) error {
 	}
 	if n, _ := result.RowsAffected(); n > 0 {
 		log.Printf("EnsureAdminTablePermissions: granted %d new table-specific permission(s) to admin group", n)
-	}
-	return nil
-}
-
-// EnsureConfidentialRolePermissions grants the configured confidential DB role
-// its restricted-schema access plus only the public identity columns required
-// for session-generation checks. This startup reconciliation prevents restored
-// Docker/local databases from drifting into unusable authentication state.
-func EnsureConfidentialRolePermissions(db *sql.DB) error {
-	confidentialUser := strings.TrimSpace(os.Getenv("DB_CONFIDENTIAL_USER"))
-	if confidentialUser == "" {
-		return nil
-	}
-
-	safeRoleName, err := security.SanitizeIdentifier(confidentialUser)
-	if err != nil {
-		return fmt.Errorf("EnsureConfidentialRolePermissions: %w", err)
-	}
-
-	result, err := db.Exec(`
-		DO $$
-		DECLARE
-			role_name text := '` + safeRoleName + `';
-		BEGIN
-			IF role_name IS NULL OR btrim(role_name) = '' THEN
-				RETURN;
-			END IF;
-
-			EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', role_name);
-			EXECUTE format('GRANT SELECT (id, enabled) ON TABLE public.system_users TO %I', role_name);
-
-			IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'restricted') THEN
-				EXECUTE format('GRANT USAGE ON SCHEMA restricted TO %I', role_name);
-				EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA restricted TO %I', role_name);
-				EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA restricted GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', role_name);
-				EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA restricted TO %I', role_name);
-				EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA restricted GRANT USAGE, SELECT ON SEQUENCES TO %I', role_name);
-			END IF;
-		END $$;
-	`)
-	if err != nil {
-		return fmt.Errorf("EnsureConfidentialRolePermissions: %w", err)
-	}
-	if n, _ := result.RowsAffected(); n > 0 {
-		log.Printf("EnsureConfidentialRolePermissions: reconciled restricted grants for %s", confidentialUser)
 	}
 	return nil
 }

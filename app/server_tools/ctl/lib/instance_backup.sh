@@ -174,6 +174,9 @@ backup_instance() {
     echo -e "${GREEN}✅ Backup created: ${backup_file} (${size})${NC}"
 }
 
+# Import into a verified empty database; keep the populated original for recovery.
+source "$(dirname "${BASH_SOURCE[0]}")/instance_restore.sh"
+
 # ------------------------------------------------------------------------------
 # Restore instance database
 # ------------------------------------------------------------------------------
@@ -213,22 +216,11 @@ restore_instance() {
         exit 0
     fi
     
-    echo -e "${BLUE}🔄 Restoring database...${NC}"
-
-    if ! (
-        set -o pipefail
-        case "$restore_file" in
-            *.gz)
-                gzip -dc "$restore_file" | docker exec -i "easelect-${instance}-db" psql -U "${DB_ADMIN_USER}" "${DB_NAME:-$(project_default_db_name)}"
-                ;;
-            *)
-                cat "$restore_file" | docker exec -i "easelect-${instance}-db" psql -U "${DB_ADMIN_USER}" "${DB_NAME:-$(project_default_db_name)}"
-                ;;
-        esac
-    ); then
-        echo -e "${RED}❌ Restore failed${NC}"
-        exit 1
+    # SIGTERM drains HTTP requests and stops workers. The database stays up.
+    # A failed import or reconciliation leaves the application stopped.
+    if ! docker stop --time 30 "easelect-${instance}-app" >/dev/null; then
+        echo "Restore refused: could not stop and drain the application." >&2
+        return 1
     fi
-    
-    echo -e "${GREEN}✅ Database restored from: ${restore_file}${NC}"
+    restore_instance_database_replacement "$instance" "$restore_file"
 }

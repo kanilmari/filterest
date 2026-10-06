@@ -1,149 +1,101 @@
 // lang_embedding_tables.go
-// Startup task that ensures embedding tables exist for all language-enabled dynamic tables.
-// Creates missing embedding columns and pgvector indexes during server initialization.
-// Exists to keep multilingual embedding infrastructure ready as datasets opt in.
+// Creates schema-qualified embedding helpers before the final startup ACL policy.
+// Later creation uses an administrator transaction and the live mutation boundary.
+// Grants never come from mirroring a host's historical ACLs.
 package startup
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"log"
-	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"github.com/lib/pq"
 )
 
-// EnsureLangEmbeddingTables creates <table>_lang_embeddings for tables
-// where system_db_tables.multi_lang_embeddings is TRUE.
-func EnsureLangEmbeddingTables() {
-	rows, err := backend.Db.Query(`SELECT table_name FROM system_db_tables WHERE multi_lang_embeddings`)
+// EnsureLangEmbeddingTables is the live entry point. Every DDL and grant shares
+// one administrator transaction; callers must handle its returned error.
+func EnsureLangEmbeddingTables() error {
+	ctx := context.Background()
+	if backend.DbAdmin == nil {
+		return fmt.Errorf("embedding administrator database is missing")
+	}
+	tx, err := backend.DbAdmin.BeginTx(ctx, nil)
 	if err != nil {
-		log.Printf("ensure lang tables query error: %v", err)
-		return
+		return err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
+	mutation, err := runtime_grant_mutations.BeginTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err = createLangEmbeddingTables(ctx, tx); err != nil {
+		return err
+	}
+	if err = mutation.Finish(ctx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
+// EnsureStartupLangEmbeddingTables runs only under the exclusive startup
+// barrier. The final catalogue reconciliation owns all grants, exactly once.
+func EnsureStartupLangEmbeddingTables(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = createLangEmbeddingTables(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func createLangEmbeddingTables(ctx context.Context, tx *sql.Tx) error {
+	// A restored registry may name a missing legacy dataset. It remains an audit
+	// finding, not a reason to manufacture a helper or fail unrelated startup.
+	rows, err := tx.QueryContext(ctx, `SELECT COALESCE(NULLIF(schema_name,''),'public'),table_name FROM system_db_tables
+ WHERE multi_lang_embeddings AND to_regclass(format('%I.%I',COALESCE(NULLIF(schema_name,''),'public'),table_name)) IS NOT NULL`)
+	if err != nil {
+		return fmt.Errorf("embedding dataset discovery: %w", err)
+	}
+	type table struct{ schema, name string }
+	var tables []table
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			log.Printf("scan multi lang table name: %v", err)
-			continue
+		var t table
+		if err = rows.Scan(&t.schema, &t.name); err != nil {
+			rows.Close()
+			return err
 		}
-		embTableName := name + "_lang_embeddings"
-		embTable := pq.QuoteIdentifier(embTableName)
-		hostTable := pq.QuoteIdentifier(name)
-		create := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-            host_row_id INTEGER REFERENCES %s(id) ON DELETE CASCADE,
-            language_code TEXT,
-            embedding VECTOR,
-            updated TIMESTAMP NOT NULL DEFAULT NOW(),
-            content_md5 TEXT
-        )`, embTable, hostTable)
-		if _, err := backend.Db.Exec(create); err != nil {
-			log.Printf("create %s error: %v", embTable, err)
-			continue
-		}
-		_, _ = backend.Db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS content_md5 TEXT`, embTable))
-		_, _ = backend.Db.Exec(fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_host ON %s (host_row_id)`, name, embTable))
-		_, _ = backend.Db.Exec(fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_lang ON %s (language_code)`, name, embTable))
-		_, _ = backend.Db.Exec(fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_vec ON %s USING hnsw (embedding)`, name, embTable))
-		syncLangEmbeddingRuntimeGrants(name, embTableName)
+		tables = append(tables, t)
 	}
-}
-
-type langEmbeddingRoleGrant struct {
-	role       string
-	privileges []string
-}
-
-var langEmbeddingRuntimeRoles = []langEmbeddingRoleGrant{
-	{role: "readeronly", privileges: []string{"SELECT"}},
-	{role: "guest_user", privileges: []string{"SELECT"}},
-	{role: "basic_user", privileges: []string{"SELECT", "INSERT", "UPDATE", "DELETE"}},
-}
-
-// syncLangEmbeddingRuntimeGrants mirrors the host table's runtime role access onto the
-// auxiliary <table>_lang_embeddings table so policy-scoped reads and writes do not fail
-// just because the helper table was created by the privileged startup connection.
-func syncLangEmbeddingRuntimeGrants(hostTableName, embeddingTableName string) {
-	embeddingTableIdentifier := pq.QuoteIdentifier(embeddingTableName)
-	for _, roleGrant := range langEmbeddingRuntimeRoles {
-		granted := make([]string, 0, len(roleGrant.privileges))
-		hasInsertPrivilege := false
-		for _, privilege := range roleGrant.privileges {
-			var hasHostPrivilege bool
-			err := backend.Db.QueryRow(
-				`SELECT has_table_privilege($1, $2, $3)`,
-				roleGrant.role,
-				hostTableName,
-				privilege,
-			).Scan(&hasHostPrivilege)
-			if err != nil {
-				log.Printf("lang embedding host privilege check error for %s/%s on %s: %v", roleGrant.role, privilege, hostTableName, err)
-				continue
-			}
-			if hasHostPrivilege {
-				granted = append(granted, privilege)
-				if privilege == "INSERT" {
-					hasInsertPrivilege = true
-				}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, t := range tables {
+		host := pq.QuoteIdentifier(t.schema) + "." + pq.QuoteIdentifier(t.name)
+		embedding := pq.QuoteIdentifier(t.schema) + "." + pq.QuoteIdentifier(t.name+"_lang_embeddings")
+		statements := []string{
+			fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (host_row_id INTEGER REFERENCES %s(id) ON DELETE CASCADE,
+ language_code TEXT, embedding VECTOR, updated TIMESTAMP NOT NULL DEFAULT NOW(), content_md5 TEXT)`, embedding, host),
+			"ALTER TABLE " + embedding + " ADD COLUMN IF NOT EXISTS content_md5 TEXT",
+		}
+		// The unconstrained vector column accepts different model dimensions.
+		// HNSW needs a dimension and operator class; the old untyped index
+		// attempt always failed and was ignored. Model-specific acceleration
+		// belongs to embedding search, not this required table-creation step.
+		for _, index := range []struct{ suffix, column string }{{"host", "host_row_id"}, {"lang", "language_code"}} {
+			statements = append(statements, "CREATE INDEX IF NOT EXISTS "+pq.QuoteIdentifier("idx_"+t.name+"_"+index.suffix)+" ON "+embedding+" ("+pq.QuoteIdentifier(index.column)+")")
+		}
+		for _, statement := range statements {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("embedding table %s: %w", embedding, err)
 			}
 		}
-		if len(granted) == 0 {
-			if hasInsertPrivilege {
-				syncLangEmbeddingSequenceGrant(roleGrant.role, embeddingTableName)
-			}
-			continue
-		}
-
-		grant := fmt.Sprintf(
-			`GRANT %s ON TABLE %s TO %s`,
-			strings.Join(granted, ", "),
-			embeddingTableIdentifier,
-			pq.QuoteIdentifier(roleGrant.role),
-		)
-		if _, err := backend.Db.Exec(grant); err != nil {
-			log.Printf("lang embedding grant error for %s on %s: %v", roleGrant.role, embeddingTableIdentifier, err)
-		}
-		if hasInsertPrivilege {
-			syncLangEmbeddingSequenceGrant(roleGrant.role, embeddingTableName)
-		}
 	}
-}
-
-// syncLangEmbeddingSequenceGrant mirrors INSERT-capable runtime roles onto the helper
-// table's serial/identity sequence so nextval() works on non-privileged request pools.
-func syncLangEmbeddingSequenceGrant(role, embeddingTableName string) {
-	var sequenceName sql.NullString
-	if err := backend.Db.QueryRow(
-		`SELECT pg_get_serial_sequence($1, 'id')`,
-		embeddingTableName,
-	).Scan(&sequenceName); err != nil {
-		log.Printf("lang embedding sequence lookup error for %s on %s: %v", role, embeddingTableName, err)
-		return
-	}
-	if !sequenceName.Valid || sequenceName.String == "" {
-		return
-	}
-
-	grant := fmt.Sprintf(
-		`GRANT USAGE, SELECT ON SEQUENCE %s TO %s`,
-		quoteQualifiedIdentifier(sequenceName.String),
-		pq.QuoteIdentifier(role),
-	)
-	if _, err := backend.Db.Exec(grant); err != nil {
-		log.Printf("lang embedding sequence grant error for %s on %s: %v", role, sequenceName.String, err)
-	}
-}
-
-func quoteQualifiedIdentifier(identifier string) string {
-	if identifier == "" {
-		return ""
-	}
-	parts := strings.Split(identifier, ".")
-	for i, part := range parts {
-		parts[i] = pq.QuoteIdentifier(strings.Trim(part, `"`))
-	}
-	return strings.Join(parts, ".")
+	return nil
 }

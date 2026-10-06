@@ -156,7 +156,7 @@ func RefuseManagedPrivilegeRole(role string) error {
 }
 
 // KeepImportBlockerScope is the explicit CSV/restore exemption. Import policy
-// remains scoped until restore policy is implemented in commit 3.
+// remains scoped; cold full-database restores instead stop and reconcile at boot.
 func (m *Mutation) KeepImportBlockerScope() {
 	if m != nil {
 		m.refuseNewBlockers = false

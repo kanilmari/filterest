@@ -26,10 +26,6 @@ var reviewedLegacyTriggers = map[string]legacyTriggerIdentity{
 	"fd6c8fb19384174612fa2d2431b34683": {"tg_upd_service_searchvec", "app_service_catalog", false},
 }
 
-var reviewedLegacyDefiners = map[string]definerFunctionIdentity{
-	"9a87d4938809ea845f63e034ddffc75a": {Schema: "public", Name: "systemview_role_table_privileges_upd", LegacyTrigger: true},
-}
-
 // A trigger-returning function cannot be called as an ordinary SQL function.
 // This definer is accepted only on its protected view, under that view's owner,
 // with the original absence of a search_path override. No limited-role writes

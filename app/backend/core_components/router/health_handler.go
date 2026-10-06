@@ -126,6 +126,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{
 		"status": "ok",
+		// The listener opens only after the required start-up grant transaction.
+		"runtime_grants": "reconciled",
 	})
 }
 

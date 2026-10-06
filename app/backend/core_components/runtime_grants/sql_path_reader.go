@@ -7,6 +7,7 @@ package runtime_grants
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 )
@@ -49,23 +50,26 @@ type definerFunctionIdentity struct {
 // A reviewed SECURITY DEFINER body is fixed by a product migration, reads only,
 // and calls no function that could write. Identity and catalogue settings must
 // also match; a changed body or identity requires a fresh review.
-var reviewedDefinerBodies = map[string]definerFunctionIdentity{
-	"8c5a769a59dfaa06a4c1ce947ff562b9": {
-		Schema: "public", Name: "resolve_effective_row_access",
-		ArgumentTypes: "text, bigint, bigint, text, boolean, boolean",
-		SearchPath:    "search_path=pg_catalog, public",
-	},
-}
+// The portable restore reads this same policy file. Keep one reviewed list.
+//
+//go:embed reviewed_definers.json
+var reviewedDefinersJSON []byte
+
+var reviewedDefinerBodies = func() map[string]definerFunctionIdentity {
+	var bodies map[string]definerFunctionIdentity
+	if err := json.Unmarshal(reviewedDefinersJSON, &bodies); err != nil {
+		panic(err)
+	}
+	for digest, identity := range bodies {
+		if identity.LegacyTrigger {
+			delete(bodies, digest)
+		}
+	}
+	return bodies
+}()
 
 func reviewedDefinerBodiesJSON() []byte {
-	bodies := map[string]definerFunctionIdentity{}
-	for digest, identity := range reviewedDefinerBodies {
-		bodies[digest] = identity
-	}
-	for digest, identity := range reviewedLegacyDefiners {
-		bodies[digest] = identity
-	}
-	encoded, _ := json.Marshal(bodies)
+	encoded, _ := json.Marshal(json.RawMessage(reviewedDefinersJSON))
 	return encoded
 }
 

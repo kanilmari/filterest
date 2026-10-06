@@ -182,6 +182,52 @@ func TestNeverCasesAndOperationalContracts(t *testing.T) {
 	}
 }
 
+func TestRowActorOperationalReadsWithoutRuntimeWrites(t *testing.T) {
+	for _, name := range []string{"system_row_actor_columns", "system_data_repair_records"} {
+		for _, declaredRights := range []bool{false, true} {
+			t.Run(name+map[bool]string{false: "/no-rights", true: "/generic-rights"}[declaredRights], func(t *testing.T) {
+				s := policyFixture()
+				object := s.Objects[10]
+				object.Name = name
+				s.Objects[10] = object
+				if class, err := ClassifyTable(object); err != nil || class != Dedicated {
+					t.Fatalf("actor support table lost its dedicated boundary: %s, %v", class, err)
+				}
+				s.Objects[14] = Object{OID: 14, Schema: "public", Name: name + "_id_seq", Kind: "sequence"}
+				s.Sequences = []SequenceUse{{TableOID: 10, SequenceOID: 14, Column: "id", NextValue: true}}
+				if declaredRights {
+					for _, id := range []int64{1, 2, 3, 4} {
+						s.Rights = append(s.Rights, Right{2, id, 1}, Right{3, id, 1})
+					}
+				}
+				grants := grantsFor(t, s)
+				for _, role := range []string{"basic", "guest", "readonly", "confidential", "PUBLIC"} {
+					if containsGrant(grants, role, 10, "", "SELECT") != (role != "PUBLIC") {
+						t.Fatal("runtime actor-support read contract missing or public", role)
+					}
+					for _, grant := range grants {
+						if grant.Role == role && (grant.ObjectOID == 14 || grant.ObjectOID == 10 && grant.Privilege != "SELECT") {
+							t.Fatal("actor-support read acquired a write or sequence privilege", grant)
+						}
+					}
+				}
+				if containsGrant(grants, "confidential", 11, "", "SELECT") {
+					t.Fatal("actor-support contract expanded confidential public reads")
+				}
+				object.Schema = "archive"
+				s.Objects[10] = object
+				s.Rights = nil
+				grants = grantsFor(t, s)
+				for _, role := range []string{"basic", "guest", "readonly", "confidential"} {
+					if containsGrant(grants, role, 10, "", "SELECT") {
+						t.Fatal("public actor-support contract escaped its schema", role)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestLabelsEmbeddingsAndSharedInboundReads(t *testing.T) {
 	s := policyFixture()
 	s.Objects[13] = Object{OID: 13, Schema: "public", Name: "fresh_dataset_lang_embeddings", Kind: "table"}

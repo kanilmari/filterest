@@ -6,6 +6,7 @@
 package dtt_crud_workflows_test
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"easelect/backend/core_components/agent_tools"
 	"easelect/backend/core_components/dbutils"
 	workflows "easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
+	"easelect/backend/core_components/runtime_grants"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/workline_observatory"
 	"github.com/gorilla/sessions"
@@ -117,13 +119,28 @@ func TestActorPackageRuntimeRoleChainPostgres(t *testing.T) {
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("roles: %v: %s", err, output)
 			}
-			for _, reconcile := range []func(*sql.DB) error{backend.EnsureGuestAndPrivilegeViewWriteRevocations, backend.EnsureAccountTableWriteRevocations, backend.EnsureRowGroupRuntimeRolePermissions} {
-				if err := reconcile(db); err != nil {
-					t.Fatal(err)
-				}
+			previousBasic, previousGuest := backend.DbBasic, backend.DbGuest
+			previousReadonly, previousConfidential := backend.DbReaderOnly, backend.DbConfidential
+			t.Cleanup(func() {
+				backend.DbBasic, backend.DbGuest = previousBasic, previousGuest
+				backend.DbReaderOnly, backend.DbConfidential = previousReadonly, previousConfidential
+			})
+			runtimes := map[string]*sql.DB{}
+			for _, suffix := range []string{"basic", "guest", "readonly", "confidential"} {
+				runtimes[suffix] = connect(prefix + "_" + suffix)
+			}
+			backend.DbBasic, backend.DbGuest = runtimes["basic"], runtimes["guest"]
+			backend.DbReaderOnly, backend.DbConfidential = runtimes["readonly"], runtimes["confidential"]
+			reconcile := func() error {
+				return runtime_grants.WithStartupBarrier(context.Background(), db, func() error {
+					return backend.EnsureRuntimeRoleGrants(context.Background(), db)
+				})
+			}
+			if err := reconcile(); err != nil {
+				t.Fatal(err)
 			}
 			for _, suffix := range []string{"basic", "guest", "readonly", "confidential"} {
-				runtime := connect(prefix + "_" + suffix)
+				runtime := runtimes[suffix]
 				var count int
 				if err := runtime.QueryRow("SELECT count(*) FROM system_row_actor_columns").Scan(&count); err != nil || count != 32 {
 					t.Fatalf("%s marks: %d, %v", suffix, count, err)
@@ -140,7 +157,7 @@ func TestActorPackageRuntimeRoleChainPostgres(t *testing.T) {
 			if _, err := db.Exec("ALTER ROLE " + prefix + "_confidential BYPASSRLS"); err != nil {
 				t.Fatal(err)
 			}
-			if err := backend.EnsureGuestAndPrivilegeViewWriteRevocations(db); err == nil || !strings.Contains(err.Error(), prefix+"_confidential") {
+			if err := reconcile(); err == nil || !strings.Contains(err.Error(), prefix+"_confidential") {
 				t.Fatalf("bypass role not named: %v", err)
 			}
 			if _, err := db.Exec("ALTER ROLE " + prefix + "_confidential NOBYPASSRLS"); err != nil {

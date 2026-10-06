@@ -17,8 +17,10 @@ func UpdateOidsAndTableNames(
 	q dbutils.Querier,
 	deleteRemovedTablesFunc func(dbutils.Querier) error,
 	insertNewTablesFunc func(dbutils.Querier) error,
+	preserveLegacy ...bool,
 ) error {
 
+	preserve := len(preserveLegacy) > 0 && preserveLegacy[0]
 	// Vaihe 0 (uusi): Poistetaan "haamutietueet" jotka aiheuttaisivat UNIQUE constraint -virheen.
 	// Haamutietue = rivi jonka OID osoittaa tauluun jolla on ERI nimi, JA kyseinen taulu
 	// on jo olemassa system_db_tables:ssa oikealla nimellä.
@@ -82,8 +84,10 @@ func UpdateOidsAndTableNames(
 		USING ghost_entries ge
 		WHERE sdt.id = ge.id
 	`
-	if _, err := q.Exec(cleanupGhostEntries); err != nil {
-		return fmt.Errorf("error cleaning up ghost entries: %v", err)
+	if !preserve {
+		if _, err := q.Exec(cleanupGhostEntries); err != nil {
+			return fmt.Errorf("error cleaning up ghost entries: %v", err)
+		}
 	}
 
 	// Vaihe 0a: Päivitetään schema_name kentät cached_oid-arvon perusteella
@@ -95,8 +99,10 @@ func UpdateOidsAndTableNames(
                WHERE t.cached_oid = c.oid
                  AND t.schema_name IS NULL;
        `
-	if _, err := q.Exec(fillSchemaByOid); err != nil {
-		return fmt.Errorf("error updating schema names by OID: %v", err)
+	if !preserve {
+		if _, err := q.Exec(fillSchemaByOid); err != nil {
+			return fmt.Errorf("error updating schema names by OID: %v", err)
+		}
 	}
 
 	// Vaihe 0b: Päivitetään schema_name ja cached_oid taulun nimen perusteella.
@@ -129,6 +135,14 @@ func UpdateOidsAndTableNames(
                        AND (t.schema_name IS NULL
                             OR t.schema_name <> table_oids.nspname);
        `
+	if preserve {
+		// Restored OIDs may now name unrelated objects. Resolve by the registry's
+		// schema/name only; leave missing/ambiguous identities for the policy audit.
+		fillSchemaByName = `UPDATE system_db_tables d SET cached_oid=c.oid,
+ schema_name=n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE d.table_name=c.relname AND n.nspname=COALESCE(NULLIF(d.schema_name,''),'public')
+ AND c.relkind IN ('r','p','v','m','f')`
+	}
 	if _, err := q.Exec(fillSchemaByName); err != nil {
 		return fmt.Errorf("error updating schema names by name: %v", err)
 	}
@@ -162,9 +176,12 @@ func UpdateOidsAndTableNames(
 				OR system_db_tables.schema_name != table_oids.schema_name
 			);
 	`
-	_, err := q.Exec(updateNameQuery)
-	if err != nil {
-		return fmt.Errorf("\033[31merror updating table names: %v\033[0m", err)
+	var err error
+	if !preserve {
+		_, err = q.Exec(updateNameQuery)
+		if err != nil {
+			return fmt.Errorf("\033[31merror updating table names: %v\033[0m", err)
+		}
 	}
 
 	// Vaihe 2: Päivitetään cached_oid taulun ja skeeman perusteella, jos OID on muuttunut
@@ -198,9 +215,11 @@ func UpdateOidsAndTableNames(
 	}
 
 	// Vaihe 3: Poistetaan taulut, joita ei enää ole
-	err = deleteRemovedTablesFunc(q)
-	if err != nil {
-		return err
+	if !preserve {
+		err = deleteRemovedTablesFunc(q)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Vaihe 4: Lisätään uudet taulut

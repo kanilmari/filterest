@@ -28,11 +28,6 @@ func RunOptionalTasks(projectRoot string, appDBCompatibilityManifest ...string) 
 		manifestPath = appDBCompatibilityManifest[0]
 	}
 
-	// Heal an inconsistent bootstrap (anonymous browsing on, but guest has no
-	// dataset-read rights) before serving requests, so a fresh machine does not
-	// 403-storm on its first page load.
-	EnsureAnonymousBrowseConsistency(backend.Db)
-
 	system_table_tools.StartAutomaticDataRetentionLoop(backend.Db)
 	go runDeferredStartupMaintenance(projectRoot, manifestPath)
 }
@@ -71,7 +66,6 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	EnsureViewSelectorLangKeys(backend.Db)
 	EnsureFilterestBusinessID(backend.Db)
 
-	EnsureLangEmbeddingTables()
 	ai_features.StartEmbeddingRefreshWorker(backend.Db)
 	// Populoi lähdetiedot: skannaa koodipohja (JS/HTML/Go), skeema (sarakkeet/taulut)
 	// ja tietokantapohjaiset avaimet (views, groups) system_lang_key_sources-tauluun.

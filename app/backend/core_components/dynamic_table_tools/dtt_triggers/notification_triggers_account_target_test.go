@@ -57,6 +57,16 @@ func (connection *triggerAccountTargetConn) QueryContext(_ context.Context, quer
 	if strings.HasPrefix(query, "SELECT EXISTS(SELECT 1 FROM public.system_db_tables") {
 		return &actorActionRows{cols: []string{"exists"}, rows: [][]driver.Value{{true}}}, nil
 	}
+	// Answer the editor's destination guard before the generic empty policy
+	// catalogue: that fixture must never turn a protected target into false.
+	if strings.HasPrefix(query, "SELECT COALESCE(bool_or(protected),false) FROM (") && len(args) == 1 {
+		if connection.state.queryErr != nil {
+			return nil, connection.state.queryErr
+		}
+		name, _ := args[0].Value.(string)
+		connection.state.checked = append(connection.state.checked, name)
+		return &triggerAccountTargetRows{value: connection.state.accountTables[strings.TrimSpace(name)]}, nil
+	}
 	if rows, ok := granttest.BoundaryQuery(query, args); ok {
 		return rows, nil
 	}
@@ -72,15 +82,7 @@ func (connection *triggerAccountTargetConn) QueryContext(_ context.Context, quer
 	if strings.Contains(query, "system_foreign_key_relations_1_m") {
 		return &actorActionRows{cols: []string{"empty"}}, nil
 	}
-	if !strings.Contains(query, "relation.relname::text = btrim($5::text)") || len(args) != 5 {
-		return nil, fmt.Errorf("unexpected query: %s", query)
-	}
-	if connection.state.queryErr != nil {
-		return nil, connection.state.queryErr
-	}
-	name, _ := args[4].Value.(string)
-	connection.state.checked = append(connection.state.checked, name)
-	return &triggerAccountTargetRows{value: connection.state.accountTables[strings.TrimSpace(name)]}, nil
+	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
 func (connection *triggerAccountTargetConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -164,5 +166,29 @@ func TestCreateTriggerHandlerRefusesAccountTableTarget(t *testing.T) {
 				t.Fatalf("checked destinations = %q, want [%q]", state.checked, testCase.target)
 			}
 		})
+	}
+}
+
+func TestCreateTriggerHandlerRefusesMissingCommitBufferBeforeWrite(t *testing.T) {
+	state := &triggerAccountTargetState{}
+	driverName := fmt.Sprintf("trigger_account_target_%d", atomic.AddInt64(&triggerAccountTargetDriverCounter, 1))
+	sql.Register(driverName, &triggerAccountTargetDriver{state: state})
+	database, err := sql.Open(driverName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	request := httptest.NewRequest(http.MethodPost, "/api/system_triggers/create",
+		strings.NewReader(`{"source_dataset":"notes","target_dataset":"notes","action_values":"{}"}`))
+	request = request.WithContext(dbutils.SetTx(request.Context(), tx))
+	recorder := httptest.NewRecorder()
+	CreateTriggerHandler(recorder, request)
+	if recorder.Code != http.StatusInternalServerError || len(state.inserted) != 0 {
+		t.Fatalf("missing buffer response=%d, stored automations=%v", recorder.Code, state.inserted)
 	}
 }

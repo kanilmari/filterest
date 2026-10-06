@@ -35,10 +35,11 @@ func UpdateColumnsWithBridge(
 // ja välittää callbackit poistettujen taulujen, uusien taulujen sekä
 // olemassaolevien sarakkeiden päivityksen hoitamiseksi.
 // Accepts a Querier (either *sql.DB or *sql.Tx) for transaction safety.
-func UpdateOidsAndTableNamesWithBridge(q dbutils.Querier) error {
+func UpdateOidsAndTableNamesWithBridge(q dbutils.Querier, preserveLegacy ...bool) error {
 	return dtt_3_table_update.UpdateOidsAndTableNames(
 		q,
 		dtt_3_table_delete.DeleteRemovedTables, // Poistetut taulut
 		dtt_3_table_create.InsertNewTables,     // Uudet taulut
+		preserveLegacy...,
 	)
 }

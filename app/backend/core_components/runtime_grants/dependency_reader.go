@@ -73,14 +73,24 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 		// usable config with a NULL parent therefore needs a blocker: simply
 		// skipping its filename UPDATE would under-grant a reachable path. The
 		// pure policy must refuse it until that identity contract is resolved.
-		if err := readRows(ctx, tx, `SELECT id,source_table_uid,target_table_uid,source_column_name,COALESCE(cached_name_col_in_src,''),insert_new_source_with_target,target_insert_specs FROM public.system_foreign_key_relations_1_m ORDER BY id`, nil, func(rows *sql.Rows) error {
+		withTargetColumn := snapshot.Objects[oidByName(snapshot, "system_foreign_key_relations_1_m")].hasColumn("target_column_name")
+		query := `SELECT id,source_table_uid,target_table_uid,source_column_name,COALESCE(cached_name_col_in_src,''),insert_new_source_with_target,target_insert_specs`
+		if withTargetColumn {
+			query += `,target_column_name`
+		}
+		query += ` FROM public.system_foreign_key_relations_1_m ORDER BY id`
+		if err := readRows(ctx, tx, query, nil, func(rows *sql.Rows) error {
 			var id int64
 			var sourceUID, targetUID sql.NullInt64
-			var column sql.NullString
+			var column, targetColumn sql.NullString
 			var cached string
 			var owned sql.NullBool
 			var specs []byte
-			if err := rows.Scan(&id, &sourceUID, &targetUID, &column, &cached, &owned, &specs); err != nil {
+			fields := []any{&id, &sourceUID, &targetUID, &column, &cached, &owned, &specs}
+			if withTargetColumn {
+				fields = append(fields, &targetColumn)
+			}
+			if err := rows.Scan(fields...); err != nil {
 				return err
 			}
 			row := fmt.Sprintf("id %d", id)
@@ -97,6 +107,10 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 			source, target := oids[0], oids[1]
 			if !column.Valid || !snapshot.Objects[source].hasColumn(column.String) {
 				metadataFinding(snapshot, "system_foreign_key_relations_1_m", row, "blocker", "missing source_column_name on snapshot table")
+				return nil
+			}
+			if withTargetColumn && (!targetColumn.Valid || !snapshot.Objects[target].hasColumn(targetColumn.String)) {
+				metadataFinding(snapshot, "system_foreign_key_relations_1_m", row, "blocker", "missing target_column_name on snapshot table")
 				return nil
 			}
 			if cached != "" {
@@ -189,10 +203,21 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 		return fmt.Errorf("read foreign-key dependencies failed: %w", err)
 	}
 	if oidByName(snapshot, "system_foreign_key_relations_m_m") != 0 {
-		if err := readRows(ctx, tx, `SELECT id,table_a_uid,table_b_uid,bridging_table_uid FROM public.system_foreign_key_relations_m_m ORDER BY id`, nil, func(rows *sql.Rows) error {
+		query := `SELECT id,table_a_uid,table_b_uid,bridging_table_uid`
+		withColumns := snapshot.Objects[oidByName(snapshot, "system_foreign_key_relations_m_m")].hasColumn("bridging_col_a")
+		if withColumns {
+			query += `,bridging_col_a,bridging_col_b,table_a_column,table_b_column`
+		}
+		query += ` FROM public.system_foreign_key_relations_m_m ORDER BY id`
+		if err := readRows(ctx, tx, query, nil, func(rows *sql.Rows) error {
 			var id int64
 			var aUID, bUID, bridgeUID sql.NullInt64
-			if err := rows.Scan(&id, &aUID, &bUID, &bridgeUID); err != nil {
+			var bridgeA, bridgeB, columnA, columnB sql.NullString
+			fields := []any{&id, &aUID, &bUID, &bridgeUID}
+			if withColumns {
+				fields = append(fields, &bridgeA, &bridgeB, &columnA, &columnB)
+			}
+			if err := rows.Scan(fields...); err != nil {
 				return err
 			}
 			// resolveManyToManyExistingLink/getManyToMany join all three UIDs;
@@ -202,6 +227,12 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 				return nil
 			}
 			a, b, bridge := oids[0], oids[1], oids[2]
+			if withColumns && (!bridgeA.Valid || !bridgeB.Valid || !columnA.Valid || !columnB.Valid ||
+				!snapshot.Objects[bridge].hasColumn(bridgeA.String) || !snapshot.Objects[bridge].hasColumn(bridgeB.String) ||
+				!snapshot.Objects[a].hasColumn(columnA.String) || !snapshot.Objects[b].hasColumn(columnB.String)) {
+				metadataFinding(snapshot, "system_foreign_key_relations_m_m", fmt.Sprintf("id %d", id), "blocker", "missing bridge or referenced column on snapshot table")
+				return nil
+			}
 			for _, pair := range [][2]int64{{a, b}, {b, a}} {
 				snapshot.Dependencies = append(snapshot.Dependencies, Dependency{SourceOID: pair[0], TargetOID: bridge, RelatedOID: pair[1], Kind: "bridge", When: Insert, Requires: Insert})
 				// A lock on the related target is conditional on both its read and

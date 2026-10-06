@@ -32,14 +32,10 @@ func (e *ScopeBlocker) Error() string {
 // transaction, before any row/reference/DDL locks. SET LOCAL bounds waiting;
 // ExecContext also observes request cancellation. Startup uses the same barrier.
 func LockRuntimeGrantPolicy(ctx context.Context, tx *sql.Tx) error {
-	if tx == nil {
-		return fmt.Errorf("runtime grant transaction is required")
-	}
-	if _, err := tx.ExecContext(ctx, `SET LOCAL lock_timeout = '5s'`); err != nil {
+	if err := LockRuntimeRequestBarrier(ctx, tx); err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))`)
-	return err
+	return lockRuntimeGrantPolicyOnly(ctx, tx)
 }
 
 // ReconcileRuntimeGrants reconciles the whole catalogue. HTTP callers use the
@@ -53,16 +49,16 @@ func ReconcileRuntimeGrants(ctx context.Context, tx *sql.Tx, roles RoleConfigura
 // A nil scope is the whole catalogue. Explicit request targets are authoritative;
 // an empty non-nil scope derives generic metadata targets from old/new changes.
 func ReconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleConfiguration, before *GrantSnapshot, scope []int64) (ReconcileResult, error) {
-	return reconcileRuntimeGrantsScoped(ctx, tx, roles, before, scope, false)
+	return reconcileRuntimeGrantsScoped(ctx, tx, roles, before, scope, false, false)
 }
 
 // ReconcileHTTPRuntimeGrantsScoped also refuses every newly introduced blocker.
-// CSV/restore callers deliberately use ReconcileRuntimeGrantsScoped until commit 3.
+// CSV/live restore callers retain the scoped import rule; cold restore uses startup.
 func ReconcileHTTPRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleConfiguration, before *GrantSnapshot, scope []int64) (ReconcileResult, error) {
-	return reconcileRuntimeGrantsScoped(ctx, tx, roles, before, scope, true)
+	return reconcileRuntimeGrantsScoped(ctx, tx, roles, before, scope, true, false)
 }
 
-func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleConfiguration, before *GrantSnapshot, scope []int64, refuseNew bool) (result ReconcileResult, err error) {
+func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleConfiguration, before *GrantSnapshot, scope []int64, refuseNew, startup bool) (result ReconcileResult, err error) {
 	snapshot, err := LoadMutationSnapshot(ctx, tx, roles)
 	if err != nil {
 		return result, err
@@ -85,7 +81,16 @@ func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleCon
 		// not turn every registered table into this request's own dataset.
 		scope = append(scope, ChangedDatasetOIDs(*before, snapshot)...)
 	}
-	checks, findings, err := reconciliationChecks(snapshot, before, scope)
+	var checks []Check
+	var findings []Finding
+	if startup {
+		checks, findings, err = mutationPolicyChecks(snapshot)
+		if err == nil {
+			checks, err = filterBlockedChecks(snapshot, nil, nil, checks, findings, true)
+		}
+	} else {
+		checks, findings, err = reconciliationChecks(snapshot, before, scope)
+	}
 	result.Findings = findings
 	if err != nil {
 		return result, err
@@ -96,12 +101,12 @@ func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleCon
 	if err := auditACLs(ctx, tx, snapshot, checks, &aclFindings); err != nil {
 		return result, err
 	}
-	checks, err = excludeBlockedChecks(snapshot, before, scope, checks, aclFindings)
+	checks, err = filterBlockedChecks(snapshot, before, scope, checks, aclFindings, startup)
 	result.Findings = normalizedFindings(append(result.Findings, aclFindings...))
 	if err != nil {
 		return result, err
 	}
-	outside, err := preservedACLs(ctx, tx, snapshot.Roles)
+	outside, err := preservedACLsForMode(ctx, tx, snapshot.Roles, startup)
 	if err != nil {
 		return result, err
 	}
@@ -113,10 +118,16 @@ func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleCon
 			return result, err
 		}
 		for _, finding := range differences {
-			if !managedDelta(finding) || (finding.Finding == "excess_write") != revoke {
+			if !managedDeltaForMode(finding, startup) || (finding.Finding == "excess_write") != revoke {
 				continue
 			}
-			statement, err := grantStatement(snapshot, finding, revoke)
+			var statement string
+			var err error
+			if startup {
+				statement, err = grantStatementForMode(snapshot, finding, revoke, true)
+			} else {
+				statement, err = grantStatement(snapshot, finding, revoke)
+			}
 			if err != nil {
 				return result, err
 			}
@@ -132,8 +143,11 @@ func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleCon
 	}
 	result.Findings = normalizedFindings(append(result.Findings, remaining...))
 	for _, finding := range remaining {
-		if managedDelta(finding) {
+		if managedDeltaForMode(finding, startup) {
 			if finding.Finding == "missing" {
+				if startup {
+					return result, fmt.Errorf("runtime grant postcheck failed: required %s %s on %s (column %q) is missing; administrator grant authority is insufficient", finding.Role, finding.Privilege, finding.Object, finding.Column)
+				}
 				finding.Finding = "blocker"
 				finding.Reason = "required runtime grant absent after reconciliation"
 				return result, fmt.Errorf("runtime grant postcheck failed: %w", &ScopeBlocker{Findings: []Finding{finding}})
@@ -141,7 +155,7 @@ func reconcileRuntimeGrantsScoped(ctx context.Context, tx *sql.Tx, roles RoleCon
 			return result, fmt.Errorf("runtime grant postcheck failed: %s %s %s", finding.Role, finding.Object, finding.Privilege)
 		}
 	}
-	after, err := preservedACLs(ctx, tx, snapshot.Roles)
+	after, err := preservedACLsForMode(ctx, tx, snapshot.Roles, startup)
 	if err != nil {
 		return result, err
 	}
@@ -181,6 +195,10 @@ func managedDelta(f Finding) bool {
 }
 
 func grantStatement(snapshot GrantSnapshot, f Finding, revoke bool) (string, error) {
+	return grantStatementForMode(snapshot, f, revoke, false)
+}
+
+func grantStatementForMode(snapshot GrantSnapshot, f Finding, revoke, startup bool) (string, error) {
 	object, ok := snapshot.Objects[f.ObjectOID]
 	if !ok {
 		return "", fmt.Errorf("grant target is missing")
@@ -191,7 +209,7 @@ func grantStatement(snapshot GrantSnapshot, f Finding, revoke bool) (string, err
 			name = role.Name
 		}
 	}
-	if name == "" || (f.Role != "basic" && f.Role != "guest") {
+	if name == "" || (!startup && f.Role != "basic" && f.Role != "guest") {
 		return "", fmt.Errorf("unmanaged grant role")
 	}
 	kind := strings.ToUpper(f.Kind)
@@ -219,7 +237,7 @@ func grantStatement(snapshot GrantSnapshot, f Finding, revoke bool) (string, err
 
 // Compare every direct ACL source not owned by the two managed runtime roles.
 // This includes owners, readonly/confidential, PUBLIC and unrelated identities.
-func preservedACLs(ctx context.Context, tx *sql.Tx, roles []Role) (string, error) {
+func preservedACLsForMode(ctx context.Context, tx *sql.Tx, roles []Role, startup bool) (string, error) {
 	var basic, guest int64
 	for _, role := range roles {
 		if role.Label == "basic" {
@@ -230,6 +248,14 @@ func preservedACLs(ctx context.Context, tx *sql.Tx, roles []Role) (string, error
 		}
 	}
 	var fingerprint string
+	if startup {
+		var oids []int64
+		for _, role := range roles {
+			oids = append(oids, role.OID)
+		}
+		err := tx.QueryRowContext(ctx, `SELECT COALESCE(string_agg(row_to_json(a)::text,E'\n' ORDER BY row_to_json(a)::text),'') FROM (`+directACLsSQL+`) a WHERE NOT grantee=ANY($1::oid[])`, pq.Array(oids)).Scan(&fingerprint)
+		return fingerprint, err
+	}
 	err := tx.QueryRowContext(ctx, `SELECT COALESCE(string_agg(row_to_json(a)::text,E'\n' ORDER BY row_to_json(a)::text),'') FROM (`+directACLsSQL+`) a WHERE grantee NOT IN ($1,$2)`, basic, guest).Scan(&fingerprint)
 	return fingerprint, err
 }

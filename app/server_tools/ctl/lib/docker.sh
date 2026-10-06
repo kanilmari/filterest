@@ -117,7 +117,7 @@ start_docker() {
         local log_file=""
 
         log_file="$(mktemp)"
-        if ! stream_local_docker_restore_sql < "$sql_file" |
+        if ! { printf "SELECT pg_advisory_lock(hashtext('filterest.runtime_startup_barrier'));\n"; stream_local_docker_restore_sql < "$sql_file"; } |
             docker exec -i easelect-db-dev psql -v ON_ERROR_STOP=1 -U admin_user -d easelect >"$log_file" 2>&1; then
             echo -e "${RED}❌ ${import_label} failed.${NC}"
             echo "   First diagnostics:"
@@ -239,7 +239,7 @@ start_docker() {
     # Wait for app startup (Go compilation takes time)
     echo "⏳ Waiting for application (may take ~60s on first run)..."
     for i in {1..120}; do
-        if curl -k -s -o /dev/null https://localhost:${PORT}/ --max-time 2 2>/dev/null; then
+        if curl -f -k -s https://localhost:${PORT}/health --max-time 2 2>/dev/null | grep -q '"runtime_grants"[[:space:]]*:[[:space:]]*"reconciled"'; then
             break
         fi
         if (( i % 10 == 0 )); then
@@ -248,7 +248,7 @@ start_docker() {
         sleep 1
     done
     
-    if curl -k -s -o /dev/null https://localhost:${PORT}/ --max-time 2 2>/dev/null; then
+    if curl -f -k -s https://localhost:${PORT}/health --max-time 2 2>/dev/null | grep -q '"runtime_grants"[[:space:]]*:[[:space:]]*"reconciled"'; then
         print_success "docker"
     else
         echo -e "${RED}❌ Application failed to start${NC}"

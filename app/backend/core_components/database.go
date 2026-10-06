@@ -8,21 +8,31 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync/atomic"
 
-	_ "github.com/lib/pq"
+	"easelect/backend/core_components/runtime_grants"
+
+	"github.com/lib/pq"
 )
 
 var (
 	// Db = "pääyhteys" joka tässä esimerkissä halutaan osoittaa samaan kuin DbGuest
 	Db             *sql.DB
 	DbAdmin        *sql.DB
+	DbLifecycle    *sql.DB // Admission sessions never consume administrator work slots.
 	DbReaderOnly   *sql.DB
 	DbConfidential *sql.DB
 	DbBasic        *sql.DB
 	DbGuest        *sql.DB
 )
 
+var runtimeDatabaseAdmission atomic.Bool
+
+// EnableRuntimeDatabaseAdmission runs after the exclusive required startup.
+func EnableRuntimeDatabaseAdmission() { runtimeDatabaseAdmission.Store(true) }
+
 func InitDB() error {
+	runtimeDatabaseAdmission.Store(false)
 	if _, err := ensureEnvironmentVariablesLoaded(); err != nil {
 		fmt.Printf("\033[31merror loading environment variables: %s\033[0m\n", err.Error())
 	}
@@ -103,12 +113,12 @@ func InitDB() error {
 			dbHost, dbPort, conn.dbUserEnv, conn.dbPasswordEnv, dbName, sslMode,
 		)
 
-		dbInstance, err := sql.Open("postgres", connectionString)
+		connector, err := pq.NewConnector(connectionString)
 		if err != nil {
-			fmt.Printf("\033[31merror opening %s: %s\033[0m\n",
-				conn.roleDescription, err.Error())
+			fmt.Printf("\033[31merror opening %s: %s\033[0m\n", conn.roleDescription, err.Error())
 			return err
 		}
+		dbInstance := sql.OpenDB(runtime_grants.DatabasePhaseConnector(connector, func() *sql.DB { return DbLifecycle }, runtimeDatabaseAdmission.Load))
 
 		if err := dbInstance.Ping(); err != nil {
 			fmt.Printf("\033[31merror connecting to '%s': %s\033[0m\n",
@@ -120,6 +130,17 @@ func InitDB() error {
 			resolvedDefaultPoolSettingsByRole = resolveDatabasePoolDefaultSettings(dbInstance)
 		}
 
+		if conn.roleKey == dbPoolRoleAdmin {
+			DbLifecycle, err = sql.Open("postgres", connectionString)
+			if err != nil {
+				return err
+			}
+			// One shared request cohort plus one exclusive startup waiter.
+			DbLifecycle.SetMaxOpenConns(2)
+			DbLifecycle.SetMaxIdleConns(2)
+			totalConfiguredMaxOpenConns += 2
+			totalConfiguredMaxIdleConns += 2
+		}
 		*conn.dbPointer = dbInstance
 
 		poolSettings := loadDatabasePoolSettingsFromDefaults(
@@ -152,6 +173,7 @@ func CloseDB() {
 		db        *sql.DB
 	}{
 		{roleLabel: "admin", db: DbAdmin},
+		{roleLabel: "lifecycle", db: DbLifecycle},
 		{roleLabel: "readonly", db: DbReaderOnly},
 		{roleLabel: "confidential", db: DbConfidential},
 		{roleLabel: "basic", db: DbBasic},

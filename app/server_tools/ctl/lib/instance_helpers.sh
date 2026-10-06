@@ -111,10 +111,10 @@ wait_for_instance_app() {
     local timeout="${3:-60}"
 
     for i in $(seq 1 "$timeout"); do
-        if curl -s -o /dev/null "http://localhost:${port}/" --max-time 2 2>/dev/null; then
+        if curl -f -s "http://localhost:${port}/health" --max-time 2 2>/dev/null | grep -q '"runtime_grants"[[:space:]]*:[[:space:]]*"reconciled"'; then
             return 0
         fi
-        if curl -k -s -o /dev/null "https://localhost:${port}/" --max-time 2 2>/dev/null; then
+        if curl -f -k -s "https://localhost:${port}/health" --max-time 2 2>/dev/null | grep -q '"runtime_grants"[[:space:]]*:[[:space:]]*"reconciled"'; then
             return 0
         fi
         sleep 1

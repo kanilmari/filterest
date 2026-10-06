@@ -109,6 +109,8 @@ class BootstrapSeedShellTests(unittest.TestCase):
     def test_every_package_import_path_uses_the_shared_import(self) -> None:
         """No import path may skip a schema error: the management instance init used to."""
         instance_sync = (PUBLIC_SOURCE_ROOT / "server_tools/ctl/lib/instance_sync.sh").read_text(encoding="utf-8")
+        self.assertIn('/instance_bootstrap.sh"', instance_sync)
+        instance_sync += (PUBLIC_SOURCE_ROOT / "server_tools/ctl/lib/instance_bootstrap.sh").read_text(encoding="utf-8")
         docker = (PUBLIC_SOURCE_ROOT / "server_tools/ctl/lib/docker.sh").read_text(encoding="utf-8")
 
         self.assertIn('import_bootstrap_package "$schema_apply_file" "$bootstrap_seed_file" 1', instance_sync)
@@ -132,9 +134,10 @@ class BootstrapSeedShellTests(unittest.TestCase):
         fake.write_text(
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$RECORD_DIR/args"\n'
-            'input="$(cat)"\n'
-            'printf "%s\\n---\\n" "$input" >> "$RECORD_DIR/streams"\n'
-            'if grep -q "FAIL" <<<"$input"; then echo "ERROR:  syntax error at or near \\"FAIL\\""; exit 3; fi\n',
+            'while IFS= read -r line; do\n'
+            '  printf "%s\\n" "$line" >> "$RECORD_DIR/streams"\n'
+            "  if [[ \"$line\" == FAIL* ]]; then echo 'ERROR:  syntax error at or near \"FAIL\"'; exit 3; fi\n"
+            'done\n',
             encoding="utf-8",
         )
         fake.chmod(0o755)
@@ -157,23 +160,24 @@ class BootstrapSeedShellTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         args = (records / "args").read_text(encoding="utf-8").splitlines()
-        self.assertEqual(args, ["-d target -v ON_ERROR_STOP=1", "-d target -v ON_ERROR_STOP=1"])
+        self.assertEqual(args, ["-d target -v ON_ERROR_STOP=1"])
         streams = (records / "streams").read_text(encoding="utf-8")
         self.assertIn("CREATE SCHEMA IF NOT EXISTS postgis;", streams)
+        self.assertTrue(streams.startswith("SELECT pg_advisory_lock(hashtext('filterest.runtime_startup_barrier'));"))
         self.assertLess(streams.index("CREATE TABLE a"), streams.index("INSERT INTO a"))
         self.assertNotIn("\\restrict", streams)
 
     def test_shared_import_stops_before_the_seed_when_the_schema_fails(self) -> None:
         result, records = self._import_with_fake_psql("CREATE TABLE a (id int);\nFAIL;\n", "INSERT INTO a VALUES (1);\n")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Bootstrap schema import failed", result.stderr)
+        self.assertIn("Bootstrap package import failed", result.stderr)
         self.assertIn('syntax error at or near "FAIL"', result.stderr)
         self.assertNotIn("INSERT INTO a", (records / "streams").read_text(encoding="utf-8"))
 
     def test_shared_import_reports_a_failed_seed(self) -> None:
         result, _ = self._import_with_fake_psql("CREATE TABLE a (id int);\n", "INSERT INTO a VALUES (1);\nFAIL;\n")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Bootstrap seed import failed", result.stderr)
+        self.assertIn("Bootstrap package import failed", result.stderr)
 
     def test_shared_import_refuses_a_missing_file(self) -> None:
         result, records = self._import_with_fake_psql("CREATE TABLE a (id int);\n", "")
@@ -192,6 +196,11 @@ class BootstrapSeedShellTests(unittest.TestCase):
     def test_setup_grants_public_schema_create_to_configured_admin(self) -> None:
         setup_script = (
             PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('source "$SCRIPT_DIR/lib/setup_database_grants.sh"', setup_script)
+        self.assertIn("grant_local_database_permissions", setup_script)
+        setup_script += (
+            PUBLIC_SOURCE_ROOT / "server_tools/lib/setup_database_grants.sh"
         ).read_text(encoding="utf-8")
 
         self.assertIn('--set=admin_user="$DB_ADMIN_USER"', setup_script)

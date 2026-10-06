@@ -125,35 +125,16 @@ SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'confid
 \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'confidential_user');
 \gexec
-SELECT format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO %I', :'confidential_user');
-\gexec
-SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'confidential_user');
-\gexec
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO %I', :'confidential_user');
-\gexec
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I', :'confidential_user');
-\gexec
 
+-- The application's one start-up policy supplies dataset and operational grants.
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'basic_user');
 \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'basic_user');
-\gexec
-SELECT format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO %I', :'basic_user');
-\gexec
-SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'basic_user');
-\gexec
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO %I', :'basic_user');
-\gexec
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I', :'basic_user');
 \gexec
 
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'guest_user');
 \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'guest_user');
-\gexec
-SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %I', :'guest_user');
-\gexec
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %I', :'guest_user');
 \gexec
 
 SELECT format('GRANT USAGE ON SCHEMA restricted TO %I', :'confidential_user')

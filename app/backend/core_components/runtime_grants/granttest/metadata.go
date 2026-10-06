@@ -47,6 +47,8 @@ func SnapshotQuery(query string, args []driver.NamedValue) (driver.Rows, bool) {
 	var columns int
 	var values [][]driver.Value
 	switch {
+	case strings.Contains(query, "COALESCE(bool_or(protected),false)"):
+		return &rows{columns: 1, values: [][]driver.Value{{false}}}, true
 	case strings.Contains(query, "FROM pg_roles WHERE rolname=$1"):
 		columns = 2
 		for i, key := range []string{"DB_BASIC_USER", "DB_GUEST_USER", "DB_READONLY_USER", "DB_CONFIDENTIAL_USER"} {
@@ -88,5 +90,5 @@ func SnapshotQuery(query string, args []driver.NamedValue) (driver.Rows, bool) {
 	return &rows{columns, values}, true
 }
 func IsPolicyLock(query string) bool {
-	return strings.HasPrefix(query, "SET LOCAL lock_timeout") || strings.Contains(query, "pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))")
+	return strings.HasPrefix(query, "SET LOCAL lock_timeout") || strings.Contains(query, "pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))") || strings.Contains(query, "pg_advisory_xact_lock_shared(hashtext($1))")
 }

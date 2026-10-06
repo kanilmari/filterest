@@ -9,13 +9,12 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	backend "easelect/backend/core_components"
 )
 
 type langEmbeddingQuery struct {
@@ -48,61 +47,44 @@ var (
 	langEmbeddingInitOnce sync.Once
 )
 
-func TestEnsureLangEmbeddingTablesMirrorsRuntimeRoleGrants(t *testing.T) {
+func TestStartupEmbeddingCreationUsesSchemaAndPropagatesDDLFailure(t *testing.T) {
+	for _, fail := range []int{-1, 0, 1, 2, 3} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			db := newLangEmbeddingTestDB(t)
+			defer db.Close()
+			pushLangEmbeddingQuery(langEmbeddingQuery{columns: []string{"schema_name", "table_name"}, rows: [][]driver.Value{{"schema quoted", "host quoted"}}})
+			for i := 0; i < 4; i++ {
+				item := langEmbeddingExec{rowsAffected: 1}
+				if i == fail {
+					item.err = errors.New("DDL failure")
+				}
+				pushLangEmbeddingExec(item)
+			}
+			err := EnsureStartupLangEmbeddingTables(context.Background(), db)
+			if (err != nil) != (fail >= 0) {
+				t.Fatalf("failure %d: %v", fail, err)
+			}
+			calls := snapshotLangEmbeddingCalls()
+			assertCallContains(t, calls, `CREATE TABLE IF NOT EXISTS "schema quoted"."host quoted_lang_embeddings"`)
+			for _, call := range calls {
+				if strings.Contains(call, "GRANT ") || strings.Contains(call, "has_table_privilege") || strings.Contains(call, "hnsw") {
+					t.Fatalf("historical grant mirror remains: %s", call)
+				}
+			}
+			if fail >= 0 && len(calls) != fail+2 {
+				t.Fatalf("continued after required DDL failure: %v", calls)
+			}
+		})
+	}
+}
+
+func TestStartupEmbeddingDiscoveryErrorIsRequired(t *testing.T) {
 	db := newLangEmbeddingTestDB(t)
 	defer db.Close()
-
-	savedDB := backend.Db
-	backend.Db = db
-	t.Cleanup(func() {
-		backend.Db = savedDB
-	})
-
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"table_name"},
-		rows:    [][]driver.Value{{"app_service_catalog"}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"has_table_privilege"},
-		rows:    [][]driver.Value{{true}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"has_table_privilege"},
-		rows:    [][]driver.Value{{true}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"has_table_privilege"},
-		rows:    [][]driver.Value{{true}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"has_table_privilege"},
-		rows:    [][]driver.Value{{true}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"has_table_privilege"},
-		rows:    [][]driver.Value{{true}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"has_table_privilege"},
-		rows:    [][]driver.Value{{true}},
-	})
-	pushLangEmbeddingQuery(langEmbeddingQuery{
-		columns: []string{"pg_get_serial_sequence"},
-		rows:    [][]driver.Value{{"public.app_service_catalog_lang_embeddings_id_seq"}},
-	})
-
-	for range 9 {
-		pushLangEmbeddingExec(langEmbeddingExec{rowsAffected: 1})
+	pushLangEmbeddingQuery(langEmbeddingQuery{err: errors.New("discovery failure")})
+	if err := EnsureStartupLangEmbeddingTables(context.Background(), db); err == nil {
+		t.Fatal("discovery failure swallowed")
 	}
-
-	EnsureLangEmbeddingTables()
-
-	calls := snapshotLangEmbeddingCalls()
-	assertCallContains(t, calls, `CREATE TABLE IF NOT EXISTS "app_service_catalog_lang_embeddings"`)
-	assertCallContains(t, calls, `GRANT SELECT ON TABLE "app_service_catalog_lang_embeddings" TO "readeronly"`)
-	assertCallContains(t, calls, `GRANT SELECT ON TABLE "app_service_catalog_lang_embeddings" TO "guest_user"`)
-	assertCallContains(t, calls, `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "app_service_catalog_lang_embeddings" TO "basic_user"`)
-	assertCallContains(t, calls, `GRANT USAGE, SELECT ON SEQUENCE "public"."app_service_catalog_lang_embeddings_id_seq" TO "basic_user"`)
 }
 
 func newLangEmbeddingTestDB(t *testing.T) *sql.DB {

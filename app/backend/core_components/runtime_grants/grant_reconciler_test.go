@@ -91,6 +91,7 @@ type applierDriver struct {
 	present      map[string]bool
 	statements   []string
 	ignoreWrites bool
+	unsafeRole   string
 }
 type applierConn struct{ state *applierDriver }
 type applierTx struct{}
@@ -109,6 +110,13 @@ func (c *applierConn) QueryContext(_ context.Context, query string, args []drive
 	s := c.state.snapshot
 	result := &metadataTestRows{}
 	switch {
+	case strings.Contains(query, "FROM pg_roles WHERE rolname=$1"):
+		result.columns = 2
+		for _, role := range s.Roles {
+			if args[0].Value == role.Name {
+				result.rows = [][]driver.Value{{role.OID, role.Label == c.state.unsafeRole}}
+			}
+		}
 	case query == effectivePrivilegesSQL:
 		result.columns = 9
 		var checks []Check
@@ -257,7 +265,7 @@ func TestPolicyLockTimeoutPrecedesBarrierAndObservesCancellation(t *testing.T) {
 	if err := LockRuntimeGrantPolicy(context.Background(), tx); err != nil {
 		t.Fatal(err)
 	}
-	if len(state.statements) != 2 || state.statements[0] != `SET LOCAL lock_timeout = '5s'` || !strings.Contains(state.statements[1], "pg_advisory_xact_lock") {
+	if len(state.statements) != 4 || !strings.Contains(state.statements[1], "pg_advisory_xact_lock_shared") || !strings.Contains(state.statements[3], "filterest.runtime_role_write_revocations") || state.statements[0] != `SET LOCAL lock_timeout = '5s'` || !strings.Contains(state.statements[1], "pg_advisory_xact_lock") {
 		t.Fatal(state.statements)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -283,3 +291,5 @@ func TestApplierReportsRetainedOperationalReads(t *testing.T) {
 		t.Fatal("retained operational read was omitted from the excess-read report", findings, err)
 	}
 }
+
+func (c *applierConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) { return c.Begin() }

@@ -218,7 +218,9 @@ func evaluateRuntimeGrants(snapshot GrantSnapshot, diagnostics *[]Finding) (Gran
 		if label == "PUBLIC" || label == "guest" && write || label == "readonly" && (write || object.Schema == "restricted") {
 			return nil
 		}
-		if label == "confidential" && object.Schema != "restricted" && !(object.Schema == "public" && object.Name == "system_users" && privilege == "SELECT" && (column == "id" || column == "enabled")) && object.Kind != "schema" {
+		confidentialIdentityRead := object.Schema == "public" && object.Name == "system_users" && privilege == "SELECT" && (column == "id" || column == "enabled")
+		operationalRead := privilege == "SELECT" && column == "" && hasOperationalReadContract(object, label)
+		if label == "confidential" && object.Schema != "restricted" && !confidentialIdentityRead && !operationalRead && object.Kind != "schema" {
 			return nil
 		}
 		if write && (object.Protected || class == Protected || class == Embedding || object.Name == "system_row_actor_columns" || object.Name == "system_data_repair_records") {
@@ -295,11 +297,9 @@ func evaluateRuntimeGrants(snapshot GrantSnapshot, diagnostics *[]Finding) (Gran
 					return nil, err
 				}
 			}
-			if object.Name == "system_row_group_classifications" || object.Name == "system_row_groups" || object.Name == "system_row_group_memberships" || object.Name == "system_row_actor_columns" {
-				for _, label := range []string{"basic", "guest"} {
-					if err := add(label, oid, "", "SELECT", "row visibility metadata"); err != nil {
-						return nil, err
-					}
+			for _, label := range operationalReadRoles[object.Name] {
+				if err := add(label, oid, "", "SELECT", "operational read contract"); err != nil {
+					return nil, err
 				}
 			}
 		}

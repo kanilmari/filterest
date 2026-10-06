@@ -7,6 +7,7 @@ package startup
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 )
 
@@ -26,18 +27,17 @@ import (
 // Runs synchronously at startup (before ListenAndServe) so the first request
 // already sees the corrected posture. Idempotent: after healing, the first guard
 // clause short-circuits on every later boot.
-func EnsureAnonymousBrowseConsistency(db *sql.DB) {
+func EnsureAnonymousBrowseConsistency(db *sql.DB) error {
 	// 1. Is anonymous browsing enabled? A missing row means "no login required".
 	var loginToBrowse sql.NullBool
 	err := db.QueryRow(`SELECT boolean_value FROM system_config WHERE key = 'login_to_browse'`).Scan(&loginToBrowse)
 	if err != nil && err != sql.ErrNoRows {
-		log.Printf("\033[31merror: [STARTUP] anonymous-browse consistency: login_to_browse read failed: %v\033[0m", err)
-		return
+		return fmt.Errorf("anonymous browsing configuration: %w", err)
 	}
 	if loginToBrowse.Valid && loginToBrowse.Bool {
 		// Login already required -> guest 403s are expected and handled by the
 		// forced-login flow, not an inconsistency.
-		return
+		return nil
 	}
 
 	// 2. With anonymous browsing enabled, can the guest principal actually read
@@ -55,12 +55,11 @@ func EnsureAnonymousBrowseConsistency(db *sql.DB) {
 			  AND gf.target_table_uid IS NULL
 		)`).Scan(&guestCanReadDatasets)
 	if err != nil {
-		log.Printf("\033[31merror: [STARTUP] anonymous-browse consistency: guest permission probe failed: %v\033[0m", err)
-		return
+		return fmt.Errorf("anonymous browsing rights: %w", err)
 	}
 	if guestCanReadDatasets {
 		// Anonymous browsing is genuinely configured (public-browse instance).
-		return
+		return nil
 	}
 
 	// 3. Inconsistent: anonymous browsing is on but the guest can read nothing.
@@ -74,11 +73,11 @@ func EnsureAnonymousBrowseConsistency(db *sql.DB) {
 			text_value    = 'true',
 			updated       = NOW()`)
 	if err != nil {
-		log.Printf("\033[31merror: [STARTUP] anonymous-browse consistency: heal failed: %v\033[0m", err)
-		return
+		return fmt.Errorf("anonymous browsing repair: %w", err)
 	}
 
 	log.Printf("\033[33m[STARTUP] Inconsistent bootstrap detected: anonymous browsing was enabled but the guest " +
 		"principal has no dataset-read rights. Forced login_to_browse=true (login required) so the app is usable. " +
 		"To run a public-browse instance instead, grant the guests group read rights and set login_to_browse=false.\033[0m")
+	return nil
 }

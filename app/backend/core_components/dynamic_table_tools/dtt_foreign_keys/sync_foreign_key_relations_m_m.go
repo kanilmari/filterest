@@ -32,7 +32,7 @@ type mmConstraint struct {
 //  1. table name must contain any of: _relation, _join, _liitos, _assoc
 //  2. exactly 2 FKs that match the entire primary key
 //  3. max 6 columns total in the bridging table
-func SyncManyToManyFKConstraints(db *sql.DB) error {
+func SyncManyToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 	// log.Println("[INFO] Synchronizing many-to-many constraints...")
 
 	// 1) Find all tables that have exactly two foreign keys referencing two distinct tables.
@@ -161,6 +161,12 @@ func SyncManyToManyFKConstraints(db *sql.DB) error {
        JOIN system_db_tables s_b  ON s_b.table_uid = fr.table_b_uid
        `
 
+	// Preserve malformed legacy rows without letting NULL, empty or missing
+	// table names or columns enter discovery comparisons. The final policy audit reports them.
+	if len(preserveLegacy) > 0 && preserveLegacy[0] {
+		getExistingQuery += ` WHERE EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname=s_br.table_name AND n.nspname=COALESCE(NULLIF(s_br.schema_name,''),'public')) AND a.attname = fr.bridging_col_a AND a.attnum > 0 AND NOT a.attisdropped) AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname=s_br.table_name AND n.nspname=COALESCE(NULLIF(s_br.schema_name,''),'public')) AND a.attname = fr.bridging_col_b AND a.attnum > 0 AND NOT a.attisdropped) AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname=s_a.table_name AND n.nspname=COALESCE(NULLIF(s_a.schema_name,''),'public')) AND a.attname = fr.table_a_column AND a.attnum > 0 AND NOT a.attisdropped) AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname=s_b.table_name AND n.nspname=COALESCE(NULLIF(s_b.schema_name,''),'public')) AND a.attname = fr.table_b_column AND a.attnum > 0 AND NOT a.attisdropped)`
+	}
+
 	rows2, err := db.Query(getExistingQuery)
 	if err != nil {
 		return fmt.Errorf("cannot query system_foreign_key_relations_m_m: %w", err)
@@ -204,6 +210,9 @@ func SyncManyToManyFKConstraints(db *sql.DB) error {
 		}
 	}
 	for key, er := range existing {
+		if len(preserveLegacy) > 0 && preserveLegacy[0] {
+			continue
+		}
 		if _, ok := discovered[key]; !ok {
 			toDelete = append(toDelete, er.ID)
 		}

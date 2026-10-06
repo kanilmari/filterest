@@ -215,6 +215,7 @@ func TestSystemUpdateNoticeHandlerAcceptsExactIdempotentJSON(t *testing.T) {
 }
 
 func TestAdminUpdateNoticeStreamSnapshotsPersistentStateAndRechecksAdmin(t *testing.T) {
+	installNoticeAdmissionFixture(t)
 	originalRead := readProductionUpdateNotice
 	originalAdminOK := productionUpdateNoticeAdminOK
 	originalHeartbeat := productionUpdateNoticeHeartbeat
