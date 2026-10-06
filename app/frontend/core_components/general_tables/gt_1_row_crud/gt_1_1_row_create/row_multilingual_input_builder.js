@@ -1,5 +1,5 @@
 // row_multilingual_input_builder.js
-// Builds one explicit textarea per active content language for multilingual add-row fields.
+// Builds one explicit textarea per active content language for multilingual row fields.
 // Bridges column metadata, the language registry contract, and serialized row payload values.
 // Exists so row creation cannot silently store one scalar value in a multilingual column.
 
@@ -22,12 +22,14 @@ function normalizedLanguageOptions(column = {}) {
         });
 }
 
-function readInitialLanguageMap(value) {
+function readInitialLanguageMap(value, defaultLanguageCode = "") {
     if (value && typeof value === "object" && !Array.isArray(value)) {
         return value;
     }
     if (typeof value !== "string" || !value.trim().startsWith("{")) {
-        return {};
+        return typeof value === "string" && defaultLanguageCode
+            ? { [defaultLanguageCode]: value }
+            : {};
     }
     try {
         const parsed = JSON.parse(value);
@@ -35,7 +37,7 @@ function readInitialLanguageMap(value) {
             ? parsed
             : {};
     } catch (_error) {
-        return {};
+        return defaultLanguageCode ? { [defaultLanguageCode]: value } : {};
     }
 }
 
@@ -57,6 +59,10 @@ function supportsMultilingualColumnType(dataType) {
  * Builds a multilingual field group and emits only a serialized language map.
  * Every active language becomes required when the database field is required,
  * or when the user starts filling an otherwise optional multilingual field.
+ * Editors may opt into partial translations and legacy text in the default
+ * language; add-row callers retain their complete-map and draft-loading rules.
+ * A partial-translation editor also keeps the stored text of languages that
+ * have no field here (for example a deactivated language), so saving cannot drop it.
  */
 export function buildMultilingualTextareaGroup(container, {
     tableName,
@@ -65,6 +71,8 @@ export function buildMultilingualTextareaGroup(container, {
     fieldName = "",
     idPrefix = "",
     onValueChange = () => {},
+    allowPartialTranslations = false,
+    legacyValueToDefaultLanguage = false,
 } = {}) {
     if (!supportsMultilingualColumnType(column?.data_type)) {
         throw new Error(
@@ -93,7 +101,9 @@ export function buildMultilingualTextareaGroup(container, {
         group.appendChild(hiddenInput);
     }
 
-    const initialMap = readInitialLanguageMap(initialValue);
+    const defaultLanguageCode = legacyValueToDefaultLanguage
+        ? (languages.find((language) => language.isDefault) || languages[0]).languageCode
+        : "";
     const textareas = [];
     const requiredBySchema = String(column.is_nullable || "").toLowerCase() === "no";
     const safePrefix = idPrefix || `${tableName}-${column.column_name}`;
@@ -111,23 +121,21 @@ export function buildMultilingualTextareaGroup(container, {
         textarea.dataset.testid = `form-input-${column.column_name}-${language.languageCode}`;
         textarea.rows = 2;
         textarea.classList.add("auto_resize_textarea");
-        textarea.value = typeof initialMap[language.languageCode] === "string"
-            ? initialMap[language.languageCode]
-            : "";
 
         group.appendChild(label);
         group.appendChild(textarea);
         textareas.push(textarea);
     });
 
+    let fieldlessEntries = [];
     const syncValue = ({ emit = true } = {}) => {
-        const languageMap = Object.fromEntries(textareas.map((textarea) => [
-            textarea.dataset.languageCode,
-            textarea.value,
-        ]));
+        const languageMap = Object.fromEntries([
+            ...textareas.map((textarea) => [textarea.dataset.languageCode, textarea.value]),
+            ...fieldlessEntries,
+        ].filter(([, value]) => !allowPartialTranslations || value.trim() !== ""));
         const hasAnyValue = Object.values(languageMap).some((value) => value.trim() !== "");
         textareas.forEach((textarea) => {
-            textarea.required = requiredBySchema || hasAnyValue;
+            textarea.required = !allowPartialTranslations && (requiredBySchema || hasAnyValue);
         });
         const serializedValue = hasAnyValue ? JSON.stringify(languageMap) : "";
         hiddenInput.value = serializedValue;
@@ -138,7 +146,21 @@ export function buildMultilingualTextareaGroup(container, {
     textareas.forEach((textarea) => {
         textarea.addEventListener("input", () => syncValue());
     });
-    syncValue({ emit: false });
+    // Loading and resetting share the same map reader as initial rendering.
+    const setValue = (value) => {
+        const languageMap = readInitialLanguageMap(value, defaultLanguageCode);
+        textareas.forEach((textarea) => {
+            const text = languageMap[textarea.dataset.languageCode];
+            textarea.value = typeof text === "string" ? text : "";
+        });
+        const fieldCodes = new Set(textareas.map((textarea) => textarea.dataset.languageCode));
+        fieldlessEntries = allowPartialTranslations
+            ? Object.entries(languageMap).filter(([languageCode, text]) =>
+                !fieldCodes.has(languageCode) && typeof text === "string")
+            : [];
+        return syncValue({ emit: false });
+    };
+    setValue(initialValue);
     container.appendChild(group);
 
     return {
@@ -146,5 +168,6 @@ export function buildMultilingualTextareaGroup(container, {
         hiddenInput,
         textareas,
         syncValue,
+        setValue,
     };
 }

@@ -15,6 +15,7 @@ import { createImageElement } from "./card_avatar_builder.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { createImageMetadataEditor } from "./row_article_image_metadata_editor.js";
 import { showConfirmModal } from "../../../reusable_components/modal/confirm_modal_builder.js";
 import {
     showErrorToast,
@@ -146,6 +147,7 @@ export function buildRowArticleImageGallery(parentTableName, parentRowId, childT
     const metadataEditor = canEditMetadata
         ? createImageMetadataEditor({
             childDataset,
+            columnTypes: childTableData?.types || {},
             onRefresh: refreshGallery,
         })
         : null;
@@ -587,182 +589,4 @@ async function setImageAsPrimary({ targetRow, allRows, childDataset, triggerButt
     } finally {
         triggerButton.disabled = false;
     }
-}
-
-function createImageMetadataEditor({ childDataset, onRefresh }) {
-    const wrapper = document.createElement("div");
-    wrapper.classList.add("big_card_image_editor_shell");
-    wrapper.dataset.testid = "big-card-image-editor-shell";
-
-    const toggleButton = document.createElement("button");
-    toggleButton.type = "button";
-    toggleButton.classList.add("fw-btn", "fw-btn--ghost", "big_card_image_editor_toggle");
-    toggleButton.dataset.testid = "big-card-image-editor-toggle";
-
-    const section = document.createElement("section");
-    section.classList.add("big_card_image_editor");
-    section.dataset.testid = "big-card-image-editor";
-    section.hidden = true;
-
-    const heading = document.createElement("h4");
-    heading.classList.add("big_card_image_editor_title");
-    heading.textContent = getTranslationForKey("edit") || "Muokkaa";
-
-    const form = document.createElement("form");
-    form.classList.add("big_card_image_editor_form");
-
-    const titleLabel = document.createElement("label");
-    titleLabel.classList.add("big_card_image_editor_field");
-    const titleCaption = document.createElement("span");
-    titleCaption.classList.add("big_card_image_editor_label");
-    titleCaption.textContent = getTranslationForKey("title") || "Otsikko";
-    const titleInput = document.createElement("input");
-    titleInput.type = "text";
-    titleInput.classList.add("big_card_image_editor_input");
-    titleInput.dataset.testid = "big-card-image-title-input";
-    titleLabel.append(titleCaption, titleInput);
-
-    const descriptionLabel = document.createElement("label");
-    descriptionLabel.classList.add("big_card_image_editor_field");
-    const descriptionCaption = document.createElement("span");
-    descriptionCaption.classList.add("big_card_image_editor_label");
-    descriptionCaption.textContent = getTranslationForKey("description") || "Kuvaus";
-    const descriptionInput = document.createElement("textarea");
-    descriptionInput.classList.add("big_card_image_editor_textarea");
-    descriptionInput.dataset.testid = "big-card-image-description-input";
-    descriptionInput.rows = 3;
-    descriptionLabel.append(descriptionCaption, descriptionInput);
-
-    const helper = document.createElement("p");
-    helper.classList.add("big_card_image_editor_helper");
-
-    const actionRow = document.createElement("div");
-    actionRow.classList.add("big_card_image_editor_actions");
-
-    const saveButton = document.createElement("button");
-    saveButton.type = "submit";
-    saveButton.classList.add("fw-btn", "big_card_image_editor_save");
-    saveButton.dataset.testid = "big-card-image-save";
-    saveButton.textContent = getTranslationForKey("save") || "Tallenna";
-
-    const resetButton = document.createElement("button");
-    resetButton.type = "button";
-    resetButton.classList.add("fw-btn", "fw-btn--ghost", "big_card_image_editor_reset");
-    resetButton.dataset.testid = "big-card-image-reset";
-    resetButton.textContent = getTranslationForKey("cancel") || "Peru";
-
-    actionRow.append(saveButton, resetButton);
-    form.append(titleLabel, descriptionLabel, helper, actionRow);
-    section.append(heading, form);
-    wrapper.append(toggleButton, section);
-
-    let currentRow = null;
-    let isEditorOpen = false;
-
-    const syncEditorVisibility = () => {
-        const hasRow = Boolean(currentRow);
-        toggleButton.hidden = !hasRow;
-        toggleButton.disabled = !hasRow;
-        toggleButton.textContent = isEditorOpen
-            ? "Piilota kuvatiedot"
-            : "Muokkaa kuvatietoja";
-        toggleButton.setAttribute("aria-expanded", isEditorOpen && hasRow ? "true" : "false");
-        section.hidden = !hasRow || !isEditorOpen;
-    };
-
-    const syncInputsFromCurrentRow = () => {
-        if (!currentRow) {
-            isEditorOpen = false;
-            titleInput.value = "";
-            descriptionInput.value = "";
-            helper.textContent = "";
-            saveButton.disabled = true;
-            resetButton.disabled = true;
-            syncEditorVisibility();
-            return;
-        }
-
-        titleInput.value = String(currentRow?.title || "");
-        descriptionInput.value = String(currentRow?.description || "");
-        helper.textContent = String(currentRow?.original_name || currentRow?.filename || "").trim()
-            ? `Tiedoston nimi: ${String(currentRow.original_name || currentRow.filename).trim()}`
-            : "Muokkaa kuvan otsikkoa ja kuvausta.";
-        saveButton.disabled = false;
-        resetButton.disabled = false;
-        syncEditorVisibility();
-    };
-
-    toggleButton.addEventListener("click", () => {
-        if (!currentRow) {
-            return;
-        }
-        isEditorOpen = !isEditorOpen;
-        syncEditorVisibility();
-    });
-
-    resetButton.addEventListener("click", syncInputsFromCurrentRow);
-
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        if (!currentRow?.id) {
-            return;
-        }
-
-        const nextTitle = titleInput.value.trim();
-        const nextDescription = descriptionInput.value.trim();
-        const currentTitle = String(currentRow?.title || "").trim();
-        const currentDescription = String(currentRow?.description || "").trim();
-
-        const updates = [];
-        if (nextTitle !== currentTitle) {
-            updates.push({ column: "title", value: nextTitle });
-        }
-        if (nextDescription !== currentDescription) {
-            updates.push({ column: "description", value: nextDescription });
-        }
-        if (updates.length === 0) {
-            return;
-        }
-
-        saveButton.disabled = true;
-        resetButton.disabled = true;
-        section.classList.add("is-saving");
-        try {
-            await endpoint_router("updateRow", {
-                method: "POST",
-                url_params: `?dataset=${childDataset}`,
-                body_data: {
-                    id: currentRow.id,
-                    updates,
-                },
-            });
-            currentRow.title = nextTitle;
-            currentRow.description = nextDescription;
-            showSuccessToast(getTranslationForKey("save_success") || "Kuva päivitetty.");
-            await onRefresh();
-        } catch (err) {
-            console.warn("image metadata update failed:", err?.message || err);
-            showErrorToast(getTranslationForKey("save_failed") || "Kuvan päivitys ei onnistunut.");
-        } finally {
-            section.classList.remove("is-saving");
-            syncInputsFromCurrentRow();
-        }
-    });
-
-    return {
-        element: wrapper,
-        focus() {
-            if (!currentRow) {
-                return;
-            }
-            isEditorOpen = true;
-            syncEditorVisibility();
-            titleInput.focus();
-            titleInput.select();
-        },
-        loadRow(nextRow) {
-            currentRow = nextRow || null;
-            syncInputsFromCurrentRow();
-        },
-    };
 }

@@ -214,6 +214,28 @@
     gap: 6px;
 }
 
+.big_card_image_editor_multilingual {
+    min-width: 0;
+    margin: 0;
+    padding: 10px;
+    border: 1px solid var(--border_color);
+    border-radius: 8px;
+}
+
+.big_card_image_editor_multilingual legend {
+    padding-inline: 4px;
+}
+
+.big_card_image_editor_multilingual label {
+    font-size: 0.85rem;
+    color: var(--text_color_secondary, #bbb);
+}
+
+.big_card_image_editor_multilingual textarea {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
 .big_card_image_editor_label {
     font-size: 0.85rem;
     color: var(--text_color_secondary, #bbb);

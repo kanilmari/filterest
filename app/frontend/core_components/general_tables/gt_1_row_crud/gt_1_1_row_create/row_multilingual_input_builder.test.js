@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// row_multilingual_input_builder.test.js
 // Verifies add-row multilingual fields serialize registry-defined language maps.
 // Bridges language metadata, visible textareas, required-state changes, and hidden payload fields.
 // Exists to prevent the add-row form from emitting scalar or partial multilingual values.
@@ -117,5 +118,63 @@ describe("buildMultilingualTextareaGroup", () => {
             column: multilingualColumn({ data_type: "integer" }),
             fieldName: "title",
         })).toThrow(/require a text or JSON column/);
+    });
+
+    test("allows an editor to load legacy text in the registry's default language", () => {
+        const form = document.createElement("form");
+        const control = buildMultilingualTextareaGroup(form, {
+            tableName: "articles",
+            column: multilingualColumn(),
+            initialValue: "Legacy scalar",
+            legacyValueToDefaultLanguage: true,
+            allowPartialTranslations: true,
+        });
+
+        expect(control.textareas[0].value).toBe("Legacy scalar");
+        expect(control.textareas[1].value).toBe("");
+        expect(JSON.parse(control.syncValue())).toEqual({ sv: "Legacy scalar" });
+        expect(form.checkValidity()).toBe(true);
+    });
+
+    test("resets editor values through the shared map reader without emitting changes", () => {
+        const form = document.createElement("form");
+        const onValueChange = vi.fn();
+        const control = buildMultilingualTextareaGroup(form, {
+            tableName: "articles",
+            column: multilingualColumn(),
+            allowPartialTranslations: true,
+            onValueChange,
+        });
+
+        expect(control.setValue({ sv: "Rubrik", en: " " })).toBe(JSON.stringify({ sv: "Rubrik" }));
+        expect(control.textareas[1].value).toBe(" ");
+        expect(control.setValue("")).toBe("");
+        expect(control.textareas.every((textarea) => textarea.value === "")).toBe(true);
+        expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    test("keeps an editor's stored text for a language that has no field", () => {
+        const form = document.createElement("form");
+        const control = buildMultilingualTextareaGroup(form, {
+            tableName: "articles",
+            column: multilingualColumn(),
+            allowPartialTranslations: true,
+        });
+
+        expect(JSON.parse(control.setValue({ sv: "Rubrik", de: "Titel" }))).toEqual({ sv: "Rubrik", de: "Titel" });
+        control.textareas[0].value = "Ny rubrik";
+        expect(JSON.parse(control.syncValue({ emit: false }))).toEqual({ sv: "Ny rubrik", de: "Titel" });
+        expect(control.setValue("Legacy")).toBe("");
+    });
+
+    test("add-row fields still drop languages that have no field", () => {
+        const form = document.createElement("form");
+        const control = buildMultilingualTextareaGroup(form, {
+            tableName: "articles",
+            column: multilingualColumn(),
+            initialValue: { sv: "Rubrik", en: "Title", de: "Titel" },
+        });
+
+        expect(JSON.parse(control.syncValue({ emit: false }))).toEqual({ sv: "Rubrik", en: "Title" });
     });
 });

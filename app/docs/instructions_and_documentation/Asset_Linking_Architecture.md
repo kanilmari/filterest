@@ -328,6 +328,7 @@ Canonical shared-asset detail UX should now assume:
 
 - big-card attachment rows may edit `title` and `description` inline when the child dataset has `/api/update-row`
 - big-card image rows may also edit `title` and `description` inline when the shared child dataset has `/api/update-row`, and the UI should batch those field changes through one `update-row` call for the active image row
+- image fields marked multilingual reuse the add-row language controls and active-language column metadata: stored maps fill the matching fields, legacy plain text starts in the default language, and saving sends a serialized map of non-empty translations that also keeps stored text in languages without a field; ordinary image fields retain their scalar editing behaviour
 - the original uploaded filename should stay visible as secondary metadata even when a friendlier attachment title is set
 - attachment refresh order should be deterministic (`sort_order`, then `created`, then `id`, then display name) so delete/edit flows do not drift between refreshes
 - card-support hero-image discovery should prefer explicit shared-media metadata first and FK-discovered `_assets` relations second; repo-wide shared-asset migrations should remove the old blind `_images` fallback path entirely
