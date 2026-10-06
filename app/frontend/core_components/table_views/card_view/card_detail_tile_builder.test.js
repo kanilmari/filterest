@@ -250,7 +250,7 @@ describe("card_detail_tile_builder", () => {
             expect(container.querySelector(".card_detail_tile_label")).toBeNull();
         });
 
-        test("a short value keeps its name on the value's line", () => {
+        test("a short value keeps its name visible without punctuation", () => {
             const container = document.createElement("div");
 
             renderModernCardDetails(container, [{
@@ -260,7 +260,7 @@ describe("card_detail_tile_builder", () => {
             const text = container.querySelector(".card_detail_tile_text");
             expect(text?.dataset.cardLabelPlacement).toBe("inline");
             const label = container.querySelector(".card_detail_tile_label");
-            // The colon is drawn by style, so a retranslation never has to carry it.
+            // The field name stays unpunctuated when it is translated again.
             expect(label?.textContent).toBe("Price");
             expect(label?.dataset.langKey).toBe("price");
         });

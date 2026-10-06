@@ -242,7 +242,7 @@ describe("renderKeyValuePairs", () => {
                 const pair = kvContainer.querySelector(".column_orders_price");
                 expect(pair?.dataset.cardLabelPlacement).toBe("inline");
                 expect(pair?.dataset.labelValueLayout).toBe("stacked");
-                // The colon belongs to style, never to the translated name element.
+                // Field names stay unpunctuated in every layout.
                 expect(pair?.querySelector(".kv-key")?.textContent).toBe("Price");
                 expect(pair?.querySelector(".kv-value")?.classList)
                     .toContain("label-value-layout__value");

@@ -234,7 +234,7 @@ describe("card_detail_single_line_helpers", () => {
             expect(container.querySelector(".card_detail_row_label_text")).toBeNull();
         });
 
-        test("a short value keeps its name on the value's line", () => {
+        test("a short value keeps its name visible without punctuation", () => {
             const container = document.createElement("div");
 
             renderSingleLineCardDetails(container, [{
@@ -244,7 +244,7 @@ describe("card_detail_single_line_helpers", () => {
             const row = container.querySelector(".card_detail_row_single_line");
             const labelText = container.querySelector(".card_detail_row_label_text");
             expect(row?.dataset.cardLabelPlacement).toBe("inline");
-            // The colon is drawn by style; the name element carries only its key.
+            // The field name carries its translation key without added punctuation.
             expect(labelText?.textContent).toBe("Price");
             expect(labelText?.dataset.langKey).toBe("price");
         });

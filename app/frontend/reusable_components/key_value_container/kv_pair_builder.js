@@ -65,7 +65,7 @@ function appendOpenInNewTabIcon(linkElement) {
  *   decorates the key element, and it may return `{labelPlacement}` — `hidden`,
  *   `inline` or `stacked`. The caller owns name visibility; the shared site
  *   adapter decides the arrangement. The marker is repeated on the pair as
- *   `data-card-label-placement` for punctuation, never for placement.
+ *   `data-card-label-placement` for legacy renderer metadata, never for placement.
  */
 export function createKvPairBuilders({ translate, decorateKeyElement }) {
     /* --------------------------------------------------

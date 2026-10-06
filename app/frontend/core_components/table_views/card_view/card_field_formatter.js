@@ -93,8 +93,7 @@ export function createKeyValueElement(
         wrapper.dataset.cardLabelPlacement = labelPlacement;
         const labelDiv = document.createElement("div");
         labelDiv.classList.add("kv_label");
-        // Kieliavain attribuuttiin, ei varatekstiä. Kaksoispiste tulee tyylistä,
-        // koska kääntäjä korvaa tämän elementin tekstin joka kielenvaihdossa.
+        // The translation owner supplies the field name without added punctuation.
         labelDiv.dataset.langKey = column;
         wrapper.appendChild(labelDiv);
     }

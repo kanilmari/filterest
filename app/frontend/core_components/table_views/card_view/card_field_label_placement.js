@@ -49,8 +49,8 @@ export function isLongTextCardField(baseRoles, dataType) {
  * Whether one card field's name is visible.
  *
  * `hidden` leaves the name out; the legacy `inline` marker means the name is
- * shown with a colon. The column's own visibility setting decides whether a
- * name is shown at all. The shared site adapter decides placement separately.
+ * shown without added punctuation. The column's own visibility setting decides
+ * whether a name is shown at all. The shared site adapter decides placement separately.
  *
  * @param {object} field
  * @param {boolean} field.labelRequested - the column's visibility setting already said a name is shown

@@ -1,5 +1,5 @@
 // site_label_value_layout_renderers.test.js
-// Verifies one site choice reaches every card and article pair renderer.
+// Verifies the site choice reaches cards while article pairs retain their own layout.
 // Connects real field builders with shared settings and contradictory stored column metadata.
 // Guards hidden names, retained values/links and live previews in both card styles.
 // @vitest-environment jsdom
@@ -33,16 +33,6 @@ const rendererCases = [
     { name: 'createKeyValueElement', render(host, showLabel, metadata) {
         host.append(createKeyValueElement(showLabel ? 'Osoite' : '', 'https://example.test/long/path', 'website', false, 'card_value', undefined, metadata));
     } },
-    ...['ordinary article', 'image-first article'].flatMap(article => [
-        { name: article + ' text', render(host, showLabel, metadata) {
-            host.classList.add(article === 'ordinary article' ? 'big_card_content' : 'image_first_view_article_content');
-            host.append(createRowArticleKeyValueElement('Osoite', 'https://example.test/long/path', 'website', false, 'big_card_detail_value', showLabel, null, 'original raw', metadata));
-        } },
-        { name: article + ' link', render(host, showLabel, metadata) {
-            host.classList.add(article === 'ordinary article' ? 'big_card_content' : 'image_first_view_article_content');
-            host.append(createRowArticleNavigableElement({ label: 'Osoite', value: 'https://example.test/long/path', column: 'website', showKey: showLabel, href: 'https://example.test/long/path', externalHttpOnly: true, openPrimaryInNewTab: true, labelMeta: metadata }));
-        } },
-    ]),
 ];
 
 beforeEach(() => {
@@ -112,21 +102,72 @@ test.each(['stacked', 'inline'])('Plain relation links share the two-line previe
     for (const articleClass of ['big_card_content', 'image_first_view_article_content']) {
         const article = document.createElement('article');
         article.className = articleClass;
+        const details = document.createElement('div');
+        details.className = 'big_card_details_container';
         const pair = createRowArticleNavigableElement({
             label: relation.labelText, column: relation.key, value: relation.value,
             href: relation.href, openInNewTabHref: relation.openInNewTabHref,
         });
-        article.append(pair);
+        details.append(pair);
+        article.append(details);
         document.body.append(article);
-        const value = pair.querySelector('.label-value-layout__value');
+        const value = pair.querySelector('.two_line_value');
         const computed = getComputedStyle(value);
-        expect(pair.dataset.labelValueLayout).toBe(mode);
+        expect(pair.dataset.labelValueLayout).toBeUndefined();
+        expect(getComputedStyle(pair).display).toBe('flex');
+        expect(getComputedStyle(pair).alignItems).toBe('baseline');
         expect(computed.display).toBe('block');
-        expect(computed.getPropertyValue('-webkit-line-clamp')).toBe('unset');
-        expect(computed.overflow).toBe('visible');
+        expect(computed.getPropertyValue('-webkit-line-clamp')).not.toBe('2');
+        expect(computed.overflow).not.toBe('hidden');
         expect(value.textContent).toBe(relation.value);
         expect(value.querySelector('a').getAttribute('href')).toBe(relation.href);
     }
+});
+
+describe.each(['big_card_content', 'image_first_view_article_content'])('article layout in %s', articleClass => {
+    test.each(['stacked', 'inline', 'auto'])('keeps label and value on one row under %s and a live preview', mode => {
+        applySiteLabelValueLayoutSetting(mode);
+        appendFieldPairStyles();
+        const article = document.createElement('article');
+        article.className = articleClass;
+        const details = document.createElement('div');
+        details.className = 'big_card_details_container';
+        article.append(details);
+        document.body.append(article);
+        const text = 'Pitkä arvo, joka jatkuu omassa sarakkeessaan ja säilyttää\nmyös rivinvaihdon';
+
+        for (const showKey of [true, false]) {
+            const labelMeta = { label_value_layout: mode, card_detail_icon_key: 'link' };
+            details.append(
+                createRowArticleKeyValueElement('Osoite', text, 'website', false,
+                    'big_card_detail_value', showKey, null, 'original raw', labelMeta),
+                createRowArticleNavigableElement({ label: 'Osoite', value: text, column: 'website',
+                    showKey, href: '/example/7', storedRawValue: '7', labelMeta }),
+            );
+        }
+        const originalMarkup = article.outerHTML;
+        const assertArticleLayout = () => {
+            expect(article.querySelector('.label-value-layout')).toBeNull();
+            for (const pair of details.children) {
+                const computed = getComputedStyle(pair);
+                expect(computed.display).toBe('flex');
+                expect(computed.flexDirection).not.toBe('column');
+                expect(computed.alignItems).toBe('baseline');
+                expect(pair.hasAttribute('data-label-value-layout')).toBe(false);
+                const label = pair.querySelector('.two_line_label');
+                if (label) expect(getComputedStyle(label).flex).toBe('0 0 14rem');
+                else expect(pair.children).toHaveLength(1);
+                const value = pair.querySelector('.two_line_value');
+                expect(value.textContent).toBe(text);
+                expect(getComputedStyle(value).flex).toBe('1 1 auto');
+                expect(getComputedStyle(value).overflowWrap).toBe('anywhere');
+            }
+        };
+        assertArticleLayout();
+        applySiteLabelValueLayoutSetting(mode === 'stacked' ? 'inline' : 'stacked');
+        expect(article.outerHTML).toBe(originalMarkup);
+        assertArticleLayout();
+    });
 });
 
 describe.each(['standard', 'modern'])('site wrapping in %s style', style => {
@@ -142,6 +183,10 @@ describe.each(['standard', 'modern'])('site wrapping in %s style', style => {
                 const pair = host.querySelector('.label-value-layout');
                 expect(pair.dataset.labelValueLayout).toBe(mode);
                 expect(Boolean(pair.querySelector('.label-value-layout__label'))).toBe(showLabel);
+                // Generic wrappers receive their field name through the translation owner.
+                const label = pair.querySelector('.label-value-layout__label');
+                if (label?.classList.contains('kv_label')) label.textContent = 'Osoite';
+                if (label) expect(label.textContent).toBe('Osoite');
                 expect(pair.querySelector('.label-value-layout__value').textContent).toContain('https://example.test/long/path');
                 expect(pair.querySelector('.kv-dropped')).toBeNull();
                 const link = pair.querySelector('.label-value-layout__value a');
@@ -150,6 +195,7 @@ describe.each(['standard', 'modern'])('site wrapping in %s style', style => {
                 const nodes = [...pair.children];
                 applySiteLabelValueLayoutSetting(mode === 'stacked' ? 'inline' : 'stacked');
                 expect([...pair.children]).toEqual(nodes);
+                if (label) expect(label.textContent).toBe('Osoite');
                 applySiteLabelValueLayoutSetting(mode);
             }
         });
@@ -174,6 +220,9 @@ test.each(['stacked', 'inline', 'auto'])('experimental ordinary field pairs foll
     const pairs = [...card.querySelectorAll('.label-value-layout')];
     expect(pairs.length).toBeGreaterThanOrEqual(3);
     expect(pairs.every(pair => pair.dataset.labelValueLayout === mode)).toBe(true);
+    for (const label of card.querySelectorAll('.experimental-free-layout-card__label')) {
+        expect(label.textContent).not.toContain(':');
+    }
     const note = pairs.find(pair => pair.textContent === 'Hidden name value');
     expect(note.querySelector('.label-value-layout__label')).toBeNull();
     const blocks = [...card.querySelectorAll('[data-layout-block-id]')];

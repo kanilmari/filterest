@@ -27,7 +27,7 @@ dataset overrides.
 | Scope | Authoritative storage | Default / inheritance |
 | --- | --- | --- |
 | Site style | `system_config.json_value`, key `dataset_cover_theme_config`, path `shared.card_style_variant` | `modern` (Glowy); `standard` means Plain |
-| Site field wrapping | Same JSON row, path `shared.label_value_layout` | `stacked`; `inline`, or development-only `auto` |
+| Site card field wrapping | Same JSON row, path `shared.label_value_layout` | `stacked`; `inline`, or development-only `auto` |
 | Site columns | Same JSON row, path `shared.card_detail_columns` | 2; integer 1–4 |
 | Dataset style | `system_db_tables.card_style_variant` | NULL inherits the site |
 | Dataset columns | `system_db_tables.card_detail_columns` | NULL inherits the site |
@@ -108,7 +108,7 @@ the selected contain/cover behavior and image dimensions. This frame is separate
 from the article's outer container, whose side borders remain while its top and
 bottom borders are removed. Gallery selection borders retain their own meaning.
 
-## One field wrapping choice for the whole site
+## One card field wrapping choice for the whole site
 
 The **Site defaults** part of **Card layout** offers **Stacked** (Allekkain)
 and **Side by side** (Rinnakkain). Stacked is the default for missing or unknown
@@ -117,16 +117,24 @@ in development mode, using the same boundary as the experimental card.
 Production rejects saving Automatic and reads an older stored Automatic as Stacked.
 
 Every ordinary label/value pair follows this choice in Glowy and Plain result
-cards, every Plain detail layout, ordinary and Image First articles, and the
-experimental free-layout card. Inline keeps the label in the left 40% area and
+cards, every Plain detail layout, and the experimental free-layout card.
+Card field labels have no added colon in either arrangement or any detail layout.
+Inline keeps the label in the left 40% area and
 the value in the right 60% area even on narrow screens. Stacked puts the value
 below the label across the full pair width. Automatic retains the shared
 flex-wrap behavior with a 16ch value basis; no further smart measurement is used.
 Hidden labels stay hidden and label-free pairs use the full width. Result cards
-keep their two-line value preview, including related-record links; articles show
-the complete value. The card preview cap takes precedence over the shared value
+keep their two-line value preview, including related-record links.
+The card preview cap takes precedence over the shared value
 display reset. Link text participates in the capped lines, with its separate
 new-tab icon at the end and both links retaining their keyboard focus targets.
+
+Opened and Image First articles keep their existing article layout independently
+of this choice. Detail labels and values start on the same row, with the label's
+fixed width and long values wrapping in their own column. Hidden labels stay
+hidden and articles show the complete value. Article-only pair builders do not
+use the card layout adapter, so saved choices and live palette previews leave
+article pairs untouched.
 
 The shared adapter owns placement, separately from field visibility, typography
 and card surfaces. Style-specific placement overrides, the 720px tile placement
@@ -134,7 +142,7 @@ switch, the 400px pair-mode switch and Canvas value dropping no longer decide
 where the value starts. Responsive numbers of detail columns still work.
 
 The same preview/save/reset owner used by other site settings updates connected
-cards and articles in place. New pairs read the current site choice. Database
+card pairs in place. New card pairs read the current site choice. Database
 9.10.0 removes the obsolete `system_column_details.label_value_layout` column,
 including its CHECK and comment. The card visibility API and result metadata
 no longer return that field; the site JSON path remains the wrapping authority.

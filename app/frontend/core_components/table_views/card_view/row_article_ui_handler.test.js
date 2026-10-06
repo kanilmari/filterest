@@ -222,7 +222,7 @@ describe("dispatchCardArticleToggle", () => {
     });
 });
 
-describe("article shared field layout", () => {
+describe("article field layout stays independent of the site choice", () => {
     beforeEach(() => { delete document.documentElement.dataset.labelValueLayout; });
     test.each([null, "auto", "inline", "stacked"])(
         "preserves raw values, navigation and hidden labels for %s", (layout) => {
@@ -236,7 +236,9 @@ describe("article shared field layout", () => {
             const hidden = createRowArticleKeyValueElement("Hidden label", "Visible value", "hidden", false,
                 "big_card_detail_value", false, null, "raw hidden", metadata);
             for (const element of [text, navigation, hidden]) {
-                expect(element.dataset.labelValueLayout).toBe("stacked");
+                expect(element.dataset.labelValueLayout).toBeUndefined();
+                expect(element.querySelector('.label-value-layout__label, .label-value-layout__value')).toBeNull();
+                expect(element.classList.contains('label-value-layout')).toBe(false);
             }
             expect(text.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("raw text");
             expect(text.textContent).toContain("Original text");

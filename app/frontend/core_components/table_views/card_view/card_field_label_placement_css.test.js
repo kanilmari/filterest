@@ -1,5 +1,5 @@
 // card_field_label_placement_css.test.js
-// Guards punctuation and the result-card preview cap in the shared CSS cascade.
+// Guards unpunctuated labels and the result-card preview cap in the shared CSS cascade.
 // Connects renderer markup with styles that must preserve the site's wrapping choice.
 // Prevents legacy width switches from placing fields independently of that choice.
 // @vitest-environment jsdom
@@ -14,22 +14,17 @@ const CSS_PATH = resolve(CURRENT_DIR, 'card_field_label_placement.css');
 const IMPORTS_PATH = resolve(CURRENT_DIR, '../../../styles/imports.css');
 
 describe('card field label placement CSS', () => {
-    test('draws the colon from style, not from the translated element', () => {
-        const css = readFileSync(CSS_PATH, 'utf8');
-
-        expect(css).toContain('.key_value_wrapper[data-card-label-placement="inline"] > .kv_label::after');
-        expect(css).toContain('content: ":"');
-    });
-
-    test('draws the same colon for the card detail renderers', () => {
-        const css = readFileSync(CSS_PATH, 'utf8');
-
-        expect(css).toContain(
-            '.card_details_kv [data-card-label-placement="inline"] > .card_detail_tile_label::after'
-        );
-        expect(css).toContain(
-            '.card_details_kv [data-card-label-placement="inline"] .card_detail_row_label_text::after'
-        );
+    test('adds no colon to labels in any card style or detail variant', () => {
+        const stylesheets = [
+            CSS_PATH,
+            resolve(CURRENT_DIR, 'cards.css'),
+            resolve(CURRENT_DIR, '../experimental_free_layout_card/experimental_free_layout_card.css'),
+            resolve(CURRENT_DIR, '../../../reusable_components/key_value_container/kv_container.css'),
+            resolve(CURRENT_DIR, '../../../reusable_components/key_value_container/label_value_layout.css'),
+        ];
+        for (const path of stylesheets) {
+            expect(readFileSync(path, 'utf8'), path).not.toMatch(/content:\s*["']:/);
+        }
     });
 
     test('keeps a card detail value capped at two lines in every arrangement', () => {

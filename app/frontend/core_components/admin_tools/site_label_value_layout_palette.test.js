@@ -1,6 +1,6 @@
 // site_label_value_layout_palette.test.js
 // Verifies the site selector's language keys, development-only option and preview/save/reset.
-// Connects the real palette owner and shared state with connected card and article pairs.
+// Connects the real palette owner and shared state with cards while leaving articles alone.
 // Ensures saved wrapping survives remounts and failed saves never claim success.
 // @vitest-environment jsdom
 
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mountDatasetCoverTestPalette } from './dataset_cover_test_palette.js';
 import { DEFAULT_DATASET_COVER_THEME, resetSitePresentationStatesForTests } from './site_presentation_state.js';
 import { applyLabelValueLayout } from '../../reusable_components/key_value_container/label_value_layout.js';
+import { createRowArticleKeyValueElement, createRowArticleNavigableElement } from '../table_views/card_view/row_article_ui_handler.js';
 
 beforeEach(() => {
     document.body.replaceChildren(); document.head.replaceChildren();
@@ -46,22 +47,34 @@ test.each(['stacked', 'inline', 'auto'])('previews, saves, resets and restores t
     document.head.innerHTML = '<meta name="app-env" content="dev">';
     const pair = document.createElement('div'); pair.innerHTML = '<span>Osoite</span><span>Visible value</span>';
     applyLabelValueLayout(pair, pair.firstChild, pair.lastChild); document.body.append(pair);
+    const article = document.createElement('article');
+    article.innerHTML = '<div class="big_card_details_container"></div>';
+    article.firstChild.append(
+        createRowArticleKeyValueElement('Osoite', 'Artikkelin arvo', 'website', false, 'big_card_detail_value'),
+        createRowArticleNavigableElement({ label: 'Viite', value: 'Artikkelin viite', href: '/example/7' }),
+    );
+    document.body.append(article);
+    const articleMarkup = article.outerHTML;
     const nodes = [...pair.children];
     const { mounted, select, button, options } = await mountWrappingPalette();
     select.value = choice; select.dispatchEvent(new Event('change'));
     expect(pair.dataset.labelValueLayout).toBe(choice);
+    expect(article.outerHTML).toBe(articleMarkup);
     expect(options.saveRequestFn).not.toHaveBeenCalled();
     button('tab-dark').click(); expect(select.value).toBe(choice);
     button('card-style').value = 'standard'; button('card-style').dispatchEvent(new Event('change'));
     expect(pair.dataset.labelValueLayout).toBe(choice);
     button('reset').click(); expect(select.value).toBe('stacked'); expect(pair.dataset.labelValueLayout).toBe('stacked');
+    expect(article.outerHTML).toBe(articleMarkup);
     select.value = choice; select.dispatchEvent(new Event('change')); button('save').click();
     await vi.waitFor(() => expect(button('save').disabled).toBe(false));
     expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.label_value_layout).toBe(choice);
     select.value = 'stacked'; select.dispatchEvent(new Event('change')); mounted.destroy();
     expect(pair.dataset.labelValueLayout).toBe(choice); expect([...pair.children]).toEqual(nodes);
+    expect(article.outerHTML).toBe(articleMarkup);
     const again = await mountWrappingPalette({ settingsRequestFn: options.settingsRequestFn });
     expect(again.select.value).toBe(choice);
+    expect(article.outerHTML).toBe(articleMarkup);
     again.mounted.destroy();
 });
 

@@ -105,14 +105,14 @@ describe('the card field the renderer builds', () => {
             .toBe('A long summary of this row.');
     });
 
-    test('puts a short value name on the same line, ready for its colon', () => {
+    test('keeps a short value name visible for translation without punctuation', () => {
         const element = renderCardField('price', '129 €', {
             card_element: 'details', data_type: 'numeric(10,2)', label_value_layout: null,
         });
 
         expect(placement(element)).toBe('inline');
         expect(label(element)?.dataset.langKey).toBe('price');
-        // The colon is styled, never written into the element the translator rewrites.
+        // The translation owner supplies the name without an added colon.
         expect(label(element)?.textContent).toBe('');
     });
 

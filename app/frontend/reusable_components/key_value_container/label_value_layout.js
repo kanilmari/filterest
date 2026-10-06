@@ -1,6 +1,6 @@
 // label_value_layout.js
 // Applies the site-wide label/value arrangement without changing field visibility or contents.
-// Connects shared presentation settings, live palette previews and every pair renderer.
+// Connects shared presentation settings, live palette previews and result-card pair renderers.
 // One adapter keeps placement independent of card style and column metadata.
 
 import { isExperimentalFreeLayoutAvailable } from "../../core_components/table_views/experimental_free_layout_card/experimental_free_layout_card_store.js";
@@ -15,7 +15,7 @@ export function readSiteLabelValueLayout() {
     return normalizeLabelValueLayout(document.documentElement.dataset.labelValueLayout);
 }
 
-/** Project the saved choice or palette preview onto connected cards and articles in place. */
+/** Project the saved choice or palette preview onto connected card pairs in place. */
 export function applySiteLabelValueLayoutSetting(setting) {
     const layout = normalizeLabelValueLayout(setting);
     document.documentElement.dataset.labelValueLayout = layout;

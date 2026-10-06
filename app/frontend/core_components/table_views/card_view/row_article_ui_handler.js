@@ -3,7 +3,6 @@
 // Bridges card content rendering and navigation state with the expanded article experience.
 // Exists to keep article-view interaction rules centralized instead of scattering them across card builders.
 
-import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 import {
@@ -76,9 +75,9 @@ function appendOpenInNewTabIcon(linkElement) {
 }
 
 /**
- * Luo avain–arvo-elementin kahdelle riville.
- *  • Label-riville asetetaan data-lang-key = "<sarakkeen_nimi>".
- *  • Fallback-tekstinä näytetään edelleen format_column_name:in palauttama arvo.
+ * Build an article field pair with a translated label and its complete value.
+ * Article CSS keeps detail labels and values on one row; result-card wrapping
+ * settings and palette previews must never mark or rearrange these pairs.
  */
 export function createRowArticleKeyValueElement(
     label,
@@ -136,10 +135,10 @@ export function createRowArticleKeyValueElement(
     }
 
     container.appendChild(valueDiv);
-    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv);
     return container;
 }
 
+/** Build an article link pair using the same article-owned layout as text fields. */
 export function createRowArticleNavigableElement({
     label,
     labelKey,
@@ -217,7 +216,6 @@ export function createRowArticleNavigableElement({
     }
 
     container.appendChild(valueDiv);
-    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv);
     return container;
 }
 

@@ -1,6 +1,6 @@
 /* label_value_layout.css
  * Arranges configured field pairs while inheriting existing theme surfaces and typography.
- * Connects the shared site choice to standard/modern cards and article details.
+ * Connects the shared site choice to result-card pairs; articles keep their own CSS.
  * Keeps explicit inline/stacked choices stable and lets auto reflow with text and width.
  */
 :root .label-value-layout[data-label-value-layout] {
