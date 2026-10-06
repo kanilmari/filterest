@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // sse_subscriber.test.js
-// Verifies shared SSE subscribe behavior for guest and authenticated browsing modes.
-// Bridges local auth-state cache, EventSource setup, and the centralized subscriber module.
-// Exists to stop guest/public browsing from reopening a forbidden SSE stream on every navigation.
+// Verifies shared SSE lifecycle for guest, authenticated and ended sign-ins.
+// Bridges local auth state, EventSource events, reconnects and dataset refresh timers.
+// Exists to keep guests and ended sign-ins from reopening a forbidden stream.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -80,6 +80,69 @@ describe('sse_subscriber', () => {
         expect(globalThis.EventSource).toHaveBeenCalledWith(
             '/api/sse/subscribe?datasets=app_service_catalog'
         );
+        expect(eventSourceAddEventListenerMock).toHaveBeenCalledWith(
+            'session_ended', expect.any(Function)
+        );
+    });
+
+    test('closes an ended sign-in stream and suppresses reconnects across navigation', async () => {
+        vi.useFakeTimers();
+        localStorage.setItem('button_state', 'logout');
+        const mod = await loadModule();
+        mod.setSSEActiveDataset('app_service_catalog');
+        const source = globalThis.EventSource.mock.instances[0];
+        const sessionEndedListener = eventSourceAddEventListenerMock.mock.calls
+            .find(([eventName]) => eventName === 'session_ended')[1];
+
+        sessionEndedListener({ data: '' });
+        source.onerror(); // A queued transport error must not restart the stream.
+        mod.setSSEActiveDataset('orders');
+        window.dispatchEvent(new Event('pageshow'));
+        mod.clearSSEActiveDataset();
+        mod.setSSEActiveDataset('orders');
+        await vi.advanceTimersByTimeAsync(30000);
+
+        expect(eventSourceCloseMock).toHaveBeenCalledTimes(1);
+        expect(globalThis.EventSource).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('button_state')).toBe('logout');
+    });
+
+    test('cancels pending refresh and reconnect timers when the sign-in ends', async () => {
+        vi.useFakeTimers();
+        localStorage.setItem('button_state', 'logout');
+        const mod = await loadModule();
+        mod.setSSEActiveDataset('orders');
+        const source = globalThis.EventSource.mock.instances[0];
+        const rowChangeListener = eventSourceAddEventListenerMock.mock.calls
+            .find(([eventName]) => eventName === 'row_change')[1];
+        const sessionEndedListener = eventSourceAddEventListenerMock.mock.calls
+            .find(([eventName]) => eventName === 'session_ended')[1];
+
+        rowChangeListener({ data: JSON.stringify({ table: 'orders' }) });
+        source.onerror();
+        sessionEndedListener({ data: '' });
+        rowChangeListener({ data: JSON.stringify({ table: 'orders' }) });
+        await vi.advanceTimersByTimeAsync(30000);
+
+        expect(globalThis.EventSource).toHaveBeenCalledTimes(1);
+        expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
+        expect(doIntelligentSearchMock).not.toHaveBeenCalled();
+        expect(rerenderCachedSearchResultsMock).not.toHaveBeenCalled();
+    });
+
+    test('still reconnects after an ordinary transport error', async () => {
+        vi.useFakeTimers();
+        localStorage.setItem('button_state', 'logout');
+        const mod = await loadModule();
+        mod.setSSEActiveDataset('orders');
+        const source = globalThis.EventSource.mock.instances[0];
+
+        source.onerror();
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(eventSourceCloseMock).toHaveBeenCalledTimes(1);
+        expect(globalThis.EventSource).toHaveBeenCalledTimes(2);
+        mod.clearSSEActiveDataset();
     });
 
     test('closes the active SSE stream on pagehide without starting a new one', async () => {

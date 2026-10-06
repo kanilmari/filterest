@@ -1,10 +1,11 @@
 // sse_handler.go
-// HTTP SSE endpoint for streaming table mutation metadata to authenticated browser clients.
-// Bridges table subscriptions from query params and event-bus channels into text/event-stream frames.
-// Exists to provide one reusable realtime endpoint that keeps payloads metadata-only for safety.
+// HTTP SSE endpoint for streaming table mutation metadata to authorized browser clients.
+// Bridges dataset subscriptions, current sign-in checks and event-bus channels into SSE frames.
+// Exists to keep payloads metadata-only and end a signed-in stream when its sign-in ends.
 package event_bus
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,6 +25,7 @@ const sseDatasetReadPermissionRoute = "/api/get-results"
 type sseDatasetAuthorizer func(*http.Request, string) (int, error)
 type sseDatasetSubscriber func(string) (<-chan Event, func())
 type sseEventAuthorizer func(*http.Request, Event) (bool, error)
+type sseSessionValidator func(*http.Request) (bool, error)
 
 // SSESubscribeHandler streams row_change events for subscribed datasets.
 func SSESubscribeHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +35,8 @@ func SSESubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		authorizeSSEDatasetSubscription,
 		Bus.Subscribe,
 		authorizeSSEEventRead,
+		validateSSESession,
+		nil,
 	)
 }
 
@@ -42,6 +46,8 @@ func serveSSESubscription(
 	authorize sseDatasetAuthorizer,
 	subscribe sseDatasetSubscriber,
 	authorizeEvent sseEventAuthorizer,
+	validateSession sseSessionValidator,
+	keepalive <-chan time.Time,
 ) {
 
 	flusher, ok := w.(http.Flusher)
@@ -89,7 +95,9 @@ func serveSSESubscription(
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	eventStream := make(chan Event, 64)
-	done := r.Context().Done()
+	streamContext, cancelStream := context.WithCancel(r.Context())
+	defer cancelStream()
+	done := streamContext.Done()
 	unsubscribers := make([]func(), 0, len(datasets))
 
 	for _, dataset := range datasets {
@@ -104,10 +112,9 @@ func serveSSESubscription(
 					if !open {
 						return
 					}
-					if !shouldForwardSSEEvent(r, event, authorizeEvent) {
-						continue
-					}
 					select {
+					case <-done:
+						return
 					case eventStream <- event:
 					default:
 					}
@@ -125,17 +132,55 @@ func serveSSESubscription(
 	fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
 
-	keepaliveTicker := time.NewTicker(15 * time.Second)
-	defer keepaliveTicker.Stop()
+	if keepalive == nil {
+		keepaliveTicker := time.NewTicker(15 * time.Second)
+		defer keepaliveTicker.Stop()
+		keepalive = keepaliveTicker.C
+	}
+
+	// Keep the same request's sign-in and browser binding, but ask the shared
+	// authentication boundary for current state on every tick and row event.
+	// A failed read also closes the stream: continuing would send metadata
+	// without knowing whether the captured actor may still be used.
+	sessionStillValid := func() bool {
+		valid := false
+		var err error
+		if validateSession != nil {
+			valid, err = validateSession(r)
+		}
+		if valid && err == nil {
+			return true
+		}
+		if err != nil {
+			log.Printf("\033[31m[SSESubscribeHandler] session validation failed: %v\033[0m", err)
+		}
+		// EventSource dispatches a named event only when it has a data line.
+		// The empty data field carries no account or sign-in information.
+		fmt.Fprint(w, "event: session_ended\ndata:\n\n")
+		flusher.Flush()
+		return false
+	}
 
 	for {
 		select {
 		case <-done:
 			return
-		case <-keepaliveTicker.C:
+		case <-keepalive:
+			if !sessionStillValid() {
+				return
+			}
 			fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		case event := <-eventStream:
+			allowed := shouldForwardSSEEvent(r, event, authorizeEvent)
+			// Check after row authorization, which can wait for a database read,
+			// and at delivery even for events queued while the sign-in was valid.
+			if !sessionStillValid() {
+				return
+			}
+			if !allowed {
+				continue
+			}
 			payload, err := json.Marshal(event)
 			if err != nil {
 				continue
@@ -144,6 +189,27 @@ func serveSSESubscription(
 			flusher.Flush()
 		}
 	}
+}
+
+// validateSSESession reuses the protected request's authentication and browser
+// binding checks without renewing cookies or changing normal sign-in handling.
+// Guests have no sign-in to expire; their existing dataset and row checks remain.
+func validateSSESession(r *http.Request) (bool, error) {
+	session, err := e_sessions.Load(r)
+	if err != nil {
+		return false, err
+	}
+	userID, readable := session.Values["user_id"].(int)
+	if !readable {
+		return false, nil
+	}
+	if userID <= 1 {
+		return true, nil
+	}
+	if !e_sessions.RequestCarriesSessionBinding(r, session) {
+		return false, nil
+	}
+	return backend.AuthenticatedSessionMatches(r.Context(), backend.DbConfidential, session, userID)
 }
 
 // shouldForwardSSEEvent fails closed between a process-internal dataset event

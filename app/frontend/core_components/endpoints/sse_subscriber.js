@@ -25,6 +25,7 @@ let reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
 let reconnectTimer = null;
 const refreshDebounceTimers = new Map();
 let pageUnloadInProgress = false;
+let sessionEnded = false;
 
 function beginPageUnload() {
     pageUnloadInProgress = true;
@@ -116,6 +117,7 @@ function scheduleReconnect() {
 }
 
 function handleRowChangeEvent(event) {
+    if (sessionEnded) return;
     let payload = null;
     try {
         payload = JSON.parse(event.data);
@@ -131,11 +133,20 @@ function handleRowChangeEvent(event) {
     scheduleDebouncedRefresh(tableName);
 }
 
+function handleSessionEndedEvent() {
+    // Stop this page's stream without changing the shared sign-in flow. The
+    // next request will meet the normal authentication boundary.
+    sessionEnded = true;
+    cleanupReconnectTimer();
+    closeAllRefreshTimers();
+    closeEventSource();
+}
+
 function connectIfNeeded() {
     cleanupReconnectTimer();
     closeEventSource();
 
-    if (pageUnloadInProgress) {
+    if (pageUnloadInProgress || sessionEnded) {
         return;
     }
 
@@ -155,12 +166,13 @@ function connectIfNeeded() {
     const streamURL = `${SSE_SUBSCRIBE_PATH}?${queryString}`;
     eventSource = new EventSource(streamURL);
     eventSource.addEventListener("row_change", handleRowChangeEvent);
+    eventSource.addEventListener("session_ended", handleSessionEndedEvent);
     eventSource.onopen = () => {
         reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
     };
     eventSource.onerror = () => {
         closeEventSource();
-        if (pageUnloadInProgress) {
+        if (pageUnloadInProgress || sessionEnded) {
             return;
         }
         scheduleReconnect();
