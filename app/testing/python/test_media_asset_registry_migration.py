@@ -59,11 +59,22 @@ APP = MIGRATION.parents[2]
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 INSERT_SOURCE = APP / "backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create/create_table.go"
 CHECK_SOURCE = APP / "backend/core_components/system_table_tools/database_consistency_check_queries.go"
+REGISTRY_SOURCE = APP / "backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy/internal_registry_tables.go"
+
+
+def _internal_registry_tables():
+    listed = re.search(r"var InternalRegistryTables = \[\]string\{(.*?)\}", REGISTRY_SOURCE.read_text(), re.S)[1]
+    return re.findall(r'"([a-z0-9_]+)"', listed)
 
 
 def _actual_catalog_query(path, function, variable):
     body = path.read_text().split("func " + function, 1)[1]
-    return re.search(variable + r" := `(.*?)`", body, re.S)[1]
+    query = re.search(variable + r" := `(.*?)`", body, re.S)[1]
+    # Both Go callers bind $1 to row_mutation_policy.InternalRegistryTables; bind the same list here.
+    names = ",".join(f"'{name}'" for name in _internal_registry_tables())
+    query = query.replace("$1::text[]", f"ARRAY[{names}]::text[]")
+    assert "$" not in query, "the catalog query gained a parameter this test does not bind"
+    return query
 
 
 def _assert_registry_policy(database):

@@ -8,6 +8,7 @@ export interface ErrorBody {
     error: string;
     code: number;
     auth_failure?: boolean;
+    error_lang_key?: string;
 }
 
 export interface AuthModesResponse {
