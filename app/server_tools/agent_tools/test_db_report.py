@@ -246,6 +246,35 @@ class DBReportCLITest(unittest.TestCase):
             },
         )
 
+    def test_handover_show_as_written_asks_for_the_manifest_versions(self):
+        with patch("builtins.print"):
+            exit_code = db_report.main(["handover", "show", "98", "--as-written"], client_factory=CapturingClient)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            CapturingClient.instances[0].calls[0]["query"],
+            {"id": 98, "as_written": "true"},
+        )
+
+    def test_handover_comment_patches_a_note_with_csrf(self):
+        with patch("builtins.print"):
+            exit_code = db_report.main(
+                ["handover", "comment", "98", "--text", "Erä 19 odottaa c+p:tä."],
+                client_factory=CapturingClient,
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            CapturingClient.instances[0].calls[0],
+            {
+                "method": "PATCH",
+                "path": db_report.HANDOVERS_PATH,
+                "data": {"id": 98, "comment": "Erä 19 odottaa c+p:tä."},
+                "query": None,
+                "csrf": True,
+            },
+        )
+
     def test_parse_handover_items_preserves_order(self):
         self.assertEqual(
             db_report.parse_handover_items(["4:10", "7:22"]),

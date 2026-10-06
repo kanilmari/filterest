@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeHandoverReportCreateRejectsDuplicateWorklines(t *testing.T) {
@@ -123,5 +124,74 @@ func TestRenderHandoverMarkdownNamesOpenPhaseSixWorklines(t *testing.T) {
 	}
 	if strings.Contains(markdown, "WL119 (") || strings.Contains(markdown, "WL103 (") {
 		t.Fatalf("closed or unfinished line named among open phase-6 lines: %s", markdown)
+	}
+}
+
+func TestRenderHandoverMarkdownReadsCommentsFirstAndNewestReports(t *testing.T) {
+	line := func(id, reportID int64, title string, phase int) AgentWorklineReport {
+		return AgentWorklineReport{ID: reportID, WorklineID: id, WorklineTitle: title, WorklineStatusSnapshot: "active",
+			PhaseGate: "3-4", CurrentPhase: phase, State: "final", Content: "**Konteksti:** " + title + "."}
+	}
+	handover := AgentHandoverReport{
+		Title: "Jatkokonteksti",
+		State: "final",
+		Items: []AgentHandoverReportItem{
+			{Report: line(132, 1240, "Kirjautumisnimi", 4), PinnedReportID: 1230},
+			{Report: line(103, 1241, "Kategoriat", 4)},
+		},
+		OpenedAfter: []AgentHandoverReportItem{{Report: line(153, 1250, "Uusi linja", 6)}},
+		Comments: []AgentHandoverComment{
+			{Text: "WL52: ok\nannettu chatissa", Username: "omistaja", CreatedAt: time.Date(2026, 10, 6, 22, 10, 0, 0, time.Local)},
+			{Text: "Erä 19 odottaa c+p:tä.", CreatedAt: time.Date(2026, 10, 6, 22, 15, 0, 0, time.Local)},
+		},
+	}
+	markdown := renderHandoverMarkdown(handover)
+	for _, expected := range []string{
+		"Jokainen linja näytetään uusimman raporttinsa mukaan",
+		"\n**Kommentit handoveriin (2):**\n\n- 6.10.2026 klo 22.10, omistaja: WL52: ok annettu chatissa\n" +
+			"- 6.10.2026 klo 22.15: Erä 19 odottaa c+p:tä.\n",
+		"\n## Kirjautumisnimi — WL132 — 4\n\n_Päivitetty handoverin jälkeen: raportti #1240 korvaa handoverin raportin #1230._",
+		"\n## Uusi linja — WL153 — 6\n\n_Ei tässä handoverissa: avoin linja",
+		"**Vaiheessa 6 mutta yhä avoinna:** WL153 (Uusi linja).",
+	} {
+		if !strings.Contains(markdown, expected) {
+			t.Fatalf("Markdown missing %q: %s", expected, markdown)
+		}
+	}
+	// Comments are read before any workline, and an unchanged line carries no update note.
+	if strings.Index(markdown, "Kommentit handoveriin") > strings.Index(markdown, "\n## ") {
+		t.Fatalf("comments must precede the worklines: %s", markdown)
+	}
+	if strings.Count(markdown, "_Päivitetty handoverin jälkeen:") != 1 {
+		t.Fatalf("update note expected only for the replaced report: %s", markdown)
+	}
+	if strings.Index(markdown, "WL153 — 6") < strings.Index(markdown, "WL103 — 4") {
+		t.Fatalf("lines missing from the manifest must follow its own lines: %s", markdown)
+	}
+}
+
+func TestRenderHandoverMarkdownAsWrittenKeepsManifestVersions(t *testing.T) {
+	markdown := renderHandoverMarkdown(AgentHandoverReport{Title: "Jatkokonteksti", State: "final", AsWritten: true,
+		Items: []AgentHandoverReportItem{{Report: AgentWorklineReport{WorklineID: 1, WorklineTitle: "Linja",
+			WorklineStatusSnapshot: "active", CurrentPhase: 2, State: "superseded", Content: "**Konteksti:** x."}}}})
+	if strings.Contains(markdown, "uusimman raporttinsa mukaan") || !strings.Contains(markdown, "_Raportin nykytila: superseded._") {
+		t.Fatalf("as-written rendering changed: %s", markdown)
+	}
+}
+
+func TestNormalizeHandoverCommentScreensLengthAndSecrets(t *testing.T) {
+	if text, err := normalizeHandoverComment("  Erä 19 pushattu.  "); err != nil || text != "Erä 19 pushattu." {
+		t.Fatalf("valid comment = %q, %v", text, err)
+	}
+	for _, rejected := range []string{"   ", strings.Repeat("ä", maxHandoverCommentRunes+1)} {
+		if _, err := normalizeHandoverComment(rejected); err == nil {
+			t.Fatalf("comment of %d runes accepted", len([]rune(rejected)))
+		}
+	}
+	credential := "sk-" + strings.Repeat("B8", 12)
+	_, err := normalizeHandoverComment("avain " + credential)
+	if err == nil || !strings.Contains(err.Error(), "handover_comment_rejected_secret_detected") ||
+		strings.Contains(err.Error(), credential) {
+		t.Fatalf("secret screening error = %v", err)
 	}
 }

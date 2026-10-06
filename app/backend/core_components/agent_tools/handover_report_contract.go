@@ -34,6 +34,9 @@ type AgentHandoverReport struct {
 	CreatedAt            time.Time                 `json:"created_at"`
 	StateChangedAt       time.Time                 `json:"state_changed_at"`
 	Items                []AgentHandoverReportItem `json:"items,omitempty"`
+	OpenedAfter          []AgentHandoverReportItem `json:"opened_after,omitempty"`
+	Comments             []AgentHandoverComment    `json:"comments,omitempty"`
+	AsWritten            bool                      `json:"as_written,omitempty"`
 	Markdown             string                    `json:"markdown,omitempty"`
 }
 
@@ -42,7 +45,20 @@ type AgentHandoverReportItem struct {
 	HandoverReportID int64               `json:"handover_report_id"`
 	SortOrder        int                 `json:"sort_order"`
 	Report           AgentWorklineReport `json:"report"`
+	// PinnedReportID names the manifest's own report when a newer final report of the line is rendered instead.
+	PinnedReportID int64 `json:"pinned_report_id,omitempty"`
 }
+
+// AgentHandoverComment is a note on a handover in the shared row-comment store: the owner's from the
+// application, an agent's through the screened handover API. The manifest itself never changes.
+type AgentHandoverComment struct {
+	ID        int64     `json:"id"`
+	Text      string    `json:"text"`
+	Username  string    `json:"username,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+const maxHandoverCommentRunes = 5000
 
 type handoverReportItemCreateRequest struct {
 	WorklineID       int64 `json:"workline_id"`
@@ -66,8 +82,22 @@ type normalizedHandoverReportCreate struct {
 }
 
 type handoverReportPatchRequest struct {
-	ID    int64   `json:"id"`
-	State *string `json:"state"`
+	ID      int64   `json:"id"`
+	State   *string `json:"state"`
+	Comment *string `json:"comment"`
+}
+
+// normalizeHandoverComment keeps a comment within the shared store's length check and out of reach of secrets,
+// as every other handover and report text is.
+func normalizeHandoverComment(text string) (string, error) {
+	normalized, err := normalizeBoundedText(text, "comment", maxHandoverCommentRunes)
+	if err != nil {
+		return "", err
+	}
+	if category := detectReportSecret(normalized); category != "" {
+		return "", fmt.Errorf("handover_comment_rejected_secret_detected:%s", category)
+	}
+	return normalized, nil
 }
 
 type validatedHandoverItem struct {
@@ -205,37 +235,69 @@ func openPhaseSixWorklines(items []AgentHandoverReportItem) []string {
 // renderHandoverMarkdown follows the chat status format: each workline is a level-two
 // heading "<title> — WL<id> — <exact phase>", and nothing else uses a heading that large.
 // Open phase-6 lines are named once above the sections, so a finished-looking line is not taken as closed.
+// Comments come right after the introduction, so the next chat reads them first (owner K248).
 func renderHandoverMarkdown(handover AgentHandoverReport) string {
 	var builder strings.Builder
 	builder.WriteString("**")
 	builder.WriteString(handover.Title)
 	builder.WriteString("**\n\n")
 	builder.WriteString("Tämä on viimeisimmän chatin kanoninen jatkokonteksti. Jatka alla kuvatuista tiloista.\n")
-	if open := openPhaseSixWorklines(handover.Items); len(open) > 0 {
+	if !handover.AsWritten && handover.State == "final" {
+		builder.WriteString("Jokainen linja näytetään uusimman raporttinsa mukaan, ja handoverin jälkeen avatut linjat " +
+			"ovat lopussa.\n")
+	}
+	allItems := append(append([]AgentHandoverReportItem{}, handover.Items...), handover.OpenedAfter...)
+	if open := openPhaseSixWorklines(allItems); len(open) > 0 {
 		builder.WriteString("\n**Vaiheessa 6 mutta yhä avoinna:** ")
 		builder.WriteString(strings.Join(open, ", "))
 		builder.WriteString(". Vaihe 6 ei sulje linjaa: kukin odottaa omistajan hyväksyntää (`WL<n>: ok`) " +
 			"tai raporttinsa seuraavaa askelta.\n")
 	}
-	for _, item := range handover.Items {
-		builder.WriteString(fmt.Sprintf("\n## %s — WL%d — %d\n\n",
-			item.Report.WorklineTitle, item.Report.WorklineID, item.Report.CurrentPhase))
-		if status := item.Report.WorklineStatusSnapshot; status != "active" {
-			label, known := handoverWorklineStatusLabels[status]
-			if !known {
-				label = status
+	if len(handover.Comments) > 0 {
+		builder.WriteString(fmt.Sprintf("\n**Kommentit handoveriin (%d):**\n\n", len(handover.Comments)))
+		for _, comment := range handover.Comments {
+			builder.WriteString("- ")
+			builder.WriteString(comment.CreatedAt.Local().Format("2.1.2006 klo 15.04"))
+			if comment.Username != "" {
+				builder.WriteString(", " + comment.Username)
 			}
-			builder.WriteString("_Työlinjan tila: ")
-			builder.WriteString(label)
-			builder.WriteString("._\n\n")
+			builder.WriteString(": ")
+			builder.WriteString(strings.Join(strings.Fields(comment.Text), " "))
+			builder.WriteString("\n")
 		}
-		if item.Report.State != "final" {
-			builder.WriteString("_Raportin nykytila: ")
-			builder.WriteString(item.Report.State)
-			builder.WriteString("._\n\n")
-		}
-		builder.WriteString(strings.TrimSpace(item.Report.Content))
-		builder.WriteString("\n")
+	}
+	for _, item := range handover.Items {
+		writeHandoverWorklineSection(&builder, item, "")
+	}
+	for _, item := range handover.OpenedAfter {
+		writeHandoverWorklineSection(&builder, item,
+			"_Ei tässä handoverissa: avoin linja, joka avattiin handoverin jälkeen tai puuttuu siitä._\n\n")
 	}
 	return strings.TrimSpace(builder.String()) + "\n"
+}
+
+func writeHandoverWorklineSection(builder *strings.Builder, item AgentHandoverReportItem, note string) {
+	builder.WriteString(fmt.Sprintf("\n## %s — WL%d — %d\n\n",
+		item.Report.WorklineTitle, item.Report.WorklineID, item.Report.CurrentPhase))
+	builder.WriteString(note)
+	if item.PinnedReportID != 0 {
+		builder.WriteString(fmt.Sprintf("_Päivitetty handoverin jälkeen: raportti #%d korvaa handoverin raportin #%d._\n\n",
+			item.Report.ID, item.PinnedReportID))
+	}
+	if status := item.Report.WorklineStatusSnapshot; status != "active" {
+		label, known := handoverWorklineStatusLabels[status]
+		if !known {
+			label = status
+		}
+		builder.WriteString("_Työlinjan tila: ")
+		builder.WriteString(label)
+		builder.WriteString("._\n\n")
+	}
+	if item.Report.State != "final" {
+		builder.WriteString("_Raportin nykytila: ")
+		builder.WriteString(item.Report.State)
+		builder.WriteString("._\n\n")
+	}
+	builder.WriteString(strings.TrimSpace(item.Report.Content))
+	builder.WriteString("\n")
 }

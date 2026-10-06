@@ -501,8 +501,15 @@ def command_handover_list(args, client):
         print_handover(report, include_markdown=False)
 
 
+def handover_read_query(args, query: dict) -> dict:
+    # A final handover prints each line's newest report; --as-written keeps the manifest's own versions.
+    if getattr(args, "as_written", False):
+        query["as_written"] = "true"
+    return query
+
+
 def command_handover_show(args, client):
-    result = request(client, "GET", HANDOVERS_PATH, query={"id": args.id})
+    result = request(client, "GET", HANDOVERS_PATH, query=handover_read_query(args, {"id": args.id}))
     if args.json:
         print_json(result)
     else:
@@ -510,11 +517,19 @@ def command_handover_show(args, client):
 
 
 def command_handover_latest(args, client):
-    result = request(client, "GET", HANDOVERS_PATH, query={"latest": "true"})
+    result = request(client, "GET", HANDOVERS_PATH, query=handover_read_query(args, {"latest": "true"}))
     if args.json:
         print_json(result)
     else:
         print_handover(result)
+
+
+def command_handover_comment(args, client):
+    result = request(client, "PATCH", HANDOVERS_PATH, data={"id": args.id, "comment": args.text})
+    if args.json:
+        print_json(result)
+    else:
+        print(f"Comment added to handover #{args.id}; it prints near the top of the handover.")
 
 
 def command_handover_add(args, client):
@@ -727,12 +742,22 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_list_arguments(handover_list)
     handover_list.set_defaults(func=command_handover_list)
 
+    as_written_help = "Show the manifest's own report versions instead of each line's newest report"
     handover_show = handover_commands.add_parser("show", help="Render one full handover")
     handover_show.add_argument("id", type=int)
+    handover_show.add_argument("--as-written", action="store_true", help=as_written_help)
     handover_show.set_defaults(func=command_handover_show)
 
     handover_latest = handover_commands.add_parser("latest", help="Render the latest final handover")
+    handover_latest.add_argument("--as-written", action="store_true", help=as_written_help)
     handover_latest.set_defaults(func=command_handover_latest)
+
+    handover_comment = handover_commands.add_parser(
+        "comment", help="Add a screened note that prints with the handover instead of writing a new one"
+    )
+    handover_comment.add_argument("id", type=int)
+    handover_comment.add_argument("--text", required=True)
+    handover_comment.set_defaults(func=command_handover_comment)
 
     handover_add = handover_commands.add_parser("add", help="Create an immutable handover manifest")
     handover_add.add_argument("--title", required=True)

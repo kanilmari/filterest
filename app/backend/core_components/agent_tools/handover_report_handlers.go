@@ -1,6 +1,7 @@
 // handover_report_handlers.go
 // Serves immutable chat handover manifests assembled from exact workline report versions.
-// Bridges authenticated Agent Tools requests with ordered report references and rendered continuation context.
+// Bridges authenticated Agent Tools requests with ordered report references and rendered continuation context;
+// reading a final handover shows each line's newest report and its comments (handover_report_reading.go).
 // Exists so later chats can load one canonical handover without replaying raw conversation history.
 package agent_tools
 
@@ -144,13 +145,14 @@ func fetchHandoverReportItems(handoverID int64) ([]AgentHandoverReportItem, erro
 }
 
 func listHandoverReportsHandler(w http.ResponseWriter, r *http.Request) {
+	asWritten := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("as_written")), "true")
 	if rawID := strings.TrimSpace(r.URL.Query().Get("id")); rawID != "" {
 		id, err := strconv.ParseInt(rawID, 10, 64)
 		if err != nil || id <= 0 {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, "id_must_be_positive")
 			return
 		}
-		report, err := fetchHandoverReportByID(id, true)
+		report, err := readHandoverReport(id, asWritten)
 		if err == sql.ErrNoRows {
 			httpresponse.RespondWithError(w, http.StatusNotFound, "handover_not_found")
 			return
@@ -176,7 +178,7 @@ func listHandoverReportsHandler(w http.ResponseWriter, r *http.Request) {
 			respondAgentToolDatabaseError(w, "find latest handover", err)
 			return
 		}
-		report, err := fetchHandoverReportByID(id, true)
+		report, err := readHandoverReport(id, asWritten)
 		if err != nil {
 			respondAgentToolDatabaseError(w, "fetch latest handover", err)
 			return
@@ -391,13 +393,13 @@ func createHandoverReportHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateHandoverReportStateHandler(w http.ResponseWriter, r *http.Request) {
-	var patch handoverReportPatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid_json")
+	patch, problem := decodeHandoverPatch(r)
+	if problem != "" {
+		httpresponse.RespondWithError(w, http.StatusBadRequest, problem)
 		return
 	}
-	if patch.ID <= 0 || patch.State == nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "id_and_state_are_required")
+	if patch.Comment != nil {
+		appendHandoverCommentHandler(w, r, patch)
 		return
 	}
 	current, err := fetchHandoverReportByID(patch.ID, false)
