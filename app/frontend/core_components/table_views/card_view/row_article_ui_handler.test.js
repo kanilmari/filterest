@@ -4,7 +4,7 @@
 // Bridges row-article field labels and the shared card-detail icon registry.
 // Exists so field label icons stay visible when article/detail layouts evolve.
 
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DATE_TIME_DISPLAY_SEPARATOR } from "../timestamp_display_formatter.js";
 
 function displayDateTime(dateText, timeText) {
@@ -223,6 +223,7 @@ describe("dispatchCardArticleToggle", () => {
 });
 
 describe("article shared field layout", () => {
+    beforeEach(() => { delete document.documentElement.dataset.labelValueLayout; });
     test.each([null, "auto", "inline", "stacked"])(
         "preserves raw values, navigation and hidden labels for %s", (layout) => {
             const metadata = { label_value_layout: layout };
@@ -235,7 +236,7 @@ describe("article shared field layout", () => {
             const hidden = createRowArticleKeyValueElement("Hidden label", "Visible value", "hidden", false,
                 "big_card_detail_value", false, null, "raw hidden", metadata);
             for (const element of [text, navigation, hidden]) {
-                expect(element.dataset.labelValueLayout).toBe(layout || undefined);
+                expect(element.dataset.labelValueLayout).toBe("stacked");
             }
             expect(text.querySelector("[data-raw-value]")?.dataset.rawValue).toBe("raw text");
             expect(text.textContent).toContain("Original text");

@@ -49,7 +49,6 @@ export function resolveCardDetailFieldLabelPlacement(label, labelMeta = {}) {
             : Boolean(String(label || "").trim()),
         baseRoles: parseRoleString(labelMeta?.card_element || "").baseRoles,
         dataType: labelMeta?.data_type,
-        labelValueLayout: labelMeta?.label_value_layout,
     });
 }
 
@@ -219,7 +218,7 @@ export function renderSingleLineCardDetails(containerElement, detailEntries, dat
         row.dataset.cardLabelPlacement = labelPlacement;
         const valueElement = createSingleLineCardDetailValue(detailEntry);
         row.appendChild(valueElement);
-        applyLabelValueLayout(row, label.parentNode === row ? label : null, valueElement, labelMeta?.label_value_layout);
+        applyLabelValueLayout(row, label.parentNode === row ? label : null, valueElement);
         containerElement.appendChild(row);
     });
 }

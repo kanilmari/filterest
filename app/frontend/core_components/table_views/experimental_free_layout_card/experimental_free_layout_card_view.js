@@ -32,6 +32,8 @@ import {
     setExperimentalDesignModeEnabled,
 } from "./experimental_free_layout_card_store.js";
 
+import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
+
 const workingTemplatesByTable = new Map();
 
 function cloneJsonCompatible(value) {
@@ -264,15 +266,12 @@ async function createBlockElement({
         `experimental-free-layout-card__block--${block.type}`
     );
     blockElement.dataset.layoutBlockId = block.id;
-
     if (block.column) {
         blockElement.classList.add(makeColumnClass(tableName, block.column));
     }
-
     if (!block.hasValue && block.type !== "action") {
         blockElement.classList.add("experimental-free-layout-card__block--empty");
     }
-
     if (block.type === "action") {
         const actionButton = document.createElement("button");
         actionButton.type = "button";
@@ -297,17 +296,20 @@ async function createBlockElement({
         );
         blockElement.appendChild(mediaContent);
     } else {
-        maybeAppendLabel(blockElement, block);
+        // Keep canvas positioning and resize handles on the outer block.
+        const pairElement = document.createElement("div");
+        maybeAppendLabel(pairElement, block);
+        const labelElement = pairElement.firstElementChild;
         const valueElement = buildFieldValueElement(block);
-        blockElement.appendChild(valueElement);
+        pairElement.appendChild(valueElement);
+        applyLabelValueLayout(pairElement, labelElement, valueElement);
+        blockElement.appendChild(pairElement);
     }
-
     if (designModeEnabled) {
         const resizeHandle = document.createElement("div");
         resizeHandle.classList.add("experimental-free-layout-card__resize-handle");
         blockElement.appendChild(resizeHandle);
     }
-
     return blockElement;
 }
 

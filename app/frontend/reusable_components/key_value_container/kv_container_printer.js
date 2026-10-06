@@ -45,19 +45,14 @@ function observeKvContainer(target, onResize) {
  * @param {number}   [userOptions.maxColumns=6]
  * @param {number}   [userOptions.minPairWidth=320]
  * @param {'inline'|'stacked'|'conditional'} [userOptions.layoutMode='stacked']
- *        - 'inline': (DEPRECATED) avain ja arvo vierekkäin 50/50 gridissä
- *        - 'stacked': avain ja arvo allekkain
- *        - 'conditional': älykäs rivitys - arvo sijoitetaan avaimen viereen jos mahtuu,
- *          muuten pudotetaan omalle rivilleen (suositeltu)
- * @param {number}   [userOptions.responsiveBreakpoint=400]
+ *        Legacy pair markup variants. The shared site setting decides label/value placement.
  * @param {string}   [userOptions.containerClassName='kv-display']
  * @param {number}   [userOptions.singleColumnBreakpoint=0] - Jos containerin leveys on alle tämän, käytetään 1 saraketta
  * @param {boolean}  [userOptions.animateHeight=false] - Animoi containerin korkeuden muutokset
- * @param {number}   [userOptions.deferResponsiveLayoutMs=0] - Lykkää conditional-tilan ensimmäistä relayoutia ja observereita
+ * @param {number}   [userOptions.deferResponsiveLayoutMs=0] - Lykkää ensimmäistä sarakeasettelua ja observereita
  * @param {Function|null} [userOptions.decorateKeyElement=null] - Valinnainen avainelementin koristelija.
  *        Se voi lisäksi palauttaa `{labelPlacement}` ("hidden", "inline" tai "stacked"),
- *        jolloin kutsuja päättää kentän nimen paikan ja tämä komponentti vain toteuttaa sen.
- *        Ilman palautettua arvoa pari noudattaa sarakkeen omaa asetusta kuten ennenkin.
+ *        The caller decides name visibility; the shared site adapter decides placement.
  *
  * @returns {Function} unmount
  */
@@ -67,7 +62,6 @@ export function renderKeyValuePairs(
     userOptions = {}
 ) {
     const CARD_MOUNT_EVENT = "easelect:card-mounted";
-    const textWidthCache = new Map();
 
     // console.log("[KV-DEBUG] renderKeyValuePairs CALLED", { dataCount: keyValuePairDataArray?.length, userOptions });
 
@@ -76,7 +70,6 @@ export function renderKeyValuePairs(
         maxColumns = 6,
         minPairWidth = 320,
         layoutMode = "stacked", // 'stacked', 'inline' (deprecated), 'conditional'
-        responsiveBreakpoint = 400,
         containerClassName = "kv-display",
         singleColumnBreakpoint = 0,  // Jos > 0, pakottaa 1 sarakkeen kun container on kapeampi
         animateHeight = false,
@@ -99,7 +92,6 @@ export function renderKeyValuePairs(
     const shouldDeferResponsiveLayout =
         layoutMode === "conditional" && deferResponsiveLayoutMs > 0;
     let _responsiveLayoutArmed = !shouldDeferResponsiveLayout;
-    let _skipNextConditionalHeightAnimation = shouldDeferResponsiveLayout;
     let _deferredResponsiveLayoutTimer = null;
     let _mountCleanup = null;
     let _observerActivationCleanup = null;
@@ -186,196 +178,16 @@ export function renderKeyValuePairs(
     const { createInlineElement, createStackedElement, createConditionalElement } =
         createKvPairBuilders({ translate, decorateKeyElement });
 
-    /**
-     * Apufunktio: Tekstin leveyden mittaus Canvas API:lla.
-     * Nopeampi kuin DOM-elementin renderöinti mittausta varten.
-     */
-    function getTextWidth(text, font) {
-        const canvas = getTextWidth.canvas || (getTextWidth.canvas = document.createElement("canvas"));
-        const context = canvas.getContext("2d");
-        context.font = font;
-        return context.measureText(text).width;
-    }
-
-    function getCachedTextWidth(text, font) {
-        const cacheKey = `${font}\n${text}`;
-        const cachedWidth = textWidthCache.get(cacheKey);
-        if (cachedWidth !== undefined) {
-            return cachedWidth;
-        }
-
-        const measuredWidth = getTextWidth(text, font);
-        textWidthCache.set(cacheKey, measuredWidth);
-        return measuredWidth;
-    }
-
-    /**
-     * Älykäs asettelun säätö conditional-tilassa.
-     * Tarkistaa jokaisen rivin ja päättää pudotetaanko arvo omalle rivilleen.
-     * Laskee sarakekohtaisen leveimmän avaimen ja käyttää sitä yhtenäiseen sisennykseen.
-     */
-    function adjustConditionalLayout(colCountHint = _prevCols) {
-        const previousHeight = containerElement.offsetHeight;
-
-        const allRows = containerElement.querySelectorAll(".kv-smart-row");
-        if (allRows.length === 0) return;
-
-        const colCount = Math.max(1, colCountHint || 1);
-        const sampleRow = allRows[0];
-        const sampleKey =
-            sampleRow?._kvKeyElement || sampleRow?.querySelector(".kv-conditional-key");
-        const sampleValue =
-            sampleRow?._kvValueElement || sampleRow?.querySelector(".kv-conditional-value");
-
-        let sharedLineHeight = 0;
-        if (sampleKey) {
-            const keyStyle = window.getComputedStyle(sampleKey);
-            sharedLineHeight = parseFloat(keyStyle.lineHeight);
-            if (isNaN(sharedLineHeight)) {
-                const fontSize = parseFloat(keyStyle.fontSize);
-                sharedLineHeight = fontSize * 1.2;
-            }
-        }
-
-        const sharedValueFont = sampleValue ? window.getComputedStyle(sampleValue).font : "";
-
-        // VAIHE 2: JÄSENNELLÄÄN RIVIT SARAKKEITTAIN
-        // Elementit tulevat DOM:ssa rivi kerrallaan: [col0row0, col1row0, col0row1, col1row1, ...]
-        const columns = [];
-        for (let c = 0; c < colCount; c++) {
-            columns[c] = [];
-        }
-        allRows.forEach((row, idx) => {
-            const colIdx = idx % colCount;
-            columns[colIdx].push(row);
-        });
-
-        // VAIHE 3: LASKE SARAKEKOHTAINEN LEVEIN AVAIN (max 50% sarakkeen leveydestä)
-        const columnMaxKeyWidths = [];
-        const columnMetrics = [];
-        for (let c = 0; c < colCount; c++) {
-            let maxKeyWidth = 0;
-            let columnWidth = 0;
-            const rowMetrics = [];
-            
-            for (const row of columns[c]) {
-                if (row.dataset.labelValueLayout) continue;
-                const key =
-                    row._kvKeyElement || row.querySelector(".kv-conditional-key");
-                const value =
-                    row._kvValueElement || row.querySelector(".kv-conditional-value");
-                if (!key || !value) continue;
-                
-                // Tarkistetaan onko avain monirivinen - ei lasketa mukaan
-                const lineHeight =
-                    sharedLineHeight ||
-                    parseFloat(window.getComputedStyle(key).lineHeight) ||
-                    19;
-                const isMultiLine = key.offsetHeight > lineHeight * 1.5;
-                const rowWidth = row.clientWidth;
-                const keyWidth = key.offsetWidth + 10;
-                const valueText = row._kvValueText || value.textContent || "";
-                const valueFont = sharedValueFont || getComputedStyle(value).font;
-                const textMetricsWidth = getCachedTextWidth(valueText, valueFont);
-                const hasLink = row._kvHasLink || value.querySelector("a") !== null;
-                const valueNeededWidth = hasLink ? textMetricsWidth + 20 : textMetricsWidth;
-                
-                if (!isMultiLine) {
-                    if (keyWidth > maxKeyWidth) {
-                        maxKeyWidth = keyWidth;
-                    }
-                }
-                
-                if (rowWidth > columnWidth) {
-                    columnWidth = rowWidth;
-                }
-
-                rowMetrics.push({
-                    isMultiLine,
-                    keyWidth,
-                    rowWidth,
-                    value,
-                    valueNeededWidth,
-                });
-            }
-            
-            // Max 50% sarakkeen leveydestä
-            const maxAllowed = columnWidth * 0.5;
-            columnMaxKeyWidths[c] = Math.min(maxKeyWidth, maxAllowed);
-            columnMetrics[c] = rowMetrics;
-        }
-
-        // VAIHE 4: KÄSITTELE RIVIT SARAKEKOHTAISESTI
-        for (let c = 0; c < colCount; c++) {
-            const columnKeyOffset = columnMaxKeyWidths[c];
-            const rows = columnMetrics[c] || [];
-
-            for (const row of rows) {
-                const { isMultiLine, keyWidth, rowWidth, value, valueNeededWidth } = row;
-
-                if (rowWidth === 0) continue;
-                
-                // Käytetään sarakkeen leveintä avainta sisennykseen (tai tämän avaimen leveyttä jos suurempi)
-                const effectiveOffset = Math.max(columnKeyOffset, keyWidth);
-                const spaceNextToOffset = rowWidth - effectiveOffset;
-
-                let shouldDrop = false;
-                let marginLeft = "0px";
-
-                if (isMultiLine) {
-                    shouldDrop = true;
-                } else if (valueNeededWidth <= spaceNextToOffset) {
-                    marginLeft = `${effectiveOffset}px`;
-                } else {
-                    shouldDrop = true;
-                }
-
-                value.classList.toggle("kv-dropped", shouldDrop);
-                if (value.style.marginLeft !== marginLeft) {
-                    value.style.marginLeft = marginLeft;
-                }
-            }
-        }
-
-        if (_hasMeasuredInitialHeight) {
-            if (_skipNextConditionalHeightAnimation) {
-                _skipNextConditionalHeightAnimation = false;
-            } else {
-                animateContainerHeight(previousHeight, containerElement.scrollHeight);
-            }
-        }
-
-    }
-
-    /** Track previous render state to skip redundant DOM rebuilds. */
+    /** Track the container grid only; field placement belongs to the shared adapter. */
     let _prevCols = -1;
     let _prevMode = "";
     let _prevTotal = -1;
-    let _prevContainerWidth = -1;
-    let _conditionalRelayoutFrame = 0;
-    let _pendingConditionalCols = 1;
-
-    function scheduleConditionalRelayout(cols) {
-        _pendingConditionalCols = cols;
-        if (_conditionalRelayoutFrame) {
-            return;
-        }
-
-        _conditionalRelayoutFrame = requestAnimationFrame(() => {
-            _conditionalRelayoutFrame = 0;
-            adjustConditionalLayout(_pendingConditionalCols);
-        });
-    }
 
     function renderNow() {
         withAnimatedHeight(() => {
             // Käytetään containerin omaa leveyttä ikkunan leveyden sijaan
             const containerWidth = containerElement.offsetWidth || window.innerWidth;
-            const ww = window.innerWidth;
-            // conditional-tilassa ei vaihdeta stacked-tilaan responsiveBreakpointin perusteella
-            const mode = (layoutMode === "conditional")
-                ? "conditional"
-                : (ww < responsiveBreakpoint ? "stacked" : layoutMode);
+            const mode = layoutMode;
 
             containerElement.classList.toggle("kv-inline", mode === "inline");
             containerElement.classList.toggle("kv-stacked", mode === "stacked");
@@ -395,17 +207,7 @@ export function renderKeyValuePairs(
                 );
             }
 
-            const widthChanged = Math.abs(containerWidth - _prevContainerWidth) >= 4;
-            _prevContainerWidth = containerWidth;
-
-            // Skip full DOM rebuild if column count, mode, and data length unchanged.
-            // Conditional mode still needs a cheap relayout when width changes.
-            if (cols === _prevCols && mode === _prevMode && total === _prevTotal) {
-                if (mode === "conditional" && widthChanged && _responsiveLayoutArmed) {
-                    scheduleConditionalRelayout(cols);
-                }
-                return;
-            }
+            if (cols === _prevCols && mode === _prevMode && total === _prevTotal) return;
             _prevCols = cols;
             _prevMode = mode;
             _prevTotal = total;
@@ -436,8 +238,7 @@ export function renderKeyValuePairs(
             }
 
             if (mode === "inline") {
-                // DEPRECATED: inline-tila - avain ja arvo vierekkäin 50/50 gridissä
-                // Suositellaan käytettäväksi 'conditional'-tilaa sen sijaan
+                // Legacy inline pair markup; the shared adapter owns field placement.
                 containerElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
                 // Tulostetaan sarakkeittain, mutta rivi kerrallaan
                 for (let row = 0; row < rows; row++) {
@@ -448,7 +249,7 @@ export function renderKeyValuePairs(
                     }
                 }
             } else if (mode === "conditional") {
-                // CONDITIONAL: Älykäs rivitys - arvo avaimen viereen jos mahtuu, muuten omalle rivilleen
+                // Legacy conditional pair markup; no text-width measurement is used.
                 containerElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
                 for (let row = 0; row < rows; row++) {
                     for (let col = 0; col < cols; col++) {
@@ -457,13 +258,8 @@ export function renderKeyValuePairs(
                         containerElement.appendChild(createConditionalElement(pair));
                     }
                 }
-                // Ajetaan älykäs asettelu heti renderöinnin jälkeen
-                // requestAnimationFrame varmistaa että DOM on päivittynyt
-                if (_responsiveLayoutArmed) {
-                    scheduleConditionalRelayout(cols);
-                }
             } else {
-                // STACKED: avain ja arvo allekkain
+                // Legacy stacked pair markup; the shared adapter owns field placement.
                 containerElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
                 for (let row = 0; row < rows; row++) {
                     for (let col = 0; col < cols; col++) {
@@ -475,9 +271,6 @@ export function renderKeyValuePairs(
             }
         });
     }
-
-    // Legacy code moved to kv_container_legacy_code.txt to fix syntax error issues.
-
 
     /* ---------- Alustus & kuuntelija ---------- */
     // Debounced resize handler: during continuous window resize, skip intermediate
@@ -528,7 +321,6 @@ export function renderKeyValuePairs(
         if (delayMs <= 0) {
             _responsiveLayoutArmed = true;
             attachResponsiveLayoutObserver();
-            scheduleConditionalRelayout(_prevCols > 0 ? _prevCols : 1);
             return;
         }
 
@@ -536,7 +328,6 @@ export function renderKeyValuePairs(
             _deferredResponsiveLayoutTimer = null;
             _responsiveLayoutArmed = true;
             attachResponsiveLayoutObserver();
-            scheduleConditionalRelayout(_prevCols > 0 ? _prevCols : 1);
         }, delayMs);
     }
 
@@ -565,7 +356,6 @@ export function renderKeyValuePairs(
     }
 
     /* ---------- Alustus & kuuntelija ---------- */
-    _skipNextConditionalHeightAnimation = true;
     renderNow();
 
     if (containerElement.isConnected) {
@@ -591,10 +381,6 @@ export function renderKeyValuePairs(
         cleanupMountWait();
         cleanupObserverActivationWait();
         cleanupResizeObserver();
-        if (_conditionalRelayoutFrame) {
-            cancelAnimationFrame(_conditionalRelayoutFrame);
-            _conditionalRelayoutFrame = 0;
-        }
         if (_debounceTimer !== null) {
             clearTimeout(_debounceTimer);
             _debounceTimer = null;

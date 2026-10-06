@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,7 +60,7 @@ const upsertDatasetCoverThemeSQL = `
 		'Admin-managed, theme-aware dataset cover presentation settings.'
 	)
 	ON CONFLICT (key) DO UPDATE
-	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
 		EXCLUDED.json_value,
 		'{shared,card_show_all_fields}',
 		CASE
@@ -96,6 +97,14 @@ const upsertDatasetCoverThemeSQL = `
 				THEN public.system_config.json_value #> '{shared,filterbar_content_top_space}'
 			ELSE '40'::jsonb
 		END
+	), '{shared,label_value_layout}',
+		CASE
+			WHEN NOT $8::boolean THEN EXCLUDED.json_value #> '{shared,label_value_layout}'
+			WHEN public.system_config.json_value #>> '{shared,label_value_layout}' IN ('stacked', 'inline')
+				OR ($9::boolean AND public.system_config.json_value #>> '{shared,label_value_layout}' = 'auto')
+				THEN public.system_config.json_value #> '{shared,label_value_layout}'
+			ELSE '"stacked"'::jsonb
+		END
 	),
 	    creation_spec = COALESCE(NULLIF(public.system_config.creation_spec, ''), EXCLUDED.creation_spec),
 	    updated = NOW()
@@ -103,7 +112,8 @@ const upsertDatasetCoverThemeSQL = `
 	          json_value #>> '{shared,card_style_variant}',
 	          (json_value #>> '{shared,card_detail_columns}')::int,
 	          json_value #>> '{shared,article_image_caption_position}',
-	          (json_value #>> '{shared,filterbar_content_top_space}')::float8`
+	          (json_value #>> '{shared,filterbar_content_top_space}')::float8,
+	          json_value #>> '{shared,label_value_layout}'`
 
 const upsertRowArticleTimestampDisplaySQL = `
 	INSERT INTO public.system_config (
@@ -153,6 +163,7 @@ type DatasetCoverSharedValues struct {
 	CardDetailColumns           int     `json:"card_detail_columns"`
 	CardDescriptionLines        int     `json:"card_description_lines"`
 	CardStyleVariant            string  `json:"card_style_variant"`
+	LabelValueLayout            string  `json:"label_value_layout"`
 	CardShowAllFields           bool    `json:"card_show_all_fields"`
 	ActiveTabFade               float64 `json:"active_tab_fade"`
 	ActiveTabMaxOpacity         float64 `json:"active_tab_max_opacity"`
@@ -178,6 +189,7 @@ type SitePresentationSettingsResponse struct {
 	// Request-only omission metadata never enters JSON responses or stored config.
 	preserveStoredCardShowAllFields           bool
 	preserveStoredCardStyleVariant            bool
+	preserveStoredLabelValueLayout            bool
 	preserveStoredCardDetailColumns           bool
 	preserveStoredArticleImageCaptionPosition bool
 	preserveStoredFilterbarContentTopSpace    bool
@@ -205,7 +217,9 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 		settings.preserveStoredCardDetailColumns,
 		settings.preserveStoredArticleImageCaptionPosition,
 		settings.preserveStoredFilterbarContentTopSpace,
-	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition, &settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace)
+		settings.preserveStoredLabelValueLayout,
+		os.Getenv("ENVIRONMENT_TYPE") == "dev",
+	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition, &settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace, &settings.DatasetCoverTheme.Shared.LabelValueLayout)
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("save cover theme: %w", err)
 	}
@@ -276,6 +290,7 @@ func readSitePresentationSettingsFromDB() (SitePresentationSettingsResponse, err
 		stored := settings.DatasetCoverTheme
 		if json.Unmarshal([]byte(rawCover), &stored) == nil {
 			inheritLegacyImageBlur(rawCover, &stored)
+			stored.Shared.LabelValueLayout = normalizeSiteLabelValueLayout(stored.Shared.LabelValueLayout)
 			if validateDatasetCoverTheme(stored) == nil {
 				settings.DatasetCoverTheme = stored
 			}
@@ -382,6 +397,17 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 		}
 		sharedKeys = append(sharedKeys, "filterbar_content_top_space")
 	}
+	layout, layoutProvided := sharedParts["label_value_layout"]
+	if layoutProvided {
+		var value string
+		if json.Unmarshal(layout, &value) != nil {
+			return SitePresentationSettingsResponse{}, errors.New("label_value_layout must be a string")
+		}
+		if value == "auto" && os.Getenv("ENVIRONMENT_TYPE") != "dev" {
+			return SitePresentationSettingsResponse{}, errors.New("auto label_value_layout requires development mode")
+		}
+		sharedKeys = append(sharedKeys, "label_value_layout")
+	}
 	if err := requireExactJSONKeys(themeParts["shared"], sharedKeys); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -394,12 +420,14 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace = defaultFilterbarContentTopSpace
 	settings.preserveStoredCardShowAllFields = !provided
 	settings.preserveStoredCardStyleVariant = !styleProvided
+	settings.preserveStoredLabelValueLayout = !layoutProvided
 	settings.preserveStoredCardDetailColumns = !columnsProvided
 	settings.preserveStoredArticleImageCaptionPosition = !captionProvided
 	settings.preserveStoredFilterbarContentTopSpace = !topSpaceProvided
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
+	settings.DatasetCoverTheme.Shared.LabelValueLayout = normalizeSiteLabelValueLayout(settings.DatasetCoverTheme.Shared.LabelValueLayout)
 	if err := validateSitePresentationSettings(settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -510,6 +538,9 @@ func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
 	if config.Shared.ArticleImageCaptionPosition != "below" && config.Shared.ArticleImageCaptionPosition != "overlay" {
 		return errors.New("unsupported article image caption position")
 	}
+	if config.Shared.LabelValueLayout != normalizeSiteLabelValueLayout(config.Shared.LabelValueLayout) {
+		return errors.New("unsupported site label value layout")
+	}
 	if config.Shared.CardStyleVariant != "standard" && config.Shared.CardStyleVariant != "modern" {
 		return errors.New("unsupported card style variant")
 	}
@@ -613,6 +644,7 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 				CardDetailColumns:           2,
 				CardShowAllFields:           true,
 				CardStyleVariant:            "modern",
+				LabelValueLayout:            "stacked",
 				ActiveTabFade:               25,
 				ActiveTabMaxOpacity:         1,
 				ActiveTabGlowIntensity:      0.5,
@@ -624,4 +656,14 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 		},
 		RowArticleTimestampDisplayMode: rowArticleTimestampDateTime,
 	}
+}
+
+// normalizeSiteLabelValueLayout mirrors the browser adapter in
+// frontend/reusable_components/key_value_container/label_value_layout.js.
+// Reuses the runtime development boundary that supplies the browser's app-env meta.
+func normalizeSiteLabelValueLayout(value string) string {
+	if value == "inline" || value == "stacked" || (value == "auto" && os.Getenv("ENVIRONMENT_TYPE") == "dev") {
+		return value
+	}
+	return "stacked"
 }

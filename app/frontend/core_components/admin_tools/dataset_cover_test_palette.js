@@ -14,6 +14,7 @@ import { hasRoutePermission } from '../route_permission_checker.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { DATASET_COVER_PALETTE_COPY as COPY } from './dataset_cover_palette_copy.js';
 import { buildDatasetCardPaletteControl, buildCardStyleControl } from './dataset_card_palette_control.js';
+import { buildLabelValueLayoutControl } from './site_label_value_layout_control.js';
 import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import {
@@ -382,6 +383,11 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         previewDraft();
     });
     cardScope.appendChild(cardStyleControl.element);
+    const labelValueLayoutControl = buildLabelValueLayoutControl((value) => {
+        draftSettings.dataset_cover_theme.shared.label_value_layout = value;
+        previewDraft();
+    });
+    cardScope.appendChild(labelValueLayoutControl.element);
     const cardImageControl = buildCardImagePresentationControl(copy, (value) => {
         draftSettings.dataset_cover_theme.shared.card_image_presentation = value;
         previewDraft();
@@ -504,6 +510,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         cardImageControl.setCopy(copy);
         cardFieldsControl.setCopy(copy);
         cardStyleControl.setCopy(copy);
+        labelValueLayoutControl.setCopy();
         cardScopeLegend.textContent = copy.siteCardDefaults;
         datasetControl?.setCopy(copy);
         brandColorText.textContent = copy.brandColor;
@@ -534,6 +541,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         cardImageControl.setValue(draftSettings.dataset_cover_theme.shared.card_image_presentation);
         cardFieldsControl.setValue(draftSettings.dataset_cover_theme.shared.card_show_all_fields);
         cardStyleControl.setValue(draftSettings.dataset_cover_theme.shared.card_style_variant);
+        labelValueLayoutControl.setValue(draftSettings.dataset_cover_theme.shared.label_value_layout);
         brandColorInput.value = draftSettings.dataset_cover_theme.shared.brand_color;
     }
 

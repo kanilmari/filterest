@@ -122,7 +122,7 @@
         grid-template-columns: 1fr !important;
     }
 
-    .kv-pair-inline {
+    .kv-pair-inline:not(.label-value-layout) {
         grid-template-columns: 1fr 2fr !important;
     }
 
@@ -330,7 +330,7 @@
         grid-template-columns: 1fr !important;
     }
 
-    .kv-pair-inline {
+    .kv-pair-inline:not(.label-value-layout) {
         grid-template-columns: 1fr 2fr !important;
     }
 

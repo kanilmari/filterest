@@ -6,6 +6,7 @@
  * Exists to display structured key-value data in a readable grid format.
  */
 
+
 @import url("./label_value_layout.css");
 
 :root {
@@ -182,14 +183,6 @@ body { */
     /* line-height: 1.5; */
 }
 
-/* Kun arvo pudotetaan omalle rivilleen (JS lisää tämän luokan) */
-.kv-conditional-value.kv-dropped {
-    clear: both; /* Pakottaa avaimen alapuolelle */
-    margin-top: 1.5em; /* Pieni väli avaimen ja arvon väliin */
-    margin-left: 0 !important;
-    display: block;
-}
-
 .kv-conditional-value .kv-link-group {
     margin-left: -10px;
 }
@@ -202,9 +195,4 @@ body { */
 
 /* ================================================================ */
 
-/* Alle 400 px – aina stacked (ei koske conditional-tilaa) */
-@media (width <= 400px) {
-    #kv-display {
-        grid-template-columns: 1fr !important;
-    }
-}
+/* The shared adapter owns pair placement at every width. */

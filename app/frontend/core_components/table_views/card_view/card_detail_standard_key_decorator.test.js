@@ -77,14 +77,14 @@ describe("decorateStandardCardDetailKey", () => {
                 .toEqual({ labelPlacement: "inline" });
         });
 
-        test("a column that states its own arrangement still decides for itself", () => {
+        test("a column's stored arrangement no longer decides its name placement (one site-wide choice, K230)", () => {
             expect(decorate({
                 card_element: "description", data_type: "text",
                 label_value_layout: "stacked",
-            })).toEqual({ labelPlacement: "stacked" });
+            })).toEqual({ labelPlacement: "hidden" });
             expect(decorate({
-                card_element: "description", data_type: "text",
-                label_value_layout: "inline",
+                card_element: "details", data_type: "character varying(200)",
+                label_value_layout: "stacked",
             })).toEqual({ labelPlacement: "inline" });
         });
 

@@ -9,6 +9,9 @@ import { CARD_IMAGE_PRESENTATIONS, normalizeCardImagePresentation, applyCardImag
 import { applyCardFieldPresentationSetting } from '../table_views/card_view/card_field_presentation.js';
 import { CARD_STYLE_VARIANT_VALUES, DEFAULT_CARD_DETAIL_COLUMNS } from '../table_views/card_view/card_detail_layout_options.js';
 
+import { normalizeLabelValueLayout, applySiteLabelValueLayoutSetting }
+    from '../../reusable_components/key_value_container/label_value_layout.js';
+
 export const PUBLIC_PRESENTATION_CACHE_KEY = 'filterest_public_presentation_v1';
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -67,6 +70,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         card_image_presentation: 'contain',
         article_image_caption_position: 'below',
         card_show_all_fields: true,
+        label_value_layout: 'stacked',
         card_style_variant: CARD_STYLE_VARIANT_VALUES.MODERN,
         card_description_lines: 2,
         card_detail_columns: DEFAULT_CARD_DETAIL_COLUMNS,
@@ -90,7 +94,7 @@ export function isValidThemeConfig(config) {
         }
     }
     for (const key of Object.keys(DEFAULT_DATASET_COVER_THEME.shared)) {
-        if (['brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'article_image_caption_position', 'image_blur'].includes(key)) continue;
+        if (['label_value_layout', 'brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'article_image_caption_position', 'image_blur'].includes(key)) continue;
         if (!Number.isFinite(config.shared[key])) return false;
     }
     return (config.shared.card_detail_columns === undefined
@@ -115,6 +119,7 @@ export function normalizePresentationSettings(payload) {
             key, source[group][key] === undefined ? fallback : source[group][key],
         ])),
     ]));
+    theme.shared.label_value_layout = normalizeLabelValueLayout(theme.shared.label_value_layout);
     theme.shared.card_image_presentation = normalizeCardImagePresentation(theme.shared.card_image_presentation);
     return {
         dataset_cover_theme: theme,
@@ -162,6 +167,7 @@ export function applySitePresentationGlobals(config, { preserveKnownBrand = fals
     if (typeof document === 'undefined' || !document.documentElement || !isValidThemeConfig(config)) return;
     const documentRoot = document.documentElement;
     applyArticleImageCaptionSetting(config);
+    applySiteLabelValueLayoutSetting(config.shared.label_value_layout);
     applyCardImagePresentationSetting(config.shared.card_image_presentation);
     applyCardFieldPresentationSetting(
         config.shared.card_show_all_fields, config.shared.card_style_variant, config.shared.card_detail_columns
@@ -246,6 +252,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
             }));
         } catch { /* Private browsing or exhausted storage still allows live settings. */ }
         applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
+        applySiteLabelValueLayoutSetting(effectiveSettings().dataset_cover_theme.shared.label_value_layout);
         applyCardFieldPresentationSetting(
             effectiveSettings().dataset_cover_theme.shared.card_show_all_fields,
             effectiveSettings().dataset_cover_theme.shared.card_style_variant,
@@ -290,6 +297,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         return pending;
     }
     applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
+    applySiteLabelValueLayoutSetting(effectiveSettings().dataset_cover_theme.shared.label_value_layout);
     applyCardFieldPresentationSetting(
             effectiveSettings().dataset_cover_theme.shared.card_show_all_fields,
             effectiveSettings().dataset_cover_theme.shared.card_style_variant,

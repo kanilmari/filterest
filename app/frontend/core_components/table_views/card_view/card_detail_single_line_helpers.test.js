@@ -4,11 +4,12 @@
 // Exists so database-held raw SVG cannot return to the card rendering path.
 // @vitest-environment jsdom
 
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 
 import { renderSingleLineCardDetails } from "./card_detail_single_line_helpers.js";
 
 describe("card_detail_single_line_helpers", () => {
+    beforeEach(() => { delete document.documentElement.dataset.labelValueLayout; });
     test.each([1, 2, 3, 4])("limits responsive single-line columns to requested %s and preserves field order", (columns) => {
         const container = document.createElement("div");
         const entries = Array.from({length: 7}, (_, index) => ({
@@ -184,7 +185,7 @@ describe("card_detail_single_line_helpers", () => {
         expect(container.querySelector(".card_detail_row_value")?.textContent).toBe("—");
     });
     test.each([null, "auto", "inline", "stacked"])(
-        "uses source-column layout %s and retains values, links and field order", (layout) => {
+        "ignores source-column layout %s and retains values, links and field order", (layout) => {
             const container = document.createElement("div");
             const entries = [
                 { column: "display_name", sourceColumn: "website", label: "Website", rawValue: "https://example.test", isLink: true },
@@ -195,8 +196,8 @@ describe("card_detail_single_line_helpers", () => {
                 website: { label_value_layout: layout, card_detail_label_mode: "both" },
             });
             const pairs = container.querySelectorAll(".card_detail_row_single_line");
-            expect(pairs[0].dataset.labelValueLayout).toBe(layout || undefined);
-            expect(pairs[1].dataset.labelValueLayout).toBeUndefined();
+            expect(pairs[0].dataset.labelValueLayout).toBe("stacked");
+            expect(pairs[1].dataset.labelValueLayout).toBe("stacked");
             expect(pairs[0].querySelector("a")?.getAttribute("href")).toBe("https://example.test");
             expect(pairs[0].querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
             expect(pairs[1].textContent).toContain("Unchanged");
@@ -248,7 +249,7 @@ describe("card_detail_single_line_helpers", () => {
             expect(labelText?.dataset.langKey).toBe("price");
         });
 
-        test("a column that states its own arrangement still decides for itself", () => {
+        test("stored column layout cannot restore a hidden name or decide placement", () => {
             const container = document.createElement("div");
 
             renderSingleLineCardDetails(container, [{
@@ -262,9 +263,8 @@ describe("card_detail_single_line_helpers", () => {
             });
 
             const row = container.querySelector(".card_detail_row_single_line");
-            expect(row?.dataset.cardLabelPlacement).toBe("stacked");
-            expect(container.querySelector(".card_detail_row_label_text")?.textContent)
-                .toBe("Summary");
+            expect(row?.dataset.cardLabelPlacement).toBe("hidden");
+            expect(container.querySelector(".card_detail_row_label_text")).toBeNull();
         });
 
         test("a hidden name keeps the field's own icon and the row's accessible name", () => {

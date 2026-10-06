@@ -1,7 +1,7 @@
 // kv_pair_builder.js
 // Builds key/value pair DOM while preserving existing text, link and icon handling.
-// Connects the responsive KV container to optional shared column layout settings.
-// Keeps pair composition separate from resize observation and automatic measurement.
+// Connects the responsive KV container to the shared site layout setting.
+// Keeps pair composition separate from the container's responsive column count.
 import { resolveSafeExternalHttpUrl } from "../safe_external_http_url.js";
 import { appendTextWithHttpLinks } from "../http_text_linkifier.js";
 import { applyLabelValueLayout } from "./label_value_layout.js";
@@ -18,9 +18,8 @@ const STATED_LABEL_PLACEMENTS = new Set(["hidden", "inline", "stacked"]);
 const HIDDEN_LABEL_PLACEMENT = "hidden";
 
 /**
- * Read the arrangement the caller's key hook stated, if it stated one.
- * This component never decides the arrangement itself; without a stated one the
- * pair keeps the column's own setting and this renderer's existing behaviour.
+ * Read the caller's legacy name marker. Only `hidden` affects name visibility;
+ * the site-wide adapter decides placement independently of this marker.
  */
 function readStatedLabelPlacement(decoration) {
     const stated = String(decoration?.labelPlacement || "").trim().toLowerCase();
@@ -64,11 +63,9 @@ function appendOpenInNewTabIcon(linkElement) {
  * @param {Function} options.translate - the caller's translation lookup
  * @param {Function|null} [options.decorateKeyElement] - the caller's key hook. It
  *   decorates the key element, and it may return `{labelPlacement}` — `hidden`,
- *   `inline` or `stacked` — to state where that field's name belongs. The caller
- *   owns that decision; these factories only apply it, and fall back to the
- *   column's own `label_value_layout` setting when nothing is stated. A stated
- *   placement is repeated on the pair as `data-card-label-placement`, which is
- *   the caller's own marker: its stylesheet is what dresses the arrangement.
+ *   `inline` or `stacked`. The caller owns name visibility; the shared site
+ *   adapter decides the arrangement. The marker is repeated on the pair as
+ *   `data-card-label-placement` for punctuation, never for placement.
  */
 export function createKvPairBuilders({ translate, decorateKeyElement }) {
     /* --------------------------------------------------
@@ -135,16 +132,6 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
         return null;
     }
 
-    /**
-     * The arrangement this pair is drawn with. A stated placement wins, because it
-     * was read from the column; otherwise the column's own setting applies as before.
-     * A hidden name leaves the value alone in the pair's single column.
-     */
-    function resolvePairLayout(statedPlacement, pairObj) {
-        if (statedPlacement === HIDDEN_LABEL_PLACEMENT) return "inline";
-        return statedPlacement || pairObj?.labelMeta?.label_value_layout;
-    }
-
     function applyPairColumnClass(pairElement, pairObj) {
         const columnClass = String(pairObj?.columnClass || "").trim();
         if (columnClass) {
@@ -181,7 +168,7 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
         if (showsName) wrap.appendChild(keySp);
         wrap.appendChild(valSp);
         applyLabelValueLayout(
-            wrap, showsName ? keySp : null, valSp, resolvePairLayout(placement, pairObj)
+            wrap, showsName ? keySp : null, valSp
         );
         return wrap;
     }
@@ -212,7 +199,7 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
         if (showsName) wrap.appendChild(keyDiv);
         wrap.appendChild(valDiv);
         applyLabelValueLayout(
-            wrap, showsName ? keyDiv : null, valDiv, resolvePairLayout(placement, pairObj)
+            wrap, showsName ? keyDiv : null, valDiv
         );
         return wrap;
     }
@@ -247,14 +234,8 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
         if (placement) wrap.dataset.cardLabelPlacement = placement;
         if (showsName) wrap.appendChild(keyDiv);
         wrap.appendChild(valDiv);
-        // A pair whose arrangement the caller stated is not measured: the smart
-        // wrap below reads one row's own text, and that must never move a name.
-        wrap._kvKeyElement = showsName ? keyDiv : null;
-        wrap._kvValueElement = valDiv;
-        wrap._kvValueText = pairObj?.value ?? "";
-        wrap._kvHasLink = pairObj?.isLink === true && !isEmptyValue(pairObj?.value);
         applyLabelValueLayout(
-            wrap, showsName ? keyDiv : null, valDiv, resolvePairLayout(placement, pairObj)
+            wrap, showsName ? keyDiv : null, valDiv
         );
         return wrap;
     }

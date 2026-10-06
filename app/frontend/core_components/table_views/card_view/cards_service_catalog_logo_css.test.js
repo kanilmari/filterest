@@ -255,7 +255,6 @@ describe('card text clamp CSS', () => {
             [
                 '.card_details_kv:not(.card_details_single_line) .kv-value',
                 '.card_details_kv:not(.card_details_single_line) .kv-conditional-value',
-                '.card_details_kv:not(.card_details_single_line) .kv-conditional-value.kv-dropped',
             ].join(',\n')
         );
         const singleLineRule = extractRule(

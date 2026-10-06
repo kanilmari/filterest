@@ -1,22 +1,32 @@
 // label_value_layout.test.js
-// Verifies explicit field arrangements preserve content, link safety and absent labels.
-// Connects shared column metadata with existing renderer DOM.
-// Protects inherited behavior when the optional default is null or unsupported.
+// Verifies the shared site arrangements preserve content, link safety and absent labels.
+// Connects the development boundary and public setting with existing renderer DOM.
+// Protects the Stacked default when a stored choice is absent or unsupported.
 // @vitest-environment jsdom
 
-import { describe, expect, test } from "vitest";
-import { applyLabelValueLayout, normalizeLabelValueLayout } from "./label_value_layout.js";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { applyLabelValueLayout, normalizeLabelValueLayout, applySiteLabelValueLayoutSetting } from "./label_value_layout.js";
 
 describe("shared field label/value layout", () => {
+    beforeEach(() => {
+        document.head.innerHTML = '<meta name="app-env" content="dev">';
+        document.body.innerHTML = '';
+        delete document.documentElement.dataset.labelValueLayout;
+    });
+    afterEach(() => { document.head.innerHTML = ''; });
+    const cases = JSON.parse(readFileSync('testing/shared_contracts/site_label_value_layout.json', 'utf8'));
+    test.each(cases)("normalizes $value in $environment to $expected", ({ environment, value, expected }) => {
+        document.querySelector('meta').content = environment;
+        expect(normalizeLabelValueLayout(value)).toBe(expected);
+    });
     test.each([undefined, null, "", "INLINE", "unknown", false, {}])(
-        "leaves legacy DOM and measurements unchanged for %s", (setting) => {
+        "defaults an absent or unsupported choice to Stacked: %s", setting => {
             const pair = document.createElement("div");
             pair.innerHTML = '<span>Label</span><span class="kv-dropped">Value</span>';
-            pair.style.cssText = "display: grid; grid-template-columns: 1fr 2fr";
-            const before = pair.outerHTML;
-            expect(normalizeLabelValueLayout(setting)).toBeNull();
-            expect(applyLabelValueLayout(pair, pair.firstChild, pair.lastChild, setting)).toBe(false);
-            expect(pair.outerHTML).toBe(before);
+            expect(applyLabelValueLayout(pair, pair.firstChild, pair.lastChild, setting)).toBe(true);
+            expect(pair.dataset.labelValueLayout).toBe('stacked');
+            expect(pair.querySelector('.kv-dropped')).toBeNull();
         },
     );
     test.each(["auto", "inline", "stacked"])(
@@ -51,5 +61,24 @@ describe("shared field label/value layout", () => {
         expect(pair.children).toHaveLength(1);
         expect(pair.classList.contains("label-value-layout--value-only")).toBe(true);
         expect(pair.querySelector(".label-value-layout__label")).toBeNull();
+    });
+});
+
+describe('live site wrapping projection', () => {
+    test.each(['stacked', 'inline'])('updates mounted and future pairs in %s while keeping hidden labels absent', mode => {
+        document.body.replaceChildren();
+        const pair = document.createElement('div');
+        const value = document.createElement('span');
+        value.textContent = 'Visible'; pair.append(value);
+        applyLabelValueLayout(pair, null, value);
+        document.body.append(pair);
+        applySiteLabelValueLayoutSetting(mode);
+        expect(pair.dataset.labelValueLayout).toBe(mode);
+        expect(pair.children).toHaveLength(1);
+        const future = document.createElement('div');
+        future.append(document.createElement('span'));
+        applyLabelValueLayout(future, null, future.firstChild);
+        expect(future.dataset.labelValueLayout).toBe(mode);
+        expect(future.classList.contains('label-value-layout--value-only')).toBe(true);
     });
 });

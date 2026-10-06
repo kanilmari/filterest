@@ -16,8 +16,6 @@ import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_ex
 import { DEFAULT_CARD_DETAIL_COLUMNS, normalizeCardDetailColumns } from "./card_detail_layout_options.js";
 
 const MODERN_CARD_DETAIL_DESKTOP_COLUMNS = DEFAULT_CARD_DETAIL_COLUMNS;
-const MODERN_CARD_DETAIL_LABEL_MIN_CH = 4;
-const MODERN_CARD_DETAIL_LABEL_MAX_CH = 32;
 
 function createModernCardDetailTileValue(detailEntry) {
     const valueElement = document.createElement("div");
@@ -82,17 +80,6 @@ function getModernCardDetailDesktopRowCount(detailEntries) {
     );
 }
 
-function setModernCardDetailLabelColumnWidth(containerElement, maxVisibleLabelLength) {
-    const labelWidthCh = Math.min(
-        MODERN_CARD_DETAIL_LABEL_MAX_CH,
-        Math.max(MODERN_CARD_DETAIL_LABEL_MIN_CH, maxVisibleLabelLength + 1)
-    );
-    containerElement.style.setProperty(
-        "--card-detail-tile-label-width",
-        `${labelWidthCh}ch`
-    );
-}
-
 /** Prepare all width bands once. CSS changes layout without replacing live field/link nodes. */
 function prepareResponsiveCardDetailLayouts(container, entryCount, requestedColumns) {
     const columns = normalizeCardDetailColumns(requestedColumns);
@@ -124,7 +111,6 @@ function prepareResponsiveCardDetailLayouts(container, entryCount, requestedColu
 export function renderModernCardDetails(containerElement, detailEntries, dataTypes = {}, { columns } = {}) {
     const entries = Array.isArray(detailEntries) ? detailEntries : [];
     const desktopRowCount = getModernCardDetailDesktopRowCount(entries);
-    let maxVisibleLabelLength = 0;
     containerElement.classList.add("card_details_modern_tiles");
     containerElement.style.setProperty(
         "--card-details-modern-rows",
@@ -178,17 +164,12 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
             labelPlacement
         );
         textElement.dataset.cardLabelPlacement = labelPlacement;
-        if (labelElement) {
-            maxVisibleLabelLength = Math.max(
-                maxVisibleLabelLength,
-                labelElement.textContent.length
-            );
-        } else if (labelText) {
+        if (!labelElement && labelText) {
             tile.setAttribute("aria-label", labelText);
             tile.title = labelText;
             tile.classList.add("card_detail_tile--value-only");
             textElement.classList.add("card_detail_tile_text--value-only");
-        } else {
+        } else if (!labelElement) {
             tile.classList.add("card_detail_tile--value-only");
             textElement.classList.add("card_detail_tile_text--value-only");
         }
@@ -198,7 +179,7 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
             textElement.appendChild(labelElement);
         }
         textElement.appendChild(valueElement);
-        applyLabelValueLayout(textElement, labelElement, valueElement, labelMeta?.label_value_layout);
+        applyLabelValueLayout(textElement, labelElement, valueElement);
         tile.appendChild(iconElement);
         tile.appendChild(textElement);
         containerElement.appendChild(tile);
@@ -216,7 +197,6 @@ export function renderModernCardDetails(containerElement, detailEntries, dataTyp
         containerElement.appendChild(placeholder);
     }
 
-    setModernCardDetailLabelColumnWidth(containerElement, maxVisibleLabelLength);
     // Article-side summaries omit the option and keep their existing two-column/mobile CSS.
     if (columns !== undefined) prepareResponsiveCardDetailLayouts(containerElement, entries.length, columns);
 }

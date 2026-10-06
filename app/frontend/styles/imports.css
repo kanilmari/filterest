@@ -81,8 +81,8 @@
 @import url("../reusable_components/animated_disclosure/animated_disclosure.css");
 @import url("../reusable_components/collapsible_section/collapsible_section.css");
 @import url("../reusable_components/key_value_container/kv_container.css");
-/* The card field-name placement sheet has to outrank both the card renderers'
-   own stylesheets and the shared key/value pair layout, so it loads after them. */
+/* Card punctuation and the two-line preview cap follow the shared pair layout.
+   Field placement belongs to the shared adapter in both card styles. */
 @import url("../core_components/table_views/card_view/card_field_label_placement.css");
 @import url("../reusable_components/dark_overlay/dark_overlay.css");
 @import url("../reusable_components/notifications/toast_notification.css");

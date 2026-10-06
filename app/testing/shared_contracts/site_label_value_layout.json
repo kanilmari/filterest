@@ -1,0 +1,14 @@
+[
+    {"environment": "dev", "value": "stacked", "expected": "stacked"},
+    {"environment": "dev", "value": "inline", "expected": "inline"},
+    {"environment": "dev", "value": "auto", "expected": "auto"},
+    {"environment": "prod", "value": "stacked", "expected": "stacked"},
+    {"environment": "prod", "value": "inline", "expected": "inline"},
+    {"environment": "prod", "value": "auto", "expected": "stacked"},
+    {"environment": "test", "value": "auto", "expected": "stacked"},
+    {"environment": "", "value": "auto", "expected": "stacked"},
+    {"environment": "dev", "value": "unknown", "expected": "stacked"},
+    {"environment": "prod", "value": "unknown", "expected": "stacked"},
+    {"environment": "dev", "value": "", "expected": "stacked"},
+    {"environment": "prod", "value": null, "expected": "stacked"}
+]

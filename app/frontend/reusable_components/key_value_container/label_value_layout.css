@@ -1,32 +1,36 @@
 /* label_value_layout.css
  * Arranges configured field pairs while inheriting existing theme surfaces and typography.
- * Connects the shared column default to standard/modern cards and article details.
+ * Connects the shared site choice to standard/modern cards and article details.
  * Keeps explicit inline/stacked choices stable and lets auto reflow with text and width.
  */
-.label-value-layout[data-label-value-layout] {
+:root .label-value-layout[data-label-value-layout] {
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
     align-items: start;
+    height: auto;
+    grid-column: auto;
+    grid-template-rows: none;
     gap: 0.35rem 0.65rem;
 }
-.label-value-layout[data-label-value-layout]::after {
+:root .label-value-layout[data-label-value-layout]::after {
     display: none;
 }
-.label-value-layout[data-label-value-layout="inline"] {
+:root .label-value-layout[data-label-value-layout="inline"] {
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
 }
-.label-value-layout[data-label-value-layout="stacked"] {
+:root .label-value-layout[data-label-value-layout="stacked"] {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
 }
-.label-value-layout[data-label-value-layout="auto"] {
+:root .label-value-layout[data-label-value-layout="auto"] {
     display: flex;
     flex-flow: row wrap;
 }
-.label-value-layout[data-label-value-layout] > .label-value-layout__label,
-.label-value-layout[data-label-value-layout] > .label-value-layout__value {
+:root .label-value-layout[data-label-value-layout] > .label-value-layout__label,
+:root .label-value-layout[data-label-value-layout] > .label-value-layout__value {
     position: static;
     flex: 0 1 auto;
     white-space: normal;
@@ -36,36 +40,56 @@
     min-width: 0;
     max-width: 100%;
     margin: 0;
-    padding-inline: 0;
-    overflow-wrap: anywhere;
+    padding: 0;
+    /* Words break at hyphenation points of the page language; only a word wider than its column breaks elsewhere. */
+    overflow-wrap: break-word;
+    hyphens: auto;
     grid-column: auto;
 }
-.label-value-layout[data-label-value-layout="auto"] > .label-value-layout__label {
+:root .label-value-layout[data-label-value-layout="auto"] > .label-value-layout__label {
     flex: 0 1 auto;
 }
-.label-value-layout[data-label-value-layout="auto"] > .label-value-layout__value {
+:root .label-value-layout[data-label-value-layout="auto"] > .label-value-layout__value {
     flex: 1 1 16ch;
 }
-.label-value-layout[data-label-value-layout] > .label-value-layout__value {
+:root .label-value-layout[data-label-value-layout] > .label-value-layout__value {
     display: block;
     max-height: none;
     overflow: visible;
+    line-clamp: unset;
     -webkit-line-clamp: unset;
 }
-.label-value-layout[data-label-value-layout] .kv-link-group {
+/* The legacy keyword wrapper otherwise forces a single unbroken line. */
+:root .label-value-layout[data-label-value-layout] > .keyword_value {
+    white-space: normal !important;
+}
+:root .label-value-layout[data-label-value-layout] .kv-link-group {
     margin-inline: 0;
 }
-.label-value-layout[data-label-value-layout].label-value-layout--value-only {
+:root .label-value-layout[data-label-value-layout].label-value-layout--value-only {
     grid-template-columns: minmax(0, 1fr);
 }
 
 /* Existing compact card rules clamp nested text; explicit pair layout may wrap it. */
-.label-value-layout[data-label-value-layout] .card_detail_row_label_text {
+:root .label-value-layout[data-label-value-layout] .card_detail_row_label_text {
     white-space: normal;
     overflow: visible;
 }
-.label-value-layout[data-label-value-layout] > .label-value-layout__value > a {
+:root .label-value-layout[data-label-value-layout] > .label-value-layout__value > a {
     display: inline;
     overflow: visible;
+    line-clamp: unset;
     -webkit-line-clamp: unset;
+}
+
+/* Both card styles use the same text metrics; surfaces and colours stay themed. */
+:root .card_details_kv .label-value-layout[data-label-value-layout] {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+:root .card_details_kv .label-value-layout[data-label-value-layout] > .label-value-layout__label {
+    font-weight: 600;
+}
+:root .card_details_kv .label-value-layout[data-label-value-layout] > .label-value-layout__value {
+    line-height: 1.5;
 }

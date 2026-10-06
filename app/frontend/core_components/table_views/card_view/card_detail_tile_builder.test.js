@@ -4,11 +4,12 @@
 // Exists to keep the new modern card variant independent from legacy KV renderers.
 // @vitest-environment jsdom
 
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 
 import { renderModernCardDetails } from "./card_detail_tile_builder.js";
 
 describe("card_detail_tile_builder", () => {
+    beforeEach(() => { delete document.documentElement.dataset.labelValueLayout; });
     test.each([1, 2, 3, 4])("prepares column-first layouts up to the requested %i columns", (columns) => {
         const container = document.createElement("div");
         const entries = Array.from({ length: 5 }, (_, index) => ({
@@ -128,7 +129,7 @@ describe("card_detail_tile_builder", () => {
         expect(container.querySelector(".card_detail_tile")?.classList.contains("card_detail_tile--value-only")).toBe(true);
     });
 
-    test("sets one shared label column width from the longest visible label", () => {
+    test("keeps label/value DOM without a content-based width override", () => {
         const container = document.createElement("div");
 
         renderModernCardDetails(container, [
@@ -138,7 +139,7 @@ describe("card_detail_tile_builder", () => {
 
         expect(
             container.style.getPropertyValue("--card-detail-tile-label-width")
-        ).toBe("16ch");
+        ).toBe("");
         for (const tile of Array.from(container.querySelectorAll(".card_detail_tile"))) {
             const text = tile.querySelector(".card_detail_tile_text");
             expect(tile.children[0]?.classList.contains("card_detail_tile_icon")).toBe(true);
@@ -195,7 +196,7 @@ describe("card_detail_tile_builder", () => {
         expect(tiles[3].getAttribute("aria-hidden")).toBe("true");
     });
     test.each([null, "auto", "inline", "stacked"])(
-        "uses source-column layout %s and retains values, links and field order", (layout) => {
+        "ignores source-column layout %s and retains values, links and field order", (layout) => {
             const container = document.createElement("div");
             const entries = [
                 { column: "display_name", sourceColumn: "website", label: "Website", rawValue: "https://example.test", isLink: true },
@@ -206,8 +207,8 @@ describe("card_detail_tile_builder", () => {
                 website: { label_value_layout: layout, card_detail_label_mode: "both" },
             });
             const pairs = container.querySelectorAll(".card_detail_tile_text");
-            expect(pairs[0].dataset.labelValueLayout).toBe(layout || undefined);
-            expect(pairs[1].dataset.labelValueLayout).toBeUndefined();
+            expect(pairs[0].dataset.labelValueLayout).toBe("stacked");
+            expect(pairs[1].dataset.labelValueLayout).toBe("stacked");
             expect(pairs[0].querySelector("a")?.getAttribute("href")).toBe("https://example.test");
             expect(pairs[0].querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
             expect(pairs[1].textContent).toContain("Unchanged");
@@ -264,7 +265,7 @@ describe("card_detail_tile_builder", () => {
             expect(label?.dataset.langKey).toBe("price");
         });
 
-        test("a column that states its own arrangement still decides for itself", () => {
+        test("stored column layout cannot restore a hidden name or decide placement", () => {
             const container = document.createElement("div");
 
             renderModernCardDetails(container, [
@@ -285,9 +286,10 @@ describe("card_detail_tile_builder", () => {
             });
 
             const texts = container.querySelectorAll(".card_detail_tile_text");
-            expect(texts[0].dataset.cardLabelPlacement).toBe("stacked");
-            expect(texts[0].querySelector(".card_detail_tile_label")?.textContent).toBe("Summary");
-            expect(texts[1].dataset.cardLabelPlacement).toBe("stacked");
+            expect(texts[0].dataset.cardLabelPlacement).toBe("hidden");
+            expect(texts[0].querySelector(".card_detail_tile_label")).toBeNull();
+            expect(texts[1].dataset.cardLabelPlacement).toBe("inline");
+            expect(texts[1].dataset.labelValueLayout).toBe("stacked");
         });
 
         test("keeps link handling and its safety rules untouched by the placement", () => {

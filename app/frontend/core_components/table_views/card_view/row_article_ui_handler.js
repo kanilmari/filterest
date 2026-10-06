@@ -136,7 +136,7 @@ export function createRowArticleKeyValueElement(
     }
 
     container.appendChild(valueDiv);
-    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv, labelMeta?.label_value_layout);
+    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv);
     return container;
 }
 
@@ -217,7 +217,7 @@ export function createRowArticleNavigableElement({
     }
 
     container.appendChild(valueDiv);
-    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv, labelMeta?.label_value_layout);
+    applyLabelValueLayout(container, showKey ? container.firstElementChild : null, valueDiv);
     return container;
 }
 

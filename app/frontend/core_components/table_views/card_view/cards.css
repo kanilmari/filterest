@@ -328,7 +328,6 @@ body.dark-mode .card--modern {
 
 .card--modern .card_details_modern_tiles {
     --card-detail-tile-gap: 0.72rem;
-    --card-detail-tile-label-width: 8ch;
 
     display: grid;
     grid-auto-flow: column;
@@ -537,17 +536,6 @@ body.dark-mode .card--modern {
         border-top: 1px solid var(--card-modern-separator-color);
     }
 
-    .card--modern .card_detail_tile_text {
-        grid-template-columns:
-            minmax(0, min(var(--card-detail-tile-label-width), 42%))
-            minmax(0, 1fr);
-        align-items: center;
-        gap: 0.16rem var(--card-detail-tile-gap);
-    }
-
-    .card--modern .card_detail_tile_text--value-only .card_detail_tile_value {
-        grid-column: 1 / -1;
-    }
 }
 
 
@@ -1050,8 +1038,7 @@ body.dark-mode .card--modern {
 }
 
 .card_details_kv:not(.card_details_single_line) .kv-value,
-.card_details_kv:not(.card_details_single_line) .kv-conditional-value,
-.card_details_kv:not(.card_details_single_line) .kv-conditional-value.kv-dropped {
+.card_details_kv:not(.card_details_single_line) .kv-conditional-value {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -1086,13 +1073,9 @@ body.dark-mode .card--modern {
     margin-left: 0;
 }
 
-.card_details_kv .kv-conditional-value:not(.kv-dropped) {
+.card_details_kv .kv-conditional-value {
     box-sizing: border-box;
     padding-left: var(--card-details-key-value-gap);
-}
-
-.card_details_kv .kv-conditional-value.kv-dropped {
-    padding-left: 0;
 }
 
 .card_details_single_line {
@@ -1119,23 +1102,6 @@ body.dark-mode .card--modern {
     align-items: center;
     column-gap: 0;
     min-width: 0;
-}
-
-@supports (grid-template-columns: subgrid) {
-    @container card-list (min-width: 650px) {
-        .card_details_single_line:not(.card_details_single_line--responsive) {
-            grid-template-columns:
-                max-content minmax(0, 1fr)
-                max-content minmax(0, 1fr);
-            column-gap: 0;
-        }
-
-        .card_details_single_line:not(.card_details_single_line--responsive) .card_detail_row_single_line {
-            grid-column: span 2;
-            grid-template-columns: subgrid;
-            column-gap: inherit;
-        }
-    }
 }
 
 /* The ordinary Plain card uses the same 240px width bands as Glowy. */

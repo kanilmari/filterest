@@ -29,6 +29,7 @@ import {
     normalizeTicketStatusForDb,
 } from './card_field_formatter_helpers.js';
 import { applyNumberInputStep } from '../../general_tables/gt_1_row_crud/number_input_step_resolver.js';
+import { applyLabelValueLayout } from '../../../reusable_components/key_value_container/label_value_layout.js';
 import { resolveCardFieldLabelPlacement } from './card_field_label_placement.js';
 
 /**
@@ -87,7 +88,6 @@ export function createKeyValueElement(
         labelRequested: Boolean(column_label),
         baseRoles: parseRoleString(columnMeta?.card_element || "").baseRoles,
         dataType: columnMeta?.data_type,
-        labelValueLayout: columnMeta?.label_value_layout,
     });
     if (labelPlacement !== "hidden") {
         wrapper.dataset.cardLabelPlacement = labelPlacement;
@@ -126,6 +126,7 @@ export function createKeyValueElement(
     }
 
     wrapper.appendChild(valueDiv);
+    applyLabelValueLayout(wrapper, wrapper.querySelector(".kv_label"), valueDiv);
 
     return wrapper;
 }

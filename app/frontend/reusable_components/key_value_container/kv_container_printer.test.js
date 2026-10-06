@@ -13,6 +13,7 @@ describe("renderKeyValuePairs", () => {
 
     beforeEach(() => {
         document.body.innerHTML = "";
+        delete document.documentElement.dataset.labelValueLayout;
         originalResizeObserver = globalThis.ResizeObserver;
         observeCalls = 0;
         vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
@@ -184,7 +185,7 @@ describe("renderKeyValuePairs", () => {
         });
     });
     test.each(["conditional", "stacked", "inline"])(
-        "honors per-column layouts inside legacy %s mode without changing values or visibility", (layoutMode) => {
+        "ignores per-column layouts inside legacy %s mode without changing values or visibility", (layoutMode) => {
             const kvContainer = document.createElement("div");
             document.body.append(kvContainer);
             const settings = [null, "auto", "inline", "stacked"];
@@ -197,7 +198,7 @@ describe("renderKeyValuePairs", () => {
             settings.forEach((setting, index) => {
                 const pair = kvContainer.querySelector(".column_orders_website" + index);
                 expect(pair).not.toBeNull();
-                expect(pair.dataset.labelValueLayout).toBe(setting || undefined);
+                expect(pair.dataset.labelValueLayout).toBe("stacked");
                 expect(pair.querySelector("a")?.getAttribute("href")).toBe("https://example.test/" + index);
                 expect(pair.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
                 expect(pair.textContent).toContain("Website " + index);
@@ -229,7 +230,7 @@ describe("renderKeyValuePairs", () => {
         );
 
         test.each(["conditional", "stacked", "inline"])(
-            "keeps a short value's name on the value's line in %s mode", (layoutMode) => {
+            "keeps a short value name visible while the site decides placement in %s mode", (layoutMode) => {
                 const kvContainer = document.createElement("div");
                 document.body.append(kvContainer);
 
@@ -240,7 +241,7 @@ describe("renderKeyValuePairs", () => {
 
                 const pair = kvContainer.querySelector(".column_orders_price");
                 expect(pair?.dataset.cardLabelPlacement).toBe("inline");
-                expect(pair?.dataset.labelValueLayout).toBe("inline");
+                expect(pair?.dataset.labelValueLayout).toBe("stacked");
                 // The colon belongs to style, never to the translated name element.
                 expect(pair?.querySelector(".kv-key")?.textContent).toBe("Price");
                 expect(pair?.querySelector(".kv-value")?.classList)
@@ -248,7 +249,8 @@ describe("renderKeyValuePairs", () => {
             },
         );
 
-        test("a stated placement overrules the column's own setting", () => {
+        test("the site choice overrules both a stated placement and column metadata", () => {
+            document.documentElement.dataset.labelValueLayout = "inline";
             const kvContainer = document.createElement("div");
             document.body.append(kvContainer);
 
@@ -260,7 +262,7 @@ describe("renderKeyValuePairs", () => {
 
             const pair = kvContainer.querySelector(".column_orders_summary");
             expect(pair?.dataset.cardLabelPlacement).toBe("stacked");
-            expect(pair?.dataset.labelValueLayout).toBe("stacked");
+            expect(pair?.dataset.labelValueLayout).toBe("inline");
         });
 
         test("a stated placement is never re-decided by one row's measured text", () => {

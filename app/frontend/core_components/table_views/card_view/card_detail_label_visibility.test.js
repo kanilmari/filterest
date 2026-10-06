@@ -84,7 +84,7 @@ describe.each(renderers)("$name field-name visibility", ({ name, render }) => {
                 expect(container.textContent).not.toContain("Hinta");
             }
             expect(container.querySelector("[data-card-label-placement]")?.dataset.cardLabelPlacement)
-                .toBe(effective ? layout || "inline" : "hidden");
+                .toBe(effective ? "inline" : "hidden");
             expect(container.textContent).toContain("129 €");
             expect(JSON.stringify(entries)).toBe(originalEntries);
 

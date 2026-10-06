@@ -74,13 +74,13 @@ describe('the rule that places a card field name', () => {
         })).toBe(CARD_FIELD_LABEL_PLACEMENTS.HIDDEN);
     });
 
-    test("the column's own layout setting overrules the rule in both directions", () => {
+    test("stored column layout no longer controls placement or visibility", () => {
         expect(resolveCardFieldLabelPlacement({
             labelRequested: true, baseRoles: ['description'], dataType: 'text', labelValueLayout: 'inline',
-        })).toBe(CARD_FIELD_LABEL_PLACEMENTS.INLINE);
+        })).toBe(CARD_FIELD_LABEL_PLACEMENTS.HIDDEN);
         expect(resolveCardFieldLabelPlacement({
             labelRequested: true, baseRoles: ['details'], dataType: 'numeric', labelValueLayout: 'stacked',
-        })).toBe(CARD_FIELD_LABEL_PLACEMENTS.STACKED);
+        })).toBe(CARD_FIELD_LABEL_PLACEMENTS.INLINE);
         // "auto" states no arrangement, so the long-text rule still answers.
         expect(resolveCardFieldLabelPlacement({
             labelRequested: true, baseRoles: ['description'], labelValueLayout: 'auto',
@@ -91,6 +91,7 @@ describe('the rule that places a card field name', () => {
 describe('the card field the renderer builds', () => {
     beforeEach(() => {
         getLanguageWithBrowserFallbackMock.mockReturnValue('en');
+        delete document.documentElement.dataset.labelValueLayout;
     });
 
     test('leaves out the name of a long text field', () => {
@@ -115,13 +116,14 @@ describe('the card field the renderer builds', () => {
         expect(label(element)?.textContent).toBe('');
     });
 
-    test("keeps a column's own stacked setting as the exception it is", () => {
+    test("ignores a stored column choice without restoring a hidden name", () => {
         const element = renderCardField('summary', 'A long summary of this row.', {
             card_element: 'description1', data_type: 'text', label_value_layout: 'stacked',
         });
 
-        expect(placement(element)).toBe('stacked');
-        expect(label(element)?.dataset.langKey).toBe('summary');
+        expect(placement(element)).toBeUndefined();
+        expect(label(element)).toBeNull();
+        expect(element.dataset.labelValueLayout).toBe('stacked');
     });
 
     test('shows no name when the column asked for none', () => {

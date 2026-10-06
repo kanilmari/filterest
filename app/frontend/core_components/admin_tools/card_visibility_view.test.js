@@ -415,107 +415,25 @@ describe('card_visibility_view', () => {
         return container;
     }
 
-    test.each([
-        ['en', 'Field label and value layout', ['Current default', 'Automatic', 'Side by side', 'Stacked']],
-        ['fi', 'Kentän otsikon ja arvon asettelu', ['Nykyinen oletus', 'Automaattinen', 'Rinnakkain', 'Allekkain']],
-    ])('explains the common column default in %s without conflating placement', async (language, label, copy) => {
+    test.each(['en', 'fi'])('hides the per-column layout editor in %s and keeps stored values on unrelated saves', async language => {
         getLanguageWithBrowserFallbackMock.mockReturnValue(language);
-        const container = await openLayoutEditor();
-        const select = container.querySelector('[data-testid="label-value-layout-select"]');
-        expect(select.getAttribute('aria-label')).toBe(label);
-        expect(Array.from(select.options, option => option.value)).toEqual(['', 'auto', 'inline', 'stacked']);
-        expect(Array.from(select.options, option => option.textContent)).toEqual(copy);
-        expect(container.querySelector('.cv-layout-help')?.textContent).toContain(
-            language === 'fi' ? 'ei muuta kentän paikkaa tai näkyvyyttä' : 'does not change field placement or visibility',
-        );
-        container.__cleanupListeners();
-    });
-
-    test.each(['auto', 'inline', 'stacked', null])('saves %s and confirms exact API readback before success', async (layout) => {
-        const container = await openLayoutEditor(layout === null ? 'inline' : null);
-        const select = container.querySelector('[data-testid="label-value-layout-select"]');
-        select.value = layout || '';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        await flushAsyncWork();
-        const draft = localStorage.getItem('card_visibility_draft_orders');
-        expect(draft).toContain('"label_value_layout":' + JSON.stringify(layout));
-        saveCardVisibilityMock.mockResolvedValue({ status: 'ok', message: 'Verified saved' });
-        let resolveReadback;
-        fetchCardVisibilityMock.mockImplementation(() => new Promise(resolve => { resolveReadback = resolve; }));
-        container.querySelector('[data-testid="card-visibility-save-button"]').click();
-        await flushAsyncWork();
-        expect(saveCardVisibilityMock).toHaveBeenCalledWith(expect.objectContaining({
-            table_name: 'orders',
-            columns: [expect.objectContaining({ label_value_layout: layout, card_element: 'details' })],
-        }));
-        expect(showSuccessToastMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('card_visibility_draft_orders')).not.toBeNull();
-        resolveReadback({ table_name: 'orders', columns: [buildColumn({ label_value_layout: layout })] });
-        await flushAsyncWork();
-        await flushAsyncWork();
-        expect(showSuccessToastMock).toHaveBeenCalledWith('Verified saved');
-        expect(localStorage.getItem('card_visibility_draft_orders')).toBeNull();
-        container.__cleanupListeners();
-    });
-
-    test('cancel drops only the local layout draft without API writes', async () => {
         const container = await openLayoutEditor('inline');
-        const select = container.querySelector('[data-testid="label-value-layout-select"]');
-        select.value = 'stacked';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        await flushAsyncWork();
-        container.querySelector('[data-testid="card-visibility-cancel-button"]').click();
-        await flushAsyncWork();
-        expect(saveCardVisibilityMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('card_visibility_draft_orders')).toBeNull();
-        expect(container.textContent).toContain('Side by side');
-        container.__cleanupListeners();
-    });
-
-    test('readback mismatch preserves the draft and prevents context change or success', async () => {
-        extractFirstSelectedTableNameMock.mockImplementation(selected => selected[0]);
-        const container = await openLayoutEditor(null);
-        const select = container.querySelector('[data-testid="label-value-layout-select"]');
-        select.value = 'stacked';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        await flushAsyncWork();
-        saveCardVisibilityMock.mockResolvedValue({ status: 'ok' });
-        showConfirmModalMock.mockResolvedValue(true);
-        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        document.dispatchEvent(new CustomEvent('checkboxSelectionChanged', {
-            detail: { selectedCategories: ['users'] },
-        }));
-        await flushAsyncWork();
-        await flushAsyncWork();
-        await flushAsyncWork();
-        expect(saveCardVisibilityMock).toHaveBeenCalledOnce();
-        expect(showSuccessToastMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"label_value_layout":"stacked"');
-        expect(fetchCardVisibilityMock).not.toHaveBeenCalledWith('users');
-        expect(warning).toHaveBeenCalled();
-        expect(container.querySelector('[role="alert"]').hidden).toBe(false);
-        expect(container.querySelector('[role="alert"]').textContent).toContain('could not be verified');
-        container.__cleanupListeners();
-    });
-
-    test('direct Save handles rejected readback without an unhandled promise or cleared draft', async () => {
-        const container = await openLayoutEditor(null);
-        const select = container.querySelector('[data-testid="label-value-layout-select"]');
-        select.value = 'inline';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        await flushAsyncWork();
-        saveCardVisibilityMock.mockResolvedValue({ status: 'ok' });
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(container.querySelector('[data-testid="label-value-layout-select"]')).toBeNull();
+        expect(container.querySelector('.cv-layout-help')).toBeNull();
+        expect(container.textContent).not.toContain('label_value_layout');
+        const select = container.querySelector('[data-testid="card-label-visibility-select"]');
+        select.value = 'false'; select.dispatchEvent(new Event('change'));
+        saveCardVisibilityMock.mockImplementation(async request => {
+            fetchCardVisibilityMock.mockResolvedValue({ table_name: 'orders', columns: request.columns });
+            return { status: 'ok' };
+        });
         container.querySelector('[data-testid="card-visibility-save-button"]').click();
-        await flushAsyncWork();
-        await flushAsyncWork();
-        await flushAsyncWork();
-        expect(showSuccessToastMock).not.toHaveBeenCalled();
-        expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"label_value_layout":"inline"');
-        expect(container.querySelector('[role="alert"]').hidden).toBe(false);
+        await vi.waitFor(() => expect(showSuccessToastMock).toHaveBeenCalled());
+        expect(saveCardVisibilityMock).toHaveBeenCalledWith(expect.objectContaining({
+            columns: [expect.objectContaining({ label_value_layout: 'inline', show_key_on_card_override: false })],
+        }));
         container.__cleanupListeners();
     });
-
 
     test.each([null, true, false])('edits raw label override %s without replacing the effective boolean', async initial => {
         let stored = buildColumn({ show_key_on_card: true, show_key_on_card_override: initial });
