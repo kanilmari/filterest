@@ -373,3 +373,21 @@ func TestDecidingReportsAFailedReadRatherThanGuessing(t *testing.T) {
 		t.Fatalf("an unreachable database answered %v, want %v", err, ErrPolicyUnreadable)
 	}
 }
+
+// Months and years are anchored to the database's calendar date at sign-in.
+func TestDecideUsesSharedCalendarDurations(t *testing.T) {
+	for _, test := range []struct {
+		now  time.Time
+		unit string
+		want time.Time
+	}{
+		{time.Date(2025, 1, 31, 12, 0, 0, 0, time.UTC), "months", time.Date(2025, 3, 3, 12, 0, 0, 0, time.UTC)},
+		{time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), "years", time.Date(2025, 3, 1, 12, 0, 0, 0, time.UTC)},
+	} {
+		site := &deadlineSite{now: test.now, policyJSON: fmt.Sprintf(`{"limit_enabled":true,"limit_unit":%q,"limit_amount":1}`, test.unit)}
+		expires, err := Decide(context.Background(), openDeadlineSite(t, site))
+		if err != nil || expires != test.want.Unix() {
+			t.Fatalf("%s: %d %v, want %d", test.unit, expires, err, test.want.Unix())
+		}
+	}
+}

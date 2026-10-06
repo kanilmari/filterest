@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/system_config_checks"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -124,7 +126,25 @@ func FixTableTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			updateQuery := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE id = $2", pq.QuoteIdentifier(req.Table), pq.QuoteIdentifier(colName))
-			if _, err := backend.Db.Exec(updateQuery, updated, rowID); err != nil {
+			var writer dbutils.Querier = backend.Db
+			if req.Table == "system_config" {
+				tx, ok := dbutils.GetTx(r.Context())
+				if !ok {
+					httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction missing")
+					return
+				}
+				if err := system_config_checks.ValidateUpdate(tx, req.Table, rowID, map[string]interface{}{colName: updated}); err != nil {
+					var refusal *httpresponse.Refusal
+					if errors.As(err, &refusal) {
+						httpresponse.RespondWithRefusal(w, refusal)
+					} else {
+						httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking setting")
+					}
+					return
+				}
+				writer = tx
+			}
+			if _, err := writer.Exec(updateQuery, updated, rowID); err != nil {
 				httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("\033[31merror: %v\033[0m", err))
 				return
 			}

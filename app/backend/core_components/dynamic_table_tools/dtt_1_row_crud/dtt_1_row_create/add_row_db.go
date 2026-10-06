@@ -17,9 +17,9 @@ import (
 
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_triggers "easelect/backend/core_components/dynamic_table_tools/dtt_triggers"
-	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 	"easelect/backend/core_components/httpresponse"
 	lang "easelect/backend/core_components/lang"
+	"easelect/backend/core_components/system_config_checks"
 
 	"github.com/lib/pq"
 )
@@ -36,6 +36,14 @@ func insertDataAccordingToPayload(
 	payload map[string]interface{},
 	tx *sql.Tx,
 ) (int64, []ChildInsertResult, error) {
+
+	if err := system_config_checks.ValidateRow(tableName, payload); err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+		}
+		return 0, nil, err
+	}
 
 	currentUserID, err := getCurrentUserID(r)
 	if err != nil {
@@ -297,6 +305,13 @@ func insertDataAccordingToPayload(
 			}
 			return 0, nil, err
 		}
+		if err := system_config_checks.ValidateRow(child.TableName, child.Data); err != nil {
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(w, refusal)
+			}
+			return 0, nil, err
+		}
 		childActorColumns[child.TableName] = childMarks
 	}
 	resolvedExistingLinks, err := resolveAndAuthorizeExistingLinks(
@@ -337,7 +352,7 @@ func insertDataAccordingToPayload(
 	mainRowID, err := insertMainRow(r.Context(), tx, tableName, filteredRow, columnTypeMap)
 	if err != nil {
 		fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting main row")
+		respondToSettingWriteError(w, err, "error inserting main row")
 		return 0, nil, err
 	}
 	// A row added straight into a gallery (a gallery upload, or an API row that names an
@@ -473,7 +488,7 @@ func insertDataAccordingToPayload(
 		cID, cErr := insertSingleChildRow(tx, mainRowID, child, childType)
 		if cErr != nil {
 			fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", cErr.Error())
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error inserting child row")
+			respondToSettingWriteError(w, cErr, "error inserting child row")
 			return 0, nil, cErr
 		}
 		childResults = append(childResults, ChildInsertResult{
@@ -490,7 +505,7 @@ func insertDataAccordingToPayload(
 	//------------------------------------------------------------------
 	if err := applyExistingLinks(tx, mainRowID, resolvedExistingLinks); err != nil {
 		fmt.Printf("\033[31m[add_row_db.go] [applyExistingLinks] error: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error linking existing rows")
+		respondToSettingWriteError(w, err, "error linking existing rows")
 		return 0, nil, err
 	}
 	// Rows of the account and rights tables were checked without a lock; the INSERTs above now hold the ones referred
@@ -536,7 +551,7 @@ func respondToTriggerExecutionError(w http.ResponseWriter, tableName string, tri
 	}
 	wrappedErr := fmt.Errorf("execute triggers for %s: %w", tableName, triggerErr)
 	fmt.Printf("\033[31m[add_row_db.go] [executeTriggers] error: %s\033[0m\n", wrappedErr.Error())
-	httpresponse.RespondWithError(w, http.StatusInternalServerError, "error executing triggers")
+	respondToSettingWriteError(w, wrappedErr, "error executing triggers")
 	return wrappedErr
 }
 
@@ -623,136 +638,4 @@ func requiredGeometryValueMissing(
 	}
 	_, err := normalizeGeometryInsertValue(value, false)
 	return err != nil
-}
-
-// insertMainRow lisää päärivin tauluun ja palauttaa luodun rivin id-arvon
-// Between: insertDataAccordingToPayload -> Database
-// Why: Executes the SQL INSERT for the main row.
-func insertMainRow(ctx context.Context, tx *sql.Tx, tableName string, rowData map[string]interface{}, columnTypeMap map[string]string) (int64, error) {
-	insertColumns := []string{}
-	placeholders := []string{}
-	values := []interface{}{}
-	i := 1
-
-	for col, val := range rowData {
-		insertColumns = append(insertColumns, pq.QuoteIdentifier(col))
-		colType := strings.ToLower(columnTypeMap[col])
-
-		// Special handling for geometry columns — PostGIS requires valid WKT.
-		// Empty nullable geometry stays NULL so missing data cannot become a
-		// plausible but false map location.
-		if strings.Contains(colType, "geometry") {
-			if normalizedValue, normalizeErr := normalizeGeometryInsertValue(val, true); normalizeErr == nil && normalizedValue == nil {
-				placeholders = append(placeholders, "NULL")
-				continue
-			}
-			placeholders = append(placeholders, fmt.Sprintf("ST_GeomFromText($%d, 4326)", i))
-			values = append(values, val)
-			i++
-			continue
-		}
-
-		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-		values = append(values, val)
-		i++
-	}
-
-	if len(insertColumns) == 0 {
-		return 0, fmt.Errorf("no valid columns to insert in table %s", tableName)
-	}
-
-	insertQuery := fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) RETURNING id`,
-		pq.QuoteIdentifier(tableName),
-		strings.Join(insertColumns, ", "),
-		strings.Join(placeholders, ", "),
-	)
-
-	var mainRowID int64
-	err := tx.QueryRow(insertQuery, values...).Scan(&mainRowID)
-	if err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertMainRow] error: %s\033[0m\n", err.Error())
-		return 0, err
-	}
-	if err := dtt_search_vectors.RefreshRowSearchVector(ctx, tx, tableName, mainRowID); err != nil {
-		return 0, err
-	}
-	return mainRowID, nil
-}
-
-// insertSingleChildRow lisää yksittäisen lapsirivin child.TableName-tauluun
-// ja asettaa referencingColumnin arvoksi mainRowID.
-// Palauttaa lisätyn rivin id-arvon (childRowID).
-// Between: insertDataAccordingToPayload -> Database
-// Why: Executes the SQL INSERT for a child row.
-func insertSingleChildRow(tx *sql.Tx, mainRowID int64, child ChildRowPayload, columnTypeMap map[string]string) (int64, error) {
-	if child.TableName == "" || child.ReferencingColumn == "" {
-		return 0, fmt.Errorf("missing child data field: tableName or referencingColumn")
-	}
-	if child.Data == nil {
-		return 0, nil
-	}
-
-	// Poistetaan _file -kenttä, ettei yritetä SQL:ään
-	delete(child.Data, "_file")
-
-	// Lisätään viite päärivin ID:hen
-	child.Data[child.ReferencingColumn] = mainRowID
-
-	insertColumns := []string{}
-	placeholders := []string{}
-	values := []interface{}{}
-	i := 1
-
-	for col, val := range child.Data {
-		insertColumns = append(insertColumns, pq.QuoteIdentifier(col))
-		if strings.Contains(strings.ToLower(columnTypeMap[col]), "geometry") {
-			if val == nil || strings.TrimSpace(fmt.Sprint(val)) == "" {
-				placeholders = append(placeholders, "NULL")
-				continue
-			}
-			placeholders = append(placeholders, fmt.Sprintf("ST_GeomFromText($%d, 4326)", i))
-			values = append(values, val)
-			i++
-			continue
-		}
-		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-		values = append(values, val)
-		i++
-	}
-
-	if len(insertColumns) == 0 {
-		return 0, nil
-	}
-
-	insertQuery := fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) RETURNING id`,
-		pq.QuoteIdentifier(child.TableName),
-		strings.Join(insertColumns, ", "),
-		strings.Join(placeholders, ", "),
-	)
-
-	var childRowID int64
-	err := tx.QueryRow(insertQuery, values...).Scan(&childRowID)
-	if err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertSingleChildRow] error: %s\033[0m\n", err.Error())
-		return 0, err
-	}
-
-	// Child rows are created in the order the form lists them, before any file is
-	// saved, so several pictures of a new row keep that order and the first is the card
-	// picture; placing them later, in the file map's random order, would lose it.
-	_, orderChosen := child.Data["sort_order"]
-	if err := dtt_asset_linking.SettleNewGalleryRows(tx, child.TableName, []int64{childRowID}, orderChosen); err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertSingleChildRow -> SettleNewGalleryRows] error: %s\033[0m\n", err.Error())
-		return 0, err
-	}
-
-	// Tämän jälkeen (transaktion sisällä) päivitetään mahdolliset cacheTargets
-	if cacheErr := updateCacheTargets(tx, child.TableName, child.ReferencingColumn, child.Data); cacheErr != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertSingleChildRow -> updateCacheTargets] error: %s\033[0m\n", cacheErr.Error())
-		return 0, cacheErr
-	}
-
-	return childRowID, nil
 }

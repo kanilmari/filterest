@@ -120,6 +120,7 @@ describe('settings_view_printer', () => {
         expect(endpointRouterMock).toHaveBeenCalledTimes(1);
         expect(endpointRouterMock).toHaveBeenCalledWith('updateRow', {
             method: 'POST',
+            suppressErrorToast: true,
             url_params: '?dataset=app_settings',
             body_data: {
                 id: 12,
@@ -163,4 +164,46 @@ describe('settings_view_printer', () => {
         expect(showErrorToastMock).toHaveBeenCalledWith('Invalid JSON for feature_flags');
         expect(saveButton?.disabled).toBe(false);
     });
+    test('uses the duration editor and keeps a refused save dirty with a translated reason', async () => {
+        endpointRouterMock.mockRejectedValue(Object.assign(new Error('technical reply'), {
+            status: 400, failureNotice: { langKey: 'error_setting_duration_invalid' },
+        }));
+        getTranslationForKeyMock.mockImplementation(key => `fi:${key}`);
+        const { create_settings_view } = await loadModule();
+        const view = create_settings_view('system_config', ['id', 'key', 'value_type', 'json_value'], [
+            { id: 9, key: 'absolute_sign_in_limit', value_type: 5,
+                json_value: { limit_enabled: true, limit_amount: 30, limit_unit: 'days' } },
+        ]);
+        document.body.appendChild(view);
+        expect(view.querySelector('textarea')).toBeNull();
+        const amount = view.querySelector('input[type="number"]');
+        amount.value = '2';
+        amount.dispatchEvent(new Event('input', { bubbles: true }));
+        view.querySelector('.settings-save-button').click();
+        await flushAsyncWork();
+        expect(endpointRouterMock).toHaveBeenCalledWith('updateRow', expect.objectContaining({
+            body_data: { id: 9, column: 'json_value', value: '{"limit_enabled":true,"limit_amount":2,"limit_unit":"days"}' },
+            suppressErrorToast: true,
+        }));
+        expect(showErrorToastMock).toHaveBeenCalledWith('fi:error_setting_duration_invalid');
+        expect(showSuccessToastMock).not.toHaveBeenCalled();
+        expect(view.querySelector('.settings-row-dirty')).not.toBeNull();
+        expect(view.querySelector('.settings-save-button').disabled).toBe(false);
+    });
+
+    test('refuses a fractional duration locally without sending a request', async () => {
+        const { create_settings_view } = await loadModule();
+        const view = create_settings_view('system_config', ['id', 'key', 'value_type', 'json_value'], [
+            { id: 9, key: 'absolute_sign_in_limit', value_type: 5,
+                json_value: { limit_enabled: true, limit_amount: 30, limit_unit: 'days' } },
+        ]);
+        const amount = view.querySelector('input[type="number"]');
+        amount.value = '1.5';
+        amount.dispatchEvent(new Event('input', { bubbles: true }));
+        view.querySelector('.settings-save-button').click();
+        await flushAsyncWork();
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+        expect(showErrorToastMock).toHaveBeenCalledWith('error_setting_duration_invalid');
+    });
+
 });

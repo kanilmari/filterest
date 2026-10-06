@@ -8,6 +8,7 @@ package dtt_triggers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/system_config_checks"
 
 	"github.com/lib/pq"
 )
@@ -218,6 +220,10 @@ func ExecuteTriggers(q queryer, tableName string, newRow map[string]interface{})
 			err = executeAction(q, trigger.ID, trigger.TargetTable, trigger.ActionValues, newRow)
 			if err != nil {
 				log.Printf("error executing action for trigger %d: %v", trigger.ID, err)
+				var refusal *httpresponse.Refusal
+				if errors.As(err, &refusal) {
+					return err
+				}
 				continue
 			}
 			log.Printf("Action executed successfully for trigger ID: %d", trigger.ID)
@@ -412,6 +418,10 @@ func executeAction(q queryer, triggerID int, targetTable, actionValuesStr string
 	}
 	actionValues, err := parseActionValues(string(cleaned), sourceRow)
 	if err != nil {
+		return err
+	}
+
+	if err := system_config_checks.ValidateRow(targetTable, actionValues); err != nil {
 		return err
 	}
 

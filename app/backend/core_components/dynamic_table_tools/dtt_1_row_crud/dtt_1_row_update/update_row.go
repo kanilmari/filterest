@@ -31,6 +31,7 @@ import (
 	lang "easelect/backend/core_components/lang"
 	security "easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/system_config_checks"
 
 	"github.com/lib/pq"
 )
@@ -191,6 +192,20 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	}
 	if !rowVisible {
 		httpresponse.RespondWithError(response_writer, http.StatusForbidden, "Row is not editable by the current actor")
+		return
+	}
+
+	settingChanges := make(map[string]interface{}, len(updates))
+	for _, update := range updates {
+		settingChanges[update.Column] = update.Value
+	}
+	if err := system_config_checks.ValidateUpdate(tx, tableName, updateRequest.ID, settingChanges); err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(response_writer, refusal)
+		} else {
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error checking setting")
+		}
 		return
 	}
 

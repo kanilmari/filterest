@@ -20,12 +20,14 @@ package sign_in_deadline
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
+
+	"easelect/backend/core_components/system_config_checks"
+	"easelect/backend/reusable_components/setting_duration"
 
 	"github.com/gorilla/sessions"
 )
@@ -45,7 +47,7 @@ const SessionKey = "sign_in_expires_at"
 const NeverExpires int64 = -1
 
 // ConfigKey names the one settings row that decides the ceiling.
-const ConfigKey = "absolute_sign_in_limit"
+const ConfigKey = system_config_checks.SignInLimitKey
 
 // Policy is what that row says. The three parts travel together because none of
 // them means anything alone.
@@ -59,15 +61,20 @@ type Policy struct {
 // a policy. It is the protective answer, not the permissive one: a row that has
 // been deleted or damaged must not quietly remove the ceiling. Switching the
 // limit off is possible, but only by saying so.
-var DefaultPolicy = Policy{Enabled: true, Unit: "days", Amount: 30}
+var limitDefinition, DefaultPolicy = defaultLimitPolicy()
 
-// maxLimit bounds how long a ceiling may be, as a length of time rather than as a
-// count. Bounding the count instead is the mistake this replaces: the same number
-// was allowed whether it meant hours or days, so a figure small enough to pass as
-// hours overflowed the arithmetic when multiplied as days and came back negative
-// -- a ceiling in the distant past, which ends every sign-in the moment it begins.
-// Ten years is past any use and far inside what the arithmetic can hold.
-const maxLimit = 10 * 365 * 24 * time.Hour
+// A broken built-in definition is a build defect, never an unlimited fallback.
+func defaultLimitPolicy() (setting_duration.Definition, Policy) {
+	definition, found := system_config_checks.DurationDefinition(ConfigKey)
+	if !found {
+		panic("the sign-in limit has no registered duration definition")
+	}
+	value, err := setting_duration.Parse(definition.Default, definition)
+	if err != nil {
+		panic(fmt.Sprintf("invalid built-in sign-in limit: %v", err))
+	}
+	return definition, Policy{Enabled: value.Enabled, Unit: value.Unit, Amount: value.Amount}
+}
 
 // ErrPolicyUnreadable means the database could not be asked. It is deliberately
 // not the same as a missing row: an absent policy has an answer, while a failed
@@ -80,41 +87,28 @@ type Querier interface {
 	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
 }
 
-// Duration turns a valid policy into the length of time it describes. A day is
-// twenty-four hours here: this measures elapsed time, not calendar days, so it
-// does not move with daylight saving.
-//
-// The count is bounded against its own unit and before it is multiplied, so no
-// figure that gets past this line can overflow the result.
+// Duration gives the elapsed length for callers that have no calendar date.
+// Calendar units require a starting date and are applied by Decide instead.
 func (p Policy) Duration() (time.Duration, error) {
-	var unit time.Duration
-	switch strings.ToLower(strings.TrimSpace(p.Unit)) {
-	case "hours", "hour":
-		unit = time.Hour
-	case "days", "day":
-		unit = 24 * time.Hour
-	default:
-		return 0, fmt.Errorf("a sign-in limit is counted in hours or days, not %q", p.Unit)
+	if err := setting_duration.Validate(p.durationValue(), limitDefinition); err != nil {
+		return 0, err
 	}
-	if p.Amount <= 0 {
-		return 0, fmt.Errorf("a sign-in limit must be above zero, got %d", p.Amount)
+	unit := setting_duration.NormalizeUnit(p.Unit)
+	if unit == "months" || unit == "years" {
+		return 0, errors.New("calendar durations require a starting date")
 	}
-	if int64(p.Amount) > int64(maxLimit/unit) {
-		return 0, fmt.Errorf("a sign-in limit of %d %s is beyond any use", p.Amount, p.Unit)
-	}
-	return time.Duration(p.Amount) * unit, nil
+	start := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	end, err := p.durationValue().AddTo(start)
+	return end.Sub(start), err
 }
 
-// Valid reports whether this policy can be acted on as written. A policy that is
-// switched off describes no length of time and needs none. Note that this says
-// nothing about whether the stored setting actually said so: that is decodePolicy's
-// job, and the distinction is what a damaged row turns on.
+func (p Policy) durationValue() setting_duration.Value {
+	return setting_duration.Value{Enabled: p.Enabled, Unit: p.Unit, Amount: p.Amount}
+}
+
+// Valid uses the same rule as every settings writer.
 func (p Policy) Valid() bool {
-	if !p.Enabled {
-		return true
-	}
-	_, err := p.Duration()
-	return err == nil
+	return setting_duration.Validate(p.durationValue(), limitDefinition) == nil
 }
 
 // ReadPolicy returns the configured ceiling and the database's own idea of the
@@ -173,24 +167,11 @@ func ReadPolicy(ctx context.Context, db Querier) (Policy, time.Time, error) {
 // all. Absence now means the setting could not be read, which sends the caller to
 // the built-in limit, and only an explicit false switches the ceiling off.
 func decodePolicy(raw string) (Policy, error) {
-	var stored struct {
-		Enabled *bool  `json:"limit_enabled"`
-		Unit    string `json:"limit_unit"`
-		Amount  int    `json:"limit_amount"`
-	}
-	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+	value, err := setting_duration.Parse(raw, limitDefinition)
+	if err != nil {
 		return Policy{}, err
 	}
-	if stored.Enabled == nil {
-		return Policy{}, errors.New("it does not say whether the limit is on or off")
-	}
-	policy := Policy{Enabled: *stored.Enabled, Unit: stored.Unit, Amount: stored.Amount}
-	if policy.Enabled {
-		if _, err := policy.Duration(); err != nil {
-			return Policy{}, err
-		}
-	}
-	return policy, nil
+	return Policy{Enabled: value.Enabled, Unit: value.Unit, Amount: value.Amount}, nil
 }
 
 // Decide works out the last moment a sign-in starting now may be used, without
@@ -205,13 +186,13 @@ func Decide(ctx context.Context, db Querier) (int64, error) {
 	if !policy.Enabled {
 		return NeverExpires, nil
 	}
-	lifetime, err := policy.Duration()
+	deadline, err := policy.durationValue().AddTo(now)
 	if err != nil {
 		// ReadPolicy only returns policies it has already accepted, so reaching
 		// here means the two disagree. Refusing to sign in is the safe answer.
 		return 0, fmt.Errorf("the accepted sign-in limit is not a length of time: %w", err)
 	}
-	return now.Add(lifetime).Unix(), nil
+	return deadline.Unix(), nil
 }
 
 // Stamp decides a deadline and writes it into a session in one step.

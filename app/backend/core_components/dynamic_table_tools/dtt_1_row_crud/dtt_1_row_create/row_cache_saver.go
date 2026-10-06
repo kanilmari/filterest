@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 
+	"easelect/backend/core_components/system_config_checks"
+
 	"github.com/lib/pq"
 )
 
@@ -135,6 +137,9 @@ func updateCacheTargetsBase(
 			continue
 		}
 
+		if err := system_config_checks.ValidateMatchingUpdate(db, targetTblName, targetColumnName, referencingValue, map[string]interface{}{targetColName: filenameStr}); err != nil {
+			return err
+		}
 		updateQuery := fmt.Sprintf(
 			`UPDATE %s SET %s = $1 WHERE %s = $2`,
 			pq.QuoteIdentifier(targetTblName),

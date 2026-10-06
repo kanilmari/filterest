@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ import (
 	lang "easelect/backend/core_components/lang"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/system_config_checks"
 
 	"github.com/lib/pq"
 )
@@ -131,6 +133,14 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 	if pictures.active() {
 		query += ` RETURNING id, (xmax = 0)`
 	}
+	if sanitizedTable == "system_config" {
+		// A partial upsert can name only id and json_value. Lock out concurrent
+		// inserts too, so a missing id cannot become a registered row between
+		// its candidate check and ON CONFLICT. Row locks cover existing ids.
+		if _, err := tx.Exec(`LOCK TABLE public.system_config IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return "", "", err
+		}
+	}
 
 	for {
 		record, err := reader.Read()
@@ -162,6 +172,14 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 					}
 				}
 			}
+		}
+
+		settingRow := make(map[string]interface{}, len(cols))
+		for index, column := range cols {
+			settingRow[column] = vals[index]
+		}
+		if err := system_config_checks.ValidateInsert(tx, sanitizedTable, settingRow); err != nil {
+			return "", "", err
 		}
 
 		if pictures.active() {
@@ -220,6 +238,11 @@ func ImportTableCSVHandler(w http.ResponseWriter, r *http.Request) {
 	var actorRepairs CSVActorRepairCounts
 	filePath, usedTable, err := ImportTableCSVTxWithUsername(tx, tableName, username, &actorRepairs)
 	if err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

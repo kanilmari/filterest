@@ -237,3 +237,40 @@
         width: 100%;
     }
 }
+
+/* Duration controls share the settings surface; options follow the app override. */
+.duration-input {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.duration-input > input[type="number"] {
+    flex: 1 1 6rem;
+    width: 6rem;
+}
+
+.duration-input select {
+    flex: 1 1 8rem;
+    min-width: 0;
+    min-height: 2.2rem;
+    border: 0;
+    color: var(--text_color);
+    background: var(--input_bg_color);
+    font: inherit;
+}
+
+.duration-input option {
+    color: var(--text_color);
+    background: var(--input_bg_color);
+}
+
+.duration-input label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text_color);
+}

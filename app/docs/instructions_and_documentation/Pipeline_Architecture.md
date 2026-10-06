@@ -502,8 +502,11 @@ sign-in that row names.
   sign-in's own stamped deadline rather than to a length computed at sign-out.
 
   The ceiling is one settings row, `absolute_sign_in_limit`, holding
-  `limit_enabled`, `limit_unit` (hours or days, counted as elapsed time) and
-  `limit_amount`. The three are one row because none of them means anything alone.
+  `limit_enabled`, `limit_unit` (seconds to weeks counted as elapsed time, months
+  and years by the calendar date at sign-in) and `limit_amount`; the shared duration
+  rule in `frontend/shared/setting_durations/definitions.json` gives the allowed
+  units and bounds, and every generic settings writer refuses a value outside it.
+  The three are one row because none of them means anything alone.
   The default is thirty days. A row that is missing or that cannot be read as a
   policy gives that same default and says so in the log — the protective answer,
   never the permissive one — while a database that cannot be *asked* is an error and

@@ -256,7 +256,7 @@ func saveUploadedFiles(
 			}
 			if err := updateCacheTargetsNoTx(tx, childTableName, effectiveReferencingColumn, tempChildData); err != nil {
 				fmt.Printf("\033[31m[saveUploadedFiles -> updateCacheTargetsNoTx] error: %s\033[0m\n", err.Error())
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating image preview")
+				respondToSettingWriteError(w, err, "error updating image preview")
 				if !rollbackCleanupRegistered {
 					cleanupUpload()
 				}

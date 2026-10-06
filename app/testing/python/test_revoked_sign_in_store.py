@@ -9,6 +9,7 @@ Runs on disposable Unix-socket-only clusters, never the native or a production d
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import re
@@ -24,6 +25,7 @@ GENERATOR = APP / "server_tools/public_bootstrap/generate_bootstrap.py"
 REVOCATION_SOURCE = APP / "backend/core_components/sign_in_revocation/sign_in_revocation.go"
 LIMIT_MIGRATION = APP / "server_tools/migrations/20260927000001_add_absolute_sign_in_limit.sql"
 DEADLINE_SOURCE = APP / "backend/core_components/sign_in_deadline/sign_in_deadline.go"
+DURATION_CATALOGUE = APP / "frontend/shared/setting_durations/definitions.json"
 
 # What the two statements are handed: a moment, in whole seconds since the epoch,
 # or a negative marker for a sign-in that was given no deadline at all.
@@ -54,14 +56,15 @@ def test_the_application_asks_for_exactly_the_table_the_migration_creates():
 def test_the_built_in_limit_and_the_seeded_one_agree():
     """A site born with the row and one that falls back to the built-in get the same ceiling.
 
-    The two are written in different languages in different files, and nothing but
-    this test makes them say the same thing.
+    The two are written in different files, and nothing but this test makes them say
+    the same thing. The built-in one is the shared duration catalogue's default for
+    the setting, which the Go reader parses when it starts.
     """
-    built_in = re.search(
-        r"DefaultPolicy = Policy\{Enabled: true, Unit: \"(\w+)\", Amount: (\d+)\}",
-        DEADLINE_SOURCE.read_text(),
+    source = DEADLINE_SOURCE.read_text()
+    assert "DurationDefinition(ConfigKey)" in source and "definition.Default" in source, (
+        "the built-in sign-in limit is no longer taken from the shared duration catalogue"
     )
-    assert built_in, "the built-in sign-in limit is no longer stated where the code reads it"
+    built_in = json.loads(DURATION_CATALOGUE.read_text())["settings"]["absolute_sign_in_limit"]["default"]
 
     migration = LIMIT_MIGRATION.read_text()
     seeded_enabled = re.search(r"'limit_enabled', (\w+)", migration)
@@ -76,8 +79,9 @@ def test_the_built_in_limit_and_the_seeded_one_agree():
     assert seeded_enabled.group(1).upper() == "TRUE", (
         "a new installation would be born with no sign-in ceiling"
     )
-    assert built_in.group(1) == seeded_unit.group(1)
-    assert built_in.group(2) == seeded_amount.group(1)
+    assert built_in["limit_enabled"] is True
+    assert built_in["limit_unit"] == seeded_unit.group(1)
+    assert str(built_in["limit_amount"]) == seeded_amount.group(1)
 
     # And the bootstrap has to carry that migration, or a new installation gets no
     # row at all and falls back silently instead of being born configured.

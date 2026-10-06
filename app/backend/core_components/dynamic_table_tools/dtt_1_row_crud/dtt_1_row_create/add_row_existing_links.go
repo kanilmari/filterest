@@ -16,6 +16,7 @@ import (
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"easelect/backend/core_components/permissions"
+	"easelect/backend/core_components/system_config_checks"
 
 	"github.com/lib/pq"
 )
@@ -316,6 +317,11 @@ func applyExistingLinks(tx *sql.Tx, mainRowID int64, links []resolvedExistingLin
 	for _, relation := range links {
 		switch relation.Kind {
 		case existingRelationOneToMany:
+			for _, id := range relation.RowIDs {
+				if err := system_config_checks.ValidateUpdate(tx, relation.RelatedTableName, id, map[string]interface{}{relation.RelatedForeignKey: mainRowID}); err != nil {
+					return err
+				}
+			}
 			query := fmt.Sprintf(
 				"UPDATE %s SET %s = $1 WHERE %s = ANY($2) AND %s IS NULL",
 				pq.QuoteIdentifier(relation.RelatedTableName),
@@ -344,6 +350,9 @@ func applyExistingLinks(tx *sql.Tx, mainRowID int64, links []resolvedExistingLin
 				pq.QuoteIdentifier(relation.BridgeOtherForeignKey),
 			)
 			for _, relatedRowID := range relation.RowIDs {
+				if err := system_config_checks.ValidateRow(relation.BridgeTableName, map[string]interface{}{relation.BridgeMainForeignKey: mainRowID, relation.BridgeOtherForeignKey: relatedRowID}); err != nil {
+					return err
+				}
 				if _, err := tx.Exec(query, mainRowID, relatedRowID); err != nil {
 					return fmt.Errorf("link many-to-many row: %w", err)
 				}

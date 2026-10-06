@@ -11,6 +11,10 @@ import {
     showSuccessToast,
 } from '../../../reusable_components/notifications/toast_notification_printer.js';
 
+import durationDefinitions from '../../../shared/setting_durations/definitions.json' with { type: 'json' };
+import { createDurationInput } from '../../../reusable_components/setting_duration/duration_input.js';
+
+const durationInputs = new WeakMap();
 const DIRTY_ROW_CLASS = 'settings-row-dirty';
 
 function normalizeDateTimeLocalValue(rawValue) {
@@ -47,6 +51,8 @@ function sanitizeSettingInputIdPart(rawValue) {
 }
 
 function readSettingInputValue(inputElement, valueType) {
+    const durationInput = durationInputs.get(inputElement);
+    if (durationInput) return JSON.stringify(durationInput.getValue());
     if (!(inputElement instanceof HTMLInputElement || inputElement instanceof HTMLTextAreaElement)) {
         return '';
     }
@@ -168,6 +174,18 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
             break;
         case 5: // json
             valueColumn = jsonColumn;
+            if (datasetName === 'system_config' && Object.hasOwn(durationDefinitions.settings, row[keyColumn])) {
+                const durationInput = createDurationInput({
+                    definition: durationDefinitions.settings[row[keyColumn]],
+                    value: row[valueColumn],
+                    translate: getTranslationForKey,
+                    inputId,
+                    label: label.textContent,
+                });
+                input = durationInput.element;
+                durationInputs.set(input, durationInput);
+                break;
+            }
             input = document.createElement('textarea');
             input.rows = 4;
             input.value = typeof row[valueColumn] === 'string'
@@ -196,7 +214,7 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
         }
 
         label.htmlFor = inputId;
-        input.id = inputId;
+        if (!durationInputs.has(input)) input.id = inputId;
         input.classList.add('settings-input');
         input.dataset.testid = 'settings-input';
         if (valueColumn) input.dataset.column = valueColumn;
@@ -249,6 +267,10 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
                     continue;
                 }
 
+                if (durationInputs.has(inputElement) && !durationInputs.get(inputElement).validate()) {
+                    throw new Error(getTranslationForKey('error_setting_duration_invalid'));
+                }
+
                 if (valueType === 5 && typeof nextValue === 'string' && nextValue.trim() !== '') {
                     try {
                         JSON.parse(nextValue);
@@ -259,6 +281,7 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
 
                 await endpoint_router('updateRow', {
                     method: 'POST',
+                    suppressErrorToast: true,
                     url_params: `?dataset=${encodeURIComponent(datasetName)}`,
                     body_data: {
                         id: rowId,
@@ -283,7 +306,9 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
             }
         } catch (error) {
             console.warn('settings_view_printer: save failed', error);
-            showErrorToast(error?.message || getTranslationForKey('save_failed', { fallback: 'Saving settings failed' }));
+            showErrorToast(error?.failureNotice?.langKey
+                ? getTranslationForKey(error.failureNotice.langKey)
+                : error?.message || getTranslationForKey('save_failed', { fallback: 'Saving settings failed' }));
         } finally {
             updateSaveUi(container);
         }
