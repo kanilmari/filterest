@@ -124,13 +124,12 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         for item in parsed for field in item.fields if field.go_type.startswith("*")
     ]
     assert pointers == [
-        ("CardVisibilityColumn", "label_value_layout", False),
         ("CardVisibilityColumn", "show_key_on_card_override", False),
         ("CardVisibilityResponse", "card_style_variant", False),
         ("CardVisibilityResponse", "card_detail_columns", False),
     ]
     output = generator.build_output(parsed)
-    assert "    label_value_layout: string | null;" in output
+    assert "label_value_layout" not in output
     assert "    card_style_variant: string | null;" in output
     assert "    show_key_on_card_override: boolean | null;" in output
     assert "    card_detail_columns: number | null;" in output

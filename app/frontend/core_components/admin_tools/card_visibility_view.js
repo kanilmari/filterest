@@ -74,7 +74,11 @@ function getCardStyleVariantLabel(value) {
 }
 
 function cloneColumnsData(columns) {
-    return JSON.parse(JSON.stringify(Array.isArray(columns) ? columns : []));
+    const rows = JSON.parse(JSON.stringify(Array.isArray(columns) ? columns : []));
+    // Old cached responses and saved drafts may still contain the retired field.
+    // Strip it at the editor boundary rather than replaying it in a visibility save.
+    rows.forEach((row) => { delete row.label_value_layout; });
+    return rows;
 }
 
 function buildDraftStorageKey(tableName) {
@@ -327,26 +331,22 @@ export async function generate_card_visibility_form(container) {
         const normalizedLayout = normalizeClientCardDetailsLayout(nextLayout);
         const normalizedStyleVariant = normalizeClientCardStyleOverride(nextStyleVariant);
         const targetDataset = currentTableName;
+        nextRows = cloneColumnsData(nextRows);
         const response = await saveCardVisibility({
             table_name: targetDataset,
             card_details_layout: normalizedLayout,
             card_style_variant: normalizedStyleVariant,
             columns: nextRows,
         });
-        const configuredRows = nextRows.filter((row) => Object.hasOwn(row, 'label_value_layout'));
         const labelRows = nextRows.filter((row) => Object.hasOwn(row, 'show_key_on_card_override'));
-        if (configuredRows.length || labelRows.length) {
+        if (labelRows.length) {
             const readback = await fetchCardVisibility(targetDataset);
             const returnedColumns = Array.isArray(readback) ? readback : readback?.columns;
-            const values = new Map((returnedColumns || []).map((row) => [row.column_uid, row.label_value_layout]));
             const labelValues = new Map((returnedColumns || []).map((row) => [row.column_uid, row.show_key_on_card_override]));
             if ((!Array.isArray(readback) && readback?.table_name && readback.table_name !== targetDataset)
-                || configuredRows.some((row) => !values.has(row.column_uid)
-                    || values.get(row.column_uid) !== row.label_value_layout)
                 || labelRows.some((row) => labelValues.get(row.column_uid) !== row.show_key_on_card_override)) {
-                throw new Error(getCardVisibilityUiText('label_value_layout_readback_failed',
-                    'Asetuksen tallennusta ei voitu varmistaa. Lataa asetukset uudelleen.',
-                    'The saved setting could not be verified. Reload the settings.'));
+                throw new Error(getCardVisibilityUiText('save_failed',
+                    'Tallennus epäonnistui.', 'Save failed.'));
             }
         }
         if (currentTableName !== targetDataset) return;
@@ -497,9 +497,8 @@ export async function generate_card_visibility_form(container) {
             console.warn('card_visibility_view: save failed', err);
             const notice = matrixContainer.querySelector('[data-testid="card-visibility-save-error"]');
             if (notice) {
-                notice.textContent = getCardVisibilityUiText('label_value_layout_readback_failed',
-                    'Asetuksen tallennusta ei voitu varmistaa. Lataa asetukset uudelleen.',
-                    'The saved setting could not be verified. Reload the settings.');
+                notice.textContent = getCardVisibilityUiText('save_failed',
+                    'Tallennus epäonnistui.', 'Save failed.');
                 notice.hidden = false;
             }
             return false;
@@ -540,7 +539,7 @@ export async function generate_card_visibility_form(container) {
             if (requestSequence !== loadRequestSequence) {
                 return;
             }
-            columnsData = prepareCardLabelVisibilityRows(Array.isArray(response) ? response : (response.columns || []));
+            columnsData = cloneColumnsData(prepareCardLabelVisibilityRows(Array.isArray(response) ? response : (response.columns || [])));
             cardDetailsLayout = Array.isArray(response)
                 ? CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE
                 : normalizeClientCardDetailsLayout(response.card_details_layout);

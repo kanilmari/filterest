@@ -1,6 +1,6 @@
 // card_visibility_test.go
-// Verifies authorized column settings and optional layout updates.
-// Connects JSON presence, enum validation and parameterized metadata writes.
+// Verifies authorized column settings and retirement of per-column layout.
+// Connects label visibility presence, dataset validation and parameterized writes.
 // Protects inheritance and existing field-delivery boundaries.
 package system_table_tools
 
@@ -343,89 +343,81 @@ func TestFieldViewOrderQueryStaysDatasetScopedWithoutReorderingSavedCollections(
 	}
 }
 
-func TestColumnLayoutJSONPreservesOmissionAndExplicitNull(t *testing.T) {
-	tests := []struct {
-		name, body string
-		supplied   bool
-		value      *string
-	}{
-		{"old client", "{" + "\"column_uid\":9,\"client_delivery_mode\":\"include\"" + "}", false, nil},
-		{"restore inherited", "{" + "\"column_uid\":9,\"client_delivery_mode\":\"include\",\"label_value_layout\":null" + "}", true, nil},
-		{"explicit", "{" + "\"column_uid\":9,\"client_delivery_mode\":\"include\",\"label_value_layout\":\"inline\"" + "}", true, layoutString("inline")},
-	}
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+// Retired column layout follows the legacy API's unknown-field behavior.
+func TestCardVisibilityIgnoresRetiredColumnLayout(t *testing.T) {
+	for _, raw := range []string{`null`, `"inline"`, `"unknown"`, `4`, `true`, `{}`, `[]`} {
+		t.Run(raw, func(t *testing.T) {
 			var column CardVisibilityColumn
-			if err := json.Unmarshal([]byte(testCase.body), &column); err != nil {
+			body := `{"column_uid":1,"client_delivery_mode":"include","show_key_on_card_override":null,"label_value_layout":` + raw + `}`
+			if err := json.Unmarshal([]byte(body), &column); err != nil {
 				t.Fatal(err)
 			}
-			if column.labelValueLayoutProvided != testCase.supplied || !reflect.DeepEqual(column.LabelValueLayout, testCase.value) {
-				t.Fatalf("unexpected layout presence/value: %+v", column)
-			}
-			normalized, err := normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "url"}}, []CardVisibilityColumn{column})
+			columns, err := normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 1, ColumnName: "label"}}, []CardVisibilityColumn{column})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if normalized[0].labelValueLayoutProvided != testCase.supplied {
-				t.Fatal("normalization lost presence")
+			encoded, err := json.Marshal(columns[0])
+			if err != nil || strings.Contains(string(encoded), "label_value_layout") {
+				t.Fatalf("retired response field: %s %v", encoded, err)
 			}
-			query := buildCardVisibilityUpdateQuery(true, true, testCase.supplied)
-			if strings.Contains(query, "label_value_layout =") != testCase.supplied {
-				t.Fatal("omitted field would be written")
+			provided, override := cardLabelVisibilityOverrideForWrite(columns[0])
+			if !provided || override != nil {
+				t.Fatal("label visibility presence lost")
 			}
-			args := buildCardVisibilityUpdateArgs(column, true, true, testCase.supplied)
-			if testCase.supplied {
-				value, err := driver.DefaultParameterConverter.ConvertValue(args[0])
-				if err != nil {
-					t.Fatal(err)
-				}
-				if testCase.value == nil && value != nil {
-					t.Fatalf("explicit null parameter = %#v", value)
-				}
-				if testCase.value != nil && value != *testCase.value {
-					t.Fatalf("layout parameter = %#v", value)
-				}
+			query := buildCardVisibilityUpdateQuery(true, true)
+			if strings.Contains(query, "label_value_layout") {
+				t.Fatal("retired column still written")
+			}
+			args := buildCardVisibilityUpdateArgs(columns[0], true, true)
+			if len(args) != 16 {
+				t.Fatalf("write arguments = %d", len(args))
 			}
 		})
 	}
 }
 
-func layoutString(value string) *string { return &value }
-
-func TestColumnLayoutRejectsUnknownValuesBeforeMutation(t *testing.T) {
-	for _, value := range []string{"", "INLINE", "unknown", "inline;DROP TABLE x"} {
-		_, err := normalizeFieldViewColumns(
-			[]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "url"}},
-			[]CardVisibilityColumn{{ColumnUID: 9, ClientDeliveryMode: "include", LabelValueLayout: &value}},
-		)
-		if err == nil {
-			t.Fatalf("accepted invalid enum %q", value)
-		}
-	}
-	for _, value := range []string{"auto", "inline", "stacked"} {
-		if err := validateLabelValueLayout(&value); err != nil {
-			t.Fatalf("%s: %v", value, err)
-		}
-	}
-	for _, raw := range []string{"4", "true", "{}", "[]"} {
+func TestRetiredColumnLayoutDoesNotBypassDatasetOwnershipOrClientDelivery(t *testing.T) {
+	for _, body := range []string{
+		`{"column_uid":99,"client_delivery_mode":"include","label_value_layout":"inline"}`,
+		`{"column_uid":9,"client_delivery_mode":"server_only","label_value_layout":"stacked"}`,
+	} {
 		var column CardVisibilityColumn
-		body := "{\"label_value_layout\":" + raw + "}"
-		if err := json.Unmarshal([]byte(body), &column); err == nil {
-			t.Fatalf("accepted non-string %s", raw)
+		if err := json.Unmarshal([]byte(body), &column); err != nil {
+			t.Fatal(err)
+		}
+		_, err := normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "id"}}, []CardVisibilityColumn{column})
+		if err == nil {
+			t.Fatalf("retired member bypassed guard: %s", body)
 		}
 	}
 }
 
-func TestColumnLayoutDoesNotBypassDatasetOwnershipOrClientDelivery(t *testing.T) {
-	_, err := normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "id"}},
-		[]CardVisibilityColumn{{ColumnUID: 99, ClientDeliveryMode: "include", LabelValueLayout: layoutString("inline")}})
-	if err == nil {
-		t.Fatal("foreign column was accepted")
+func TestCardVisibilityHandlerAcceptsRetiredColumnLayout(t *testing.T) {
+	state := &cardStyleWriteState{}
+	sql.Register("retired-column-layout-save", &cardStyleWriteDriver{state})
+	db, err := sql.Open("retired-column-layout-save", "")
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, err = normalizeFieldViewColumns([]fieldViewColumnGuard{{ColumnUID: 9, ColumnName: "id"}},
-		[]CardVisibilityColumn{{ColumnUID: 9, ClientDeliveryMode: "server_only", LabelValueLayout: layoutString("stacked")}})
-	if err == nil {
-		t.Fatal("layout bypassed protected id delivery")
+	defer db.Close()
+	previous := backend.Db
+	backend.Db = db
+	defer func() { backend.Db = previous }()
+	tx := dbutils.NewLazyTx(db)
+	defer tx.Rollback()
+	body := `{"table_name":"style_fixture","columns":[{"column_uid":1,"client_delivery_mode":"include","show_key_on_card_override":false,"label_value_layout":"inline"}]}`
+	request := httptest.NewRequest(http.MethodPost, "/api/card-visibility/update", strings.NewReader(body))
+	request = request.WithContext(dbutils.SetLazyTx(request.Context(), tx))
+	response := httptest.NewRecorder()
+	UpdateCardVisibilityHandler(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d: %s", response.Code, response.Body)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if state.columnWrites != 2 || state.commits != 1 {
+		t.Fatalf("visibility save lost: %#v", state)
 	}
 }
 
@@ -455,6 +447,9 @@ func (c *cardStyleWriteConn) Begin() (driver.Tx, error) { return &cardStyleWrite
 func (t *cardStyleWriteTx) Commit() error               { t.state.commits++; return nil }
 func (*cardStyleWriteTx) Rollback() error               { return nil }
 func (c *cardStyleWriteConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "label_value_layout") {
+		return nil, fmt.Errorf("retired layout read: %s", query)
+	}
 	if strings.Contains(query, "SELECT EXISTS") {
 		return &cardStyleWriteRows{values: []driver.Value{!(c.state.missingColumn && args[1].Value == "card_style_variant")}}, nil
 	}
@@ -464,6 +459,9 @@ func (c *cardStyleWriteConn) QueryContext(_ context.Context, query string, args 
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 func (c *cardStyleWriteConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if strings.Contains(query, "label_value_layout") {
+		return nil, fmt.Errorf("retired layout write: %s", query)
+	}
 	if strings.Contains(query, "SET card_style_variant = $1") {
 		if args[1].Value != "style_fixture" {
 			return nil, fmt.Errorf("wrong dataset target")

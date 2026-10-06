@@ -26,6 +26,13 @@ import (
 	"github.com/lib/pq"
 )
 
+// retiredCSVColumns is the small, table-specific compatibility list for old
+// exports. Only deliberately removed metadata is skipped; other headers still
+// reach PostgreSQL, which rejects unknown columns. Exports use the live schema.
+var retiredCSVColumns = map[string]map[string]bool{
+	"system_column_details": {"label_value_layout": true}, // WL52, DB 9.10.0.
+}
+
 // ImportTableCSV reads the resolved tables_data/<table>.csv using the transaction from ctx
 // and upserts rows into the database. It returns an error if the transaction is
 // missing.
@@ -67,13 +74,18 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 		return "", "", fmt.Errorf("error reading header: %v", err)
 	}
 
-	cols := make([]string, len(headers))
+	cols := make([]string, 0, len(headers))
+	sourceIndexes := make([]int, 0, len(headers))
 	for i, h := range headers {
 		sanitized, err := security.SanitizeIdentifier(h)
 		if err != nil {
 			return "", "", fmt.Errorf("bad column name '%s': %v", h, err)
 		}
-		cols[i] = sanitized
+		if retiredCSVColumns[sanitizedTable][sanitized] {
+			continue
+		}
+		cols = append(cols, sanitized)
+		sourceIndexes = append(sourceIndexes, i)
 	}
 
 	if len(cols) == 0 {
@@ -143,7 +155,7 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 	}
 
 	for {
-		record, err := reader.Read()
+		sourceRecord, err := reader.Read()
 		if err != nil {
 			if err.Error() == "EOF" {
 				break
@@ -151,6 +163,10 @@ func ImportTableCSVTxWithUsername(tx *sql.Tx, tableName string, username string,
 			return "", "", fmt.Errorf("error reading row: %v", err)
 		}
 
+		record := make([]string, len(cols))
+		for i, sourceIndex := range sourceIndexes {
+			record[i] = sourceRecord[sourceIndex]
+		}
 		vals := make([]interface{}, len(record))
 		for i, v := range record {
 			if v == "" {

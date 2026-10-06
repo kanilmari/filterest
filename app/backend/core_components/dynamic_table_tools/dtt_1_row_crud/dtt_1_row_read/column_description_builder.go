@@ -30,7 +30,6 @@ func buildColumnDescription(overrides map[string]interface{}) map[string]interfa
 		"card_detail_icon_key":       "",
 		"card_detail_capitalization": true,
 		"card_detail_label_mode":     "label",
-		"label_value_layout":         nil,
 	}
 
 	for fieldName, value := range overrides {

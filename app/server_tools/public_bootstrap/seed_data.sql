@@ -2635,15 +2635,15 @@ WHERE keys.lang_key IN (
 )
 ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
 SET last_seen = CURRENT_DATE;
--- Seeds the shared field label/value layout editor in Finnish and English.
--- Connects fresh public installations to the matching additive schema migration.
--- Preserves nonempty site translations and records the actual editor source.
--- Keeps this seven-key capability separate from field-collection inheritance copy.
+-- label_value_layout.lang_keys.sql
+-- Retains wrapping translations and tracks the four live site-selector keys.
+-- Connects fresh installations to the site-wide appearance control after WL52.
+-- Keeps retired copy without false code sources, for normal orphan archival.
 
 -- BEGIN label/value layout language seed (shared with fresh bootstrap).
 WITH authored_keys(lang_key, fi, en, creation_spec) AS (
     VALUES
-    ('label_value_layout', 'Kentän otsikon ja arvon asettelu', 'Field label and value layout', 'Names the shared column label/value default, separately from field placement.'),
+    ('label_value_layout', 'Kentän otsikon ja arvon asettelu', 'Field label and value layout', 'Names the site-wide field wrapping choice, separately from field placement and visibility.'),
     ('label_value_layout_inherit', 'Nykyinen oletus', 'Current default', 'Restores each renderer''s existing behavior without an explicit column layout.'),
     ('label_value_layout_auto', 'Automaattinen', 'Automatic', 'Lets the configured field pair wrap according to text and available space.'),
     ('label_value_layout_inline', 'Rinnakkain', 'Side by side', 'Keeps the label and value in adjacent areas while allowing text to wrap.'),
@@ -2675,10 +2675,13 @@ WHERE NULLIF(btrim(system_lang_key_translations.translation), '') IS NULL;
 
 INSERT INTO public.system_lang_key_sources
     (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
-SELECT id, 'code', 'frontend/core_components/admin_tools/card_visibility_view.js',
+-- Inherit/help/readback copy belonged to the retired column editor. Keep its
+-- translations, but do not invent live sources; the startup orphan lifecycle
+-- owns retirement. Old installations' unreferenced code sources expire normally.
+SELECT id, 'code', 'frontend/core_components/admin_tools/site_label_value_layout_control.js',
        '', creation_spec, CURRENT_DATE
 FROM public.system_lang_keys
-WHERE lang_key IN ('label_value_layout', 'label_value_layout_inherit', 'label_value_layout_auto', 'label_value_layout_inline', 'label_value_layout_stacked', 'label_value_layout_help', 'label_value_layout_readback_failed')
+WHERE lang_key IN ('label_value_layout', 'label_value_layout_auto', 'label_value_layout_inline', 'label_value_layout_stacked')
 ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE SET last_seen = CURRENT_DATE;
 -- END label/value layout language seed.
 -- article_view.seed.sql
@@ -6567,7 +6570,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'system_favorites_table', 'wl58_row_actor_columns', 'system_favorites_registry']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'system_favorites_table', 'wl52_drop_column_label_value_layout', 'wl58_row_actor_columns', 'system_favorites_registry']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -6717,6 +6720,7 @@ BEGIN
       ('20261005000023_register_system_favorites.sql'),
       ('20261005000055_seed_setting_check_language_keys.sql'),
       ('20261005000060_seed_shell_boot_recovery_language_keys.sql'),
+      ('20261005000070_drop_column_label_value_layout.sql'),
       ('20261005000099_record_database_release_9_10_0.sql')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

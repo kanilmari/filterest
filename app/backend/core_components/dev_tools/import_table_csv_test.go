@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -26,6 +27,67 @@ type stubDriver struct {
 	execArgs    [][]driver.NamedValue
 	lastQuery   string
 	lastArgs    []driver.NamedValue
+}
+
+func TestImportTableCSVSkipsOnlyRetiredColumnMetadata(t *testing.T) {
+	for _, test := range []struct {
+		name, table, csv string
+		wantArgs         []interface{}
+		wantLayout       bool
+	}{
+		{"first", "system_column_details", "label_value_layout,id,show_key_on_card,show_value_on_card\ninline,1,false,true\n", []interface{}{"1", "false", "true"}, false},
+		{"middle", "system_column_details", "id,show_key_on_card,label_value_layout,show_value_on_card\n1,,stacked,false\n2,true,,true\n", []interface{}{"2", "true", "true"}, false},
+		{"last", "system_column_details", "id,show_key_on_card,show_value_on_card,label_value_layout\n1,false,true,auto\n", []interface{}{"1", "false", "true"}, false},
+		{"other table", "content", "id,label_value_layout\n1,inline\n", []interface{}{"1", "inline"}, true},
+		{"other unknown column", "system_column_details", "id,unknown_metadata\n1,kept\n", []interface{}{"1", "kept"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			paths, err := runtimepaths.Resolve(root, root, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			configureTableCSVRuntimePathsForTest(t, paths)
+			if err := os.MkdirAll(tableCSVDataDir(), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(tableCSVFilePath(test.table), []byte(test.csv), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			drv := &stubDriver{}
+			name := "retired-csv-" + t.Name()
+			sql.Register(name, drv)
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			if _, _, err := ImportTableCSVTx(tx, test.table); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(drv.lastQuery, "label_value_layout") != test.wantLayout {
+				t.Fatalf("wrong retired-header handling: %s", drv.lastQuery)
+			}
+			got := make([]interface{}, len(drv.lastArgs))
+			for i, value := range drv.lastArgs {
+				got[i] = value.Value
+			}
+			if !reflect.DeepEqual(got, test.wantArgs) {
+				t.Fatalf("values=%#v want=%#v", got, test.wantArgs)
+			}
+			if test.name == "middle" && drv.execArgs[0][1].Value != nil {
+				t.Fatal("nullable visibility was not preserved")
+			}
+			if test.name == "other unknown column" && !strings.Contains(drv.lastQuery, "unknown_metadata") {
+				t.Fatal("unknown column silently skipped")
+			}
+		})
+	}
 }
 
 func (d *stubDriver) Open(name string) (driver.Conn, error) {

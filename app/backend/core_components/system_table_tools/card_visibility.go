@@ -22,15 +22,13 @@ const defaultCardDetailsLayout = "conditional_multiline"
 
 // CardVisibilityColumn represents one column's visibility settings.
 type CardVisibilityColumn struct {
-	ColumnUID                     int     `json:"column_uid"`
-	ColumnName                    string  `json:"column_name"`
-	CoNumber                      int     `json:"co_number"`
-	HideEverywhereLocked          bool    `json:"hide_everywhere_locked"`
-	HideEverywhereLockReason      string  `json:"hide_everywhere_lock_reason"`
-	ClientDeliveryMode            string  `json:"client_delivery_mode"`
-	ClientDeliveryModeLocked      bool    `json:"client_delivery_mode_locked"`
-	LabelValueLayout              *string `json:"label_value_layout"`
-	labelValueLayoutProvided      bool
+	ColumnUID                     int    `json:"column_uid"`
+	ColumnName                    string `json:"column_name"`
+	CoNumber                      int    `json:"co_number"`
+	HideEverywhereLocked          bool   `json:"hide_everywhere_locked"`
+	HideEverywhereLockReason      string `json:"hide_everywhere_lock_reason"`
+	ClientDeliveryMode            string `json:"client_delivery_mode"`
+	ClientDeliveryModeLocked      bool   `json:"client_delivery_mode_locked"`
 	CardElement                   string `json:"card_element"`
 	CardDetailLabelMode           string `json:"card_detail_label_mode"`
 	CardDetailIconSVG             string `json:"card_detail_icon_svg"`
@@ -174,9 +172,6 @@ func normalizeFieldViewColumns(
 			)
 		}
 
-		if err := validateLabelValueLayout(column.LabelValueLayout); err != nil {
-			return nil, err
-		}
 		column.ColumnName = guard.ColumnName
 		column.CoNumber = index + 1
 		column.HideEverywhereLocked = guard.LockReason != ""
@@ -246,16 +241,6 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		cardDetailCapitalizationExpr = `COALESCE(scd.card_detail_capitalization, true) AS card_detail_capitalization`
 	}
 
-	hasLabelValueLayout, err := publicTableColumnExists(backend.Db, "system_column_details", "label_value_layout")
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking field layout metadata")
-		return
-	}
-	labelValueLayoutExpr := `NULL::varchar AS label_value_layout`
-	if hasLabelValueLayout {
-		labelValueLayoutExpr = `scd.label_value_layout`
-	}
-
 	query := fmt.Sprintf(`
 		SELECT scd.column_uid, scd.column_name,
 		       COALESCE(scd.co_number, 0)                  AS co_number,
@@ -273,13 +258,12 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(scd.hide_false_null_on_sml_crd, false) AS hide_false_null_on_sml_crd,
 		       COALESCE(scd.hide_false_null_on_big_crd, false) AS hide_false_null_on_big_crd,
 		       COALESCE(scd.hide_on_bg_crd_if_not_own, false)  AS hide_on_bg_crd_if_not_own,
-		       COALESCE(scd.hide_in_filter_panel, false)   AS hide_in_filter_panel,
-               %s
+		       COALESCE(scd.hide_in_filter_panel, false)   AS hide_in_filter_panel
 		FROM system_column_details scd
 		JOIN system_db_tables sdt ON sdt.table_uid = scd.table_uid
 		WHERE sdt.table_name = $1
 		ORDER BY scd.co_number, scd.column_uid
-	`, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, labelValueLayoutExpr)
+	`, cardDetailIconKeyExpr, cardDetailCapitalizationExpr)
 
 	cardDetailsLayout, presentation, err := loadCardVisibilityTableSettings(backend.Db, tableName)
 	if err != nil {
@@ -306,7 +290,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			&c.ShowKeyOnCard, &c.ShowKeyOnCardOverride, &c.ShowValueOnCard, &c.HideEverywhere,
 			&c.ClientDeliveryMode,
 			&c.HideOnSmallCard, &c.HideFalseNullOnSmlCrd, &c.HideFalseNullOnBigCrd,
-			&c.HideOnBgCrdIfNotOwn, &c.HideInFilterPanel, &c.LabelValueLayout,
+			&c.HideOnBgCrdIfNotOwn, &c.HideInFilterPanel,
 		); err != nil {
 			log.Printf("\033[31merror: [GetCardVisibilityHandler] scan failed: %v\033[0m", err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error scanning column row")
@@ -448,18 +432,6 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasLabelValueLayout, err := publicTableColumnExists(backend.Db, "system_column_details", "label_value_layout")
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking field layout metadata")
-		return
-	}
-	for _, column := range req.Columns {
-		if !hasLabelValueLayout && column.LabelValueLayout != nil {
-			httpresponse.RespondWithError(w, http.StatusConflict, "field layout migration required")
-			return
-		}
-	}
-
 	if len(req.CardStyleVariant) > 0 && !hasCardStyleVariant {
 		httpresponse.RespondWithError(w, http.StatusConflict, "card style migration required")
 		return
@@ -493,9 +465,8 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, col := range req.Columns {
-		includeLayout := hasLabelValueLayout && (col.labelValueLayoutProvided || col.LabelValueLayout != nil)
-		updateQuery := buildCardVisibilityUpdateQuery(hasCardDetailIconKey, hasCardDetailCapitalization, includeLayout)
-		updateArgs := buildCardVisibilityUpdateArgs(col, hasCardDetailIconKey, hasCardDetailCapitalization, includeLayout)
+		updateQuery := buildCardVisibilityUpdateQuery(hasCardDetailIconKey, hasCardDetailCapitalization)
+		updateArgs := buildCardVisibilityUpdateArgs(col, hasCardDetailIconKey, hasCardDetailCapitalization)
 		_, err := tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] update for column_uid %d: %v\033[0m", col.ColumnUID, err)
@@ -536,7 +507,7 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func buildCardVisibilityUpdateQuery(includeIconKey, includeCapitalization, includeLayout bool) string {
+func buildCardVisibilityUpdateQuery(includeIconKey, includeCapitalization bool) string {
 	placeholder := 1
 	setClauses := []string{}
 	addSetClause := func(columnName string) {
@@ -544,9 +515,6 @@ func buildCardVisibilityUpdateQuery(includeIconKey, includeCapitalization, inclu
 		placeholder++
 	}
 
-	if includeLayout {
-		addSetClause("label_value_layout")
-	}
 	addSetClause("card_element")
 	addSetClause("card_detail_label_mode")
 	addSetClause("card_detail_icon_svg")
@@ -578,11 +546,8 @@ func buildCardVisibilityUpdateQuery(includeIconKey, includeCapitalization, inclu
 	`, strings.Join(setClauses, ",\n		    "), placeholder)
 }
 
-func buildCardVisibilityUpdateArgs(col CardVisibilityColumn, includeIconKey, includeCapitalization, includeLayout bool) []interface{} {
+func buildCardVisibilityUpdateArgs(col CardVisibilityColumn, includeIconKey, includeCapitalization bool) []interface{} {
 	args := []interface{}{}
-	if includeLayout {
-		args = append(args, col.LabelValueLayout)
-	}
 	args = append(args,
 		col.CardElement,
 		normalizeCardDetailLabelMode(col.CardDetailLabelMode),

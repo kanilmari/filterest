@@ -1,5 +1,5 @@
 // get_results_metadata_test.go
-// Verifies result metadata and optional column layout transport.
+// Verifies result metadata and the retired column layout boundary.
 // Connects supported schema shapes to safe client-visible metadata.
 // Preserves inheritance and hidden-field delivery restrictions.
 package dtt_1_row_read
@@ -151,8 +151,6 @@ type layoutMetadataDriver struct {
 	styleColumn       bool
 	cardStyle         driver.Value
 	editable          bool
-	present           bool
-	value             driver.Value
 	query             *string
 }
 type layoutMetadataConn struct{ state *layoutMetadataDriver }
@@ -182,7 +180,7 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 			present = c.state.styleColumn
 		}
 		if args[1].Value == "label_value_layout" {
-			present = c.state.present
+			return nil, fmt.Errorf("retired column presence read")
 		}
 		return &layoutMetadataRows{values: []driver.Value{present}}, nil
 	}
@@ -190,17 +188,13 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 	if c.state.tableMeta {
 		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns, c.state.defaultView}}, nil
 	}
-	value := c.state.value
-	if !c.state.present {
-		value = nil
-	}
 	dataType := c.state.dataType
 	if dataType == "" {
 		dataType = "text"
 	}
 	return &layoutMetadataRows{values: []driver.Value{
 		"url", dataType, nil, nil, "details_link", true, true, false, false, false, false, false, false,
-		int64(1), int64(1), false, c.state.editable, "", "", true, "label", value,
+		int64(1), int64(1), false, c.state.editable, "", "", true, "label",
 	}}, nil
 }
 func (r *layoutMetadataRows) Columns() []string {
@@ -220,48 +214,37 @@ func (r *layoutMetadataRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-func TestColumnMetadataCarriesOptionalLayoutWithoutExposingHiddenFields(t *testing.T) {
-	tests := []struct {
-		name    string
-		present bool
-		value   driver.Value
-	}{
-		{"older schema", false, nil}, {"inherited", true, nil}, {"inline", true, "inline"}, {"auto", true, "auto"}, {"stacked", true, "stacked"},
+func TestColumnMetadataOmitsRetiredLayoutWithoutExposingHiddenFields(t *testing.T) {
+	query := ""
+	const name = "wl52-retired-layout-metadata"
+	sql.Register(name, &layoutMetadataDriver{query: &query})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			query := ""
-			name := "wl52-layout-" + t.Name()
-			sql.Register(name, &layoutMetadataDriver{present: tt.present, value: tt.value, query: &query})
-			db, err := sql.Open(name, "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer db.Close()
-			metadata, err := getColumnDataTypesWithFK("example", db)
-			if err != nil {
-				t.Fatal(err)
-			}
-			encoded, err := json.Marshal(metadata)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var result map[string]map[string]interface{}
-			if err = json.Unmarshal(encoded, &result); err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(result["url"]["label_value_layout"], tt.value) {
-				t.Fatalf("layout %s", encoded)
-			}
-			for _, guard := range []string{"public.resolve_card_label_visibility(scd.show_key_on_card, scd.card_element) AS show_key_on_card", "COALESCE(scd.hide_everywhere, false) = false", "COALESCE(scd.client_delivery_mode, 'include') = 'include'"} {
-				if !strings.Contains(query, guard) {
-					t.Fatalf("missing delivery guard %s", guard)
-				}
-			}
-			if !tt.present && !strings.Contains(query, "NULL::varchar AS label_value_layout") {
-				t.Fatal("old schema must remain readable")
-			}
-		})
+	defer db.Close()
+	metadata, err := getColumnDataTypesWithFK("example", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result map[string]map[string]interface{}
+	if err = json.Unmarshal(encoded, &result); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := result["url"]["label_value_layout"]; exists || strings.Contains(query, "label_value_layout") {
+		t.Fatalf("retired layout in query or metadata: %s %s", query, encoded)
+	}
+	if result["url"]["show_key_on_card"] != true || result["url"]["show_value_on_card"] != true {
+		t.Fatalf("visibility lost: %s", encoded)
+	}
+	for _, guard := range []string{"public.resolve_card_label_visibility(scd.show_key_on_card, scd.card_element) AS show_key_on_card", "COALESCE(scd.hide_everywhere, false) = false", "COALESCE(scd.client_delivery_mode, 'include') = 'include'"} {
+		if !strings.Contains(query, guard) {
+			t.Fatalf("missing delivery guard %s", guard)
+		}
 	}
 }
 
@@ -373,6 +356,9 @@ func TestDatasetColumnDescriptionsConformToBuilderFieldSet(t *testing.T) {
 			continue
 		}
 
+		if _, exists := columnInfo["label_value_layout"]; exists {
+			t.Errorf("retired field on %s", columnName)
+		}
 		actualFields := sortedColumnDescriptionFields(columnInfo)
 		if !reflect.DeepEqual(actualFields, expectedFields) {
 			t.Errorf("column %q description fields = %v, want complete builder contract %v", columnName, actualFields, expectedFields)

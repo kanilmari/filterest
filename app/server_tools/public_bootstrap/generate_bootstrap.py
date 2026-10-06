@@ -75,6 +75,7 @@ repair_schema_migrations = (
     "20261005000002_key_row_actor_marks_by_table_uid.sql",
     "20261005000006_check_row_actor_trigger_definitions.sql",
     "20261005000021_create_system_favorites.sql",
+    "20261005000070_drop_column_label_value_layout.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.

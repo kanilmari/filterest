@@ -943,6 +943,7 @@ def test_fresh_package_equals_the_upgraded_database_by_column_name(prepared, ins
     prepared(DATA_STEP.read_text())
     prepared(LANGUAGE_SEED.read_text())
     prepared(TRIGGER_CHECK.read_text())
+    prepared((MIGRATIONS / "20261005000070_drop_column_label_value_layout.sql").read_text())
     assert wl58_structure(prepared) == wl58_structure(installed)
 
 

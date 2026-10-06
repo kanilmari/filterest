@@ -292,7 +292,6 @@ CREATE TABLE IF NOT EXISTS public.system_column_details (
     updated timestamp without time zone DEFAULT now() NOT NULL,
     data_type character varying(255),
     card_element character varying(255) DEFAULT 'details',
-    label_value_layout character varying(16),
     creation_spec text,
     show_key_on_card boolean,
     mandatory boolean,
@@ -315,7 +314,6 @@ CREATE TABLE IF NOT EXISTS public.system_column_details (
     card_detail_label_mode character varying(16) DEFAULT 'label' NOT NULL,
     card_detail_icon_key character varying(64),
     card_detail_capitalization boolean DEFAULT true,
-    CONSTRAINT system_column_details_label_value_layout_check CHECK (label_value_layout IS NULL OR label_value_layout IN ('auto', 'inline', 'stacked')),
     CONSTRAINT ck_system_column_details_positive_id CHECK (id > 0),
     CONSTRAINT uq_system_column_details_id UNIQUE (id),
     CONSTRAINT uq_system_column_details_table_column_name
@@ -411,7 +409,3 @@ CREATE TABLE IF NOT EXISTS public.system_audit_log (
     duration_ms integer,
     details jsonb
 );
-
--- Match the additive shared field-layout migration in fresh installations.
-COMMENT ON COLUMN public.system_column_details.label_value_layout IS
-    'Optional shared field label/value layout: null preserves existing view behavior; auto, inline or stacked affects presentation only.';

@@ -1,7 +1,8 @@
-"""Verify the optional field layout on fresh and upgraded PostgreSQL metadata.
+"""Verify the historical additive column-layout migration and current language seed.
 
 Connects the public migration to the real SQL constraint and localized settings copy.
-Protects inherited behavior and existing site translations across repeated upgrades.
+Protects historical inheritance and retained translations with current selector sources.
+Current column removal is covered by test_drop_column_label_value_layout.py.
 """
 from pathlib import Path
 import subprocess
@@ -40,17 +41,22 @@ def test_layout_migration_keeps_inheritance_constraints_and_site_copy(database):
     assert database("SELECT count(*) FROM system_db_version WHERE version='9.7.6'") == "1"
 
 
-def test_fresh_public_layout_seed_matches_upgrade_and_is_repeatable(database):
+def test_fresh_layout_seed_retains_translations_and_current_selector_sources_and_is_repeatable(database):
     source = APP / "server_tools/public_bootstrap/source/label_value_layout.lang_keys.sql"
     start = "-- BEGIN label/value layout language seed (shared with fresh bootstrap)."
     end = "-- END label/value layout language seed."
     def block(text):
         return text[text.index(start):text.index(end) + len(end)]
     canonical = block(MIGRATION.read_text())
-    assert block(source.read_text()) == canonical
-    database(canonical)
-    database(canonical)
+    # The historical migration stays unchanged. Fresh installs retain its copy
+    # but now track the live site selector rather than the retired column editor.
+    assert "shared column label/value default" in canonical
+    assert "site-wide field wrapping choice" in source.read_text()
+    database(source.read_text())
+    database(source.read_text())
     assert database("SELECT count(*) FROM system_lang_keys WHERE lang_key LIKE 'label_value_layout%'") == "7"
     assert database("SELECT count(*) FROM system_lang_key_translations") == "14"
     assert database("SELECT count(*) FROM system_lang_keys WHERE NULLIF(btrim(fi),'') IS NULL OR NULLIF(btrim(en),'') IS NULL") == "0"
     assert database("SELECT count(*) FROM system_db_version") == "0"
+    assert database("SELECT count(*) FROM system_lang_key_sources") == "4"
+    assert database("SELECT count(*) FROM system_lang_key_sources WHERE source_high LIKE '%card_visibility_view.js'") == "0"

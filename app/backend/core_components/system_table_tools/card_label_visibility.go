@@ -10,6 +10,23 @@ import (
 	"fmt"
 )
 
+// UnmarshalJSON preserves omitted versus explicit label visibility overrides.
+// Unknown members, including the removed column layout, follow this legacy API's
+// usual encoding/json behavior: ignored on input and absent from the response.
+func (column *CardVisibilityColumn) UnmarshalJSON(data []byte) error {
+	type plainColumn CardVisibilityColumn
+	var decoded plainColumn
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*column = CardVisibilityColumn(decoded)
+	return decodeCardLabelVisibilityPresence(column, fields)
+}
+
 func decodeCardLabelVisibilityPresence(column *CardVisibilityColumn, fields map[string]json.RawMessage) error {
 	legacy, legacyProvided := fields["show_key_on_card"]
 	override, overrideProvided := fields["show_key_on_card_override"]

@@ -76,7 +76,7 @@ func cardLabelVisibilityFixture(t *testing.T) *sql.DB {
  column_uid integer PRIMARY KEY, table_uid integer, column_name text, co_number integer,
  card_element text, show_key_on_card boolean DEFAULT false, show_value_on_card boolean,
  card_detail_label_mode text, card_detail_icon_svg text, card_detail_icon_key text,
- card_detail_capitalization boolean, label_value_layout text, updated timestamptz,
+ card_detail_capitalization boolean, updated timestamptz,
  hide_everywhere boolean, client_delivery_mode text, hide_on_small_card boolean,
  hide_false_null_on_sml_crd boolean, hide_false_null_on_big_crd boolean, hide_on_bg_crd_if_not_own boolean,
  hide_in_filter_panel boolean, insertable boolean, data_type text, editable_in_ui boolean, is_multilingual boolean);
@@ -133,6 +133,9 @@ func TestCardLabelVisibilitySharedPolicyAndAPIPostgres(t *testing.T) {
 	GetCardVisibilityHandler(rec, httptest.NewRequest(http.MethodGet, "/api/card-visibility/fixture", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("admin read %d: %s", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "label_value_layout") {
+		t.Fatalf("retired response field: %s", rec.Body)
 	}
 	var response CardVisibilityResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
@@ -199,8 +202,8 @@ func TestCardLabelVisibilityConditionalWritesPostgres(t *testing.T) {
 		column.ColumnUID = 1
 		column.CardElement = "details"
 		column.ClientDeliveryMode = "include"
-		_, err := db.Exec(buildCardVisibilityUpdateQuery(true, true, column.labelValueLayoutProvided),
-			buildCardVisibilityUpdateArgs(column, true, true, column.labelValueLayoutProvided)...)
+		_, err := db.Exec(buildCardVisibilityUpdateQuery(true, true),
+			buildCardVisibilityUpdateArgs(column, true, true)...)
 		if err != nil {
 			t.Fatalf("%s: %v", test.body, err)
 		}

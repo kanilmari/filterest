@@ -134,7 +134,23 @@ switch, the 400px pair-mode switch and Canvas value dropping no longer decide
 where the value starts. Responsive numbers of detail columns still work.
 
 The same preview/save/reset owner used by other site settings updates connected
-cards and articles in place. New pairs read the current site choice. Per-column
-`label_value_layout` values remain stored and available through the existing API,
-but renderers ignore them and the column visibility editor no longer offers the
-selector. This uses the existing shared JSON settings path without a migration.
+cards and articles in place. New pairs read the current site choice. Database
+9.10.0 removes the obsolete `system_column_details.label_value_layout` column,
+including its CHECK and comment. The card visibility API and result metadata
+no longer return that field; the site JSON path remains the wrapping authority.
+Served bundles must come from the release build that contains this change.
+The complete-column visibility API follows its existing unknown-member policy:
+an old request containing `label_value_layout` ignores that member, including
+its former values or types, and saves the supported visibility fields normally.
+Scoped dataset presentation saves retain their strict unknown-member validation.
+
+Old `system_column_details` CSV exports can still be restored: the importer skips
+only this table's retired layout header and its matching cells through its
+documented `retiredCSVColumns` list. Other columns and tables retain normal
+validation; new exports follow the physical schema. Label visibility, including
+raw nullable `show_key_on_card_override`, still saves and verifies readback.
+Visibility save failures use the existing translated `save_failed` key. The
+site selector retains `label_value_layout` and its `auto`, `inline`, and `stacked`
+keys. Retired `inherit`, `help`, and `readback_failed` keys and translations are
+preserved: stale code sources expire after seven days, then orphan marking and
+the 90-day archive window follow [the language-key lifecycle](lang_key_lifecycle.md).
