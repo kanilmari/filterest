@@ -12,7 +12,7 @@
 
 INSERT INTO public.system_db_version (version, description)
 SELECT '9.10.0',
-       'Added creator and owner columns to every content dataset, with the actor marks, repair record and guards they rest on; added account-owned favorites and administrator quick-list copy; added optional common and account-specific front pages with protected backgrounds; removed unused per-column field wrapping; required, protected dataset registry reference key; added multilingual row-group classification headings (WL103)'
+       'Added creator and owner columns to every content dataset, with the actor marks, repair record and guards they rest on; added account-owned favorites and administrator quick-list copy; added optional common and account-specific front pages with protected backgrounds; removed unused per-column field wrapping; required, protected dataset registry reference key; added multilingual row-group classification headings (WL103); dataset cover and background images can be hidden without deleting them (WL153)'
 WHERE NOT EXISTS (
     SELECT 1 FROM public.system_db_version WHERE version = '9.10.0'
 );

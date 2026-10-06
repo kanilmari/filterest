@@ -15,6 +15,7 @@ import { build_favefox_style_filter_bar_from_columns } from "./filter_list/favef
 import { buildColumnViewPresetSelector } from "./filter_list/column_view_preset_builder.js";
 import { setResultsCount } from "../../reusable_components/results_count/results_count_printer.js";
 import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from "../table_views/storage_media_urls.js";
+import { resolveVisibleDatasetMediaPath } from "../table_views/dataset_media_visibility_resolver.js";
 
 // Refactored imports
 import {
@@ -1004,9 +1005,8 @@ export function create_filter_bar(
             resetTargetElement: tablePartsContainer,
             allowDatasetManagement,
             sortOptions: surfaceOptions.sortOptions,
-			coverImagePath: typeof tableSpec.dataset_cover_image_path === "string"
-				? tableSpec.dataset_cover_image_path.trim()
-				: "",
+			coverImagePath: resolveVisibleDatasetMediaPath(
+				tableSpec.dataset_cover_image_path, tableSpec.dataset_cover_image_hidden),
         })
         : null;
 

@@ -55,6 +55,7 @@ func TestBuildGroupedTablesQueryUsesRecursiveCurrentProjectFolders(t *testing.T)
 		"FROM public.system_dataset_media media",
 		"media.table_uid = t.table_uid",
 		"media.media_role IN ('cover', 'background')",
+		"AND NOT media.hidden",
 		") AS has_presentation_media",
 	}
 

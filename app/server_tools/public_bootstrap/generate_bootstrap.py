@@ -106,6 +106,7 @@ release_data_migrations = (
     "20261005000034_register_system_front_page_blocks.sql",
     "20261005000037_register_row_group_classifications.sql",
     "20261005000050_require_registry_reference_key.sql",
+    "20261005000080_add_dataset_media_hidden.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

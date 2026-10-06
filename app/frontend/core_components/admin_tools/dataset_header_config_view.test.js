@@ -17,6 +17,7 @@ const showWarningToastMock = vi.fn();
 const translatePageMock = vi.fn();
 const getLanguageWithBrowserFallbackMock = vi.fn();
 const datasetDropdownSetValueMock = vi.fn();
+let translationLanguage = 'en';
 
 function buildConfig(overrides = {}) {
     return {
@@ -99,7 +100,7 @@ async function loadModule() {
     // The screen's own English copy stands in for the site's translations.
     vi.doMock('../lang/translation_handler.js', () => ({
         translatePage: translatePageMock,
-        getTranslationForKey: (key) => COPY[key]?.en ?? key,
+        getTranslationForKey: (key) => COPY[key]?.[translationLanguage] ?? key,
     }));
     vi.doMock('../state_stores/lang_preference_reader.js', () => ({
         getLanguageWithBrowserFallback: getLanguageWithBrowserFallbackMock,
@@ -124,6 +125,7 @@ describe('dataset_header_config_view', () => {
         datasetDropdownSetValueMock.mockReset();
         getLanguageWithBrowserFallbackMock.mockReturnValue('fi');
         localStorage.clear();
+        translationLanguage = 'en';
         createVanillaDropdownMock.mockImplementation(() => ({
             setValue: datasetDropdownSetValueMock,
         }));
@@ -377,7 +379,125 @@ describe('dataset_header_config_view', () => {
         expect(showSuccessToastMock).not.toHaveBeenCalled();
     });
 
-    test('every text on the screen has Finnish, English, Chinese and Cantonese copy', async () => {
+
+    test('loaded hide flags tick the controls and show Finnish hidden preview badges', async () => {
+        translationLanguage = 'fi';
+        endpointRouterMock.mockResolvedValue(['orders']);
+        fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig({ cover_image_hidden: true, background_image_hidden: true }));
+        const { generate_dataset_header_config_view } = await loadModule();
+        const container = document.createElement('div');
+        await generate_dataset_header_config_view(container);
+        expect(container.textContent).toContain('Piilota kansikuva');
+        expect(container.textContent).toContain('Piilota taustakuva');
+        expect(container.querySelector('input[name="hide_cover_image"]').checked).toBe(true);
+        expect(container.querySelector('input[name="hide_background_image"]').checked).toBe(true);
+        const badges = container.querySelectorAll('[data-lang-key="dataset_header_config_image_hidden"]');
+        expect(Array.from(badges, (badge) => badge.textContent)).toEqual(['Piilotettu', 'Piilotettu']);
+        expect(container.querySelector('img').getAttribute('src')).toContain('/cover/original/');
+    });
+
+    test('removal clears and disables hiding, while picking a replacement keeps the hide tick', async () => {
+        endpointRouterMock.mockResolvedValue(['orders']);
+        fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig({ cover_image_hidden: true }));
+        saveDatasetHeaderConfigMock.mockResolvedValue({ config: buildConfig() });
+        const { generate_dataset_header_config_view } = await loadModule();
+        const container = document.createElement('div');
+        await generate_dataset_header_config_view(container);
+        const hide = container.querySelector('input[name="hide_cover_image"]');
+        const remove = container.querySelector('input[name="remove_cover_image"]');
+        remove.checked = true;
+        remove.dispatchEvent(new Event('change'));
+        expect(hide.checked).toBe(false);
+        expect(hide.disabled).toBe(true);
+        expect(container.querySelector('[data-lang-key="dataset_header_config_image_hidden"]')).toBeNull();
+        submitForm(container);
+        await flushAsyncWork();
+        expect(saveDatasetHeaderConfigMock.mock.calls[0][0].get('hide_cover_image')).toBe('false');
+        expect(saveDatasetHeaderConfigMock.mock.calls[0][0].get('remove_cover_image')).toBe('true');
+
+        const originalCreate = URL.createObjectURL;
+        const originalRevoke = URL.revokeObjectURL;
+        URL.createObjectURL = vi.fn(() => 'blob:hidden-replacement');
+        URL.revokeObjectURL = vi.fn();
+        try {
+            hide.checked = true;
+            hide.dispatchEvent(new Event('change'));
+            pickFile(container.querySelector('input[name="cover_image"]'), new File(['png'], 'cover.png'));
+            expect(hide.checked).toBe(true);
+            expect(hide.disabled).toBe(false);
+            expect(container.textContent).toContain('Hidden');
+            expect(container.textContent).toContain('Unsaved changes');
+            submitForm(container);
+            await flushAsyncWork();
+            const payload = saveDatasetHeaderConfigMock.mock.calls[1][0];
+            expect(payload.get('hide_cover_image')).toBe('true');
+            expect(payload.get('cover_image').name).toBe('cover.png');
+        } finally {
+            URL.createObjectURL = originalCreate;
+            URL.revokeObjectURL = originalRevoke;
+        }
+    });
+
+    test.each([[true, true, 'false'], [true, false, 'true'], [false, true, 'true'], [false, false, 'true']])(
+        'saved visibility (%s, %s) updates displayed images and preserves cached paths', async (coverHidden, backgroundHidden, hasMedia) => {
+            endpointRouterMock.mockResolvedValue(['orders']);
+            fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig());
+            saveDatasetHeaderConfigMock.mockResolvedValue({ config: buildConfig({
+                cover_image_hidden: coverHidden, background_image_hidden: backgroundHidden,
+            }) });
+            const { generate_dataset_header_config_view } = await loadModule();
+            const container = document.createElement('div');
+            const hero = document.createElement('div');
+            hero.className = 'filterbar-inline-hero filterbar-inline-hero--has-cover';
+            hero.dataset.filterbarInlineHeroFor = 'orders';
+            hero.style.setProperty('--dataset-cover-image', 'url("old-cover")');
+            const content = document.createElement('div');
+            content.className = 'tab-content-area tab-content-area--has-dataset-background';
+            content.dataset.tableName = 'orders';
+            content.style.setProperty('--dataset-background-image', 'url("old-background")');
+            const tab = document.createElement('button');
+            tab.className = 'navtablinks';
+            tab.dataset.id = 'orders';
+            document.body.append(hero, content, tab);
+            localStorage.setItem('full_tree_data', JSON.stringify({ nodes: [
+                { name: 'orders', table_uid: '104', dataset_cover_image_hidden: false },
+                { name: 'invoices', table_uid: '105' },
+            ] }));
+            localStorage.setItem('full_tree_data_cached_at', '1234');
+            await generate_dataset_header_config_view(container);
+            container.querySelector('input[name="hide_cover_image"]').checked = coverHidden;
+            container.querySelector('input[name="hide_background_image"]').checked = backgroundHidden;
+            submitForm(container);
+            await flushAsyncWork();
+            const payload = saveDatasetHeaderConfigMock.mock.calls[0][0];
+            expect(payload.get('hide_cover_image')).toBe(String(coverHidden));
+            expect(payload.get('hide_background_image')).toBe(String(backgroundHidden));
+            expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(!coverHidden);
+            expect(Boolean(hero.style.getPropertyValue('--dataset-cover-image'))).toBe(!coverHidden);
+            expect(content.classList.contains('tab-content-area--has-dataset-background')).toBe(!backgroundHidden);
+            expect(Boolean(content.style.getPropertyValue('--dataset-background-image'))).toBe(!backgroundHidden);
+            expect(tab.dataset.hasPresentationMedia).toBe(hasMedia);
+            expect(JSON.parse(localStorage.getItem('table_specs')).orders).toMatchObject({
+                dataset_cover_image_path: buildConfig().cover_image_path,
+                dataset_background_image_path: buildConfig().background_image_path,
+                dataset_cover_image_hidden: coverHidden, dataset_background_image_hidden: backgroundHidden,
+            });
+            expect(container.querySelectorAll('[data-lang-key="dataset_header_config_image_hidden"]'))
+                .toHaveLength(Number(coverHidden) + Number(backgroundHidden));
+            const { buildTreeDatasetSpecs } = await import('../vanilla_tree/van_tr_components/admin_tree_metadata_reader.js');
+            const cachedTree = JSON.parse(localStorage.getItem('full_tree_data'));
+            expect(buildTreeDatasetSpecs(cachedTree.nodes).orders).toMatchObject({
+                dataset_cover_image_hidden: coverHidden,
+                dataset_background_image_hidden: backgroundHidden,
+                dataset_cover_image_path: buildConfig().cover_image_path,
+                dataset_background_image_path: buildConfig().background_image_path,
+            });
+            expect(cachedTree.nodes[1]).toEqual({ name: 'invoices', table_uid: '105' });
+            expect(localStorage.getItem('full_tree_data_cached_at')).toBe('1234');
+        }
+    );
+
+    test('copy preserves existing languages and adds image visibility in Finnish and English (K175)', async () => {
         endpointRouterMock.mockResolvedValue(['orders']);
         fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig({ cover_image_path: '' }));
         const { generate_dataset_header_config_view } = await loadModule();
@@ -391,12 +511,14 @@ describe('dataset_header_config_view', () => {
         );
         for (const key of ['dataset_select_target', 'search', 'dataset_header_config_usage_placeholder',
             'dataset_header_config_not_loaded', 'dataset_header_config_no_datasets', 'saved', 'save_failed',
-            'unsaved_changes']) {
+            'unsaved_changes', 'dataset_header_config_image_hidden']) {
             keys.add(key);
         }
         expect(keys.size).toBeGreaterThan(20);
         for (const key of keys) {
-            for (const language of ['fi', 'en', 'ch', 'yue']) {
+            const languages = ['dataset_header_config_hide_cover_image', 'dataset_header_config_hide_background_image',
+                'dataset_header_config_image_hidden'].includes(key) ? ['fi', 'en'] : ['fi', 'en', 'ch', 'yue'];
+            for (const language of languages) {
                 expect(COPY[key]?.[language], `${key} ${language}`).toMatch(/\S/);
             }
         }

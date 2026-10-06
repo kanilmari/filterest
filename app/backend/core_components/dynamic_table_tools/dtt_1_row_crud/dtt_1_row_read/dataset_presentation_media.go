@@ -14,8 +14,10 @@ import (
 // rows the current request has already proved it may read. Storage delivery
 // still performs its own registry and dataset-read authorization.
 type DatasetPresentationMedia struct {
-	CoverImagePath      string `json:"cover_image_path"`
-	BackgroundImagePath string `json:"background_image_path"`
+	CoverImagePath        string `json:"cover_image_path"`
+	BackgroundImagePath   string `json:"background_image_path"`
+	CoverImageHidden      bool   `json:"cover_image_hidden"`
+	BackgroundImageHidden bool   `json:"background_image_hidden"`
 }
 
 func fetchDatasetPresentationMedia(db dbutils.Querier, tableName string) (DatasetPresentationMedia, error) {
@@ -25,13 +27,15 @@ func fetchDatasetPresentationMedia(db dbutils.Querier, tableName string) (Datase
 			COALESCE(MAX('/storage/' || dataset_media.storage_key)
 				FILTER (WHERE dataset_media.media_role = 'cover'), ''),
 			COALESCE(MAX('/storage/' || dataset_media.storage_key)
-				FILTER (WHERE dataset_media.media_role = 'background'), '')
+				FILTER (WHERE dataset_media.media_role = 'background'), ''),
+			COALESCE(BOOL_OR(dataset_media.hidden) FILTER (WHERE dataset_media.media_role = 'cover'), FALSE),
+			COALESCE(BOOL_OR(dataset_media.hidden) FILTER (WHERE dataset_media.media_role = 'background'), FALSE)
 		FROM public.system_db_tables AS tables
 		LEFT JOIN public.system_dataset_media AS dataset_media
 			ON dataset_media.table_uid = tables.table_uid
 		WHERE tables.table_name = $1
 		  AND COALESCE(NULLIF(tables.schema_name, ''), 'public') = 'public'
-	`, tableName).Scan(&media.CoverImagePath, &media.BackgroundImagePath)
+	`, tableName).Scan(&media.CoverImagePath, &media.BackgroundImagePath, &media.CoverImageHidden, &media.BackgroundImageHidden)
 	if err != nil {
 		return DatasetPresentationMedia{}, fmt.Errorf("fetch dataset presentation media: %w", err)
 	}

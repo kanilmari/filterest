@@ -5,6 +5,7 @@
 
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, rememberLoadedDatasetRows } from "./dataset_loaded_rows.js";
 import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from "./storage_media_urls.js";
+import { resolveVisibleDatasetMediaPath } from "./dataset_media_visibility_resolver.js";
 
 import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
 import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
@@ -493,9 +494,12 @@ export async function generate_table(
 		const configuredBackgroundPath = typeof authoritativeBackgroundPath === "string"
 			? authoritativeBackgroundPath
 			: datasetSpec.dataset_background_image_path;
-		const backgroundImagePath = typeof configuredBackgroundPath === "string"
-			? configuredBackgroundPath.trim()
-			: "";
+		// A response path (including an empty one) owns its visibility as well.
+		const backgroundImageHidden = typeof authoritativeBackgroundPath === "string"
+			? datasetPresentation.background_image_hidden
+			: datasetSpec.dataset_background_image_hidden;
+		const backgroundImagePath = resolveVisibleDatasetMediaPath(
+			configuredBackgroundPath, backgroundImageHidden);
 		contentArea.classList.toggle(
 			"tab-content-area--has-dataset-background",
 			Boolean(backgroundImagePath)

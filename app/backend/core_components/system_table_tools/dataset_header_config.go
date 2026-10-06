@@ -30,12 +30,14 @@ type datasetHeaderTextConfig struct {
 }
 
 type datasetHeaderConfigResponse struct {
-	DatasetName         string                  `json:"dataset_name"`
-	Title               datasetHeaderTextConfig `json:"title"`
-	Slogan              datasetHeaderTextConfig `json:"slogan"`
-	SearchPlaceholder   datasetHeaderTextConfig `json:"search_placeholder"`
-	CoverImagePath      string                  `json:"cover_image_path"`
-	BackgroundImagePath string                  `json:"background_image_path"`
+	DatasetName           string                  `json:"dataset_name"`
+	Title                 datasetHeaderTextConfig `json:"title"`
+	Slogan                datasetHeaderTextConfig `json:"slogan"`
+	SearchPlaceholder     datasetHeaderTextConfig `json:"search_placeholder"`
+	CoverImagePath        string                  `json:"cover_image_path"`
+	BackgroundImagePath   string                  `json:"background_image_path"`
+	CoverImageHidden      bool                    `json:"cover_image_hidden"`
+	BackgroundImageHidden bool                    `json:"background_image_hidden"`
 }
 
 type datasetHeaderQueryer interface {
@@ -112,11 +114,13 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 		role        string
 		fileField   string
 		removeField string
+		hideField   string
 	}{
-		{role: "cover", fileField: "cover_image", removeField: "remove_cover_image"},
-		{role: "background", fileField: "background_image", removeField: "remove_background_image"},
+		{role: "cover", fileField: "cover_image", removeField: "remove_cover_image", hideField: "hide_cover_image"},
+		{role: "background", fileField: "background_image", removeField: "remove_background_image", hideField: "hide_background_image"},
 	} {
 		removeMedia := strings.EqualFold(strings.TrimSpace(r.FormValue(request.removeField)), "true")
+		hideMedia := strings.EqualFold(strings.TrimSpace(r.FormValue(request.hideField)), "true")
 		fileHeader, err := readOptionalMultipartFile(r, request.fileField)
 		if err != nil {
 			log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s upload read failed: %v\033[0m", request.role, err)
@@ -139,16 +143,25 @@ func SaveDatasetHeaderConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if _, err := tx.Exec(`
 				INSERT INTO public.system_dataset_media (
-					table_uid, media_role, storage_key, original_name, mime_type
-				) VALUES ($1, $2, $3, $4, $5)
+					table_uid, media_role, storage_key, original_name, mime_type, hidden
+				) VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT (table_uid, media_role) DO UPDATE
 				SET storage_key = EXCLUDED.storage_key,
 				    original_name = EXCLUDED.original_name,
 				    mime_type = EXCLUDED.mime_type,
+				    hidden = EXCLUDED.hidden,
 				    updated = now()
-			`, tableUID, request.role, savedFile.StorageKey, savedFile.OriginalName, savedFile.MIMEType); err != nil {
+			`, tableUID, request.role, savedFile.StorageKey, savedFile.OriginalName, savedFile.MIMEType, hideMedia); err != nil {
 				log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s metadata save failed: %v\033[0m", request.role, err)
 				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving dataset media metadata")
+				return
+			}
+		} else if !removeMedia {
+			// Update only a stored image: hiding an empty slot must not create media.
+			if _, err := tx.Exec(`UPDATE public.system_dataset_media SET hidden = $3, updated = now()
+				WHERE table_uid = $1 AND media_role = $2`, tableUID, request.role, hideMedia); err != nil {
+				log.Printf("\033[31merror: [SaveDatasetHeaderConfigHandler] %s visibility save failed: %v\033[0m", request.role, err)
+				httpresponse.RespondWithError(w, http.StatusInternalServerError, "error saving dataset media visibility")
 				return
 			}
 		}
@@ -200,11 +213,13 @@ func readDatasetHeaderConfigWithQueryer(q datasetHeaderQueryer, datasetName stri
 	if err := q.QueryRow(`
 		SELECT
 			COALESCE(MAX(CASE WHEN media.media_role = 'cover' THEN '/storage/' || media.storage_key END), ''),
-			COALESCE(MAX(CASE WHEN media.media_role = 'background' THEN '/storage/' || media.storage_key END), '')
+			COALESCE(MAX(CASE WHEN media.media_role = 'background' THEN '/storage/' || media.storage_key END), ''),
+			COALESCE(BOOL_OR(media.hidden) FILTER (WHERE media.media_role = 'cover'), FALSE),
+			COALESCE(BOOL_OR(media.hidden) FILTER (WHERE media.media_role = 'background'), FALSE)
 		FROM public.system_db_tables AS tables
 		LEFT JOIN public.system_dataset_media AS media ON media.table_uid = tables.table_uid
 		WHERE tables.table_name = $1
-	`, datasetName).Scan(&config.CoverImagePath, &config.BackgroundImagePath); err != nil {
+	`, datasetName).Scan(&config.CoverImagePath, &config.BackgroundImagePath, &config.CoverImageHidden, &config.BackgroundImageHidden); err != nil {
 		return datasetHeaderConfigResponse{}, err
 	}
 	return config, nil

@@ -20,6 +20,11 @@ import { showConfirmModal, showInputModal } from "../../../reusable_components/m
 import { setAllSpecs } from "../../state_stores/table_specs_reader.js";
 import { showAccessDeniedToast, showErrorToast, showSuccessToast } from "../../../reusable_components/notifications/toast_notification_printer.js";
 
+import { buildTreeDatasetSpecs, getCurrentProjectRootFolderIds, getFolderProjectScope,
+    getParentFolderNode, isProjectRootFolderNode, isTreeCacheFresh, normalizeLegacyOtherTablesNodes,
+    persistTreeCache, readCachedTreeData } from './admin_tree_metadata_reader.js';
+export { getCurrentProjectRootFolderIds, isProjectRootFolderNode, normalizeLegacyOtherTablesNodes } from './admin_tree_metadata_reader.js';
+
 // Shared config for the table-selector (permissions) checkbox tree.
 const TABLE_SELECTOR_TREE_CONFIG = {
     container_id: "table_selector_tree",
@@ -35,169 +40,6 @@ const TABLE_SELECTOR_TREE_CONFIG = {
     show_search: true,
     use_data_lang_key: true,
 };
-
-const PROJECT_CONTAINER_NAMES = new Set(['apps', 'app_projects']);
-const LEGACY_OTHER_TABLES_NAME = 'other_tables';
-const DATABASE_ROOT_NAME = 'database';
-const TREE_CACHE_KEY = 'full_tree_data';
-const TREE_CACHE_TS_KEY = 'full_tree_data_cached_at';
-const TREE_CACHE_TTL_MS = 5 * 60 * 1000;
-
-function isTreeRootParent(parentId) {
-    return parentId == null || parentId === '' || parentId === 'null';
-}
-
-function readCachedTreeData() {
-    const raw = localStorage.getItem(TREE_CACHE_KEY);
-    if (!raw) {
-        return null;
-    }
-
-    try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : null;
-    } catch (err) {
-        console.warn('initializeTreeCallAdmin: failed to parse cached tree data', err);
-        return null;
-    }
-}
-
-function isTreeCacheFresh() {
-    const cachedAtRaw = localStorage.getItem(TREE_CACHE_TS_KEY);
-    const cachedAt = Number.parseInt(cachedAtRaw || '', 10);
-    if (!Number.isFinite(cachedAt) || cachedAt <= 0) {
-        return false;
-    }
-    return (Date.now() - cachedAt) < TREE_CACHE_TTL_MS;
-}
-
-function persistTreeCache(data) {
-    localStorage.setItem(TREE_CACHE_KEY, JSON.stringify(data));
-    localStorage.setItem(TREE_CACHE_TS_KEY, String(Date.now()));
-}
-
-function normalizeTreeFolderName(name) {
-    return String(name || '').trim().toLowerCase();
-}
-
-function isFolderTreeNode(node) {
-    return Boolean(node) && !node.table_uid && node.is_view !== true && String(node.id || '').startsWith('f_');
-}
-
-export function normalizeLegacyOtherTablesNodes(nodes) {
-    if (!Array.isArray(nodes) || nodes.length === 0) {
-        return [];
-    }
-
-    const clonedNodes = nodes.map((node) => ({ ...node }));
-    const databaseRootNode = clonedNodes.find((node) => (
-        isFolderTreeNode(node)
-        && isTreeRootParent(node.parent_id)
-        && normalizeTreeFolderName(node.name) === DATABASE_ROOT_NAME
-    ));
-    if (!databaseRootNode) {
-        return clonedNodes;
-    }
-
-    const canonicalOtherTablesNode = clonedNodes.find((node) => (
-        isFolderTreeNode(node)
-        && node.parent_id === databaseRootNode.id
-        && normalizeTreeFolderName(node.name) === LEGACY_OTHER_TABLES_NAME
-    ));
-    if (!canonicalOtherTablesNode) {
-        return clonedNodes;
-    }
-
-    const duplicateRootIds = new Map();
-    clonedNodes.forEach((node) => {
-        if (
-            isFolderTreeNode(node)
-            && isTreeRootParent(node.parent_id)
-            && normalizeTreeFolderName(node.name) === LEGACY_OTHER_TABLES_NAME
-            && node.id !== canonicalOtherTablesNode.id
-        ) {
-            duplicateRootIds.set(node.id, canonicalOtherTablesNode.id);
-        }
-    });
-    if (duplicateRootIds.size === 0) {
-        return clonedNodes;
-    }
-
-    return clonedNodes
-        .filter((node) => !duplicateRootIds.has(node.id))
-        .map((node) => {
-            if (!duplicateRootIds.has(node.parent_id)) {
-                return node;
-            }
-            return {
-                ...node,
-                parent_id: duplicateRootIds.get(node.parent_id),
-            };
-        });
-}
-
-function isFolderNode(node) {
-    return Boolean(node) && !node.table_uid && node.is_view !== true;
-}
-
-function getParentFolderNode(node, nodesById) {
-    if (!node || !nodesById) return null;
-    const parentId = typeof node.parent_id === 'string' ? node.parent_id : '';
-    if (!parentId.startsWith('f_')) return null;
-    return nodesById.get(parentId) || null;
-}
-
-function isProjectContainerNode(node) {
-    if (!isFolderNode(node)) return false;
-    return PROJECT_CONTAINER_NAMES.has(String(node.name || '').trim().toLowerCase());
-}
-
-function getProjectRootFolderNode(folderNode, nodesById) {
-    if (!isFolderNode(folderNode) || !nodesById) return null;
-
-    const seen = new Set();
-    let currentNode = folderNode;
-    while (currentNode && !seen.has(currentNode.id)) {
-        seen.add(currentNode.id);
-        const parentFolder = getParentFolderNode(currentNode, nodesById);
-        if (!parentFolder) {
-            return null;
-        }
-        if (isProjectContainerNode(parentFolder)) {
-            return currentNode;
-        }
-        currentNode = parentFolder;
-    }
-    return null;
-}
-
-function getFolderProjectScope(folderNode, nodesById) {
-    const projectRootNode = getProjectRootFolderNode(folderNode, nodesById);
-    return {
-        projectRootNode,
-        projectName: projectRootNode?.name || '',
-        isTopLevel: Boolean(projectRootNode && folderNode && projectRootNode.id === folderNode.id),
-    };
-}
-
-export function isProjectRootFolderNode(node, nodesById) {
-    if (!isFolderNode(node) || !nodesById) {
-        return false;
-    }
-    const scope = getFolderProjectScope(node, nodesById);
-    return Boolean(scope.projectRootNode && scope.projectRootNode.id === node.id);
-}
-
-export function getCurrentProjectRootFolderIds(nodes) {
-    if (!Array.isArray(nodes) || nodes.length === 0) {
-        return [];
-    }
-
-    const nodesById = new Map(nodes.map((node) => [String(node.id), node]));
-    return nodes
-        .filter((node) => node?.is_current_project === true && isProjectRootFolderNode(node, nodesById))
-        .map((node) => String(node.id));
-}
 
 export function decorateCurrentProjectFolderBadges(treeContainer, currentProjectFolderIds) {
     if (!(treeContainer instanceof HTMLElement)) {
@@ -699,47 +541,7 @@ export async function initializeTreeCallAdmin({ forceRefresh = false } = {}) {
         // Tallennetaan koko vastaus localStorageen
         persistTreeCache(data);
 
-        // Kerätään taulujen table_uid + default_view_name + filterbar oletus
-        const tableSpecsMap = {};
-        data.nodes.forEach((node) => {
-            if (node.table_uid) {
-                const bannerIconUrlsByLang =
-                    node.banner_icon_urls_by_lang || node.banner_icons_by_lang;
-                tableSpecsMap[node.name] = {
-                    table_uid: node.table_uid,
-                    default_view_name: node.default_view_name,
-                    filterbar_visible_by_default: node.filterbar_visible_by_default,
-                    ...(node.banner_icon_url
-                        ? { banner_icon_url: node.banner_icon_url }
-                        : {}),
-                    ...(bannerIconUrlsByLang
-                        ? { banner_icon_urls_by_lang: bannerIconUrlsByLang }
-                        : {}),
-                    ...(node.dataset_icon_url
-                        ? { dataset_icon_url: node.dataset_icon_url }
-                        : {}),
-                    ...(node.icon_key
-                        ? { icon_key: node.icon_key }
-                        : {}),
-                    ...(node.display_name
-                        ? { display_name: node.display_name }
-                        : {}),
-                    ...(node.search_slogan
-                        ? { search_slogan: node.search_slogan }
-                        : {}),
-                    ...(node.search_placeholder
-                        ? { search_placeholder: node.search_placeholder }
-                        : {}),
-                    ...(node.dataset_cover_image_path
-                        ? { dataset_cover_image_path: node.dataset_cover_image_path }
-                        : {}),
-                    ...(node.dataset_background_image_path
-                        ? { dataset_background_image_path: node.dataset_background_image_path }
-                        : {}),
-                };
-            }
-        });
-        setAllSpecs(tableSpecsMap);
+        setAllSpecs(buildTreeDatasetSpecs(data.nodes));
 
         // 1) Piirretään navigointipuu
         await render_tree(data.nodes, {

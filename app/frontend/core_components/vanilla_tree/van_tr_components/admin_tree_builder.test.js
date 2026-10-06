@@ -77,6 +77,10 @@ describe('admin_tree_builder move helpers', () => {
                     parent_id: 'f_1',
                     table_uid: '3157',
                     icon_key: 'task',
+                    dataset_cover_image_path: '/storage/3157/dataset_media/cover/original/cover.png',
+                    dataset_cover_image_hidden: true,
+                    dataset_background_image_path: '/storage/3157/dataset_media/background/original/background.png',
+                    dataset_background_image_hidden: false,
                 },
             ],
         });
@@ -88,6 +92,10 @@ describe('admin_tree_builder move helpers', () => {
             tiketit: expect.objectContaining({
                 table_uid: '3157',
                 icon_key: 'task',
+                dataset_cover_image_path: '/storage/3157/dataset_media/cover/original/cover.png',
+                dataset_cover_image_hidden: true,
+                dataset_background_image_path: '/storage/3157/dataset_media/background/original/background.png',
+                dataset_background_image_hidden: false,
             }),
         }));
     });

@@ -71,6 +71,8 @@ export interface DatasetHeaderConfigResponse {
     search_placeholder: DatasetHeaderTextConfig;
     cover_image_path: string;
     background_image_path: string;
+    cover_image_hidden: boolean;
+    background_image_hidden: boolean;
 }
 
 export interface ChildTabConfigRow {

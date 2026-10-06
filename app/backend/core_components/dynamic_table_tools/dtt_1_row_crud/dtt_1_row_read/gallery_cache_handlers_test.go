@@ -81,7 +81,7 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 	case strings.Contains(q, "SELECT table_uid"), strings.Contains(q, "SELECT\n        table_uid"):
 		return rows([]string{"uid"}, []driver.Value{int64(161)}), nil
 	case strings.Contains(q, "system_dataset_media"):
-		return rows([]string{"cover", "background"}, []driver.Value{"", ""}), nil
+		return rows([]string{"cover", "background", "cover_hidden", "background_hidden"}, []driver.Value{"", "", false, false}), nil
 	case strings.Contains(q, "results_load_amount"):
 		return rows([]string{"amount"}, []driver.Value{"10"}), nil
 	case strings.Contains(q, "FROM system_column_details cd"):

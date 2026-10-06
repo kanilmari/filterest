@@ -52,6 +52,7 @@ func buildGroupedTablesQuery(iconKeyExpr string) string {
 				FROM public.system_dataset_media media
 				WHERE media.table_uid = t.table_uid
 				  AND media.media_role IN ('cover', 'background')
+				  AND NOT media.hidden
 			) AS has_presentation_media
 		FROM system_db_tables t
 		LEFT JOIN current_project_folders cpf ON t.folder_id = cpf.id

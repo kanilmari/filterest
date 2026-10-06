@@ -3,8 +3,9 @@
 // dataset's hero or from the admin tools.
 // Bridges the screen with an installation whose language keys are still
 // missing: the site's own reviewed translations always take precedence.
-// Exists so every text on the screen has Finnish, English, Chinese (ch) and
-// Cantonese (yue) copy. Shared keys the screen reuses carry the fresh-install
+// Existing copy includes Finnish, English, Chinese (ch) and Cantonese (yue).
+// Image visibility copy is authored in Finnish and English only (K175).
+// Shared keys the screen reuses carry the fresh-install
 // copy of public_bootstrap/seed_data.sql, so both read the same. The
 // `key: { fi: ... }` shape is one the startup language-key scan recognises.
 
@@ -78,6 +79,9 @@ const COPY = {
         yue: "淡淡咁顯示喺結果數目同資料集內容後面，同封面圖片無關。",
     },
     dataset_header_config_replace_image: { fi: "Vaihda kuva", en: "Replace image", ch: "更换图片", yue: "更換圖片" },
+    dataset_header_config_hide_cover_image: { fi: "Piilota kansikuva", en: "Hide cover image" },
+    dataset_header_config_hide_background_image: { fi: "Piilota taustakuva", en: "Hide background image" },
+    dataset_header_config_image_hidden: { fi: "Piilotettu", en: "Hidden" },
     dataset_header_config_remove_image: {
         fi: "Poista nykyinen kuva tallennettaessa",
         en: "Remove current image on save",

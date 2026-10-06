@@ -23,6 +23,20 @@ describe('create_filter_bar inline hero mounting', () => {
         cleanupFilterBarBuilderTestDom();
     });
 
+
+    test.each([true, false])('hero image visibility %s controls the CSS load property', async (hidden) => {
+        const { getAllSpecs } = await import('../state_stores/table_specs_reader.js');
+        vi.mocked(getAllSpecs).mockReturnValueOnce({ demo: {
+            dataset_cover_image_path: '/storage/104/dataset_media/cover/original/cover.webp',
+            dataset_cover_image_hidden: hidden,
+        } });
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        create_filter_bar('demo', 'demo_uid', ['id'], { id: 'integer' }, 1, false, 'card');
+        const hero = document.querySelector('.filterbar-inline-hero');
+        expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(!hidden);
+        expect(Boolean(hero.style.getPropertyValue('--dataset-cover-image'))).toBe(!hidden);
+    });
+
     test('uses explicit surface metadata and omits SQL-only hero actions for API surfaces', async () => {
         sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/admin/dataset_header_config']));
         const { create_filter_bar } = await import('./filter_bar_builder.js');

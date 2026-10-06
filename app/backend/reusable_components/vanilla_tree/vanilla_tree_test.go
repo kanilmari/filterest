@@ -167,3 +167,25 @@ func TestUnregisteredPublicViewsQueryExcludesRegisteredDatasetViews(t *testing.T
 		}
 	}
 }
+
+func TestTreeNodeMediaHiddenJSONKeepsPathsAndOmitsAbsentFlags(t *testing.T) {
+	path := "/storage/104/dataset_media/cover/original/cover.svg"
+	hidden, visible := true, false
+	node := TreeNode{DatasetCoverImagePath: &path, DatasetBackgroundImagePath: &path, DatasetCoverImageHidden: &hidden, DatasetBackgroundImageHidden: &visible}
+	body, err := json.Marshal(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{`"dataset_cover_image_hidden":true`, `"dataset_background_image_hidden":false`, `"dataset_cover_image_path":`, `"dataset_background_image_path":`} {
+		if !strings.Contains(string(body), fragment) {
+			t.Fatalf("missing %s: %s", fragment, body)
+		}
+	}
+	body, err = json.Marshal(TreeNode{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "image_hidden") {
+		t.Fatalf("absent media flags should be omitted: %s", body)
+	}
+}

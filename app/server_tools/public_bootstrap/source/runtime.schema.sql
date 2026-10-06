@@ -290,6 +290,13 @@ CREATE TABLE IF NOT EXISTS public.system_dataset_media (
     UNIQUE (table_uid, media_role)
 );
 
+-- The full upgrade migration also registers the column and its language keys,
+-- so it runs with the seed after the dataset registry exists.
+ALTER TABLE public.system_dataset_media
+    ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE;
+COMMENT ON COLUMN public.system_dataset_media.hidden IS
+    'Suppresses presentation loading without removing the stored image or its link. Admin previews remain visible.';
+
 CREATE INDEX IF NOT EXISTS idx_system_dataset_media_table_uid
     ON public.system_dataset_media (table_uid);
 

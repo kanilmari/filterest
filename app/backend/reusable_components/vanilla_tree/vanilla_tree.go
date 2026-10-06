@@ -22,22 +22,24 @@ import (
 // TableUID on system_db_tables-rekisterin kokonaislukuinen viiteavain; id on vain rekisteririvin numero.
 // DefaultViewID on oletusnäkymän numeroinen ID, jos sellainen on tallennettu.
 type TreeNode struct {
-	ID                         string  `json:"id"`
-	Name                       string  `json:"name"`
-	ParentID                   string  `json:"parent_id"`
-	DbID                       int     `json:"db_id"`
-	TableUID                   string  `json:"table_uid,omitempty"`
-	DisplayName                *string `json:"display_name,omitempty"`
-	SearchSlogan               *string `json:"search_slogan,omitempty"`
-	SearchPlaceholder          *string `json:"search_placeholder,omitempty"`
-	DatasetCoverImagePath      *string `json:"dataset_cover_image_path,omitempty"`
-	DatasetBackgroundImagePath *string `json:"dataset_background_image_path,omitempty"`
-	IconKey                    *string `json:"icon_key,omitempty"`
-	DefaultViewID              *int64  `json:"default_view_id,omitempty"`
-	DefaultViewName            *string `json:"default_view_name,omitempty"`
-	FilterbarVisibleByDefault  *bool   `json:"filterbar_visible_by_default,omitempty"`
-	IsCurrentProject           bool    `json:"is_current_project,omitempty"`
-	IsView                     bool    `json:"is_view,omitempty"`
+	ID                           string  `json:"id"`
+	Name                         string  `json:"name"`
+	ParentID                     string  `json:"parent_id"`
+	DbID                         int     `json:"db_id"`
+	TableUID                     string  `json:"table_uid,omitempty"`
+	DisplayName                  *string `json:"display_name,omitempty"`
+	SearchSlogan                 *string `json:"search_slogan,omitempty"`
+	SearchPlaceholder            *string `json:"search_placeholder,omitempty"`
+	DatasetCoverImagePath        *string `json:"dataset_cover_image_path,omitempty"`
+	DatasetBackgroundImagePath   *string `json:"dataset_background_image_path,omitempty"`
+	DatasetCoverImageHidden      *bool   `json:"dataset_cover_image_hidden,omitempty"`
+	DatasetBackgroundImageHidden *bool   `json:"dataset_background_image_hidden,omitempty"`
+	IconKey                      *string `json:"icon_key,omitempty"`
+	DefaultViewID                *int64  `json:"default_view_id,omitempty"`
+	DefaultViewName              *string `json:"default_view_name,omitempty"`
+	FilterbarVisibleByDefault    *bool   `json:"filterbar_visible_by_default,omitempty"`
+	IsCurrentProject             bool    `json:"is_current_project,omitempty"`
+	IsView                       bool    `json:"is_view,omitempty"`
 }
 
 type folderTreeRow struct {
@@ -269,6 +271,10 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 							LIMIT 1
 						),
 						t.icon_key,
+						(SELECT media.hidden FROM public.system_dataset_media AS media
+						 WHERE media.table_uid = t.table_uid AND media.media_role = 'cover' LIMIT 1),
+						(SELECT media.hidden FROM public.system_dataset_media AS media
+						 WHERE media.table_uid = t.table_uid AND media.media_role = 'background' LIMIT 1),
                         t.default_view_id,
                         v.name,
                         t.filterbar_visible_by_default
@@ -293,6 +299,7 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 		var datasetCoverImagePath sql.NullString
 		var datasetBackgroundImagePath sql.NullString
 		var iconKey sql.NullString
+		var datasetCoverImageHidden, datasetBackgroundImageHidden sql.NullBool
 		var defaultViewID sql.NullInt64
 		var defaultViewName sql.NullString
 		var filterbarDefault sql.NullBool
@@ -308,6 +315,8 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 			&datasetCoverImagePath,
 			&datasetBackgroundImagePath,
 			&iconKey,
+			&datasetCoverImageHidden,
+			&datasetBackgroundImageHidden,
 			&defaultViewID,
 			&defaultViewName,
 			&filterbarDefault,
@@ -347,9 +356,11 @@ func GetTreeDataHandler(response_writer http.ResponseWriter, request *http.Reque
 		}
 		if datasetCoverImagePath.Valid {
 			node.DatasetCoverImagePath = &datasetCoverImagePath.String
+			node.DatasetCoverImageHidden = &datasetCoverImageHidden.Bool
 		}
 		if datasetBackgroundImagePath.Valid {
 			node.DatasetBackgroundImagePath = &datasetBackgroundImagePath.String
+			node.DatasetBackgroundImageHidden = &datasetBackgroundImageHidden.Bool
 		}
 		if iconKey.Valid {
 			node.IconKey = &iconKey.String

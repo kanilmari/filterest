@@ -67,7 +67,9 @@ export async function fetchFilterOptions({
  *     "geom_sources": string[],
  *     "dataset_presentation": {
  *       "cover_image_path": string,
- *       "background_image_path": string
+ *       "background_image_path": string,
+ *       "cover_image_hidden": boolean,
+ *       "background_image_hidden": boolean
  *     }
  *   }
  */

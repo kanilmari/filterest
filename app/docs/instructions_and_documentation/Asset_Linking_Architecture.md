@@ -3,6 +3,23 @@
 This document defines the long-term direction for asset support in Filterest.
 It replaces the narrower “image linking only” mental model with a generic `asset_linking` architecture while keeping images as the first fully supported profile.
 
+## Dataset Presentation Images
+
+The dataset header settings use `system_dataset_media`, separate from row
+assets, for one cover and one content background per dataset. Each media row's
+`hidden` flag defaults to false. The settings API, dataset results and navigation
+tree keep returning the stored image link alongside its visibility flag. Hiding
+updates that row in the same transaction as the header settings; hiding an empty
+slot creates no row, and a replacement upload takes the selected hidden state.
+
+Dataset pages suppress a hidden image immediately before writing the CSS image
+property, so the browser never requests its display variant. Main tabs count
+only visible presentation media. The administrator's preview still loads the
+image with a translated Hidden badge; selecting removal clears and disables
+hiding. A successful save updates the active page, settings cache and cached
+navigation tree. This per-image flag is independent of the site palette's
+cover-opacity setting, which can make a loaded cover transparent.
+
 ## 1. Why This Exists
 
 Filterest already has working image-linking behavior, but upcoming requirements expand beyond one image per row:

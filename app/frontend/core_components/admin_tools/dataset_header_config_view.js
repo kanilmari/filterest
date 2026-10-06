@@ -12,6 +12,8 @@ import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_
 import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js';
 import { refreshMainTabPresentation } from '../navigation/main_tabs/main_tab_active_state.js';
 import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from '../table_views/storage_media_urls.js';
+import { resolveVisibleDatasetMediaPath } from '../table_views/dataset_media_visibility_resolver.js';
+import { syncCachedTreeDatasetMedia } from '../vanilla_tree/van_tr_components/admin_tree_metadata_reader.js';
 
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderConfigResponse} DatasetHeaderConfigResponse */
 /** @typedef {import('../../generated/go_contract_types').DatasetHeaderTextConfig} DatasetHeaderTextConfig */
@@ -126,12 +128,16 @@ export async function generate_dataset_header_config_view(
         hintKey: 'dataset_header_config_cover_hint',
         fileFieldName: 'cover_image',
         removeFieldName: 'remove_cover_image',
+        hideFieldName: 'hide_cover_image',
+        hideLabelKey: 'dataset_header_config_hide_cover_image',
     });
     const backgroundEditor = createDatasetMediaEditor({
         titleKey: 'dataset_header_config_background_title',
         hintKey: 'dataset_header_config_background_hint',
         fileFieldName: 'background_image',
         removeFieldName: 'remove_background_image',
+        hideFieldName: 'hide_background_image',
+        hideLabelKey: 'dataset_header_config_hide_background_image',
     });
 
     formGrid.appendChild(copyCard);
@@ -208,7 +214,9 @@ export async function generate_dataset_header_config_view(
             syncDatasetPresentationMedia(
                 selectedDataset,
                 savedConfig.cover_image_path || '',
-                savedConfig.background_image_path || ''
+                savedConfig.background_image_path || '',
+                savedConfig.cover_image_hidden,
+                savedConfig.background_image_hidden
             );
             await translatePage(getLanguageWithBrowserFallback());
             showSuccessToast(headerText('saved'));
@@ -284,8 +292,8 @@ export async function generate_dataset_header_config_view(
         applyLangKeyConfig(titleEditor, config?.title);
         applyLangKeyConfig(sloganEditor, config?.slogan);
         applyLangKeyConfig(placeholderEditor, config?.search_placeholder);
-        coverEditor.applyPath(config?.cover_image_path || '');
-        backgroundEditor.applyPath(config?.background_image_path || '');
+        coverEditor.applyPath(config?.cover_image_path || '', config?.cover_image_hidden);
+        backgroundEditor.applyPath(config?.background_image_path || '', config?.background_image_hidden);
     }
 }
 
@@ -294,13 +302,16 @@ export async function generate_dataset_header_config_view(
  * with a successful media save. The authoritative values still come from the
  * backend response; this only avoids making the administrator reload the page.
  */
-function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundImagePath) {
+function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundImagePath, coverImageHidden = false, backgroundImageHidden = false) {
     if (!datasetName) return;
 
     const specs = getAllSpecs();
     const nextDatasetSpec = { ...(specs[datasetName] || {}) };
     setOptionalSpecPath(nextDatasetSpec, 'dataset_cover_image_path', coverImagePath);
     setOptionalSpecPath(nextDatasetSpec, 'dataset_background_image_path', backgroundImagePath);
+    nextDatasetSpec.dataset_cover_image_hidden = coverImageHidden === true;
+    nextDatasetSpec.dataset_background_image_hidden = backgroundImageHidden === true;
+    syncCachedTreeDatasetMedia(datasetName, nextDatasetSpec);
     setAllSpecs({
         ...specs,
         [datasetName]: nextDatasetSpec,
@@ -309,7 +320,8 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
         .find((button) => button.dataset.id === datasetName);
     if (tabButton instanceof HTMLElement) {
         tabButton.dataset.hasPresentationMedia = String(
-            Boolean(coverImagePath || backgroundImagePath)
+            Boolean(resolveVisibleDatasetMediaPath(coverImagePath, coverImageHidden)
+                || resolveVisibleDatasetMediaPath(backgroundImagePath, backgroundImageHidden))
         );
     }
 
@@ -319,7 +331,8 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
             hero,
             'filterbar-inline-hero--has-cover',
             '--dataset-cover-image',
-            coverImagePath
+            coverImagePath,
+            coverImageHidden
         );
     }
 
@@ -329,7 +342,8 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
             contentArea,
             'tab-content-area--has-dataset-background',
             '--dataset-background-image',
-            backgroundImagePath
+            backgroundImagePath,
+            backgroundImageHidden
         );
     }
     refreshMainTabPresentation();
@@ -344,8 +358,8 @@ function setOptionalSpecPath(spec, key, path) {
     delete spec[key];
 }
 
-function applyPresentationImage(element, enabledClass, propertyName, path) {
-    const normalizedPath = typeof path === 'string' ? path.trim() : '';
+function applyPresentationImage(element, enabledClass, propertyName, path, hidden = false) {
+    const normalizedPath = resolveVisibleDatasetMediaPath(path, hidden);
     element.classList.toggle(enabledClass, Boolean(normalizedPath));
     if (!normalizedPath) {
         element.style.removeProperty(propertyName);
@@ -362,8 +376,11 @@ function createDatasetMediaEditor({
     hintKey,
     fileFieldName,
     removeFieldName,
+    hideFieldName,
+    hideLabelKey,
 }) {
     let currentPath = '';
+    let currentHidden = false;
     let pendingPreviewUrl = '';
 
     const wrapper = document.createElement('section');
@@ -400,6 +417,14 @@ function createDatasetMediaEditor({
     removeLabel.append(removeCheckbox, removeText);
     wrapper.appendChild(removeLabel);
 
+    const hideLabel = document.createElement('label');
+    hideLabel.classList.add('dataset-header-config-checkbox', 'fw-flex', 'fw-gap-2', 'fw-items-center');
+    const hideCheckbox = document.createElement('input');
+    hideCheckbox.type = 'checkbox';
+    hideCheckbox.name = hideFieldName;
+    hideLabel.append(hideCheckbox, setHeaderText(document.createElement('span'), hideLabelKey));
+    wrapper.appendChild(hideLabel);
+
     function clearPendingPreview() {
         if (!pendingPreviewUrl) return;
         URL.revokeObjectURL(pendingPreviewUrl);
@@ -419,6 +444,11 @@ function createDatasetMediaEditor({
         image.alt = '';
         image.classList.add('dataset-header-config-media-image');
         preview.appendChild(image);
+        if (hideCheckbox.checked) {
+            const badge = setHeaderText(document.createElement('span'), 'dataset_header_config_image_hidden');
+            badge.classList.add('fw-badge');
+            preview.appendChild(badge);
+        }
         if (isPending) {
             const badge = setHeaderText(document.createElement('span'), 'unsaved_changes');
             badge.classList.add('fw-badge');
@@ -429,19 +459,23 @@ function createDatasetMediaEditor({
     // Forgets a picked file and the removal tick, and shows the saved image again.
     function resetSelection() {
         removeCheckbox.checked = false;
+        hideCheckbox.checked = currentHidden;
+        hideCheckbox.disabled = false;
         fileInput.value = '';
         clearPendingPreview();
         renderPreview(currentPath);
     }
 
-    function applyPath(path) {
+    function applyPath(path, hidden = false) {
         currentPath = path || '';
+        currentHidden = hidden === true;
         resetSelection();
     }
 
     fileInput.addEventListener('change', () => {
         clearPendingPreview();
         removeCheckbox.checked = false;
+        hideCheckbox.disabled = false;
         const [file] = fileInput.files || [];
         if (!file) {
             renderPreview(currentPath);
@@ -452,7 +486,9 @@ function createDatasetMediaEditor({
     });
 
     removeCheckbox.addEventListener('change', () => {
+        hideCheckbox.disabled = removeCheckbox.checked;
         if (removeCheckbox.checked) {
+            hideCheckbox.checked = false;
             clearPendingPreview();
             fileInput.value = '';
             renderPreview('');
@@ -461,12 +497,17 @@ function createDatasetMediaEditor({
         renderPreview(currentPath);
     });
 
+    hideCheckbox.addEventListener('change', () => {
+        renderPreview(pendingPreviewUrl || currentPath, Boolean(pendingPreviewUrl));
+    });
+
     return {
         wrapper,
         applyPath,
         resetSelection,
         appendPayload(payload) {
             payload.append(removeFieldName, removeCheckbox.checked ? 'true' : 'false');
+            payload.append(hideFieldName, hideCheckbox.checked ? 'true' : 'false');
             const [file] = fileInput.files || [];
             if (file) payload.append(fileFieldName, file);
         },

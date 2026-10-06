@@ -159,6 +159,29 @@ describe('generate_table', () => {
 		expect(document.querySelector('.dataset-results-surface')).not.toBeNull();
 	});
 
+
+    test.each([
+        [null, true, false],
+        [null, false, true],
+        [{ background_image_path: '/storage/104/dataset_media/background/original/new.webp', background_image_hidden: true }, false, false],
+        [{ background_image_path: '/storage/104/dataset_media/background/original/new.webp', background_image_hidden: false }, true, true],
+        [{ background_image_path: '' }, false, false],
+    ])('background response %j owns visibility over cached flag %s', async (presentation, cachedHidden, visible) => {
+        setChosenDatasetView('demo_dataset', 'card');
+        getAllSpecsMock.mockReturnValue({ demo_dataset: {
+            dataset_background_image_path: '/storage/104/dataset_media/background/original/old.webp',
+            dataset_background_image_hidden: cachedHidden,
+        } });
+        const { generate_table } = await import('./dataset_view_printer.js');
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, null, presentation);
+        const content = document.querySelector('.tab-content-area');
+        expect(content.classList.contains('tab-content-area--has-dataset-background')).toBe(visible);
+        expect(Boolean(content.style.getPropertyValue('--dataset-background-image'))).toBe(visible);
+        if (presentation?.background_image_path && visible) {
+            expect(content.style.getPropertyValue('--dataset-background-image')).toContain('new.webp');
+        }
+    });
+
     test.each([null, {card_style_variant: null}, {card_style_variant: 'standard'}])('retains style inheritance or an explicit override from metadata %j', async tableMeta => {
         setChosenDatasetView('demo_dataset', 'card');
         const { generate_table } = await import('./dataset_view_printer.js');
