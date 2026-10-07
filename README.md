@@ -156,11 +156,21 @@ only for the automated fast-forward update command described below.
 ## Installation Options
 
 The recommended portable path uses Docker. It works the same from a GitHub
-checkout or a same-version folder copied without Git. The first start creates
+checkout or a same-version folder copied without Git. By default, the first start creates
 the five operator directories, generates protected settings in
 `keys/docker.env`, creates the local TLS identity under `keys/tls/`, builds the
 application and PostgreSQL images, and waits until both are healthy. Generated
 secrets are never printed.
+
+Docker Engine/Desktop with Docker Compose **2.20.0 or newer** and Python 3 is
+required. Compose's [recursive `include` support](https://docs.docker.com/compose/how-tos/multiple-compose-files/include/)
+sets that minimum; the deployment fragments use interpolated include paths and
+`extends: file:`. Default and host-proxy installations were started with Docker
+29.8.2 and Compose v5.6.0, and the default configuration renders identically
+with Compose 2.40.3.
+For inspection, use `docker compose --env-file keys/docker.env config`.
+`config --no-interpolate` cannot resolve the selected include paths and fails;
+normal `config` can display secrets, so keep its output protected.
 
 The current Docker stack uses installation-owned bind mounts, not named
 volumes. It mounts `config/`, `keys/tls/`, `keys/filterest_runtime/`, `projects/`,
@@ -243,6 +253,98 @@ If an installation later loses access to its administrator accounts, `SECURITY.m
 describes the operator-only command that restores an existing administrator and,
 when none is usable, creates a new one.
 
+### Behind your own web server
+
+The default Docker installation continues to serve local HTTPS at
+`https://localhost:8100`, publish PostgreSQL at `127.0.0.1:5433`, generate an
+installation identity, and let Docker allocate its network. The settings below
+are optional. They use the same public setup/start commands and folder layout.
+
+For a host nginx or another host web server that terminates public HTTPS,
+create a protected settings file before the first setup. Replace the example
+identity, public URL, port and network with your own values; no domain-specific
+configuration belongs in application source:
+
+```bash
+mkdir -p keys
+chmod 700 keys
+(umask 077; cat > keys/docker.env <<'ENV'
+FILTEREST_EDGE=host-proxy
+COMPOSE_PROJECT_NAME=my-site
+INSTANCE_NAME=my-site
+APP_PORT=18100
+BASE_URL=https://example.invalid
+FILTEREST_PUBLISH_DB_PORT=false
+FILTEREST_NETWORK_SUBNET=172.30.99.0/24
+FILTEREST_NETWORK_GATEWAY=172.30.99.1
+ENV
+)
+./filterest docker setup
+./filterest docker start
+```
+
+For an existing installation, edit its `keys/docker.env` instead of replacing
+it; preserve the database/session secrets and both identities. Setup fills
+missing secrets, keeps explicit identities and public URLs, and preserves those
+values on later starts. You can also supply `--project-name` and
+`--instance-name` to setup, or the same two identity environment variables; a
+conflicting existing identity is refused. Compose project names start with a
+lowercase letter or digit and use lowercase letters, digits, `_` and `-`.
+New instance names start with a letter or digit and use letters, digits, `.`, `_`
+and `-`. New public URLs must be absolute HTTP/HTTPS URLs without credentials,
+whitespace, query strings, fragments or `$` interpolation. Established Docker
+installations retain their stored instance names and public URLs under the older
+runner's rules. A missing instance name takes the project's name only before
+first setup. An established installation with an empty or missing instance name
+keeps its effective `filterest-local` cookie identity, written explicitly.
+The installation marker (`FILTEREST_INSTALL_PROFILE=docker`) also distinguishes
+an established `filterest-local` project from a template placeholder; setup
+generates a unique name for the placeholder even in a pre-created settings file.
+Before starting, the runner inspects running and stopped containers and networks
+and refuses a project whose working-directory label names another installation
+folder. Failed or incomplete Docker inspection also refuses the start.
+
+Host-proxy mode keeps the application on plain HTTP at `127.0.0.1:<APP_PORT>`
+and requires that loopback binding. It sets local TLS off and generates no
+self-signed certificate; existing local certificates remain in place. Configure
+your host web server to proxy to `http://127.0.0.1:18100` in this example.
+`BASE_URL` is the public browser address and must be HTTPS: production session
+cookies are always Secure. Without a public URL, setup derives
+`http://localhost:<APP_PORT>` and warns that it cannot support public secure
+sessions; host-proxy setup also warns about any non-HTTPS or loopback URL. Readiness
+checks use the application's local HTTP address, independently of that public
+URL. Set `FILTEREST_EDGE=local-tls` or remove the setting to return to local
+HTTPS, with certificate generation when needed.
+
+`APP_PORT` or `--app-port` chooses the application loopback port; `BASE_URL` or
+`--base-url` chooses its public HTTP/HTTPS URL. Changing the port preserves a
+custom public URL. `DB_PORT` or `--db-port` chooses the PostgreSQL host port
+when published. Set `FILTEREST_PUBLISH_DB_PORT=false` to omit that host port
+entirely; the application still connects to PostgreSQL through the internal
+network. Omit that setting or set it to `true` for the existing published-port
+behaviour.
+
+Omit both network settings to let Docker allocate the project network. To pin
+it, provide a canonical IPv4 CIDR subnet with at least six usable addresses;
+the gateway defaults to its first
+usable address or may be set explicitly to another usable address in the subnet.
+Loopback, multicast, link-local and other special-use/reserved ranges are refused;
+use a free RFC 1918 private range. Public ranges produce a routing warning.
+Pinned setup requires a running Docker daemon: setup and start
+refuse ranges overlapping any existing Docker network, while allowing this
+project's unchanged default network. Changing an existing project's subnet or
+gateway, or switching between pinned and automatic allocation in either direction,
+requires `./filterest docker stop` first so its old network no longer exists.
+No network or
+container is deleted by the collision check. Setup maintains the internal
+Compose fragment selectors in `keys/docker.env`; configure the settings above
+instead of editing those selectors.
+
+Host web-server configuration, public certificates and renewal are operator
+responsibilities. The header boundary below is required before trusting an
+additional proxy peer; nginx/ACME provisioning and existing-site adoption are
+separate work.
+
 ### Reverse-proxy client identity
 
 When Filterest runs behind a host reverse proxy, client-IP headers are trusted
@@ -260,10 +362,16 @@ The repository ships the two canonical nginx boundaries:
   `X-Forwarded-For`.
 
 Install the Cloudflare source snippet in the nginx HTTP or server context and
-the sanitized-header snippet in the application `location` before setting
-`EASELECT_TRUSTED_PROXY_PEER_IPS` to nginx's one exact Docker-gateway or host
-address. The setting accepts IP literals only, never a subnet or CIDR. Keep it
-blank when no additional proxy peer has been proven.
+the sanitized-header snippet in the application `location` before trusting an
+additional proxy peer. With the host-proxy Docker binding, nginx reaches the
+application from the Docker network gateway, rather than loopback. Pin a free
+private subnet and gateway as above, then set `EASELECT_TRUSTED_PROXY_PEER_IPS`
+in `keys/docker.env` to that exact `FILTEREST_NETWORK_GATEWAY` address (for the
+example, `172.30.99.1`). Without that trust, visitors share the gateway's address
+for rate limiting and login throttling. An automatically allocated gateway can
+change when Docker recreates the network and invalidate the trusted-peer setting.
+The setting accepts IP literals only, never a subnet or CIDR. Keep it blank when
+no additional proxy peer has been proven to sanitize incoming headers.
 
 For native installation, `config/filterest.paths` records the portable relative
 homes for projects, protected keys, and runtime data. Relative paths start at
@@ -308,6 +416,14 @@ version, fill in the update folder and run this block from the installation
 folder. It stops at the first failing command. It restores the checkout, the
 settings, the stored files, and the database together, and moves what the new
 version left behind into a `backups/replaced_*` folder instead of deleting it:
+
+**Opt-in Docker installations cannot safely use this block to roll back across
+the introduction of host-proxy, private database ports or pinned networks.**
+The older runner re-enables local TLS (a host nginx HTTP upstream then receives
+HTTPS and answers 502), publishes PostgreSQL on port 5433 again, and recreates
+the pinned network with automatic allocation. Review the older deployment
+configuration and restore an equivalent transport, port and network contract
+before starting it; the block below does not preserve those options.
 
 ```bash
 (

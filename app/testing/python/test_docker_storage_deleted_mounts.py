@@ -5,7 +5,9 @@ Exists so container rebuilds cannot discard media archived after a database dele
 """
 
 import json
+import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import unittest
@@ -168,6 +170,9 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         compose = (PUBLIC_SOURCE_ROOT / "docker/docker-compose.yml").read_text(
             encoding="utf-8"
         )
+        compose += (PUBLIC_SOURCE_ROOT / "docker/docker-compose.db-base.yml").read_text(
+            encoding="utf-8"
+        )
         entrypoint = (
             PUBLIC_SOURCE_ROOT / "docker/docker-entrypoint.sh"
         ).read_text(encoding="utf-8")
@@ -267,20 +272,35 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("docker"), "Docker CLI is not installed")
     def test_standalone_compose_build_context_is_exactly_immutable_app(self) -> None:
+        # Selectable include paths need interpolation, even for config-only
+        # inspection. Supply synthetic secrets and ignore operator environment
+        # settings; this command neither contacts the engine nor starts services.
+        environment = os.environ.copy()
+        for source in (PUBLIC_SOURCE_ROOT / "docker").glob("docker-compose*.yml"):
+            for key in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", source.read_text()):
+                environment.pop(key, None)
+        for key in list(environment):
+            if key.startswith("COMPOSE_"):
+                environment.pop(key)
+        for key in ("DB_ADMIN_PASSWORD", "DB_READONLY_PASSWORD", "DB_CONFIDENTIAL_PASSWORD",
+                    "DB_BASIC_PASSWORD", "DB_GUEST_PASSWORD", "SESSION_KEY", "SESSION_SECRET_KEY"):
+            environment[key] = "synthetic-compose-contract-secret"
         completed = subprocess.run(
             [
                 "docker",
                 "compose",
                 "--file",
                 str(INSTALLATION_ROOT / "compose.yml"),
+                "--env-file",
+                os.devnull,
                 "config",
-                "--no-interpolate",
                 "--format",
                 "json",
             ],
             check=True,
             capture_output=True,
             text=True,
+            env=environment,
         )
         rendered = json.loads(completed.stdout)
         expected_context = str(PROJECT_ROOT.resolve())
@@ -292,6 +312,14 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             )
 
         app_service = rendered["services"]["app"]
+        self.assertEqual(app_service["ports"][0]["host_ip"], "127.0.0.1")
+        self.assertEqual(str(app_service["ports"][0]["published"]), "8100")
+        self.assertEqual(app_service["environment"]["BASE_URL"], "https://localhost:8100")
+        self.assertEqual(str(app_service["environment"]["FILTEREST_LOCAL_TLS"]).lower(), "true")
+        database_service = rendered["services"]["db"]
+        self.assertEqual(database_service["ports"][0]["host_ip"], "127.0.0.1")
+        self.assertEqual(str(database_service["ports"][0]["published"]), "5433")
+        self.assertFalse(rendered["networks"]["default"].get("ipam", {}).get("config"))
         self.assertTrue(app_service["read_only"])
         app_mounts = {mount["target"]: mount for mount in app_service["volumes"]}
         self.assertEqual(
@@ -310,7 +338,7 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
         )
         for mount in app_mounts.values():
             self.assertFalse(mount["target"].startswith("/filterest/app/"), mount)
-            self.assertFalse(mount["bind"]["create_host_path"], mount)
+            self.assertFalse(mount.get("bind", {}).get("create_host_path", False), mount)
         for protected_target in (
             "/filterest/config",
             "/filterest/keys/tls",
@@ -336,7 +364,34 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             str((INSTALLATION_ROOT / "data/postgres").resolve()),
         )
         for mount in database_mounts.values():
-            self.assertFalse(mount["bind"]["create_host_path"], mount)
+            self.assertFalse(mount.get("bind", {}).get("create_host_path", False), mount)
+
+        operator_environment = environment | {
+            "COMPOSE_PROJECT_NAME": "synthetic-site",
+            "INSTANCE_NAME": "synthetic-site",
+            "FILTEREST_LOCAL_TLS": "false",
+            "APP_PORT": "18100",
+            "BASE_URL": "https://example.invalid",
+            "FILTEREST_DB_PORTS_FILE": "docker-compose.db-private.yml",
+            "FILTEREST_NETWORK_FILE": "docker-compose.network-pinned.yml",
+            "FILTEREST_NETWORK_SUBNET": "172.30.99.0/24",
+            "FILTEREST_NETWORK_GATEWAY": "172.30.99.1",
+        }
+        configured = subprocess.run(
+            completed.args, check=True, capture_output=True, text=True,
+            env=operator_environment,
+        )
+        operator_stack = json.loads(configured.stdout)
+        self.assertEqual(operator_stack["services"]["db"].get("ports", []), [])
+        operator_app = operator_stack["services"]["app"]
+        self.assertEqual(operator_app["ports"][0]["host_ip"], "127.0.0.1")
+        self.assertEqual(str(operator_app["ports"][0]["published"]), "18100")
+        self.assertEqual(str(operator_app["environment"]["FILTEREST_LOCAL_TLS"]).lower(), "false")
+        self.assertEqual(operator_app["environment"]["BASE_URL"], "https://example.invalid")
+        self.assertEqual(operator_app["environment"]["INSTANCE_NAME"], "synthetic-site")
+        self.assertEqual(operator_stack["networks"]["default"]["ipam"]["config"], [
+            {"subnet": "172.30.99.0/24", "gateway": "172.30.99.1"},
+        ])
 
     def test_installation_ignore_contract_excludes_all_mutable_siblings(self) -> None:
         gitignore = (INSTALLATION_ROOT / ".gitignore").read_text(encoding="utf-8")

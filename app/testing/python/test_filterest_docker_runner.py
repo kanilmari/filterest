@@ -1,4 +1,5 @@
-"""Verifies the portable Filterest Docker command without starting real containers.
+"""test_filterest_docker_runner.py
+Verifies the portable Filterest Docker command without starting real containers.
 Bridges a copied source root, generated local secrets, and the Docker Compose call.
 Exists so browser-ready setup stays one command and never exposes generated secrets.
 The fake Docker executable records only command arguments in an isolated test folder.
@@ -32,9 +33,8 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         (self.app_root / "docker").mkdir(parents=True)
         shutil.copy2(SOURCE_ROOT / ".env.example", self.app_root / ".env.example")
         shutil.copy2(INSTALLATION_ROOT / "compose.yml", self.root / "compose.yml")
-        (self.app_root / "docker/docker-compose.yml").write_text(
-            "services: {}\n", encoding="utf-8"
-        )
+        for compose_source in (SOURCE_ROOT / "docker").glob("docker-compose*.yml"):
+            shutil.copy2(compose_source, self.app_root / "docker" / compose_source.name)
         (self.app_root / "VERSION_APP").write_text("8.42.1\n", encoding="utf-8")
         (self.app_root / "VERSION_DB").write_text("9.6.7\n", encoding="utf-8")
 
@@ -45,14 +45,34 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         fake_docker.write_text(
             "#!/bin/sh\n"
             "printf '%s\\n' \"$*\" >> \"$FILTEREST_DOCKER_TEST_LOG\"\n"
+            "if [ \"${1:-}\" = compose ] && [ \"${2:-}\" = version ]; then\n"
+            "    printf '%s\\n' \"${FILTEREST_DOCKER_TEST_COMPOSE_VERSION:-2.40.3}\"\n"
+            "    exit \"${FILTEREST_DOCKER_TEST_COMPOSE_VERSION_STATUS:-0}\"\n"
+            "fi\n"
+            "if [ \"${1:-}\" = network ]; then\n"
+            "    case \"${2:-}\" in\n"
+            "        ls) printf '%b' \"${FILTEREST_DOCKER_TEST_NETWORK_IDS:-}\"; "
+            "exit \"${FILTEREST_DOCKER_TEST_NETWORK_LIST_STATUS:-0}\" ;;\n"
+            "        inspect) printf '%s' \"${FILTEREST_DOCKER_TEST_NETWORKS:-[]}\"; "
+            "exit \"${FILTEREST_DOCKER_TEST_NETWORK_INSPECT_STATUS:-0}\" ;;\n"
+            "    esac\n"
+            "fi\n"
             "if [ \"${1:-}\" = volume ] && [ \"${2:-}\" = inspect ]; then\n"
             "    [ -n \"${FILTEREST_DOCKER_TEST_EXISTING_VOLUME:-}\" ] && "
             "[ \"${3:-}\" = \"$FILTEREST_DOCKER_TEST_EXISTING_VOLUME\" ]\n"
             "    exit $?\n"
             "fi\n"
             "if [ \"${1:-}\" = ps ]; then\n"
+            "    if [ \"${2:-}\" = --all ]; then\n"
+            "        printf '%b' \"${FILTEREST_DOCKER_TEST_CONTAINER_IDS:-}\"\n"
+            "        exit \"${FILTEREST_DOCKER_TEST_CONTAINER_LIST_STATUS:-0}\"\n"
+            "    fi\n"
             "    printf '%s' \"${FILTEREST_DOCKER_TEST_RUNNING:-}\"\n"
             "    exit 0\n"
+            "fi\n"
+            "if [ \"${1:-}\" = container ] && [ \"${2:-}\" = inspect ]; then\n"
+            "    printf '%s' \"${FILTEREST_DOCKER_TEST_CONTAINERS:-[]}\"\n"
+            "    exit \"${FILTEREST_DOCKER_TEST_CONTAINER_INSPECT_STATUS:-0}\"\n"
             "fi\n"
             "if [ \"${1:-}\" = run ] && [ -n \"${FILTEREST_DOCKER_TEST_LEGACY_SOURCE:-}\" ]; then\n"
             "    for argument in \"$@\"; do\n"
@@ -77,6 +97,9 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "PATH=\"$FILTEREST_DOCKER_TEST_CONTAINER_BIN:$PATH\" exec sh \"$@\"\n"
             "    fi\n"
             "    case \"$*\" in\n"
+            "        'down')\n"
+            "            printf 'down-environment FILTEREST_NETWORK_FILE=%s\\n' "
+            "\"${FILTEREST_NETWORK_FILE-<unset>}\" >> \"$FILTEREST_DOCKER_TEST_LOG\" ;;\n"
             "        'ps --status running --services')\n"
             "            printf '%b' \"${FILTEREST_DOCKER_TEST_SERVICES-app\\\\ndb\\\\n}\" ;;\n"
             "        'images --quiet app')\n"
@@ -111,6 +134,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         fake_curl.write_text(
             "#!/bin/sh\n"
             "set -eu\n"
+            "printf '%s\\n' \"$*\" >> \"$FILTEREST_CURL_TEST_RESPONSES/arguments\"\n"
             "out=''\n"
             "url=''\n"
             "max_time=''\n"
@@ -155,7 +179,12 @@ class FilterestDockerRunnerTests(unittest.TestCase):
     def environment(
         self, extra: dict[str, str] | None = None
     ) -> dict[str, str]:
-        environment = os.environ.copy()
+        # Only process/tool discovery belongs to the caller. Docker settings and
+        # fixture control variables must enter explicitly through extra.
+        environment = {
+            key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR", "LANG")
+            if key in os.environ
+        }
         environment["FILTEREST_PROJECT_ROOT_OVERRIDE"] = str(self.root)
         environment["FILTEREST_DOCKER_TEST_LOG"] = str(self.docker_log)
         environment["PATH"] = f"{self.fake_bin}:{environment['PATH']}"

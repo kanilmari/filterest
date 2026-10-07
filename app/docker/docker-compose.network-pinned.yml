@@ -1,0 +1,10 @@
+# docker-compose.network-pinned.yml
+# Declares the operator's validated subnet and gateway for the project network.
+# Connects protected Docker settings to the public stack's default bridge.
+# Keeps site-specific addresses out of maintained application source.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${FILTEREST_NETWORK_SUBNET:?Set FILTEREST_NETWORK_SUBNET}
+          gateway: ${FILTEREST_NETWORK_GATEWAY:?Run ./filterest docker setup}

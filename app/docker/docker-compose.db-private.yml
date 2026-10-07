@@ -1,0 +1,10 @@
+# docker-compose.db-private.yml
+# Omits host publication when the operator explicitly makes PostgreSQL private.
+# Connects the public database service to the internal Compose network only.
+# Avoids exposing a random host port when publication is disabled.
+services:
+  db:
+    extends:
+      file: docker-compose.db-base.yml
+      service: db
+    ports: []

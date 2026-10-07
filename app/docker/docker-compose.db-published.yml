@@ -1,0 +1,11 @@
+# docker-compose.db-published.yml
+# Defines the existing loopback PostgreSQL publication for the public stack.
+# Connects the database service's extends contract to protected operator ports.
+# Keeps the default host database address unchanged.
+services:
+  db:
+    extends:
+      file: docker-compose.db-base.yml
+      service: db
+    ports:
+      - "${DB_BIND_HOST:-127.0.0.1}:${DB_PORT:-5433}:5432"

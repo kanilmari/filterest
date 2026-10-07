@@ -513,6 +513,7 @@ FAKE_UPDATE_TOOLS = {
         "fi\n"
         "printf 'docker %s\\n' \"$*\" >> \"$FILTEREST_TEST_LOG\"\n"
         "case \"$*\" in\n"
+        "    'compose version --short') printf '2.40.3\\n' ;;\n"
         "    'volume inspect '*) exit 1 ;;\n"
         "    'ps --status running --services') printf 'app\\ndb\\n' ;;\n"
         "    'images --quiet app') printf 'sha256:previous-app-image\\n' ;;\n"

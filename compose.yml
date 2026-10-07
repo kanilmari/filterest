@@ -1,6 +1,6 @@
 # Exposes the complete portable stack from the Filterest repository root.
 # Connects Docker Compose's default root command to the canonical Docker contract.
 # Keeps source copies and GitHub checkouts operational through the same command.
-# The included file remains the single detailed application-and-database definition.
+# The included entrypoint selects the maintained application, database and network fragments.
 include:
   - path: app/docker/docker-compose.yml

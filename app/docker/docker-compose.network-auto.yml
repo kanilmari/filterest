@@ -1,0 +1,6 @@
+# docker-compose.network-auto.yml
+# Retains Docker allocation of the project's ordinary default bridge network.
+# Connects the public stack's network include to its unchanged default topology.
+# Leaves subnet and gateway selection to Docker unless explicitly pinned.
+networks:
+  default: {}

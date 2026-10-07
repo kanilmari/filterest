@@ -53,6 +53,7 @@ RECORD_STATUS = (
 FAKE_DOCKER = (
     "#!/bin/sh\n"
     "printf 'docker %s\\n' \"$*\" >> \"$FILTEREST_TEST_LOG\"\n"
+    "if [ \"${1:-}\" = compose ] && [ \"${2:-}\" = version ]; then printf '2.40.3\\n'; fi\n"
     # No earlier named volumes exist, so start migrates nothing.
     "if [ \"${1:-}\" = volume ] && [ \"${2:-}\" = inspect ]; then exit 1; fi\n"
     "exit 0\n"

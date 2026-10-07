@@ -1,7 +1,11 @@
+# docker-compose.yml
 # Defines the complete standalone Filterest application and database stack.
 # Connects the immutable application image to installation-owned bind mounts.
 # Makes a local folder copy operate without any embedding-product dependencies.
 # Root compose.yml exposes this detailed contract through Docker's default command.
+include:
+  - path: ${FILTEREST_NETWORK_FILE:-docker-compose.network-auto.yml}
+  - path: ${FILTEREST_DB_PORTS_FILE:-docker-compose.db-published.yml}
 services:
   app:
     build:
@@ -129,48 +133,3 @@ services:
         read_only: true
         bind:
           create_host_path: false
-
-  db:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.db
-    image: filterest-postgres:pg16-postgis-pgvector
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_ADMIN_USER:-filterest_admin}
-      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in keys/docker.env}
-      POSTGRES_DB: ${DB_NAME:-filterest}
-      DB_READONLY_USER: ${DB_READONLY_USER:-filterest_readonly}
-      DB_READONLY_PASSWORD: ${DB_READONLY_PASSWORD:?Set DB_READONLY_PASSWORD in keys/docker.env}
-      DB_CONFIDENTIAL_USER: ${DB_CONFIDENTIAL_USER:-filterest_confidential}
-      DB_CONFIDENTIAL_PASSWORD: ${DB_CONFIDENTIAL_PASSWORD:?Set DB_CONFIDENTIAL_PASSWORD in keys/docker.env}
-      DB_BASIC_USER: ${DB_BASIC_USER:-filterest_basic}
-      DB_BASIC_PASSWORD: ${DB_BASIC_PASSWORD:?Set DB_BASIC_PASSWORD in keys/docker.env}
-      DB_GUEST_USER: ${DB_GUEST_USER:-filterest_guest}
-      DB_GUEST_PASSWORD: ${DB_GUEST_PASSWORD:?Set DB_GUEST_PASSWORD in keys/docker.env}
-    volumes:
-      - type: bind
-        source: ../../data/postgres
-        target: /var/lib/postgresql/data
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ../server_tools/db_init
-        target: /docker-entrypoint-initdb.d
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ../server_tools/public_bootstrap
-        target: /filterest-public-bootstrap
-        read_only: true
-        bind:
-          create_host_path: false
-    ports:
-      - "${DB_BIND_HOST:-127.0.0.1}:${DB_PORT:-5433}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_ADMIN_USER:-filterest_admin} -d ${DB_NAME:-filterest}"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 10s

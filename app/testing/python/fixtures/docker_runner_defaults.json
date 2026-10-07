@@ -1,0 +1,53 @@
+{
+  "files": {
+    "keys/docker.env": {
+      "mode": "0o600",
+      "overrides": {
+        "ENVIRONMENT_TYPE": "prod",
+        "FILTEREST_INSTALL_PROFILE": "docker",
+        "COMPOSE_PROJECT_NAME": "filterest-00000000",
+        "FILTEREST_LOCAL_TLS": "true",
+        "INSTANCE_NAME": "filterest-00000000",
+        "DB_ADMIN_PASSWORD": "000000000000000000000000000000000000000000000000",
+        "DB_PASSWORD": "000000000000000000000000000000000000000000000000",
+        "DB_READONLY_PASSWORD": "000000000000000000000000000000000000000000000000",
+        "DB_CONFIDENTIAL_PASSWORD": "000000000000000000000000000000000000000000000000",
+        "DB_BASIC_PASSWORD": "000000000000000000000000000000000000000000000000",
+        "DB_GUEST_PASSWORD": "000000000000000000000000000000000000000000000000",
+        "SESSION_SECRET_KEY": "000000000000000000000000000000000000000000000000",
+        "SESSION_KEY": "000000000000000000000000000000000000000000000000",
+        "FILTEREST_RUNTIME_UID": "<uid>",
+        "FILTEREST_RUNTIME_GID": "<gid>",
+        "FILTEREST_APP_VERSION": "8.42.1",
+        "FILTEREST_DB_VERSION": "9.6.7"
+      }
+    },
+    "keys/tls/localhost.crt": {
+      "content": "test certificate\n",
+      "mode": "0o644"
+    },
+    "keys/tls/localhost.key": {
+      "content": "test private key\n",
+      "mode": "0o600"
+    },
+    "keys/filterest_runtime/runtime_environment.env": {
+      "content": "# Administrator-managed runtime integration secrets.\nOPENAI_API_KEY=\n",
+      "mode": "0o600"
+    }
+  },
+  "directories": {
+    "config": "0o750",
+    "keys": "0o700",
+    "keys/tls": "0o700",
+    "keys/filterest_runtime": "0o700",
+    "projects": "0o750",
+    "data": "0o750",
+    "data/runtime": "0o750",
+    "data/postgres": "0o750",
+    "data/bootstrap": "0o700",
+    "data/storage_deleted": "0o750",
+    "data/storage": "0o750",
+    "backups": "0o750"
+  },
+  "docker_calls": "compose version\nvolume inspect filterest-00000000_filterest_storage\nvolume inspect filterest-00000000_filterest_storage_deleted\nvolume inspect filterest-00000000_filterest_db_backups\nvolume inspect filterest-00000000_filterest_runtime\nvolume inspect filterest-00000000_filterest_postgres_data\ncompose --project-directory <root> --file <root>/compose.yml --env-file <root>/keys/docker.env up --build --detach --wait\nup-environment ENABLE_SQL_MIGRATIONS=<unset> EASELECT_MIGRATION_FILE_ALLOWLIST=<unset> FILTEREST_APP_VERSION=<unset>\n"
+}

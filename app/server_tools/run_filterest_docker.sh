@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# run_filterest_docker.sh
 # Manages the complete portable Filterest Docker stack from one source folder.
 # Connects the root command, protected local settings, Compose, and readiness output.
 # Makes a copied folder installable without manual secret generation or private tools.
@@ -9,6 +10,8 @@ set -euo pipefail
 SCRIPT_APPLICATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=server_tools/lib/database_dump_options.sh
 source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/database_dump_options.sh"
+# shellcheck source=server_tools/lib/docker_deployment_settings.sh
+source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_deployment_settings.sh"
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$(cd "$SCRIPT_APPLICATION_ROOT/.." && pwd -P)}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
 APPLICATION_ROOT="$PROJECT_ROOT/app"
@@ -23,6 +26,11 @@ COMPOSE_FILE="$PROJECT_ROOT/compose.yml"
 DRY_RUN=0
 APP_PORT_OVERRIDE=""
 DB_PORT_OVERRIDE=""
+PROJECT_NAME_OVERRIDE="${COMPOSE_PROJECT_NAME:-}"
+INSTANCE_NAME_OVERRIDE="${INSTANCE_NAME:-}"
+PROJECT_NAME_SOURCE="the shell"
+INSTANCE_NAME_SOURCE="the shell"
+BASE_URL_OVERRIDE=""
 FOR_UPDATE=0
 DUMP_OUTPUT=""
 DUMP_PARTIAL=""
@@ -53,6 +61,9 @@ Options:
   --dry-run          Show the intended setup or Docker command without changing anything
   --app-port         Bind the browser application to a different localhost port
   --db-port          Bind PostgreSQL to a different localhost port
+  --project-name     Set the Compose project identity without replacing an existing one
+  --instance-name    Set the session/readiness identity without replacing an existing one
+  --base-url         Set the public HTTP or HTTPS application URL
   --for-update       With start: return once the containers start; ready-check follows
   --output PATH      With dump-database: the new dump file
   --expect-version   With ready-check: the application version that must answer
@@ -105,7 +116,7 @@ env_file_value() {
 
 env_value() {
     local key="$1"
-    env_file_value "$ENV_FILE" "$key"
+    env_file_value "${DOCKER_SETTINGS_SOURCE:-$ENV_FILE}" "$key"
 }
 
 # Returns a keys/docker.env value as Compose reads it: leading blanks trimmed,
@@ -186,7 +197,11 @@ is_placeholder_secret() {
 validate_port() {
     local label="$1"
     local value="$2"
-    [[ "$value" =~ ^[0-9]+$ ]] && (( 10#$value >= 1 && 10#$value <= 65535 )) || \
+    # Bound significant digits before arithmetic so oversized inputs cannot wrap.
+    local decimal="${value#"${value%%[!0]*}"}"
+    decimal="${decimal:-0}"
+    [[ "$value" =~ ^[0-9]+$ && "${#decimal}" -le 5 ]] && \
+        (( 10#$decimal >= 1 && 10#$decimal <= 65535 )) || \
         die "$label must be an integer from 1 through 65535"
 }
 
@@ -312,7 +327,10 @@ migrate_legacy_environment() {
     fi
 }
 
-prepare_tls_identity() {
+# Checks the certificate/key pair before deployment settings can change.
+# Between read-only setup planning and later creation of the local TLS identity.
+# Refuses unsafe paths or incomplete pairs without altering protected state.
+validate_tls_identity() {
     local certificate_file="$TLS_DIRECTORY/localhost.crt"
     local key_file="$TLS_DIRECTORY/localhost.key"
 
@@ -325,14 +343,23 @@ prepare_tls_identity() {
        [[ ! -f "$certificate_file" && -f "$key_file" ]]; then
         die "TLS certificate and key must either both exist or both be absent"
     fi
+    if [[ ! -f "$certificate_file" ]]; then
+        command -v openssl >/dev/null 2>&1 || \
+            die "OpenSSL is required once to create the local TLS identity"
+    fi
+}
+
+prepare_tls_identity() {
+    local certificate_file="$TLS_DIRECTORY/localhost.crt"
+    local key_file="$TLS_DIRECTORY/localhost.key"
+
+    validate_tls_identity
     if [[ -f "$certificate_file" ]]; then
         chmod 0644 "$certificate_file"
         chmod 0600 "$key_file"
         return
     fi
 
-    command -v openssl >/dev/null 2>&1 || \
-        die "OpenSSL is required once to create the local TLS identity"
     umask 077
     openssl req \
         -x509 \
@@ -376,8 +403,7 @@ ensure_database_mounts_readable() {
 }
 
 prepare_environment() {
-    local installation_id=""
-    local compose_project=""
+    local established=0
     local admin_password=""
     local key=""
     local value=""
@@ -390,39 +416,44 @@ prepare_environment() {
         return
     fi
 
+    # Read the eventual input without migrating/copying or rewriting it. All
+    # deployment validation must finish before touching protected state or TLS.
+    [[ ! -L "$ENV_FILE" ]] || die "Docker settings path must not be a symbolic link: $ENV_FILE"
+    [[ ! -L "$LEGACY_ENV_FILE" ]] || die "Legacy Docker settings path must not be a symbolic link: $LEGACY_ENV_FILE"
+    [[ ! -e "$ENV_FILE" || -f "$ENV_FILE" ]] || die "Docker settings must be a regular file"
+    [[ ! -e "$LEGACY_ENV_FILE" || -f "$LEGACY_ENV_FILE" ]] || die "Legacy Docker settings must be a regular file"
+    [[ ! -f "$ENV_FILE" || ! -f "$LEGACY_ENV_FILE" ]] || \
+        die "Both legacy .env and keys/docker.env exist; keep one reviewed settings file before setup"
+    DOCKER_SETTINGS_SOURCE="$ENV_TEMPLATE"
+    if [[ -f "$ENV_FILE" ]]; then
+        DOCKER_SETTINGS_SOURCE="$ENV_FILE"
+    elif [[ -f "$LEGACY_ENV_FILE" ]]; then
+        DOCKER_SETTINGS_SOURCE="$LEGACY_ENV_FILE"
+    fi
+    [[ "$(compose_env_value FILTEREST_INSTALL_PROFILE)" != docker ]] || established=1
+    DOCKER_SETTING_KEYS=()
+    DOCKER_SETTING_VALUES=()
+    prepare_docker_identity "$established"
+    prepare_docker_transport "$established"
+    prepare_docker_compose_options
+    require_docker_option_environment
+    check_docker_network_collision
+    unset DOCKER_SETTINGS_SOURCE
+
     prepare_directory "$KEYS_DIRECTORY" 0700
     migrate_legacy_environment
-    if [[ ! -f "$ENV_FILE" ]]; then
-        (umask 077; cp "$ENV_TEMPLATE" "$ENV_FILE")
-    fi
+    [[ -f "$ENV_FILE" ]] || (umask 077; cp "$ENV_TEMPLATE" "$ENV_FILE")
     chmod 600 "$ENV_FILE"
 
     prepare_installation_directories
     ensure_database_mounts_readable
     prepare_runtime_environment
     migrate_docker_openai_api_key
-    prepare_tls_identity
-
     set_env_value FILTEREST_INSTALL_PROFILE docker
     set_env_value ENVIRONMENT_TYPE prod
-    set_env_value FILTEREST_LOCAL_TLS true
-    if [[ -n "$APP_PORT_OVERRIDE" ]]; then
-        set_env_value APP_PORT "$APP_PORT_OVERRIDE"
-        set_env_value BASE_URL "https://localhost:${APP_PORT_OVERRIDE}"
-    fi
-    if [[ -n "$DB_PORT_OVERRIDE" ]]; then
-        set_env_value DB_PORT "$DB_PORT_OVERRIDE"
-    fi
-
-    compose_project="$(env_value COMPOSE_PROJECT_NAME)"
-    if [[ -z "$compose_project" || "$compose_project" == "filterest-local" ]]; then
-        installation_id="$(random_hex)"
-        installation_id="${installation_id:0:8}"
-        compose_project="filterest-${installation_id}"
-        set_env_value COMPOSE_PROJECT_NAME "$compose_project"
-        if [[ "$(env_value INSTANCE_NAME)" == "filterest-local" || -z "$(env_value INSTANCE_NAME)" ]]; then
-            set_env_value INSTANCE_NAME "$compose_project"
-        fi
+    apply_docker_settings
+    if [[ "$(docker_deployment_value FILTEREST_LOCAL_TLS)" == true ]]; then
+        prepare_tls_identity
     fi
 
     admin_password="$(env_value DB_ADMIN_PASSWORD)"
@@ -459,8 +490,21 @@ prepare_environment() {
 }
 
 require_docker_compose() {
+    local version=""
+    local major=0
+    local minor=0
     command -v docker >/dev/null 2>&1 || die "Docker is required; install Docker Engine or Docker Desktop first"
-    docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required"
+    version="$(docker compose version --short)" || die "Docker Compose 2.20.0 or newer is required"
+    # include was introduced in 2.20.0; its documented recursive loading and
+    # interpolated paths also cover the nested fragment contract. Accept v5 too.
+    # Only the leading major.minor counts: distribution packages append their own
+    # suffixes, such as Ubuntu's 2.40.3+ds1-0ubuntu1~24.04.1.
+    [[ "$version" =~ ^v?([0-9]{1,4})\.([0-9]{1,4})(\.|$) ]] || \
+        die "Could not determine the Docker Compose version; 2.20.0 or newer is required"
+    major=$((10#${BASH_REMATCH[1]}))
+    minor=$((10#${BASH_REMATCH[2]}))
+    (( major > 2 || (major == 2 && minor >= 20) )) || \
+        die "Docker Compose 2.20.0 or newer is required for the included deployment files (found $version)"
 }
 
 require_existing_environment() {
@@ -494,7 +538,7 @@ migrate_legacy_named_volumes() {
     )
 
     [[ ! -e "$migration_marker" ]] || return 0
-    compose_project="$(env_value COMPOSE_PROJECT_NAME)"
+    compose_project="$(compose_env_value COMPOSE_PROJECT_NAME)"
     [[ "$compose_project" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || \
         die "Docker project identity is invalid: $compose_project"
 
@@ -606,7 +650,7 @@ require_settings_not_overridden() {
 
     substituted_names=" $(
         { grep -ohE '\$\{?[A-Za-z_][A-Za-z0-9_]*' \
-            "$COMPOSE_FILE" "$APPLICATION_ROOT/docker/docker-compose.yml" || true; } |
+            "$COMPOSE_FILE" "$APPLICATION_ROOT"/docker/docker-compose*.yml || true; } |
             tr -d '${' | sort -u | tr '\n' ' '
     )"
     while IFS= read -r key; do
@@ -621,6 +665,7 @@ require_settings_not_overridden() {
     done < <(settings_keys | sort -u)
     [[ -z "$inherited" ]] || \
         die "Inherited environment variables would override keys/docker.env in Docker Compose: $inherited; unset them, then run the update again"
+    require_docker_option_environment
 }
 
 # Confirms, without changing the file, the Docker settings an update action uses.
@@ -692,6 +737,7 @@ dump_database() {
 # /system/ready shows that migrations finished for this installation and this version.
 ready_check() {
     local port=""
+    local scheme=""
     local expected_instance=""
     local work_directory=""
     local http_status=""
@@ -700,15 +746,20 @@ ready_check() {
     local remaining=0
     local request_limit=0
     local connect_limit=0
+    local -a tls_options=()
 
     [[ -n "$EXPECTED_VERSION" ]] || die "ready-check requires --expect-version VERSION"
     port="$(compose_env_value APP_PORT)"
     port="${port:-8100}"
+    scheme="$(docker_edge_scheme)"
+    if [[ "$scheme" == https ]]; then
+        tls_options=(--cacert "$TLS_DIRECTORY/localhost.crt")
+    fi
     expected_instance="$(compose_env_value INSTANCE_NAME)"
     expected_instance="${expected_instance:-filterest-local}"
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        printf '  [dry-run] wait for https://localhost:%s/system/ready to report %s ready\n' \
-            "$port" "$EXPECTED_VERSION"
+        printf '  [dry-run] wait for %s://localhost:%s/system/ready to report %s ready\n' \
+            "$scheme" "$port" "$EXPECTED_VERSION"
         return
     fi
     command -v curl >/dev/null 2>&1 || die "curl is required for the readiness check"
@@ -729,10 +780,10 @@ ready_check() {
         connect_limit=$(( request_limit < 5 ? request_limit : 5 ))
         : > "$work_directory/response.json"
         if ! http_status="$(curl --silent --show-error \
-            --cacert "$TLS_DIRECTORY/localhost.crt" \
+            "${tls_options[@]}" \
             --connect-timeout "$connect_limit" --max-time "$request_limit" \
             --output "$work_directory/response.json" --write-out '%{http_code}' \
-            "https://localhost:${port}/system/ready" 2> "$work_directory/curl.err")"; then
+            "$scheme://localhost:${port}/system/ready" 2> "$work_directory/curl.err")"; then
             verdict="no response ($(tail -n 1 "$work_directory/curl.err"))"
         else
             verdict="$(python3 - "$work_directory/response.json" "$http_status" \
@@ -799,6 +850,29 @@ parse_arguments() {
                 validate_port "--db-port" "$DB_PORT_OVERRIDE"
                 shift
                 ;;
+            --project-name)
+                [[ "$ACTION" == setup || "$ACTION" == start ]] || die "--project-name applies only to setup or start"
+                [[ "$#" -ge 2 && -n "$2" ]] || die "--project-name requires an identity"
+                PROJECT_NAME_OVERRIDE="$2"
+                PROJECT_NAME_SOURCE="--project-name"
+                validate_docker_identity "$PROJECT_NAME_OVERRIDE" valid new
+                shift
+                ;;
+            --instance-name)
+                [[ "$ACTION" == setup || "$ACTION" == start ]] || die "--instance-name applies only to setup or start"
+                [[ "$#" -ge 2 && -n "$2" ]] || die "--instance-name requires an identity"
+                INSTANCE_NAME_OVERRIDE="$2"
+                INSTANCE_NAME_SOURCE="--instance-name"
+                validate_docker_identity valid "$INSTANCE_NAME_OVERRIDE" new
+                shift
+                ;;
+            --base-url)
+                [[ "$ACTION" == setup || "$ACTION" == start ]] || die "--base-url applies only to setup or start"
+                [[ "$#" -ge 2 ]] || die "--base-url requires a URL"
+                BASE_URL_OVERRIDE="$2"
+                validate_docker_base_url "$BASE_URL_OVERRIDE"
+                shift
+                ;;
             --for-update)
                 FOR_UPDATE=1
                 ;;
@@ -835,6 +909,8 @@ parse_arguments() {
 
 main() {
     local port="8100"
+    local scheme=""
+    local browser_url=""
     parse_arguments "$@"
     cd "$PROJECT_ROOT"
 
@@ -862,8 +938,11 @@ main() {
             else
                 compose up --build --detach --wait
                 if [[ "$DRY_RUN" -eq 0 ]]; then
-                    port="$(env_value APP_PORT)"
-                    printf 'Filterest is ready: https://localhost:%s/first-run\n' "${port:-8100}"
+                    port="$(compose_env_value APP_PORT)"
+                    scheme="$(docker_edge_scheme)"
+                    browser_url="$(compose_env_value BASE_URL)"
+                    browser_url="${browser_url:-$scheme://localhost:${port:-8100}}"
+                    printf 'Filterest is ready: %s/first-run\n' "${browser_url%/}"
                 fi
             fi
             ;;
@@ -872,7 +951,10 @@ main() {
             if [[ "$DRY_RUN" -eq 0 ]]; then
                 require_docker_compose
             fi
-            compose down
+            # down removes the project's labelled resources by identity. It must
+            # remain usable after subnet/gateway edits that start refuses, even
+            # when the stored pinned fragment would require a now-empty value.
+            FILTEREST_NETWORK_FILE=docker-compose.network-auto.yml compose down
             printf 'Filterest stopped. Its database and uploaded files were preserved.\n'
             printf 'Raw PostgreSQL data may be copied only while the stack is stopped; keep portable database dumps under %s.\n' "$PROJECT_ROOT/backups"
             ;;

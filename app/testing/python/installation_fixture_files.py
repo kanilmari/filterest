@@ -13,5 +13,7 @@ LIFECYCLE_LIBRARY_FILES = (
     "server_tools/lib/filterest_port_preflight.sh",
     "server_tools/lib/native_development_ports.env",
     "server_tools/lib/database_dump_options.sh",
+    "server_tools/lib/docker_deployment_settings.sh",
+    "server_tools/lib/docker_network_validator.py",
     "server_tools/lib/installation_records.sh",
 )
