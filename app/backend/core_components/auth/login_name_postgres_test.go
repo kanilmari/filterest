@@ -48,6 +48,11 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 	run := func(name string, args ...string) {
 		t.Helper()
 		if out, err := exec.Command(filepath.Join(bin, name), args...).CombinedOutput(); err != nil {
+			if name == "pg_ctl" {
+				// pg_ctl hides the server's startup error in this separate log.
+				serverLog, _ := os.ReadFile(filepath.Join(root, "postgres.log"))
+				out = append(out, serverLog...)
+			}
 			if strings.Contains(string(out), "Operation not permitted") {
 				t.Skip("sandbox cannot start disposable PostgreSQL")
 			}
@@ -178,12 +183,20 @@ func postgresProfile(t *testing.T, cookie *http.Cookie, body string) *httptest.R
 
 func latestPostgresCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie {
 	t.Helper()
+	if cookie := issuedPostgresCookie(w); cookie != nil {
+		return cookie
+	}
+	t.Fatal("no saved current session")
+	return nil
+}
+
+// issuedPostgresCookie returns the session cookie a response issued, or nil when it kept the browser's cookie.
+func issuedPostgresCookie(w *httptest.ResponseRecorder) *http.Cookie {
 	for _, cookie := range w.Result().Cookies() {
 		if cookie.Name == sessions.SessionName && cookie.MaxAge >= 0 {
 			return cookie
 		}
 	}
-	t.Fatal("no saved current session")
 	return nil
 }
 

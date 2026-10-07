@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"os"
@@ -71,8 +72,10 @@ func TestInitialAdministratorLoginNamesPostgres(t *testing.T) {
 			args := []string{"--email", "bootstrap@example.invalid"}
 			wantLogin := "admin_northwind"
 			if explicit {
-				args = append(args, "--login-name", "chosen_bootstrap_login")
-				wantLogin = "chosen_bootstrap_login"
+				// LT10 exercises the operator flow with a fresh private canary;
+				// the default-name case still pins LT8's site-slug suggestion.
+				wantLogin = "a" + strings.ToLower(rand.Text())
+				args = append(args, "--login-name", wantLogin)
 			}
 			cfg, err := parseConfig(args)
 			if err != nil {

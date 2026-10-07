@@ -21,6 +21,7 @@ import (
 	"easelect/backend/core_components/otp"
 	sessions "easelect/backend/core_components/sessions"
 	"github.com/google/uuid"
+	"github.com/gorilla/securecookie"
 )
 
 func TestLoginNameFirstRunPostgres(t *testing.T) {
@@ -48,13 +49,17 @@ func TestLoginNameFirstRunPostgres(t *testing.T) {
 			}
 			token, _ := session.Values["csrf_token"].(string)
 			form := url.Values{"site_name": {"Fixture site"}, "username": {"chosen_setup_login"}, "display_name": {"admin_1"}, "email": {"setup@example.invalid"}, "password": {loginFixturePassword}, "confirm_password": {loginFixturePassword}, "installation_environment": {"prod"}, "verification_method": {"none"}, "display_name_may_equal_login_name": {choice}, "csrf_token": {token}}
+			setupLogin := "a" + strings.ReplaceAll(uuid.NewString(), "-", "")
+			form.Set("username", setupLogin)
 			post := httptest.NewRequest("POST", "/first-run", strings.NewReader(form.Encode()))
 			post.AddCookie(cookie)
 			post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			post.RemoteAddr = "192.0.2.219:1234"
 			response = httptest.NewRecorder()
 			FirstRunAdminHandler(response, post)
-			if response.Code != 303 || strings.Contains(response.Header().Get("Location"), "chosen_setup_login") {
+			assertPrivateNameAbsent(t, response, setupLogin)
+			assertPrivateNameAbsentFromPublic(t, db, setupLogin)
+			if response.Code != 303 || strings.Contains(response.Header().Get("Location"), setupLogin) {
 				t.Fatalf("setup: %d %s", response.Code, response.Body.String())
 			}
 			var saved, open bool
@@ -65,7 +70,7 @@ func TestLoginNameFirstRunPostgres(t *testing.T) {
 				t.Fatal("setup left open", err)
 			}
 			var display, login string
-			if err = db.QueryRow(`SELECT u.username,ur.login_name FROM system_users u JOIN restricted.users_restricted ur USING(id) WHERE ur.email='setup@example.invalid'`).Scan(&display, &login); err != nil || display != "admin_1" || login != "chosen_setup_login" {
+			if err = db.QueryRow(`SELECT u.username,ur.login_name FROM system_users u JOIN restricted.users_restricted ur USING(id) WHERE ur.email='setup@example.invalid'`).Scan(&display, &login); err != nil || display != "admin_1" || login != setupLogin {
 				t.Fatal("account names", err)
 			}
 		})
@@ -168,7 +173,7 @@ func TestLoginNameCreatorsAndCanaryPostgres(t *testing.T) {
 	if err != nil || rotated.UserID != created.UserID || rotated.Username != created.Username || rotated.AuthenticationGeneration != created.AuthenticationGeneration+1 {
 		t.Fatal("automation rotation", err)
 	}
-	for _, canary := range []string{loginName, userLogin} {
+	for _, canary := range []string{loginName, userLogin, credentials.AutomationLoginName} {
 		if strings.Contains(output.String(), canary) {
 			t.Fatal("private name in application log")
 		}
@@ -182,22 +187,76 @@ func TestLoginNameCreatorsAndCanaryPostgres(t *testing.T) {
 
 func assertPrivateNameAbsent(t *testing.T, w *httptest.ResponseRecorder, name string) {
 	t.Helper()
-	if strings.Contains(w.Body.String(), name) || strings.Contains(fmt.Sprint(w.Header()), name) {
-		t.Fatal("private name in HTTP response")
+	findings, err := privateNameHTTPFindings(w, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) > 0 {
+		t.Fatalf("private name in HTTP channels: %v", findings)
+	}
+}
+
+func privateNameHTTPFindings(w *httptest.ResponseRecorder, name string) ([]string, error) {
+	var findings []string
+	name = strings.ToLower(name)
+	if strings.Contains(strings.ToLower(w.Body.String()), name) || strings.Contains(strings.ToLower(fmt.Sprint(w.Header())), name) {
+		findings = append(findings, "body or header")
 	}
 	for _, cookie := range w.Result().Cookies() {
-		if cookie.Name != sessions.SessionName || cookie.MaxAge < 0 {
+		if cookie.Name != sessions.SessionName || cookie.Value == "" {
 			continue
 		}
-		request := httptest.NewRequest("GET", "/", nil)
-		request.AddCookie(cookie)
-		session, err := sessions.Load(request)
-		if err != nil {
-			t.Fatal(err)
+		// Inspect the wire value, including expiring cookies. Load deliberately
+		// removes retired fields and would hide a serializer regression here.
+		var values map[interface{}]interface{}
+		if err := securecookie.DecodeMulti(cookie.Name, cookie.Value, &values, sessions.GetStore().Codecs...); err != nil {
+			return nil, err
 		}
-		if strings.Contains(fmt.Sprint(session.Values), name) {
-			t.Fatal("private name in decoded cookie")
+		if strings.Contains(strings.ToLower(fmt.Sprint(values)), name) {
+			findings = append(findings, "decoded cookie")
 		}
+		for _, key := range sessions.RetiredSessionKeys {
+			if _, exists := values[key]; exists {
+				findings = append(findings, "retired wire key "+key)
+			}
+		}
+	}
+	return findings, nil
+}
+
+func TestLoginNameCanaryDetectorRejectsEachWireChannel(t *testing.T) {
+	prepareLoginHandlerSessionStore(t)
+	const name = "random-private-wire-canary"
+	for _, channel := range []string{"body", "header", "redirect", "decoded cookie", "expired decoded cookie", "retired wire key"} {
+		t.Run(channel, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			switch channel {
+			case "body":
+				response.Body.WriteString(name)
+			case "header":
+				response.Header().Set("X-Canary", name)
+			case "redirect":
+				response.Header().Set("Location", "/"+name)
+			default:
+				values := map[interface{}]interface{}{"arbitrary_field": name}
+				if channel == "retired wire key" {
+					values = map[interface{}]interface{}{"username": "different-old-name", "otp_pending_username": "another-old-name"}
+				}
+				cookie := seedSessionCookie(t, values)
+				if channel == "expired decoded cookie" {
+					cookie.MaxAge = -1
+				}
+				response.Header().Add("Set-Cookie", cookie.String())
+			}
+			findings, err := privateNameHTTPFindings(response, name)
+			if err != nil || len(findings) == 0 {
+				t.Fatalf("missed %s: %v", channel, err)
+			}
+		})
+	}
+	clean := httptest.NewRecorder()
+	if findings, err := privateNameHTTPFindings(clean, name); err != nil || len(findings) != 0 {
+		t.Fatal("clean response rejected", findings, err)
 	}
 }
 

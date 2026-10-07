@@ -111,7 +111,11 @@ Administrators can inspect non-secret account state and provision another admini
   --credential-username EXISTING_ADMIN_USERNAME user-auth-list
 ```
 
-The list contains the user id, username, enabled state, admins-group membership, administrator-access flag, and sign-in verification method. It never returns email addresses, passwords, PINs, PIN hashes, or authenticator secrets.
+The credential option `--credential-username` takes the private **login name**.
+The list contains the user id, public **display name** (the compatibility JSON
+field `username`), enabled state, admins-group membership,
+administrator-access flag, and sign-in verification method. It never returns
+login names, email addresses, passwords, PINs, PIN hashes, or authenticator secrets.
 
 After copying the current user id from that fresh read, the following command enables the account, adds it to the admins group, allows administrator access, and selects password-only sign-in in one transaction:
 
@@ -125,6 +129,45 @@ USER_ID=replace_with_fresh_user_id
 ```
 
 Use `fixed_pin` instead of `none` to set a 4–8 digit fixed PIN. The command asks for the new PIN and its confirmation without echoing or placing either value in command history. The `email` method is accepted only when the installation has a working Postmark token and sender address. TOTP authenticator secrets are deliberately not managed by this command.
+
+### Login Names, Display Names And Session Control
+
+Inspect `system_users` for public account information; its `username` column is
+the display name. An administrator's generic row edit can change that display
+name, but cannot change the private login name stored in the restricted table.
+Ordinary users use their Account profile for their own edits; granting generic
+editor rights on an account dataset does not authorize them to write it.
+
+These dedicated HTTP requests use the normal authenticated session and CSRF
+proof (`X-CSRF-Token`). Keep password/name payloads in protected input files or
+use the browser's Account profile; never place real credentials in examples or
+shell history. The CRUD CLI's commands above manage authentication methods;
+they do not provide a login-name-change subcommand.
+
+| Request | JSON body | Result |
+|---|---|---|
+| `POST /api/update-profile` | `{"username":"Public Display","current_password":"<current password>"}` | Changes the current account's public display name. |
+| `POST /api/update-profile` | `{"login_name":"<new private name>","current_password":"<current password>"}` | Changes the private name; keeps this sign-in and invalidates the account's other sign-ins. |
+| `POST /api/sign-out-other-devices` | `{"current_password":"<current password>"}` | Keeps this sign-in and invalidates the others, without renaming. The profile also accepts `sign_out_other_devices:true`. |
+| `POST /api/admin/user-login-name` | `{"user_id":42,"login_name":"<new private name>"}` | A current administrator changes another account's private name, ending all its sign-ins. Use a freshly read id; own-account changes use the profile. |
+
+Registration accepts the login name in `username` and the display name in
+`display_name`; sign-in still accepts its private name in `username`. Profile
+readback and administrator lists return only the public name. A successful
+name-change reply contains status and mail-delivery status, not the private
+value; owner-directed mail may contain it. A failed delivery does not undo a
+committed account change. Profile login-name changes allow three attempts in
+five minutes; fixed program/development names refuse changes.
+
+The site setting **Display name may equal login name** defaults to yes for
+ordinary accounts. When no, new accounts and actual name edits must leave
+different names; existing equal pairs and sign-in are preserved. Administrator
+names always differ. Name conflicts return HTTP 409 with a translated reason.
+The upgrade keeps existing login names unchanged and allocates `admin_<n>`
+display names for existing administrators (`auto_<n>` for API-only ones).
+See [Permission Model](Permission_Model.md#account-names-and-account-maintenance)
+for the complete rule and [Program Accounts](Program_Accounts.md) for fixed
+automation identities, provisioning and password rotation.
 
 ## Dataset And Field Symbols
 

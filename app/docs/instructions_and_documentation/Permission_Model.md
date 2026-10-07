@@ -20,6 +20,71 @@ The main principal is a `system_users` row. Group membership comes from `system_
 
 SSO, LDAP, OIDC, SAML, and AD are not yet a full identity-provider layer in the permission model. When implemented, they should map external identities and external groups into internal Filterest users and groups rather than creating a parallel authorization system.
 
+### Account Names And Account Maintenance
+
+Each credentialed account has a private **login name** in
+`restricted.users_restricted.login_name` and a public **display name** in
+`system_users.username`. Sign-in compares login names without case sensitivity;
+password recovery accepts that name or the account's email. Public profiles,
+account lists, search and new actor records use the display name. Permissions
+and browser-test identity use the account id, so changing either name does not
+create a new principal or transfer rights. Sessions carry ids and security
+state, with neither a display name nor a login name.
+
+Ordinary users choose both names during registration. The site setting
+**Display name may equal login name** (`display_name_may_equal_login_name`) is
+true by default, including on existing sites; First Run asks with yes selected.
+An administrator can change it in Settings. When false, a name change or a new
+account must leave the names different, ignoring case and edge spaces.
+Existing equal pairs survive until a name actually changes: tightening the
+setting does not rename users, prevent sign-in, or reject unrelated profile,
+membership or flag edits. The setting's description records the date and the
+count of ordinary accounts with equal names when its value changes. A user who
+chooses equal names has also chosen to publish that value as their display name.
+
+Administrators' names always differ, under either setting value. New
+administrators normally receive the smallest available `admin_<n>` display
+name; First Run lets the owner edit its suggestion. Promotion allocates a new
+name when the existing names are equal. Automation administrators receive
+`auto_<n>` and have fixed private names; see [Program Accounts](Program_Accounts.md).
+New human login names cannot use `admin_<digits>`, `auto_<digits>` or the
+reserved program/development identities. Each name has its own
+case-insensitive uniqueness check.
+
+Ordinary users maintain their own display name, email, website and biography
+through the Account profile. Sensitive edits require their current password.
+The profile's **Change login name** action also requires it, accepts at most
+three attempts in five minutes, and leaves the current sign-in valid while
+ending other sign-ins on their next request. **Sign out other devices** uses
+the same password confirmation and session effect without changing a name.
+Fixed program/development login names cannot be changed through these actions.
+Only a current administrator may edit the five account/rights datasets through
+generic row tools, even if another group has been granted editor rights.
+An administrator can change another account's login name through the dedicated
+account API; all the target's sign-ins end. Administrators use their own profile
+for their own login-name changes. The server's operator recovery tool can
+replace a forgotten administrator login name without a browser sign-in; see
+[SECURITY.md](../../../SECURITY.md).
+
+The upgrade copies every existing credentialed account's old public username
+unchanged into its login name. Existing administrators receive `admin_<n>`
+display names in account-id order, or `auto_<n>` for API-only administrators,
+skipping names already used as a display or login name. Matching full names
+follow the rename, stale account search vectors are cleared, and renamed
+administrators must sign in again with their unchanged login and password.
+Invalid or ambiguous names stop the atomic migration before any partial change.
+Ordinary accounts keep their display names and their existing sign-in names.
+
+Owner-directed welcome, reset and name-change email may contain the private
+name; forms may contain the value the owner typed, and protected operator
+credential handoffs contain it. Account responses, new cookies and new log or
+audit records do not return a separate private name. The upgrade preserves old,
+already public names in history, discussions and existing search/embedding
+copies; it does not promise to erase them. An old cookie may retain its holder's
+former name until its first session save, which drops the retired fields.
+The separate administrator sign-in address is future slice-4 work; the current
+account-name separation uses the existing sign-in routes.
+
 ### Capability and Dataset Permissions
 
 The core permission tables are:

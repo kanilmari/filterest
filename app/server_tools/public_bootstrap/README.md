@@ -44,7 +44,8 @@ to a site are administrator-managed content, never public fixture data.
 
 WL132's account-name migration runs in the schema phase after row-actor support.
 It copies existing public names unchanged into confidential login names, assigns
-administrator display names, and creates serialized name protections in one
+`admin_<n>` display names to existing administrators (`auto_<n>` for API-only
+administrators), and creates serialized name protections in one
 atomic statement. The acceptance block requires its `k116_login_names` completion
 marker and an empty `app_check_login_name_protections()` result. The ordinary-account
 setting `display_name_may_equal_login_name` defaults to true; changing it to false
@@ -53,6 +54,15 @@ the migration both preserve a previously saved setting. Before an upgrade, run
 `app/server_tools/scripts/login_name_dry_run.sql` as a read-only query with a role
 that can read credentials; its results contain counts, account ids and trigger
 names without account names or credential values.
+
+Numbering follows account-id order and skips existing display and login names.
+An administrator's login name and password remain unchanged; a matching full
+name follows the display rename, the account's stale search vector is cleared,
+and old sign-ins end. Ordinary accounts keep their display names. Any preflight
+failure rolls the migration back as a whole. Historic, already public names in
+logs, discussions and search/embedding copies remain; this upgrade does not
+erase history. An old cookie loses its former-name fields on its next save.
+See the [account-name rules](../../docs/instructions_and_documentation/Permission_Model.md#account-names-and-account-maintenance).
 
 The three reviewed walkthrough images and the user-approved service, risk, and
 ticket starter images remain immutable fixture inputs under `source/fixtures/`.
@@ -76,7 +86,8 @@ anonymous browsing; it does not ship a reusable admin password or any reusable
 ordinary-user password. On first browser
 access, Filterest opens a two-section form where the installation owner first
 chooses the visible environment purpose and sign-in verification method, then
-sets the site identity and creates the administrator username, email address,
+sets the site identity and creates the administrator's private login name,
+public display name, email address,
 and password. The saved site identity replaces Filterest and deployment-domain
 defaults across normal browser-facing pages after setup. Email
 verification uses Postmark and requires a separately created free Postmark
@@ -101,6 +112,16 @@ editable suggestions from the shared site-slug rule and display-name allocator.
 It also asks whether ordinary users may use equal names (preselected yes) and
 saves the choice with the account in one transaction. Missing setting rows refuse
 setup. Administrator names always differ.
+
+Sign-in uses the private name without case sensitivity; public account lists
+and search use the display name. Ordinary users may publish the same value as
+both names when the site setting allows it. The Account profile offers
+password-confirmed login-name changes and **Sign out other devices**; both keep
+the current sign-in while invalidating the account's other sign-ins. An
+administrator can change another account's name through the dedicated API,
+ending all that account's sign-ins. Program accounts keep their fixed login
+names and use `auto_<n>` public names; their provisioning and password rotation
+are documented in [Program Accounts](../../docs/instructions_and_documentation/Program_Accounts.md).
 
 The isolated preview helper defaults to `admin_<site_slug>` for sign-in and
 allocates `admin_<n>` for display. `--login-name` overrides the sign-in suggestion;

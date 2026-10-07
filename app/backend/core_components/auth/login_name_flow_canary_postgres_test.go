@@ -8,8 +8,10 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,6 +21,7 @@ import (
 	"time"
 
 	"easelect/backend/core_components/auth/credentials"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/logging"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -34,6 +37,9 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 	os.Stdout = stdout
 	t.Cleanup(func() { os.Stdout = oldStdout; stdout.Close() })
 	var output, mail bytes.Buffer
+	standardLog := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(standardLog) })
 	logging.SetOutput(&output)
 	t.Cleanup(func() { logging.SetOutput(os.Stderr) })
 	newName := func() string { return "a" + strings.ReplaceAll(uuid.NewString(), "-", "") }
@@ -76,12 +82,20 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 	t.Cleanup(func() { http.DefaultTransport = oldTransport })
 	t.Setenv("POSTMARK_API_KEY", "disposable-postmark-token")
 	t.Setenv("EMAIL_FROM_ADDRESS", "sender@example.invalid")
+	var emailedOTP string
 	http.DefaultTransport = loginNoticeRoundTrip(func(r *http.Request) (*http.Response, error) {
 		payload, err := io.ReadAll(r.Body)
 		if err != nil {
 			return nil, err
 		}
 		mail.Write(payload)
+		var message struct{ TextBody string }
+		if err := json.Unmarshal(payload, &message); err != nil {
+			return nil, err
+		}
+		if code, ok := strings.CutPrefix(message.TextBody, "Vahvistuskoodisi on: "); ok {
+			emailedOTP = strings.ReplaceAll(strings.SplitN(code, "\n", 2)[0], " ", "")
+		}
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"ErrorCode":0,"MessageID":"fixture-mail"}`))}, nil
 	})
 	tx, err := db.Begin()
@@ -98,7 +112,9 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 	if err = tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
+	assertPrivateNameAbsentFromPublic(t, db, adminName)
 	check(postgresLogin(t, adminName, loginFixturePassword), 200)
+	check(postgresLogin(t, strings.ToUpper(adminName), loginFixturePassword), 200)
 	requestReset(adminName)
 	oldEnabled := registrationEnabledFunc
 	registrationEnabledFunc = func() bool { return true }
@@ -121,6 +137,7 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 	if err = db.QueryRow(`SELECT u.id,u.enabled FROM restricted.users_restricted ur JOIN system_users u USING(id) WHERE ur.login_name=$1`, userName).Scan(&userID, &enabled); err != nil || !enabled {
 		t.Fatal("local development registration did not create an enabled account", err)
 	}
+	assertPrivateNameAbsentFromPublic(t, db, userName)
 	check(postgresLogin(t, userName, "wrong password"), 401)
 	check(postgresLogin(t, "Flow Display", loginFixturePassword), 401)
 	response = postgresLogin(t, userName, loginFixturePassword)
@@ -148,6 +165,9 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 	} {
 		response = postgresProfile(t, cookie, body)
 		check(response, 200)
+		for _, name := range canaries {
+			assertPrivateNameAbsentFromPublic(t, db, name)
+		}
 		// A display-name and website edit keeps the session; signing out other
 		// devices and changing the login name must re-issue it (K203).
 		if index > 0 {
@@ -198,14 +218,15 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 	response = httptest.NewRecorder()
 	LogoutHandler(response, request)
 	check(response, http.StatusSeeOther)
-	// Both local second-step methods also pass through failed and successful cookie writes.
+	// All three second-step methods pass through failed and successful cookie writes;
+	// email delivery stays in the in-memory transport, with a positive code control.
 	for _, account := range []struct {
 		id             int64
 		name, password string
 	}{
 		{adminID, recoveryName, loginFixturePassword}, {int64(userID), adminReplacement, "reset-canary-password-123"},
 	} {
-		for _, method := range []string{"fixed_pin", "totp"} {
+		for _, method := range []string{"fixed_pin", "totp", "email"} {
 			const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 			pinHash, err := hashFixedPIN("246810")
 			if err != nil {
@@ -215,7 +236,7 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 			code := "246810"
 			if method == "fixed_pin" {
 				pin = pinHash
-			} else {
+			} else if method == "totp" {
 				totp = secret
 				code, err = totpCodeForCounter(secret, uint64(time.Now().Unix()/totpPeriod))
 				if err != nil {
@@ -227,6 +248,12 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 			}
 			response = postgresLogin(t, account.name, account.password)
 			check(response, 200)
+			if method == "email" {
+				code = emailedOTP
+				if len(code) != 9 {
+					t.Fatal("email OTP positive control missing")
+				}
+			}
 			if !strings.Contains(response.Body.String(), "otp_required") {
 				t.Fatal("factor did not establish a pending sign-in")
 			}
@@ -238,10 +265,35 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 				response = httptest.NewRecorder()
 				LoginAPIHandler(response, request)
 				check(response, []int{401, 200}[index])
-				pending = latestPostgresCookie(t, response)
+				// A refused code may keep the pending sign-in without issuing a cookie; the browser keeps its own.
+				if issued := issuedPostgresCookie(response); issued != nil || index == 1 {
+					pending = latestPostgresCookie(t, response)
+				}
 			}
 		}
 	}
+	// Promotion must remove a formerly public equal-name copy before exposing
+	// the administrator record. Keep its private credential unchanged.
+	if _, err = db.Exec(`UPDATE system_users SET username=$1::text,search_vector_simple=to_tsvector('simple',$1::text) WHERE id=$2`, adminReplacement, userID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err = db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	request = httptest.NewRequest("POST", "/api/admin/user-authentication", strings.NewReader(fmt.Sprintf(`{"user_id":%d,"verification_method":"none"}`, userID)))
+	request = request.WithContext(dbutils.SetTx(request.Context(), tx))
+	request.AddCookie(postgresOwnCookie(t, int(adminID)))
+	response = httptest.NewRecorder()
+	AdminUserAuthenticationHandler(response, request)
+	if response.Code != 200 {
+		_ = tx.Rollback()
+		t.Fatalf("promotion status=%d", response.Code)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	check(response, 200)
 	os.Stdout = oldStdout
 	if _, err = stdout.Seek(0, io.SeekStart); err != nil {
 		t.Fatal(err)
@@ -251,10 +303,10 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range canaries {
-		if bytes.Contains(capturedStdout, []byte(name)) {
+		if bytes.Contains(bytes.ToLower(capturedStdout), []byte(name)) {
 			t.Fatal("canary in stdout")
 		}
-		if strings.Contains(output.String(), name) {
+		if strings.Contains(strings.ToLower(output.String()), name) {
 			t.Fatal("canary in app log")
 		}
 		if !strings.Contains(mail.String(), name) {
@@ -273,8 +325,11 @@ func TestLoginNameEveryAccountFlowCanaryPostgres(t *testing.T) {
 func assertPrivateNameAbsentFromPublic(t *testing.T, db *sql.DB, name string) {
 	t.Helper()
 	rows, err := db.Query(`SELECT c.relname,a.attname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-		JOIN pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='public' AND c.relkind='r'
-		AND a.attnum>0 AND NOT a.attisdropped AND a.atttypid IN ('text'::regtype,'varchar'::regtype,'json'::regtype,'jsonb'::regtype,'tsvector'::regtype)`)
+		JOIN pg_attribute a ON a.attrelid=c.oid JOIN pg_type typ ON typ.oid=a.atttypid
+		LEFT JOIN pg_type base ON base.oid=typ.typbasetype LEFT JOIN pg_type elem ON elem.oid=typ.typelem
+		WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m') AND a.attnum>0 AND NOT a.attisdropped
+		AND (COALESCE(base.typcategory,typ.typcategory)='S' OR elem.typcategory='S'
+		OR a.atttypid IN ('json'::regtype,'jsonb'::regtype,'tsvector'::regtype,'json[]'::regtype,'jsonb[]'::regtype))`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,10 +345,13 @@ func assertPrivateNameAbsentFromPublic(t *testing.T, db *sql.DB, name string) {
 		t.Fatal(err)
 	}
 	rows.Close()
+	if len(columns) == 0 {
+		t.Fatal("public canary scanner found no inspectable columns")
+	}
 	for _, pair := range columns {
 		var leaked bool
-		query := `SELECT EXISTS(SELECT 1 FROM public.` + pq.QuoteIdentifier(pair[0]) + ` WHERE strpos(` + pq.QuoteIdentifier(pair[1]) + `::text,$1)>0)`
-		if err = db.QueryRow(query, name).Scan(&leaked); err != nil || leaked {
+		query := `SELECT EXISTS(SELECT 1 FROM public.` + pq.QuoteIdentifier(pair[0]) + ` WHERE strpos(lower(` + pq.QuoteIdentifier(pair[1]) + `::text),$1)>0)`
+		if err = db.QueryRow(query, strings.ToLower(name)).Scan(&leaked); err != nil || leaked {
 			t.Fatalf("public channel %s.%s leaked=%v err=%v", pair[0], pair[1], leaked, err)
 		}
 	}

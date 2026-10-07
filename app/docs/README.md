@@ -23,6 +23,8 @@ Architecture and behaviour guides in
 
 - [Permission_Model.md](instructions_and_documentation/Permission_Model.md) —
   the authorization model across capabilities, datasets, scopes, rows and fields.
+- [Program_Accounts.md](instructions_and_documentation/Program_Accounts.md) —
+  fixed automation login names, public display names and the API credential lifecycle.
 - [Frontend_Guide.md](instructions_and_documentation/Frontend_Guide.md) —
   frontend architecture, interface components, configuration and accessibility.
 - [Asset_Linking_Architecture.md](instructions_and_documentation/Asset_Linking_Architecture.md) —

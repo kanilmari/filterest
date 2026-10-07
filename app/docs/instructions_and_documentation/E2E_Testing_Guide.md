@@ -147,7 +147,14 @@ The Visual Guardian screenshot flow now reuses the authenticated E2E storage sta
 
 ## Authentication
 
-Global setup (`app/testing/e2e/global-setup.ts`) logs in once, verifies the exact non-guest username/user id, and saves the session to `data/testing/e2e/.auth/user.json` with owner-only permissions. All tests share this session via `storageState`; normal teardown and failures after this process has acquired the artifact run remove its auth state. A runner rejected as foreign does not remove another process's state.
+Global setup (`app/testing/e2e/global-setup.ts`) logs in once using the private
+login name in the credential file, verifies the numeric non-guest account id
+against the profile, and saves the session to `data/testing/e2e/.auth/user.json`
+with owner-only permissions. The profile's `username` is a public display name
+and is not credential evidence. All tests share this session via `storageState`;
+normal teardown and failures after this process has acquired the artifact run
+remove its auth state. A runner rejected as foreign does not remove another
+process's state.
 
 The same global setup/teardown path owns an exclusive artifact-run registry and a complete pre-run baseline:
 
@@ -205,6 +212,84 @@ test.beforeEach(async ({ page }) => { await login(page, credentials); });
 ```
 
 ## Critical Patterns
+
+### Account-Name Privacy Proof (WL132 LT10/LT11)
+
+Use distinct random login names for an administrator and an ordinary user.
+The ordinary-user equality setting defaults to yes; intentionally choosing the
+login name as a display name publishes that value and is not a private-name
+canary fixture. Administrators' names always differ. Upgraded administrators
+use their unchanged former login with a new `admin_<n>` public name, while
+API-only administrators receive `auto_<n>`. See
+[Permission Model](Permission_Model.md#account-names-and-account-maintenance)
+and [Program Accounts](Program_Accounts.md).
+
+The database-backed handler canary
+`TestLoginNameEveryAccountFlowCanaryPostgres` covers registration, sign-in,
+profile reads/edits, password-confirmed login-name changes and **Sign out other
+devices**, administrator changes/promotion, operator recovery, password reset, sign-out,
+and wrong/right fixed-PIN, TOTP and email codes. It inspects bodies, headers
+(including redirects), raw decoded response cookies, captured standard and
+application logs, and public text/JSON/search columns. Restricted rows and
+owner-directed test mail supply positive controls. The first-run and creator
+proofs add setup and fixed automation-name checks.
+The initial-administrator tool's PostgreSQL proof also uses a random override,
+keeps status/conflict output free of it, and verifies it in the private row and
+protected credential handoff.
+`TestLoginNamePublicSearchCanaryPostgres` exercises the actual results handler
+as both roles, with indexed and NULL-vector public-name positive controls and
+zero private-name search hits. Mail transport is replaced in memory; these
+proofs never contact a mail provider.
+
+```bash
+# From the installation root; local disposable PostgreSQL only.
+(cd app && FILTEREST_TEST_DISPOSABLE_POSTGRES=1 go test ./backend/core_components/auth -run 'TestLoginName(EveryAccountFlowCanary|PublicSearchCanary|FirstRun|CreatorsAndCanary)Postgres' -count=1 -v)
+(cd app && FILTEREST_TEST_DISPOSABLE_POSTGRES=1 go test ./server_tools/initial_admin_bootstrap -run TestInitialAdministratorLoginNamesPostgres -count=1 -v)
+
+# Source guards need no database or running application.
+(cd app && go test ./backend/core_components/auth ./backend/core_components/auth/credentials ./backend/core_components/sessions -run 'Test(LoginNameSourceGuard|PrivateNameWholeRowReadGuard|SourceGuard|SystemLoginNameValidationIsNarrowLT11|SessionStoreBypass|SessionNameKey|BackendLoadsAndWrites|NoBackendCode)' -count=1)
+```
+
+The LT11 guard reviews runtime Go, JavaScript, TypeScript, Python and SQL
+private-name references, binds each Go credential writer to its file and
+validator call, and checks that trusted wrappers still call `ValidateLoginName`.
+The session guard forbids retired name keys and direct cookie-store loads or
+saves outside `sessions`, including simple aliases, in backend and server-tool
+Go source. Negative fixtures keep the guards observable. Generated bootstrap
+and schema snapshots retain their separate hash/acceptance proofs in
+`app/testing/python/test_login_name_bootstrap.py`.
+
+`L_auth/L8_login_name_canary.spec.ts` adds real browser sign-in, profile display,
+login-name change, two-device revocation, public search, logout and new-name
+sign-in. It captures browser responses, headers/redirects, DOM and browser
+cookie/local-storage values. The Go proofs own decoded-cookie, server-log,
+database and owner-mail inspection; a browser cannot decrypt server cookies.
+
+This mutating spec runs only in `desktop-card` and only when explicitly enabled
+against a disposable native installation with mail delivery disabled. Prepare
+two enabled password-only accounts through the supported registration and
+administrator APIs, with distinct random login names `wl132_<32 lowercase hex
+digits>`, distinct public names and ids, one administrator and one ordinary
+user. Use a separate existing administrator for global setup. Save a JSON array
+of the two records in an absolute, owner-only file under `keys/`; each record
+contains `role` (`admin` or `user`), `user_id`, `username` (private login name),
+`display_name`, and `password`. Do not use reserved/shared credentials as canaries.
+
+```bash
+FILTEREST_E2E_LOGIN_NAME_CANARY=1 \
+FILTEREST_E2E_CANARY_ACCOUNTS_FILE="$PWD/keys/filterest_runtime/wl132_canaries.json" \
+PLAYWRIGHT_HTML_OPEN=never ./filterest test \
+  testing/e2e/L_auth/L8_login_name_canary.spec.ts --project=desktop-card --workers=1
+```
+
+The spec verifies the supplied account ids and roles before changing anything
+and restores each changed login name through the supervising administrator in
+`finally`. The disposable installation owns the fixture accounts and protected
+file; remove them with that installation after proof. A normal matrix run skips
+this spec. A skipped opt-in proof or sandbox-denied database/browser start is
+not a pass: report the missing channels and rerun on an authorized local native
+host before release. Slice 4's separate administrator sign-in address requires
+its own route matrix and is not covered by this spec.
 
 ### 0. Shared Helpers And Stable Anchors First
 
