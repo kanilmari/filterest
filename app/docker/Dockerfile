@@ -10,6 +10,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./frontend/
+# The Vite configuration inlines the page-recovery script and style that the backend also serves.
+COPY backend/core_components/frontend_assets/shell_boot_recovery.js backend/core_components/frontend_assets/shell_boot_recovery.css ./backend/core_components/frontend_assets/
 COPY server_tools/lib/easelect_private_paths.mjs ./server_tools/lib/easelect_private_paths.mjs
 # Both modules the Vite configuration imports take the project-folder rule from here.
 COPY server_tools/lib/filterest_project_boundary.cjs ./server_tools/lib/filterest_project_boundary.cjs
